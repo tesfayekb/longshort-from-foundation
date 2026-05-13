@@ -234,6 +234,38 @@ Implement configurable user onboarding system with open signup, invite-only, and
 
 ---
 
+### PLAN-AUTH-MFA-POLICY-001: Configurable Per-Panel MFA Enforcement Policy
+**Status:** `approved`
+**Risk Level:** MEDIUM
+**Module Doc:** [auth.md](../04-modules/auth.md), [admin-panel.md](../04-modules/admin-panel.md), [user-panel.md](../04-modules/user-panel.md)
+
+**Purpose:**
+Replace hard-coded admin MFA enforcement with a superadmin-controlled per-panel policy plus a user-controlled self-preference. Removes TOTP-every-login friction during development, provides production hardening lever (toggle, no redeploy), and keeps the framework extensible to future panels (trading, finance, ops).
+
+**Dependencies:**
+- PLAN-AUTH-001 (MFA primitives — enrollment, challenge, recovery)
+- PLAN-RBAC-001 (`admin.config` permission, `is_superadmin`)
+- PLAN-ADMIN-001 (admin panel shell)
+- PLAN-AUDIT-001 (audit event writer)
+
+**Approval:** DEC-028 / FP-002
+
+**Acceptance Criteria:**
+- `system_config.mfa_enforcement_policy` row seeded with `panels.admin = 'optional'` in dev
+- `profiles.require_mfa_for_self` column added (default false)
+- Three dedicated edge functions deployed: `get-mfa-policy`, `update-mfa-policy`, `update-mfa-self-pref`
+- `/admin/security` page exists, superadmin-only, audit-aware confirm dialog
+- `/settings/security` exposes self-preference switch
+- `AdminLayout` enrollment redirect gated by `panels.admin === 'required'`
+- `UserLayout` enrollment gate driven by `require_mfa_for_self`, NOT by `admin.access`
+- Supabase `aal1→aal2` challenge unaffected for already-enrolled users
+- `system.mfa_policy_changed` and `user.mfa_self_pref_changed` audit events emitted
+- RW016 regression test passes
+- Strict enum: `'required' | 'optional'` only — no `'disabled'`
+- Production deployment SOP entry: superadmin must set `panels.admin = 'required'` before go-live
+
+---
+
 ## Development Phases
 
 ### Phase 1 — Foundation (Auth + Infrastructure)

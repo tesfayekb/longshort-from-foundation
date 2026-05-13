@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { ROUTES } from '@/config/routes';
 import { ShieldCheck, ShieldOff, Trash2, KeyRound, Clock, LogIn, Lock, Monitor, LogOut, Copy, RefreshCw, Link2, Unlink } from 'lucide-react';
 import { PasswordChangeCard } from '@/components/user/PasswordChangeCard';
+import { SelfMfaPrefCard } from '@/components/user/SelfMfaPrefCard';
 import { ReauthDialog } from '@/components/auth/ReauthDialog';
 import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
 import { apiClient, invalidateTokenCache } from '@/lib/api-client';
@@ -413,6 +414,9 @@ export default function SecurityPage() {
 
         {/* Password change */}
         <PasswordChangeCard />
+
+        {/* Personal MFA enforcement preference (PLAN-AUTH-MFA-POLICY-001) */}
+        <SelfMfaPrefCard />
       </div>
 
       {/* Session revocation confirmations */}

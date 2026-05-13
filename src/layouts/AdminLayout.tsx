@@ -11,6 +11,7 @@ import { ROUTES } from '@/config/routes';
 import { ROLES_QUERY_KEY, rolesQueryFn, PERMISSIONS_QUERY_KEY, permissionsQueryFn } from '@/hooks/useRoles';
 import { USER_STATS_QUERY_KEY, userStatsQueryFn } from '@/hooks/useUserStats';
 import { USER_ROLES_KEY } from '@/hooks/useUserRoles';
+import { MFA_POLICY_KEY, mfaPolicyQueryFn, useMfaPolicy } from '@/hooks/useMfaPolicy';
 import { supabase } from '@/integrations/supabase/client';
 import { apiClient } from '@/lib/api-client';
 
@@ -58,6 +59,11 @@ export function AdminLayout() {
       queryFn: () => apiClient.get('query-audit-logs', { limit: 50 }),
       staleTime: 30_000,
     });
+    queryClient.prefetchQuery({
+      queryKey: [...MFA_POLICY_KEY],
+      queryFn: mfaPolicyQueryFn,
+      staleTime: 5 * 60 * 1000,
+    });
   }
 
   // Reset prefetch ref if user changes
@@ -82,9 +88,15 @@ export function AdminLayout() {
 }
 
 /**
- * Redirects to MFA enrollment if admin user has no MFA factors enrolled.
- * mfaStatus === 'none' means the user has never set up MFA.
+ * Redirects to MFA enrollment ONLY when the panel policy requires it
+ * AND the user has no MFA factor (mfaStatus === 'none').
+ *
+ * PLAN-AUTH-MFA-POLICY-001 / DEC-028 — gate is data-driven, not hard-coded.
  * RequireAuth already handles 'challenge_required' (enrolled but not verified).
+ *
+ * While the policy query is loading, we render the children — the policy
+ * defaults to 'optional' and any future tightening will be applied on the
+ * next navigation. This avoids a render flash on every admin entry.
  */
 function RequireMfaForAdmin({
   mfaStatus,
@@ -95,7 +107,9 @@ function RequireMfaForAdmin({
   returnTo: string;
   children: React.ReactNode;
 }) {
-  if (mfaStatus === 'none') {
+  const { policy } = useMfaPolicy();
+  const adminRequired = policy?.panels?.admin === 'required';
+  if (adminRequired && mfaStatus === 'none') {
     return <Navigate to={ROUTES.MFA_ENROLL} replace state={{ returnTo }} />;
   }
   return <>{children}</>;

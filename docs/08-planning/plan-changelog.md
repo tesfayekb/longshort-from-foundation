@@ -173,6 +173,23 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved |
 | Supersession Links | None |
 
+### v6 → v7 (2026-05-13)
+
+**Type:** Plan addition — approved unplanned proposal
+
+| Field | Value |
+|-------|-------|
+| Plan Version | v6 → v7 |
+| Section IDs Changed | PLAN-AUTH-MFA-POLICY-001 (new) |
+| Decision IDs Affected | DEC-028 (new) |
+| What Changed | FP-002 approved. New plan section PLAN-AUTH-MFA-POLICY-001 added: configurable per-panel MFA enforcement policy + per-user MFA self-preference. Two-layer model: (1) superadmin-controlled `system_config.mfa_enforcement_policy` with `panels.admin = 'required'\|'optional'`, extensible to future panels; (2) user-controlled `profiles.require_mfa_for_self`. Three new dedicated edge functions, one new admin page, one card added to `/settings/security`, narrow gate updates in `AdminLayout` and `UserLayout`. |
+| Why | Hard-coded admin MFA gate forced TOTP-every-login during development with no relief lever. Solution must (a) allow superadmin to control panel-level enforcement without redeploy, (b) preserve user autonomy to opt themselves into stricter MFA, (c) be extensible to future panels (trading, finance), (d) never silently weaken MFA for already-enrolled users. |
+| What Stayed | All existing MFA enrollment/challenge/recovery flows. Supabase `aal1→aal2` enforcement is sacrosanct. Reauth dialog unchanged. No new permission, role, or auth primitive. |
+| What Was Added | DEC-028, PLAN-AUTH-MFA-POLICY-001, `system.mfa_policy_changed` event, `user.mfa_self_pref_changed` event, `get-mfa-policy` / `update-mfa-policy` / `update-mfa-self-pref` edge functions, `/admin/security` route, `mfa_enforcement_policy` config row, `profiles.require_mfa_for_self` column |
+| What Was Removed | `UserLayout`'s `admin.access`-keyed MFA enrollment redirect (responsibility moved into `AdminLayout` and gated by panel policy) |
+| Approval Status | Approved |
+| Supersession Links | None |
+
 ---
 
 ## Supersession Chain Requirement

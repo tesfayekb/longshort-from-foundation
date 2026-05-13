@@ -446,6 +446,7 @@ export type Database = {
           email_verified: boolean | null
           id: string
           last_name: string | null
+          require_mfa_for_self: boolean
           status: string
           updated_at: string
         }
@@ -457,6 +458,7 @@ export type Database = {
           email_verified?: boolean | null
           id: string
           last_name?: string | null
+          require_mfa_for_self?: boolean
           status?: string
           updated_at?: string
         }
@@ -468,6 +470,7 @@ export type Database = {
           email_verified?: boolean | null
           id?: string
           last_name?: string | null
+          require_mfa_for_self?: boolean
           status?: string
           updated_at?: string
         }
