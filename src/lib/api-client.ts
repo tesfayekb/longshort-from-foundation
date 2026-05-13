@@ -10,6 +10,7 @@ class ApiError extends Error {
     message: string,
     public status: number,
     public code?: string,
+    public correlation_id?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -112,6 +113,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
       body.error ?? `Request failed (${res.status})`,
       res.status,
       body.code,
+      body.correlation_id,
     );
 
     if (res.status === 401) {

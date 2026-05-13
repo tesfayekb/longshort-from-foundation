@@ -27,6 +27,10 @@ const BodySchema = z.object({
   action_key: z.string().min(1).max(128).regex(/^[a-z0-9_.:-]+$/i, {
     message: 'action_key must be alphanumeric with _ . : - only',
   }),
+  // Optional client-supplied correlation_id. When present, it is used as
+  // the canonical correlation_id for both the audit row and any error
+  // response, so the client buffer and server logs share a trace key.
+  correlation_id: z.string().uuid().optional(),
 })
 
 Deno.serve(createHandler(async (req: Request) => {
@@ -37,7 +41,8 @@ Deno.serve(createHandler(async (req: Request) => {
 
   const ctx = await authenticateRequest(req)
   const body = await req.json()
-  const { action, action_key } = validateRequest(BodySchema, body)
+  const { action, action_key, correlation_id: clientCid } = validateRequest(BodySchema, body)
+  const correlationId = clientCid ?? ctx.correlationId
 
   const auditResult = await logAuditEvent({
     actorId: ctx.user.id,
@@ -47,14 +52,14 @@ Deno.serve(createHandler(async (req: Request) => {
     metadata: { action_key },
     ipAddress: ctx.ipAddress,
     userAgent: ctx.userAgent,
-    correlationId: ctx.correlationId,
+    correlationId,
   })
 
   if (!auditResult.success) {
     console.error('[LOG-SUDO-EVENT] Audit write failed', auditResult)
     const { apiError } = await import('../_shared/api-error.ts')
-    return apiError(500, 'Failed to persist audit event', { correlationId: ctx.correlationId })
+    return apiError(500, 'Failed to persist audit event', { correlationId })
   }
 
-  return apiSuccess({ logged: true })
+  return apiSuccess({ logged: true, correlation_id: correlationId })
 }))
