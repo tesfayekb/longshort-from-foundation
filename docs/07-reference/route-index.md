@@ -271,10 +271,11 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | **Classification** | authenticated |
 | **Auth required** | Yes |
 | **Permission required** | *(authenticated + verified email — no specific permission)* |
+| **Sudo required** | Yes — wrapped in `<RequireSudo actionKey="mfa_enroll_route">` (PLAN-AUTH-SUDO-001 / DEC-029). Cancelling re-auth bounces to `/settings/security`. |
 | **Scope** | self |
 | **Panel** | user-panel |
-| **Related functions** | `requireAuth()`, `requireVerifiedEmail()`, `checkMfaStatus()` |
-| **Related events** | `auth.mfa_enrolled` |
+| **Related functions** | `requireAuth()`, `requireVerifiedEmail()`, `checkMfaStatus()`, `RequireSudo`, `useSudoMode()` |
+| **Related events** | `auth.mfa_enrolled`, `auth.sudo_granted`, `auth.sensitive_action_performed` |
 | **Related tests** | MFA enrollment flow tests, unauthenticated deny test |
 | **Lifecycle** | active |
 
