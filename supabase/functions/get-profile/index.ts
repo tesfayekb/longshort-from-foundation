@@ -52,11 +52,6 @@ Deno.serve(createHandler(async (req: Request) => {
     .single()
 
   if (error || !data) {
-    console.error('[get-profile] query failed', {
-      targetUserId,
-      error,
-      hasData: !!data,
-    })
     const { apiError } = await import('../_shared/api-error.ts')
     return apiError(404, 'Profile not found', { correlationId: ctx.correlationId })
   }
