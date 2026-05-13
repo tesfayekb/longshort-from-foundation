@@ -179,7 +179,11 @@ Per-user preference lives on `profiles.require_mfa_for_self` (boolean, default `
 | **Estimated Impact** | MEDIUM — touches several existing flows but introduces no new schema beyond an in-memory/sessionStorage timestamp; no new tables, no new permissions, no new roles. |
 | **Risk Assessment** | LOW implementation risk, HIGH security upside. Failure mode is annoyance (extra password prompt) rather than lockout. Sudo timestamp must be cleared on sign-out and on password change. Must NOT be persisted across browser restarts. |
 | **Reference Impact** | functions: +`useSudoMode`, +`requireSudo` guard. events: +`auth.sudo_granted`, +`auth.sensitive_action_performed`. routes: gate added to `/auth/mfa/enroll`. permissions: none. config: +`auth.sudo_window_seconds` (default 300). env: none. |
-| **Status** | `proposed` |
+| **Status** | `approved` |
+| **Reviewed By** | Project lead (user) |
+| **Review Date** | 2026-05-13 |
+| **Decision ID** | DEC-029 |
+| **Plan Section ID** | PLAN-AUTH-SUDO-001 |
 
 #### Proposed scope
 
