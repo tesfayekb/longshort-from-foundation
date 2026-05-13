@@ -40,7 +40,7 @@ import {
   type AuthEventName,
 } from '@/lib/auth-events';
 import { useSudoGate } from '@/components/auth/SudoGate';
-import { clearSudo, grantSudo, isSudoActive } from '@/hooks/useSudoMode';
+import { grantSudo, isSudoActive } from '@/hooks/useSudoMode';
 
 const read = (rel: string) => readFileSync(resolve(__dirname, '..', rel), 'utf-8');
 
