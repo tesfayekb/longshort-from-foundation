@@ -860,6 +860,48 @@ Key event chains showing upstream triggers and downstream effects:
 | **Related tests** | MFA update emission test, payload validation test |
 | **Lifecycle** | active |
 
+#### `user.mfa_self_pref_changed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | security |
+| **Severity** | LOW |
+| **Owner module** | auth |
+| **Consumers** | audit-logging |
+| **Description** | User toggled their own `profiles.require_mfa_for_self` preference (force-MFA-on-own-pages opt-in/out). Emitted by `update-mfa-self-pref` only when the value actually changes. |
+| **Payload schema** | `{ user_id: uuid, timestamp: datetime, before: boolean, after: boolean }` |
+| **Delivery guarantee** | at-least-once |
+| **Ordering** | none |
+| **Idempotency** | event_id |
+| **Retry policy** | No retry (single audit row) |
+| **Failure handling** | Log only — preference write succeeds independently |
+| **Observability** | Logged |
+| **Related risks** | RISK-001 (credential compromise — MFA downgrade) |
+| **Related tests** | RW-016 (`src/test/rw016-mfa-policy-enforcement.test.ts`) |
+| **Lifecycle** | active |
+| **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
+
+#### `system.mfa_policy_changed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | security |
+| **Severity** | HIGH |
+| **Owner module** | auth |
+| **Consumers** | audit-logging, monitoring (future alert) |
+| **Description** | Superadmin updated `system_config.mfa_enforcement_policy` (per-panel MFA enrollment gate). Emitted by `update-mfa-policy` for every successful write. Weakening any panel from `required` to `optional` is a security-relevant action and must be reviewed. |
+| **Payload schema** | `{ actor_id: uuid, timestamp: datetime, before: { version, panels }, after: { version, panels }, fields_changed: string[] }` |
+| **Delivery guarantee** | at-least-once |
+| **Ordering** | strict |
+| **Idempotency** | event_id |
+| **Retry policy** | No retry (single audit row) |
+| **Failure handling** | Alert on failure — policy changes must be auditable |
+| **Observability** | Logged, traced |
+| **Related risks** | RISK-001 (credential compromise — MFA downgrade) |
+| **Related tests** | RW-016 (`src/test/rw016-mfa-policy-enforcement.test.ts`) |
+| **Lifecycle** | active |
+| **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
+
 ### Audit Events
 
 #### `audit.logged` — v1
