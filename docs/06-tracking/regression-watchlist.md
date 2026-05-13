@@ -238,6 +238,27 @@ Each watchlist item must include:
 | **Last Verified** | — |
 | **Status** | Active |
 
+### RW-016: Configurable MFA Policy Enforcement Gate
+
+| Field | Value |
+|-------|-------|
+| **Area** | Auth / MFA / RBAC |
+| **Risk Description** | Regression in the per-panel or per-user MFA gate either (a) silently weakens enforcement (admins can reach `/admin` without an MFA factor when policy is `required`), (b) over-enforces (forces enrollment when policy is `optional` or user has not opted in), (c) accepts an out-of-enum value such as `disabled`, or (d) lets a non-superadmin mutate the panel policy. Any of these breaks the contract established by PLAN-AUTH-MFA-POLICY-001 / DEC-028. |
+| **Regression Class** | Security / Authorization |
+| **Priority** | High |
+| **Affected Modules** | auth, admin-panel, user-panel, rbac |
+| **Trigger Conditions** | Any change to: `AdminLayout`, `UserLayout`, `useMfaPolicy`, `get-mfa-policy`, `update-mfa-policy`, `update-mfa-self-pref`, `system_config.mfa_enforcement_policy` seed, `profiles.require_mfa_for_self`, `RequireAuth` MFA branch |
+| **Detection** | `src/test/rw016-mfa-policy-enforcement.test.ts` (static contract checks) + Deno tests on the three edge functions + manual toggle smoke test |
+| **Required Checks** | 1) AdminLayout redirects to `/mfa-enroll` IFF `panels.admin === 'required'` AND `mfaStatus === 'none'`. 2) UserLayout redirects IFF `require_mfa_for_self === true` AND `mfaStatus === 'none'`. 3) `update-mfa-policy` requires superadmin + `admin.config` + recent reauth and rejects values outside `'required' \| 'optional'`. 4) `update-mfa-self-pref` only mutates the caller's own profile row. 5) Every successful policy/preference write emits its audit event. 6) Policy is prefetched in both layouts to keep paint latency unchanged. |
+| **Verification Type** | Automated test + runtime |
+| **Related Tests** | `src/test/rw016-mfa-policy-enforcement.test.ts` |
+| **Related Risk** | — |
+| **Recurrence Count** | 0 |
+| **Owner** | Project Lead |
+| **Added Date** | 2026-05-13 |
+| **Last Verified** | 2026-05-13 (19/19 assertions passed) |
+| **Status** | Active |
+
 ---
 
 ## Pre-Change Verification Workflow
