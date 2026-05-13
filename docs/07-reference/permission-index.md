@@ -624,8 +624,10 @@ Permissions classified as `destructive`, `system-wide`, or `security-critical` r
 | **Audit required** | Yes |
 | **Reauth required** | Yes |
 | **Related routes** | `/admin/config` |
-| **Related events** | `admin.config_changed` |
-| **Related tests** | Config change allow/deny suite |
+| **Related events** | `admin.config_changed`, `system.mfa_policy_changed` |
+| **Related tests** | Config change allow/deny suite, RW-016 (`src/test/rw016-mfa-policy-enforcement.test.ts`) |
+| **Related routes (additional)** | `/admin/security`, `PATCH /update-mfa-policy` |
+| **Related watchlist** | RW-016 |
 | **Depends on** | `admin.access` |
 | **Lifecycle** | active |
 
