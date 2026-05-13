@@ -323,8 +323,9 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | **Scope** | self |
 | **Panel** | user-panel |
 | **Reauth required** | Yes (sensitive security action) |
-| **Related functions** | `requireAuth()`, `requireRecentAuth()`, `requireSelfScope()` |
-| **Related events** | `auth.mfa_enrolled`, `user_panel.mfa_updated`, `auth.session_revoked` |
+| **Related functions** | `requireAuth()`, `requireRecentAuth()`, `requireSelfScope()`, `update-mfa-self-pref`, `get-mfa-policy` |
+| **Related events** | `auth.mfa_enrolled`, `user_panel.mfa_updated`, `auth.session_revoked`, `user.mfa_self_pref_changed` |
+| **Related watchlist** | RW-016 |
 | **Lifecycle** | active |
 
 ### Admin Panel Routes (Privileged)
