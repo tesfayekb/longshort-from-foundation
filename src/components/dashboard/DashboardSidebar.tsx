@@ -58,7 +58,11 @@ export const DashboardSidebar = React.memo(function DashboardSidebar({ sections,
 
   const isActive = useCallback(
     (path: string) => {
-      if (path === '/admin' || path === '/dashboard') {
+      // Routes that are also a prefix of another nav route must match
+      // exactly, otherwise both items light up at the same time
+      // (e.g. `/settings` would match `/settings/security`).
+      const exactMatchRoutes = ['/admin', '/dashboard', '/settings'];
+      if (exactMatchRoutes.includes(path)) {
         return location.pathname === path;
       }
       return location.pathname.startsWith(path);
@@ -116,7 +120,7 @@ export const DashboardSidebar = React.memo(function DashboardSidebar({ sections,
         >
           <NavLink
             to={item.url}
-            end={item.url === '/admin' || item.url === '/dashboard'}
+            end={['/admin', '/dashboard', '/settings'].includes(item.url)}
             className="hover:bg-sidebar-accent/50"
             activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
           >
