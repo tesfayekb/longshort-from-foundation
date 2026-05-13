@@ -212,6 +212,11 @@ export default function SecurityPage() {
         </Card>
 
         {/* Recovery Codes (DW-008) */}
+        {/* Personal MFA enforcement appears between TOTP setup and recovery codes
+            so all MFA-strength controls are grouped in order of importance:
+            (1) enroll authenticator → (2) require MFA → (3) backup codes. */}
+        <SelfMfaPrefCard />
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -266,10 +271,6 @@ export default function SecurityPage() {
             )}
           </CardContent>
         </Card>
-
-        {/* Personal MFA enforcement preference (PLAN-AUTH-MFA-POLICY-001) —
-            grouped with MFA + Recovery Codes since they're all auth-strength controls. */}
-        <SelfMfaPrefCard />
 
         {/* Linked Accounts (DW-001, DW-002) */}
         <Card>
