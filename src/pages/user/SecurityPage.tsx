@@ -13,6 +13,9 @@ import { PasswordChangeCard } from '@/components/user/PasswordChangeCard';
 import { SelfMfaPrefCard } from '@/components/user/SelfMfaPrefCard';
 import { ReauthDialog } from '@/components/auth/ReauthDialog';
 import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
+import { useSudoGate } from '@/components/auth/SudoGate';
+import { grantSudo } from '@/hooks/useSudoMode';
+import { logSudoEvent } from '@/lib/sudo-audit';
 import { apiClient, invalidateTokenCache } from '@/lib/api-client';
 import { toast } from 'sonner';
 
@@ -33,6 +36,7 @@ export default function SecurityPage() {
 
   // OAuth linking state
   const [linkingProvider, setLinkingProvider] = useState<string | null>(null);
+  const sudoGate = useSudoGate();
 
   const handleRequestUnenroll = useCallback((factor: MfaFactor) => {
     setFactorToRemove(factor);
@@ -41,6 +45,13 @@ export default function SecurityPage() {
 
   const handleReauthVerified = useCallback(async () => {
     if (!factorToRemove) return;
+    // PLAN-AUTH-SUDO-001 — successful re-auth here is just as fresh a
+    // credential proof as any other sudo grant. Open the sudo window so
+    // the user can immediately re-enroll / regenerate codes / etc. without
+    // a second prompt.
+    grantSudo();
+    void logSudoEvent('auth.sudo_granted', 'mfa_unenroll');
+    void logSudoEvent('auth.sensitive_action_performed', 'mfa_unenroll');
     const success = await unenrollFactor(factorToRemove.id);
     if (success) {
       // Refresh the session so the JWT's `aal` claim drops to aal1; without
@@ -80,7 +91,7 @@ export default function SecurityPage() {
     }
   }, []);
 
-  const handleGenerateRecoveryCodes = useCallback(async () => {
+  const generateRecoveryCodesInner = useCallback(async () => {
     setGeneratingCodes(true);
     try {
       const result = await apiClient.post<{ codes: string[]; message: string }>('mfa-recovery-generate');
@@ -94,6 +105,14 @@ export default function SecurityPage() {
       setShowRegenerateConfirm(false);
     }
   }, []);
+
+  // PLAN-AUTH-SUDO-001 — recovery code generation is sensitive: a fresh batch
+  // would let an attacker bypass MFA on next sign-in. Always gate via sudo.
+  const handleGenerateRecoveryCodes = useCallback(async () => {
+    const ok = await sudoGate.run('recovery_codes_generate');
+    if (!ok) return;
+    await generateRecoveryCodesInner();
+  }, [sudoGate, generateRecoveryCodesInner]);
 
   const handleCopyRecoveryCodes = useCallback(() => {
     if (!recoveryCodes) return;
@@ -474,6 +493,8 @@ export default function SecurityPage() {
         description="Removing MFA is a critical security action. Please verify your identity by entering the code sent to your email."
         onVerified={handleReauthVerified}
       />
+
+      {sudoGate.element}
     </>
   );
 }

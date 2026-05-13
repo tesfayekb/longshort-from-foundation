@@ -15,6 +15,7 @@ import { ErrorState } from '@/components/dashboard/ErrorState';
 import { useMfaPolicy } from '@/hooks/useMfaPolicy';
 import { useMfaFactors } from '@/hooks/useMfaFactors';
 import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
+import { useSudoGate } from '@/components/auth/SudoGate';
 import { Lock, ShieldAlert } from 'lucide-react';
 import { ROUTES } from '@/config/routes';
 
@@ -23,15 +24,26 @@ export function SelfMfaPrefCard() {
   const { factors, loading: factorsLoading } = useMfaFactors();
   const [confirmOff, setConfirmOff] = useState(false);
   const [confirmOn, setConfirmOn] = useState(false);
+  const sudoGate = useSudoGate();
   const navigate = useNavigate();
 
-  const handleToggle = useCallback(async (checked: boolean) => {
-    if (checked) {
-      setConfirmOn(true);
-      return;
-    }
-    setConfirmOff(true);
-  }, []);
+  // PLAN-AUTH-SUDO-001 — both ON and OFF are sensitive actions: an attacker
+  // with an open session could otherwise enroll their own TOTP and force-on
+  // self-MFA to lock out the legitimate user, or force-off to weaken posture.
+  const handleToggle = useCallback(
+    async (checked: boolean) => {
+      const ok = await sudoGate.run(
+        checked ? 'toggle_require_mfa_on' : 'toggle_require_mfa_off',
+      );
+      if (!ok) return;
+      if (checked) {
+        setConfirmOn(true);
+      } else {
+        setConfirmOff(true);
+      }
+    },
+    [sudoGate],
+  );
 
   const handleConfirmOn = useCallback(async () => {
     await updateSelfPref(true);
@@ -105,6 +117,8 @@ export function SelfMfaPrefCard() {
           </div>
         </CardContent>
       </Card>
+
+      {sudoGate.element}
 
       <ConfirmActionDialog
         open={confirmOff}

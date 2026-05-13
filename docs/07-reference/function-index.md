@@ -1341,6 +1341,43 @@ When changing any indexed function:
 | **Related tests** | RW-016 (`src/test/rw016-mfa-policy-enforcement.test.ts`) |
 | **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
 
+### `log-sudo-event` — Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Location** | `supabase/functions/log-sudo-event/index.ts` |
+| **Classification** | security-relevant (write-only audit) |
+| **Owner module** | auth |
+| **Consumers** | `useSudoGate`, `RequireSudo`, `SecurityPage` (any sudo-gated client surface) |
+| **Signature** | `POST { action: 'auth.sudo_granted' \| 'auth.sensitive_action_performed', action_key: string }` (Zod-validated) |
+| **Description** | Persists a sudo-mode audit event. `actor_id` is taken from the verified JWT (NEVER from the body). `action_key` is a free-form identifier of the protected action and grants no privileges. (PLAN-AUTH-SUDO-001 / DEC-029 / FP-003) |
+| **Side effects** | Single `audit_logs` insert. No business effect. |
+| **Error behavior** | 405 on non-POST; 400 on invalid body; 500 on audit write failure. Client treats failure as non-fatal. |
+| **Security** | Bearer JWT required. `actor_id` from JWT only. `action_key` constrained to `[A-Za-z0-9_.:-]{1,128}`. |
+| **Lifecycle** | active |
+| **Related routes** | `POST /log-sudo-event`; gates `/mfa-enroll`, `/settings/security` (toggle, password, recovery codes) |
+| **Related permissions** | — (any authenticated user; self-scope by JWT) |
+| **Related events** | `auth.sudo_granted`, `auth.sensitive_action_performed` |
+| **Related tests** | Sudo gating regression (planned), audit row presence per protected action |
+| **Added by** | PLAN-AUTH-SUDO-001 (DEC-029 / FP-003) |
+
+### `useSudoMode` — React Hook
+
+| Field | Value |
+|-------|-------|
+| **Location** | `src/hooks/useSudoMode.ts` |
+| **Classification** | security-relevant (client) |
+| **Owner module** | auth |
+| **Consumers** | `RequireSudo`, `useSudoGate`, `AuthContext` (clearSudo), `SecurityPage` |
+| **Signature** | `() => { isSudo: boolean; remainingMs: number; grantSudo(windowMs?): number; clearSudo(): void }` |
+| **Description** | Session-scoped sudo state, backed by `sessionStorage` key `auth.sudo_until`. Naturally cleared on tab close; explicitly cleared by `signOut` and `updatePassword`. |
+| **Side effects** | Reads/writes `sessionStorage`, dispatches `auth.sudo_changed` CustomEvent. |
+| **Security** | Client-side only — server is the source of truth via `log-sudo-event` audit. Never store secrets. Default window 5 min (`SUDO_WINDOW_MS`). |
+| **Lifecycle** | active |
+| **Related routes** | `/mfa-enroll`, `/settings/security` |
+| **Related events** | `auth.sudo_granted`, `auth.sensitive_action_performed` |
+| **Added by** | PLAN-AUTH-SUDO-001 (DEC-029 / FP-003) |
+
 ### User Onboarding Functions (PLAN-INVITE-001)
 
 ### `auth-hook-pre-signup` — Edge Function (Auth Hook)

@@ -340,6 +340,17 @@ If any field is missing → the decision is **INVALID**.
 
 ---
 
+### DEC-029: Sensitive-Action Re-Authentication ("Sudo Mode")
+- **Plan Section:** PLAN-AUTH-SUDO-001
+- **Decision Type:** security / architecture
+- **Date Approved:** 2026-05-13
+- **Decision:** Introduce a session-scoped "sudo mode" that requires a fresh credential challenge (current password OR current TOTP code via the existing `ReauthDialog`) before any account-takeover-relevant mutation: (a) entering MFA enrollment (`/mfa-enroll`), (b) toggling `profiles.require_mfa_for_self` ON or OFF, (c) unenrolling a TOTP factor, (d) changing password, (e) generating or regenerating recovery codes. A successful reauth sets a `sudo_until` timestamp in `sessionStorage` valid for `auth.sudo_window_seconds` (default 300 s, superadmin-tunable via `system_config`). Protected actions check `sudo_until > now()` and re-prompt otherwise. The sudo grant and every protected action are audited via the new edge function `log-sudo-event` writing to `audit_logs` with actions `auth.sudo_granted` and `auth.sensitive_action_performed`. Sudo MUST be cleared on `signOut`, on successful password change, and is naturally cleared on tab close (sessionStorage lifecycle). Sudo is orthogonal to AAL — fresh-credential proof, not MFA-elevated session. Closes the unlocked-public-computer attack vector (attacker enrolling their own TOTP + flipping `require_mfa_for_self` → permanent lockout of legitimate user). No new permissions, no new roles, no new tables — only a new edge function, a new system_config key, and two new audit event names.
+- **Affected Modules / Systems:** Auth, User Panel (Security page), Audit Logging
+- **Status:** active
+- **Superseded By:** —
+
+---
+
 ## Decision Integrity Rules
 
 - Every approved plan section MUST have a corresponding `DEC-NNN` entry

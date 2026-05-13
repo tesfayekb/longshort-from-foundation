@@ -257,6 +257,29 @@ Every config must define:
 | **Related risks** | RISK-001, RISK-002 |
 | **Lifecycle** | active |
 
+#### `auth.sudo_window_seconds`
+
+| Field | Value |
+|-------|-------|
+| **Type** | `integer` |
+| **Module** | auth |
+| **Classification** | security-sensitive |
+| **Default** | `300` (5 minutes) |
+| **Allowed values** | `60–3600` |
+| **Invalid value behavior** | `fail-secure` — use default `300` |
+| **Unit** | seconds |
+| **Source** | client constant `SUDO_WINDOW_MS` (`src/hooks/useSudoMode.ts`); future: `system_config.auth.sudo_window_seconds` (superadmin-tunable) |
+| **Mutability** | build-time (v1); runtime (planned via `update-system-config`) |
+| **Reload behavior** | next sudo grant uses the new window |
+| **Blast radius** | low — affects only re-prompt frequency for sensitive actions |
+| **Approval required** | Yes (security-sensitive default) |
+| **Audit required** | Yes — every grant emits `auth.sudo_granted` |
+| **Used by** | `useSudoMode`, `useSudoGate`, `RequireSudo`, sensitive-action handlers |
+| **Related tests** | Sudo expiry boundary tests (planned) |
+| **Related risks** | RISK-001 (credential compromise) |
+| **Lifecycle** | active |
+| **Added by** | PLAN-AUTH-SUDO-001 (DEC-029 / FP-003) |
+
 #### `auth.lockout_duration`
 
 | Field | Value |
