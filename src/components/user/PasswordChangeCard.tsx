@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { KeyRound, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { ReauthDialog } from '@/components/auth/ReauthDialog';
+import { useSudoGate } from '@/components/auth/SudoGate';
 
 const MIN_PASSWORD_LENGTH = 12;
 
@@ -16,11 +16,18 @@ export function PasswordChangeCard() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [verified, setVerified] = useState(false);
-  const [showReauth, setShowReauth] = useState(false);
+  const sudoGate = useSudoGate();
 
   const passwordsMatch = newPassword === confirmPassword;
   const meetsMinLength = newPassword.length >= MIN_PASSWORD_LENGTH;
   const canSubmit = newPassword && confirmPassword && passwordsMatch && meetsMinLength && !submitting;
+
+  // PLAN-AUTH-SUDO-001 — single sudo prompt (or none, if already in sudo
+  // window) replaces the previous standalone ReauthDialog round-trip.
+  const handleVerifyClick = async () => {
+    const ok = await sudoGate.run('password_change');
+    if (ok) setVerified(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +64,7 @@ export function PasswordChangeCard() {
             <p className="text-sm text-muted-foreground">
               For security, you must verify your identity before changing your password.
             </p>
-            <Button size="sm" onClick={() => setShowReauth(true)}>
+            <Button size="sm" onClick={handleVerifyClick}>
               Verify Identity
             </Button>
           </div>
@@ -108,13 +115,7 @@ export function PasswordChangeCard() {
         )}
       </CardContent>
 
-      <ReauthDialog
-        open={showReauth}
-        onOpenChange={setShowReauth}
-        title="Verify Identity"
-        description="Enter the verification code sent to your email to unlock password change."
-        onVerified={() => setVerified(true)}
-      />
+      {sudoGate.element}
     </Card>
   );
 }
