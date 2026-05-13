@@ -266,6 +266,39 @@ Replace hard-coded admin MFA enforcement with a superadmin-controlled per-panel 
 
 ---
 
+### PLAN-AUTH-SUDO-001: Sensitive-Action Re-Authentication ("Sudo Mode")
+**Status:** `approved`
+**Risk Level:** MEDIUM
+**Module Doc:** [auth.md](../04-modules/auth.md), [user-panel.md](../04-modules/user-panel.md), [audit-logging.md](../04-modules/audit-logging.md)
+
+**Purpose:**
+Close the unlocked-public-computer attack vector by requiring a fresh credential proof (current password OR current TOTP) before any account-takeover-relevant mutation. Today an attacker with access to an open session can enroll their own TOTP factor and flip `require_mfa_for_self` ON, permanently locking out the legitimate user without ever knowing the password. Sudo mode enforces "fresh credential within N seconds" gating on every such action, audited end-to-end. Standard pattern (GitHub, Google, Stripe).
+
+**Dependencies:**
+- PLAN-AUTH-001 (existing `ReauthDialog`, MFA primitives)
+- PLAN-AUTH-MFA-POLICY-001 (`profiles.require_mfa_for_self`)
+- PLAN-AUDIT-001 (audit_logs writer pattern)
+- PLAN-USRPNL-001 (Security page)
+
+**Approval:** DEC-029 / FP-003
+
+**Acceptance Criteria:**
+- New hook `useSudoMode()` exposes `isSudo`, `grantSudo()`, `clearSudo()`, backed by `sessionStorage` key `auth.sudo_until`
+- New route guard `<RequireSudo>` wraps `/mfa-enroll` and prompts via `ReauthDialog` when not sudo
+- `SelfMfaPrefCard` toggle (both ON and OFF) blocked until sudo
+- `PasswordChangeCard` skips reauth prompt when sudo is active (but still requires fresh sudo if expired)
+- `SecurityPage` recovery code generation/regeneration gated by sudo
+- Existing MFA unenroll flow grants sudo on successful reauth (no functional regression)
+- `signOut()` and successful `updatePassword()` MUST clear sudo
+- New edge function `log-sudo-event` writes audit_logs row (`auth.sudo_granted` | `auth.sensitive_action_performed`) with actor_id from JWT
+- New `system_config` key `auth.sudo_window_seconds` (default 300, superadmin-tunable)
+- New audit events `auth.sudo_granted` and `auth.sensitive_action_performed` registered in `event-index.md`
+- Reference indexes updated: function-index (hook + edge fn), event-index (2 events), route-index (note `/mfa-enroll` sudo-gated), config-index (new key)
+- No new permissions, no new roles, no new tables
+- Phase gate: post-implementation, master-plan checkbox updated with ACT-NNN evidence
+
+---
+
 ## Development Phases
 
 ### Phase 1 — Foundation (Auth + Infrastructure)
