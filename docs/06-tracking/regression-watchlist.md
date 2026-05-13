@@ -520,6 +520,10 @@ The following **MUST** create Action Tracker entries:
 | 8 | RW-008 | PERMISSION_DEPS map drift | High | 0 |
 | 9 | RW-009 | UI design system compliance | High | 0 |
 | 10 | RW-010 | MFA enroll route state drift | High | 1 |
+| 11 | RW-017 | Sudo-mode protection on sensitive actions | Critical | 0 |
+| 12 | RW-018 | Sudo audit-event completeness | High | 0 |
+| 13 | RW-019 | Sudo correlation_id propagation | High | 0 |
+| 14 | RW-020 | audit_logs.correlation_id index DDL contract | High | 0 |
 
 _Updated as items are added, triggered, or resolved._
 
