@@ -99,6 +99,60 @@ Only after the feature exists in the approved master plan may implementation beg
 
 ---
 
+### FP-002: Configurable Per-Panel MFA Enforcement Policy
+
+| Field | Value |
+|-------|-------|
+| **ID** | FP-002 |
+| **Date Proposed** | 2026-05-13 |
+| **Proposed By** | AI Agent (raised by project lead during dev-flow friction review) |
+| **Title** | Configurable Per-Panel MFA Enforcement Policy (superadmin-controlled, panel-scoped, future-extensible) |
+| **Description** | Today MFA enforcement for the Admin Panel is hard-coded in two layers: (1) Supabase Auth issues `aal1` whenever a TOTP factor exists, forcing `/mfa-challenge` on every login; (2) `AdminLayout` and `UserLayout` redirect any user holding `admin.access` to `/mfa-enroll` if `mfaStatus !== 'verified'`. This makes MFA non-optional during development and cannot be relaxed without code changes. Proposal: introduce a single, superadmin-controlled, audited `system_config` row (`mfa_enforcement_policy`) holding a per-panel map (`{ admin: 'required'\|'optional'\|'disabled', ... }`), surfaced in a new `/admin/security` page (superadmin-only). Layouts read the policy via React Query (cached, prefetched in `AdminLayout`/`UserLayout`) and gate the existing redirect. Default in production seed = `admin: 'required'`. Default in non-prod env = `admin: 'optional'` so devs are not locked into TOTP-every-login. Designed to extend to future panels (e.g. `finance`, `ops`) without schema change — just add a key to the JSON map and reference it in the new panel layout. |
+| **Justification** | Not in master plan. Surfaced as friction during active development (TOTP prompt every login for the only superadmin) and as a hardening lever for production (superadmin can tighten policy without redeploy). Aligns with DEC-007 audit retention (every change audited) and the locked feature scope (auth + admin-panel; no new module). Does not introduce new authn/authz primitives — only governs an existing enforcement check. |
+| **Affected Modules** | auth, admin-panel, user-panel, audit-logging |
+| **New Modules Required** | None |
+| **Dependencies** | Existing `system_config` table, `update-system-config` / `get-system-config` edge functions, `useSystemConfig` hook pattern, `admin.config` permission, `is_superadmin` helper, `logAuditEvent`, existing `mfaStatus` from `AuthContext`. No new tables, no new auth primitives, no new third-party deps. |
+| **Estimated Impact** | MEDIUM — touches two layouts (read-only addition), adds one admin page, extends two existing edge functions (`get-system-config`, `update-system-config`) to also handle the new key, adds one config row, one audit action key, and one route. No DB schema change beyond a single seeded `system_config` row. No regression to existing MFA enrollment, challenge, recovery, or reauth flows. |
+| **Risk Assessment** | **Security risk:** Misconfigured policy could allow an admin to access the panel without MFA in production. **Mitigations:** (a) write-path requires `is_superadmin` + `admin.config` + recent reauth (5 min); (b) every change emits `system.mfa_policy_changed` audit event with `{ before, after, actor }`; (c) production seed forces `admin: 'required'`; (d) policy lives in DB, not env, so it is auditable and reversible; (e) `optional` does NOT skip Supabase's `aal2` challenge if a factor exists — it only skips the *enrollment* gate, so existing enrolled admins retain full MFA; (f) `disabled` is rejected by validator unless `NODE_ENV !== 'production'` AND environment flag `ALLOW_MFA_DISABLED=true` is set on the edge function (defense in depth). **Performance:** policy is cached for 5 min in React Query and prefetched in layout — adds zero render-path latency after first load. **Regression:** new RW test (`rw016-mfa-policy-enforcement`) verifies (i) default = required, (ii) layout still blocks when required, (iii) layout permits when optional and factor absent, (iv) Supabase `aal2` challenge still triggers when a factor exists regardless of policy. |
+| **Reference Impact** | • `function-index.md` — extend `get-system-config` and `update-system-config` entries with new `mfa_enforcement_policy` key surface. • `event-index.md` — add `system.mfa_policy_changed`. • `permission-index.md` — no new permission (reuses `admin.config`); document that this permission now also gates MFA policy. • `route-index.md` — add `GET /admin/security` frontend route. • `config-index.md` — add `mfa_enforcement_policy` system_config row with schema, defaults, and per-env defaults. • `env-var-index.md` — add `ALLOW_MFA_DISABLED` (edge function env, default unset/false). • `dependency-map.md` — admin-panel → system_config (new edge dep). |
+| **Status** | `proposed` |
+| **Reviewed By** | _pending_ |
+| **Review Date** | _pending_ |
+| **Decision ID** | _pending — will be DEC-NNN_ |
+| **Plan Section ID** | _pending — proposed PLAN-AUTH-MFA-POLICY-001_ |
+
+#### Proposed JSON shape (for review, not yet implemented)
+
+```json
+{
+  "version": 1,
+  "panels": {
+    "admin": "required"   // "required" | "optional" | "disabled"
+  },
+  "notes": "Policy governs the layout-level MFA enrollment gate only. Supabase Auth aal1→aal2 challenge for already-enrolled factors is unaffected."
+}
+```
+
+#### Proposed implementation outline (for review, not yet implemented)
+
+1. **DB:** seed one `system_config` row `key='mfa_enforcement_policy'` with the JSON above. No schema change.
+2. **Edge:** extend `get-system-config` to also return `mfa_enforcement_policy` (still public-safe — exposes policy shape, never secrets); extend `update-system-config` with a discriminated body branch validated by Zod, requiring `is_superadmin` + `admin.config` + recent reauth, rejecting `disabled` unless env-gated, emitting `system.mfa_policy_changed`.
+3. **Hook:** add `useMfaPolicy()` (thin wrapper over `useSystemConfig` keyed by `['system-config','mfa-policy']`, 5-min staleTime).
+4. **Layouts:** `AdminLayout`/`UserLayout` read policy; redirect to `/mfa-enroll` only when `panels.admin === 'required'` AND `mfaStatus === 'none'`. The existing Supabase `aal1→aal2` challenge path (`RequireAuth` → `/mfa-challenge`) is **not** changed — enrolled users always complete challenge.
+5. **UI:** new `/admin/security` page (superadmin-only via `RequirePermission permission="admin.config"` + `is_superadmin` check) with a single panel-keyed select per panel + audit-aware confirm dialog.
+6. **Tests:** RW016 regression test + Vitest unit tests for the layout gate matrix + Deno test for `update-system-config` policy branch.
+7. **Docs:** update all reference indexes listed above + module docs (`auth.md`, `admin-panel.md`) + closure entry.
+
+#### Out of scope (explicit, to prevent scope creep on approval)
+
+- No change to MFA enrollment/challenge/recovery flows.
+- No change to `aal2` requirement for any other security-critical operation (reauth dialog stays).
+- No new permission, no new role, no new auth primitive.
+- No support for per-user MFA policy overrides (panel-level only in v1).
+- No SMS/WebAuthn additions — TOTP only, unchanged.
+
+---
+
 ## Status Definitions
 
 | Status | Meaning |
