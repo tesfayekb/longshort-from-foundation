@@ -16,7 +16,10 @@ export type AuthEventName =
   | 'auth.mfa_enrolled'
   | 'auth.mfa_recovered'
   | 'auth.failed_attempt'
-  | 'auth.session_revoked';
+  | 'auth.session_revoked'
+  // PLAN-AUTH-SUDO-001 / DEC-029 — sudo-mode events
+  | 'auth.sudo_granted'
+  | 'auth.sensitive_action_performed';
 
 export interface AuthEvent {
   event_id: string;
