@@ -5,20 +5,24 @@
  * Lives in /settings/security. Only the user themselves can toggle this.
  */
 import { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ErrorState } from '@/components/dashboard/ErrorState';
 import { useMfaPolicy } from '@/hooks/useMfaPolicy';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
-import { Lock } from 'lucide-react';
+import { Lock, ShieldAlert } from 'lucide-react';
+import { ROUTES } from '@/config/routes';
 
 export function SelfMfaPrefCard() {
   const { mfaStatus } = useAuth();
   const { policy, isLoading, error, updateSelfPref, isUpdatingSelfPref } = useMfaPolicy();
   const [confirmOff, setConfirmOff] = useState(false);
+  const navigate = useNavigate();
 
   const handleToggle = useCallback(async (checked: boolean) => {
     if (!checked) {
@@ -38,6 +42,7 @@ export function SelfMfaPrefCard() {
   if (!policy) return null;
 
   const enrolled = mfaStatus === 'enrolled';
+  const canEnable = enrolled; // Cannot require MFA without an authenticator
 
   return (
     <>
@@ -54,23 +59,41 @@ export function SelfMfaPrefCard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
-            <div className="space-y-1">
-              <Label htmlFor="self-mfa-pref" className="text-base font-medium">
-                Personal MFA enforcement
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                {enrolled
-                  ? 'You already have an authenticator enrolled. Toggling this only affects what happens if you remove it.'
-                  : 'You currently have no authenticator. Turning this on will redirect you to the enrollment page on your next protected page load.'}
-              </p>
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
+              <div className="space-y-1">
+                <Label htmlFor="self-mfa-pref" className="text-base font-medium">
+                  Personal MFA enforcement
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  {canEnable
+                    ? 'Your authenticator is enrolled. Toggling this only affects what happens if you remove it.'
+                    : 'Set up an authenticator (TOTP) first — you cannot require MFA without one enrolled.'}
+                </p>
+              </div>
+              <Switch
+                id="self-mfa-pref"
+                checked={policy.require_mfa_for_self && canEnable}
+                disabled={isUpdatingSelfPref || !canEnable}
+                onCheckedChange={handleToggle}
+                aria-describedby={!canEnable ? 'self-mfa-pref-help' : undefined}
+              />
             </div>
-            <Switch
-              id="self-mfa-pref"
-              checked={policy.require_mfa_for_self}
-              disabled={isUpdatingSelfPref}
-              onCheckedChange={handleToggle}
-            />
+
+            {!canEnable && (
+              <div
+                id="self-mfa-pref-help"
+                className="flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/5 p-3"
+              >
+                <div className="flex items-center gap-2 text-sm text-warning-foreground">
+                  <ShieldAlert className="h-4 w-4 text-warning" />
+                  <span>No authenticator configured</span>
+                </div>
+                <Button size="sm" onClick={() => navigate(ROUTES.MFA_ENROLL)}>
+                  Set Up TOTP
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
