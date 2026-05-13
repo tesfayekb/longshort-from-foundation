@@ -104,16 +104,12 @@ describe('RW-018 logSudoEvent emits to buffer + log-sudo-event endpoint', () => 
 
 describe('RW-018 useSudoGate emits both sudo_granted and sensitive_action_performed', () => {
   it('on fresh grant: emits sudo_granted THEN sensitive_action_performed for the same action_key', async () => {
-    clearSudo();
+    // Pre-grant so the hook's first render sees `isSudo === true`. This
+    // exercises the short-circuit path in useSudoGate.run, which fires the
+    // sensitive_action_performed audit without opening ReauthDialog.
+    grantSudo();
     const { result } = renderHook(() => useSudoGate());
 
-    // Sudo is inactive → run() returns a pending promise. Simulate a verified
-    // ReauthDialog by directly invoking the verified path: grant sudo then
-    // call the gate's run() — which now short-circuits (sudo active) and
-    // emits exactly the sensitive_action_performed event for `actionKey`.
-    // To exercise the full grant path we go through grantSudo + the gate's
-    // own audit calls as wired in SudoGate.tsx.
-    grantSudo();
     let ok = false;
     await act(async () => {
       ok = await result.current.run('toggle_require_mfa_on');
