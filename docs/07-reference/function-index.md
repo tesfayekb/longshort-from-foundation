@@ -1334,6 +1334,11 @@ When changing any indexed function:
 | **Error behavior** | 405 on non-PATCH; 400 on invalid body; 500 on read/write failure. |
 | **Security** | Bearer JWT required. Cannot mutate any other user's row. Superadmin policy cannot toggle this — user-controlled only. |
 | **Lifecycle** | active |
+| **Related routes** | `PATCH /update-mfa-self-pref`, `/settings/security` |
+| **Related permissions** | — (self-scope only) |
+| **Related events** | `user.mfa_self_pref_changed` |
+| **Related watchlist** | RW-016 |
+| **Related tests** | RW-016 (`src/test/rw016-mfa-policy-enforcement.test.ts`) |
 | **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
 
 ### User Onboarding Functions (PLAN-INVITE-001)
