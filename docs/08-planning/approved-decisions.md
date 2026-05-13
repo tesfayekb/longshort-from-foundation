@@ -329,6 +329,17 @@ If any field is missing → the decision is **INVALID**.
 
 ---
 
+### DEC-028: Configurable Per-Panel MFA Enforcement Policy + Per-User MFA Self-Preference
+- **Plan Section:** PLAN-AUTH-MFA-POLICY-001
+- **Decision Type:** architecture / security
+- **Date Approved:** 2026-05-13
+- **Decision:** Replace hard-coded admin MFA enforcement with two independent, opt-in layers governed by data, not code. **Layer 1 (panel policy, superadmin-controlled):** `system_config.mfa_enforcement_policy` holds `{ panels: { admin: 'required' \| 'optional' } }`, extensible to future panels (`trading`, `finance`, …) without schema change. When a panel is `required` and the user has access but no MFA factor, the panel layout redirects to `/mfa-enroll`. Affects only that panel — never the user's own dashboard. **Layer 2 (self-preference, user-controlled):** `profiles.require_mfa_for_self` boolean lets each user opt themselves into mandatory MFA across their authenticated routes. Superadmin cannot toggle this. **Sacrosanct:** once enrolled, the Supabase `aal1→aal2` challenge is unaffected by either layer — only an explicit user unenroll removes TOTP. Three dedicated edge functions (`get-mfa-policy`, `update-mfa-policy`, `update-mfa-self-pref`) implement this — chosen over extending `get/update-system-config` to keep MFA-policy logic separated from onboarding-mode logic. Strict `required | optional` enum (no `disabled` value). Production deployment SOP forces `panels.admin = 'required'` (preproduction-checklist.md). Every change audited via `system.mfa_policy_changed` and `user.mfa_self_pref_changed`.
+- **Affected Modules / Systems:** Auth, Admin Panel, User Panel, User Management, Audit Logging
+- **Status:** active
+- **Superseded By:** —
+
+---
+
 ## Decision Integrity Rules
 
 - Every approved plan section MUST have a corresponding `DEC-NNN` entry
