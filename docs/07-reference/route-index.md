@@ -1214,6 +1214,7 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | Route | Permission | Re-Auth |
 |-------|-----------|---------|
 | `/admin/config` | `admin.config` | Yes |
+| `/admin/security` | `admin.config` | Yes |
 | `/admin/users/:id/roles` | `roles.assign` / `roles.revoke` | Yes |
 | `/admin/users/:id/deactivate` | `users.deactivate` | Yes |
 | `/admin/users/:id/reactivate` | `users.reactivate` | Yes |
