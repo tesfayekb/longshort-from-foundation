@@ -88,6 +88,30 @@ Authentication flows only. Authorization (permissions) is handled by the RBAC mo
 | `auth.mfa_recovered` | MFA recovery code used | audit-logging |
 | `auth.failed_attempt` | Login failure | audit-logging, health-monitoring |
 | `auth.session_revoked` | Session manually revoked | audit-logging |
+| `auth.sudo_granted` | Sudo-mode window opened by successful re-auth (PLAN-AUTH-SUDO-001 / DEC-029) | audit-logging |
+| `auth.sensitive_action_performed` | Sudo-gated security mutation executed (MFA enroll/unenroll, require-MFA toggle, password change, recovery code generation) | audit-logging |
+
+## Sensitive-Action Re-Authentication ("Sudo Mode")
+
+Per **PLAN-AUTH-SUDO-001 / DEC-029 / FP-003**, every account-takeover-relevant
+mutation requires a fresh credential proof (current password OR current TOTP)
+within a `auth.sudo_window_seconds` window (default 300 s). The session-scoped
+`sudo_until` is held in `sessionStorage` and **MUST be cleared** by `signOut()`
+and `updatePassword()`. Tab close clears it naturally.
+
+Protected actions (all gated):
+- Entering `/mfa-enroll` (route guard `<RequireSudo>`)
+- Toggling `profiles.require_mfa_for_self` (ON or OFF)
+- Unenrolling a TOTP factor
+- Changing password
+- Generating or regenerating recovery codes
+
+Implementation surface:
+- Hook: `useSudoMode()` — `src/hooks/useSudoMode.ts`
+- Programmatic gate: `useSudoGate()` — `src/components/auth/SudoGate.tsx`
+- Route guard: `<RequireSudo>` — `src/components/auth/RequireSudo.tsx`
+- Edge function: `log-sudo-event` — `supabase/functions/log-sudo-event/index.ts`
+- Audit events: `auth.sudo_granted`, `auth.sensitive_action_performed`
 
 ## Monitoring
 
