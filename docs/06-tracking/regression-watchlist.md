@@ -520,6 +520,10 @@ The following **MUST** create Action Tracker entries:
 | 8 | RW-008 | PERMISSION_DEPS map drift | High | 0 |
 | 9 | RW-009 | UI design system compliance | High | 0 |
 | 10 | RW-010 | MFA enroll route state drift | High | 1 |
+| 11 | RW-017 | Sudo-mode protection on sensitive actions | Critical | 0 |
+| 12 | RW-018 | Sudo audit-event completeness | High | 0 |
+| 13 | RW-019 | Sudo correlation_id propagation | High | 0 |
+| 14 | RW-020 | audit_logs.correlation_id index DDL contract | High | 0 |
 
 _Updated as items are added, triggered, or resolved._
 
@@ -567,6 +571,98 @@ _Updated as items are added, triggered, or resolved._
 | **Owner** | Project Lead |
 | **Added Date** | 2026-04-11 |
 | **Last Verified** | 2026-04-11 |
+| **Status** | Active |
+
+---
+
+### RW-017: Sudo-Mode Protection On Sensitive Actions
+
+| Field | Value |
+|-------|-------|
+| **Area** | Auth / Sudo Mode |
+| **Risk Description** | Regression in `RequireSudo`, `useSudoGate`, `useSudoMode`, or `ReauthDialog` could let MFA enroll, `require_mfa_for_self` toggles, recovery-code generation, or MFA unenroll proceed without a fresh credential proof, re-opening the unlocked-public-computer attack vector closed by PLAN-AUTH-SUDO-001 / DEC-029. |
+| **Regression Class** | Security / Authorization |
+| **Priority** | Critical |
+| **Affected Modules** | auth, user-panel, audit-logging |
+| **Trigger Conditions** | Any change to `useSudoMode`, `useSudoGate`, `RequireSudo`, `ReauthDialog`, `SelfMfaPrefCard`, `PasswordChangeCard`, `SecurityPage`, `MfaEnroll`, or sudo session-storage key. |
+| **Detection Method** | Vitest regression suite + manual sensitive-flow walkthrough. |
+| **Required Checks** | (1) MFA enroll route blocked until sudo. (2) `require_mfa_for_self` toggle (ON/OFF) blocked until sudo. (3) Recovery-code generation blocked until sudo. (4) MFA unenroll blocked until re-auth. (5) After sudo expiry, all four re-prompt. (6) `signOut()` and `updatePassword()` clear sudo. |
+| **Verification Type** | Automated test (rw017) + manual |
+| **Related Tests** | `src/test/rw017-sudo-mode-protection.test.ts` |
+| **Related Risk** | — |
+| **Recurrence Count** | 0 |
+| **Owner** | Project Lead |
+| **Added Date** | 2026-05-13 |
+| **Last Verified** | 2026-05-13 |
+| **Status** | Active |
+
+---
+
+### RW-018: Sudo Audit-Event Completeness
+
+| Field | Value |
+|-------|-------|
+| **Area** | Auth / Audit Logging |
+| **Risk Description** | Sudo grant or sensitive-action emit path could silently drop the `auth.sudo_granted` / `auth.sensitive_action_performed` audit row, lose `actor_id` from the JWT, or write the wrong `action_key`, breaking the end-to-end audit chain mandated by PLAN-AUTH-SUDO-001. |
+| **Regression Class** | Audit |
+| **Priority** | High |
+| **Affected Modules** | auth, audit-logging |
+| **Trigger Conditions** | Any change to `log-sudo-event`, `logSudoEvent`, `RequireSudo`, `useSudoGate`, or audit-event registration in event-index. |
+| **Detection Method** | Vitest regression suite asserting one row per grant + per sensitive action, with correct `actor_id` and `action_key`. |
+| **Required Checks** | (1) Every sudo grant emits `auth.sudo_granted` with `actor_id` from JWT and matching `action_key`. (2) Every protected sensitive action emits `auth.sensitive_action_performed` with same `actor_id` and `action_key`. (3) Both events declared in event-index. |
+| **Verification Type** | Automated test (rw018) |
+| **Related Tests** | `src/test/rw018-sudo-audit-events.test.ts` |
+| **Related Risk** | — |
+| **Recurrence Count** | 0 |
+| **Owner** | Project Lead |
+| **Added Date** | 2026-05-13 |
+| **Last Verified** | 2026-05-13 |
+| **Status** | Active |
+
+---
+
+### RW-019: Sudo correlation_id Propagation
+
+| Field | Value |
+|-------|-------|
+| **Area** | Auth / Audit Logging / API |
+| **Risk Description** | Client-generated `correlation_id` could fail to propagate through `apiClient` → `log-sudo-event` request → audit_logs row → 200/500 response, breaking cross-system trace lookups. |
+| **Regression Class** | Audit / Functional |
+| **Priority** | High |
+| **Affected Modules** | auth, audit-logging, api |
+| **Trigger Conditions** | Any change to `src/lib/api-client.ts`, `src/lib/sudo-audit.ts`, `supabase/functions/log-sudo-event/index.ts`, or correlation-id generation. |
+| **Detection Method** | Client-side Vitest suite + Deno server-side tests asserting cid round-trip on success and 500 paths. |
+| **Required Checks** | (1) Client buffer cid matches request body cid. (2) Server persists client cid into audit_logs row on success. (3) Server returns the same cid in 200 and 500 responses. (4) Server-generated cid (when client omits) flows into both row and response. |
+| **Verification Type** | Automated test (rw019 + log-sudo-event index_test) |
+| **Related Tests** | `src/test/rw019-sudo-correlation-id.test.ts`, `supabase/functions/log-sudo-event/index_test.ts` |
+| **Related Risk** | — |
+| **Recurrence Count** | 0 |
+| **Owner** | Project Lead |
+| **Added Date** | 2026-05-13 |
+| **Last Verified** | 2026-05-13 |
+| **Status** | Active |
+
+---
+
+### RW-020: audit_logs.correlation_id Index DDL Contract
+
+| Field | Value |
+|-------|-------|
+| **Area** | Database / Audit Logging |
+| **Risk Description** | Loss, rename, type change, or removal of the partial-`WHERE correlation_id IS NOT NULL` predicate on `idx_audit_logs_correlation_id` would silently degrade trace lookups from index seek to full table scan as audit_logs grows. |
+| **Regression Class** | Performance / Data Integrity |
+| **Priority** | High |
+| **Affected Modules** | audit-logging, database |
+| **Trigger Conditions** | Any migration touching `audit_logs` indexes; any change to `sql/01_rbac_schema.sql` or `sql/08_audit_correlation_id_index.sql`; any change to the audit-correlation-id-index contract doc. |
+| **Detection Method** | Static DDL validation in Vitest (rw020) + inline `DO $$ ... $$` self-check inside the migration that fails on missing/wrong shape. |
+| **Required Checks** | (1) Index name `idx_audit_logs_correlation_id` exists in both schema and migration files. (2) Index uses `btree (correlation_id)`. (3) Predicate is `WHERE correlation_id IS NOT NULL`. (4) Lookup tests filter by `correlation_id` only and exclude null-cid rows. (5) Contract doc unchanged or change accompanied by a new migration + ledger entry. |
+| **Verification Type** | Automated test (rw020) + migration self-check |
+| **Related Tests** | `src/test/rw020-audit-correlation-index.test.ts` |
+| **Related Risk** | — |
+| **Recurrence Count** | 0 |
+| **Owner** | Project Lead |
+| **Added Date** | 2026-05-13 |
+| **Last Verified** | 2026-05-13 |
 | **Status** | Active |
 
 ---

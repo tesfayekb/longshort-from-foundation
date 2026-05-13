@@ -1,4 +1,4 @@
--- MIG-NNN: audit_logs.correlation_id fast trace lookup index — idempotent guard + DDL self-check.
+-- MIG-022: audit_logs.correlation_id fast trace lookup index — idempotent guard + DDL self-check.
 -- PLAN-AUTH-SUDO-001 / DEC-029 / FP-003 / RW-019 / RW-020.
 -- Safe to re-run; index already exists from MIG-001 (sql/01_rbac_schema.sql).
 

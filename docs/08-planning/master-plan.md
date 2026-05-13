@@ -267,7 +267,7 @@ Replace hard-coded admin MFA enforcement with a superadmin-controlled per-panel 
 ---
 
 ### PLAN-AUTH-SUDO-001: Sensitive-Action Re-Authentication ("Sudo Mode")
-**Status:** `approved`
+**Status:** `implemented` (2026-05-13 — ACT-066, ACT-067; closure: [plan-auth-sudo-001-closure.md](phase-closures/plan-auth-sudo-001-closure.md))
 **Risk Level:** MEDIUM
 **Module Doc:** [auth.md](../04-modules/auth.md), [user-panel.md](../04-modules/user-panel.md), [audit-logging.md](../04-modules/audit-logging.md)
 
@@ -282,20 +282,22 @@ Close the unlocked-public-computer attack vector by requiring a fresh credential
 
 **Approval:** DEC-029 / FP-003
 
-**Acceptance Criteria:**
-- New hook `useSudoMode()` exposes `isSudo`, `grantSudo()`, `clearSudo()`, backed by `sessionStorage` key `auth.sudo_until`
-- New route guard `<RequireSudo>` wraps `/mfa-enroll` and prompts via `ReauthDialog` when not sudo
-- `SelfMfaPrefCard` toggle (both ON and OFF) blocked until sudo
-- `PasswordChangeCard` skips reauth prompt when sudo is active (but still requires fresh sudo if expired)
-- `SecurityPage` recovery code generation/regeneration gated by sudo
-- Existing MFA unenroll flow grants sudo on successful reauth (no functional regression)
-- `signOut()` and successful `updatePassword()` MUST clear sudo
-- New edge function `log-sudo-event` writes audit_logs row (`auth.sudo_granted` | `auth.sensitive_action_performed`) with actor_id from JWT
-- New `system_config` key `auth.sudo_window_seconds` (default 300, superadmin-tunable)
-- New audit events `auth.sudo_granted` and `auth.sensitive_action_performed` registered in `event-index.md`
-- Reference indexes updated: function-index (hook + edge fn), event-index (2 events), route-index (note `/mfa-enroll` sudo-gated), config-index (new key)
-- No new permissions, no new roles, no new tables
-- Phase gate: post-implementation, master-plan checkbox updated with ACT-NNN evidence
+**Acceptance Criteria (Phase Gate — all verified):**
+- [x] `useSudoMode()` hook exposes `isSudo`, `grantSudo()`, `clearSudo()` backed by `sessionStorage` key `auth.sudo_until` — *ACT-066: src/hooks/useSudoMode.ts; RW-017 covers expiry + clear paths.*
+- [x] `<RequireSudo>` route guard wraps `/mfa-enroll` and prompts via `ReauthDialog` when not sudo — *ACT-066: src/components/auth/RequireSudo.tsx; route-index L265 sudo-gated note.*
+- [x] `SelfMfaPrefCard` toggle (ON and OFF) blocked until sudo — *ACT-066: RW-017 case "MFA toggle".*
+- [x] `PasswordChangeCard` skips reauth prompt when sudo active, re-prompts on expiry — *ACT-066: RW-017 case "post-expiry re-prompt".*
+- [x] `SecurityPage` recovery-code generation/regeneration gated by sudo — *ACT-066: RW-017 case "recovery codes".*
+- [x] MFA unenroll flow grants sudo on successful reauth (no regression) — *ACT-066: RW-017 case "unenroll".*
+- [x] `signOut()` and successful `updatePassword()` clear sudo — *ACT-066: src/contexts/AuthContext.tsx + PasswordChangeCard; RW-017 covered.*
+- [x] Edge function `log-sudo-event` writes audit row with `actor_id` from JWT for both events — *ACT-066: supabase/functions/log-sudo-event/index.ts; RW-018 verifies actor_id + action_key.*
+- [x] `auth.sudo_window_seconds` config key registered (default 300) — *ACT-066: config-index L260.*
+- [x] `auth.sudo_granted` and `auth.sensitive_action_performed` registered in event-index — *ACT-066: event-index L525, L544.*
+- [x] Reference indexes updated (function/event/route/config) — *ACT-066: function-index L1344+L1364, event-index L525+L544, route-index L265, config-index L260.*
+- [x] No new permissions, no new roles, no new tables — *ACT-066: confirmed; only `audit_logs.correlation_id` index added (MIG-022).*
+- [x] correlation_id propagates client → server → audit row → 200/500 response — *ACT-067: RW-019 + log-sudo-event Deno tests.*
+- [x] `audit_logs.correlation_id` index governed by DDL contract with migration self-check — *ACT-067: MIG-022 / `sql/08_audit_correlation_id_index.sql` / `docs/07-reference/audit-correlation-id-index-contract.md`; RW-020.*
+- [x] Closure document published — *[plan-auth-sudo-001-closure.md](phase-closures/plan-auth-sudo-001-closure.md).*
 
 ---
 
