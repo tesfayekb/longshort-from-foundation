@@ -594,6 +594,21 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | **Linked Actions** | Stage 6A (DW-008) |
 | **Notes** | No client-side access by design. All operations via edge functions using service-role client. |
 
+### MIG-034: MFA Enforcement Policy Seed + Self-Preference Column
+
+| Field | Value |
+|-------|-------|
+| **Ledger ID** | MIG-034 |
+| **Migration File** | `20260513205352_6b48c3f6-f26d-4b5a-93db-7dff2a89201b.sql` |
+| **Source Dir** | `supabase/migrations/` |
+| **Applied Date** | 2026-05-13 |
+| **Sequence Order** | 34 |
+| **Purpose** | (1) Seeds `system_config` row `mfa_enforcement_policy` with `{ version: 1, panels: { admin: 'optional' } }` (dev default — production SOP must flip to `required`). (2) Adds `profiles.require_mfa_for_self boolean NOT NULL DEFAULT false` for the per-user opt-in MFA preference. Schema is forward-compatible: future panels (`trading`, `finance`, ...) only need a new key in the JSON value, no further migration. |
+| **Depends On** | MIG-001 (system_config), MIG-011 (profiles) |
+| **Status** | `active` |
+| **Linked Actions** | PLAN-AUTH-MFA-POLICY-001 (DEC-028 / FP-002) |
+| **Notes** | Idempotent — `INSERT … ON CONFLICT DO NOTHING` and `ADD COLUMN IF NOT EXISTS`. Column comment documents the user-only mutability contract. Superadmin policy CANNOT toggle `require_mfa_for_self`. |
+
 ---
 
 ### Tables (13)
@@ -614,6 +629,8 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | `job_executions` | MIG-025 | Active |
 | `job_idempotency_keys` | MIG-025 | Active |
 | `mfa_recovery_codes` | MIG-033 | Active |
+| `profiles.require_mfa_for_self` | MIG-034 | Active (column on existing `profiles` table) |
+| `system_config[key=mfa_enforcement_policy]` | MIG-034 | Active (seeded row) |
 
 ### Functions (12)
 
