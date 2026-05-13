@@ -126,7 +126,7 @@ Set these in **Supabase Dashboard → Settings → Edge Functions → Secrets**:
 | `SUPABASE_ANON_KEY` | Settings → API → anon public | Publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → service_role | ⚠️ Keep secret — full DB access |
 | `CRON_SECRET` | Generate: `openssl rand -hex 32` | Authenticates scheduled job calls |
-| `ALLOWED_ORIGINS` | Your app domain(s) | Comma-separated, e.g. `https://myapp.com,https://staging.myapp.com` |
+| `ALLOWED_ORIGINS` | Your app domain(s) | Comma-separated, e.g. `https://myapp.com,https://staging.myapp.com`. Lovable preview hosts (`*.lovable.app`, `*.lovableproject.com`, `*.lovable.dev`) are auto-allowed in addition to this list. |
 | `TURNSTILE_SECRET_KEY` | Cloudflare Dashboard → Turnstile | Server-side verification key |
 
 ### Development Shortcuts
@@ -271,5 +271,5 @@ After completing setup, verify each layer:
 | "relation does not exist" | Migrations not run or run out of order | Run `sql/` files first, then migrations in timestamp order |
 | Duplicate table errors | Ran `sql/` files AND migrations that recreate the same tables | Start fresh: reset DB, run in correct order |
 | Sign-up blocked | Pre-signup hook active + onboarding mode = `invite_only` | Either invite the user first or change onboarding mode to `open` |
-| CORS errors in browser | `ALLOWED_ORIGINS` not set or wrong domain | Set to your app's URL in edge function secrets |
+| CORS errors in browser | `ALLOWED_ORIGINS` not set or wrong domain (production only — Lovable preview hosts are auto-allowed) | Set to your app's URL in edge function secrets |
 | Turnstile not loading | Wrong site key or CSP blocking | Check `VITE_TURNSTILE_SITE_KEY` and `index.html` CSP `frame-src` |
