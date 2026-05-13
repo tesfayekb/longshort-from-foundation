@@ -414,6 +414,7 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | **Objects Affected** | Column: `audit_logs.correlation_id`; Index: `idx_audit_logs_correlation_id` (partial, WHERE NOT NULL) |
 | **Status** | `active` |
 | **Linked Actions** | ACT-055 |
+| **Notes** | DDL contract for this index is governed by [`docs/07-reference/audit-correlation-id-index-contract.md`](./audit-correlation-id-index-contract.md). Re-asserted with self-check by `sql/08_audit_correlation_id_index.sql` (PLAN-AUTH-SUDO-001 / RW-019 / RW-020). |
 
 ---
 
