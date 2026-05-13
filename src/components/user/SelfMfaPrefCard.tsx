@@ -22,14 +22,20 @@ export function SelfMfaPrefCard() {
   const { policy, isLoading, error, updateSelfPref, isUpdatingSelfPref } = useMfaPolicy();
   const { factors, loading: factorsLoading } = useMfaFactors();
   const [confirmOff, setConfirmOff] = useState(false);
+  const [confirmOn, setConfirmOn] = useState(false);
   const navigate = useNavigate();
 
   const handleToggle = useCallback(async (checked: boolean) => {
-    if (!checked) {
-      setConfirmOff(true);
+    if (checked) {
+      setConfirmOn(true);
       return;
     }
+    setConfirmOff(true);
+  }, []);
+
+  const handleConfirmOn = useCallback(async () => {
     await updateSelfPref(true);
+    setConfirmOn(false);
   }, [updateSelfPref]);
 
   const handleConfirmOff = useCallback(async () => {
@@ -107,6 +113,15 @@ export function SelfMfaPrefCard() {
         description="You can still keep your authenticator enrolled — this only removes the requirement to have one before accessing your pages."
         confirmLabel="Disable preference"
         onConfirm={handleConfirmOff}
+      />
+
+      <ConfirmActionDialog
+        open={confirmOn}
+        onOpenChange={setConfirmOn}
+        title="Require MFA for your account?"
+        description="Once enabled, every authenticated page will require your authenticator. If you ever remove your TOTP factor while this is on, you will be redirected to the enrollment page on the next protected request and cannot access your dashboard until you enroll again."
+        confirmLabel="Enable requirement"
+        onConfirm={handleConfirmOn}
       />
     </>
   );

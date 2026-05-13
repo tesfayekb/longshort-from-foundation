@@ -142,6 +142,10 @@ export default function SecurityPage() {
       <PageHeader title="Security" subtitle="Manage MFA, recovery codes, linked accounts, and session security" />
 
       <div className="grid gap-6 max-w-2xl">
+        {/* Password change — placed first as it is the most frequently-used
+            action on this page. */}
+        <PasswordChangeCard />
+
         {/* MFA Status */}
         <Card>
           <CardHeader>
@@ -340,9 +344,6 @@ export default function SecurityPage() {
             )}
           </CardContent>
         </Card>
-
-        {/* Password change — credential management lives next to linked accounts */}
-        <PasswordChangeCard />
 
         {/* Active Sessions — destructive session controls grouped together */}
         <Card>
