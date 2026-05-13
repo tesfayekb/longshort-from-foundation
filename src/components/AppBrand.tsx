@@ -9,7 +9,7 @@ interface AppBrandProps {
 }
 
 export function AppBrand({
-  appName = 'Foundation First',
+  appName = 'LongShort',
   appIcon: Icon = Shield,
   showName = true,
   className,
