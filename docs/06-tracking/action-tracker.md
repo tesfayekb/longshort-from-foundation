@@ -1674,6 +1674,40 @@ Each action must include:
 
 ---
 
+### ACT-066: PLAN-AUTH-SUDO-001 — Sudo-Mode Implementation & Regression Coverage
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-066 |
+| **Date** | 2026-05-13 |
+| **Action** | Implemented PLAN-AUTH-SUDO-001 (DEC-029 / FP-003) sensitive-action re-authentication. Added `useSudoMode` hook (sessionStorage-backed `auth.sudo_until`, default 5-min window), `useSudoGate` inline helper, `<RequireSudo>` route guard, and wired sudo gating into `/mfa-enroll`, `SelfMfaPrefCard` toggle (ON/OFF), `PasswordChangeCard`, `SecurityPage` recovery-code generation, and MFA unenroll. `signOut()` and successful `updatePassword()` clear sudo. New edge function `log-sudo-event` writes `auth.sudo_granted` and `auth.sensitive_action_performed` audit rows with `actor_id` from JWT. Registered both events in event-index, hook + edge fn in function-index, sudo-gated note on `/mfa-enroll` in route-index, and `auth.sudo_window_seconds` key in config-index. Added regression coverage RW-017 (sudo protection) and RW-018 (sudo audit completeness). |
+| **Type** | Security |
+| **Impact Classification** | High |
+| **Modules Affected** | auth, user-panel, audit-logging |
+| **Files Changed** | src/hooks/useSudoMode.ts, src/components/auth/RequireSudo.tsx, src/components/auth/SudoGate.tsx, src/components/auth/ReauthDialog.tsx, src/components/user/SelfMfaPrefCard.tsx, src/components/user/PasswordChangeCard.tsx, src/pages/user/SecurityPage.tsx, src/pages/MfaEnroll.tsx, src/contexts/AuthContext.tsx, src/lib/sudo-audit.ts, supabase/functions/log-sudo-event/index.ts, src/test/rw017-sudo-mode-protection.test.ts, src/test/rw018-sudo-audit-events.test.ts, docs/06-tracking/regression-watchlist.md (RW-017, RW-018), docs/07-reference/{function,event,route,config}-index.md, docs/08-planning/master-plan.md |
+| **Related Tests** | src/test/rw017-sudo-mode-protection.test.ts, src/test/rw018-sudo-audit-events.test.ts |
+| **Evidence** | RW-017 vitest suite green: enroll route, MFA toggle (ON/OFF), recovery-code generation, and unenroll all blocked until sudo and re-prompt after expiry; `signOut()` + `updatePassword()` clear sudo. RW-018 vitest suite green: every grant emits `auth.sudo_granted` and every protected action emits `auth.sensitive_action_performed` with `actor_id` from JWT and matching `action_key`. Reference indexes reconciled (function-index L1344/L1364, event-index L525/L544, route-index L265, config-index L260). |
+| **Status** | Verified |
+
+---
+
+### ACT-067: PLAN-AUTH-SUDO-001 — correlation_id End-to-End Trace + Index DDL Contract
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-067 |
+| **Date** | 2026-05-13 |
+| **Action** | Closed end-to-end correlation_id trace for sudo audit chain. (1) `apiClient` generates a per-request correlation_id and exposes it; `logSudoEvent` forwards client cid to `log-sudo-event` and the edge function persists it into the `audit_logs.correlation_id` column on success and surfaces it in 200/500 responses (server-generated UUID flows through when client omits). (2) Authored MIG-022 (`sql/08_audit_correlation_id_index.sql`): idempotent partial btree `idx_audit_logs_correlation_id ON public.audit_logs (correlation_id) WHERE correlation_id IS NOT NULL` with inline `DO $$ ... $$` self-check that fails the migration on missing/wrong access method or missing predicate. (3) Authored canonical DDL contract `docs/07-reference/audit-correlation-id-index-contract.md` and cross-linked from audit-logging module + migration ledger MIG-022. (4) Added regression coverage RW-019 (cid propagation, client + server) and RW-020 (index DDL contract + lookup semantics). |
+| **Type** | Security |
+| **Impact Classification** | High |
+| **Modules Affected** | auth, audit-logging, api, database |
+| **Files Changed** | src/lib/api-client.ts, src/lib/sudo-audit.ts, supabase/functions/log-sudo-event/index.ts, supabase/functions/log-sudo-event/index_test.ts, sql/08_audit_correlation_id_index.sql, supabase/migrations/20260513222245_98d7f94f-2838-49ce-a6ab-d0f84e4fb2b8.sql, src/test/rw019-sudo-correlation-id.test.ts, src/test/rw020-audit-correlation-index.test.ts, docs/07-reference/audit-correlation-id-index-contract.md, docs/04-modules/audit-logging.md, docs/07-reference/database-migration-ledger.md, docs/06-tracking/regression-watchlist.md (RW-019, RW-020) |
+| **Related Tests** | src/test/rw019-sudo-correlation-id.test.ts, src/test/rw020-audit-correlation-index.test.ts, supabase/functions/log-sudo-event/index_test.ts |
+| **Evidence** | RW-019 vitest suite green: client buffer cid === request body cid === server response cid on both 200 and 500 paths; cid persisted to row on success path. log-sudo-event Deno tests green: cid round-trips through `auth.sudo_granted` (success) and `auth.sensitive_action_performed` (500) and server-generated UUID flows when client omits cid. RW-020 vitest suite green: static DDL validation of `sql/01_rbac_schema.sql` + `sql/08_audit_correlation_id_index.sql` confirms partial btree on `(correlation_id) WHERE correlation_id IS NOT NULL`; lookup semantics tests confirm `.eq('correlation_id', cid)` returns only exact UUID matches and excludes null-cid rows. Migration self-check `RAISE EXCEPTION` covers missing index, non-btree, and missing predicate. |
+| **Status** | Verified |
+
+---
+
 - Regression fix actions must reference the original regression
 - Repeated failures in same area → tracked via recurrence in watchlist, referenced here
 
