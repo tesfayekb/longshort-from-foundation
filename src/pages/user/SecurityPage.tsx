@@ -267,6 +267,10 @@ export default function SecurityPage() {
           </CardContent>
         </Card>
 
+        {/* Personal MFA enforcement preference (PLAN-AUTH-MFA-POLICY-001) —
+            grouped with MFA + Recovery Codes since they're all auth-strength controls. */}
+        <SelfMfaPrefCard />
+
         {/* Linked Accounts (DW-001, DW-002) */}
         <Card>
           <CardHeader>
@@ -329,7 +333,48 @@ export default function SecurityPage() {
           </CardContent>
         </Card>
 
-        {/* Session info */}
+        {/* Password change — credential management lives next to linked accounts */}
+        <PasswordChangeCard />
+
+        {/* Active Sessions — destructive session controls grouped together */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Monitor className="h-4 w-4" />
+              Active Sessions
+            </CardTitle>
+            <CardDescription>
+              Manage your active sessions across devices
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRevokeOthers(true)}
+                disabled={revoking}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign out other devices
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowRevokeAll(true)}
+                disabled={revoking}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign out everywhere
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              "Sign out other devices" keeps your current session. "Sign out everywhere" terminates all sessions including this one.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Session info — informational, last */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -373,50 +418,6 @@ export default function SecurityPage() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Session Management (DW-019) */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Monitor className="h-4 w-4" />
-              Active Sessions
-            </CardTitle>
-            <CardDescription>
-              Manage your active sessions across devices
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowRevokeOthers(true)}
-                disabled={revoking}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign out other devices
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setShowRevokeAll(true)}
-                disabled={revoking}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign out everywhere
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              "Sign out other devices" keeps your current session. "Sign out everywhere" terminates all sessions including this one.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Password change */}
-        <PasswordChangeCard />
-
-        {/* Personal MFA enforcement preference (PLAN-AUTH-MFA-POLICY-001) */}
-        <SelfMfaPrefCard />
       </div>
 
       {/* Session revocation confirmations */}
