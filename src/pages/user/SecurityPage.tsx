@@ -345,9 +345,6 @@ export default function SecurityPage() {
           </CardContent>
         </Card>
 
-        {/* Password change — credential management lives next to linked accounts */}
-        <PasswordChangeCard />
-
         {/* Active Sessions — destructive session controls grouped together */}
         <Card>
           <CardHeader>
