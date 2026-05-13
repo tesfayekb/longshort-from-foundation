@@ -9,7 +9,7 @@ import type { NavSection } from '@/config/navigation.types';
 
 interface DashboardLayoutProps {
   sections: NavSection[];
-  /** Label shown in the sidebar header. Defaults to "Foundation First". */
+  /** Label shown in the sidebar header. Defaults to "LongShort". */
   title?: string;
   /** Optional children to render instead of <Outlet />. Used when layout wraps permission gates. */
   children?: React.ReactNode;

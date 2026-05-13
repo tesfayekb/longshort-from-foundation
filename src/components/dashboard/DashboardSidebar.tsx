@@ -42,7 +42,7 @@ interface DashboardSidebarProps {
   title?: string;
 }
 
-export const DashboardSidebar = React.memo(function DashboardSidebar({ sections, title = 'Foundation First' }: DashboardSidebarProps) {
+export const DashboardSidebar = React.memo(function DashboardSidebar({ sections, title = 'LongShort' }: DashboardSidebarProps) {
   const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === 'collapsed' && !isMobile;
   const location = useLocation();
@@ -84,10 +84,20 @@ export const DashboardSidebar = React.memo(function DashboardSidebar({ sections,
     [context],
   );
 
-  const activeDashboard = useMemo(
-    () => availableDashboards.find((d) => location.pathname.startsWith(d.basePath)),
-    [availableDashboards, location.pathname],
-  );
+  const activeDashboard = useMemo(() => {
+    // Direct prefix match (e.g. /admin/*, /dashboard/*)
+    const direct = availableDashboards.find((d) =>
+      location.pathname.startsWith(d.basePath),
+    );
+    if (direct) return direct;
+    // Fallback: routes that live under the user shell but don't share its
+    // basePath (e.g. /settings/*, /profile, /security) should still resolve
+    // to the user dashboard so the switcher renders correctly.
+    return (
+      availableDashboards.find((d) => d.id === 'user') ??
+      availableDashboards[0]
+    );
+  }, [availableDashboards, location.pathname]);
 
   const handleDashboardSwitch = useCallback(
     (basePath: string) => {
