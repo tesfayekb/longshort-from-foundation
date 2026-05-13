@@ -74,12 +74,12 @@ export default function AdminJobsPage() {
   const { data: jobs, isLoading: loadingJobs, error: jobsError } = useQuery({
     queryKey: ['admin', 'job-registry'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('job_registry')
         .select('*')
         .order('id');
       if (error) throw error;
-      return (data ?? []) as JobRegistry[];
+      return (data ?? []) as unknown as JobRegistry[];
     },
   });
 
@@ -87,13 +87,13 @@ export default function AdminJobsPage() {
   const { data: executions } = useQuery({
     queryKey: ['admin', 'job-executions'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('job_executions')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
-      return (data ?? []) as JobExecution[];
+      return (data ?? []) as unknown as JobExecution[];
     },
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
@@ -103,14 +103,14 @@ export default function AdminJobsPage() {
   const { data: deadLetters, refetch: refetchDeadLetters } = useQuery({
     queryKey: ['admin', 'dead-letters'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('job_executions')
         .select('*')
         .eq('state', 'dead_lettered')
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
-      return (data ?? []) as JobExecution[];
+      return (data ?? []) as unknown as JobExecution[];
     },
   });
 
