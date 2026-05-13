@@ -43,13 +43,20 @@ export default function SecurityPage() {
     if (!factorToRemove) return;
     const success = await unenrollFactor(factorToRemove.id);
     if (success) {
+      // Refresh the session so the JWT's `aal` claim drops to aal1; without
+      // this, mfaStatus would remain 'enrolled' even though no factor exists.
+      await supabase.auth.refreshSession();
       await checkMfaStatus();
     }
     setFactorToRemove(null);
   }, [factorToRemove, unenrollFactor, checkMfaStatus]);
 
   const verifiedFactors = factors.filter((f) => f.status === 'verified');
-  const hasMfa = mfaStatus === 'enrolled' || verifiedFactors.length > 0;
+  // Single source of truth: a verified TOTP factor exists in the database.
+  // We deliberately do NOT consult `mfaStatus` here — that value is derived
+  // from the access-token `aal` claim, which lags reality after an unenroll
+  // until the session is refreshed (handled in handleReauthVerified above).
+  const hasMfa = verifiedFactors.length > 0;
 
   const handleRevokeSessions = useCallback(async (scope: 'others' | 'global') => {
     setRevoking(true);
