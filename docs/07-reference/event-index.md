@@ -522,6 +522,44 @@ Key event chains showing upstream triggers and downstream effects:
 | **Related tests** | Session revocation emission test, audit consumer test |
 | **Lifecycle** | active |
 
+#### `auth.sudo_granted` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | security |
+| **Severity** | HIGH |
+| **Owner module** | auth |
+| **Consumers** | audit-logging |
+| **Description** | A "sudo mode" window was opened by a successful re-authentication. Subsequent sensitive actions within the window will not re-prompt. (PLAN-AUTH-SUDO-001 / DEC-029) |
+| **Payload schema** | `{ actor_id: uuid, action: "auth.sudo_granted", target_type: "auth.sudo", target_id: uuid (== actor_id), metadata: { action_key: string }, ip_address: string, user_agent: string, correlation_id: string }` |
+| **Delivery guarantee** | at-least-once |
+| **Ordering** | strict |
+| **Idempotency** | event_id (UUID) |
+| **Retry policy** | none — audit-write failure must not block the action; client logs warning |
+| **Failure handling** | console warning, alert if rate of failures exceeds threshold |
+| **Observability** | Logged, audited |
+| **Related tests** | Sudo grant emission, audit row presence with correct actor_id |
+| **Lifecycle** | active |
+
+#### `auth.sensitive_action_performed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | security |
+| **Severity** | HIGH |
+| **Owner module** | auth |
+| **Consumers** | audit-logging |
+| **Description** | A sudo-gated sensitive action was executed (MFA enroll, MFA toggle, password change, recovery code generation, MFA unenroll). Always emitted on protected action whether sudo was freshly granted or already active. (PLAN-AUTH-SUDO-001 / DEC-029) |
+| **Payload schema** | `{ actor_id: uuid, action: "auth.sensitive_action_performed", target_type: "auth.sudo", target_id: uuid (== actor_id), metadata: { action_key: string }, ip_address: string, user_agent: string, correlation_id: string }` |
+| **Delivery guarantee** | at-least-once |
+| **Ordering** | strict |
+| **Idempotency** | event_id (UUID) |
+| **Retry policy** | none — audit-write failure must not block the action; client logs warning |
+| **Failure handling** | console warning, alert if rate of failures exceeds threshold |
+| **Observability** | Logged, audited |
+| **Related tests** | Each protected action writes one row with correct action_key |
+| **Lifecycle** | active |
+
 ### RBAC Events
 
 #### `rbac.role_assigned` — v1
