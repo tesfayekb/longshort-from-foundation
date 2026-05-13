@@ -345,6 +345,27 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | **Related risks** | RISK-002 (privilege escalation) |
 | **Lifecycle** | active |
 
+#### `/admin/security` — MFA Enforcement Policy
+
+| Field | Value |
+|-------|-------|
+| **Page** | Admin Security (MFA Policy) |
+| **Module** | admin-panel |
+| **Classification** | privileged, destructive |
+| **Auth required** | Yes |
+| **Permission required** | `admin.access` + `admin.config` (write) |
+| **Scope** | system-wide |
+| **Panel** | admin-panel |
+| **Reauth required** | Yes (5 min — enforced by `update-mfa-policy`) |
+| **Audit required** | Yes — every change emits `system.mfa_policy_changed` |
+| **Related functions** | `get-mfa-policy`, `update-mfa-policy`, `useMfaPolicy()` |
+| **Related events** | `system.mfa_policy_changed` |
+| **Related risks** | RISK-001 (credential compromise — MFA downgrade) |
+| **Related watchlist** | RW-016 |
+| **Related tests** | RW-016 (`src/test/rw016-mfa-policy-enforcement.test.ts`) |
+| **Lifecycle** | active |
+| **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
+
 #### `/admin/users` — User Management
 
 | Field | Value |
