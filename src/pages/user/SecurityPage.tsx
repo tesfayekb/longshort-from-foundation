@@ -414,6 +414,9 @@ export default function SecurityPage() {
 
         {/* Password change */}
         <PasswordChangeCard />
+
+        {/* Personal MFA enforcement preference (PLAN-AUTH-MFA-POLICY-001) */}
+        <SelfMfaPrefCard />
       </div>
 
       {/* Session revocation confirmations */}
