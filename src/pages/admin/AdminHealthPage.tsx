@@ -13,6 +13,32 @@ import { format } from 'date-fns';
 
 type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
 
+type HealthSnapshot = {
+  id: string;
+  created_at: string;
+  status: string;
+  checks: Record<string, { status: string; latency_ms?: number; error?: string }>;
+};
+type MetricRow = { id: string; metric_key: string; value: number; recorded_at: string };
+type AlertRow = {
+  id: string;
+  metric_key: string;
+  metric_value: number;
+  threshold_value: number;
+  severity: string;
+  resolved_at: string | null;
+  created_at: string;
+};
+type AlertConfigRow = {
+  id: string;
+  metric_key: string;
+  comparison: string;
+  threshold_value: number;
+  severity: string;
+  cooldown_seconds: number;
+  enabled: boolean;
+};
+
 const STATUS_CONFIG = {
   healthy: { Icon: CheckCircle, className: 'text-success', badgeClass: 'bg-success/10 text-success border-success/20' },
   degraded: { Icon: AlertTriangle, className: 'text-warning', badgeClass: 'bg-warning/10 text-warning border-warning/20' },
