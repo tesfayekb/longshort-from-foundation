@@ -575,8 +575,6 @@ _Updated as items are added, triggered, or resolved._
 
 ---
 
-## Link to Risk Register
-
 ### RW-017: Sudo-Mode Protection On Sensitive Actions
 
 | Field | Value |
