@@ -22,6 +22,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import MfaChallenge from "./pages/MfaChallenge";
 import MfaEnroll from "./pages/MfaEnroll";
+import { RequireSudo } from "./components/auth/RequireSudo";
 
 // Layouts (eagerly loaded — shell must be ready immediately)
 import { AdminLayout } from "./layouts/AdminLayout";
@@ -108,7 +109,9 @@ const App = () => (
               <Route path="/mfa-enroll" element={
                 <RequireAuth>
                   <RequireVerifiedEmail>
-                    <MfaEnroll />
+                    <RequireSudo actionKey="mfa_enroll_route" fallback="/settings/security">
+                      <MfaEnroll />
+                    </RequireSudo>
                   </RequireVerifiedEmail>
                 </RequireAuth>
               } />
