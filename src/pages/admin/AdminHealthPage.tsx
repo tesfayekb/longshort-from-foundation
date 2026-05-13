@@ -37,18 +37,20 @@ export default function AdminHealthPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin', 'health-all'],
     queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const db = supabase as any;
       const [snapshotRes, metricsRes, alertsRes, configsRes] = await Promise.all([
-        supabase.from('system_health_snapshots').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('system_metrics').select('*').order('recorded_at', { ascending: false }).limit(50),
-        supabase.from('alert_history').select('*').order('created_at', { ascending: false }).limit(20),
-        supabase.from('alert_configs').select('*').order('created_at', { ascending: false }),
+        db.from('system_health_snapshots').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        db.from('system_metrics').select('*').order('recorded_at', { ascending: false }).limit(50),
+        db.from('alert_history').select('*').order('created_at', { ascending: false }).limit(20),
+        db.from('alert_configs').select('*').order('created_at', { ascending: false }),
       ]);
       if (snapshotRes.error) throw snapshotRes.error;
       return {
-        snapshot: snapshotRes.data,
-        metrics: metricsRes.data ?? [],
-        alerts: alertsRes.data ?? [],
-        alertConfigs: configsRes.data ?? [],
+        snapshot: snapshotRes.data as HealthSnapshot | null,
+        metrics: (metricsRes.data ?? []) as MetricRow[],
+        alerts: (alertsRes.data ?? []) as AlertRow[],
+        alertConfigs: (configsRes.data ?? []) as AlertConfigRow[],
       };
     },
     refetchInterval: 60_000,
