@@ -9,6 +9,7 @@ import {
   emitFailedAttempt,
   emitPasswordReset,
 } from '@/lib/auth-events';
+import { clearSudo } from '@/hooks/useSudoMode';
 
 type MfaStatus = 'none' | 'enrolled' | 'challenge_required';
 
@@ -186,6 +187,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const userId = state.user?.id;
     queryClient.clear();
+    // PLAN-AUTH-SUDO-001 — sudo MUST NOT survive a sign-out.
+    clearSudo();
     // Local sign-out only — clears this browser's session without a server round-trip.
     // "Sign out everywhere" (global revocation) is handled by SecurityPage → revoke-sessions edge function.
     await supabase.auth.signOut({ scope: 'local' });
@@ -208,6 +211,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.updateUser({ password });
     if (!error && state.user) {
       emitPasswordReset(state.user.id, 'completed');
+      // PLAN-AUTH-SUDO-001 — invalidate sudo after a password change so the
+      // new credential must be proven again before the next sensitive action.
+      clearSudo();
       // GAP 8: Revoke all other sessions after password change to prevent
       // compromised sessions from remaining active
       await supabase.auth.signOut({ scope: 'others' });
