@@ -1291,6 +1291,11 @@ When changing any indexed function:
 | **Error behavior** | 405 on non-GET; service-role read errors propagate as 500 from handler. |
 | **Security** | Bearer JWT required. No secrets in payload. Cached client-side 5 min via React Query. |
 | **Lifecycle** | active |
+| **Related routes** | `GET /get-mfa-policy`, `/admin/security`, `/settings/security`, `/admin`, all user-panel routes |
+| **Related permissions** | — (any authenticated user) |
+| **Related events** | — (read-only) |
+| **Related watchlist** | RW-016 |
+| **Related tests** | RW-016 (`src/test/rw016-mfa-policy-enforcement.test.ts`) |
 | **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
 
 ### `update-mfa-policy` — Edge Function
@@ -1307,6 +1312,12 @@ When changing any indexed function:
 | **Error behavior** | 403 if not superadmin; 403 without `admin.config`; 401 if reauth older than 5 min; 400 on invalid enum. |
 | **Security** | Defense in depth: `is_superadmin` RPC + `checkPermissionOrThrow('admin.config')` + `requireRecentAuth(5 min)`. |
 | **Lifecycle** | active |
+| **Related routes** | `PATCH /update-mfa-policy`, `/admin/security` |
+| **Related permissions** | `admin.config` (+ `is_superadmin`) |
+| **Related events** | `system.mfa_policy_changed` |
+| **Related risks** | RISK-001 (credential compromise — MFA downgrade) |
+| **Related watchlist** | RW-016 |
+| **Related tests** | RW-016 (`src/test/rw016-mfa-policy-enforcement.test.ts`) |
 | **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
 
 ### `update-mfa-self-pref` — Edge Function
