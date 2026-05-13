@@ -13,14 +13,14 @@ import { Button } from '@/components/ui/button';
 import { LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ErrorState } from '@/components/dashboard/ErrorState';
 import { useMfaPolicy } from '@/hooks/useMfaPolicy';
-import { useAuth } from '@/contexts/AuthContext';
+import { useMfaFactors } from '@/hooks/useMfaFactors';
 import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
 import { Lock, ShieldAlert } from 'lucide-react';
 import { ROUTES } from '@/config/routes';
 
 export function SelfMfaPrefCard() {
-  const { mfaStatus } = useAuth();
   const { policy, isLoading, error, updateSelfPref, isUpdatingSelfPref } = useMfaPolicy();
+  const { factors, loading: factorsLoading } = useMfaFactors();
   const [confirmOff, setConfirmOff] = useState(false);
   const navigate = useNavigate();
 
@@ -37,11 +37,13 @@ export function SelfMfaPrefCard() {
     setConfirmOff(false);
   }, [updateSelfPref]);
 
-  if (isLoading) return <LoadingSkeleton />;
+  if (isLoading || factorsLoading) return <LoadingSkeleton />;
   if (error) return <ErrorState message={error.message} />;
   if (!policy) return null;
 
-  const enrolled = mfaStatus === 'enrolled';
+  // Authoritative: presence of a verified TOTP factor in the database.
+  // Avoids drift from a stale `aal` JWT claim after unenroll.
+  const enrolled = factors.some((f) => f.status === 'verified');
   const canEnable = enrolled; // Cannot require MFA without an authenticator
 
   return (
