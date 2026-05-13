@@ -1508,6 +1508,64 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | **Lifecycle** | active |
 | **Added By** | PLAN-INVITE-001 Phase 2 |
 
+### GET /get-mfa-policy — Per-User MFA Enforcement View
+
+| Field | Value |
+|-------|-------|
+| **Path** | `GET /get-mfa-policy` |
+| **Classification** | api-standard |
+| **Owner Module** | auth |
+| **Auth** | Bearer JWT |
+| **Permission** | None (any authenticated user) |
+| **Rate Limit** | standard |
+| **Request Body** | None |
+| **Response** | `{ version: number, panels: { admin: 'required' \| 'optional', [key: string]: 'required' \| 'optional' }, require_mfa_for_self: boolean }` |
+| **Audit** | No (read-only) |
+| **Idempotent** | Yes |
+| **Related functions** | `useMfaPolicy()`, `mfaPolicyQueryFn()` |
+| **Related watchlist** | RW-016 |
+| **Lifecycle** | active |
+| **Added By** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
+
+### PATCH /update-mfa-policy — Update Per-Panel MFA Policy
+
+| Field | Value |
+|-------|-------|
+| **Path** | `PATCH /update-mfa-policy` |
+| **Classification** | privileged, destructive, security-critical |
+| **Owner Module** | auth |
+| **Auth** | Bearer JWT + reauth (5 min) |
+| **Permission** | `admin.config` + `is_superadmin` (defense in depth) |
+| **Rate Limit** | strict |
+| **Request Body** | `{ panels: { [panelKey: string]: 'required' \| 'optional' } }` |
+| **Response** | `{ policy: { version, panels, ...}, changed: boolean }` |
+| **Audit** | Yes — `system.mfa_policy_changed` (with before/after/fields_changed) |
+| **Idempotent** | Yes (no-op when value unchanged) |
+| **Related events** | `system.mfa_policy_changed` |
+| **Related risks** | RISK-001 |
+| **Related watchlist** | RW-016 |
+| **Lifecycle** | active |
+| **Added By** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
+
+### PATCH /update-mfa-self-pref — User MFA Self-Preference Toggle
+
+| Field | Value |
+|-------|-------|
+| **Path** | `PATCH /update-mfa-self-pref` |
+| **Classification** | security-relevant |
+| **Owner Module** | auth |
+| **Auth** | Bearer JWT |
+| **Permission** | None (self-scope only — `WHERE id = ctx.user.id`) |
+| **Rate Limit** | standard |
+| **Request Body** | `{ require_mfa_for_self: boolean }` |
+| **Response** | `{ require_mfa_for_self: boolean, changed: boolean }` |
+| **Audit** | Yes — `user.mfa_self_pref_changed` (only when value changes) |
+| **Idempotent** | Yes |
+| **Related events** | `user.mfa_self_pref_changed` |
+| **Related watchlist** | RW-016 |
+| **Lifecycle** | active |
+| **Added By** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
+
 ### POST /invite-user — Send Single Invitation
 
 | Field | Value |
