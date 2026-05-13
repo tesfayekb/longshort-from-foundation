@@ -176,6 +176,27 @@ export type Database = {
         }
         Relationships: []
       }
+      system_health_snapshots: {
+        Row: {
+          checks: Json
+          created_at: string
+          id: string
+          status: string
+        }
+        Insert: {
+          checks?: Json
+          created_at?: string
+          id?: string
+          status: string
+        }
+        Update: {
+          checks?: Json
+          created_at?: string
+          id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           assigned_at: string
