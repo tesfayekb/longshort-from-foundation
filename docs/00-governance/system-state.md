@@ -48,9 +48,13 @@ deferred_work_closed_this_phase: [DW-001, DW-008, DW-016, DW-017, DW-018, DW-019
 manual_deployment_actions:
   - pre_signup_hook: "Register in Supabase Dashboard → Auth → Hooks → Before user is created → auth-hook-pre-signup edge function"
   - custom_smtp: "Configure custom SMTP before production (Supabase Dashboard → Auth → Settings → SMTP). Resend recommended."
-deployment_config_required:
-  - leaked_password_protection: "Enable in Supabase Dashboard → Authentication → Settings → Leaked Password Protection. Cannot be set via SQL migration or edge function. Required for A+ security posture."
-last_updated: 2026-04-14
+deployment_config_required: []
+deployment_config_completed:
+  - leaked_password_protection: "Enabled 2026-05-13 in Supabase Dashboard → Authentication → Sign In / Providers → Email → Password HIBP Check. Clears SUPA_auth_leaked_password_protection linter warning."
+  - app_rebrand_longshort: "App rebranded from 'Foundation First' to 'LongShort' on 2026-05-13. Updated index.html, public/manifest.json, src/components/AppBrand.tsx."
+  - rls_hardening_2026_05_13: "Migration 20260513195212 — restricted system_config SELECT to is_superadmin(); added owner-scoped SELECT policies on mfa_recovery_codes and mfa_recovery_attempts; added admin/accepting-user SELECT policy on invitations."
+  - route_index_reconciliation_2026_05_13: "Added auth-hook-pre-signup and verify-turnstile entries to docs/07-reference/route-index.md (Reconciliation Addendum)."
+last_updated: 2026-05-13
 ```
 
 ## RBAC Governance Hardening (2026-04-13)
