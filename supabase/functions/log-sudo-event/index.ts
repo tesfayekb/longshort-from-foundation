@@ -33,7 +33,8 @@ const BodySchema = z.object({
   correlation_id: z.string().uuid().optional(),
 })
 
-Deno.serve(createHandler(async (req: Request) => {
+/** Exported for tests; production binding is `Deno.serve(handler)` below. */
+export const handler = createHandler(async (req: Request) => {
   if (req.method !== 'POST') {
     const { apiError } = await import('../_shared/api-error.ts')
     return apiError(405, 'Method not allowed', { correlationId: crypto.randomUUID() })
@@ -62,4 +63,6 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   return apiSuccess({ logged: true, correlation_id: correlationId })
-}))
+})
+
+Deno.serve(handler)
