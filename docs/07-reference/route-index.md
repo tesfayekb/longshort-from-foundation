@@ -1597,3 +1597,53 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 - [Admin Panel Module](../04-modules/admin-panel.md)
 - [User Panel Module](../04-modules/user-panel.md)
 - [Architecture Overview](../01-architecture/architecture-overview.md)
+
+---
+
+## Reconciliation Addendum (2026-05-13) — System Webhooks & Anti-Abuse
+
+The two endpoints below were deployed as part of the auth + onboarding hardening but were not previously listed in this index. Added now to satisfy the Reconciliation Rule (reference indexes MUST match deployed code).
+
+### POST /auth-hook-pre-signup — Auth Webhook: Pre-Signup
+
+| Field | Value |
+|-------|-------|
+| **Module** | auth |
+| **Classification** | internal |
+| **Auth required** | No (called by Supabase Auth via signed webhook) |
+| **Permission required** | n/a — webhook signature verified server-side |
+| **Scope** | system-wide |
+| **Panel** | none (system webhook) |
+| **Purpose** | Pre-signup gate. Enforces invite-only mode (when `system_config.onboarding_mode = 'invite_only'`) by rejecting signups whose email is not associated with a pending, unexpired invitation. Returns `decision: reject` with a localized message when blocked. |
+| **Request schema** | Supabase Auth `BeforeUserCreated` event payload (`{ user: { email, ... }, ... }`) |
+| **Response contract** | `200 { decision: "continue" }` (allowed) / `200 { decision: "reject", message }` (blocked) |
+| **Rate limit class** | bypass (Supabase-internal caller) |
+| **Audit required** | Yes — emits `user.signup_blocked_invite_only` when rejecting |
+| **Idempotent** | Yes (read-only over `system_config` + `invitations`) |
+| **Related functions** | `is_superadmin()` (n/a here), invitation lookup query |
+| **Related events** | `user.signup_blocked_invite_only` |
+| **Manual deployment action** | Must be registered in Supabase Dashboard → Auth → Hooks → **Before user is created**. See `system-state.md → manual_deployment_actions.pre_signup_hook`. |
+| **Lifecycle** | active |
+| **Added By** | PLAN-INVITE-001 Phase 1 (reconciled to index 2026-05-13) |
+
+### POST /verify-turnstile — Cloudflare Turnstile Verification
+
+| Field | Value |
+|-------|-------|
+| **Module** | auth |
+| **Classification** | internal |
+| **Auth required** | No (challenge precedes authentication) |
+| **Permission required** | n/a |
+| **Scope** | system-wide |
+| **Panel** | public (called from sign-in / sign-up / forgot-password forms) |
+| **Purpose** | Server-side verification of Cloudflare Turnstile challenge tokens to defend `/sign-in`, `/sign-up`, and `/forgot-password` against bot/credential-stuffing abuse. |
+| **Request schema** | `{ token: string, action?: string }` |
+| **Response contract** | `200 { success: true }` / `400 { success: false, error }` / `401 { success: false }` (invalid token) |
+| **Required env** | `TURNSTILE_SECRET_KEY` (server), `TURNSTILE_SITE_KEY` (client, via `VITE_*`) |
+| **Rate limit class** | strict (per-IP) |
+| **Audit required** | No |
+| **Idempotent** | Yes (single-use token per call, but call itself is side-effect-free server-side) |
+| **Related components** | `src/components/auth/TurnstileWidget.tsx` |
+| **Related events** | none |
+| **Lifecycle** | active |
+| **Added By** | Auth Phase 1 hardening (reconciled to index 2026-05-13) |
