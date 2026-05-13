@@ -13,6 +13,32 @@ import { format } from 'date-fns';
 
 type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
 
+type HealthSnapshot = {
+  id: string;
+  created_at: string;
+  status: string;
+  checks: Record<string, { status: string; latency_ms?: number; error?: string }>;
+};
+type MetricRow = { id: string; metric_key: string; value: number; recorded_at: string };
+type AlertRow = {
+  id: string;
+  metric_key: string;
+  metric_value: number;
+  threshold_value: number;
+  severity: string;
+  resolved_at: string | null;
+  created_at: string;
+};
+type AlertConfigRow = {
+  id: string;
+  metric_key: string;
+  comparison: string;
+  threshold_value: number;
+  severity: string;
+  cooldown_seconds: number;
+  enabled: boolean;
+};
+
 const STATUS_CONFIG = {
   healthy: { Icon: CheckCircle, className: 'text-success', badgeClass: 'bg-success/10 text-success border-success/20' },
   degraded: { Icon: AlertTriangle, className: 'text-warning', badgeClass: 'bg-warning/10 text-warning border-warning/20' },
@@ -37,18 +63,20 @@ export default function AdminHealthPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin', 'health-all'],
     queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const db = supabase as any;
       const [snapshotRes, metricsRes, alertsRes, configsRes] = await Promise.all([
-        supabase.from('system_health_snapshots').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('system_metrics').select('*').order('recorded_at', { ascending: false }).limit(50),
-        supabase.from('alert_history').select('*').order('created_at', { ascending: false }).limit(20),
-        supabase.from('alert_configs').select('*').order('created_at', { ascending: false }),
+        db.from('system_health_snapshots').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        db.from('system_metrics').select('*').order('recorded_at', { ascending: false }).limit(50),
+        db.from('alert_history').select('*').order('created_at', { ascending: false }).limit(20),
+        db.from('alert_configs').select('*').order('created_at', { ascending: false }),
       ]);
       if (snapshotRes.error) throw snapshotRes.error;
       return {
-        snapshot: snapshotRes.data,
-        metrics: metricsRes.data ?? [],
-        alerts: alertsRes.data ?? [],
-        alertConfigs: configsRes.data ?? [],
+        snapshot: snapshotRes.data as HealthSnapshot | null,
+        metrics: (metricsRes.data ?? []) as MetricRow[],
+        alerts: (alertsRes.data ?? []) as AlertRow[],
+        alertConfigs: (configsRes.data ?? []) as AlertConfigRow[],
       };
     },
     refetchInterval: 60_000,
