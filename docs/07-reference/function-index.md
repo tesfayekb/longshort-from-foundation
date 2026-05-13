@@ -1277,6 +1277,54 @@ When changing any indexed function:
 | **Lifecycle** | active |
 | **Added by** | Stage 6A (DW-008) |
 
+### `get-mfa-policy` — Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Location** | `supabase/functions/get-mfa-policy/index.ts` |
+| **Classification** | api-standard |
+| **Owner module** | auth |
+| **Consumers** | `useMfaPolicy` hook (AdminLayout, UserLayout, AdminSecurityPage, SelfMfaPrefCard) |
+| **Signature** | `GET` (no body) |
+| **Description** | Returns merged per-user MFA enforcement view: `{ version, panels: { admin: 'required'\|'optional', ... }, require_mfa_for_self }`. Reads `system_config.mfa_enforcement_policy` (global) and `profiles.require_mfa_for_self` (per user) via service role; whitelists enum values; falls back to `SAFE_DEFAULT` (`admin: 'optional'`) when row missing. |
+| **Side effects** | None (read-only) |
+| **Error behavior** | 405 on non-GET; service-role read errors propagate as 500 from handler. |
+| **Security** | Bearer JWT required. No secrets in payload. Cached client-side 5 min via React Query. |
+| **Lifecycle** | active |
+| **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
+
+### `update-mfa-policy` — Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Location** | `supabase/functions/update-mfa-policy/index.ts` |
+| **Classification** | security-critical |
+| **Owner module** | auth |
+| **Consumers** | AdminSecurityPage (`useMfaPolicy.updatePolicy`) |
+| **Signature** | `PATCH { panels: Record<string, 'required' \| 'optional'> }` (Zod-validated) |
+| **Description** | Superadmin updates the per-panel MFA enrollment policy in `system_config.mfa_enforcement_policy`. Merges submitted panels onto current value; floor enforces `admin` panel always present and a valid enum. Strict enum — no `disabled` value exists by design. Returns `{ policy, changed }`. |
+| **Side effects** | Writes `system_config` row, emits `system.mfa_policy_changed` audit event with `{ before, after, fields_changed }`. |
+| **Error behavior** | 403 if not superadmin; 403 without `admin.config`; 401 if reauth older than 5 min; 400 on invalid enum. |
+| **Security** | Defense in depth: `is_superadmin` RPC + `checkPermissionOrThrow('admin.config')` + `requireRecentAuth(5 min)`. |
+| **Lifecycle** | active |
+| **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
+
+### `update-mfa-self-pref` — Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Location** | `supabase/functions/update-mfa-self-pref/index.ts` |
+| **Classification** | security-relevant |
+| **Owner module** | auth |
+| **Consumers** | SelfMfaPrefCard (user panel `/settings/security`) |
+| **Signature** | `PATCH { require_mfa_for_self: boolean }` (Zod-validated) |
+| **Description** | User toggles their own `profiles.require_mfa_for_self` preference. Self-scope only — `WHERE id = ctx.user.id`. No-op when value unchanged. |
+| **Side effects** | Writes `profiles.require_mfa_for_self`, emits `user.mfa_self_pref_changed` audit event. |
+| **Error behavior** | 405 on non-PATCH; 400 on invalid body; 500 on read/write failure. |
+| **Security** | Bearer JWT required. Cannot mutate any other user's row. Superadmin policy cannot toggle this — user-controlled only. |
+| **Lifecycle** | active |
+| **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
+
 ### User Onboarding Functions (PLAN-INVITE-001)
 
 ### `auth-hook-pre-signup` — Edge Function (Auth Hook)
