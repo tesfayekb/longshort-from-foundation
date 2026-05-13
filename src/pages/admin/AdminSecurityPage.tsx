@@ -29,7 +29,7 @@ const PANEL_LABELS: Record<string, { title: string; description: string }> = {
 };
 
 export default function AdminSecurityPage() {
-  const { is_superadmin } = useUserRoles();
+  const { isSuperadmin } = useUserRoles();
   const { policy, isLoading, error, updatePolicy, isUpdatingPolicy } = useMfaPolicy();
   const [pending, setPending] = useState<{ panel: string; value: PanelEnforcement } | null>(null);
   const [reauthOpen, setReauthOpen] = useState(false);
@@ -48,7 +48,7 @@ export default function AdminSecurityPage() {
     }
   }, [pending, updatePolicy]);
 
-  if (!is_superadmin) {
+  if (!isSuperadmin) {
     return <AccessDenied message="Only superadmins can manage the MFA enforcement policy." />;
   }
   if (isLoading) return <LoadingSkeleton />;
