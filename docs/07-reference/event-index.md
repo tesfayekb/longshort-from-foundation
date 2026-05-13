@@ -877,6 +877,8 @@ Key event chains showing upstream triggers and downstream effects:
 | **Failure handling** | Log only — preference write succeeds independently |
 | **Observability** | Logged |
 | **Related risks** | RISK-001 (credential compromise — MFA downgrade) |
+| **Related routes** | `PATCH /update-mfa-self-pref`, `/settings/security` |
+| **Related functions** | `update-mfa-self-pref` |
 | **Related tests** | RW-016 (`src/test/rw016-mfa-policy-enforcement.test.ts`) |
 | **Lifecycle** | active |
 | **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
@@ -898,6 +900,9 @@ Key event chains showing upstream triggers and downstream effects:
 | **Failure handling** | Alert on failure — policy changes must be auditable |
 | **Observability** | Logged, traced |
 | **Related risks** | RISK-001 (credential compromise — MFA downgrade) |
+| **Related routes** | `PATCH /update-mfa-policy`, `/admin/security` |
+| **Related functions** | `update-mfa-policy` |
+| **Related permissions** | `admin.config` (+ `is_superadmin`) |
 | **Related tests** | RW-016 (`src/test/rw016-mfa-policy-enforcement.test.ts`) |
 | **Lifecycle** | active |
 | **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
