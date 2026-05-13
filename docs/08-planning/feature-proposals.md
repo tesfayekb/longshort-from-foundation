@@ -163,6 +163,47 @@ Per-user preference lives on `profiles.require_mfa_for_self` (boolean, default `
 
 ---
 
+### FP-003: Sensitive-Action Re-Authentication ("Sudo Mode")
+
+| Field | Value |
+|-------|-------|
+| **ID** | FP-003 |
+| **Date Proposed** | 2026-05-13 |
+| **Proposed By** | AI Agent (threat-model question raised by user on /settings/security) |
+| **Title** | Sensitive-Action Re-Authentication ("Sudo Mode") |
+| **Description** | Require a fresh credential challenge (current password OR current TOTP code) within a short window (proposed 5 min) before any account-takeover-relevant mutation: (a) entering MFA enrollment (`/auth/mfa/enroll`), (b) toggling `profiles.require_mfa_for_self` ON or OFF, (c) unenrolling a TOTP factor (already partially gated), (d) changing password, (e) viewing or regenerating recovery codes, (f) changing primary email. Implementation: a session-scoped `sudo_until` timestamp set by a successful `ReauthDialog` verification; protected actions check `sudo_until > now()` and re-prompt otherwise. Each successful reauth emits an audit event (`auth.sudo_granted`) and each protected action audits `auth.sensitive_action_performed` with the action key. |
+| **Justification** | Current state allows an attacker with access to an unlocked session to enroll their own TOTP authenticator and flip `require_mfa_for_self = true`, locking the legitimate user out without ever proving knowledge of the password. Only the unenroll path is gated today; enrollment, the self-pref toggle, and password change have no fresh-credential check. This is a standard "sudo mode" pattern (GitHub, Google, Stripe) and closes a complete-account-takeover vector. |
+| **Modules Affected** | auth, user-panel (security page), admin-panel (admin/security page reauth re-use), audit |
+| **New Modules Required** | None — extends existing `ReauthDialog` + adds a `useSudoMode()` hook and a `requireSudo()` route guard. |
+| **Dependencies** | Existing `ReauthDialog` component, existing `audit_logs` table, existing MFA enrollment/unenroll edge functions. |
+| **Estimated Impact** | MEDIUM — touches several existing flows but introduces no new schema beyond an in-memory/sessionStorage timestamp; no new tables, no new permissions, no new roles. |
+| **Risk Assessment** | LOW implementation risk, HIGH security upside. Failure mode is annoyance (extra password prompt) rather than lockout. Sudo timestamp must be cleared on sign-out and on password change. Must NOT be persisted across browser restarts. |
+| **Reference Impact** | functions: +`useSudoMode`, +`requireSudo` guard. events: +`auth.sudo_granted`, +`auth.sensitive_action_performed`. routes: gate added to `/auth/mfa/enroll`. permissions: none. config: +`auth.sudo_window_seconds` (default 300). env: none. |
+| **Status** | `proposed` |
+
+#### Proposed scope
+
+1. **Hook:** `useSudoMode()` — exposes `isSudo`, `requestSudo()`, `clearSudo()`. Backed by `sessionStorage` key wiped on `signOut`, on password change, and on tab close.
+2. **Component:** reuse `ReauthDialog`; on success, call `setSudo(now + window)` and emit `auth.sudo_granted` audit log via a thin edge function (or piggy-back existing reauth edge fn).
+3. **Guards:**
+   - Route guard `<RequireSudo>` wrapping `/auth/mfa/enroll`.
+   - Inline check in `SelfMfaPrefCard` toggle handler (both ON and OFF).
+   - Inline check in `PasswordChangeCard` (in addition to current-password verification).
+   - Inline check in MFA unenroll handler (replaces current ad-hoc reauth).
+4. **Audit:** every protected action writes `auth.sensitive_action_performed` with `{ action, sudo_granted_at }`.
+5. **Config:** `system_config` row `auth.sudo_window_seconds = 300`, superadmin-editable.
+6. **Tests:** RW-regression covering: (a) attacker-with-session cannot enroll TOTP without reauth, (b) cannot flip self-pref without reauth, (c) sudo expires after window, (d) sudo cleared on sign-out.
+7. **Docs:** update `auth.md`, reference indexes (functions/events/routes/config), closure entry.
+
+#### Out of scope (explicit, to prevent scope creep)
+
+- No new auth provider, no WebAuthn, no hardware-key support.
+- No server-side session table — sudo lives in client session + audited on each use.
+- No change to AAL2 enforcement model (orthogonal — sudo is "fresh credential", AAL2 is "MFA-elevated").
+- No change to existing password reset / account recovery flows.
+
+---
+
 ## Status Definitions
 
 | Status | Meaning |
