@@ -65,4 +65,6 @@ export const handler = createHandler(async (req: Request) => {
   return apiSuccess({ logged: true, correlation_id: correlationId })
 })
 
-Deno.serve(handler)
+if (!Deno.env.get('LOG_SUDO_EVENT_TEST')) {
+  Deno.serve(handler)
+}
