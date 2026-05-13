@@ -127,3 +127,4 @@ HIGH — audit logging is a security, compliance, and incident-response control.
 - [Admin Panel](admin-panel.md)
 - [Health Monitoring](health-monitoring.md)
 - [Authorization Security](../02-security/authorization-security.md)
+- [Audit `correlation_id` Index — DDL Contract](../07-reference/audit-correlation-id-index-contract.md)
