@@ -26,12 +26,16 @@ import { renderHook, act } from '@testing-library/react';
 // ─── apiClient must be mocked BEFORE importing modules that capture it ──────
 
 const postMock = vi.fn().mockResolvedValue({ logged: true });
-vi.mock('@/lib/api-client', () => ({
-  apiClient: {
-    post: (...args: unknown[]) => postMock(...args),
-    get: vi.fn(),
-  },
-}));
+vi.mock('@/lib/api-client', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/api-client')>('@/lib/api-client');
+  return {
+    ...actual,
+    apiClient: {
+      post: (...args: unknown[]) => postMock(...args),
+      get: vi.fn(),
+    },
+  };
+});
 
 import { logSudoEvent } from '@/lib/sudo-audit';
 import {
