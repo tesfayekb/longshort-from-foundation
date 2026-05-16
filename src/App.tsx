@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-query";
+import * as Sentry from "@sentry/react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -49,6 +50,19 @@ const ProfilePage = lazy(() => import("./pages/user/ProfilePage"));
 const SecurityPage = lazy(() => import("./pages/user/SecurityPage"));
 
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      // M4/N1: surface query errors that would otherwise be silently swallowed
+      // by prefetchQuery and other React Query paths. Critical for diagnosability
+      // of silent-fallback paths in layout prefetches.
+      // eslint-disable-next-line no-console
+      console.error('[query-error]', query.queryKey, error);
+      Sentry.captureException(error, {
+        tags: { source: 'react-query' },
+        extra: { queryKey: JSON.stringify(query.queryKey) },
+      });
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: 2 * 60 * 1000, // 2 minutes — admin data changes infrequently
