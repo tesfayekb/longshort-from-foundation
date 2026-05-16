@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { env, getFunctionsBaseUrl } from '@/lib/env';
 import { toast } from 'sonner';
 
 interface ExportParams {
@@ -23,7 +24,7 @@ export function useAuditExport() {
       const session = (await supabase.auth.getSession()).data.session;
       if (!session) throw new Error('Not authenticated');
 
-      const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-audit-logs`);
+      const url = new URL(`${getFunctionsBaseUrl()}/export-audit-logs`);
       for (const [key, value] of Object.entries(params)) {
         if (value != null && value !== '') url.searchParams.set(key, String(value));
       }
@@ -32,7 +33,7 @@ export function useAuditExport() {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'apikey': env.SUPABASE_PUBLISHABLE_KEY,
         },
       });
 

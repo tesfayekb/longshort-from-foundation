@@ -667,6 +667,29 @@ _Updated as items are added, triggered, or resolved._
 
 ---
 
+### RW-021: Client Env Loader Fail-Fast Contract
+
+| Field | Value |
+|-------|-------|
+| **Area** | API / Infrastructure / Frontend Bootstrap |
+| **Risk Description** | Silent absence of `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` / `VITE_SUPABASE_PROJECT_ID` at Vite build time previously produced `Failed to construct 'URL': Invalid URL` deep inside React Query on every page whose initial fetch went through `apiClient` (Permissions, Roles, Users, Audit, Security, Onboarding, Profile). Pages that read via the Supabase JS SDK (Jobs, System Health) survived only because `src/integrations/supabase/client.ts` is auto-generated with the URL hardcoded. Re-introducing direct `import.meta.env.VITE_SUPABASE_*` reads outside `src/lib/env.ts` would re-open this class of failure (including for the trading panel, which routes through the same `apiClient`). |
+| **Regression Class** | Functional / UX / Observability |
+| **Priority** | High |
+| **Affected Modules** | api, auth, audit-logging, admin-panel, user-panel, trading-panel, user-onboarding |
+| **Trigger Conditions** | Any change to `src/lib/env.ts`, `src/lib/api-client.ts`, `src/components/ErrorBoundary.tsx`, any new client hook/component that calls a Supabase edge function, or any change to `.env`/`.env.example` keys. |
+| **Detection Method** | Vitest suite `src/test/rw021-env-loader-fail-fast.test.ts`: (a) loader throws `EnvConfigError` on missing/invalid required vars, (b) loader returns frozen `env` with canonical `getFunctionsBaseUrl()` when valid, (c) static AST-free grep proves no source file outside `src/lib/env.ts` and the auto-generated supabase client reads `import.meta.env.VITE_SUPABASE_URL`/`_PUBLISHABLE_KEY`/`_PROJECT_ID`. |
+| **Required Checks** | (1) `env.ts` validates `SUPABASE_URL` via `new URL()` and rejects empty/non-http(s) values. (2) `ErrorBoundary` renders dedicated branded screen for `EnvConfigError` (no generic Retry — env errors are unrecoverable in the running tab). (3) `apiClient.getBaseUrl()` and any new edge-function URL construction go through `getFunctionsBaseUrl()`. (4) No new consumer reads `import.meta.env.VITE_SUPABASE_*` directly. (5) env-var-index entries for `VITE_SUPABASE_URL`/`_PUBLISHABLE_KEY`/`_PROJECT_ID` reference `src/lib/env.ts` as the runtime enforcer. |
+| **Verification Type** | Automated test (rw021) + static source scan inside same test |
+| **Related Tests** | `src/test/rw021-env-loader-fail-fast.test.ts` |
+| **Related Risk** | RISK-004 (env drift / startup misconfiguration) |
+| **Recurrence Count** | 1 (original incident 2026-05-16) |
+| **Owner** | Project Lead |
+| **Added Date** | 2026-05-16 |
+| **Last Verified** | 2026-05-16 |
+| **Status** | Active |
+
+---
+
 ## Link to Risk Register
 
 - Watchlist = **tactical** (day-to-day change verification)
