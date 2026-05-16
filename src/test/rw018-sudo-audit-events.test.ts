@@ -83,6 +83,7 @@ describe('RW-018 logSudoEvent emits to buffer + log-sudo-event endpoint', () => 
     expect(calls[0][1]).toEqual({
       action: 'auth.sudo_granted',
       action_key: 'mfa_enroll_route',
+      correlation_id: expect.any(String),
     });
   });
 
@@ -93,6 +94,7 @@ describe('RW-018 logSudoEvent emits to buffer + log-sudo-event endpoint', () => 
     expect(postCallsTo('log-sudo-event')[0][1]).toEqual({
       action: 'auth.sensitive_action_performed',
       action_key: 'recovery_codes_generate',
+      correlation_id: expect.any(String),
     });
   });
 
@@ -133,6 +135,7 @@ describe('RW-018 useSudoGate emits both sudo_granted and sensitive_action_perfor
     expect(calls[0][1]).toEqual({
       action: 'auth.sensitive_action_performed',
       action_key: 'toggle_require_mfa_on',
+      correlation_id: expect.any(String),
     });
   });
 
@@ -147,8 +150,16 @@ describe('RW-018 useSudoGate emits both sudo_granted and sensitive_action_perfor
     const calls = postCallsTo('log-sudo-event');
     expect(calls).toHaveLength(2);
     expect(calls.map((c) => c[1])).toEqual([
-      { action: 'auth.sudo_granted', action_key: 'recovery_codes_generate' },
-      { action: 'auth.sensitive_action_performed', action_key: 'recovery_codes_generate' },
+      {
+        action: 'auth.sudo_granted',
+        action_key: 'recovery_codes_generate',
+        correlation_id: expect.any(String),
+      },
+      {
+        action: 'auth.sensitive_action_performed',
+        action_key: 'recovery_codes_generate',
+        correlation_id: expect.any(String),
+      },
     ]);
   });
 });
@@ -233,7 +244,14 @@ describe('RW-018 log-sudo-event edge function: server-trust contract', () => {
 
   it('returns 500 with correlation_id when audit write fails (diagnosable)', () => {
     expect(fn).toMatch(/auditResult\.success/);
-    expect(fn).toMatch(/apiError\(500[\s\S]{0,120}correlationId:\s*ctx\.correlationId/);
+    // RW-019: client-supplied correlation_id round-trips through error path.
+    // Source derives `const correlationId = clientCid ?? ctx.correlationId`
+    // and passes it to apiError(500, ...). Assert both the derivation and
+    // the apiError reference, independent of property-shorthand vs. explicit.
+    expect(fn).toMatch(
+      /const\s+correlationId\s*=\s*clientCid\s*\?\?\s*ctx\.correlationId/,
+    );
+    expect(fn).toMatch(/apiError\(\s*500[\s\S]{0,200}correlationId/);
   });
 });
 
@@ -265,7 +283,7 @@ describe('RW-018 audit-write failure does not throw to the caller', () => {
     postMock.mockRejectedValueOnce(new Error('network down'));
     await expect(
       logSudoEvent('auth.sensitive_action_performed', 'password_change'),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({ persisted: false });
     // Even though the network call failed, the in-memory event still fired,
     // so downstream observers (Sentry breadcrumbs, dev tools) see it.
     const buffered = eventsByName('auth.sensitive_action_performed');
