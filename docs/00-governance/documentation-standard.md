@@ -62,6 +62,28 @@ Module files (`docs/04-modules/`) MUST include:
 - Decision IDs: `DEC-{NNN}`
 - IDs are permanent and never reassigned
 
+### Workstream Step vs Repo Stage
+
+The project uses two parallel naming vocabularies for sequenced work, which can collide on numbers (e.g., the existing `stage-3.5-plan.md` Security Hardening Stage from April 2026 vs the "Step 3.5" CROSSWIND design-source landing from May 2026). Both are valid; the distinction is which artifact you're referencing.
+
+**"Stage N" (repo planning vocabulary):**
+- Refers to repo-internal phase plans
+- Has a corresponding `docs/08-planning/stage-N-plan.md` file
+- Owns a defined scope, gate criteria, and closure record in `phase-closures/`
+- Examples at HEAD `76efbe7`: Stage 3.5 (Security Hardening, April 2026), Stage 4, Stage 5, Stage 6, Stage 3D, Stage 4I, Stage Invitations
+- Use "Stage N" when referencing these artifacts in commit messages, doc cross-references, or planning discussions
+
+**"Workstream Step N" (conversational vocabulary):**
+- Refers to sequenced work-items within an active workstream conducted between operator and AI collaborators
+- Tracked in conversation context and commit history, NOT as standalone files in `docs/08-planning/`
+- Examples: the PLAN-TRADING-001 workstream uses Step 0 (decision design), Step 1 (FP proposal entry), Step 2a (FP approval), Step 2b (substantive docs), Step 3 (.cursorrules expanded), Step 3.5 (design source landing), Step 3.6 (consistency cleanup), Step 4 (foundation infrastructure), etc.
+- Use the explicit "Workstream Step N" prefix in commit messages and PR descriptions when collision risk is non-zero
+- Use "Step N" alone only inside conversation context where workstream is unambiguous
+
+**Collision-avoidance rule.** When writing a commit message, PR description, or doc cross-reference where a reader from outside the conversation might confuse Step N with Stage N: use the explicit "Workstream Step N" prefix. Inside an active conversation thread (where the workstream is contextually clear), "Step N" alone is acceptable.
+
+**Going forward.** PLAN-TRADING-001 workstream commits and PRs through Step 7 use the "Step N" naming inherited from the current workstream conversation. Future workstreams may either continue the "Step" pattern or be promoted to standalone Stage plans in `docs/08-planning/` at operator discretion.
+
 ## Cross-Reference Rules
 
 - Never duplicate content — always link

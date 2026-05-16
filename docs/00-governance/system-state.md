@@ -1,6 +1,6 @@
 # System State
 
-> **Owner:** Project Lead | **Last Reviewed:** 2026-04-12
+> **Owner:** Project Lead | **Last Reviewed:** 2026-05-16
 
 ## Purpose
 
@@ -35,8 +35,8 @@ Tracks:
 status: complete
 phase: development
 code_generation: allowed
-modules_implemented: auth implemented (A+B+D implemented + hardened incl. Google account-picker prompt [ACT-064] + revoked-session local cleanup [ACT-065], C cancelled per DEC-025), rbac implemented (Phase 2 gate 12/12 closed + dependency enforcement + roles.edit + permissions.view separated + permissions.assign/revoke restricted to superadmin + RBAC governance hardening 2026-04-13), user-management implemented (Stage 3C closed), audit-logging implemented (Stage 3B closed + Phase 3.5 hardened + RLS INSERT policy removed [ACT-053] + correlation_id top-level column [ACT-055]), api implemented (Stage 3A closed + Phase 3.5 hardened), admin-panel implemented (Phase 4 CLOSED + Phase 5 additions: AdminHealthPage [ACT-063], AdminJobsPage [ACT-063] + performance hardening [ACT-056] + RBAC governance hardening 2026-04-13), user-panel implemented (Phase 4 CLOSED + session revocation [ACT-063] + global revoke local cleanup [ACT-065]), health-monitoring implemented (Stage 5A + 5B + 5F complete [ACT-057, ACT-058, ACT-063]), jobs-and-scheduler implemented (Stage 5C + 5D + 5E complete [ACT-059, ACT-060, ACT-062])
-active_work: All phases complete. PLAN-INVITE-001 (User Onboarding & Invitations) implemented — 6-phase plan complete. OAuth account-picker hardening reconciled 2026-04-14 [ACT-064]. Revoked-session cleanup reconciled 2026-04-14 [ACT-065].
+modules_implemented: auth implemented (A+B+D implemented + hardened incl. Google account-picker prompt [ACT-064] + revoked-session local cleanup [ACT-065], C cancelled per DEC-025), rbac implemented (Phase 2 gate 12/12 closed + dependency enforcement + roles.edit + permissions.view separated + permissions.assign/revoke restricted to superadmin + RBAC governance hardening 2026-04-13), user-management implemented (Stage 3C closed), audit-logging implemented (Stage 3B closed + Phase 3.5 hardened + RLS INSERT policy removed [ACT-053] + correlation_id top-level column [ACT-055]), api implemented (Stage 3A closed + Phase 3.5 hardened), admin-panel implemented (Phase 4 CLOSED + Phase 5 additions: AdminHealthPage [ACT-063], AdminJobsPage [ACT-063] + performance hardening [ACT-056] + RBAC governance hardening 2026-04-13), user-panel implemented (Phase 4 CLOSED + session revocation [ACT-063] + global revoke local cleanup [ACT-065]), health-monitoring implemented (Stage 5A + 5B + 5F complete [ACT-057, ACT-058, ACT-063]), jobs-and-scheduler implemented (Stage 5C + 5D + 5E complete [ACT-059, ACT-060, ACT-062]), trading-panel documented-only (PR #3 Step 2b — module doc landed at docs/04-modules/trading-panel.md; NO implementation yet; first code lands in Step 4), strategy-module-pattern documented-only (PR #3 Step 2b — binding-contract architectural pattern doc at docs/04-modules/strategy-module-pattern.md; rules T1-T9 + D1-D5 encoded in .cursorrules during PR #4 Step 3; folder-pattern reconciliation in PR #5 Step 3.5), longshort documented-only (PR #5 Step 3.5 — canonical CROSSWIND v0.9 design source landed at docs/04-modules/longshort/design-source/ with byte-level SHA-256 verification; longshort.md module doc to be created in FP-005)
+active_work: PLAN-TRADING-001 (Trading Panel + Strategy Module Architectural Pattern) governance foundation in progress — FP-004 approved (PRs #1, #2); Step 2b consolidated docs merged (PR #3); Step 3 .cursorrules expanded to comprehensive guardrails (PR #4); Step 3.5 long-short design source landed verbatim with binding-contract reconciliation (PR #5); Step 3.6 consistency cleanup (this PR). Step 4 (foundation infrastructure — TradingLayout, permission seeds, MFA policy extension, e2e tests) NOT YET started. All prior PLAN-* sections remain CLOSED — PLAN-INVITE-001 (User Onboarding & Invitations) implemented 2026-04-14; all phases through Phase 6 complete. OAuth account-picker hardening reconciled 2026-04-14 [ACT-064]. Revoked-session cleanup reconciled 2026-04-14 [ACT-065].
 current_plan_version: v12.0
 approved_plan_baseline: v12.0
 plan_status: approved
@@ -54,8 +54,10 @@ deployment_config_completed:
   - app_rebrand_longshort: "App rebranded from 'Foundation First' to 'LongShort' on 2026-05-13. Updated index.html, public/manifest.json, src/components/AppBrand.tsx."
   - rls_hardening_2026_05_13: "Migration 20260513195212 — restricted system_config SELECT to is_superadmin(); added owner-scoped SELECT policies on mfa_recovery_codes and mfa_recovery_attempts; added admin/accepting-user SELECT policy on invitations."
   - route_index_reconciliation_2026_05_13: "Added auth-hook-pre-signup and verify-turnstile entries to docs/07-reference/route-index.md (Reconciliation Addendum)."
-last_updated: 2026-05-15
+last_updated: 2026-05-16
 ```
+
+> **Note on `status: complete`:** This field reflects the closure of the historical platform-module programme (auth through PLAN-INVITE-001 inclusive, all phases through Phase 6). It does NOT mean the project is closed or that no work is active. PLAN-TRADING-001 (Trading Panel + Strategy Module Architectural Pattern) governance and implementation steps are currently in progress as recorded in the `active_work` field above. A future `status:` value bump (e.g., to `in_progress` or `closed`, when PLAN-TRADING-001 reaches its own closure or another plan supersedes it) is a separately-governed edit and is intentionally NOT introduced by this PR — preserving backward compatibility with any tooling that reads the existing `status` value.
 
 ## RBAC Governance Hardening (2026-04-13)
 
@@ -121,6 +123,9 @@ If inconsistency is detected → execution must **STOP** and be corrected.
 | api | implemented (Phase 3A closed + Phase 3.5 hardened: PermissionDeniedError enriched with userId/reason, centralized denial interception in handler.ts) | 2026-04-10 |
 | jobs-and-scheduler | implemented (5C + 5D + 5E complete [ACT-059, ACT-060, ACT-062]) | 2026-04-12 |
 | user-onboarding | implemented (PLAN-INVITE-001 complete: 6 phases, 9 edge functions, 2 permissions, 7 audit events, admin UI, signup gate) | 2026-04-14 |
+| trading-panel | documented-only (PR #3 Step 2b: docs/04-modules/trading-panel.md; first code in Step 4) | 2026-05-16 |
+| strategy-module-pattern | documented-only (PR #3 Step 2b: architectural binding contract at docs/04-modules/strategy-module-pattern.md; rules T1-T9 + D1-D5 in .cursorrules per PR #4; folder pattern reconciled PR #5) | 2026-05-16 |
+| longshort | documented-only (PR #5 Step 3.5: design source verbatim at docs/04-modules/longshort/design-source/; longshort.md module doc deferred to FP-005) | 2026-05-16 |
 
 ## AI Behavior Constraint
 

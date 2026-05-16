@@ -169,4 +169,4 @@ After execution and verification, the following will be updated:
 
 - `docs/08-planning/deferred-work-register.md` — mark DW-014, DW-015 as resolved
 - `docs/08-planning/master-plan.md` — update phase gate checkboxes
-- `docs/06-tracking/system-state.md` — reflect hardening completion
+- `docs/00-governance/system-state.md` — reflect hardening completion
