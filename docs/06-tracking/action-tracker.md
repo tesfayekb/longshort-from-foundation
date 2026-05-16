@@ -1725,6 +1725,23 @@ Each action must include:
 
 ---
 
+### ACT-069: Client Env Loader Fail-Fast (RW-021)
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-069 |
+| **Date** | 2026-05-16 |
+| **Action** | Implemented single-source, fail-fast client env loader (`src/lib/env.ts`) per env-var-index "Startup gate" rule. Loader reads `import.meta.env.VITE_SUPABASE_URL` / `_PUBLISHABLE_KEY` / `_PROJECT_ID` once at module init, validates presence and (for URL) parseability via `new URL()`, throws `EnvConfigError` synchronously on first import otherwise. Refactored `src/lib/api-client.ts` (`getBaseUrl` → `getFunctionsBaseUrl`, anon key reads), `src/hooks/useAuditExport.ts` (export URL + apikey), and `src/hooks/useOnboardingMode.ts` (public config URL + apikey) to consume the loader; eliminated all hand-coded `import.meta.env.VITE_SUPABASE_*` reads outside the loader and the auto-generated supabase client. `ErrorBoundary` now renders a dedicated branded "App misconfigured" screen for `EnvConfigError` with the list of missing/invalid vars and a pointer to `env-var-index.md`, replacing the generic Retry UI which cannot fix a build-time env miss. Registered RW-021 with static source scan that fails CI if any new file reintroduces direct env reads. Root cause investigation: dev-server bundled before `.env` was written, so `VITE_SUPABASE_URL` evaluated `undefined` and every `new URL("undefined/functions/v1/...")` threw "Failed to construct 'URL': Invalid URL" inside React Query, surfacing on every admin page and Profile (Jobs/System Health survived only because they go through the auto-generated supabase client which has the URL hardcoded). |
+| **Type** | Fix / Infrastructure |
+| **Impact Classification** | High |
+| **Modules Affected** | api, auth, audit-logging, admin-panel, user-panel, user-onboarding, trading-panel (forward compat) |
+| **Files Changed** | `src/lib/env.ts` (new), `src/lib/api-client.ts`, `src/hooks/useAuditExport.ts`, `src/hooks/useOnboardingMode.ts`, `src/components/ErrorBoundary.tsx`, `src/test/rw021-env-loader-fail-fast.test.ts` (new), `docs/06-tracking/regression-watchlist.md` (RW-021), `docs/07-reference/env-var-index.md` (runtime-enforcer cross-ref), `docs/04-modules/api.md` (env-loader contract) |
+| **Related Tests** | `src/test/rw021-env-loader-fail-fast.test.ts` |
+| **Evidence** | Vitest rw021 suite green: (1) `EnvConfigError` thrown on missing `VITE_SUPABASE_URL`, (2) on missing `VITE_SUPABASE_PUBLISHABLE_KEY`, (3) on malformed URL ("not-a-url"); (4) frozen env returned + `getFunctionsBaseUrl()` === `${SUPABASE_URL}/functions/v1` on valid input; (5) source scan returns zero violations — only `src/lib/env.ts`, `src/integrations/supabase/client.ts`, and the test file itself contain `import.meta.env.VITE_SUPABASE_*` references. Manual verification: pre-fix `/admin/permissions` showed `Failed to construct 'URL': Invalid URL`; post-fix with the same broken-env condition the `ErrorBoundary` renders the branded "App misconfigured" screen listing the missing var instead of the cryptic React Query error. Compatible with PLAN-TRADING-001 multi-env deployment (trading edge-function calls flow through the same loader, no hardcoded fallback that would couple trading to a single Supabase project). |
+| **Status** | Verified |
+
+---
+
 - Regression fix actions must reference the original regression
 - Repeated failures in same area → tracked via recurrence in watchlist, referenced here
 
