@@ -23,7 +23,10 @@ import { validateRequest } from '../_shared/validate-request.ts'
 
 const PanelValue = z.enum(['required', 'optional'])
 const BodySchema = z.object({
-  panels: z.record(z.string().min(1).max(64), PanelValue).refine(
+  panels: z.object({
+    admin: PanelValue.optional(),
+    trading: PanelValue.optional(),
+  }).strict().refine(
     (p) => Object.keys(p).length > 0,
     { message: 'At least one panel must be specified' },
   ),
