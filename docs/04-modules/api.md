@@ -35,6 +35,15 @@ Every request **MUST** follow this sequence:
 
 No steps may be skipped.
 
+## Client-Side Env Loader (RW-021)
+
+All client → edge-function URLs and the `apikey` header **MUST** be constructed via the canonical loader `src/lib/env.ts`:
+
+- `env.SUPABASE_URL`, `env.SUPABASE_PUBLISHABLE_KEY`, `env.SUPABASE_PROJECT_ID`
+- `getFunctionsBaseUrl()` for edge-function base URL (`${SUPABASE_URL}/functions/v1`)
+
+Direct `import.meta.env.VITE_SUPABASE_*` reads are **prohibited** outside `src/lib/env.ts` (and the auto-generated `src/integrations/supabase/client.ts`). The loader throws `EnvConfigError` synchronously at module init when any required var is missing or malformed; `ErrorBoundary` renders a branded "App misconfigured" screen for it. RW-021 enforces this with a static source scan. Rationale: a missing build-time env var must fail loudly at app boot, not silently produce `Failed to construct 'URL': Invalid URL` deep inside React Query on every page. This contract is also a prerequisite for multi-environment deployments (staging / paper-trading / prod) under PLAN-TRADING-001 — no hardcoded URL fallbacks are permitted.
+
 ## API Conventions
 
 ### Error Response Format
