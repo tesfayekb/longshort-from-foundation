@@ -14,10 +14,63 @@ Before writing, modifying, or deleting ANY file (code or documentation), you MUS
 
 If ANY required document is missing or unclear → **STOP and ask for clarification.** Do not assume.
 
+## UNCERTAINTY = STOP, NOT GUESS
+
+If at any point you are uncertain about ANY of the following, STOP and surface the uncertainty rather than guessing:
+
+- Which mode applies to the task (see MODE DISCIPLINE)
+- What the scope boundary is (which files may/may not be changed)
+- RBAC implications (which permissions are checked; which roles inherit)
+- Database schema implications (which tables, RLS policies, columns affected)
+- Trading-specific logic (signals, thresholds, sizing, risk model)
+- Which rule applies when two rules seem to conflict
+- Whether a finding should be fixed inline or surfaced as incidental
+- Whether a structural change you observe was intentional or drift
+
+Guessing on ANY of the above produces silent regressions, scope drift, or worse — broken trading logic with real money implications. Surfacing the uncertainty costs one operator turn; guessing wrong costs hours or days of diagnosis.
+
+**Required surfacing format:**
+
+```
+## Uncertainty Surfaced
+[What is uncertain]
+
+## Why It Matters
+[What could go wrong if I guess]
+
+## Options I Can See
+[2-3 paths forward]
+
+## What I Need From Operator
+[Specific decision needed]
+```
+
+Then STOP. Do not proceed.
+
 ## TASK TYPE BRANCHING
 
 - **Review-only task** (no file edits): No action tracker updates unless instructed. No output format required unless requested.
 - **Change task** (any file edit): Full 9-step workflow required. Output format mandatory.
+
+## MODE DISCIPLINE
+
+Every task operates in exactly ONE of six modes. Identify the mode at task start and stay within it. Mode drift is an INVALID work product.
+
+1. **investigation** — find root cause / gather evidence; ZERO file edits; output is findings only
+2. **review-only** — evaluate existing or proposed work; ZERO file edits; output is verdict + rationale
+3. **documentation-only** — update docs only; NO code changes; output includes doc diff + summary
+4. **execution** — implement approved scope on a named branch; produces commits
+5. **revision-fix** — apply a specific operator-requested fix to existing work; minimal scope, named files only
+6. **verification** — confirm completion against acceptance criteria; ZERO file edits; output is verification report
+
+**Mode-drift examples (all INVALID):**
+
+- "I'm in review-only mode but noticed a typo — let me fix it." → NO. Surface it; don't fix it.
+- "I'm in execution mode for feature X but feature Y looks broken — let me refactor it." → NO. Out of scope.
+- "I'm in documentation-only mode but the code seems wrong — let me adjust it." → NO. Doc-only is doc-only.
+- "I'm in revision-fix mode for issue A — let me also fix similar issue B nearby." → NO. Issue B is a separate revision.
+
+If the task didn't name a mode explicitly, infer from the prompt verb (review/evaluate → review-only; implement/build/create → execution; etc.) and state the inferred mode at the start of the response. If inference is ambiguous, STOP per UNCERTAINTY = STOP.
 
 ## EXECUTION GATES (HARD BLOCKS)
 
@@ -29,6 +82,12 @@ Check `system-state.md` YAML block. Obey these gates absolutely:
 - Execution MUST use the `approved_plan_baseline` version defined in system-state.md.
 - Only plan sections with status `approved` or `approved-partial` may be executed.
 
+**Additional execution-gate checks (before any change task):**
+
+- **Concurrent-merge detection:** Fresh `git fetch origin && git log -1 --format='%H' origin/main` BEFORE branching or applying changes. If `origin/main` HEAD differs from the base the task was drafted against, STOP and surface — do not silently rebase or merge.
+- **Slot availability:** If the task adds DEC entries, PLAN sections, ART entries, etc. with specific IDs, verify those IDs are still next-free at the verified HEAD. If a concurrent merge consumed the slot, STOP.
+- **Branch base sanity:** New work branches MUST be created from `origin/main`, not from a stale local checkout. If `git rev-parse HEAD` does not match `git rev-parse origin/main`, hard-reset to origin/main before branching.
+
 ## MANDATORY READING ORDER (Every Task)
 
 For every task — no matter how small — read these in order:
@@ -38,8 +97,51 @@ For every task — no matter how small — read these in order:
 3. `docs/08-planning/approved-decisions.md` (binding decisions)
 4. `docs/08-planning/master-plan.md` (plan sections with stable IDs)
 5. Relevant module docs from `docs/04-modules/` (for the module you're working on)
+   - **For ANY task touching the `/trading` panel, strategy modules (`src/features/<strategy>/`), per-strategy permissions (`<strategy>.*`), per-strategy tables (`<strategy>_*`), per-strategy edge functions (`<strategy>-*`), or per-strategy jobs (`<strategy>_*`):** ALSO read `docs/04-modules/strategy-module-pattern.md` AND `docs/04-modules/trading-panel.md` BEFORE making any changes. These two docs are the binding architectural contract per DEC-031 — partial conformance is INVALID. See TRADING-PANEL + STRATEGY-MODULE BINDING CONTRACT section below for the operational rules.
 6. `docs/01-architecture/dependency-map.md` (if shared logic is involved)
 7. Relevant reference indexes from `docs/07-reference/` (if shared components involved)
+8. `docs/05-quality/regression-strategy.md` and `docs/05-quality/testing-strategy.md` (for any change task — see REGRESSION PREVENTION PROTOCOL and ANTI-COMPLETION-THEATER below)
+
+## PRE-EXECUTION BASELINE CAPTURE
+
+Before applying ANY change in execution or revision-fix mode, capture and record:
+
+1. **HEAD SHA at task start:** `git rev-parse origin/main` — record in work-complete summary as `base_sha`
+2. **Branch HEAD before changes:** `git rev-parse HEAD` after branching, before edits — record as `branch_base_sha`
+3. **Existing test baseline:** Run the existing test suite once before applying any edit. Record pass/fail counts as `baseline_passed / baseline_failed / baseline_skipped`. If the baseline has pre-existing failures, list which tests fail and surface as incidental findings — do NOT silently inherit them.
+4. **Files to change (explicit list):** Before editing, write the exact list of files you intend to change. Any file edit outside this list is scope drift (see SCOPE DISCIPLINE).
+5. **Diff target lines (for surgical edits):** For edits to specific lines or sections of existing files, record the line range / section being targeted. After edit, verify no lines outside the target range were modified.
+
+Baseline capture is mandatory. A task that skips baseline capture and produces "all tests pass" with no comparison number is unverifiable and INVALID.
+
+## SCOPE DISCIPLINE — NO HELPFUL REFACTORING
+
+While doing your task, you MUST NOT:
+
+- Reformat unrelated files (even if their formatting is inconsistent)
+- Reorder imports outside files you're already changing
+- Auto-fix lint warnings outside the change scope
+- "Improve" adjacent code that you happen to notice
+- Rename variables, functions, or files that aren't named in the task scope
+- Refactor existing logic that isn't part of the change
+- Delete code you think is unused without explicit operator approval
+- Update dependencies beyond what the task requires
+- Modify any file not in the explicit "Files to change" list from baseline capture
+
+**If you see something that needs fixing while doing your task:**
+
+1. Surface as an incidental finding in the work-complete summary
+2. Do NOT silently fix it
+3. Do NOT bundle it into the current change
+4. Leave it for the operator to schedule as a separate task
+
+This is Constitution Rule 7 (No Silent Behavior Change) operationalized. The principle: changes the operator did not explicitly approve are silent changes regardless of how "obviously correct" they seem. Silent changes destroy reviewability and accumulate into untraceable regressions.
+
+**Examples of valid incidental-finding surfacing (not fixing):**
+
+- "While editing `audit-logging.md`, I noticed `health-monitoring.md` has a stale reference to a removed function. Logged as INC-XX for separate cleanup."
+- "While reviewing `route-index.md`, I noticed the `/auth/callback` entry is missing a `Related risks` field. Logged as INC-XX."
+- "While running tests, I noticed test `RBAC-027` was already failing on `origin/main` — pre-existing, not introduced by this change. Logged as INC-XX."
 
 ## CHANGE CONTROL (9-Step Workflow)
 
@@ -49,29 +151,157 @@ HIGH-impact changes require pre/post state tracking, blast radius assessment, an
 
 Auth, RBAC, and Security modules are ALWAYS classified as HIGH impact regardless of change scope.
 
-## OUTPUT FORMAT (Mandatory After Every Change Task)
+## REGRESSION PREVENTION PROTOCOL
 
-After completing any task that modifies files, produce this output. Optional for pure review/verification tasks unless explicitly requested.
+This protocol is MANDATORY for every change task. Skipping any step makes the work INVALID per Constitution Rule 4 (Definition of Done Enforcement).
+
+### Step A — Test suite must run, not just exist
+
+After applying changes, run the full test suite that ran during baseline capture. Compare results:
+
+- **No new failures.** Every test that passed in baseline MUST still pass post-change. If any previously-passing test now fails, the change introduces a regression and CANNOT be claimed complete.
+- **No new skips.** Every test that ran (passed or failed) in baseline MUST still run post-change. New `.skip()`, `.only()`, `xit()`, etc. are NOT allowed without explicit operator approval (see ANTI-COMPLETION-THEATER).
+- **Intentional test retirement is allowed but must be explicit.** A test that legitimately no longer applies (e.g., the feature it covered was intentionally removed in this same change) may be removed or renamed — but the work-complete summary MUST list `retired_tests` with one-line justification per test. Silent test removal is a regression.
+- **New tests required for new behavior.** See Step B. New tests added by this change MUST pass; failing new tests block completion.
+- **Net pass-count formula:** `post_change_passed ≥ (baseline_passed − retired_tests_count) + new_tests_added_and_passing`, where `retired_tests_count` is the cardinality (number of entries) of the `retired_tests` list defined in the bullet above (i.e., `retired_tests_count = len(retired_tests)`). Pure equality is brittle against rename/retirement; the inequality preserves correctness against legitimate suite churn.
+
+### Step B — New tests required for new behavior
+
+Any code change that adds, modifies, or removes observable behavior MUST include new or modified tests covering that behavior. "Observable behavior" includes:
+
+- New routes, new permissions, new edge functions, new jobs
+- Changed input handling, validation, or response shapes
+- Changed RLS policies, auth flows, or RBAC checks
+- Changed audit-event vocabularies, retention, or sanitization
+- Any change to functions exported from a module's `index.ts`
+
+Pure refactors (rename without behavior change, file split without logic change) are the only exception — and even then, an explanation in the work-complete summary is required.
+
+### Step C — Cross-module blast radius check
+
+Before any change to a module, identify what depends on it via `docs/01-architecture/dependency-map.md`. If dependents exist:
+
+- Run the dependent modules' tests too — not just the changed module's tests
+- Surface any dependent test that newly fails
+- For HIGH-impact modules (auth, rbac, audit-logging, anything touching `permissions` or `audit_logs` tables) — ALL downstream tests must run, not just spot-checks
+
+### Step D — Regression-strategy.md alignment
+
+For any change affecting modules in the regression baseline, the change must align with `docs/05-quality/regression-strategy.md`:
+
+- Baselines listed in regression-strategy.md must be re-verified
+- The Regression Protection Loop (defined in regression-strategy.md) must be executed
+- Manual verification governance applies for changes that can't be auto-tested
+
+### Step E — Database/RBAC regression checks (CRITICAL)
+
+Any change to RBAC permissions, RLS policies, or schema MUST include:
+
+- Permission allow/deny matrix re-verification (every role × every protected route/edge function)
+- RLS deny test for every new table (verify rows scoped to `auth.uid()` are not readable by other users)
+- Audit-event integrity check (verify audit rows are still written by the appropriate paths)
+
+These checks are non-negotiable per Constitution Rule 11 (Critical Module Override): RBAC/Auth/Security changes are ALWAYS high-impact and require full regression even for "small" changes.
+
+## ANTI-COMPLETION-THEATER
+
+Completion of a change task may NOT be claimed when ANY of the following are true:
+
+### Code-level theater
+
+- **Untracked** TODO, FIXME, XXX, HACK comments left in the changed files. TODOs/FIXMEs with a corresponding tracked action-tracker entry (`ACT-NNN` or similar) OR an incidental-finding entry surfaced in the work-complete summary are PERMITTED per CODE QUALITY NON-NEGOTIABLES. The distinction: tracked = work intentionally deferred and visible to operator; untracked = hidden incomplete work masquerading as done.
+- Stub functions that throw "not implemented" or return placeholder values
+- `console.log`, `print()`, or debug-only output left in production paths
+- Hardcoded test values (e.g., `userId: 'test-user-123'`) in non-test code
+- Mock data, fake fixtures, or sandbox-only paths left in production code
+- Commented-out code blocks without explanation
+- `// @ts-ignore`, `// eslint-disable` without inline justification comment
+
+### Test-level theater
+
+- Tests marked `.skip()`, `.only()`, or `xit()` / `xdescribe()`
+- Tests that assert nothing (`expect(true).toBe(true)`) or trivially pass
+- Tests guarded by `if (process.env.SKIP_X)` to bypass them in CI
+- Tests with hardcoded "expected" values that don't actually verify the change
+- Tests that catch all errors and treat them as "pass" — error-swallowing tests
+- Tests added with the comment "// TODO: implement this test" or similar
+
+### Process-level theater
+
+- Claiming completion before the post-change test run finishes
+- Claiming completion when a test that passed in baseline now fails (any new failure is a regression — see REGRESSION PREVENTION PROTOCOL Step A)
+- Claiming completion with any newly-skipped test that wasn't operator-approved (see Step A)
+- Claiming completion when the diff includes files outside the planned-scope list
+- Claiming completion when the work-complete summary omits required fields (see WORK-COMPLETE SUMMARY)
+- Claiming completion when the branch HEAD or base HEAD doesn't match what's reported in the summary
+
+### What to do instead
+
+If ANY of the above is true, the task is NOT done. Either:
+
+- Fix the issue and re-run baseline → post-change verification
+- Or surface explicitly: "Cannot complete because X. Recommend: Y. Awaiting operator decision."
+
+Do NOT claim completion with a "minor caveat" or "small follow-up needed" framing. Either it's done or it's not.
+
+This is Constitution Rule 4 (Definition of Done Enforcement) operationalized.
+
+## WORK-COMPLETE SUMMARY (Mandatory After Every Change Task)
+
+After completing any task that modifies files, produce this output. Required for execution mode; required for revision-fix mode; optional for review-only/investigation/documentation-only/verification modes unless explicitly requested.
 
 ```
+## Mode
+[Investigation | Review-only | Documentation-only | Execution | Revision-fix | Verification]
+
+## Base / Branch HEADs
+- base_sha (origin/main at task start): [SHA]
+- branch_base_sha (after branching, before edits): [SHA]
+- branch_tip_sha (after commit): [SHA]
+- Confirmed origin/main unchanged at branch creation: [Yes / No — if No, explain]
+
+## Test Results
+- baseline_passed / baseline_failed / baseline_skipped: [N / N / N]
+- post_change_passed / post_change_failed / post_change_skipped: [N / N / N]
+- new_tests_added (and passing): [N]
+- retired_tests (with one-line justification each): [list, or "none"]
+- net check: post_change_passed ≥ (baseline_passed − retired_tests_count) + new_tests_added_and_passing, where retired_tests_count = len(retired_tests): [Yes / No — if No, explain]
+- regression introduced: [No — no previously-passing test newly fails | Yes — list affected tests]
+
+## Files Touched
+- Planned (from baseline capture's Files to change list): [list]
+- Actually changed (from `git diff --name-only`): [list]
+- Match: [Yes / No — if No, explain unplanned changes]
+
 ## Change Summary
-[What was done]
+[What was done — bullet form, 3-10 lines]
 
 ## Modules Impacted
 [List of affected modules]
 
 ## Docs Updated
-[List of documentation files modified]
+[List of documentation files modified in this same PR — must align with Constitution Rule 2 doc-code coupling]
 
 ## References Updated
-[List of reference index files modified]
+[List of `docs/07-reference/` index files modified — see REFERENCE INDEX MAINTENANCE]
+
+## ROI / Risk-Adjusted Impact
+[For changes affecting strategy/signal/threshold/sizing/monitoring/trading-logic: explicit ROI assessment. For pure-platform changes: state N/A. See ROI & STRATEGY GUARDRAILS.]
+
+## Incidental Findings Surfaced (not fixed in this PR)
+[List with proposed disposition]
+
+## Concurrent-Change Verification
+[Confirmed that origin/main HEAD did not move during task: Yes / No — if No, explain how reconciled]
 
 ## Verification Status
-[How the change was verified]
+[How the change was verified end-to-end]
 
 ## Risks / Follow-up
-[Any outstanding risks or required follow-up]
+[Any outstanding risks or required follow-up — these are NOT "minor caveats" allowing completion claim; if blocking, see ANTI-COMPLETION-THEATER]
 ```
+
+Missing or "TBD" entries in this summary make the work INVALID per Constitution Rule 4.
 
 ## PLAN REVISION FORMAT (When Modifying master-plan.md)
 
@@ -111,6 +341,9 @@ Key reminders (non-authoritative — the Constitution is the source of truth):
 - Moderator role is deferred to v2 per active decision record — do not implement
 - MFA recovery follows the active decision record (currently: 10 codes, 8 alphanumeric chars)
 - If required documents are missing or unclear → STOP, do not assume
+- **Rule 4 (Definition of Done) operationalized in ANTI-COMPLETION-THEATER section**
+- **Rule 7 (No Silent Behavior Change) operationalized in SCOPE DISCIPLINE section**
+- **Rule 11 (Critical Module Override) operationalized in REGRESSION PREVENTION PROTOCOL Step E**
 
 ## AUTHORITY HIERARCHY
 
@@ -130,6 +363,7 @@ When modifying code that affects shared components, you MUST update the relevant
 - `docs/07-reference/event-index.md` — system events
 - `docs/07-reference/config-index.md` — configuration keys
 - `docs/07-reference/env-var-index.md` — environment variables
+- `docs/07-reference/artifact-index.md` — generated artifacts (migrations, closures, references, edge functions)
 
 ## DEPENDENCY ORDER (Implementation Sequence)
 
@@ -144,31 +378,33 @@ Current sequence (non-authoritative convenience summary — master-plan.md is ca
 5. PLAN-ADMIN-001 (after RBAC + User Management)
 6. PLAN-USRPNL-001 (after Auth)
 7. PLAN-HEALTH-001, PLAN-JOBS-001 (independent, any time after GOV)
+8. PLAN-TRADING-001 (trading-panel + strategy-module pattern foundation, after all platform modules)
 
 ## DOCUMENTATION LOCATIONS
 
 ```
 docs/
 ├── 00-governance/    — Constitution, change control, system state, AI rules
-├── 01-architecture/  — Architecture overview, dependency map, design principles
+├── 01-architecture/  — Architecture overview, dependency map, design principles, project structure, UI architecture
 ├── 02-security/      — Auth security, authorization, input validation
 ├── 03-performance/   — Caching, DB performance, strategy
-├── 04-modules/       — Module specs (auth, rbac, admin, user, audit, health, api, jobs)
+├── 04-modules/       — Module specs (auth, rbac, admin-panel, user-panel, user-management, audit-logging, health-monitoring, api, jobs-and-scheduler, trading-panel, strategy-module-pattern)
 ├── 05-quality/       — Testing strategy, regression strategy
 ├── 06-tracking/      — Action tracker, risk register, regression watchlist
-├── 07-reference/     — Function, permission, route, event, config, env var indexes
-└── 08-planning/      — Master plan, approved decisions, changelog, review log
+├── 07-reference/     — Function, permission, route, event, config, env var, artifact indexes
+└── 08-planning/      — Master plan, approved decisions, changelog, review log, feature proposals, phase closures
 ```
 
 ## VERSION CONTROL — BRANCHING RULES (MANDATORY)
 
 All implementation work MUST be done in feature branches, NOT on the main/default branch.
 
-- **Branch naming**: `feature/PLAN-{MODULE}-{NNN}-{short-description}` (e.g., `feature/PLAN-AUTH-001-email-password`)
+- **Branch naming**: `feature/PLAN-{MODULE}-{NNN}-{short-description}` (e.g., `feature/PLAN-AUTH-001-email-password`); for documentation-only PRs use `docs/{short-description}`
 - **One branch per feature/phase**: Each implementation task or phase gate gets its own branch
 - **No direct commits to main**: All work merges via pull request after phase gate verification
 - **Branch scope**: Each branch should correspond to a single plan section or sub-task — do not bundle unrelated changes
 - **Clean history**: Branches must pass all tests before merge. Failed branches must be fixed, not force-merged.
+- **Branch base sanity**: New branches MUST be created from origin/main, not from stale local checkouts. See EXECUTION GATES.
 
 ## DEPENDENCY COMPATIBILITY — NO UNSUPPORTED SOFTWARE (MANDATORY)
 
@@ -194,6 +430,204 @@ If you identify a feature, enhancement, or capability that is NOT in the approve
 
 This applies to ALL unplanned features — no matter how small, useful, or obvious they seem. Scope is locked. No exceptions.
 
+## ROI & STRATEGY GUARDRAILS
+
+This is a long-short trading strategy web application. ROI and risk-adjusted performance are the dominant criteria for ANY change affecting trading-related logic. The AI default — both Cursor's default and any model's default — is to make conservative fixes that quietly reduce ROI. THIS DEFAULT IS ACTIVELY RESISTED.
+
+### What "conservative fix" looks like (and is FORBIDDEN as a silent default)
+
+- Tightening thresholds (e.g., raising a signal cutoff to reduce false positives without ROI evidence)
+- Reducing signal sensitivity (e.g., changing a multiplier from 1.0 to 0.7 to "play it safe")
+- Removing model inputs (e.g., dropping a feature because it's noisy on small samples)
+- Disabling tracking, monitoring, or audit data ("we don't really need this")
+- Oversimplifying strategy logic (collapsing branches, removing edge-case handling)
+- Reducing position sizing without explicit drawdown reasoning
+- Suppressing uncertainty (collapsing a distribution to a point estimate "for simplicity"; dropping error bars; reporting fallback values as primary values)
+- Removing or weakening cross-checks, sanity gates, or guardrails on strategy output
+- Replacing a model output with a hardcoded constant "for now"
+
+### What the binding rule is
+
+For any change affecting prediction logic, signals, model confidence, fallback behavior, thresholds, scoring, ranking, strategy selection, risk sizing, position sizing, execution timing, trade filtering, monitoring, performance analytics, or audit data:
+
+1. **State the ROI / risk-adjusted impact explicitly** in the work-complete summary's ROI section
+2. **If the change is ROI-neutral or ROI-negative**: it is acceptable ONLY when necessary for correctness, safety, security, or compliance — AND the ROI tradeoff must be explicit, documented, and operator-approved
+3. **If the change is ROI-positive**: state the basis (backtest, simulation, theoretical reasoning) — do not assume ROI-positive without evidence
+4. **Uncertainty MUST be preserved, not flattened**: distributions stay distributions; error bars stay; fallback values are labeled
+
+### Default position when uncertain about ROI impact
+
+When uncertain whether a change will affect ROI: STOP and ask. Do not assume "small change = small ROI impact." A 1-line threshold change can drop a strategy's Sharpe ratio by 0.5 in production. A "minor refactor" that collapses two code paths can mask a regime-detection branch and silently halve returns. ROI sensitivity is non-obvious.
+
+### Cross-reference
+
+This section operationalizes supervisor §7a. The supervisor instructions in the operator's hands are canonical for the supervisor-Claude-Cursor workflow; this `.cursorrules` section is canonical for Cursor's per-task behavior.
+
+## TRADING-PANEL + STRATEGY-MODULE BINDING CONTRACT
+
+The trading-panel and strategy-module-pattern documentation in `docs/04-modules/` is the binding architectural contract per DEC-031 (locked 2026-05-15). Partial conformance is INVALID. Every rule below is a Constitution-Rule-7-violation if bypassed silently.
+
+### When this section applies
+
+ANY task that touches:
+
+- The `/trading` panel path or its sub-routes
+- Strategy module directory `src/features/<strategy>/` (any strategy)
+- Per-strategy permissions matching pattern `<strategy>.*` (e.g., `longshort.view`, `longshort.manage`, `longshort.execute`)
+- Per-strategy database tables matching pattern `<strategy>_*` (e.g., `longshort_positions`, `longshort_audit_logs`)
+- Per-strategy edge functions matching pattern `<strategy>-*` (e.g., `longshort-rebalance`)
+- Per-strategy background jobs with `job_id` matching pattern `<strategy>_*`
+- `TradingLayout`, `trading-navigation.ts`, `panels.trading` config
+- Any new strategy module being created
+
+Before any such task: read `docs/04-modules/strategy-module-pattern.md` AND `docs/04-modules/trading-panel.md` in full.
+
+### Rule T1 — Strategy directory layout is FIXED
+
+Every strategy module lives at `src/features/<strategy>/` with this exact layout:
+
+```
+src/features/<strategy>/
+├── components/
+├── hooks/
+├── services/
+├── types/
+├── api/
+├── utils/
+└── index.ts            ← public façade, the ONLY file other modules may import from
+```
+
+Routed page wrappers live at `src/pages/trading/<strategy>/` and import ONLY from the strategy's `index.ts`.
+
+Any strategy file outside this layout is non-conformant. Stop and surface.
+
+### Rule T2 — Per-strategy table naming is `<strategy>_<entity>`
+
+Strategy data tables in the `public` schema MUST be named `<strategy>_<entity>` (e.g., `longshort_positions`, `longshort_signals`). Per-strategy audit table is `<strategy>_audit_logs`. The platform `audit_logs` table is NEVER modified to receive strategy events.
+
+### Rule T3 — Per-strategy RBAC uses strict two-segment format
+
+Per-strategy permissions follow `<strategy>.<action>` (two segments only) per `rbac.md`:
+
+- `<strategy>.view` — read access
+- `<strategy>.manage` — create/edit positions, configure parameters
+- `<strategy>.execute` — actually place trades (destructive; reauth-required; system_critical)
+
+No three-segment permission keys. Grouping in admin UI uses the `module` field on each permission entry, not key namespacing.
+
+### Rule T4 — THE AUDIT-WRITER TRAP (CRITICAL)
+
+**Strategy code MUST NOT use the platform `logAuditEvent` primitive from `supabase/functions/_shared/audit.ts`.**
+
+That writer is hardcoded to INSERT into the platform `audit_logs` table. Calling it from a strategy edge function silently violates DEC-031 modularity (strategy events end up in the platform audit table) and constitutes a Constitution Rule 7 violation (silent behavior change on the platform `audit_logs` table).
+
+Strategy modules MUST provide their own audit writer targeting `<strategy>_audit_logs`. Two acceptable shapes:
+
+1. **Per-strategy local writer** — function under `src/features/<strategy>/api/` (client-side) or `supabase/functions/<strategy>-<verb>/audit.ts` (edge-function-local) — mirrors hardened patterns of `_shared/audit.ts` (sanitization, correlation_id, structured success/failure, never throws)
+2. **Shared strategy-audit helper** — new helper at `supabase/functions/_shared/strategy-audit.ts` parameterized by strategy key, writing to `${strategyKey}_audit_logs`. If adopted, this helper is a platform-tier addition requiring its own governance approval (new DEC).
+
+Whichever shape is chosen: action names use `<strategy>.<verb>` format, registered in `event-index.md`.
+
+### Rule T5 — THE TRADING-PANEL CARVE-OUT (took 4 review rounds to converge — DO NOT REINTRODUCE THE BLUNT WORDING)
+
+The dependency rule between platform modules and strategy modules has a precise carve-out:
+
+- **Strategy modules MAY** depend on platform modules (auth, RBAC, audit primitives, jobs scheduler, API, UI, dashboard shell)
+- **Strategy modules MUST NOT** import from sibling strategy modules (cross-strategy interaction goes through platform services or documented registration patterns, never via direct import)
+- **Core platform modules** (auth, rbac implementation, audit-logging implementation, jobs scheduler, admin-panel, user-panel) **MUST NOT** import from any strategy module — INCLUDING the strategy's `index.ts` façade
+- **Trading-panel infrastructure** (e.g., `src/config/trading-navigation.ts`) has a **narrow carve-out** to import from strategy `index.ts` façades for nav/RBAC-key registration ONLY — NEVER from strategy internals
+
+Do NOT collapse this to "platform modules MUST NOT import from strategies" — that wording was specifically REJECTED during the FP-004 review cycle because it denies the sanctioned façade-import path. The narrow trading-panel-infrastructure carve-out is the entire point of how the panel discovers registered strategies.
+
+Reference: DEC-031 sub-point (6); `strategy-module-pattern.md` Dependency Rules; `dependency-map.md` Forbidden Dependency Examples.
+
+### Rule T6 — Per-strategy removability invariant
+
+Every strategy MUST be removable as a unit. Removing strategy X means:
+
+- Delete `src/features/X/` directory
+- Delete `src/pages/trading/X/` directory
+- Drop all `X_*` tables (data + audit) via migration
+- Drop all `X-*` edge functions
+- Remove all `X_*` rows from `job_registry` + their pg_cron entries
+- Delete all `X.*` permission rows from `permissions` table
+- Remove all `X.*` event registrations from `event-index.md`
+- Remove all `X.*` route registrations from `route-index.md`
+- Delete module doc `docs/04-modules/X.md`
+
+If a "trading-related" file you're creating doesn't fit any of the above patterns, you're probably violating modularity. STOP and surface. Do not silently place strategy-specific code outside the canonical locations.
+
+### Rule T7 — DEC-023 envelope mandatory for strategy edge functions
+
+Every strategy edge function MUST consume the shared handler stack from `supabase/functions/_shared/`: `createHandler`, `authenticateRequest`, `validateRequest`/`normalizeRequest`, `checkPermissionOrThrow`, `apiError`/`apiSuccess`. No inline validation. No ad-hoc error responses. No bypassing the envelope.
+
+Note: `logAuditEvent` is NOT in this list — see Rule T4 (the audit-writer trap).
+
+### Rule T8 — Idempotency mandatory for financial side-effects
+
+Any strategy job, edge function, or code path that has financial side-effects (trade execution, position open/close, money movement) MUST use an idempotency store with exactly-once delivery per `jobs-and-scheduler.md` Execution Guarantee Model. A trade-execution path that fires twice due to retry without idempotency is a money-losing defect, not a benign duplicate.
+
+Live-trading jobs without an idempotency store MUST NOT reach production. Stop and surface if a draft proposes one.
+
+### Rule T9 — MFA policy participation, not duplication
+
+Strategy code does NOT define its own MFA enforcement. The trading panel as a whole participates in the FP-002 / DEC-028 panel policy via `mfa_enforcement_policy.panels.trading`. Strategies that need stricter MFA for specific actions use `reauth_required: true` on the relevant permission key — NOT a new MFA enforcement layer.
+
+## DATABASE & MIGRATION DISCIPLINE
+
+### Rule D1 — RLS-first for every new table
+
+Every new table MUST have Row-Level Security enabled BEFORE any application code reads from it. Per DEC-022 single-tenant model:
+
+- Row ownership scoped by `auth.uid()` — no `tenant_id` columns
+- Admin-override paths use existing platform helpers — strategy modules MUST NOT define new admin-override mechanisms
+- Service-role bypass requires explicit justification in the migration's accompanying ledger entry
+
+A new table without RLS is a data-leak waiting to happen. Stop and surface.
+
+### Rule D2 — No DROP / destructive ALTER without explicit operator approval
+
+Migrations may freely add: new tables, new columns (nullable or with safe defaults), new indexes, new policies, new functions. These are additive.
+
+Migrations MUST NOT, without explicit operator approval recorded in the change summary:
+
+- DROP TABLE (any)
+- DROP COLUMN (any)
+- ALTER COLUMN TYPE (especially narrowing types)
+- DROP / ALTER POLICY (removal or weakening)
+- DROP / ALTER FUNCTION (signature change)
+- TRUNCATE (any)
+- DELETE FROM (mass-delete; targeted DELETE for cleanup is acceptable if scoped)
+- Anything that could lose data, change RLS semantics, or break referential integrity
+
+If the task requires any of the above, STOP and surface to operator with: (a) what the destructive operation is, (b) what data/behavior is affected, (c) what the rollback looks like, (d) whether a feature flag could avoid the destructive path.
+
+### Rule D3 — Idempotent migrations (CRITICAL)
+
+All migrations MUST be idempotent — applying twice produces the same result as applying once. Use:
+
+- `CREATE TABLE IF NOT EXISTS`
+- `CREATE INDEX IF NOT EXISTS`
+- `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+- `DROP POLICY IF EXISTS ... ; CREATE POLICY ...` for policy replacements
+- Conditional `INSERT ... ON CONFLICT DO NOTHING` for seed data
+
+Non-idempotent migrations break re-runs, break preview environments, and break disaster recovery. They are INVALID.
+
+### Rule D4 — Per-strategy migration scoping
+
+Migrations for a strategy module MUST be scoped to `<strategy>_*` artifacts. A single migration MUST NOT mix:
+
+- Platform table changes AND strategy table changes
+- Strategy X changes AND strategy Y changes
+- Schema changes AND data seeding (separate migrations preferred for clarity)
+
+This preserves the removability invariant (Rule T6) — strategy X migrations can be selectively reverted without affecting platform or strategy Y.
+
+### Rule D5 — Migration ledger entry mandatory
+
+Every new migration MUST have a corresponding entry in `docs/07-reference/database-migration-ledger.md` describing: migration ID, purpose, tables/policies/functions affected, rollback plan, owning plan section. Migrations without ledger entries are INVALID per Constitution Rule 2 (Documentation-Code Coupling).
+
 ## QUALITY MANDATE — INSTITUTIONAL GRADE (NON-NEGOTIABLE)
 
 This is an institutional-grade project. Every output must meet A+ / 100/100 standard. "Good enough" is not acceptable.
@@ -205,6 +639,7 @@ This is an institutional-grade project. Every output must meet A+ / 100/100 stan
 3. **Auditable**: Every piece of code must have a clear audit trail — who did what, when, why. Logging, structured errors, and action tracking are mandatory.
 4. **Diagnosable**: Every failure path must be clear and traceable. No silent failures, no swallowed errors, no ambiguous states. Errors must be structured, logged, and actionable.
 5. **Testable**: Every piece of code must be testable at unit, integration, and E2E levels. No tightly coupled, untestable logic. Separation of concerns is mandatory.
+6. **Modular** (strategy modules): per the binding contract in TRADING-PANEL + STRATEGY-MODULE BINDING CONTRACT section. Removability invariant non-negotiable.
 
 ### End-to-End Verification (Every Implementation Task)
 
@@ -213,8 +648,9 @@ After completing any implementation task:
 1. **Test end-to-end** — verify the feature works in its complete flow, not just the changed file
 2. **Verify security** — confirm no new attack surfaces, no permission gaps, no data leaks
 3. **Verify performance** — confirm no regressions in latency, bundle size, or query performance
-4. **If ANY test fails → FIX and RETEST** — repeat until ALL tests pass. No partial passes accepted. Do not declare done with known failures.
+4. **If ANY test fails → FIX and RETEST** — repeat until ALL tests pass. No partial passes accepted. Do not declare done with known failures (see ANTI-COMPLETION-THEATER).
 5. **Verify documentation alignment** — confirm all docs reflect the implementation accurately
+6. **Verify ROI / risk impact** — for any change touching trading logic, complete the ROI assessment per ROI & STRATEGY GUARDRAILS
 
 ### Mandatory Testing Reading (Implementation Tasks)
 
@@ -223,32 +659,42 @@ For any implementation task, you MUST also read:
 - `docs/05-quality/testing-strategy.md` — testing governance, coverage targets, test pyramid
 - `docs/05-quality/regression-strategy.md` — regression prevention, baselines, cross-module checks
 
-These are not optional. They define the testing contract for this project.
+These are not optional. They define the testing contract for this project. The REGRESSION PREVENTION PROTOCOL section above operationalizes both.
 
 ### Code Quality Non-Negotiables
 
 - No `any` types in TypeScript (use proper typing)
-- No disabled ESLint rules without documented justification
+- No disabled ESLint rules without documented justification (inline comment with reason)
 - No hardcoded secrets, tokens, or credentials
 - No console.log in production code (use structured logging)
-- No TODO/FIXME without a tracked action item
+- No TODO/FIXME without a tracked action item or incidental-finding entry
 - No dead code or unused imports
 - Error boundaries on all major UI sections
 - Loading and error states for all async operations
 - Input validation on all user-facing forms (client + server)
 - Proper HTTP status codes and error responses
+- **Idempotency for any financial side-effect path** (see Rule T8)
+- **Per-strategy audit table for strategy events** — NEVER write strategy events to platform `audit_logs` (see Rule T4)
+- **Trading-panel infrastructure imports only strategy `index.ts` façades** — never strategy internals (see Rule T5)
+- **No bypass of DEC-023 shared API stack** for edge functions (see Rule T7)
+- **RLS enabled before reads on every new table** (see Rule D1)
+- **Idempotent migrations** (see Rule D3)
 
 ## PHASE GATE VERIFICATION PROTOCOL (MANDATORY)
 
 After ANY implementation task that completes or advances a plan section:
 
 1. **Update phase gate checkboxes** in `docs/08-planning/master-plan.md` with evidence references (ACT-NNN)
-2. **Reconcile reference indexes** — verify that `docs/07-reference/` entries (routes, functions, events, permissions) match actual code. Mismatches are INVALID.
+2. **Reconcile reference indexes** — verify that `docs/07-reference/` entries (routes, functions, events, permissions, artifacts) match actual code. Mismatches are INVALID.
 3. **Update action tracker** — ensure `docs/06-tracking/action-tracker.md` reflects current status with accurate evidence
 4. **Verify summary dashboard** — confirm counts in the action tracker summary match the detailed register
+5. **No scope creep beyond gate items** — the gate items list what the phase commits to deliver. Adding work beyond gate items is scope expansion (see FEATURE PROPOSAL PROTOCOL).
+6. **Verify regression baseline** — confirm REGRESSION PREVENTION PROTOCOL was executed for this phase
 
 Failure to complete this protocol means the task is NOT done, regardless of whether the code works. This is a governance requirement (ACT-012).
 
 ## FINAL WARNING
 
-If you skip reading governance docs, generate code when blocked, drop plan sections, fail to update documentation, skip phase gate verification, skip testing, or produce code that is not auditable/diagnosable/testable — the work is INVALID and must be reverted. This is not advisory. This is mandatory.
+If you skip reading governance docs, generate code when blocked, drop plan sections, fail to update documentation, skip phase gate verification, skip testing, claim completion with TODOs or skipped tests, silently fix things outside scope, default to conservative-fix ROI degradation, bypass the trading-panel + strategy-module binding contract, or produce code that is not auditable/diagnosable/testable — the work is INVALID and must be reverted. This is not advisory. This is mandatory.
+
+When in doubt: STOP and ask. The cost of one operator turn is small. The cost of silent regression in a trading system is large.
