@@ -612,6 +612,26 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 
 ---
 
+### MIG-035: Step 4 Trading Panel Foundation — Permission Seed + MFA Policy Extension
+
+| Field | Value |
+|-------|-------|
+| **Ledger ID** | MIG-035 |
+| **Migration File** | `20260516103000_step_4_trading_panel_foundation.sql` |
+| **Source Dir** | `supabase/migrations/` |
+| **Applied Date** | 2026-05-16 |
+| **Sequence Order** | 35 |
+| **Purpose** | (1) Seed `trading.access` permission with **no role grants** (DEC-031.10). (2) Extend `system_config.mfa_enforcement_policy` JSON `panels` with `trading: 'optional'` via `jsonb_set`, idempotent when key already exists. |
+| **Objects Affected** | Rows: `public.permissions` (insert); `public.system_config` (`mfa_enforcement_policy` value patch, `updated_at`) |
+| **Depends On** | MIG-001 (permissions table), MIG-034 (`mfa_enforcement_policy` row) |
+| **Status** | `active` |
+| **Linked Actions** | ACT-068 |
+| **Linked Decisions** | DEC-030, DEC-031 |
+| **Linked Artifacts** | ART-015 |
+| **Notes** | Forward migration only — rollback is operator manual DELETE + JSON patch if ever required. |
+
+---
+
 ### Tables (13)
 
 | Table | Created By | Status |

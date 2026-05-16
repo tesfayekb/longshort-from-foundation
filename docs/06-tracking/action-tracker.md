@@ -1708,6 +1708,23 @@ Each action must include:
 
 ---
 
+### ACT-068: PLAN-TRADING-001 Step 4 — Trading Panel Foundation Infrastructure
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-068 |
+| **Date** | 2026-05-16 |
+| **Action** | Implemented Workstream Step 4 trading panel foundation under PLAN-TRADING-001 / DEC-031: `TradingLayout` + `TradingDashboard` + `tradingNavigation`; `ROUTES.TRADING` + `/trading` route block in `App.tsx`; migration `20260516103000_step_4_trading_panel_foundation.sql` (seed `trading.access` with no role grants; `panels.trading` MFA JSON extension); Playwright `e2e/trading-panel-access.spec.ts` (skip-on-no-session parity with admin-role E2E); governance + reference indexes (system-state, trading-panel implementation status, permission/route/config/migration-ledger/function/artifact indexes); new `docs/06-tracking/incidental-findings.md` with INC-15. |
+| **Type** | Feature |
+| **Impact Classification** | High |
+| **Modules Affected** | trading-panel, rbac (permission seed only), auth (MFA policy data; DEC-028 path) |
+| **Files Changed** | `src/layouts/TradingLayout.tsx`, `src/pages/trading/TradingDashboard.tsx`, `src/config/trading-navigation.ts`, `src/App.tsx`, `src/config/routes.ts`, `supabase/migrations/20260516103000_step_4_trading_panel_foundation.sql`, `e2e/trading-panel-access.spec.ts`, `docs/06-tracking/incidental-findings.md`, `docs/06-tracking/action-tracker.md`, `docs/00-governance/system-state.md`, `docs/04-modules/trading-panel.md`, `docs/07-reference/{permission-index,route-index,config-index,database-migration-ledger,artifact-index,function-index}.md` |
+| **Related Tests** | `e2e/trading-panel-access.spec.ts`, Vitest regression suite (baseline preserved) |
+| **Evidence** | Typecheck clean; `trading.access` gated layout matches `AdminLayout` pattern; migration idempotent guards per D2. |
+| **Status** | Verified |
+
+---
+
 - Regression fix actions must reference the original regression
 - Repeated failures in same area → tracked via recurrence in watchlist, referenced here
 

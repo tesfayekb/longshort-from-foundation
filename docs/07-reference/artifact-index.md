@@ -333,9 +333,9 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Owning Phase** | Phase Trading-Foundation |
 | **Owning Plan Section** | PLAN-TRADING-001 |
 | **Status** | `active` |
-| **Related Actions** | — (no ACT-* assignments yet; trading-panel implementation work lands in PR-3 of FP-004 outline as ACT-NNN — registry to be updated then) |
+| **Related Actions** | ACT-068 (Step 4 — PLAN-TRADING-001 trading panel foundation: TradingLayout + migration + e2e + governance docs) |
 | **Related Decisions** | DEC-030, DEC-031 |
-| **Notes** | Defines the trading-panel shell as a peer to admin and user panels. Hosts strategy modules per the binding contract in `strategy-module-pattern.md`. Participates in the FP-002 / DEC-028 panel MFA enforcement policy via the new `panels.trading` key. |
+| **Notes** | Defines the trading-panel shell as a peer to admin and user panels. Hosts strategy modules per the binding contract in `strategy-module-pattern.md`. Participates in the FP-002 / DEC-028 panel MFA enforcement policy via the new `panels.trading` key. **Step 4 foundation implemented:** `TradingLayout` at `src/layouts/TradingLayout.tsx`; `trading.access` permission seeded via migration `20260516103000_step_4_trading_panel_foundation.sql`; `panels.trading` MFA key added in same migration; e2e tests at `e2e/trading-panel-access.spec.ts`. |
 
 ---
 

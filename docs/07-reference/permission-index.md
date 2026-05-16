@@ -635,8 +635,10 @@ Permissions classified as `destructive`, `system-wide`, or `security-critical` r
 
 | Field | Value |
 |-------|-------|
-| **Permission UUID** | `perm-uuid-trading-access` (actual UUID assigned at DB creation) |
+| **Permission UUID** | Assigned at insert time in `public.permissions`. Seeded idempotently by migration `20260516103000_step_4_trading_panel_foundation.sql` (Step 4). |
 | **Module** | trading-panel |
+| **Note** | `Module` is documentation metadata only per permission-index convention — see **INC-15** (`docs/06-tracking/incidental-findings.md`) for permissions table schema vs doc alignment. |
+| **Implementation status** | IMPLEMENTED |
 | **Description** | Gates access to the entire trading panel (`/trading/*`). Required by `TradingLayout` before any strategy sub-route is reachable. Analogous to `admin.access` for the admin panel. |
 | **Classification** | operational |
 | **Scope** | system-wide |

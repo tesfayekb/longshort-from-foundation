@@ -18,6 +18,17 @@ The trading panel exists to: (a) give users a single navigational entry point fo
 
 The trading panel does NOT govern: strategy business logic, strategy data tables, strategy edge functions, strategy jobs, strategy audit infrastructure, per-strategy permissions. Those belong to individual strategy modules per `strategy-module-pattern.md`.
 
+## Implementation Status
+
+| Phase | Status | Workstream Step | PR |
+|---|---|---|---|
+| Foundation infrastructure (TradingLayout, trading.access permission, panels.trading MFA key, e2e tests) | Complete | Workstream Step 4 | #7 (or actual PR number at merge) |
+| First strategy (long-short Phase 0) | Not started | Workstream Step 5 (FP-005) | — |
+
+At HEAD, the trading panel renders at `/trading` for users with `trading.access` permission. No strategies are currently registered. The TradingDashboard placeholder shows an empty state. Strategies will be registered via `src/config/trading-navigation.ts` (the DEC-031 sub-point 6 carve-out file) in subsequent feature proposals starting with FP-005.
+
+Permissions doc-vs-DB schema drift (`module` field) is logged as **INC-15** in `docs/06-tracking/incidental-findings.md`.
+
 ## Enforcement Rule (CRITICAL)
 
 - Trading panel is a **privileged control surface** gated by `trading.access`.

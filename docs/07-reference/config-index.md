@@ -343,13 +343,13 @@ Every config must define:
 | **Approval required** | Yes — superadmin + `admin.config` + recent reauth |
 | **Audit required** | Yes — `system.mfa_policy_changed` |
 | **Used by** | `AdminLayout`, `UserLayout`, `TradingLayout`, `AdminSecurityPage`, `useMfaPolicy` |
-| **Related routes** | `/admin/security`, `GET /get-mfa-policy`, `PATCH /update-mfa-policy` |
+| **Related routes** | `/admin/security`, `GET /get-mfa-policy`, `PATCH /update-mfa-policy`, `/trading` |
 | **Related events** | `system.mfa_policy_changed` |
 | **Related risks** | RISK-001 |
 | **Related watchlist** | RW-016 |
 | **Lifecycle** | active |
 | **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
-| **Extended by** | PLAN-TRADING-001 (DEC-031) — `panels.trading` key added; no schema change required per FP-002 forward-compatible design |
+| **Extended by** | PLAN-TRADING-001 (DEC-031) — `panels.trading` key; **migration** `20260516103000_step_4_trading_panel_foundation.sql` (Step 4) adds `panels.trading = 'optional'` via `jsonb_set` on existing `mfa_enforcement_policy` row (idempotent). |
 
 ### Session Configs
 
