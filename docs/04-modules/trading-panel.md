@@ -22,7 +22,7 @@ The trading panel does NOT govern: strategy business logic, strategy data tables
 
 | Phase | Status | Workstream Step | PR |
 |---|---|---|---|
-| Foundation infrastructure (TradingLayout, trading.access permission, panels.trading MFA key, e2e tests) | Complete | Workstream Step 4 | #7 (or actual PR number at merge) |
+| Foundation infrastructure (TradingLayout, trading.access permission, panels.trading MFA key, e2e tests) | Complete | Workstream Step 4 | #7 |
 | First strategy (long-short Phase 0) | Not started | Workstream Step 5 (FP-005) | — |
 
 At HEAD, the trading panel renders at `/trading` for users with `trading.access` permission. No strategies are currently registered. The TradingDashboard placeholder shows an empty state. Strategies will be registered via `src/config/trading-navigation.ts` (the DEC-031 sub-point 6 carve-out file) in subsequent feature proposals starting with FP-005.
