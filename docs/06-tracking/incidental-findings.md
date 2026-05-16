@@ -43,6 +43,37 @@ Yet:
 
 (None yet.)
 
+### INC-16 — RW-018 test assertions out of sync with implementation (6 pre-existing failures)
+
+| Field | Value |
+|---|---|
+| **Discovered** | 2026-05-16 |
+| **Discovery Context** | C1 fix execution (RW-018 `ApiError` mock re-export). After applying `vi.importActual` pattern, failures dropped from 7 to 6. The 6 remaining failures are pre-existing assertion mismatches, not caused by the fix. |
+| **Severity** | Medium (test suite hygiene; RW-018 marked Verified but 6 of its 22 tests do not pass) |
+| **Disposition** | **Escalated for operator decision** — fix requires test-file refactor, which C1 scope prohibits. |
+
+**Finding.** The `vi.importActual` fix resolves the `ApiError` mock issue (1 test restored). Six remaining failures in `src/test/rw018-sudo-audit-events.test.ts` fall into two categories:
+
+**Category A — Success-path POST body assertions (4 tests).** Tests in sections 1 and 3 expect the `apiClient.post` body to contain exactly `{ action, action_key }`, but `logSudoEvent` (implementation-correct per RW-019) sends `{ action, action_key, correlation_id }`. The assertions use `.toEqual()` strict equality, so the extra `correlation_id` field fails the match.
+
+Affected tests:
+- `auth.sudo_granted is buffered AND POSTed with the action_key`
+- `auth.sensitive_action_performed is buffered AND POSTed`
+- `on fresh grant: emits sudo_granted THEN sensitive_action_performed for the same action_key`
+- `manual grant flow emits BOTH sudo_granted and sensitive_action_performed once each`
+
+Fix: change `.toEqual({ action, action_key })` to `.toMatchObject({ action, action_key })` or assert the full 3-field body shape.
+
+**Category B — Error-path return-value assertions (2 tests).** Tests in section 6 expect `logSudoEvent` to resolve to `undefined` (`.resolves.toBeUndefined()`), but `logSudoEvent` always returns a `SudoAuditResult` object (implementation-correct per DEC-029). The original `ApiError` mock bug masked this by causing `logSudoEvent` to throw a TypeError on the `instanceof` check, making the promise reject instead of resolve.
+
+Affected tests:
+- `logSudoEvent swallows edge-function errors but still buffers the event`
+- `isSudoActive is unaffected by audit-write failure`
+
+Fix: change `.resolves.toBeUndefined()` to `.resolves.toBeDefined()` or assert on `result.persisted === false`.
+
+**Impact.** RW-018 is marked Verified in the regression watchlist and action tracker, but 6 of its 22 tests are not reproducible as passing. This is a Constitution Rule 11 issue (evidence not reproducible), though distinct from the `ApiError` mock bug that C1 resolves.
+
 ---
 
 ## Naming Conventions
