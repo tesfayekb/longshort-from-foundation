@@ -631,6 +631,29 @@ Permissions classified as `destructive`, `system-wide`, or `security-critical` r
 | **Depends on** | `admin.access` |
 | **Lifecycle** | active |
 
+#### `trading.access`
+
+| Field | Value |
+|-------|-------|
+| **Permission UUID** | `perm-uuid-trading-access` (actual UUID assigned at DB creation) |
+| **Module** | trading-panel |
+| **Description** | Gates access to the entire trading panel (`/trading/*`). Required by `TradingLayout` before any strategy sub-route is reachable. Analogous to `admin.access` for the admin panel. |
+| **Classification** | operational |
+| **Scope** | system-wide |
+| **Default roles** | — (none seeded; superadmin inherits all permissions; admin and user roles do NOT receive `trading.access` by default per DEC-031 initial-seed-grants rule) |
+| **Used by** | `TradingLayout`, all `/trading/*` routes (outer gate) |
+| **Blast radius** | medium — gates an entire panel, but the panel hosts only strategy modules which carry their own per-strategy permissions for inner routes |
+| **Approval required** | Yes — granting requires admin with `permissions.assign`; revoking requires admin with `permissions.revoke` |
+| **Audit required** | Yes — grant/revoke audited via `rbac.permission_assigned` / `rbac.permission_revoked` |
+| **Reauth required** | No (reauth is enforced on destructive trading actions via per-strategy `<strategy>.execute` permissions, not at the panel level) |
+| **Related routes** | `/trading/*` (all trading-panel routes) |
+| **Related functions** | `RequirePermission`, `useMfaPolicy` (panel MFA enforcement) |
+| **Related risks** | (to be assigned when risk register is updated) |
+| **Related tests** | Trading panel access allow/deny suite (added in PR-3 of FP-004 outline) |
+| **Depends on** | `admin.access` is independent; this is a separate panel-level root permission |
+| **Lifecycle** | active |
+| **Added by** | PLAN-TRADING-001 (DEC-030 scope expansion, DEC-031 architectural pattern) |
+
 ### Audit Permissions
 
 #### `audit.view`

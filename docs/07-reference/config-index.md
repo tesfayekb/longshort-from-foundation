@@ -332,8 +332,8 @@ Every config must define:
 | **Type** | `jsonb` (`{ version: number, panels: Record<string, 'required' \| 'optional'>, notes?: string }`) |
 | **Module** | auth |
 | **Classification** | authorization-sensitive, security-critical |
-| **Default (dev seed)** | `{ version: 1, panels: { admin: 'optional' } }` |
-| **Default (prod SOP)** | `{ version: 1, panels: { admin: 'required' } }` — set during preproduction checklist |
+| **Default (dev seed)** | `{ version: 1, panels: { admin: 'optional', trading: 'optional' } }` |
+| **Default (prod SOP)** | `{ version: 1, panels: { admin: 'required', trading: 'required' } }` — set during preproduction checklist |
 | **Allowed values** | Per panel: `'required'` \| `'optional'` only. No `'disabled'` (DEC-028). |
 | **Invalid value behavior** | `fail-open-on-read / fail-closed-on-write` — reads whitelist unknown values to `'optional'`; writes reject anything outside the enum. `admin` panel always present (floor enforced server-side). |
 | **Source** | `system_config` table row, key = `mfa_enforcement_policy` |
@@ -342,13 +342,14 @@ Every config must define:
 | **Blast radius** | large — gates admin-panel and any future panel access |
 | **Approval required** | Yes — superadmin + `admin.config` + recent reauth |
 | **Audit required** | Yes — `system.mfa_policy_changed` |
-| **Used by** | `AdminLayout`, `UserLayout`, `AdminSecurityPage`, `useMfaPolicy` |
+| **Used by** | `AdminLayout`, `UserLayout`, `TradingLayout`, `AdminSecurityPage`, `useMfaPolicy` |
 | **Related routes** | `/admin/security`, `GET /get-mfa-policy`, `PATCH /update-mfa-policy` |
 | **Related events** | `system.mfa_policy_changed` |
 | **Related risks** | RISK-001 |
 | **Related watchlist** | RW-016 |
 | **Lifecycle** | active |
 | **Added by** | PLAN-AUTH-MFA-POLICY-001 (DEC-028) |
+| **Extended by** | PLAN-TRADING-001 (DEC-031) — `panels.trading` key added; no schema change required per FP-002 forward-compatible design |
 
 ### Session Configs
 

@@ -92,6 +92,20 @@ features/{feature-name}/
   - API layer
   - Approved interfaces
 
+### Adoption Status and Dual-Pattern Note
+
+The `features/{feature-name}/` pattern documented above is the canonical structure for new feature modules. As of FP-004 (DEC-031, 2026-05-15) the pattern is first adopted by trading strategy modules under `src/features/<strategy>/` (long-short first; options, futures, and other strategies follow as separate proposals).
+
+The pre-existing admin panel and user panel modules — located at `src/pages/admin/` + `src/components/admin/` and `src/pages/user/` + `src/components/user/` respectively — predate this convention and are NOT migrated. They remain in their established locations.
+
+**Rule:** All new feature modules MUST adopt the `features/` pattern. Existing admin/user panels are grandfathered; they are not in scope for migration unless a separate proposal explicitly approves it.
+
+### Strategy-Specific Table Naming (added by DEC-031)
+
+Strategy data tables MUST be named `<strategy>_<entity>` in the `public` schema (e.g., `longshort_positions`, `longshort_signals`, `options_positions`). Per-strategy audit log tables follow the same prefix: `<strategy>_audit_logs` (e.g., `longshort_audit_logs`). The platform `audit_logs` table is NOT modified or extended for trading events.
+
+This naming convention is binding for any future strategy module per `docs/04-modules/strategy-module-pattern.md`.
+
 ## Shared Code Structure
 
 | Folder | Purpose |

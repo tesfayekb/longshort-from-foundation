@@ -49,6 +49,8 @@ All modules defined in `docs/04-modules/` and all approved shared services.
 | health-monitoring | audit-logging, jobs-and-scheduler | Operational, Event | admin-panel | MEDIUM |
 | api | auth, rbac, audit-logging | Auth, Authorization, Service, Operational | presentation layer consumers | HIGH |
 | jobs-and-scheduler | auth, audit-logging | Auth, Operational, Event | health-monitoring | MEDIUM |
+| trading-panel | auth, rbac, audit-logging (pattern reference only — NOT data dep on `audit_logs` table), jobs-and-scheduler (pattern reference; no `job_registry` rows from panel itself), strategy modules' `index.ts` façades (narrow carve-out for `src/config/trading-navigation.ts` only — nav/RBAC-key registration ONLY, never strategy internals; see Forbidden Dependencies section for the matching forbidden bullets) | Auth, Authorization, Service, Operational | — | MEDIUM |
+| strategy modules (longshort, options, futures, etc. — pattern documented in `strategy-module-pattern.md`) | auth, rbac, audit primitives (custom strategy-audit writer, NOT platform `logAuditEvent`), jobs-and-scheduler (via `job_registry`), api (DEC-023 stack), ui (`DashboardLayout` via TradingLayout) | Auth, Authorization, Service, Data, Event, Operational | trading-panel (façade-import carve-out only) | MEDIUM (per strategy) |
 
 ## Shared Services Matrix
 
@@ -67,6 +69,9 @@ All modules defined in `docs/04-modules/` and all approved shared services.
 - Frontend must not call privileged service-role paths
 - `jobs-and-scheduler` must not bypass `audit-logging` for significant actions
 - No module may access another module's internal tables without approved shared service
+- Strategy modules MUST NOT import from sibling strategy modules. Cross-strategy interaction goes through platform services or documented registration patterns, never via direct import
+- Strategy modules MUST NOT use the platform `logAuditEvent` primitive — that writer is hardcoded to platform `audit_logs` and would violate DEC-031 modularity. Strategy modules use their own audit writer targeting `<strategy>_audit_logs`
+- Core platform modules (auth, rbac implementation, audit-logging implementation, jobs scheduler, admin-panel, user-panel) MUST NOT import from any strategy module — including the strategy's `index.ts` façade. The only sanctioned exception is trading-panel infrastructure (`src/config/trading-navigation.ts`), which has a narrow carve-out to import from strategy `index.ts` façades for nav/RBAC-key registration ONLY (never from strategy internals)
 
 ## Impact Assessment Rules
 

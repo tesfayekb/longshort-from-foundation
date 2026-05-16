@@ -62,6 +62,17 @@ No lower layer may be bypassed in ways that violate security, validation, or aud
 └──────────────────────────────────────────────┘
 ```
 
+### Strategy-Module Layer (added by DEC-031)
+
+Trading strategy modules occupy a peer layer at the Presentation + Application + Service + Data tiers — they are not a separate horizontal layer, but a vertical slice that spans the layered architecture for one domain (one strategy). Each strategy module:
+
+- Owns its own Presentation-layer pages and components under `src/features/<strategy>/` (vertical slice)
+- Owns its own Application-layer edge functions (`<strategy>-<verb>`) using the shared DEC-023 handler stack
+- Owns its own Service-layer business logic, signal computation, ranking, sizing
+- Owns its own Data-layer tables (`<strategy>_<entity>`) including a dedicated `<strategy>_audit_logs` table
+
+Strategy modules depend on platform modules (auth, RBAC, audit primitives, jobs scheduler, api, ui) but NEVER on sibling strategy modules. The trading-panel module hosts strategy modules as shell + routing infrastructure but does NOT contain strategy logic. See `docs/04-modules/strategy-module-pattern.md` for the binding contract.
+
 ## Canonical Request Flow
 
 1. User action originates in frontend
@@ -88,6 +99,7 @@ The following apply across all layers and modules:
 - Configuration management
 - Performance controls
 - Change tracking and documentation alignment
+- Modularity (strategy-module isolation per DEC-031: strategies are removable as units; platform layer is never modified to accommodate a strategy)
 
 ## Communication Rules
 

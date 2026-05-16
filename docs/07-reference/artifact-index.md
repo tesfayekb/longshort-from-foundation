@@ -246,6 +246,10 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | ART-010 | phase-closure | Phase 2 RBAC closure | Phase 2 | `active` |
 | ART-011 | edge-function | Shared API helpers (_shared/) | Phase 3 | `active` |
 | ART-012 | migration | Audit logs INSERT policy | Phase 3 | `active` |
+| ART-013 | edge-function | Query Audit Logs Edge Function | Phase 3 | `active` |
+| ART-014 | edge-function | Export Audit Logs Edge Function | Phase 3 | `active` |
+| ART-015 | reference | Trading Panel Module | Trading-Foundation | `active` |
+| ART-016 | reference | Strategy Module Pattern | Trading-Foundation | `active` |
 
 ---
 
@@ -313,6 +317,42 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Status** | `active` |
 | **Related Actions** | ACT-024 |
 | **Notes** | Permission: audit.export. HIGH-RISK fail-closed: export aborted if audit write fails. CSV format, max 10K rows, chronological sort. Export action itself is audited. |
+
+---
+
+### ART-015: Trading Panel Module Documentation
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-015 |
+| **Type** | reference |
+| **Title** | Trading Panel Module — panel shell, MFA policy participation, cross-strategy contract |
+| **Source Path** | `docs/04-modules/trading-panel.md` |
+| **Created Date** | 2026-05-15 |
+| **Owning Phase** | Phase Trading-Foundation |
+| **Owning Plan Section** | PLAN-TRADING-001 |
+| **Status** | `active` |
+| **Related Actions** | — (no ACT-* assignments yet; trading-panel implementation work lands in PR-3 of FP-004 outline as ACT-NNN — registry to be updated then) |
+| **Related Decisions** | DEC-030, DEC-031 |
+| **Notes** | Defines the trading-panel shell as a peer to admin and user panels. Hosts strategy modules per the binding contract in `strategy-module-pattern.md`. Participates in the FP-002 / DEC-028 panel MFA enforcement policy via the new `panels.trading` key. |
+
+---
+
+### ART-016: Strategy Module Pattern Documentation
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-016 |
+| **Type** | reference |
+| **Title** | Strategy Module Pattern — binding architectural contract for all trading strategy modules |
+| **Source Path** | `docs/04-modules/strategy-module-pattern.md` |
+| **Created Date** | 2026-05-15 |
+| **Owning Phase** | Phase Trading-Foundation |
+| **Owning Plan Section** | PLAN-TRADING-001 |
+| **Status** | `active` |
+| **Related Actions** | — (no ACT-* assignments yet; first concrete strategy lands via FP-005 long-short; registry to be updated then) |
+| **Related Decisions** | DEC-030, DEC-031 |
+| **Notes** | The contract every trading strategy module (long-short first, then options, futures, etc.) MUST follow. Locks: directory layout (`src/features/<strategy>/`), public façade via `index.ts`, RBAC two-segment permissions, per-strategy `<strategy>_audit_logs` tables, edge function naming, job classification + idempotency, cross-module dependency rules, removability contract. |
 
 ---
 
