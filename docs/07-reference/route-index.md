@@ -50,7 +50,7 @@ All frontend routes and API endpoints across all modules.
 | `auth_required` | Whether authentication is required | Yes |
 | `permission_required` | Permission key(s) from Permission Index | If protected |
 | `scope` | `self`, `tenant`, `system-wide` | If protected |
-| `panel` | `public`, `user-panel`, `admin-panel` | Yes |
+| `panel` | `public`, `user-panel`, `admin-panel`, `trading-panel` | Yes |
 | `reauth_required` | Whether re-authentication is needed for actions | If destructive |
 | `related_functions` | Shared functions used by this route | If applicable |
 | `related_events` | Events emitted from this route | If applicable |
@@ -639,6 +639,25 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | **Related risks** | RISK-007 |
 | **Related tests** | Kill switch allow/deny suite, emergency flow E2E |
 | **Lifecycle** | planned |
+
+### Trading Panel Routes (Privileged)
+
+#### `/trading` — Trading Dashboard
+
+| Field | Value |
+|-------|-------|
+| **Page** | Trading Dashboard (panel index — placeholder until cross-strategy features land) |
+| **Module** | trading-panel |
+| **Classification** | privileged |
+| **Auth required** | Yes |
+| **Permission required** | `trading.access` |
+| **Scope** | system-wide |
+| **Panel** | trading-panel |
+| **Related functions** | `RequireAuth`, `RequirePermission`, `useMfaPolicy` |
+| **Related tests** | Trading panel access + MFA-policy redirect suite (added in PR-3 of FP-004 outline) |
+| **Related risks** | (to be assigned) |
+| **Lifecycle** | active |
+| **Added by** | PLAN-TRADING-001 (DEC-031) |
 
 ---
 

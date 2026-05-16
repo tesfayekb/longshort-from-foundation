@@ -37,8 +37,8 @@ phase: development
 code_generation: allowed
 modules_implemented: auth implemented (A+B+D implemented + hardened incl. Google account-picker prompt [ACT-064] + revoked-session local cleanup [ACT-065], C cancelled per DEC-025), rbac implemented (Phase 2 gate 12/12 closed + dependency enforcement + roles.edit + permissions.view separated + permissions.assign/revoke restricted to superadmin + RBAC governance hardening 2026-04-13), user-management implemented (Stage 3C closed), audit-logging implemented (Stage 3B closed + Phase 3.5 hardened + RLS INSERT policy removed [ACT-053] + correlation_id top-level column [ACT-055]), api implemented (Stage 3A closed + Phase 3.5 hardened), admin-panel implemented (Phase 4 CLOSED + Phase 5 additions: AdminHealthPage [ACT-063], AdminJobsPage [ACT-063] + performance hardening [ACT-056] + RBAC governance hardening 2026-04-13), user-panel implemented (Phase 4 CLOSED + session revocation [ACT-063] + global revoke local cleanup [ACT-065]), health-monitoring implemented (Stage 5A + 5B + 5F complete [ACT-057, ACT-058, ACT-063]), jobs-and-scheduler implemented (Stage 5C + 5D + 5E complete [ACT-059, ACT-060, ACT-062])
 active_work: All phases complete. PLAN-INVITE-001 (User Onboarding & Invitations) implemented — 6-phase plan complete. OAuth account-picker hardening reconciled 2026-04-14 [ACT-064]. Revoked-session cleanup reconciled 2026-04-14 [ACT-065].
-current_plan_version: v11.0
-approved_plan_baseline: v11.0
+current_plan_version: v12.0
+approved_plan_baseline: v12.0
 plan_status: approved
 artifact_governance: active (artifact-index.md, database-migration-ledger.md, phase-closures/)
 deferred_work_open: []
@@ -54,7 +54,7 @@ deployment_config_completed:
   - app_rebrand_longshort: "App rebranded from 'Foundation First' to 'LongShort' on 2026-05-13. Updated index.html, public/manifest.json, src/components/AppBrand.tsx."
   - rls_hardening_2026_05_13: "Migration 20260513195212 — restricted system_config SELECT to is_superadmin(); added owner-scoped SELECT policies on mfa_recovery_codes and mfa_recovery_attempts; added admin/accepting-user SELECT policy on invitations."
   - route_index_reconciliation_2026_05_13: "Added auth-hook-pre-signup and verify-turnstile entries to docs/07-reference/route-index.md (Reconciliation Addendum)."
-last_updated: 2026-05-13
+last_updated: 2026-05-15
 ```
 
 ## RBAC Governance Hardening (2026-04-13)

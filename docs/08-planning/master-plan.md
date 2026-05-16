@@ -301,6 +301,57 @@ Close the unlocked-public-computer attack vector by requiring a fresh credential
 
 ---
 
+### PLAN-TRADING-001: Trading Panel + Strategy Module Architectural Pattern
+**Status:** `approved`
+**Risk Level:** HIGH
+**Module Doc:** [trading-panel.md](../04-modules/trading-panel.md), [strategy-module-pattern.md](../04-modules/strategy-module-pattern.md)
+
+**Purpose:**
+Establish the trading panel as a third authenticated panel peer to the existing admin and user panels, and lock the architectural pattern for hosting individual trading strategies inside it. This is foundation-only — no specific strategy is built by this plan. The pattern enables future strategies (long-short first, then options, futures, etc.) to plug into a stable, modular shell with consistent RBAC, audit, data, and dependency conventions. Modularity priority: trading must be removable as a unit — deleting the trading panel + its permissions + per-strategy tables + audit infrastructure returns the platform to its current state with zero residue.
+
+**Dependencies:**
+- PLAN-GOV-001 (governance baseline)
+- PLAN-AUTH-001 (authentication primitives)
+- PLAN-RBAC-001 (RBAC permission model)
+- PLAN-AUDIT-001 (audit-logging pipeline pattern; net-new per-strategy audit tables follow the same shape, not the same table)
+- PLAN-API-001 / PLAN-AUDIT-001 Stage 3A (DEC-023 shared edge handler stack)
+- PLAN-JOBS-001 (`job_registry`, `_shared/job-executor`, pg_cron per DEC-019)
+- PLAN-AUTH-MFA-POLICY-001 (`mfa_enforcement_policy` extension to add `panels.trading`)
+
+**Used By / Affects:**
+- All future strategy plan sections (long-short, options, futures, etc.) attach as sub-sections under this parent plan
+- `docs/01-architecture/project-structure.md` (canonical `features/` pattern adoption)
+- `docs/01-architecture/dependency-map.md` (new strategy-tier rows)
+- `docs/04-modules/trading-panel.md`, `docs/04-modules/strategy-module-pattern.md` (new module docs)
+- Reference indexes: permission-index, route-index, config-index, artifact-index, database-migration-ledger
+
+**Approval:** DEC-030 (scope expansion) / DEC-031 (architectural pattern) / FP-004
+
+**Acceptance Criteria (Phase Gate — to be verified during execution PRs):**
+- [ ] DEC-030 and DEC-031 recorded in `approved-decisions.md` with stable IDs — *this PR (Batch A)*
+- [ ] PLAN-TRADING-001 plan section recorded in `master-plan.md` — *this PR (Batch A)*
+- [ ] plan-changelog.md updated with v11.0 → v12.0 transition entry — *this PR (Batch A)*
+- [ ] system-state.md updated: `current_plan_version` bumped v11.0 → v12.0, `approved_plan_baseline` bumped v11.0 → v12.0 (both fields move together per the file's internal consistency rule), and `last_updated` refreshed 2026-05-13 → 2026-05-15. Cursor inspects at execution time and surfaces any narrative drift (e.g., `v11` references in `active_work` or section headers) as incidental findings if found — *this PR (Batch A)*
+- [ ] `docs/04-modules/strategy-module-pattern.md` created with the binding pattern contract — *Batch B*
+- [ ] `docs/04-modules/trading-panel.md` created with panel shell + MFA policy participation contract — *Batch B*
+- [ ] `docs/01-architecture/project-structure.md` updated to note `features/` is in use + dual-pattern caveat — *Batch C*
+- [ ] `docs/01-architecture/dependency-map.md` extended with strategy-tier rows and forbidden cross-strategy bullets — *Batch C*
+- [ ] `docs/01-architecture/architecture-overview.md` updated to mention strategy-module layer — *Batch C*
+- [ ] `docs/07-reference/permission-index.md` registers `trading.access` (registration only; DB seed happens in PR-2 per FP-004 outline) — *Batch C*
+- [ ] `docs/07-reference/route-index.md` registers `/trading` route and adds `trading-panel` to the `panel` enum — *Batch C*
+- [ ] `docs/07-reference/config-index.md` documents the `panels.trading` extension — *Batch C*
+- [ ] `docs/07-reference/artifact-index.md` registers the new module docs — *Batch C*
+- [ ] `.cursorrules` updated to instruct Cursor to read strategy-module-pattern.md and trading-panel.md for any trading-related task — *Step 3 (separate small PR)*
+- [ ] PR-2 of FP-004 outline lands: `trading.access` permission seed migration + `mfa_enforcement_policy.panels.trading` JSON extension + `database-migration-ledger.md` entries — *Step 4a*
+- [ ] PR-3 of FP-004 outline lands: TradingLayout, routing block in `App.tsx`, placeholder `TradingDashboard`, `trading-navigation` config, Playwright e2e suite under `e2e/trading/`, `function-index.md` registration — *Step 4b*
+
+**Out of scope of this plan section:**
+- Any specific trading strategy (long-short, options, futures) — each is a separate feature proposal that attaches as a sub-section under this plan
+- Live-trading execution paths — deferred to per-strategy execution proposals after pattern is in place
+- Cross-strategy aggregate features (e.g., total portfolio P&L across strategies) — deferred until at least two strategies exist
+
+---
+
 ## Development Phases
 
 ### Phase 1 — Foundation (Auth + Infrastructure)

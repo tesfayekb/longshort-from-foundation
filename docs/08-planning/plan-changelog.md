@@ -190,6 +190,23 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved |
 | Supersession Links | None |
 
+### v11.0 → v12.0 (2026-05-15)
+
+**Type:** Plan addition — approved unplanned proposal (architectural foundation)
+
+| Field | Value |
+|-------|-------|
+| Plan Version | v11.0 → v12.0 |
+| Section IDs Changed | PLAN-TRADING-001 (new) |
+| Decision IDs Affected | DEC-030 (new), DEC-031 (new); DEC-003 expanded but not superseded |
+| What Changed | FP-004 approved. New plan section PLAN-TRADING-001 added: trading panel + strategy-module architectural pattern. DEC-030 records the DEC-003 feature scope expansion to include trading strategies (DEC-003 stays historically intact as the scope-discipline anchor; this is an additive amendment, not a supersession). DEC-031 records the eleven architectural decisions that lock the pattern (module location at `src/features/<strategy>/`, panel routing as shared `/trading` shell, strict two-segment RBAC permissions, per-strategy data and audit tables, cross-module dependency rules with narrow trading-panel-infrastructure façade-import carve-out, edge function naming, job classification, MFA policy participation, initial seed-grant policy, scope boundary). No code, migrations, or schema changes in this version — pure planning + decision recording. This v11.0 → v12.0 transition ships in **one consolidated Step 2b documentation PR** containing all three internal batches: Batch A (this entry plus DEC-030, DEC-031, PLAN-TRADING-001, system-state version bump), Batch B (`docs/04-modules/strategy-module-pattern.md` and `docs/04-modules/trading-panel.md` — two new module docs), and Batch C (reference-index updates and architecture-doc updates across seven existing files). The batch labels exist for review traceability — not separate PRs. Subsequent work (Step 3 `.cursorrules` update, Step 4 foundation infrastructure including TradingLayout + permission seeds + e2e tests, FP-005 long-short Phase 0) opens later as separate PRs and triggers their own plan-version movements if applicable. |
+| Why | DEC-003 locked feature scope at v0 (April 2026) to prevent silent scope creep. Trading was always anticipated (FP-002 / DEC-028 explicitly mentions `panels.trading` as a future panel) but never formally added. FP-004 surfaced the need to record the scope expansion formally before any trading work could begin per Constitution Rule 9 (Execution Lock). Architectural decisions captured in DEC-031 to ensure future strategies (options, futures) clone a consistent pattern rather than each inventing its own shape. |
+| What Stayed | All existing plan sections (PLAN-GOV-001 through PLAN-AUTH-SUDO-001), all existing DECs including DEC-003 (which gains DEC-030 as an explicit expansion record but is not superseded), the entire platform module set (auth, rbac, admin-panel, user-panel, audit-logging, api, health-monitoring, jobs-and-scheduler, user-management). Existing `audit_logs` table is unchanged — trading uses dedicated per-strategy audit tables. |
+| What Was Added | DEC-030, DEC-031, PLAN-TRADING-001. Plan version bumped v11.0 → v12.0. No code, no migrations. Two new module docs (`trading-panel.md`, `strategy-module-pattern.md`), reference-index extensions, architecture-doc updates land in Batches B and C of this Step 2b documentation PR. |
+| What Was Removed | None |
+| Approval Status | Approved |
+| Supersession Links | None — DEC-003 remains active as the scope-discipline anchor; DEC-030 is an amendment, not a supersession |
+
 ---
 
 ## Supersession Chain Requirement
