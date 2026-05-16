@@ -250,6 +250,7 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | ART-014 | edge-function | Export Audit Logs Edge Function | Phase 3 | `active` |
 | ART-015 | reference | Trading Panel Module | Trading-Foundation | `active` |
 | ART-016 | reference | Strategy Module Pattern | Trading-Foundation | `active` |
+| ART-017 | reference | Long-Short Design Source | Trading-Foundation | `active` |
 
 ---
 
@@ -353,6 +354,24 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Actions** | — (no ACT-* assignments yet; first concrete strategy lands via FP-005 long-short; registry to be updated then) |
 | **Related Decisions** | DEC-030, DEC-031 |
 | **Notes** | The contract every trading strategy module (long-short first, then options, futures, etc.) MUST follow. Locks: directory layout (`src/features/<strategy>/`), public façade via `index.ts`, RBAC two-segment permissions, per-strategy `<strategy>_audit_logs` tables, edge function naming, job classification + idempotency, cross-module dependency rules, removability contract. |
+
+---
+
+### ART-017: Long-Short Design Source
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-017 |
+| **Type** | reference |
+| **Title** | Long-Short Strategy Design Source — canonical CROSSWIND v0.9 spec set + ADR-001 + source attribution index |
+| **Source Path** | `docs/04-modules/longshort/design-source/` (folder containing 13 verbatim files + README.md) |
+| **Created Date** | 2026-05-16 |
+| **Owning Phase** | Phase Trading-Foundation |
+| **Owning Plan Section** | PLAN-TRADING-001 |
+| **Status** | `active` |
+| **Related Actions** | — (no ACT-* assignments yet; long-short implementation work lands via FP-005 Phase 0+ as ACT-NNN — registry to be updated then) |
+| **Related Decisions** | DEC-030, DEC-031 |
+| **Notes** | Verbatim pre-implementation design source for the long-short strategy. Includes CROSSWIND_SPEC.md (top-level v0.9 specification), 10 numbered parts (`crosswind_spec_v09_part*.md`), ADR-001-reconciliation-architecture.md, and spec-source-index.md. Files preserved unmodified to make rule-loss detectable during future module-doc derivation. Future module docs (e.g., `longshort.md`) MUST cite specific design-source sections rather than generic references. See INC-14 for pre-existing path-drift in source files (e.g., `docs/decisions/` references) — NOT fixed; preserved as historical record. |
 
 ---
 

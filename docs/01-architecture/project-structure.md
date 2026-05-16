@@ -40,7 +40,7 @@ docs/
 ├── 01-architecture/      # Architecture overview, dependency map, design principles, project structure
 ├── 02-security/          # Auth security, authorization, input validation
 ├── 03-performance/       # Caching, DB performance, strategy
-├── 04-modules/           # Module specs (auth, rbac, admin, user, audit, health, api, jobs)
+├── 04-modules/           # Module specs. Platform modules flat; strategy modules per-strategy folders (e.g. longshort/) — see strategy-module-pattern.md
 ├── 05-quality/           # Testing strategy, regression strategy
 ├── 06-tracking/          # Action tracker, risk register, regression watchlist
 ├── 07-reference/         # Function, permission, route, event, config, env var indexes

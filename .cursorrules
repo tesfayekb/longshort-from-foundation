@@ -98,6 +98,7 @@ For every task — no matter how small — read these in order:
 4. `docs/08-planning/master-plan.md` (plan sections with stable IDs)
 5. Relevant module docs from `docs/04-modules/` (for the module you're working on)
    - **For ANY task touching the `/trading` panel, strategy modules (`src/features/<strategy>/`), per-strategy permissions (`<strategy>.*`), per-strategy tables (`<strategy>_*`), per-strategy edge functions (`<strategy>-*`), or per-strategy jobs (`<strategy>_*`):** ALSO read `docs/04-modules/strategy-module-pattern.md` AND `docs/04-modules/trading-panel.md` BEFORE making any changes. These two docs are the binding architectural contract per DEC-031 — partial conformance is INVALID. See TRADING-PANEL + STRATEGY-MODULE BINDING CONTRACT section below for the operational rules.
+   - **For ANY task touching long-short specifically** (`src/features/longshort/`, `src/pages/trading/longshort/`, `longshort_*` tables, `longshort-*` edge functions, `longshort_*` jobs, `longshort.*` permissions/events/routes, or any file under `docs/04-modules/longshort/`): ALSO read the relevant files in `docs/04-modules/longshort/design-source/` (the CROSSWIND v0.9 spec set + ADR-001 + spec-source-index) BEFORE making changes or deriving module docs. These are the canonical long-short design source-of-truth. Future module docs and code derived from them MUST cite specific design-source sections rather than generic references. The design-source files remain authoritative when in conflict with derived docs, until explicitly superseded by a new DEC entry. **Carve-out:** generic trading-panel infrastructure work (e.g., `TradingLayout`, `src/config/trading-navigation.ts`, the panel shell route registration, MFA policy participation) does NOT trigger this reading — only long-short-specific work does. The carve-out parallels Rule T5's trading-panel-infrastructure carve-out for façade imports.
 6. `docs/01-architecture/dependency-map.md` (if shared logic is involved)
 7. Relevant reference indexes from `docs/07-reference/` (if shared components involved)
 8. `docs/05-quality/regression-strategy.md` and `docs/05-quality/testing-strategy.md` (for any change task — see REGRESSION PREVENTION PROTOCOL and ANTI-COMPLETION-THEATER below)
@@ -388,7 +389,7 @@ docs/
 ├── 01-architecture/  — Architecture overview, dependency map, design principles, project structure, UI architecture
 ├── 02-security/      — Auth security, authorization, input validation
 ├── 03-performance/   — Caching, DB performance, strategy
-├── 04-modules/       — Module specs (auth, rbac, admin-panel, user-panel, user-management, audit-logging, health-monitoring, api, jobs-and-scheduler, trading-panel, strategy-module-pattern)
+├── 04-modules/       — Module specs. Platform modules are flat files (auth.md, rbac.md, admin-panel.md, user-panel.md, user-management.md, audit-logging.md, health-monitoring.md, api.md, jobs-and-scheduler.md, trading-panel.md, strategy-module-pattern.md). Strategy modules use per-strategy folders (`<strategy>/` containing `<strategy>.md`, optional `design-source/`, and READMEs) per strategy-module-pattern.md. First strategy folder: `longshort/`.
 ├── 05-quality/       — Testing strategy, regression strategy
 ├── 06-tracking/      — Action tracker, risk register, regression watchlist
 ├── 07-reference/     — Function, permission, route, event, config, env var, artifact indexes
@@ -497,6 +498,8 @@ src/features/<strategy>/
 └── index.ts            ← public façade, the ONLY file other modules may import from
 ```
 
+Strategy documentation lives at `docs/04-modules/<strategy>/` (a folder containing `<strategy>.md`, `design-source/`, and `README.md`), NOT at `docs/04-modules/<strategy>.md` (a single file). Platform modules use the flat-file convention; strategy modules use the folder convention — this dual-pattern is intentional and matches the code-side dual-pattern in `project-structure.md`.
+
 Routed page wrappers live at `src/pages/trading/<strategy>/` and import ONLY from the strategy's `index.ts`.
 
 Any strategy file outside this layout is non-conformant. Stop and surface.
@@ -553,7 +556,7 @@ Every strategy MUST be removable as a unit. Removing strategy X means:
 - Delete all `X.*` permission rows from `permissions` table
 - Remove all `X.*` event registrations from `event-index.md`
 - Remove all `X.*` route registrations from `route-index.md`
-- Delete module doc `docs/04-modules/X.md`
+- Delete `docs/04-modules/X/` directory (entire per-strategy doc folder, including module doc, `design-source/` subfolder, and any per-strategy READMEs)
 
 If a "trading-related" file you're creating doesn't fit any of the above patterns, you're probably violating modularity. STOP and surface. Do not silently place strategy-specific code outside the canonical locations.
 
