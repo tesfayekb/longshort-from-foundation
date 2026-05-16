@@ -26,6 +26,10 @@ const PANEL_LABELS: Record<string, { title: string; description: string }> = {
     title: 'Admin panel',
     description: 'Require MFA enrollment for any user with admin.access before they can enter the admin panel.',
   },
+  trading: {
+    title: 'Trading panel',
+    description: 'Require MFA enrollment for any user with trading.access before they can enter the trading panel.',
+  },
 };
 
 export default function AdminSecurityPage() {

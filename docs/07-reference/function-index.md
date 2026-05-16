@@ -1286,7 +1286,7 @@ When changing any indexed function:
 | **Owner module** | auth |
 | **Consumers** | `useMfaPolicy` hook (AdminLayout, UserLayout, AdminSecurityPage, SelfMfaPrefCard, TradingLayout) |
 | **Signature** | `GET` (no body) |
-| **Description** | Returns merged per-user MFA enforcement view: `{ version, panels: { admin: 'required'\|'optional', ... }, require_mfa_for_self }`. Reads `system_config.mfa_enforcement_policy` (global) and `profiles.require_mfa_for_self` (per user) via service role; whitelists enum values; falls back to `SAFE_DEFAULT` (`admin: 'optional'`) when row missing. |
+| **Description** | Returns merged per-user MFA enforcement view: `{ version, panels: { admin: 'required'\|'optional', ... }, require_mfa_for_self }`. Reads `system_config.mfa_enforcement_policy` (global) and `profiles.require_mfa_for_self` (per user) via service role; whitelists enum values; falls back to `SAFE_DEFAULT` (`admin: 'optional', trading: 'optional'`) when row missing; both keys floor-enforced. |
 | **Side effects** | None (read-only) |
 | **Error behavior** | 405 on non-GET; service-role read errors propagate as 500 from handler. |
 | **Security** | Bearer JWT required. No secrets in payload. Cached client-side 5 min via React Query. |
@@ -1306,10 +1306,10 @@ When changing any indexed function:
 | **Classification** | security-critical |
 | **Owner module** | auth |
 | **Consumers** | AdminSecurityPage (`useMfaPolicy.updatePolicy`) |
-| **Signature** | `PATCH { panels: Record<string, 'required' \| 'optional'> }` (Zod-validated) |
-| **Description** | Superadmin updates the per-panel MFA enrollment policy in `system_config.mfa_enforcement_policy`. Merges submitted panels onto current value; floor enforces `admin` panel always present and a valid enum. Strict enum — no `disabled` value exists by design. Returns `{ policy, changed }`. |
+| **Signature** | `PATCH { panels: { admin?: 'required' \| 'optional', trading?: 'required' \| 'optional' } }` (Zod-validated, strict — unknown keys rejected) |
+| **Description** | Superadmin updates the per-panel MFA enrollment policy in `system_config.mfa_enforcement_policy`. Merges submitted panels onto current value; strict whitelist of `admin` + `trading` keys on write side (floor enforcement of `admin`/`trading` defaults is on the READ side in `get-mfa-policy`). Strict enum — no `disabled` value exists by design. Returns `{ policy, changed }`. |
 | **Side effects** | Writes `system_config` row, emits `system.mfa_policy_changed` audit event with `{ before, after, fields_changed }`. |
-| **Error behavior** | 403 if not superadmin; 403 without `admin.config`; 401 if reauth older than 5 min; 400 on invalid enum. |
+| **Error behavior** | 403 if not superadmin; 403 without `admin.config`; 401 if reauth older than 5 min; 400 on invalid enum; 400 on unknown panel key (strict whitelist). |
 | **Security** | Defense in depth: `is_superadmin` RPC + `checkPermissionOrThrow('admin.config')` + `requireRecentAuth(5 min)`. |
 | **Lifecycle** | active |
 | **Related routes** | `PATCH /update-mfa-policy`, `/admin/security` |
