@@ -24,7 +24,7 @@ export function UserLayout() {
   const { user, mfaStatus } = useAuth();
   const queryClient = useQueryClient();
   const location = useLocation();
-  const { policy } = useMfaPolicy();
+  const { policy, error } = useMfaPolicy();
 
   useEffect(() => {
     if (!user) return;
@@ -35,7 +35,9 @@ export function UserLayout() {
 
   // Enforce MFA only when the user has opted in personally.
   // Note: 'challenge_required' is already handled by RequireAuth.
-  const selfRequired = policy?.require_mfa_for_self === true;
+  // N1: fail closed on policy fetch failure — if we can't read the policy we
+  // cannot know whether the user opted in, so we require MFA enrollment.
+  const selfRequired = error ? true : policy?.require_mfa_for_self === true;
   if (selfRequired && mfaStatus === 'none') {
     const returnTo = `${location.pathname}${location.search}${location.hash}`;
     return (
