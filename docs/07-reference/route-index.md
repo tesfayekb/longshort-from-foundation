@@ -653,8 +653,9 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | **Permission required** | `trading.access` |
 | **Scope** | system-wide |
 | **Panel** | trading-panel |
-| **Related functions** | `RequireAuth`, `RequirePermission`, `useMfaPolicy` |
-| **Related tests** | Trading panel access + MFA-policy redirect suite (added in PR-3 of FP-004 outline) |
+| **Related tests** | `e2e/trading-panel-access.spec.ts` (Workstream Step 4), trading panel access allow/deny suite |
+| **Related functions** | `TradingLayout` (`src/layouts/TradingLayout.tsx`), `RequirePermission`, `useMfaPolicy` (panel MFA enforcement) |
+| **Implementation** | **IMPLEMENTED** — nested route in `src/App.tsx` under `<Route path="/trading" element={<TradingLayout />}>` with index `TradingDashboard`. |
 | **Related risks** | (to be assigned) |
 | **Lifecycle** | active |
 | **Added by** | PLAN-TRADING-001 (DEC-031) |

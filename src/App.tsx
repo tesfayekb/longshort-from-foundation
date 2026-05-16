@@ -26,6 +26,7 @@ import { RequireSudo } from "./components/auth/RequireSudo";
 
 // Layouts (eagerly loaded — shell must be ready immediately)
 import { AdminLayout } from "./layouts/AdminLayout";
+import { TradingLayout } from "./layouts/TradingLayout";
 import { UserLayout } from "./layouts/UserLayout";
 
 // Admin pages (lazy loaded)
@@ -43,6 +44,7 @@ const RoleDetailPage = lazy(() => import("./pages/admin/RoleDetailPage"));
 
 // User pages (lazy loaded)
 const UserDashboard = lazy(() => import("./pages/user/UserDashboard"));
+const TradingDashboard = lazy(() => import("./pages/trading/TradingDashboard"));
 const ProfilePage = lazy(() => import("./pages/user/ProfilePage"));
 const SecurityPage = lazy(() => import("./pages/user/SecurityPage"));
 
@@ -170,6 +172,11 @@ const App = () => (
                   </PermissionGate>
                 } />
                 <Route path="*" element={<DashboardNotFound />} />
+              </Route>
+
+              {/* Trading panel — TradingLayout enforces trading.access; individual strategy routes add per-strategy permissions in future PRs */}
+              <Route path="/trading" element={<TradingLayout />}>
+                <Route index element={<TradingDashboard />} />
               </Route>
 
               {/* User panel */}

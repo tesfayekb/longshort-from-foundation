@@ -29,4 +29,7 @@ export const ROUTES = {
   ADMIN_JOBS: '/admin/jobs',
   ADMIN_ONBOARDING: '/admin/onboarding',
   ADMIN_SECURITY: '/admin/security',
+
+  // Trading
+  TRADING: '/trading',
 } as const;

@@ -543,7 +543,7 @@ When changing any indexed function:
 | **Side effects** | DB read (user_roles + roles + role_permissions + permissions) |
 | **Transactional** | No |
 | **Fail behavior** | fail-secure — return null on error |
-| **Used by** | `useUserRoles()` hook (client) |
+| **Used by** | `useUserRoles()` hook (client), `TradingLayout` (authorization context prefetch via same RPC contract) |
 | **Blast radius** | large |
 | **Criticality** | HIGH |
 | **Approval required** | Yes — Lead |
@@ -1284,14 +1284,14 @@ When changing any indexed function:
 | **Location** | `supabase/functions/get-mfa-policy/index.ts` |
 | **Classification** | api-standard |
 | **Owner module** | auth |
-| **Consumers** | `useMfaPolicy` hook (AdminLayout, UserLayout, AdminSecurityPage, SelfMfaPrefCard) |
+| **Consumers** | `useMfaPolicy` hook (AdminLayout, UserLayout, AdminSecurityPage, SelfMfaPrefCard, TradingLayout) |
 | **Signature** | `GET` (no body) |
 | **Description** | Returns merged per-user MFA enforcement view: `{ version, panels: { admin: 'required'\|'optional', ... }, require_mfa_for_self }`. Reads `system_config.mfa_enforcement_policy` (global) and `profiles.require_mfa_for_self` (per user) via service role; whitelists enum values; falls back to `SAFE_DEFAULT` (`admin: 'optional'`) when row missing. |
 | **Side effects** | None (read-only) |
 | **Error behavior** | 405 on non-GET; service-role read errors propagate as 500 from handler. |
 | **Security** | Bearer JWT required. No secrets in payload. Cached client-side 5 min via React Query. |
 | **Lifecycle** | active |
-| **Related routes** | `GET /get-mfa-policy`, `/admin/security`, `/settings/security`, `/admin`, all user-panel routes |
+| **Related routes** | `GET /get-mfa-policy`, `/admin/security`, `/settings/security`, `/admin`, all user-panel routes, `/trading` |
 | **Related permissions** | — (any authenticated user) |
 | **Related events** | — (read-only) |
 | **Related watchlist** | RW-016 |
