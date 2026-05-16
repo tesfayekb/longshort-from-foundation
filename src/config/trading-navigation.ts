@@ -15,15 +15,15 @@ import { ROUTES } from './routes';
  * an import from `src/features/longshort/index.ts`.
  */
 export const tradingNavigation: NavSection[] = [
-    {
-        label: 'Overview',
-        items: [
-            {
-                title: 'Dashboard',
-                url: ROUTES.TRADING,
-                icon: LayoutDashboard,
-                permission: 'trading.access',
-            },
-        ],
-    },
+  {
+    label: 'Overview',
+    items: [
+      {
+        title: 'Dashboard',
+        url: ROUTES.TRADING,
+        icon: LayoutDashboard,
+        permission: 'trading.access',
+      },
+    ],
+  },
 ];

@@ -29,77 +29,77 @@ import { supabase } from '@/integrations/supabase/client';
  *   NOT here.
  */
 export function TradingLayout() {
-    const { mfaStatus, user } = useAuth();
-    const location = useLocation();
-    const queryClient = useQueryClient();
-    const returnTo = `${location.pathname}${location.search}${location.hash}`;
-    const prefetchedRef = useRef(false);
+  const { mfaStatus, user } = useAuth();
+  const location = useLocation();
+  const queryClient = useQueryClient();
+  const returnTo = `${location.pathname}${location.search}${location.hash}`;
+  const prefetchedRef = useRef(false);
 
-    if (user && !prefetchedRef.current) {
-        prefetchedRef.current = true;
-        queryClient.prefetchQuery({
-            queryKey: [...USER_ROLES_KEY],
-            queryFn: async () => {
-                const { data, error } = await supabase.rpc(
-                    'get_my_authorization_context',
-                );
-                if (error || !data)
-                    return { roles: [], permissions: [], is_superadmin: false };
-                const ctx = data as unknown as {
-                    roles: string[];
-                    permissions: string[];
-                    is_superadmin: boolean;
-                };
-                return {
-                    roles: ctx.roles ?? [],
-                    permissions: ctx.permissions ?? [],
-                    is_superadmin: ctx.is_superadmin ?? false,
-                };
-            },
-            staleTime: 5 * 60 * 1000,
-        });
-        queryClient.prefetchQuery({
-            queryKey: [...MFA_POLICY_KEY],
-            queryFn: mfaPolicyQueryFn,
-            staleTime: 5 * 60 * 1000,
-        });
-    }
+  if (user && !prefetchedRef.current) {
+    prefetchedRef.current = true;
+    queryClient.prefetchQuery({
+      queryKey: [...USER_ROLES_KEY],
+      queryFn: async () => {
+        const { data, error } = await supabase.rpc(
+          'get_my_authorization_context',
+        );
+        if (error || !data)
+          return { roles: [], permissions: [], is_superadmin: false };
+        const ctx = data as unknown as {
+          roles: string[];
+          permissions: string[];
+          is_superadmin: boolean;
+        };
+        return {
+          roles: ctx.roles ?? [],
+          permissions: ctx.permissions ?? [],
+          is_superadmin: ctx.is_superadmin ?? false,
+        };
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+    queryClient.prefetchQuery({
+      queryKey: [...MFA_POLICY_KEY],
+      queryFn: mfaPolicyQueryFn,
+      staleTime: 5 * 60 * 1000,
+    });
+  }
 
-    useEffect(() => {
-        prefetchedRef.current = false;
-    }, [user?.id]);
+  useEffect(() => {
+    prefetchedRef.current = false;
+  }, [user?.id]);
 
-    return (
-        <RequireAuth>
-            <RequireMfaForTrading mfaStatus={mfaStatus} returnTo={returnTo}>
-                <DashboardLayout sections={tradingNavigation}>
-                    <RequirePermission
-                        permission="trading.access"
-                        fallback={
-                            <AccessDenied message="You need trading panel access to view this page." />
-                        }
-                    >
-                        <Outlet />
-                    </RequirePermission>
-                </DashboardLayout>
-            </RequireMfaForTrading>
-        </RequireAuth>
-    );
+  return (
+    <RequireAuth>
+      <RequireMfaForTrading mfaStatus={mfaStatus} returnTo={returnTo}>
+        <DashboardLayout sections={tradingNavigation}>
+          <RequirePermission
+            permission="trading.access"
+            fallback={
+              <AccessDenied message="You need trading panel access to view this page." />
+            }
+          >
+            <Outlet />
+          </RequirePermission>
+        </DashboardLayout>
+      </RequireMfaForTrading>
+    </RequireAuth>
+  );
 }
 
 function RequireMfaForTrading({
-    mfaStatus,
-    returnTo,
-    children,
+  mfaStatus,
+  returnTo,
+  children,
 }: {
-    mfaStatus: string;
-    returnTo: string;
-    children: React.ReactNode;
+  mfaStatus: string;
+  returnTo: string;
+  children: React.ReactNode;
 }) {
-    const { policy } = useMfaPolicy();
-    const tradingRequired = policy?.panels?.trading === 'required';
-    if (tradingRequired && mfaStatus === 'none') {
-        return <Navigate to={ROUTES.MFA_ENROLL} replace state={{ returnTo }} />;
-    }
-    return <>{children}</>;
+  const { policy } = useMfaPolicy();
+  const tradingRequired = policy?.panels?.trading === 'required';
+  if (tradingRequired && mfaStatus === 'none') {
+    return <Navigate to={ROUTES.MFA_ENROLL} replace state={{ returnTo }} />;
+  }
+  return <>{children}</>;
 }
