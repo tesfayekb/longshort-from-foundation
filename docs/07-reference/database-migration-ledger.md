@@ -632,6 +632,27 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 
 ---
 
+### MIG-036: SECURITY DEFINER EXECUTE Hardening (H1a)
+
+| Field | Value |
+|-------|-------|
+| **Ledger ID** | MIG-036 |
+| **Migration File** | `20260516113643_18cf3d9a-5369-4596-9d79-fe9e61d0164c.sql` |
+| **Source Dir** | `supabase/migrations/` |
+| **Applied Date** | 2026-05-16 |
+| **Sequence Order** | 36 |
+| **Purpose** | Close anon-enumeration oracle on SECURITY DEFINER functions. REVOKE EXECUTE from PUBLIC + anon on all 10 SECURITY DEFINER functions in `public` (ground-truth count from `pg_proc` at HEAD `b3c969f`, not 16 as initial estimate); GRANT EXECUTE TO authenticated for the 1 client-RPC subset (`get_my_authorization_context`). Trigger functions, RLS helpers, and server-only paths (called from edge functions via service-role which bypasses EXECUTE) do not receive an `authenticated` GRANT — Postgres trigger machinery and RLS expression evaluation run SECURITY DEFINER functions inline regardless of caller EXECUTE privilege. |
+| **Objects Affected** | Function privileges on 10 SECURITY DEFINER functions in `public` schema: `accept_invitation_on_confirm`, `handle_new_user`, `handle_new_user_role`, `sync_profile_email`, `rls_auto_enable`, `has_permission(uuid,text)`, `has_role(uuid,app_role)`, `has_role(uuid,text)`, `is_superadmin(uuid)`, `get_my_authorization_context`. |
+| **Depends On** | All prior function-defining migrations (MIG-001 through MIG-035) |
+| **Status** | `active` |
+| **Linked Actions** | — (review-finding remediation, no ACT entry) |
+| **Linked Decisions** | — (defensive hardening, no DEC) |
+| **Linked Artifacts** | — |
+| **Linked Findings** | INC-19 (Lovable project review H1a) |
+| **Notes** | Forward migration only. REVOKE/GRANT are idempotent. Post-migration `pg_proc` verification: `anon_can_execute = false` for all 10; `authenticated_can_execute = true` only for `get_my_authorization_context`. H1b (function_search_path_mutable — 5 WARN linter findings) deferred as separate future PR pending operator authorization. |
+
+---
+
 ### Tables (13)
 
 | Table | Created By | Status |

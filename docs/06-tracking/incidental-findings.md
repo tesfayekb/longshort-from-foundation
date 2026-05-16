@@ -93,6 +93,16 @@ Fix: change `.resolves.toBeUndefined()` to `.resolves.toBeDefined()` or assert o
 
 **Impact.** RW-018 is marked Verified in the regression watchlist and action tracker, but 6 of its 22 tests are not reproducible as passing. This is a Constitution Rule 11 issue (evidence not reproducible), though distinct from the `ApiError` mock bug that C1 resolves.
 
+### INC-19 — SECURITY DEFINER functions executable by PUBLIC/anon (H1a)
+
+| Field | Value |
+|---|---|
+| **Discovered** | 2026-05-16 |
+| **Discovery Context** | Lovable project review at HEAD `f13f408` — Supabase linter flagged `0028_anon_security_definer_function_executable` and `0029_authenticated_security_definer_function_executable` on every SECURITY DEFINER function in `public`. By Postgres default, EXECUTE on functions is granted to PUBLIC unless explicitly revoked; for SECURITY DEFINER RBAC helpers (`is_superadmin`, `has_role`, `has_permission`) this created a low-grade anon-enumeration oracle (probe membership without authenticating). |
+| **Severity** | Medium (defense-in-depth: no direct privilege escalation since RLS still gates rows, but anon-callable RBAC helpers leak boolean membership signals). |
+| **Disposition** | **Resolved** (MIG-036, 2026-05-16) |
+| **Resolution** | New migration `20260516113643_18cf3d9a-5369-4596-9d79-fe9e61d0164c.sql` REVOKEs EXECUTE FROM PUBLIC, anon on all **10** SECURITY DEFINER functions in `public` (ground-truth count from `pg_proc` at HEAD `b3c969f` — original prompt estimate of 16 was conservative). GRANTs EXECUTE TO `authenticated` only for `get_my_authorization_context()` — the sole function called from client code via `supabase.rpc(...)` (verified by grep of `src/`). Trigger functions (`accept_invitation_on_confirm`, `handle_new_user`, `handle_new_user_role`, `sync_profile_email`, `rls_auto_enable`), RLS helpers (`has_permission`, `has_role`×2, `is_superadmin`), and server-only paths (RLS helpers also called from edge functions via service-role, which bypasses EXECUTE checks) receive no `authenticated` GRANT. Post-migration `pg_proc` verification confirms `anon_can_execute = false` for all 10 and `authenticated_can_execute = true` only on `get_my_authorization_context`. H1b (0011 `function_search_path_mutable` — 5 WARN linter findings) deferred as separate future PR pending operator authorization. |
+
 ---
 
 ## Naming Conventions
