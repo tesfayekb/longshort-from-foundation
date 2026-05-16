@@ -14,6 +14,7 @@ import { USER_ROLES_KEY } from '@/hooks/useUserRoles';
 import { MFA_POLICY_KEY, mfaPolicyQueryFn, useMfaPolicy } from '@/hooks/useMfaPolicy';
 import { supabase } from '@/integrations/supabase/client';
 import { apiClient } from '@/lib/api-client';
+import * as Sentry from '@sentry/react';
 
 /**
  * AdminLayout renders the shell unconditionally (sidebar + header),
@@ -40,7 +41,17 @@ export function AdminLayout() {
       queryKey: [...USER_ROLES_KEY],
       queryFn: async () => {
         const { data, error } = await supabase.rpc('get_my_authorization_context');
-        if (error || !data) return { roles: [], permissions: [], is_superadmin: false };
+        if (error || !data) {
+          // M4: silent fallback is fail-closed (empty perms → AccessDenied), but
+          // must be visible. Empty-perms behavior preserved; observability added.
+          // eslint-disable-next-line no-console
+          console.error('[admin-layout] get_my_authorization_context failed', error);
+          Sentry.captureException(
+            error ?? new Error('get_my_authorization_context returned no data'),
+            { tags: { source: 'auth-context-prefetch', layout: 'admin' } },
+          );
+          return { roles: [], permissions: [], is_superadmin: false };
+        }
         const ctx = data as unknown as { roles: string[]; permissions: string[]; is_superadmin: boolean };
         return { roles: ctx.roles ?? [], permissions: ctx.permissions ?? [], is_superadmin: ctx.is_superadmin ?? false };
       },
@@ -107,8 +118,9 @@ function RequireMfaForAdmin({
   returnTo: string;
   children: React.ReactNode;
 }) {
-  const { policy } = useMfaPolicy();
-  const adminRequired = policy?.panels?.admin === 'required';
+  const { policy, error } = useMfaPolicy();
+  // N1: fail closed on MFA policy fetch failure — never silently bypass DEC-028.
+  const adminRequired = error ? true : policy?.panels?.admin === 'required';
   if (adminRequired && mfaStatus === 'none') {
     return <Navigate to={ROUTES.MFA_ENROLL} replace state={{ returnTo }} />;
   }

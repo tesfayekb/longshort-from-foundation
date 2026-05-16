@@ -11,6 +11,7 @@ import { ROUTES } from '@/config/routes';
 import { USER_ROLES_KEY } from '@/hooks/useUserRoles';
 import { MFA_POLICY_KEY, mfaPolicyQueryFn, useMfaPolicy } from '@/hooks/useMfaPolicy';
 import { supabase } from '@/integrations/supabase/client';
+import * as Sentry from '@sentry/react';
 
 /**
  * TradingLayout renders the shell unconditionally (sidebar + header),
@@ -43,8 +44,17 @@ export function TradingLayout() {
         const { data, error } = await supabase.rpc(
           'get_my_authorization_context',
         );
-        if (error || !data)
+        if (error || !data) {
+          // M4: silent fallback is fail-closed (empty perms → AccessDenied), but
+          // must be visible. Empty-perms behavior preserved; observability added.
+          // eslint-disable-next-line no-console
+          console.error('[trading-layout] get_my_authorization_context failed', error);
+          Sentry.captureException(
+            error ?? new Error('get_my_authorization_context returned no data'),
+            { tags: { source: 'auth-context-prefetch', layout: 'trading' } },
+          );
           return { roles: [], permissions: [], is_superadmin: false };
+        }
         const ctx = data as unknown as {
           roles: string[];
           permissions: string[];
@@ -96,8 +106,12 @@ function RequireMfaForTrading({
   returnTo: string;
   children: React.ReactNode;
 }) {
-  const { policy } = useMfaPolicy();
-  const tradingRequired = policy?.panels?.trading === 'required';
+  const { policy, error } = useMfaPolicy();
+  // N1: fail closed on MFA policy fetch failure. A transient backend outage
+  // can never silently bypass DEC-028 enforcement. The QueryCache.onError
+  // handler logs the underlying error to Sentry; this just decides routing.
+  // Loading state (policy undefined, no error) preserves current pass-through.
+  const tradingRequired = error ? true : policy?.panels?.trading === 'required';
   if (tradingRequired && mfaStatus === 'none') {
     return <Navigate to={ROUTES.MFA_ENROLL} replace state={{ returnTo }} />;
   }

@@ -41,6 +41,26 @@ Yet:
 
 ## Resolved Findings
 
+### INC-17 — Silent auth-context fallback in layout prefetches (M4)
+
+| Field | Value |
+|---|---|
+| **Discovered** | 2026-05-16 |
+| **Discovery Context** | Lovable project review of Step 4 trading panel infrastructure. |
+| **Severity** | High (security-relevant: silent permission-loss path indistinguishable from genuine denial) |
+| **Disposition** | **Resolved** (2026-05-16) |
+| **Resolution** | Layout prefetch queryFns for `get_my_authorization_context` (TradingLayout, AdminLayout) now log to Sentry + console.error in the catch path before returning empty-perms defaults. Empty-perms behavior preserved (fail-closed → AccessDenied) but now visible. Global QueryCache.onError handler added in App.tsx to capture all silently-swallowed query errors going forward. |
+
+### INC-18 — Silent MFA-policy bypass on transient backend failure (N1)
+
+| Field | Value |
+|---|---|
+| **Discovered** | 2026-05-16 |
+| **Discovery Context** | Lovable project review second-read after C1.1 closure. |
+| **Severity** | High (DEC-028 enforcement bypass on transient errors — production exposure once `panels.trading = 'required'`) |
+| **Disposition** | **Resolved** (2026-05-16) |
+| **Resolution** | `RequireMfaForTrading`, `RequireMfaForAdmin`, and `UserLayout`'s self-MFA gate now read `error` from `useMfaPolicy` and fail closed: any policy fetch error → treat enforcement as required → redirect to `/mfa-enroll`. Global QueryCache.onError handler logs the underlying fetch failure to Sentry. DEC-028 enforcement preserved on transient outages. |
+
 ### INC-16 — RW-018 test assertions out of sync with implementation (6 pre-existing failures)
 
 | Field | Value |
