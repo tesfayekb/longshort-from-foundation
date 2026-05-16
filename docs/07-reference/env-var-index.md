@@ -280,7 +280,8 @@ Before any deployment proceeds, the system must confirm:
 | **Related configs** | All Supabase-dependent configs |
 | **Related routes** | All API routes |
 | **Related risks** | RISK-004 (infrastructure failure) |
-| **Related tests** | Startup validation, connectivity tests |
+| **Related tests** | Startup validation, connectivity tests, `src/test/rw021-env-loader-fail-fast.test.ts` (RW-021) |
+| **Runtime enforcer** | `src/lib/env.ts` (`env.SUPABASE_URL` / `getFunctionsBaseUrl()`). Direct `import.meta.env.VITE_SUPABASE_URL` reads outside this loader are prohibited and enforced by RW-021. |
 | **Lifecycle** | active |
 
 ### `SUPABASE_ANON_KEY`
@@ -302,7 +303,8 @@ Before any deployment proceeds, the system must confirm:
 | **Related configs** | All frontend API configs |
 | **Related routes** | All frontend routes |
 | **Related risks** | RISK-004 |
-| **Related tests** | Startup validation, API connectivity tests |
+| **Related tests** | Startup validation, API connectivity tests, `src/test/rw021-env-loader-fail-fast.test.ts` (RW-021) |
+| **Runtime enforcer** | `src/lib/env.ts` (`env.SUPABASE_PUBLISHABLE_KEY`). Direct `import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY` reads outside this loader are prohibited and enforced by RW-021. |
 | **Lifecycle** | active |
 
 ### `SUPABASE_SERVICE_ROLE_KEY`
