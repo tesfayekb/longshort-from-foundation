@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 
 .env
+
+# Operator-staged Step 3.5 CROSSWIND copies (landing source); not tracked
+docs/longshort-design-source/
+

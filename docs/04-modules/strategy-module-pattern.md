@@ -46,6 +46,23 @@ Every strategy's `index.ts` MUST export only what other modules legitimately nee
 
 Strategy internals (services, hooks, types, utils, internal components) MUST NOT be exported from `index.ts`. Any consumer trying to reach inside a strategy module is a Constitution Rule 3 violation (pattern duplication / hidden coupling).
 
+### Strategy Documentation Folder
+
+Each strategy's documentation lives in `docs/04-modules/<strategy>/` (a folder, not a single file) with this structure:
+
+```
+docs/04-modules/<strategy>/
+├── README.md                    # what this folder contains; cross-references
+├── <strategy>.md                # the module doc (canonical per-strategy docs)
+└── design-source/               # canonical design source-of-truth
+    ├── README.md                # attribution + how to use
+    └── (design source files)    # verbatim from pre-implementation work
+```
+
+Platform modules (auth, rbac, admin-panel, user-panel, audit-logging, health-monitoring, api, jobs-and-scheduler, user-management, trading-panel, strategy-module-pattern) remain as flat files at `docs/04-modules/<module>.md`. This dual-pattern mirrors the project-structure.md dual-pattern for code (platform modules flat in `src/pages/admin/`; strategy modules nested in `src/features/<strategy>/`).
+
+The `design-source/` subfolder holds canonical reference material preserved verbatim from pre-implementation design work. Module docs and code derived from a strategy's design source MUST cite specific sections of the source (file + section anchor) rather than generic "per the spec" references.
+
 ## Database Tables
 
 Strategy data tables MUST be named `<strategy>_<entity>` in the `public` schema. Examples for long-short:
@@ -240,7 +257,7 @@ A complete strategy removal MUST delete, in one operation:
 - All `<strategy>.*` permission rows from `permissions` table
 - All `<strategy>.*` event registrations from `event-index.md`
 - All `<strategy>.*` route registrations from `route-index.md`
-- Module doc `docs/04-modules/<strategy>.md`
+- `docs/04-modules/<strategy>/` directory (entire per-strategy doc folder, including module doc and `design-source/` subfolder)
 
 After removal, the platform returns to current state with no orphan references, no orphan tables, no orphan permissions, no orphan jobs.
 
