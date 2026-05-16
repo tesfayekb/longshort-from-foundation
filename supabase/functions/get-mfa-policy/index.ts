@@ -24,7 +24,7 @@ import { supabaseAdmin } from '../_shared/supabase-admin.ts'
 
 const SAFE_DEFAULT = {
   version: 1,
-  panels: { admin: 'optional' as const },
+  panels: { admin: 'optional' as const, trading: 'optional' as const },
   require_mfa_for_self: false,
 }
 
@@ -58,6 +58,7 @@ Deno.serve(createHandler(async (req: Request) => {
     panels[key] = val === 'required' ? 'required' : 'optional'
   }
   if (!('admin' in panels)) panels.admin = SAFE_DEFAULT.panels.admin
+  if (!('trading' in panels)) panels.trading = SAFE_DEFAULT.panels.trading
 
   return apiSuccess({
     version: typeof raw.version === 'number' ? raw.version : SAFE_DEFAULT.version,
