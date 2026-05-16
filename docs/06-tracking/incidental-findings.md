@@ -41,8 +41,6 @@ Yet:
 
 ## Resolved Findings
 
-(None yet.)
-
 ### INC-16 — RW-018 test assertions out of sync with implementation (6 pre-existing failures)
 
 | Field | Value |
@@ -50,7 +48,8 @@ Yet:
 | **Discovered** | 2026-05-16 |
 | **Discovery Context** | C1 fix execution (RW-018 `ApiError` mock re-export). After applying `vi.importActual` pattern, failures dropped from 7 to 6. The 6 remaining failures are pre-existing assertion mismatches, not caused by the fix. |
 | **Severity** | Medium (test suite hygiene; RW-018 marked Verified but 6 of its 22 tests do not pass) |
-| **Disposition** | **Escalated for operator decision** — fix requires test-file refactor, which C1 scope prohibits. |
+| **Disposition** | **Resolved** (C1.1, 2026-05-16) |
+| **Resolution** | Updated 6 stale assertions in `src/test/rw018-sudo-audit-events.test.ts` to match correct implementation behavior per RW-019 (correlation_id mandatory in POST body and round-tripped on error path) and DEC-029 (`logSudoEvent` returns `SudoAuditResult`, not `undefined`). 4 Category-A `.toEqual` blocks extended with `correlation_id: expect.any(String)`. 1 Category-B `.resolves.toBeUndefined()` changed to `.resolves.toMatchObject({ persisted: false })`. 6th failure (uncharacterized in original INC-16 — edge-function source regex `apiError(500…correlationId: ctx.correlationId`) split into two assertions verifying the RW-019 `const correlationId = clientCid ?? ctx.correlationId` derivation and the `apiError(500, …, correlationId)` reference, independent of property-shorthand form. Production code (`src/lib/sudo-audit.ts`, `src/lib/api-client.ts`, `supabase/functions/log-sudo-event/index.ts`) unchanged. Post-fix: 22/22 RW-018 tests pass; 205/205 repo-wide. |
 
 **Finding.** The `vi.importActual` fix resolves the `ApiError` mock issue (1 test restored). Six remaining failures in `src/test/rw018-sudo-audit-events.test.ts` fall into two categories:
 
