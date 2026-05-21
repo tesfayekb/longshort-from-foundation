@@ -352,6 +352,83 @@ Establish the trading panel as a third authenticated panel peer to the existing 
 
 ---
 
+### PLAN-TRADING-001-LONGSHORT-001: Long-Short Strategy Module — FP-005 Bootstrap
+**Parent Plan:** PLAN-TRADING-001
+**Status:** `proposed` (becomes `approved` upon FP-005 ratification)
+**Risk Level:** HIGH (Constitution Rule 11 — Critical Module Override: Auth/RBAC/Security modules are ALWAYS classified as HIGH impact; this proposal adds RBAC permission additions + new audit table + new edge function)
+**Module Doc:** [longshort/longshort.md](../04-modules/longshort/longshort.md) (ART-018), [strategy-module-pattern.md](../04-modules/strategy-module-pattern.md) (§Audit-Writer Contract rewrite per DEC-033 v4.1)
+
+**Purpose:**
+First concrete application of the FP-004 / DEC-031 strategy-module pattern. Bootstraps the `longshort` strategy module to the bootstrap surface enumerated in DEC-032 clause (1): T1 scaffold, two-segment RBAC seed (`longshort.view`, `longshort.manage` — NO `.execute`), per-strategy audit table `public.longshort_audit_logs` with standalone `operator_id` column, one envelope-conformant init edge function (`longshort-emit-init`) exercising the DEC-033 v4.1 canonical shared audit-writer helper, first exercise of the DEC-031 sub-point 6 narrow trading-nav façade-import carve-out, page wrappers, and prerequisite doc fixes (INC-15 closure + §Audit-Writer Contract rewrite). NO decision engine, NO reconciliation, NO order management, NO CI/CD — those are explicitly reserved to FP-006 (and FP-007 for CI/CD) per DEC-032 clauses (3)–(7).
+
+**Plan Version:** v12.1 (minor merge from v12.0 per Constitution Rule 10 Plan Merge Rule — additive diffs to the approved baseline; sub-section attaches under PLAN-TRADING-001 without restructuring parent baseline).
+
+**Dependencies:**
+- PLAN-TRADING-001 (parent — Step 4 implemented at HEAD `b112a08`: TradingLayout, `trading.access`, `panels.trading`, `trading-navigation.ts`)
+- DEC-030 (scope expansion), DEC-031 (architectural pattern), DEC-032 (FP-005 Bootstrap scope lock + FP-006 / FP-007 reservation), DEC-033 v4.1 (canonical shared strategy audit-writer helper)
+- INC-15 closed as Resolved (precondition to any 5.0a or downstream work — gated by AC-01)
+- `docs/04-modules/strategy-module-pattern.md` §Audit-Writer Contract rewritten per DEC-033 v4.1 (Round 4.1 Section C — gated by AC-04)
+- `_shared/handler.ts` envelope per DEC-023 (existing)
+- `audit_logs.correlation_id` index per MIG-022 (existing — pattern reference for `longshort_audit_logs` correlation_id behavior)
+
+**Used By / Affects:**
+- `src/features/longshort/**` (new vertical-slice module)
+- `src/pages/trading/longshort/` (new page wrappers, façade-only imports)
+- `src/config/trading-navigation.ts` (first exercise of DEC-031 sub-point 6 carve-out)
+- `supabase/functions/_shared/strategy-audit.ts` (platform-tier addition per DEC-033 v4.1)
+- `supabase/functions/longshort-emit-init/` (new edge function)
+- Reference indexes: `permission-index.md`, `route-index.md`, `event-index.md`, `function-index.md`, `artifact-index.md` (ART-018), `database-migration-ledger.md` (MIG-037 + MIG-038), `dependency-map.md`
+- `.cursorrules` (single-write rule per Round 1.1 D3 — no `.lovable/rules.md` dual-write)
+- `system-state.md` (`longshort: documented-only` → `foundation-implemented` after AC-23)
+
+**Approval:** FP-005 / DEC-032 / DEC-033 v4.1
+
+**Sub-step execution checklist (status / dependencies / ACT-NNN evidence — next free id ≥ ACT-021):**
+
+| Sub-step | Description | Status | Depends On | Covers AC | Evidence (ACT-NNN) |
+|---|---|---|---|---|---|
+| 5.0a | Prerequisite closures: INC-15 doc-only fix; `strategy-module-pattern.md` §Audit-Writer Contract rewrite per DEC-033 v4.1; DEC-031 sub-point 3 + 6 wording clarifications per DEC-032 | planned | FP-005 approval; DEC-032 + DEC-033 v4.1 ratified | AC-01, AC-02, AC-03, AC-04 | (pending) |
+| 5.0b | Canonical shared helper landing: `supabase/functions/_shared/strategy-audit.ts` implemented per DEC-033 v4.1 clause (2) with unit tests on table-name interpolation and platform-parity return shape | planned | 5.0a | AC-05 | (pending) |
+| 5.1 | `longshort.md` "Phase Scope" table (≥16 rows; CROSSWIND Parts 1/2/2b/2c/3a/3b/4a/4b/5/6 + §11.0 + §11.8 + §11.9 + §12 + ADR-001 + spec-source-index; Tracking FP column) | planned | 5.0a | AC-06 | (pending) |
+| 5.2 | RBAC seed: MIG-037 (`longshort.view`, `longshort.manage` — NO `.execute`); `permission-index.md` update; `LONGSHORT_PERMISSION_KEYS` constant on façade | planned | 5.0a | AC-07, AC-08, AC-09 | (pending) |
+| 5.3 | Per-strategy audit infrastructure: MIG-038 (`public.longshort_audit_logs` with `operator_id` default UUID + `correlation_id` + RLS append-only); ledger entries; `longshort-emit-init` edge function (DEC-023 envelope + DEC-033 v4.1 helper); rg-zero audit-writer-trap proof | planned | 5.0b, 5.2 | AC-10, AC-11, AC-12, AC-13, AC-14 | (pending) |
+| 5.4 | T1 scaffold enforced under `src/features/longshort/` (`components/`, `hooks/`, `services/`, `types/`, `api/`, `utils/`, `index.ts` — no extras) | planned | 5.0a | AC-15 | (pending) |
+| 5.5 | Façade discipline: export surface limited to `{ longshortNav, LONGSHORT_PERMISSION_KEYS, LongShortDashboardPage }`; `.cursorrules` rule; `trading-navigation.ts` carve-out exercise; page wrappers façade-only; no sibling-strategy imports | planned | 5.2, 5.4 | AC-16, AC-17, AC-18, AC-19, AC-20 | (pending) |
+| 5.6 | E2E + closure: `e2e/longshort/longshort-access.spec.ts` (unauth-redirect / no-perm-denied / with-perm-renders + correlation_id propagation into `longshort_audit_logs`); master-plan checkboxes updated with ACT-NNN evidence; `system-state.md` reflects `longshort: foundation-implemented`; `action-tracker.md` entries registered | planned | 5.3, 5.5 | AC-21, AC-22, AC-23 | (pending) |
+
+**Phase Gate — must ALL pass before FP-005 closes (per supervisor §6 review per Round 2.1 lock):**
+- [ ] All 23 acceptance criteria (AC-01 through AC-23) verified per FP-005 Section "Approved implementation outline" AC matrix v2.1 — *gated per supervisor §6 review*
+- [ ] No sub-step skipped or merged; sub-step order honored per dependency chain above — *per DEC-032 clause (7) scope-lock enforcement*
+- [ ] G1–G5 risk mitigations evidenced in PR descriptions (audit-writer trap rg-zero proof; bootstrap surface vs DEC-032 clause (1) reconciliation; façade export-surface AST test; INC-15 Resolved status; MIG-037 + MIG-038 scoping diff) — *per Round 1.1 G-register; forward-tracking note for CROSSWIND v0.10 §15 reconciliation under FP-006*
+- [ ] No FP-006 / FP-007 work introduced into any FP-005 PR (trading engine, reconciliation, order management, `longshort.execute`, CI/CD, Tier 3 runbooks, >150s detection, §10.4 items) — *per DEC-032 clause (7) supervisor rejection mandate*
+- [ ] Reference indexes updated in same PR as code changes (Constitution Rules 2 + 6): permission-index (`longshort.view`, `longshort.manage`), route-index (`/trading/longshort`), event-index (`longshort.*` audit actions), function-index (`writeStrategyAuditEvent`, `longshortNav`), artifact-index (ART-018), database-migration-ledger (MIG-037, MIG-038), dependency-map (`longshort` row)
+- [ ] `system-state.md` `longshort` state transition: `documented-only` → `foundation-implemented`; `current_plan_version` reflects v12.1
+- [ ] FP-005 closure document published under `docs/08-planning/phase-closures/` (filename TBD at execution time; pattern per `phase-05-closure.md` and `plan-auth-sudo-001-closure.md`)
+
+**Out of scope of this plan section (deferred — 10 items per FP-005 entry):**
+1. Longshort decision engine — FP-006
+2. Longshort reconciliation logic — FP-006
+3. Longshort order management / execution path — FP-006
+4. `longshort.execute` permission key — FP-006
+5. Residual CROSSWIND §10.3 Phase 0A items — FP-006
+6. All CROSSWIND §10.4 Phase 0B items — FP-006
+7. Tier 3 runbooks under `docs/09-runbooks/` — FP-006
+8. >150s long-running-job detection / hand-off pattern — FP-006
+9. CI/CD pipeline for `longshort` — FP-007
+10. CROSSWIND §15 Risk Register reconciliation (v0.10-deferred) — FP-006 once v0.10 lands
+
+**Cross-references:**
+- FP-005 entry: `docs/08-planning/feature-proposals.md` (after FP-004)
+- DEC-032: `docs/08-planning/approved-decisions.md` (after DEC-031)
+- DEC-033 v4.1: `docs/08-planning/approved-decisions.md` (after DEC-032)
+- AC matrix v2.1: FP-005 entry, "Approved implementation outline" section (23 ACs)
+- G1–G5 risk register: FP-005 entry, "Risk Assessment" field (governance-derived; forward-tracking for CROSSWIND v0.10 §15 reconciliation)
+- Parent plan: PLAN-TRADING-001 (this file, line 304)
+- Constitution Rule 9 (Execution Lock); Rule 10 (Plan Merge Rule); Rule 11 (Critical Module Override — Auth/RBAC/Security modules are ALWAYS classified as HIGH impact)
+- T-series KB invariants T1–T9 (Lovable KB v1.1)
+
+---
+
 ## Development Phases
 
 ### Phase 1 — Foundation (Auth + Infrastructure)
