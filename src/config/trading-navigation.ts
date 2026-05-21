@@ -1,6 +1,7 @@
 import { LayoutDashboard } from 'lucide-react';
 import type { NavSection } from './navigation.types';
 import { ROUTES } from './routes';
+import { longshortNav } from '@/features/longshort';
 
 /**
  * Trading-panel navigation.
@@ -10,9 +11,8 @@ import { ROUTES } from './routes';
  * purpose of nav/RBAC-key registration ONLY. No other trading-panel
  * infrastructure file may import strategy modules.
  *
- * At Step 4 there are no strategies registered — only the Dashboard section.
- * Step 5 (FP-005 long-short Phase 0) registers the first strategy here, via
- * an import from `src/features/longshort/index.ts`.
+ * At Step 5 (FP-005 long-short Phase 0), the first strategy is registered
+ * here via the import above from `src/features/longshort/index.ts`.
  */
 export const tradingNavigation: NavSection[] = [
   {
@@ -26,4 +26,5 @@ export const tradingNavigation: NavSection[] = [
       },
     ],
   },
+  longshortNav,
 ];
