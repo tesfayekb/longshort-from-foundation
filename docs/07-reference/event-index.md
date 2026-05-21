@@ -1591,6 +1591,32 @@ Key event chains showing upstream triggers and downstream effects:
 
 ---
 
+### Long-Short Events
+
+#### `longshort.init` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.init` |
+| **Module** | longshort |
+| **Version** | 1 |
+| **Classification** | audit-critical |
+| **Description** | Initial audit-event emission probe for the long-short strategy. Emitted by `longshort-emit-init` edge function (FP-005 Step 5.3) when an authenticated caller with `longshort.view` permission successfully exercises the audit pipeline. Used as AC-13 / AC-14 evidence surface for the bootstrap; subsequent strategy actions register their own `longshort.<verb>` vocabulary in FP-006. |
+| **Emitted by** | `longshort-emit-init` edge function (`supabase/functions/longshort-emit-init/index.ts`) |
+| **Target table** | `public.longshort_audit_logs` (NOT platform `audit_logs` — strategy events go to per-strategy table per DEC-031 sub-point 5 and DEC-033 v4.1) |
+| **Writer** | `writeStrategyAuditEvent` from `supabase/functions/_shared/strategy-audit.ts` (DEC-033 v4.1 canonical writer) |
+| **Delivery** | Best-effort, append-only via RLS; helper returns structured `{success, ...}` result rather than throwing |
+| **Ordering** | Not ordered (correlation_id allows trace lookup but no cross-event sequencing guarantees at this surface) |
+| **Idempotency** | Each call generates a new audit row; idempotency at caller level via correlation_id propagation from DEC-023 envelope |
+| **Schema fields written** | `operator_id` (actor_id from auth context, or default UUID if absent), `action` ('longshort.init'), `correlation_id` (envelope-propagated), `ip_address`, `user_agent`, `metadata` (empty for init), `created_at` (DB default) |
+| **Failure handling** | Fail-closed: edge function returns 500 error if audit write fails (rather than masking with success). Failure-code vocabulary per DEC-033 v4.1 clause 2: `unknown_strategy_key` / `rls_denied` / `db_unreachable` / `sanitization_violation` / `unexpected_error` |
+| **Related risks** | T4 audit-writer trap (closed by DEC-033 v4.1); FP-005 G1 risk register item (mitigated by this AC-14 surface) |
+| **Related tests** | Step 5.6 e2e suite (`e2e/longshort/longshort-access.spec.ts`) asserts correlation_id propagation from request header into longshort_audit_logs row |
+| **Added by** | PLAN-TRADING-001-LONGSHORT-001 Step 5.3 |
+| **Lifecycle** | active |
+
+---
+
 ## Dependencies
 
 - [Dependency Map](../01-architecture/dependency-map.md)
