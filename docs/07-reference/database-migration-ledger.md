@@ -673,6 +673,26 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 
 ---
 
+### MIG-038: FP-005 Step 5.3 — Long-Short Per-Strategy Audit Table + RLS
+
+| Field | Value |
+|-------|-------|
+| **Ledger ID** | MIG-038 |
+| **Migration File** | `20260521130000_step_5_3_longshort_audit_table.sql` |
+| **Source Dir** | `supabase/migrations/` |
+| **Applied Date** | 2026-05-21 |
+| **Sequence Order** | 38 |
+| **Purpose** | (1) Create `public.longshort_audit_logs` table — per-strategy audit table mirroring platform `audit_logs` schema except `operator_id` replaces `actor_id` (denormalized standalone column with default UUID `'00000000-0000-0000-0000-000000000001'::uuid`; no FK; no `operators` table per DEC-032 clause 5 + F-2). (2) Enable RLS with INSERT-only policy (append-only enforcement by absence of UPDATE/DELETE policies). (3) Create correlation_id index for trace lookups (parity with MIG-022 on platform audit_logs). |
+| **Objects Affected** | New table: `public.longshort_audit_logs` (10 columns). New RLS policy: `longshort_audit_logs_insert_policy`. New index: `idx_longshort_audit_logs_correlation_id`. Platform `audit_logs` schema unchanged (per AC-11 + DEC-031 sub-point 5). |
+| **Depends On** | MIG-001 (auth.users + base schema), MIG-022 (correlation_id pattern parity); platform `audit_logs` schema unchanged so no dependency on a specific platform audit migration |
+| **Status** | `active` |
+| **Linked Actions** | — (no ACT-* assignments yet; FP-005 ACT-NNN entries register at Step 5.6 / AC-23) |
+| **Linked Decisions** | DEC-031 (sub-point 5 per-strategy audit table; sub-point 4 RLS append-only), DEC-032 (clause 1 bootstrap surface includes longshort_audit_logs; clause 5 F-2 standalone operator_id with no FK / no operators table), DEC-033 v4.1 (canonical writer for this table is `writeStrategyAuditEvent`) |
+| **Linked Artifacts** | ART-018 (long-short module documentation references this table) |
+| **Notes** | Idempotent — `CREATE TABLE IF NOT EXISTS`, `DROP POLICY IF EXISTS` then `CREATE POLICY`, `CREATE INDEX IF NOT EXISTS`. Forward migration only per §22.8.5(d); rollback requires manual `DROP TABLE public.longshort_audit_logs CASCADE` if ever required. operator_id FK to a future `operators` table is FP-006 territory (DEC-032 clause 2 + 5 F-2 retrofit requirement). Tables-summary section count update deferred to Step 5.6 cleanup per execution-prompt §22.3 item 1 anti-creep boundary. |
+
+---
+
 ### Tables (13)
 
 | Table | Created By | Status |
