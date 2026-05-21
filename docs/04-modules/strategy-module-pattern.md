@@ -16,7 +16,7 @@ Applies to every file, directory, table, edge function, background job, audit ev
 
 - Every strategy module MUST conform to the pattern below in full. Partial conformance is INVALID.
 - Strategy modules MUST NOT import from sibling strategy modules. Any cross-strategy interaction goes through platform services (e.g., shared audit primitives) or through documented registration patterns (e.g., sidebar nav, job registry).
-- Core platform modules (auth, rbac implementation, audit-logging implementation, jobs scheduler, admin-panel, user-panel) MUST NOT import from any strategy module, including the strategy's `index.ts` façade. Trading-panel infrastructure (e.g., `src/config/trading-navigation.ts`) has a narrow carve-out to import from strategy `index.ts` façades for nav/RBAC-key registration ONLY — never from strategy internals. See the Dependency Rules section below for the full allowed/forbidden matrix.
+- Core platform modules (auth, rbac implementation, audit-logging implementation, jobs scheduler, admin-panel, user-panel) MUST NOT import from any strategy module, including the strategy's `index.ts` façade. Trading-panel infrastructure (e.g., `src/config/trading-navigation.ts`) has a narrow carve-out (per DEC-031 sub-point 6) to import from strategy `index.ts` façades for nav/RBAC-key registration ONLY — never from strategy internals. See the Dependency Rules section below for the full allowed/forbidden matrix.
 - The platform `audit_logs` table MUST NOT receive trading events. Strategy events go to per-strategy `<strategy>_audit_logs` tables.
 - Deviations from this pattern require a new DEC entry and explicit operator approval. Silent deviation = INVALID.
 
@@ -165,18 +165,37 @@ No inline validation. No ad-hoc error responses. No bypassing the envelope.
 
 ### Audit-Writer Contract (Critical Divergence From Platform Audit)
 
-Per DEC-031, **strategy events MUST NOT be written to the platform `audit_logs` table**. The platform audit primitive `logAuditEvent` in `supabase/functions/_shared/audit.ts` is hardcoded to insert into `audit_logs` and is therefore **NOT usable for strategy-domain audit events**. Calling it from a strategy edge function for a strategy event would silently violate DEC-031 / FP-004 and produce a Constitution Rule 7 "no silent behavior change" violation against the platform audit table.
+Per DEC-031, **strategy events MUST NOT be written to the platform `audit_logs` table**. The platform audit primitive `logAuditEvent` in `supabase/functions/_shared/audit.ts` is hardcoded to insert into `audit_logs` and is therefore **NOT usable for strategy-domain audit events**. Calling it from a strategy edge function for a strategy event silently violates DEC-031 / FP-004 and produces a Constitution Rule 7 "no silent behavior change" violation against the platform audit table. This is the T4 audit-writer trap codified in `.cursorrules`.
 
-Each strategy MUST provide its own audit writer targeting its own `<strategy>_audit_logs` table. Two acceptable shapes:
+#### Canonical shared helper (mandatory)
 
-1. **Per-strategy local writer** — a function under `src/features/<strategy>/api/` (for client-side audit calls via edge function) or `supabase/functions/<strategy>-<verb>/audit.ts` (for edge-function-local writers) that mirrors the hardened patterns of `_shared/audit.ts`: `sanitizeMetadata`, correlation_id propagation, structured success/failure return, no thrown exceptions, never logging passwords/tokens/MFA secrets.
+Per DEC-033, every strategy MUST consume the platform-tier shared helper `supabase/functions/_shared/strategy-audit.ts`, parameterized by strategy key, which writes to `${strategyKey}_audit_logs`. The helper is the **sole sanctioned writer** for `<strategy>_audit_logs` tables. It is consumed the same way as the rest of the DEC-023 stack (imported by strategy edge functions running inside the `createHandler` envelope).
 
-2. **Shared strategy-audit helper** — a new helper at `supabase/functions/_shared/strategy-audit.ts` (or similarly named) parameterized by strategy key, writing to `${strategyKey}_audit_logs`. This option centralizes the discipline (sanitization, correlation, structured result) and reduces per-strategy code duplication. If adopted, this helper itself is a platform-tier addition and requires its own governance approval — but once approved, individual strategy modules consume it the same way they consume the rest of the DEC-023 stack.
+The helper enforces, on every call:
 
-The choice between shapes (1) and (2) is deferred to the first strategy implementation (likely FP-005 long-short). Whichever shape is chosen, the contract is the same:
-- Strategy events go to `<strategy>_audit_logs`, never to `audit_logs`
-- Same hardened pattern as platform audit (sanitization, correlation_id, append-only via RLS, structured success/failure, never throws)
-- Action names use `<strategy>.<verb>` format, registered in `event-index.md`
+- Target table resolution = `${strategyKey}_audit_logs` (typo-resistant via a registry of known strategy keys; unknown keys raise at module load, never at runtime).
+- Metadata sanitization via the same allowlist discipline as platform `sanitizeMetadata` (no passwords, no tokens, no MFA secrets, no PII).
+- Structured `{ success: true, auditId, correlationId } | { success: false, code, reason, correlationId }` return — never throws. Mirrors the platform `_shared/audit.ts` `AuditWriteResult` shape so callers can apply a uniform `if (result.success)` discriminator across platform and strategy audits.
+- `correlation_id` propagation from the DEC-023 envelope into both the top-level column and the metadata JSON.
+- Append-only via RLS (no UPDATE / DELETE paths exposed).
+- Action names use `<strategy>.<verb>` format and MUST be pre-registered in `event-index.md` before first write.
+
+#### Per-strategy local writers — PROHIBITED (DEC-033)
+
+The earlier two-shapes framing (per-strategy local writer in `src/features/<strategy>/api/` or `supabase/functions/<strategy>-<verb>/audit.ts`, vs. shared helper) is closed by DEC-033 in favor of the shared helper. Per-strategy local audit writers are PROHIBITED because:
+
+1. They duplicate the sanitization / correlation / never-throws discipline per strategy, maximizing drift surface.
+2. They re-open the T4 trap surface every time a new strategy lands.
+3. They make cross-strategy audit-contract regressions impossible to catch in a single code-review pass.
+
+If a strategy ever has a justified need to extend the writer behavior (e.g., additional sanitization for a specific event class), the extension lands in `_shared/strategy-audit.ts` behind a per-key opt-in, NOT as a per-strategy local writer. Such extensions require their own governance approval (new DEC) per Constitution Rule 6.
+
+#### Contract summary
+
+- Strategy events go to `<strategy>_audit_logs`, never to `audit_logs`.
+- The shared helper is the only writer; per-strategy local writers are prohibited.
+- Same hardened pattern as platform audit (sanitization, correlation_id, append-only via RLS, structured success/failure, never throws).
+- Action names use `<strategy>.<verb>` format, registered in `event-index.md` BEFORE first write.
 
 ### Service Role Usage
 
