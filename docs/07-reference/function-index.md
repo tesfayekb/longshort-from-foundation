@@ -827,6 +827,30 @@ When changing any indexed function:
 | **Observability** | Write success rate, emission verification, latency |
 | **Lifecycle** | active |
 
+#### `writeStrategyAuditEvent(params)`
+
+| Field | Value |
+|-------|-------|
+| **Type** | function |
+| **Classification** | audit-critical |
+| **Owner module** | strategy-module-pattern (platform-tier helper; sibling to audit-logging per DEC-033 v4.1 clause 1) |
+| **Signature** | `(params: WriteStrategyAuditEventParams) → Promise<StrategyAuditWriteResult>` |
+| **Returns** | On success: `{ success: true, auditId: string, correlationId: string }`. On failure: `{ success: false, code: string, reason: string, correlationId: string }`. Never throws. Mirrors platform `_shared/audit.ts` `AuditWriteResult` shape per DEC-033 v4.1 clause 2 Option Y platform-parity reconciliation. |
+| **Purity** | impure |
+| **Side effects** | DB write (append-only per-strategy audit table `${strategyKey}_audit_logs`); emits `strategy_audit.write_failed` console log on failure |
+| **Transactional** | Yes (independent transaction — must not fail with parent) |
+| **Fail behavior** | Returns structured failure result; failure codes from stable vocabulary (`'unknown_strategy_key'`, `'rls_denied'`, `'db_unreachable'`, `'sanitization_violation'`, `'unexpected_error'`) |
+| **Used by** | All strategy modules (longshort first; per DEC-033 clause 4 strategy modules MUST consume this helper, per-strategy local writers PROHIBITED) |
+| **Blast radius** | system-wide (T4 audit-writer trap surface — all strategy audit integrity depends on this) |
+| **Criticality** | CRITICAL |
+| **Approval required** | Yes — Lead (per DEC-033 clause 5 extensions require new DEC) |
+| **Callable from** | request-path, job-path (within DEC-023 `createHandler` envelope only) |
+| **Related events** | `strategy_audit.write_failed` |
+| **Related risks** | T4 audit-writer trap; audit-trail integrity for strategy events; FP-005 G1 risk register item |
+| **Related tests** | `supabase/functions/_shared/strategy-audit_test.ts` (table-name interpolation, platform-parity return shape, unknown-key failure path) |
+| **Observability** | Write success rate, `strategy_audit.write_failed` emission count, latency |
+| **Lifecycle** | active |
+
 #### `queryAuditLogs(filters)`
 
 | Field | Value |
