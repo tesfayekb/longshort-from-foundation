@@ -693,7 +693,7 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 
 ---
 
-### Tables (13)
+### Tables (14)
 
 | Table | Created By | Status |
 |-------|-----------|--------|
@@ -713,6 +713,7 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | `mfa_recovery_codes` | MIG-033 | Active |
 | `profiles.require_mfa_for_self` | MIG-034 | Active (column on existing `profiles` table) |
 | `system_config[key=mfa_enforcement_policy]` | MIG-034 | Active (seeded row) |
+| `longshort_audit_logs` | MIG-038 | Active |
 
 ### Functions (12)
 
