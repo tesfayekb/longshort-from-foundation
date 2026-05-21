@@ -207,6 +207,24 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved |
 | Supersession Links | None — DEC-003 remains active as the scope-discipline anchor; DEC-030 is an amendment, not a supersession |
 
+### v12.0 → v12.1 (2026-05-17)
+
+**Type:** Additive merge — FP-005 Bootstrap governance authoring (per Constitution Rule 10 — Plan Merge Rule: revisions are additive diffs to the approved baseline, not regenerations)
+
+| Field | Value |
+|-------|-------|
+| Plan Version | v12.0 → v12.1 |
+| Date | 2026-05-17 |
+| Section IDs Changed | PLAN-TRADING-001 (parent unchanged in structure; receives new child sub-section PLAN-TRADING-001-LONGSHORT-001) |
+| Decision IDs Affected | DEC-032 (new — FP-005 Bootstrap Scope Lock + FP-006 / FP-007 Reservation); DEC-033 (new — Canonical Shared Strategy Audit-Writer Helper, v4.1 reconciled to platform `_shared/audit.ts` return shape) |
+| What Changed | FP-005 entry added to `feature-proposals.md` (after FP-004's closing `---`, before `## Status Definitions`); PLAN-TRADING-001-LONGSHORT-001 plan section added to `master-plan.md` as a child of PLAN-TRADING-001; DEC-032 and DEC-033 v4.1 added to `approved-decisions.md` after DEC-031's closing `---` and before `## Decision Integrity Rules` |
+| Why It Changed | First concrete application of the FP-004 / DEC-031 strategy-module architectural pattern (DEC-031 sub-point 11 requires a per-strategy proposal before any strategy is implemented); CROSSWIND v0.9 design source landed in PR #5 Step 3.5 (ART-017 family with byte-level SHA-256 verification); `longshort` module advances from documented-only to foundation-implemented via the FP-005 Bootstrap surface (T1 directory scaffold, per-strategy audit table, RBAC seed, and `longshort-emit-init` edge function only — decision engine, reconciliation, and order management explicitly deferred to FP-006) |
+| What Stayed Unchanged | All prior PLAN-* sections retain their definitions and statuses — PLAN-GOV-001, PLAN-AUTH-001, PLAN-RBAC-001, PLAN-USRMGMT-001, PLAN-ADMIN-001, PLAN-USRPNL-001, PLAN-AUDIT-001, PLAN-HEALTH-001, PLAN-API-001, PLAN-JOBS-001, PLAN-INVITE-001, PLAN-AUTH-SUDO-001, and the PLAN-TRADING-001 main body; all prior DEC-001 through DEC-031 entries; platform `audit_logs` table schema and writer contract (per DEC-031 sub-point 5 and DEC-032 clause (1) — platform `audit_logs` is NOT modified to receive strategy events); admin-panel, user-panel, user-management, auth, rbac semantics, audit-logging platform writer, api, health-monitoring, and jobs-and-scheduler module behaviors (per DEC-032 clause (1) no-platform-modification lock); `docs/04-modules/strategy-module-pattern.md` structure outside the §Audit-Writer Contract section (the §Audit-Writer Contract rewrite per DEC-033 v4.1 lands in Step 5.0a code work, not in this plan-revision entry) |
+| What Was Added | FP-005 entry (feature-proposals.md); PLAN-TRADING-001-LONGSHORT-001 plan section (master-plan.md, child of PLAN-TRADING-001); DEC-032 (approved-decisions.md); DEC-033 v4.1 (approved-decisions.md) |
+| What Was Removed | None (additive diff per Constitution Rule 10 — Plan Merge Rule) |
+| Approval Status | PLAN-TRADING-001-LONGSHORT-001: proposed (pending FP-005 operator ratification); all prior sections retain their pre-existing statuses unchanged |
+| Supersession Links | None (DEC-032 and DEC-033 v4.1 are new entries, not supersessions; no prior decision is retired by this revision) |
+
 ---
 
 ## Supersession Chain Requirement
