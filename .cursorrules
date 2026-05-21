@@ -504,6 +504,20 @@ Routed page wrappers live at `src/pages/trading/<strategy>/` and import ONLY fro
 
 Any strategy file outside this layout is non-conformant. Stop and surface.
 
+### Rule T1a — Strategy façade export surface is bounded to the 3-name template
+
+Every strategy's `src/features/<strategy>/index.ts` façade exports EXACTLY these three named values, no more no less:
+
+- `<strategy>Nav` — NavSection descriptor (registered into `src/config/trading-navigation.ts` per the DEC-031 sub-point 6 narrow carve-out / T5)
+- `<STRATEGY>_PERMISSION_KEYS` — frozen `as const` array of two-segment permission keys (consumed by RBAC seed scripts and per-strategy permission checks)
+- `<StrategyName>DashboardPage` — re-exported routed page component (consumed by `src/pages/trading/<strategy>/` thin page wrappers and `src/App.tsx` lazy-load registration)
+
+Type-only exports (`export type ...`) do NOT count toward this surface — they exist for consumer ergonomics and have no runtime presence.
+
+Adding a 4th value export is INVALID and constitutes a Constitution Rule 3 violation (façade ossification → strategy internals leak). If a strategy genuinely needs an additional sanctioned export (e.g., a `<strategy>Routes` const), the addition goes through governance: a new DEC entry updating DEC-031 sub-point 6 and amending this rule. Stop and surface — do NOT add a 4th export silently.
+
+This rule is the codified version of FP-005 AC-16, AC-17, AC-18, AC-19, AC-20. Test it with: `grep -cE '^export ' src/features/<strategy>/index.ts` ≤ 3 (plus type-only exports).
+
 ### Rule T2 — Per-strategy table naming is `<strategy>_<entity>`
 
 Strategy data tables in the `public` schema MUST be named `<strategy>_<entity>` (e.g., `longshort_positions`, `longshort_signals`). Per-strategy audit table is `<strategy>_audit_logs`. The platform `audit_logs` table is NEVER modified to receive strategy events.

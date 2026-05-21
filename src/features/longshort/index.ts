@@ -17,9 +17,11 @@
  * utils, internal components) MUST NOT be exported. Reaching inside this
  * folder from outside is a Constitution Rule 3 violation.
  *
- * Step 5.2 status (after this commit): LONGSHORT_PERMISSION_KEYS populated.
- * Remaining stub: longshortNav and LongShortDashboardPage (added in Step 5.5).
+ * Step 5.5 status (after this commit): all three exports populated; façade
+ * discipline complete. AC-16 closed.
  */
+import { TrendingUp } from 'lucide-react';
+import type { NavSection } from '@/config/navigation.types';
 
 /**
  * Long-short permission keys, exactly two two-segment keys per DEC-031 sub-point 3
@@ -36,3 +38,32 @@ export const LONGSHORT_PERMISSION_KEYS = [
 ] as const;
 
 export type LongShortPermissionKey = (typeof LONGSHORT_PERMISSION_KEYS)[number];
+
+/**
+ * NavSection descriptor for the long-short strategy. Imported by
+ * `src/config/trading-navigation.ts` per the DEC-031 sub-point 6 narrow
+ * carve-out. The trading-panel-infrastructure registers this nav into the
+ * shared navigation tree; the strategy never references the panel.
+ *
+ * Permission gate: `longshort.view` — required to see the nav entry.
+ */
+export const longshortNav: NavSection = {
+  label: 'Long-Short Strategy',
+  items: [
+    {
+      title: 'Dashboard',
+      url: '/trading/longshort',
+      icon: TrendingUp,
+      permission: 'longshort.view',
+    },
+  ],
+};
+
+/**
+ * Routed page component for `/trading/longshort`. Thin re-export of the
+ * internal `LongShortDashboard` component, named `LongShortDashboardPage` to
+ * match the page-wrapper convention. Consumers (the route registration in
+ * `src/App.tsx` and the page wrapper in `src/pages/trading/longshort/`)
+ * import this through the façade ONLY.
+ */
+export { LongShortDashboard as LongShortDashboardPage } from './components/LongShortDashboard';

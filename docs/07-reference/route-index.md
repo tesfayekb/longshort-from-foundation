@@ -660,6 +660,24 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | **Lifecycle** | active |
 | **Added by** | PLAN-TRADING-001 (DEC-031) |
 
+#### `/trading/longshort` — Long-Short Strategy Dashboard
+
+| Field | Value |
+|-------|-------|
+| **Page** | Long-Short Dashboard (placeholder at FP-005 bootstrap; full UI lands in FP-006) |
+| **Module** | longshort |
+| **Classification** | authenticated, privileged |
+| **Auth required** | Yes |
+| **Permission required** | `longshort.view` (inner gate; outer gate is `trading.access` from `<Route path="/trading" element={<TradingLayout />}>`) |
+| **Scope** | system-wide |
+| **Panel** | trading-panel |
+| **Related tests** | `e2e/longshort/longshort-access.spec.ts` (Step 5.6 e2e) — asserts unauth-redirect, auth-no-perm-denied, auth-with-`longshort.view`-renders |
+| **Related functions** | `TradingLayout`, `RequirePermission`, `LongShortDashboardPage` (re-exported from `src/features/longshort/index.ts`), `longshortNav` (registered in `src/config/trading-navigation.ts`) |
+| **Implementation** | **IMPLEMENTED** — nested route in `src/App.tsx` under `<Route path="/trading" element={<TradingLayout />}>` with `<Route path="longshort" element={<PermissionGate permission="longshort.view"><LongShortDashboardPage /></PermissionGate>}>` |
+| **Related risks** | FP-005 G2 (bootstrap scope discipline), G3 (façade ossification — mitigated by Rule T1a in `.cursorrules`) |
+| **Lifecycle** | active |
+| **Added by** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Step 5.5) |
+
 ---
 
 ## API Endpoint Registry
