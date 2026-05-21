@@ -13,6 +13,10 @@ Each entry must reach one of two terminal states per supervisor protocol §8: **
 
 ## Open Findings
 
+_(no open findings)_
+
+## Resolved Findings
+
 ### INC-15 — `permissions` table has no `module` column
 
 | Field | Value |
@@ -20,7 +24,7 @@ Each entry must reach one of two terminal states per supervisor protocol §8: **
 | **Discovered** | 2026-05-16 |
 | **Discovery Context** | Step 4 (Trading Panel Foundation Infrastructure) planning — investigating permission seed pattern for `trading.access` |
 | **Severity** | Medium (documentation accuracy; no runtime bug) |
-| **Disposition** | Scheduled — Step 6 incidental cleanup batch OR Step 5 FP-005 Phase 0 planning (whichever comes first that touches RBAC docs) |
+| **Disposition** | Resolved — doc-only fix landed via FP-005 Step 5.0a; DEC-031 sub-point 3 wording amended |
 
 **Finding.** The `permissions` table has schema `(id, key, description, created_at)` — no `module` column. Verified across multiple migrations (all permission INSERTs use only `(key, description)`).
 
@@ -39,7 +43,7 @@ Yet:
 
 **Related artifacts.** DEC-031 (sub-point 3), permission-index.md, AdminPermissionsPage.tsx (`groupByResource()` function).
 
-## Resolved Findings
+**Resolution.** Option 1 (doc-only fix) was selected per FP-005 Step 5.0a / Round 1.1 D1. The fix landed by amending DEC-031 sub-point 3 in `docs/08-planning/approved-decisions.md` to accurately describe the `groupByResource()` mechanism in `src/pages/admin/AdminPermissionsPage.tsx` (first-dot-split of the permission key) and to clarify that the `module:` metadata in `docs/07-reference/permission-index.md` is documentation-only and is not read by code or stored as a DB column. Resolution anchor: this Step 5.0a commit (SHA recorded in the commit message body `inc_15_resolution_sha` field per §22.4).
 
 ### INC-17 — Silent auth-context fallback in layout prefetches (M4)
 
