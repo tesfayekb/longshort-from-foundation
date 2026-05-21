@@ -46,6 +46,7 @@ const RoleDetailPage = lazy(() => import("./pages/admin/RoleDetailPage"));
 // User pages (lazy loaded)
 const UserDashboard = lazy(() => import("./pages/user/UserDashboard"));
 const TradingDashboard = lazy(() => import("./pages/trading/TradingDashboard"));
+const LongShortDashboardPage = lazy(() => import("./pages/trading/longshort/LongShortDashboardPage"));
 const ProfilePage = lazy(() => import("./pages/user/ProfilePage"));
 const SecurityPage = lazy(() => import("./pages/user/SecurityPage"));
 
@@ -191,6 +192,11 @@ const App = () => (
               {/* Trading panel — TradingLayout enforces trading.access; individual strategy routes add per-strategy permissions in future PRs */}
               <Route path="/trading" element={<TradingLayout />}>
                 <Route index element={<TradingDashboard />} />
+                <Route path="longshort" element={
+                  <PermissionGate permission="longshort.view">
+                    <LongShortDashboardPage />
+                  </PermissionGate>
+                } />
               </Route>
 
               {/* User panel */}
