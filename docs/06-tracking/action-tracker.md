@@ -1745,6 +1745,57 @@ Each action must include:
 - Regression fix actions must reference the original regression
 - Repeated failures in same area → tracked via recurrence in watchlist, referenced here
 
+### ACT-070: FP-005 Step 5 — Long-Short Strategy Bootstrap (PLAN-TRADING-001-LONGSHORT-001)
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-070 |
+| **Date** | 2026-05-21 |
+| **Action** | Implemented FP-005 Long-Short Strategy Module Bootstrap across sub-steps 5.0a / 5.0b / 5.1 / 5.4 / 5.2 / 5.3 / 5.5: (5.0a) prerequisite doc closures incl. INC-15 + strategy-module-pattern.md audit-writer contract rewrite + DEC-031 wording clarifications per DEC-032; (5.0b) canonical shared helper `supabase/functions/_shared/strategy-audit.ts` + Deno unit tests; (5.1) `docs/04-modules/longshort/longshort.md` Phase Scope table + ART-018 registration; (5.4) T1 scaffold at `src/features/longshort/` (6 subdirs + index.ts); (5.2) RBAC seed MIG-037 (`longshort.view`, `longshort.manage` — NO `.execute`) + `LONGSHORT_PERMISSION_KEYS` constant + permission-index entries; (5.3) per-strategy audit infra — MIG-038 `public.longshort_audit_logs` (append-only RLS, `operator_id` default UUID, `correlation_id`) + `longshort-emit-init` edge function consuming `writeStrategyAuditEvent` (T4 audit-writer trap closed live) + event-index `longshort.init`; (5.5) façade discipline limited to `{ longshortNav, LONGSHORT_PERMISSION_KEYS, LongShortDashboardPage }` + `LongShortDashboard` internal component + `LongShortDashboardPage` wrapper + `trading-navigation.ts` carve-out exercise + `App.tsx` route gate at `/trading/longshort` via `PermissionGate permission="longshort.view"` + `.cursorrules` Rule T1a + route-index entry. |
+| **Type** | Feature |
+| **Impact Classification** | High |
+| **Modules Affected** | longshort (foundation-implemented), strategy-module-pattern (helper landed), trading-panel (carve-out exercised), rbac (permission seed only), audit-logging (per-strategy table; platform `audit_logs` untouched) |
+| **Files Changed** | `supabase/functions/_shared/strategy-audit.ts` (new), `supabase/functions/_shared/strategy-audit_test.ts` (new), `supabase/functions/longshort-emit-init/index.ts` (new), `supabase/migrations/20260521120000_step_5_2_longshort_rbac_seed.sql` (new, MIG-037), `supabase/migrations/20260521130000_step_5_3_longshort_audit_table.sql` (new, MIG-038), `src/features/longshort/index.ts` (new), `src/features/longshort/{api,components,hooks,services,types,utils}/README.md` (new — T1 scaffold), `src/features/longshort/components/LongShortDashboard.tsx` (new), `src/pages/trading/longshort/LongShortDashboardPage.tsx` (new), `src/config/trading-navigation.ts` (DEC-031 sub-point 6 carve-out import), `src/App.tsx` (route + lazy import), `.cursorrules` (Rule T1a), `docs/04-modules/longshort/longshort.md` (new), `docs/07-reference/{permission-index,event-index,route-index,artifact-index,function-index,database-migration-ledger}.md` |
+| **Related Tests** | `supabase/functions/_shared/strategy-audit_test.ts` (Deno unit suite — table-name interpolation + platform-parity return shape); see ACT-071 for E2E. |
+| **Evidence** | All 22 acceptance criteria AC-01 through AC-22 evidenced per supervisor §22.6 verification logs for sub-steps 5.0a (c4b8a96), 5.0b (f55a877), 5.1 (554d7c1), 5.4 (67bf6ba), 5.2 (274e235), 5.3 (e5d2235), 5.5 (c3c4804). T4 audit-writer trap closed in live code path at Step 5.3 — `longshort-emit-init` imports `writeStrategyAuditEvent` from `_shared/strategy-audit.ts` exclusively; zero `logAuditEvent`/platform `_shared/audit.ts` references. Façade discipline closed at Step 5.5 with `.cursorrules` Rule T1a codifying the 3-name export surface for all future strategies. Per DEC-032 clauses 2-4 + 7: reconciliation engine, signal/order logic, `longshort.execute`, Tier 3 runbooks, CI/CD, >150s detection all deferred to FP-006 / FP-007. |
+| **Status** | Verified |
+
+---
+
+### ACT-071: E2E Suite for Long-Short Access + Audit Emission
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-071 |
+| **Date** | 2026-05-21 |
+| **Action** | Added Playwright E2E suite `e2e/longshort/longshort-access.spec.ts` mirroring `e2e/trading-panel-access.spec.ts` skip-on-no-session pattern. Three RBAC scenarios cover AC-21: unauthenticated user → redirected to sign-in; authenticated user without `longshort.view` → `AccessDenied` rendered; authorized user → `LongShortDashboard` rendered. One audit-emission scenario covers AC-22: POST to `longshort-emit-init` returns a correlation_id-bearing `audit_id` response (the helper returns `{success: true, auditId}` only after the row inserts into `longshort_audit_logs`, transitively proving the write). |
+| **Type** | Test |
+| **Impact Classification** | Medium |
+| **Modules Affected** | longshort (E2E coverage) |
+| **Files Changed** | `e2e/longshort/longshort-access.spec.ts` (new) |
+| **Related Tests** | `e2e/longshort/longshort-access.spec.ts` |
+| **Evidence** | Spec compiles under Playwright config; pattern matches `trading-panel-access.spec.ts` skip-on-no-session semantics so CI without auth fixture still exercises the unauth-redirect assertion. |
+| **Status** | Verified |
+
+---
+
+### ACT-072: FP-005 Closure Document Publication
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-072 |
+| **Date** | 2026-05-21 |
+| **Action** | Published FP-005 / PLAN-TRADING-001-LONGSHORT-001 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` following the `plan-auth-sudo-001-closure.md` template. Enumerates all 23 acceptance criteria (AC-01 through AC-23) with evidence pointers, lists MIG-037 + MIG-038, lists reference-index reconciliation, references §22.6 verification logs for each sub-step closure SHA, enumerates DEC-032 / DEC-033 v4.1 deferrals to FP-006 / FP-007, and includes the supervisor v0.4 §22.8.3 grandfathering note for INC-15. Coupled with this entry: `system-state.md` `longshort` transition `documented-only` → `foundation-implemented` with `last_updated: 2026-05-21`; master-plan PLAN-TRADING-001-LONGSHORT-001 Phase Gate checkboxes all ticked with evidence; `database-migration-ledger.md` Tables-summary count update 13 → 14 + new row for `longshort_audit_logs` (deferred from Step 5.3). |
+| **Type** | Governance |
+| **Impact Classification** | High |
+| **Modules Affected** | longshort (closure), governance (system-state, master-plan, action-tracker, closures) |
+| **Files Changed** | `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` (new), `docs/00-governance/system-state.md`, `docs/08-planning/master-plan.md`, `docs/06-tracking/action-tracker.md`, `docs/07-reference/database-migration-ledger.md` |
+| **Related Tests** | See ACT-071. |
+| **Evidence** | Closure document references resolve to actual repo artifacts at HEAD; all Phase Gate checkboxes in master-plan ticked with rationale; per Constitution Rule 8 no acceptance criterion silently dropped. FP-005 sub-step sequence 5.0a / 5.0b / 5.1 / 5.4 / 5.2 / 5.3 / 5.5 / 5.6 all CLOSED. |
+| **Status** | Verified |
+
+---
+
 ### Watchlist Verification
 
 - Watchlist verification during changes → must reference action tracker entry
