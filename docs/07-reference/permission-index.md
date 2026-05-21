@@ -656,6 +656,56 @@ Permissions classified as `destructive`, `system-wide`, or `security-critical` r
 | **Lifecycle** | active |
 | **Added by** | PLAN-TRADING-001 (DEC-030 scope expansion, DEC-031 architectural pattern) |
 
+#### `longshort.view`
+
+| Field | Value |
+|-------|-------|
+| **Permission UUID** | Assigned at insert time in `public.permissions`. Seeded idempotently by migration `20260521120000_step_5_2_longshort_rbac_seed.sql` (Step 5.2). |
+| **Module** | longshort |
+| **Note** | `Module` is documentation metadata only per permission-index convention — see **INC-15** (`docs/06-tracking/incidental-findings.md`, Resolved) for the permissions table schema vs doc alignment. |
+| **Implementation status** | IMPLEMENTED |
+| **Description** | Gates read-only view of the long-short strategy dashboard at `/trading/longshort` and its sub-routes. Required by `LongShortDashboardPage` (Step 5.5) before any long-short content renders. Two-segment per DEC-031 sub-point 3. |
+| **Classification** | operational |
+| **Scope** | system-wide |
+| **Default roles** | — (none seeded; superadmin inherits all permissions; admin and user roles do NOT receive `longshort.view` by default per DEC-031 sub-point 10 / initial-seed-grants rule) |
+| **Used by** | `LongShortDashboardPage` (Step 5.5), `/trading/longshort/*` routes (inner gate; outer gate is `trading.access`) |
+| **Blast radius** | small — gates a single strategy sub-tree within the trading panel |
+| **Approval required** | Yes — granting requires admin with `permissions.assign`; revoking requires admin with `permissions.revoke` |
+| **Audit required** | Yes — grant/revoke audited via `rbac.permission_assigned` / `rbac.permission_revoked` |
+| **Reauth required** | No (reauth would be required only on destructive actions which require `longshort.execute`, reserved for FP-006) |
+| **Related routes** | `/trading/longshort`, `/trading/longshort/*` |
+| **Related functions** | `RequirePermission` |
+| **Related risks** | FP-005 G2 (bootstrap scope discipline); G3 (façade ossification) |
+| **Related tests** | Long-short access allow/deny suite (Step 5.6 e2e) |
+| **Depends on** | `trading.access` (panel outer gate) |
+| **Lifecycle** | active |
+| **Added by** | PLAN-TRADING-001-LONGSHORT-001 (FP-005, DEC-031 architectural pattern, DEC-032 bootstrap scope lock) |
+
+#### `longshort.manage`
+
+| Field | Value |
+|-------|-------|
+| **Permission UUID** | Assigned at insert time in `public.permissions`. Seeded idempotently by migration `20260521120000_step_5_2_longshort_rbac_seed.sql` (Step 5.2). |
+| **Module** | longshort |
+| **Note** | `Module` is documentation metadata only per permission-index convention — see **INC-15** (`docs/06-tracking/incidental-findings.md`, Resolved) for the permissions table schema vs doc alignment. |
+| **Implementation status** | IMPLEMENTED |
+| **Description** | Gates non-destructive management actions on long-short strategy configuration (e.g., enable/disable, parameter tuning, capital allocation knobs — actual management surface lands in FP-006). At Step 5.2 the permission is seeded; consuming code lands in FP-006. Does NOT permit order execution — that requires `longshort.execute` which is deferred to FP-006 per DEC-032 clause 7. Two-segment per DEC-031 sub-point 3. |
+| **Classification** | admin-critical |
+| **Scope** | system-wide |
+| **Default roles** | — (none seeded; superadmin inherits all permissions; admin and user roles do NOT receive `longshort.manage` by default per DEC-031 sub-point 10 / initial-seed-grants rule) |
+| **Used by** | Long-short management UI (FP-006), long-short admin API routes (FP-006) |
+| **Blast radius** | medium — gates strategy-level configuration that affects all long-short trading behavior |
+| **Approval required** | Yes — Lead (per DEC-033 clause 5 pattern; long-short config changes warrant Lead approval) |
+| **Audit required** | Yes — management actions audited via per-strategy `longshort_audit_logs` (Step 5.3) per the `<strategy>_audit_logs` convention |
+| **Reauth required** | No (reauth is enforced on destructive trading actions via `longshort.execute` permission, FP-006) |
+| **Related routes** | (FP-006 — management routes not yet introduced) |
+| **Related functions** | `RequirePermission` |
+| **Related risks** | FP-005 G2 (bootstrap scope discipline); G3 (façade ossification) |
+| **Related tests** | Long-short manage allow/deny suite (Step 5.6 e2e covers presence/seed; full surface tests in FP-006) |
+| **Depends on** | `trading.access` (panel outer gate), `longshort.view` (cannot manage what you cannot view) |
+| **Lifecycle** | active |
+| **Added by** | PLAN-TRADING-001-LONGSHORT-001 (FP-005, DEC-031 architectural pattern, DEC-032 bootstrap scope lock) |
+
 ### Audit Permissions
 
 #### `audit.view`
