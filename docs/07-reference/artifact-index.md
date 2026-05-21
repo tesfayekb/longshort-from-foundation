@@ -375,6 +375,24 @@ For each phase, only **one** authoritative closure document may exist in the rep
 
 ---
 
+### ART-018: Long-Short Module Documentation
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-018 |
+| **Type** | reference |
+| **Title** | Long-Short Module Documentation — module doc derived from ART-017 design source per FP-005 Step 5.1 |
+| **Source Path** | `docs/04-modules/longshort/longshort.md` |
+| **Created Date** | 2026-05-21 |
+| **Owning Phase** | Phase Trading-Foundation |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-001 |
+| **Status** | `active` |
+| **Related Actions** | — (no ACT-* assignments yet; long-short implementation work lands via FP-005 Phase 0+ as ACT-NNN — registry to be updated at Step 5.6 / AC-23) |
+| **Related Decisions** | DEC-030, DEC-031, DEC-032, DEC-033 v4.1 |
+| **Notes** | Cites ART-017 as the canonical design source per Round 1.1 D3. Per FP-005's Reference Impact line, the FP-005-specific anchor set is CROSSWIND Parts 1, §11.0, §11.8, §11.9, §12 (plus ADR-001 and spec-source-index as standalone anchors). The file's Phase Scope table covers a superset of those anchors (≥16 rows) and maps every CROSSWIND part / section anchor to its tracking feature proposal (FP-005 / FP-006 / v0.10+) per AC-06. |
+
+---
+
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
