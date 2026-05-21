@@ -653,6 +653,26 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 
 ---
 
+### MIG-037: FP-005 Step 5.2 — Long-Short RBAC Permission Seed
+
+| Field | Value |
+|-------|-------|
+| **Ledger ID** | MIG-037 |
+| **Migration File** | `20260521120000_step_5_2_longshort_rbac_seed.sql` |
+| **Source Dir** | `supabase/migrations/` |
+| **Applied Date** | 2026-05-21 |
+| **Sequence Order** | 37 |
+| **Purpose** | Seed two long-short strategy permissions: `longshort.view` (operational; read-only dashboard access) and `longshort.manage` (admin-critical; non-destructive configuration). NO `longshort.execute` — explicitly deferred to FP-006 per DEC-032 clause 7. No role grants — per DEC-031 sub-point 10, admin and user roles do NOT receive `<strategy>.*` permissions by default; superadmin inherits all; trader-class roles are admin-on-demand. |
+| **Objects Affected** | Rows: `public.permissions` (2 inserts: `longshort.view`, `longshort.manage`). No role grants, no schema changes, no policy changes. |
+| **Depends On** | MIG-001 (permissions table), MIG-035 (trading.access panel umbrella — `longshort.*` depends on `trading.access` per per-strategy hierarchy) |
+| **Status** | `active` |
+| **Linked Actions** | — (no ACT-* assignments yet; FP-005 implementation work registers ACT-NNN at Step 5.6 / AC-23) |
+| **Linked Decisions** | DEC-030 (scope expansion), DEC-031 (architectural pattern + sub-point 3 two-segment + sub-point 10 no-default-grants), DEC-032 (FP-005 bootstrap scope lock; clause 7 forbids longshort.execute in FP-005) |
+| **Linked Artifacts** | ART-018 (long-short module documentation references this seed) |
+| **Notes** | Idempotent — `ON CONFLICT (key) DO NOTHING`. Forward migration only per §22.8.5(d); rollback requires manual `DELETE FROM permissions WHERE key IN ('longshort.view', 'longshort.manage')` if ever required (and only if no role grants reference them, which by design they don't). |
+
+---
+
 ### Tables (13)
 
 | Table | Created By | Status |
