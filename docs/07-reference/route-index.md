@@ -588,6 +588,25 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | **Related tests** | Jobs view allow/deny tests |
 | **Lifecycle** | planned |
 
+#### `/admin/kill-switch` — Platform Kill-Switch Operations (FP-006 Sub-Step 6.1)
+
+| Field | Value |
+|-------|-------|
+| **Page** | AdminKillSwitchPage (`src/pages/admin/AdminKillSwitchPage.tsx`) |
+| **Module** | admin-panel |
+| **Classification** | privileged + destructive + sudo-gated |
+| **Auth required** | Yes |
+| **Permission required** | `admin.access` + `system.kill_switches.manage` |
+| **Reauth required** | Yes — enforced via `<RequireSudo actionKey="kill_switch_route" fallback="/admin">` per DEC-029; sudo audit events `auth.sudo_granted` + `auth.sensitive_action_performed` emitted on verification |
+| **Scope** | system-wide |
+| **Panel** | admin-panel |
+| **Audit required** | Yes — each action emits `kill_switch.*` row in platform `audit_logs` |
+| **Description** | Operator UI for kill-switch operations (soft-pause / hard-pause / manual-liquidate / resume) across all strategy modules. Route nesting: RequireAuth → AdminLayout (`admin.access`) → RequireSudo (`kill_switch_route` actionKey) → PermissionGate (`system.kill_switches.manage`). |
+| **Related events** | `kill_switch.soft_pause`, `kill_switch.hard_pause`, `kill_switch.manual_liquidate`, `kill_switch.resume` |
+| **Related functions** | `kill_switch_soft_pause`, `kill_switch_hard_pause`, `kill_switch_manual_liquidate`, `kill_switch_resume` |
+| **Lifecycle** | active |
+| **Added By** | FP-006 sub-step 6.1(d), ACT-075 |
+
 #### `/admin/jobs/:id/trigger` — Manual Job Trigger
 
 | Field | Value |
