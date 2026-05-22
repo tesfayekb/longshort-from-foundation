@@ -744,6 +744,60 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 
 ---
 
+### MIG-042: FP-006 Sub-Step 6.2(a) — longshort_reconciliation_state Table
+
+| Field | Value |
+|-------|-------|
+| **ledger_id** | MIG-042 |
+| **migration_file** | `20260522100000_step_6_2_longshort_reconciliation_state.sql` |
+| **source_dir** | `supabase/migrations/` |
+| **applied_date** | 2026-05-22 |
+| **sequence_order** | 42 |
+| **purpose** | FP-006 sub-step 6.2(a) — reconciliation engine state surface per DEC-034.1 clause (5) verbatim schema. State-as-projection cache rebuildable from `reconciliation_events` within <5s rolling-hour window per clause (3). |
+| **Objects created** | `longshort_reconciliation_state` table (10 cols, composite PK `(operator_id, symbol, call_name)`); 2 RLS policies (read with `longshort.view`, no-direct-write block); index `idx_longshort_reconciliation_state_operator` |
+| **RLS** | Enabled. Read = authenticated with `longshort.view`; direct INSERT/UPDATE blocked (sole write surface = engine via supabaseAdmin) |
+| **Linked Actions** | ACT-076 |
+| **Linked Decisions** | DEC-034.1 clauses (2)(3)(5); DEC-031 sub-point 5 (standalone operator_id) |
+| **Status** | active |
+
+---
+
+### MIG-043: FP-006 Sub-Step 6.2(b) — reconciliation_events Table
+
+| Field | Value |
+|-------|-------|
+| **ledger_id** | MIG-043 |
+| **migration_file** | `20260522100100_step_6_2_reconciliation_events.sql` |
+| **source_dir** | `supabase/migrations/` |
+| **applied_date** | 2026-05-22 |
+| **sequence_order** | 43 |
+| **purpose** | FP-006 sub-step 6.2(b) — reconciliation engine event log per CROSSWIND §11.0.10 verbatim + DEC-034.1 clause (6). Append-only authoritative source from which state is derived. |
+| **Objects created** | `reconciliation_outcome` enum (5 values); `reconciliation_tier` enum (4 values); `reconciliation_events` table (17 cols); 4 indices (`idx_..._ts_call`, `idx_..._state_rebuild`, `idx_..._phase_0b`, `idx_..._unresolved_bugs`) |
+| **RLS** | Enabled. Read = authenticated with `longshort.view`; direct INSERT/UPDATE blocked (sole write surface = engine via supabaseAdmin). UPDATE for `resolved_at`/`resolution_pr_ref` deferred to future governed RPC. |
+| **Retention** | Strong+/Strong tier indefinite; Medium tier 12 months per §11.0.10 |
+| **Linked Actions** | ACT-076 |
+| **Linked Decisions** | DEC-034.1 clauses (2)(6); CROSSWIND §11.0.10 |
+| **Status** | active |
+
+---
+
+### MIG-044: FP-006 Sub-Step 6.2(e) — Reconciliation Job Registry Seeds
+
+| Field | Value |
+|-------|-------|
+| **ledger_id** | MIG-044 |
+| **migration_file** | `20260522100200_step_6_2_reconciliation_jobs_seed.sql` |
+| **source_dir** | `supabase/migrations/` |
+| **applied_date** | 2026-05-22 |
+| **sequence_order** | 44 |
+| **purpose** | FP-006 sub-step 6.2(e) — registers 2 `job_registry` rows for reconciliation infrastructure per DEC-034.1 clause (9). `longshort.reconciliation_periodic_sweep` (every-5-min cron, exactly_once, forbid concurrency) and `longshort.reconciliation_replay_chain` (manual, allow concurrency, replay_safe). Both `enabled=false` initially — activate when corresponding handlers land (6.3d / 6.5). |
+| **Objects created** | 2 rows in `job_registry` (`longshort.reconciliation_periodic_sweep`, `longshort.reconciliation_replay_chain`) |
+| **Linked Actions** | ACT-076 |
+| **Linked Decisions** | DEC-034.1 clause (9); DEC-035 (replay determinism) |
+| **Status** | active (jobs disabled; activate per sub-step lineage) |
+
+---
+
 ### Tables (14)
 
 | Table | Created By | Status |
@@ -765,6 +819,10 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | `profiles.require_mfa_for_self` | MIG-034 | Active (column on existing `profiles` table) |
 | `system_config[key=mfa_enforcement_policy]` | MIG-034 | Active (seeded row) |
 | `longshort_audit_logs` | MIG-038 | Active |
+| `feature_flags` | MIG-039 | Active |
+| `kill_switches` | MIG-040 | Active |
+| `longshort_reconciliation_state` | MIG-042 | Active |
+| `reconciliation_events` | MIG-043 | Active |
 
 ### Functions (12)
 
