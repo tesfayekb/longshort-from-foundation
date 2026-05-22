@@ -431,6 +431,23 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 
 ---
 
+### PLAN-TRADING-001-LONGSHORT-002 — Long-Short Strategy Module Phase 0A Residual + Phase 0B
+
+- **Status:** approved (execution-pending)
+- **Feature Proposal:** FP-006
+- **Tier:** A (FINANCIAL-CRITICAL)
+- **Decisions ratified:** DEC-034 / DEC-034.1 / DEC-035 / DEC-036 / DEC-037
+- **Phase Gates (5):** Gate 6.0 (Prerequisites + DEC ratifications); Gate 6.3 (Phase 0A residual + reconciliation engine + 17 verify_*); Gate 6.4 (Strong-evidence workflow tooling, fail-fast); Gate 6.7 (Replay framework + A1 baseline + Alpaca paper); Gate 6.9 (ADR-002 multi-pending validation + Phase 0B exit gate quietness)
+- **Sub-step inventory (14):** 6.0a / 6.0b / 6.0c / 6.1 / 6.2 / 6.3a / 6.3b / 6.3c / 6.3d / 6.4 / 6.5 / 6.6 / 6.7 / 6.8 / 6.9 (+ 6.10 closure)
+- **AC count:** 79
+- **Plan Version impact:** v12.1 → v13.0
+- **Dependencies:** PLAN-TRADING-001-LONGSHORT-001 (FP-005) closed; FP-007 CI/CD Pipeline Bootstrap closed (hard prerequisite per DEC-032 clause (4))
+- **Out-of-scope:** 17 items per FP-006 entry (Phases 1-9, DW-046/047/051/052/053/054/056, sustained-anomaly kill VALUES, trader-class roles, real Day 1 capture, §15 risk register reconciliation)
+- **Risk register:** H1-H7 per FP-006 entry
+- **Forward state on closure:** longshort module status transitions `foundation-implemented` → `phase-0b-validated`; Phases 1-9 unblocked; sustained-anomaly kill mechanism infrastructure ready for Phase 7 baseline population per §10.13 + §11.6
+
+---
+
 ## Development Phases
 
 ### Phase 1 — Foundation (Auth + Infrastructure)

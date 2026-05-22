@@ -39,13 +39,13 @@ modules_implemented: auth implemented (A+B+D implemented + hardened incl. Google
 # ⚠ active_work — narrative replaced to reflect FP-005 closure
 active_work: FP-005 (Long-Short Strategy Module Bootstrap) CLOSED — all 23 acceptance criteria evidenced; closure document at docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md; ACT-070/071/072 registered. Bootstrap surface live: RBAC seed (MIG-037), per-strategy audit (MIG-038 + longshort-emit-init), façade + page wrapper, route /trading/longshort gated by longshort.view. Reconciliation engine, signal/order logic, longshort.execute, CI/CD all deferred to FP-006 / FP-007 per DEC-032 clauses 2-4 + 7. PLAN-TRADING-001 closed at Step 4; PLAN-TRADING-001-LONGSHORT-001 closed at this FP-005 closure. All prior PLAN-* sections remain CLOSED.
 # ⚠ current_plan_version — minor merge bump per Constitution Rule 10 (Plan Merge Rule)
-current_plan_version: v12.1
-# ⚠ approved_plan_baseline — bumps to v12.1 at Step 5.0 doc PR merge per Round 6.1
+current_plan_version: v13.0
+# ⚠ approved_plan_baseline — bumps to v13.0 at FP-006 Round Final doc PR per §22.5 reconciliation
 #   resolution. Step 5.0 PR is the approval mechanism (matches v11.0 → v12.0 PR #3
 #   Step 2b precedent). Constitution Rule 9 (Execution Lock) is satisfied: code
 #   execution Steps 5.0a-5.6 cannot begin until v12.1 baseline is approved, which
 #   it becomes at Step 5.0 PR merge.
-approved_plan_baseline: v12.1
+approved_plan_baseline: v13.0
 plan_status: approved
 artifact_governance: active (artifact-index.md, database-migration-ledger.md, phase-closures/)
 deferred_work_open: []
@@ -62,7 +62,7 @@ deployment_config_completed:
   - rls_hardening_2026_05_13: "Migration 20260513195212 — restricted system_config SELECT to is_superadmin(); added owner-scoped SELECT policies on mfa_recovery_codes and mfa_recovery_attempts; added admin/accepting-user SELECT policy on invitations."
   - route_index_reconciliation_2026_05_13: "Added auth-hook-pre-signup and verify-turnstile entries to docs/07-reference/route-index.md (Reconciliation Addendum)."
 # ⚠ last_updated
-last_updated: 2026-05-21
+last_updated: 2026-05-22
 ```
 
 > **Note on `status: complete`:** This field reflects the closure of the historical platform-module programme (auth through PLAN-INVITE-001 inclusive, all phases through Phase 6). It does NOT mean the project is closed or that no work is active. PLAN-TRADING-001 (Trading Panel + Strategy Module Architectural Pattern) governance and implementation steps are currently in progress as recorded in the `active_work` field above. A future `status:` value bump (e.g., to `in_progress` or `closed`, when PLAN-TRADING-001 reaches its own closure or another plan supersedes it) is a separately-governed edit and is intentionally NOT introduced by this PR — preserving backward compatibility with any tooling that reads the existing `status` value.
