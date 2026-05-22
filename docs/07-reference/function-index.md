@@ -1659,3 +1659,81 @@ Resumes from `soft_paused` only. Raises `no_data_found` if no row; raises `inval
 | **Purpose** | SOLE sanctioned location for wall-clock reads in the reconciliation engine path per DEC-034 clause (4) + DEC-035 clause (2). `productionClock.getWallClockTs()` reads `new Date()` (the only such read in the engine); `createFixedClock(ts)` returns deterministic clock for tests + replay. All downstream reconciliation code receives `ts: Date` as a parameter and propagates — never derives time internally. |
 | **Override mechanism** | `// allow-now-in-business-logic: <ADR-ID>` permits specific instances elsewhere with ADR. |
 | **Added by** | FP-006 sub-step 6.2(c), ACT-076 |
+
+### verify_* Batch A (#1–#5) — sub-step 6.3a (ACT-077)
+
+The 5 verifiers below are importable Deno shared modules under `supabase/functions/_shared/longshort-verifiers/`. Each exposes `buildVerifyXxxSpec(...)` (returns `ReconcileCallSpec`) + `verifyXxx(...)` (convenience wrapper invoking `reconcile()`). Real broker integration lands at sub-step 6.7; sub-step 6.3a accepts mock-compatible `Broker*Fetcher` interfaces (see below).
+
+#### `verifyPosition`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3a) |
+| **Classification** | financial-critical + audit-critical (strong_plus tier per §11.0.10) |
+| **Signature** | `verifyPosition(args: {symbol, expected_qty, expected_cost_basis, operator_id}, fetcher: BrokerPositionFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_position.ts` |
+| **Tolerance class** | zero_tolerance per §11.0.9 (qty=0, cost_basis=1¢/share) |
+| **Failure action** | `symbol_halt_alert_emitted` per §11.0.7 #1 |
+| **Side effects** | Via reconcile() lifecycle: INSERT row in reconciliation_events; upsert row in longshort_reconciliation_state |
+| **Throws** | Propagates BrokerPositionFetcher errors (lifecycle records as `system_bug`) |
+| **Determinism** | Pure given (args, fetcher, ts); replay-safe per DEC-035 clause (1) |
+| **Added by** | FP-006 sub-step 6.3a, ACT-077 |
+
+#### `verifyQuote`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3a) |
+| **Classification** | financial-critical (medium tier per §11.0.10) |
+| **Signature** | `verifyQuote(args: {symbol, operator_id}, fetchers: {signal, recon, broker}, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_quote.ts` |
+| **Tolerance class** | noise_tolerant per §11.0.9 (5bps + 1¢ both-must-exceed for firing; 100bps magnitude escalation) |
+| **Failure action** | `logged_for_pattern_analysis` (no symbol-halt; informs Phase 0B tuning) |
+| **Determinism** | Pure given (args, fetchers, ts) |
+| **Added by** | FP-006 sub-step 6.3a, ACT-077 |
+
+#### `verifyQuoteFreshness`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3a) |
+| **Classification** | financial-critical (medium tier per §11.0.10) |
+| **Signature** | `verifyQuoteFreshness(args: {symbol, operator_id, max_age_s?}, fetcher: BrokerQuoteFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_quote_freshness.ts` |
+| **Tolerance class** | noise_tolerant per §11.0.9 (default max_age_s=5 per §11.0.7 #3) |
+| **Failure action** | `mtm_skipped_quote_stale` — do NOT fall back to last-known price |
+| **Added by** | FP-006 sub-step 6.3a, ACT-077 |
+
+#### `verifyShortAvailability`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3a) |
+| **Classification** | financial-critical (strong tier per §11.0.10) |
+| **Signature** | `verifyShortAvailability(args: {symbol, operator_id, qty_requested}, fetcher: BrokerLocateFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_short_availability.ts` |
+| **Tolerance class** | low_tolerance per §11.0.9 (3 firings in 1h escalates) |
+| **Failure action** | `short_entry_skipped_locate_unavailable` — NO substitution to long; NO "assume available" default |
+| **Added by** | FP-006 sub-step 6.3a, ACT-077 |
+
+#### `verifySSRStatus`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3a) |
+| **Classification** | financial-critical (strong tier per §11.0.10) — TRI-STATE per §11.0.7 #5 |
+| **Signature** | `verifySSRStatus(args: {symbol, operator_id}, fetcher: BrokerSSRStatusFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_ssr_status.ts` |
+| **Tolerance class** | low_tolerance per §11.0.9 |
+| **Failure action** | `not_active`→no action (FPWT); `active`→`ssr_compliant_routing_required`; `indeterminate`→`short_skipped_ssr_indeterminate` |
+| **Coverage** | DEC-035 clause (4) ≥3 scenarios met (one per tri-state branch) |
+| **Added by** | FP-006 sub-step 6.3a, ACT-077 |
+
+#### Broker fetcher interfaces — sub-step 6.3a (ACT-077)
+
+| Interface | File | Consumed by | Real impl |
+|---|---|---|---|
+| `BrokerPositionFetcher` | `supabase/functions/_shared/longshort-broker-interfaces.ts` | verifyPosition | sub-step 6.7 (Alpaca paper) |
+| `BrokerQuoteFetcher` | same | verifyQuote, verifyQuoteFreshness | sub-step 6.7 |
+| `BrokerLocateFetcher` | same | verifyShortAvailability | sub-step 6.7 |
+| `BrokerSSRStatusFetcher` | same | verifySSRStatus | sub-step 6.7 |
