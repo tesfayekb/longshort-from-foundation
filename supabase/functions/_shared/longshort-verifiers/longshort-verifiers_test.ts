@@ -31,6 +31,9 @@ import {
   buildVerifySettlementStatusSpec,
   buildVerifyOrderAcceptanceSpec,
   buildVerifyRealizedPnLSpec,
+  buildVerifyLotRecordSpec,
+  buildVerifyWashSaleRecordSpec,
+  buildVerifyRebalanceAggregateSpec,
   IMPLEMENTED_VERIFIERS,
   isVerifierImplemented,
 } from './index.ts';
