@@ -1951,6 +1951,21 @@ Over time, action outcomes may become invalid due to later changes:
 - Status changes are forward-only (except `Rolled Back` which references the issue)
 - Audit trail must be fully reconstructable from the action log
 
+### ACT-074: FP-006 Gate 6.0 Closure — Sub-Steps 6.0a + 6.0b + 6.0c + DEC-034 Clause (5) Verifier Correction
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-074 |
+| **Date** | 2026-05-22 |
+| **Action** | Closed FP-006 Gate 6.0 by bundling sub-steps 6.0a / 6.0b / 6.0c plus an in-cycle DEC-034 clause (5) verifier amendment per Option 1 reconciliation. (6.0a) Prerequisite doc closures + DEC ratifications evidenced against Round Final PR HEAD `30ff765`: FP-006 entry landed; PLAN-TRADING-001-LONGSHORT-002 plan section landed; DEC-034 / DEC-034.1 / DEC-035 / DEC-036 / DEC-037 ratified; system-state.md bumped v12.1 → v13.0; ADR-002 placeholder positioned at sibling-of-ADR-001; DW-054 through DW-057 registered. (6.0b) Platform-tier reconciliation stub landed at `supabase/functions/_shared/strategy-reconciliation.ts` — empty JSDoc + `export {}` per DEC-033 v4.1 strategy-audit.ts precedent shape. (6.0c) Audit-writer trap rg-zero invariant verified per CORRECTED DEC-034 clause (5) call/import-shaped pattern: `rg -nE 'import\s.*\blogAuditEvent\b\|\blogAuditEvent\s*\(' src/features/longshort/ supabase/functions/longshort-* --glob '!*.md'` returns empty (no real structural violations). The prior plain-substring pattern surfaced a false positive on the `longshort-emit-init/index.ts:10` JSDoc defense-in-depth comment that reinforces the T4 trap closure. Lovable correctly STOPPED per §22.8.4 on the broken substring pattern; supervisor amended DEC-034 clause (5) per Option 1 (fix-at-source, same precedent as DEC-036 clause (2) regex correction Round 3). Plan version bumped v13.0 → v13.1 per Constitution Rule 10 minor merge for the DEC-034 amendment. PLAN-TRADING-001-LONGSHORT-002 Phase Gate checkboxes added + Gate 6.0 / 6.0a / 6.0b / 6.0c ticked. |
+| **Type** | Governance (closure-evidencing + in-cycle DEC amendment) + Structural (platform-tier hook stub) |
+| **Impact Classification** | Medium |
+| **Modules Affected** | longshort (Gate 6.0 closure — no code paths touched); strategy-module-pattern (platform-tier reconciliation hook stub); governance (DEC-034 verifier regex correction; plan version v13.0 → v13.1) |
+| **Files Changed** | `supabase/functions/_shared/strategy-reconciliation.ts` (new); `docs/08-planning/approved-decisions.md` (DEC-034 clause (5) verifier amendment); `docs/08-planning/master-plan.md` (Phase Gate checkboxes + Gate 6.0 + 6.0a/b/c ticked); `docs/08-planning/plan-changelog.md` (v13.0 → v13.1 entry); `docs/00-governance/system-state.md` (current_plan_version + approved_plan_baseline → v13.1; last_updated); `docs/06-tracking/action-tracker.md` (this ACT-074 entry) |
+| **Related Tests** | None — Gate 6.0 is closure-evidencing + stub-creation + governance text correction; no functional code paths to test. Stub emptiness verified by `grep -cE '^(function \|const \|let \|class \|interface \|type )' supabase/functions/_shared/strategy-reconciliation.ts = 0`. DEC-034 amendment verified by `grep -c 'import\\s.*\\blogAuditEvent\\b' docs/08-planning/approved-decisions.md ≥ 1`. |
+| **Evidence** | AC-01 (FP-006 entry) evidenced at Round Final HEAD `30ff765`; AC-02 (PLAN-TRADING-001-LONGSHORT-002) evidenced at same SHA; AC-03 (5 DECs + system-state v13.0) evidenced at same SHA per §22.5 CLEAN verification 2026-05-22. AC-04 (strategy-reconciliation.ts stub) evidenced at this PR's SHA. AC-05 (audit-writer trap) evidenced at this PR's SHA via CORRECTED verifier per DEC-034 clause (5) amendment — call/import-shaped regex returns empty; JSDoc reinforcement at longshort-emit-init/index.ts:10 correctly excluded. Lovable's §22.8.4 STOP discipline preserved the invariant (broken regex would have produced false-CLEAN closure); supervisor reconciliation cycle resolved per Option 1. |
+| **Status** | Verified |
+
 ---
 
 ## Dependencies
