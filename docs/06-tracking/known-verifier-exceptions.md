@@ -40,3 +40,8 @@ Documented exceptions to AC-level rg-zero verifier patterns embedded in DEC text
 - ACT-077 (sub-step 6.3a closure) — first SHA at which the JSDoc line was discovered to false-positive against v13.1
 - ACT-078 (this sub-step) — exception register created; FOLLOWUP-004 logged
 - FOLLOWUP-004 — sub-step 6.4 remediation: CI script + DEC-034 v13.2 amendment + governance ADR
+## Status updates
+
+### 2026-05-22 (Gate 6.3 closure / ACT-081)
+
+FINDING-001 still active. Through Gate 6.3 closure the 17-verifier roster + edge function dispatch + MIG-045 job activation introduced NO new audit-writer trap regex false-positive cases — the JSDoc continuation pattern at `longshort-reconciliation-lifecycle.ts:23` remains the sole documented exception. FOLLOWUP-004 / sub-step 6.4 remains the canonical remediation owner.
