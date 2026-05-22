@@ -443,13 +443,14 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [ ] Gate 6.4 — Strong-evidence workflow tooling, fail-fast
   - [ ] Gate 6.7 — Replay framework + A1 baseline + Alpaca paper
   - [ ] Gate 6.9 — ADR-002 multi-pending validation + Phase 0B exit gate quietness
-- **Sub-step inventory (14 + closure):**
+- **Sub-step inventory (15 + closure):**
   - [x] 6.0a — Prerequisite doc closures + DEC ratifications evidenced (closed 2026-05-22, ACT-074)
   - [x] 6.0b — Platform-tier reconciliation stub landed at `supabase/functions/_shared/strategy-reconciliation.ts` (closed 2026-05-22, ACT-074)
   - [x] 6.0c — Audit-writer trap rg-zero invariant verified per DEC-034 v13.1 corrected verifier (closed 2026-05-22, ACT-074)
   - [x] 6.1 — Phase 0A residual items + pg_cron precondition check (closed 2026-05-22, ACT-075)
   - [x] 6.2 — Reconciliation engine state-machine + event-log scaffolding (closed 2026-05-22, ACT-076)
   - [x] 6.3a — verify_* batch A (#1–#5) (closed 2026-05-22, ACT-077)
+  - [x] 6.3a.1 — Corrective: type variance + lazy supabase-admin + FINDING-001 interim register (closed 2026-05-22, ACT-078)
   - [ ] 6.3b — verify_* batch B (#6–#10)
   - [ ] 6.3c — verify_* batch C (#11–#14)
   - [ ] 6.3d — verify_* batch D (#15–#17) + Gate 6.3 closure
