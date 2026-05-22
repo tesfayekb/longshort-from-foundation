@@ -1196,7 +1196,7 @@ At each phase boundary (before advancing to the next phase):
 | **Related Actions** | ACT-070, ACT-071, ACT-072 |
 | **Required Tests for Closure** | Each `verify_*` interface coverage; replay-test PASS comparison <15-min wall-clock per §10.4; sustained-anomaly baseline computation correctness |
 | **Status** | `deferred` |
-| **Cross-references** | CROSSWIND v0.9 Part 3a §10.4; FP-005 closure-doc Deferred item #2 |
+| **Cross-references** | CROSSWIND v0.9 Part 3a §10.4; FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #2 |
 
 ---
 
@@ -1219,7 +1219,7 @@ At each phase boundary (before advancing to the next phase):
 | **Related Actions** | ACT-070, ACT-071, ACT-072 |
 | **Required Tests for Closure** | Order lifecycle state machine paths (1.A/1.B/1.C; Phase 2 fill/partial/escalation/cancel); short-stop over-close detection + corrective trade synthetic test |
 | **Status** | `deferred` |
-| **Cross-references** | CROSSWIND v0.9 Part 2c §8.6.2, Part 3b §10.9 Phase 5; FP-005 closure-doc Deferred item #3 |
+| **Cross-references** | CROSSWIND v0.9 Part 2c §8.6.2, Part 3b §10.9 Phase 5; FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #3 |
 
 ---
 
@@ -1242,7 +1242,7 @@ At each phase boundary (before advancing to the next phase):
 | **Related Actions** | ACT-070, ACT-071, ACT-072 |
 | **Required Tests for Closure** | E2E gate: user without `longshort.execute` blocked at execution edge functions; superadmin retains via wildcard; audit log records denial |
 | **Status** | `deferred` |
-| **Cross-references** | FP-005 closure-doc Deferred item #4; constitution.md Rule 11 (critical module override) |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #4; constitution.md Rule 11 (critical module override) |
 
 ---
 
@@ -1265,7 +1265,7 @@ At each phase boundary (before advancing to the next phase):
 | **Related Actions** | ACT-070, ACT-071, ACT-072 |
 | **Required Tests for Closure** | Phase 0A exit-gate verification per §10.3 (multi-instance schema convention verified across all Crosswind-specific tables) |
 | **Status** | `deferred` |
-| **Cross-references** | CROSSWIND v0.9 Part 3a §10.3; FP-005 closure-doc Deferred item #5 |
+| **Cross-references** | CROSSWIND v0.9 Part 3a §10.3; FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #5 |
 
 ---
 
@@ -1288,7 +1288,7 @@ At each phase boundary (before advancing to the next phase):
 | **Related Actions** | ACT-070, ACT-071, ACT-072 |
 | **Required Tests for Closure** | §11.0.11 Phase 0B exit gate (every reconciliation firing root-caused; outcome classification per R3-R1); <15-min wall-clock evidence-tooling validation |
 | **Status** | `deferred` |
-| **Cross-references** | CROSSWIND v0.9 Part 3a §10.4 + Part 4a §11.0.11; FP-005 closure-doc Deferred item #6 |
+| **Cross-references** | CROSSWIND v0.9 Part 3a §10.4 + Part 4a §11.0.11; FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #6 |
 
 ---
 
@@ -1311,7 +1311,7 @@ At each phase boundary (before advancing to the next phase):
 | **Related Actions** | ACT-070, ACT-071, ACT-072 |
 | **Required Tests for Closure** | Each runbook validated against synthetic incident drill |
 | **Status** | `deferred` |
-| **Cross-references** | FP-005 closure-doc Deferred item #7 |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #7 |
 
 ---
 
@@ -1334,7 +1334,7 @@ At each phase boundary (before advancing to the next phase):
 | **Related Actions** | ACT-070, ACT-071, ACT-072 |
 | **Required Tests for Closure** | Synthetic >150s job triggers hand-off; resumption idempotent; no duplicate side-effects |
 | **Status** | `deferred` |
-| **Cross-references** | FP-005 closure-doc Deferred item #8 |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #8 |
 
 ---
 
@@ -1357,7 +1357,7 @@ At each phase boundary (before advancing to the next phase):
 | **Related Actions** | ACT-070, ACT-071, ACT-072 |
 | **Required Tests for Closure** | Pipeline runs on PR; blocks merge on any gate failure; reference-index drift detection catches missing registrations |
 | **Status** | `deferred` |
-| **Cross-references** | FP-005 closure-doc Deferred item #9 |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #9 |
 
 ---
 
@@ -1380,7 +1380,7 @@ At each phase boundary (before advancing to the next phase):
 | **Related Actions** | ACT-070, ACT-071, ACT-072 |
 | **Required Tests for Closure** | Every §15 v0.10 risk has a corresponding platform risk-register entry or explicit non-applicability note |
 | **Status** | `deferred` |
-| **Cross-references** | FP-005 closure-doc Deferred item #10 |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #10 |
 
 ---
 
