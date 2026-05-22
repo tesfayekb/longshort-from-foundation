@@ -119,7 +119,13 @@ export async function reconcile<TExpected, TObserved>(
   // STEP (d) — update state surface (does not block return on error per DEC-034.1 clause (2)
   // state-as-cache contract — the event log is authoritative)
   try {
-    await updateStateSurface({ spec, outcome, ts });
+    await updateStateSurface({
+      call_name: spec.call_name,
+      operator_id: spec.operator_id,
+      symbol: spec.symbol,
+      outcome,
+      ts,
+    });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error('[reconcile] updateStateSurface failed (event row persisted)', {
