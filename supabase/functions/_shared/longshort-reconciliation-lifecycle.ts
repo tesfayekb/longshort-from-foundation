@@ -30,6 +30,7 @@ import type {
   ReconcileResult,
   ReconciliationEventRow,
   ReconciliationOutcome,
+  VerifyCallName,
 } from './longshort-reconciliation-types.ts';
 import { ENGINE_VERSION } from './longshort-reconciliation-types.ts';
 import { DEFAULT_ROLLING_WINDOW_MS } from './longshort-reconciliation-state.ts';
