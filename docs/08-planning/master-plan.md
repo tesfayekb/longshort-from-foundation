@@ -354,7 +354,7 @@ Establish the trading panel as a third authenticated panel peer to the existing 
 
 ### PLAN-TRADING-001-LONGSHORT-001: Long-Short Strategy Module — FP-005 Bootstrap
 **Parent Plan:** PLAN-TRADING-001
-**Status:** `proposed` (becomes `approved` upon FP-005 ratification)
+**Status:** `closed` (FP-005 ratified, executed, and closed 2026-05-21 — closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md`; ACT-070, ACT-071, ACT-072)
 **Risk Level:** HIGH (Constitution Rule 11 — Critical Module Override: Auth/RBAC/Security modules are ALWAYS classified as HIGH impact; this proposal adds RBAC permission additions + new audit table + new edge function)
 **Module Doc:** [longshort/longshort.md](../04-modules/longshort/longshort.md) (ART-018), [strategy-module-pattern.md](../04-modules/strategy-module-pattern.md) (§Audit-Writer Contract rewrite per DEC-033 v4.1)
 
@@ -377,7 +377,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 - `src/config/trading-navigation.ts` (first exercise of DEC-031 sub-point 6 carve-out)
 - `supabase/functions/_shared/strategy-audit.ts` (platform-tier addition per DEC-033 v4.1)
 - `supabase/functions/longshort-emit-init/` (new edge function)
-- Reference indexes: `permission-index.md`, `route-index.md`, `event-index.md`, `function-index.md`, `artifact-index.md` (ART-018), `database-migration-ledger.md` (MIG-037 + MIG-038), `dependency-map.md`
+- Reference indexes: `permission-index.md`, `route-index.md`, `event-index.md`, `function-index.md`, `artifact-index.md` (ART-018), `database-migration-ledger.md` (MIG-037 + MIG-038). Per Step 5.7 cleanup R8: `dependency-map.md` per-strategy `longshort` row not added — the generic strategy-modules row at line 53 already covers longshort per repo convention; per-strategy rows would inflate the matrix as more strategies land without semantic gain.
 - `.cursorrules` (single-write rule per Round 1.1 D3 — no `.lovable/rules.md` dual-write)
 - `system-state.md` (`longshort: documented-only` → `foundation-implemented` after AC-23)
 
@@ -403,7 +403,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 - [x] No sub-step skipped or merged; sub-step order honored per dependency chain above — *per DEC-032 clause (7) scope-lock enforcement*
 - [x] G1–G5 risk mitigations evidenced in PR descriptions (audit-writer trap rg-zero proof; bootstrap surface vs DEC-032 clause (1) reconciliation; façade export-surface AST test; INC-15 Resolved status; MIG-037 + MIG-038 scoping diff) — *per Round 1.1 G-register*
 - [x] No FP-006 / FP-007 work introduced into any FP-005 PR (trading engine, reconciliation, order management, `longshort.execute`, CI/CD, Tier 3 runbooks, >150s detection, §10.4 items) — *per DEC-032 clause (7) supervisor rejection mandate*
-- [x] Reference indexes updated in same PR as code changes (Constitution Rules 2 + 6): permission-index (`longshort.view`, `longshort.manage`), route-index (`/trading/longshort`), event-index (`longshort.*` audit actions), function-index (`writeStrategyAuditEvent`, `longshortNav`), artifact-index (ART-018), database-migration-ledger (MIG-037, MIG-038)
+- [x] Reference indexes updated in same PR as code changes (Constitution Rules 2 + 6): permission-index (`longshort.view`, `longshort.manage`), route-index (`/trading/longshort`), event-index (`longshort.*` audit actions), function-index (`writeStrategyAuditEvent`), artifact-index (ART-018), database-migration-ledger (MIG-037, MIG-038). Per Step 5.7 cleanup R6: NavSection consts (`longshortNav`) and routed component re-exports (`LongShortDashboardPage`) are not separately registered in function-index — function-index convention is shared helpers only (consistent with Step 5.2 precedent for `LONGSHORT_PERMISSION_KEYS`).
 - [x] `system-state.md` `longshort` state transition: `documented-only` → `foundation-implemented`; `current_plan_version` reflects v12.1
 - [x] FP-005 closure document published at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md`
 

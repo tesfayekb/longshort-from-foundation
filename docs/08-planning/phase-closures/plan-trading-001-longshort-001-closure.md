@@ -66,7 +66,7 @@ Both migrations registered in `docs/07-reference/database-migration-ledger.md`. 
 | `event-index.md` | `longshort.init` (Step 5.3) |
 | `route-index.md` | `/trading/longshort` gated by `longshort.view` (Step 5.5) |
 | `artifact-index.md` | ART-018 — `docs/04-modules/longshort/longshort.md` (Step 5.1) |
-| `function-index.md` | `writeStrategyAuditEvent`, `longshort-emit-init` (Steps 5.0b / 5.3) |
+| `function-index.md` | `writeStrategyAuditEvent` (Step 5.0b — shared helper). Edge function endpoint `longshort-emit-init` (Step 5.3) is not separately registered in function-index per convention (function-index = shared helpers only, not endpoints; per Step 5.7 cleanup R7). |
 | `database-migration-ledger.md` | MIG-037 (Step 5.2), MIG-038 (Step 5.3); Tables-summary 13 → 14 with `longshort_audit_logs` row (this closure) |
 
 ---
