@@ -449,7 +449,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [x] 6.0c — Audit-writer trap rg-zero invariant verified per DEC-034 v13.1 corrected verifier (closed 2026-05-22, ACT-074)
   - [x] 6.1 — Phase 0A residual items + pg_cron precondition check (closed 2026-05-22, ACT-075)
   - [x] 6.2 — Reconciliation engine state-machine + event-log scaffolding (closed 2026-05-22, ACT-076)
-  - [ ] 6.3a — verify_* batch A (#1–#5)
+  - [x] 6.3a — verify_* batch A (#1–#5) (closed 2026-05-22, ACT-077)
   - [ ] 6.3b — verify_* batch B (#6–#10)
   - [ ] 6.3c — verify_* batch C (#11–#14)
   - [ ] 6.3d — verify_* batch D (#15–#17) + Gate 6.3 closure
