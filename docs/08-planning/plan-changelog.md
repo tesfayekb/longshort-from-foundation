@@ -207,6 +207,24 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved |
 | Supersession Links | None — DEC-003 remains active as the scope-discipline anchor; DEC-030 is an amendment, not a supersession |
 
+### v12.1 → v13.0 (2026-05-22)
+
+**Type:** Governance authoring — FP-006 reservation activated; 5 DECs ratified; PLAN-TRADING-001-LONGSHORT-002 created; ADR-002 placeholder positioned
+
+| Field | Value |
+|---|---|
+| Plan Version | v12.1 → v13.0 |
+| Section IDs Created | PLAN-TRADING-001-LONGSHORT-002 |
+| Section IDs Changed | (none) |
+| Decision IDs Affected | DEC-034 (new), DEC-034.1 (new), DEC-035 (new), DEC-036 (new), DEC-037 (new) |
+| What Changed | FP-006 governance authored: residual Phase 0A + entire Phase 0B reconciliation engine + 17 verify_* + replay framework + evidence tooling + Alpaca paper integration + Phase 0B exit gate quietness evidencing |
+| Why | CROSSWIND v0.9 §10.4 architectural commitment ("reconciliation engine built before any business logic"); FP-005 Phase 0A bootstrap closed (9 of 9 sub-steps); FP-006 unblocks Phases 1-9 via Phase 0B closure |
+| What Stayed | All FP-005 outputs, all DEC-030/031/032/033 bindings, all platform-tier modules, all repo-platform foundation, FP-007 reservation per DEC-032 clause (4), all OUT-OF-SCOPE items enumerated in Round 1.4 (Phases 1-9 + DW-046/047/052) |
+| What Was Added | FP-006 entry, PLAN-TRADING-001-LONGSHORT-002 plan section, 5 DECs (DEC-034 invariants, DEC-034.1 architecture, DEC-035 replay determinism + L2 synthetic Day 1, DEC-036 Alpaca paper scope, DEC-037 evidence tooling + Gate 6.4 baseline discipline), ADR-002 placeholder at sibling-of-ADR-001 location, 4 DW entries (DW-054 platform-tier extraction, DW-055 pg_cron contingency, DW-056 real Day 1 capture Phase 7, DW-057 Tier 3 runbook templates emergent) |
+| What Was Removed | None |
+| Approval Status | Approved (Round Final consolidated PR post §22.5 reconciliation — Rounds 1.1 + 1.2 + 1.3 + 1.4 + 2 + 3 + Round Final reconciliation all CLEAN; time-box closed within Session 5; no escalation triggered) |
+| Supersession Links | None (DEC-034.1 specializes DEC-034 but does not supersede it; both are active) |
+
 ### v12.0 → v12.1 (2026-05-17)
 
 **Type:** Additive merge — FP-005 Bootstrap governance authoring (per Constitution Rule 10 — Plan Merge Rule: revisions are additive diffs to the approved baseline, not regenerations)

@@ -1796,6 +1796,22 @@ Each action must include:
 
 ---
 
+### ACT-073 — FP-006 Round Final Consolidated Doc-Only PR Landing (post-reconciliation)
+
+| Field | Value |
+|---|---|
+| Date | 2026-05-22 |
+| Owner | supervisor (Claude) + operator-via-Lovable |
+| Type | governance-authoring |
+| Linked Plan Section | PLAN-TRADING-001-LONGSHORT-002 (newly created) |
+| Linked Decisions | DEC-034 / DEC-034.1 / DEC-035 / DEC-036 / DEC-037 (all newly created) |
+| Linked DW | DW-054 / DW-055 / DW-056 / DW-057 (all newly created) |
+| Status | Closed |
+| Evidence | Commit SHA: (Lovable post-commit); verification log at supervisor scratch `/mnt/user-data/outputs/FP-006-verification-log-round-final.md` (Claude-authored post-commit per §22.6) |
+| Notes | Round Final consolidates FP-006 governance authoring (Rounds 1.1 + 1.2 + 1.3 + 1.4 + 2 + 3 + Round Final §22.5 reconciliation resolving Lovable-surfaced docs/decisions path correction + inline-embed of verbatim DEC bodies). After this PR ratifies, FP-006 execution opens with sub-step 6.0a Lovable execution prompt (mirroring FP-005 Step 5.0a pattern). |
+
+---
+
 ### Watchlist Verification
 
 - Watchlist verification during changes → must reference action tracker entry

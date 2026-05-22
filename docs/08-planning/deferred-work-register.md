@@ -1384,6 +1384,62 @@ At each phase boundary (before advancing to the next phase):
 
 ---
 
+### DW-054 — Platform-Tier Extraction of Reconciliation Engine + 17 verify_* + Replay Framework
+
+| Field | Value |
+|---|---|
+| Source | FP-006 Round 1.1 Q2 amendment (longshort-tier first; extraction post-2nd-strategy) |
+| Description | Extract reconciliation engine + 17 verify_* + replay framework + scenario × verify_* coverage matrix + injected-clock infrastructure from `src/features/longshort/services/reconciliation/` to platform-tier shared helpers at `supabase/functions/_shared/strategy-reconciliation.ts` + `src/features/_shared/reconciliation/` |
+| Trigger Condition | When 2nd strategy module lands (options, futures, spreads, arbitrage, or any non-longshort strategy) requiring reconciliation engine adoption |
+| Blocking Dependencies | 2nd strategy module exists; both modules pass their respective Phase 0B equivalents |
+| Estimated Scope | New platform-tier helper module + 2 strategy-tier refactors to consume shared API + ADR documenting extraction rationale + invariant preservation per DEC-034 |
+| Owner | Future FP supervisor (not yet authored) |
+| Status | Registered |
+
+---
+
+### DW-055 — pg_cron Alternative Evaluation (Contingency)
+
+| Field | Value |
+|---|---|
+| Source | FP-006 Round 1.3 D2 amendment (pg_cron availability hard precondition) |
+| Description | Evaluate Supabase Scheduled Edge Functions or external scheduler (cron-as-a-service; GitHub Actions scheduled workflows) if pg_cron becomes unavailable on the active Supabase tier or project |
+| Trigger Condition | (a) Supabase pg_cron extension disabled on project, OR (b) Supabase Pro tier no longer includes pg_cron, OR (c) operational requirements exceed pg_cron's scheduling granularity / reliability |
+| Blocking Dependencies | Active monitoring of pg_cron availability + Supabase pricing tier changes |
+| Estimated Scope | Substrate evaluation + DEC-034.1 clause (7) amendment if alternative selected + migration of all reconciliation periodic-sweep jobs + A1 baseline aggregation refresh + replay framework chained-execution |
+| Owner | Operator (substrate decision) + future FP supervisor (implementation) |
+| Status | Registered (defensive contingency; pg_cron currently confirmed available at HEAD 1358904 per MIG family 2026-04-12 CREATE EXTENSION) |
+
+---
+
+### DW-056 — Real Day 1 Capture during Phase 7 Paper Trading Validation
+
+| Field | Value |
+|---|---|
+| Source | FP-006 Round 1.3 D3 implication (synthetic Day 1 lock during FP-006; real broker validation deferred to Phase 7 per CROSSWIND §10.11) |
+| Description | Replace synthetic Day 1 fixture at `e2e/longshort/replay-fixtures/day-1-synthetic/` with real captured RTH day from Alpaca paper account operational for one full session. Update scenario × verify_* coverage matrix at `e2e/longshort/replay-fixtures/coverage-matrix.md` to reflect real-broker outcome coverage. Update replay-test PASS baselines |
+| Trigger Condition | Phase 7 (Paper trading validation) FP opens; Alpaca paper account operational for one full RTH session |
+| Blocking Dependencies | Phase 7 FP authored; Phase 0B closed (FP-006 sub-step 6.10); Alpaca paper account credentials provisioned and operational; one full RTH session captured |
+| Estimated Scope | New replay-storage fixtures + matrix updates + replay-test PASS regression validation against the real Day 1 (expected differences from synthetic = synthetic-introduced quirks; real Day 1 becomes the new baseline) |
+| Owner | Future Phase 7 FP supervisor |
+| Status | Registered |
+
+---
+
+### DW-057 — Tier 3 Runbook Templates (Emergent Product)
+
+| Field | Value |
+|---|---|
+| Source | FP-006 Round 1.2 Section 1b residual-count refinement (Tier 3 runbook templates per CROSSWIND §10.3 #3 = substantively-satisfied gap; runbooks are emergent per-component product, not Phase 0A scaffold) |
+| Description | Author Tier 3 operational runbooks for: reconciliation engine periodic-sweep failure recovery; replay framework Day 1 regeneration; Alpaca paper credentials rotation; pg_cron job failure investigation; sustained-anomaly baseline aggregation refresh failure; kill-switch manual activation; Phase 0B firing-quietness investigation procedure |
+| Trigger Condition | Operational gap surfaces during FP-006 execution OR Phase 7+ paper trading reveals procedural pain points |
+| Blocking Dependencies | FP-006 execution in progress (procedural gaps surface during the work); operator identifies which runbooks are highest-leverage |
+| Estimated Scope | New `docs/09-runbooks/` directory + per-component runbook files + integration with operator dashboard / alert routes |
+| Owner | Operator (runbook prioritization) + future runbook-authoring FP |
+| Status | Registered |
+
+---
+
 ## Used By / Affects
 
 - Phase gate closure decisions
