@@ -1013,6 +1013,29 @@ The following must create Action Tracker entries:
 | **Lifecycle** | active |
 | **Added By** | PLAN-INVITE-001 Phase 1 |
 
+### Platform Kill-Switch Permissions (FP-006 Sub-Step 6.1)
+
+#### `system.kill_switches.manage`
+
+| Field | Value |
+|-------|-------|
+| **Module** | platform |
+| **Description** | Manage platform kill-switches (soft-pause, hard-pause, manual-liquidate, resume) across all strategy modules per CROSSWIND §11.6. |
+| **Classification** | security-critical, destructive |
+| **Scope** | system-wide |
+| **Default roles** | superadmin |
+| **Used by** | `AdminKillSwitchPage` (`/admin/kill-switch`); RPC authorization in `kill_switch_*` SECURITY DEFINER functions (via `is_superadmin(auth.uid())` predicate) |
+| **Blast radius** | system-wide |
+| **Approval required** | Yes — Lead + Security |
+| **Audit required** | Yes |
+| **Reauth required** | Yes — enforced at route layer via `<RequireSudo actionKey="kill_switch_route">` per DEC-029 |
+| **Related routes** | `/admin/kill-switch` |
+| **Related functions** | `kill_switch_soft_pause`, `kill_switch_hard_pause`, `kill_switch_manual_liquidate`, `kill_switch_resume` |
+| **Related events** | `kill_switch.soft_pause`, `kill_switch.hard_pause`, `kill_switch.manual_liquidate`, `kill_switch.resume` |
+| **Depends on** | `admin.access` |
+| **Lifecycle** | active |
+| **Added By** | FP-006 sub-step 6.1(d), ACT-075 |
+
 #### `users.invite.manage`
 
 | Field | Value |
