@@ -358,6 +358,16 @@ At each phase boundary (before advancing to the next phase):
 | DW-041 | Cursor-based Pagination (list-users, list-invitations) | Performance review | `unassigned` (v2) | `deferred (v2)` |
 | DW-042 | Trigram Index for ILIKE Search | Performance review | `unassigned` (v2) | `deferred (v2)` |
 | DW-043 | HTTP Cache Headers on Edge Functions | Performance review | `unassigned` (v2) | `deferred (v2)` |
+| DW-044 | Longshort Decision Engine | FP-005 | FP-006 | `deferred` |
+| DW-045 | Longshort Reconciliation Logic | FP-005 | FP-006 | `deferred` |
+| DW-046 | Longshort Order Management / Execution Path | FP-005 | FP-006 | `deferred` |
+| DW-047 | `longshort.execute` Permission Key | FP-005 | FP-006 | `deferred` |
+| DW-048 | Residual CROSSWIND §10.3 Phase 0A Items | FP-005 | FP-006 | `deferred` |
+| DW-049 | All CROSSWIND §10.4 Phase 0B Items | FP-005 | FP-006 | `deferred` |
+| DW-050 | Tier 3 Runbooks Under docs/09-runbooks/ | FP-005 | FP-006 | `deferred` |
+| DW-051 | >150s Long-Running-Job Detection / Hand-Off Pattern | FP-005 | FP-006 | `deferred` |
+| DW-052 | CI/CD Pipeline for longshort | FP-005 | FP-007 | `deferred` |
+| DW-053 | CROSSWIND §15 Risk Register Reconciliation (v0.10) | FP-005 | FP-006 (post-v0.10) | `deferred` |
 
 ### DW-011: Distributed Rate Limiting
 
