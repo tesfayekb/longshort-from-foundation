@@ -1631,3 +1631,33 @@ Key event chains showing upstream triggers and downstream effects:
 - [Function Index](function-index.md)
 - [Route Index](route-index.md)
 - [Permission Index](permission-index.md)
+
+---
+
+## Platform Kill-Switch Events (FP-006 Sub-Step 6.1)
+
+#### `kill_switch.soft_pause` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | platform |
+| **Description** | Soft-pause kill-switch activated for a strategy (halts new entries; existing positions held). |
+| **Emitted by** | `kill_switch_soft_pause()` RPC via SQL-level INSERT into `audit_logs` |
+| **Target table** | `public.audit_logs` (platform — SQL INSERT carve-out per T4 trap) |
+| **Payload schema** | `metadata: { operator_id, strategy_key, reason, state_after: 'soft_paused' }`; `target_type='kill_switches'`; `target_id=NULL` |
+| **Lifecycle** | active |
+| **Added By** | FP-006 sub-step 6.1(d), MIG-040, ACT-075 |
+
+#### `kill_switch.hard_pause` — v1
+
+Same as soft_pause; `state_after='hard_paused'`. Halts all activity including monitoring.
+
+#### `kill_switch.manual_liquidate` — v1
+
+Same as soft_pause; `state_after='liquidating'`; CRITICAL severity. State transition only in sub-step 6.1; order-cancel loop is Phase 5.
+
+#### `kill_switch.resume` — v1
+
+Same as soft_pause; `state_after='active'`. Only valid from `soft_paused`.
