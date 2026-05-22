@@ -715,3 +715,40 @@ Failure to complete this protocol means the task is NOT done, regardless of whet
 If you skip reading governance docs, generate code when blocked, drop plan sections, fail to update documentation, skip phase gate verification, skip testing, claim completion with TODOs or skipped tests, silently fix things outside scope, default to conservative-fix ROI degradation, bypass the trading-panel + strategy-module binding contract, or produce code that is not auditable/diagnosable/testable — the work is INVALID and must be reverted. This is not advisory. This is mandatory.
 
 When in doubt: STOP and ask. The cost of one operator turn is small. The cost of silent regression in a trading system is large.
+
+## Rule 8 — Evidence-Tier Hierarchy (DEC-037 §12.5)
+
+Per CROSSWIND §12.5 (ratified DEC-037), every feature-flagged behavior is governed by a three-tier evidence hierarchy stored in `feature_flags.evidence_tier`:
+
+- `weak` — flag exists, behavior toggleable; no validation evidence required. Default for newly-registered flags.
+- `medium` — flag has documented validation harness output (paper-trade or simulator). May be enabled in non-production paths.
+- `strong` — flag has documented production-equivalent validation evidence per DEC-037 strong-evidence workflow (sub-step 6.4). Required for any code path that affects money or trading decisions in production.
+
+Code generation MUST NOT introduce a feature flag in production money paths at `weak` tier. New flags default to `weak` and require explicit operator promotion through `medium` → `strong` before production-money use. Skipping tiers is a governance violation.
+
+## Rule 9 — Banned Patterns (DEC-034 clauses (2)+(4))
+
+Per DEC-034 clauses (2) and (4), the following patterns are banned in all code paths that touch reconciliation, replay, strategy decisions, or money-affecting logic. The grep verifiers below MUST return zero matches before commit:
+
+1. **Wall-clock in kernels** (DEC-034 clause (2)) — `Date.now()`, `performance.now()`, `datetime.now()`, `time.time()` are banned inside reconciliation/replay/strategy-decision code. Use injected `Clock` or `replay_as_of` parameter.
+   - Verifier: `rg -nE '\b(Date\.now|performance\.now)\(' src/features/*/services/ src/features/*/utils/ supabase/functions/_shared/ --glob '!*.test.*'`
+2. **Silent monetary sentinels** (DEC-034 clause (4)) — `redis.get(k) or 0`, `dict.get(price, 0)`, `value || 0` in money paths are banned. Missing data uses typed `Optional` / explicit enums.
+   - Verifier (TypeScript surrogate): `rg -nE '\|\|\s*0\b' src/features/*/services/ supabase/functions/_shared/strategy-* --glob '!*.test.*'`
+
+If a verifier surfaces a match in non-money-path code, the verifier may be narrowed via explicit `--glob` exclusion in the same commit, but the exclusion MUST be justified in the work-complete summary.
+
+## Rule 10 — Strategy Audit-Writer Trap Awareness (DEC-033 v4.1)
+
+Per DEC-033 v4.1, strategy code (anything under `src/features/<strategy>/` or `supabase/functions/<strategy>-*`) MUST NOT import or call the platform `logAuditEvent` helper from `supabase/functions/_shared/audit.ts`. The platform helper is hardcoded to the platform `audit_logs` table and writing strategy events through it violates T4 isolation (per-strategy audit tables per DEC-031 sub-point 5).
+
+Strategy code MUST use `writeStrategyAuditEvent` from `supabase/functions/_shared/strategy-audit.ts`, which routes to `${strategyKey}_audit_logs`.
+
+Call/import-shaped verifier (per DEC-034 clause (5) corrected pattern; v13.1 baseline):
+
+```bash
+rg -nE 'import\s.*\blogAuditEvent\b|\blogAuditEvent\s*\(' src/features/longshort/ supabase/functions/longshort-* --glob '!*.md'
+```
+
+Expected: empty. Any match (excluding JSDoc and `*.md` documentation) is a structural violation and the change MUST be reverted. JSDoc defense-in-depth comments that mention the banned helper are acceptable and intentionally surfaced via documentation-class exception.
+
+**SQL-level INSERTs into platform `public.audit_logs` from `SECURITY DEFINER` RPCs are NOT subject to this rule** — the trap targets the TypeScript helper, not the table. Platform-tier RPCs (e.g. `kill_switch_*`) emit to `audit_logs` directly via SQL `INSERT`, which is the canonical pattern for platform-tier governance events.
