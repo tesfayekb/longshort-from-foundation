@@ -264,3 +264,76 @@ export interface BrokerRealizedPnLFetcher {
    */
   fetchRealizedPnL(trade_id: string, ts: Date): Promise<BrokerRealizedPnLConfirm>;
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Sub-step 6.3d additions (verify_*'s #15-#17 broker contracts)
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Lot record state for verify_lot_record (#15).
+ * Note: the actual lot ledger table is Phase 1+ work. For 6.3d, the verifier ships with
+ * the contract; mock fetchers exercise it. Real lot ledger integration comes later.
+ */
+export interface BrokerLotRecord {
+  lot_id: string;
+  symbol: string;
+  entry_ts: Date;
+  qty: number;
+  cost_basis: number;
+  side: 'long' | 'short';
+  status: string;
+  locate_id: string | null;
+  fetched_at: Date;
+}
+
+export interface BrokerLotRecordFetcher {
+  /**
+   * Fetch lot record by lot_id. Per §11.0.7 #15: called after every lot write/update per
+   * §7.5/§7.6/§7.9. Zero-tolerance per §11.0.9 line 234.
+   */
+  fetchLotRecord(lot_id: string, ts: Date): Promise<BrokerLotRecord>;
+}
+
+/**
+ * Wash sale record state for verify_wash_sale_record (#16).
+ * Note: wash_sale_events table is Phase 1+ work; mock fetchers for 6.3d.
+ */
+export interface BrokerWashSaleRecord {
+  event_id: string;
+  symbol: string;
+  exit_ts: Date;
+  realized_loss: number;
+  lot_ids_affected: string[];
+  status: string;
+  block_until: Date | null;
+  attached_to_lot_id: string | null;
+  fetched_at: Date;
+}
+
+export interface BrokerWashSaleRecordFetcher {
+  /**
+   * Fetch wash sale event record by event_id. Per §11.0.7 #16. Zero-tolerance per
+   * §11.0.9 line 234. Year-end ground-truth reconciliation against broker 1099-B /
+   * Form 8949 per §11.0.10 Strong+ retention.
+   */
+  fetchWashSaleRecord(event_id: string, ts: Date): Promise<BrokerWashSaleRecord>;
+}
+
+/**
+ * Rebalance aggregate state for verify_rebalance_aggregate (#17). System-level (no symbol).
+ */
+export interface BrokerRebalanceAggregate {
+  long_gross_dollars: number;
+  short_gross_dollars: number;
+  rebalance_completed_at: Date;
+  fetched_at: Date;
+}
+
+export interface BrokerRebalanceAggregateFetcher {
+  /**
+   * Fetch aggregate long/short gross dollars from broker positions per §11.0.7 #17.
+   * Verifies 90-110% band per §1.6. Zero-tolerance per §11.0.9 line 234.
+   * For 6.3d: mock fetcher; real Alpaca /v2/positions integration at 6.7.
+   */
+  fetchRebalanceAggregate(ts: Date): Promise<BrokerRebalanceAggregate>;
+}
