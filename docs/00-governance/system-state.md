@@ -39,13 +39,13 @@ modules_implemented: auth implemented (A+B+D implemented + hardened incl. Google
 # ⚠ active_work — narrative replaced to reflect FP-005 closure
 active_work: FP-005 (Long-Short Strategy Module Bootstrap) CLOSED — all 23 acceptance criteria evidenced; closure document at docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md; ACT-070/071/072 registered. Bootstrap surface live: RBAC seed (MIG-037), per-strategy audit (MIG-038 + longshort-emit-init), façade + page wrapper, route /trading/longshort gated by longshort.view. Reconciliation engine, signal/order logic, longshort.execute, CI/CD all deferred to FP-006 / FP-007 per DEC-032 clauses 2-4 + 7. PLAN-TRADING-001 closed at Step 4; PLAN-TRADING-001-LONGSHORT-001 closed at this FP-005 closure. All prior PLAN-* sections remain CLOSED.
 # ⚠ current_plan_version — minor merge bump per Constitution Rule 10 (Plan Merge Rule)
-current_plan_version: v13.0
-# ⚠ approved_plan_baseline — bumps to v13.0 at FP-006 Round Final doc PR per §22.5 reconciliation
+current_plan_version: v13.1
+# ⚠ approved_plan_baseline — bumps to v13.1 at FP-006 Gate 6.0 closure per DEC-034 clause (5) amendment (Option 1 reconciliation)
 #   resolution. Step 5.0 PR is the approval mechanism (matches v11.0 → v12.0 PR #3
 #   Step 2b precedent). Constitution Rule 9 (Execution Lock) is satisfied: code
 #   execution Steps 5.0a-5.6 cannot begin until v12.1 baseline is approved, which
 #   it becomes at Step 5.0 PR merge.
-approved_plan_baseline: v13.0
+approved_plan_baseline: v13.1
 plan_status: approved
 artifact_governance: active (artifact-index.md, database-migration-ledger.md, phase-closures/)
 deferred_work_open: []
