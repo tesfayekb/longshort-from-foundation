@@ -2051,6 +2051,23 @@ Over time, action outcomes may become invalid due to later changes:
 
 ---
 
+### ACT-080: FP-006 Sub-Step 6.3c — verify_* Batch C (#11–#14)
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-080 |
+| **Date** | 2026-05-22 |
+| **Action** | Closed FP-006 sub-step 6.3c by landing verify_* batch C: #11 verify_corporate_action_clean (Low/strong + expected-divergence-aware + 48h structural escalation per §11.0.9 line 272 — FIRST verifier combining count-based escalation with structural single-firing escalation when divergence persists beyond the 48h documented operational window; T+0–T+1 propagation emits `expected_divergence_handled`, 24–48h emits `failure_handled`, beyond 48h emits `failure_escalated` + operator alert), #12 verify_settlement_status (Zero/strong + expected-divergence-aware — FIRST hybrid Zero/expected-div verifier per §11.0.9 line 235 verbatim: pre-T+1 unsettled emits `expected_divergence_handled` and does not count, post-T+1 unsettled emits `failure_escalated` immediately), #13 verify_order_acceptance (Zero/strong + TRI-STATE — second tri-state verifier after #5; DEC-035 clause (4) ≥3 scenarios satisfied via accepted/rejected/pending branches with pending sub-classified by 60s elapsed threshold per §11.0.7 #13 verbatim; cancel-and-retry EXPLICITLY NOT exercised per §11.0.7 ban — implementation can never emit `action_taken='cancel_and_retry'`), #14 verify_realized_pnl (Zero/**strong_plus** — FIRST strong_plus tier verifier outside #1 verify_position; tax/regulatory retention indefinite per §11.0.10 line 334; 1¢ tolerance per §11.0.9 line 226). 4 new broker fetcher interfaces appended to `_shared/longshort-broker-interfaces.ts` (BrokerCorporateActionFetcher, BrokerSettlementStatusFetcher, BrokerOrderAcceptanceFetcher, BrokerRealizedPnLFetcher). IMPLEMENTED_VERIFIERS array extended from 10 to 14 entries. Combined Deno test file extended with 18 new test cases (AC-26..AC-29); two cumulative registry-membership tests updated to 14-entry assertion (same concession pattern as 6.3b). Verifiers do NOT yet dispatch from edge functions — that integration lands at sub-step 6.3d Gate 6.3 closure. Master-plan 6.3c ticked. |
+| **Type** | Feature (financial-critical reconciliation verifiers, batch C) |
+| **Impact Classification** | High (post-trade verification surface; #14 is Strong+ tax/regulatory; #13 is order-acceptance gate; #11 + #12 cover corporate-action + settlement boundary cases) |
+| **Modules Affected** | longshort (4 new verifiers + 4 broker contracts); reconciliation engine (exercises hybrid Zero/expected-div outcome routing in #12 + second tri-state classifier in #13 + first strong_plus tier outside #1 in #14) |
+| **Files Changed** | `supabase/functions/_shared/longshort-broker-interfaces.ts` (append 4 contracts); 4 new verifier modules under `supabase/functions/_shared/longshort-verifiers/`; `supabase/functions/_shared/longshort-verifiers/index.ts` (extend registry 10→14 + 4 re-exports); `supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts` (append 18 cases + update 2 registry tests); `docs/07-reference/function-index.md` (4 verifier + 4 broker-interface entries); `docs/06-tracking/action-tracker.md` (this ACT-080); `docs/08-planning/master-plan.md` (6.3c tick) |
+| **Related Tests** | `deno test supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts` — 61 tests total (23 from 6.3a + 20 from 6.3b + 18 from 6.3c), all green; bare invocation per 6.3a.1 fix. Registry-membership tests updated from 10-element to 14-element assertion (concession; documented). |
+| **Evidence** | AC-26..AC-29 evidenced via Deno test suite. #11 emits all four outcomes across the propagation/24h/48h boundaries. #12 hybrid Zero/expected-div verified (pre-T+1 → expected_divergence_handled; post-T+1 → failure_escalated). #13 all three tri-state branches present in spec + tests; pending sub-classified by elapsed; cancel-and-retry NEVER emitted (test asserts action_taken !== 'cancel_and_retry' on rejected branch). #14 spec.tier === 'strong_plus' asserted explicitly (first verifier outside #1). Banned-pattern enforcement: no `Date.now()` / `new Date()` outside test fixtures, no sentinel `?? 0` in monetary paths in the 4 new verifier files. 6.3a + 6.3b verifier files + lifecycle/types/state/clock/supabase-admin engine modules untouched. |
+| **Status** | Verified |
+
+---
+
 ## Dependencies
 
 - [Definition of Done](../00-governance/definition-of-done.md) — requires action tracker update

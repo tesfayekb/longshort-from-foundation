@@ -27,6 +27,10 @@ import {
   buildVerifyBorrowPersistenceSpec,
   buildVerifyBuyingPowerSpec,
   buildVerifyUniverseMembershipSpec,
+  buildVerifyCorporateActionCleanSpec,
+  buildVerifySettlementStatusSpec,
+  buildVerifyOrderAcceptanceSpec,
+  buildVerifyRealizedPnLSpec,
   IMPLEMENTED_VERIFIERS,
   isVerifierImplemented,
 } from './index.ts';
@@ -265,7 +269,7 @@ Deno.test('AC-20: verify_ssr_status — state=indeterminate → failure_handled 
 
 // ─── Registry sanity ───────────────────────────────────────────────
 
-Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 10 batch-A+B verifiers in canonical order', () => {
+Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 14 batch-A+B+C verifiers in canonical order', () => {
   assertEquals(IMPLEMENTED_VERIFIERS, [
     'verify_position',
     'verify_quote',
@@ -277,15 +281,22 @@ Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 10 batch-A+B verifier
     'verify_borrow_persistence',
     'verify_buying_power',
     'verify_universe_membership',
+    'verify_corporate_action_clean',
+    'verify_settlement_status',
+    'verify_order_acceptance',
+    'verify_realized_pnl',
   ]);
 });
 
-Deno.test('Registry — isVerifierImplemented reflects batch-A+B membership', () => {
+Deno.test('Registry — isVerifierImplemented reflects batch-A+B+C membership', () => {
   assertEquals(isVerifierImplemented('verify_position'), true);
   assertEquals(isVerifierImplemented('verify_halt_status'), true);
   assertEquals(isVerifierImplemented('verify_universe_membership'), true);
-  // Batch C/D (#11-#17) not yet implemented:
-  assertEquals(isVerifierImplemented('verify_corporate_action_clean'), false);
+  assertEquals(isVerifierImplemented('verify_corporate_action_clean'), true);
+  assertEquals(isVerifierImplemented('verify_realized_pnl'), true);
+  // Batch D (#15-#17) not yet implemented:
+  assertEquals(isVerifierImplemented('verify_lot_record'), false);
+  assertEquals(isVerifierImplemented('verify_wash_sale_record'), false);
   assertEquals(isVerifierImplemented('verify_rebalance_aggregate'), false);
 });
 
@@ -509,4 +520,226 @@ Deno.test('AC-25: verify_universe_membership — consistent inclusion → false_
   };
   const div = spec.compute_divergence({ in_universe: true }, observed);
   assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+// ─── AC-26: verify_corporate_action_clean (#11 — Low + expected-div + 48h structural) ───
+
+Deno.test('AC-26: verify_corporate_action_clean spec — strong + low_tolerance', () => {
+  const spec = buildVerifyCorporateActionCleanSpec({ symbol: 'AAPL', operator_id: OP });
+  assertEquals(spec.call_name, 'verify_corporate_action_clean');
+  assertEquals(spec.tier, 'strong');
+  assertEquals(spec.tolerance_class, 'low_tolerance');
+  assertEquals(spec.symbol, 'AAPL');
+});
+
+Deno.test('AC-26: verify_corporate_action_clean — no recent action → false_positive_within_tolerance', () => {
+  const spec = buildVerifyCorporateActionCleanSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', recent_action_within_lookback: false, action_type: null,
+    action_ts: null, broker_basis_adjusted: false, hours_since_action: null,
+    fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+Deno.test('AC-26: verify_corporate_action_clean — recent action + broker_basis_adjusted → false_positive_within_tolerance', () => {
+  const spec = buildVerifyCorporateActionCleanSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', recent_action_within_lookback: true, action_type: 'split',
+    action_ts: new Date(0), broker_basis_adjusted: true, hours_since_action: 12,
+    fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+Deno.test('AC-26: verify_corporate_action_clean — T+0 to T+1 (hours<24) → expected_divergence_handled', () => {
+  const spec = buildVerifyCorporateActionCleanSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', recent_action_within_lookback: true, action_type: 'split',
+    action_ts: new Date(0), broker_basis_adjusted: false, hours_since_action: 12,
+    fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'expected_divergence_handled');
+});
+
+Deno.test('AC-26: verify_corporate_action_clean — 24-48h window → failure_handled (count-based)', () => {
+  const spec = buildVerifyCorporateActionCleanSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', recent_action_within_lookback: true, action_type: 'split',
+    action_ts: new Date(0), broker_basis_adjusted: false, hours_since_action: 36,
+    fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
+  // failure_action invoked here per lifecycle guard
+});
+
+Deno.test('AC-26: verify_corporate_action_clean — beyond 48h → failure_escalated + operator_alert_corporate_action_unresolved_48h', async () => {
+  const spec = buildVerifyCorporateActionCleanSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', recent_action_within_lookback: true, action_type: 'split',
+    action_ts: new Date(0), broker_basis_adjusted: false, hours_since_action: 72,
+    fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_escalated', divergence: div, expected: null, observed,
+  });
+  assertEquals(action.action_taken, 'operator_alert_corporate_action_unresolved_48h');
+});
+
+// ─── AC-27: verify_settlement_status (#12 — hybrid Zero + expected-div per §11.0.9 line 235) ───
+
+Deno.test('AC-27: verify_settlement_status spec — strong + zero_tolerance (post-T+1 path) + expected-div for pre-T+1', () => {
+  const spec = buildVerifySettlementStatusSpec({ symbol: 'AAPL', side: 'long', operator_id: OP });
+  assertEquals(spec.call_name, 'verify_settlement_status');
+  assertEquals(spec.tier, 'strong');
+  assertEquals(spec.tolerance_class, 'zero_tolerance');
+  assertEquals(spec.symbol, 'AAPL');
+});
+
+Deno.test('AC-27: verify_settlement_status — settled=true → false_positive_within_tolerance', () => {
+  const spec = buildVerifySettlementStatusSpec({ symbol: 'AAPL', side: 'long', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', side: 'long' as const, trade_ts: new Date('2026-01-01T10:00:00Z'),
+    settled: true,
+    expected_settlement_ts: new Date('2026-01-02T16:00:00Z'),
+    fetched_at: new Date('2026-01-03T10:00:00Z'),
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+Deno.test('AC-27: verify_settlement_status — pre-T+1 unsettled → expected_divergence_handled (does not count)', () => {
+  const spec = buildVerifySettlementStatusSpec({ symbol: 'AAPL', side: 'short', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', side: 'short' as const, trade_ts: new Date('2026-01-01T10:00:00Z'),
+    settled: false,
+    expected_settlement_ts: new Date('2026-01-02T16:00:00Z'),
+    fetched_at: new Date('2026-01-02T10:00:00Z'),  // before expected_settlement_ts
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'expected_divergence_handled');
+});
+
+Deno.test('AC-27: verify_settlement_status — post-T+1 unsettled → failure_escalated (Zero-tolerance per §11.0.9 line 235)', async () => {
+  const spec = buildVerifySettlementStatusSpec({ symbol: 'AAPL', side: 'short', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', side: 'short' as const, trade_ts: new Date('2026-01-01T10:00:00Z'),
+    settled: false,
+    expected_settlement_ts: new Date('2026-01-02T16:00:00Z'),
+    fetched_at: new Date('2026-01-03T16:00:00Z'),  // 24h past expected
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_escalated', divergence: div, expected: null, observed,
+  });
+  assertEquals(action.action_taken, 'post_t1_unsettled_operator_alert_emitted');
+});
+
+// ─── AC-28: verify_order_acceptance (#13 — TRI-STATE, second after #5) ───
+
+Deno.test('AC-28: verify_order_acceptance spec — strong + zero_tolerance + tri-state', () => {
+  const spec = buildVerifyOrderAcceptanceSpec({ order_id: 'ord-1', symbol: 'AAPL', operator_id: OP });
+  assertEquals(spec.call_name, 'verify_order_acceptance');
+  assertEquals(spec.tier, 'strong');
+  assertEquals(spec.tolerance_class, 'zero_tolerance');
+  assertEquals(spec.symbol, 'AAPL');
+});
+
+Deno.test('AC-28: verify_order_acceptance — state=accepted → false_positive_within_tolerance', () => {
+  const spec = buildVerifyOrderAcceptanceSpec({ order_id: 'ord-1', symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    order_id: 'ord-1', symbol: 'AAPL', state: 'accepted' as const,
+    rejection_reason: null, pending_elapsed_s: 0, fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+Deno.test('AC-28: verify_order_acceptance — state=rejected → failure_escalated + order_marked_rejected_no_retry', async () => {
+  const spec = buildVerifyOrderAcceptanceSpec({ order_id: 'ord-1', symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    order_id: 'ord-1', symbol: 'AAPL', state: 'rejected' as const,
+    rejection_reason: 'insufficient_buying_power', pending_elapsed_s: 0, fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_escalated', divergence: div, expected: null, observed,
+  });
+  assertEquals(action.action_taken, 'order_marked_rejected_no_retry');
+  // Confirm cancel-and-retry NEVER emitted per §11.0.7 ban
+  assertEquals(action.action_taken === 'cancel_and_retry', false);
+});
+
+Deno.test('AC-28: verify_order_acceptance — state=pending elapsed<60s → failure_handled + polling_escalated_2s_interval', async () => {
+  const spec = buildVerifyOrderAcceptanceSpec({ order_id: 'ord-1', symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    order_id: 'ord-1', symbol: 'AAPL', state: 'pending' as const,
+    rejection_reason: null, pending_elapsed_s: 15, fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_handled', divergence: div, expected: null, observed,
+  });
+  assertEquals(action.action_taken, 'polling_escalated_2s_interval');
+});
+
+Deno.test('AC-28: verify_order_acceptance — state=pending elapsed>60s → failure_escalated + operator_alert_pending_60s_exceeded', async () => {
+  const spec = buildVerifyOrderAcceptanceSpec({ order_id: 'ord-1', symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    order_id: 'ord-1', symbol: 'AAPL', state: 'pending' as const,
+    rejection_reason: null, pending_elapsed_s: 75, fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_escalated', divergence: div, expected: null, observed,
+  });
+  assertEquals(action.action_taken, 'operator_alert_pending_60s_exceeded');
+});
+
+// ─── AC-29: verify_realized_pnl (#14 — Zero + STRONG_PLUS first outside #1) ───
+
+Deno.test('AC-29: verify_realized_pnl spec — strong_plus + zero_tolerance + 1¢ tolerance config (first strong_plus outside #1)', () => {
+  const spec = buildVerifyRealizedPnLSpec({ symbol: 'AAPL', operator_id: OP });
+  assertEquals(spec.call_name, 'verify_realized_pnl');
+  assertEquals(spec.tier, 'strong_plus');
+  assertEquals(spec.tolerance_class, 'zero_tolerance');
+  assertEquals(
+    (spec.tolerance as { diff_tolerance_cents: number }).diff_tolerance_cents,
+    1,
+  );
+});
+
+Deno.test('AC-29: verify_realized_pnl — diff_cents <= 1 → false_positive_within_tolerance', () => {
+  const spec = buildVerifyRealizedPnLSpec({ symbol: 'AAPL', operator_id: OP });
+  // claimed=100.005, broker=100.00 -> diff=$0.005 -> 0.5¢ < 1¢
+  const observed = {
+    trade_id: 't-1', symbol: 'AAPL', broker_confirmed_pnl: 100.00,
+    trade_ts: new Date(0), fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ trade_id: 't-1', claimed_pnl: 100.005 }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+Deno.test('AC-29: verify_realized_pnl — diff_cents > 1 → failure_escalated + realized_pnl_divergence_operator_alert_emitted', async () => {
+  const spec = buildVerifyRealizedPnLSpec({ symbol: 'AAPL', operator_id: OP });
+  // claimed=100.00, broker=100.05 -> diff=$0.05 -> 5¢ > 1¢
+  const observed = {
+    trade_id: 't-1', symbol: 'AAPL', broker_confirmed_pnl: 100.05,
+    trade_ts: new Date(0), fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ trade_id: 't-1', claimed_pnl: 100.00 }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_escalated', divergence: div, expected: { trade_id: 't-1', claimed_pnl: 100.00 }, observed,
+  });
+  assertEquals(action.action_taken, 'realized_pnl_divergence_operator_alert_emitted');
 });
