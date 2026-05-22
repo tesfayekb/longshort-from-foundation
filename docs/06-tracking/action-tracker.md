@@ -2034,6 +2034,23 @@ Over time, action outcomes may become invalid due to later changes:
 
 ---
 
+### ACT-079: FP-006 Sub-Step 6.3b — verify_* Batch B (#6–#10)
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-079 |
+| **Date** | 2026-05-22 |
+| **Action** | Closed FP-006 sub-step 6.3b by landing verify_* batch B: #6 verify_halt_status (Low/strong), #7 verify_borrow_rate (Low/strong + 200bps magnitude per §11.0.9 line 271), #8 verify_borrow_persistence (Low/strong + expected-divergence-aware — FIRST use of `expected_divergence_handled` outcome per §11.0.7 #8 + §11.0.9 line 283; lifecycle's shouldRunAction guard suppresses failure_action for that outcome and updateStateSurface omits it from the firing count), #9 verify_buying_power (Low/strong + 10% magnitude per §11.0.9 line 269 + SYSTEM-LEVEL with `symbol: null` — FIRST system-level verifier exercising the lifecycle's symbol=null skip-state-surface branch from 6.2/6.3a.1), #10 verify_universe_membership (Low/strong + structural escalation per §11.0.9 line 273 — FIRST structural-escalation classifier where `materially_excluded` condition (exclusion_reasons intersects `{in_ma, halted_5d_plus}`) triggers single-firing `failure_escalated`). 5 new broker fetcher interfaces appended to `_shared/longshort-broker-interfaces.ts` (BrokerHaltStatusFetcher, BrokerBorrowRateFetcher, BrokerLocatePersistenceFetcher, BrokerBuyingPowerFetcher, UniverseMembershipFetcher). IMPLEMENTED_VERIFIERS array in `_shared/longshort-verifiers/index.ts` extended from 5 to 10 entries. Combined Deno test file extended with 20 new test cases targeting batch B; two existing registry-membership tests updated to match the new 10-entry registry. Sub-step 6.3b checkbox ticked in master-plan. Verifiers do NOT yet dispatch from edge functions — that integration lands at sub-step 6.3d Gate 6.3 closure. |
+| **Type** | Feature (financial-critical reconciliation verifiers, batch B) |
+| **Impact Classification** | High (pre-trade gates: halt / borrow availability + rate + persistence / buying power / universe membership — all guard real trade decisions) |
+| **Modules Affected** | longshort (5 new verifiers + 5 broker contracts); reconciliation engine (now exercises `expected_divergence_handled` outcome + system-level `symbol: null` + structural-escalation classifier — all three first-occurrences) |
+| **Files Changed** | `supabase/functions/_shared/longshort-broker-interfaces.ts` (append 5 contracts); 5 new verifier modules under `supabase/functions/_shared/longshort-verifiers/`; `supabase/functions/_shared/longshort-verifiers/index.ts` (extend registry to 10 + add 5 re-exports); `supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts` (append 20 cases + update 2 registry tests); `docs/07-reference/function-index.md` (5 verifier + 5 broker-interface entries); `docs/06-tracking/action-tracker.md` (this ACT-079); `docs/08-planning/master-plan.md` (6.3b tick) |
+| **Related Tests** | `deno test supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts` — 43 tests total (23 from 6.3a + 20 from 6.3b), all green; bare invocation (no `--no-check`, no dummy env per 6.3a.1 fix). The two updated registry-membership tests (Registry — IMPLEMENTED_VERIFIERS contains all 10 batch-A+B verifiers; Registry — isVerifierImplemented reflects batch-A+B membership) were modified rather than appended because the assertion targets the cumulative registry; this is an additive change — no 6.3a behavioral test was modified. |
+| **Evidence** | AC-21..25 evidenced via Deno test suite covering spec shape, classify_outcome rules per §11.0.9 + §11.0.7, magnitude/structural escalation, expected-divergence-aware outcome (#8 emits `expected_divergence_handled` for end-of-TTL and `failure_handled` for pre-TTL disappearance), system-level symbol=null path (#9 spec asserts `symbol === null`), structural classifier (#10 emits `failure_escalated` for materially_excluded). Banned-pattern enforcement: no `Date.now()` / `new Date()` outside test fixtures / sentinel `?? 0` in monetary paths in any of the 5 new verifier files; audit-writer trap rg-zero maintained per FINDING-001 documented exception at `longshort-reconciliation-lifecycle.ts:23` (FOLLOWUP-004 → 6.4). 6.3a verifier files + lifecycle/types/state/clock/supabase-admin engine modules untouched. |
+| **Status** | Verified |
+
+---
+
 ## Dependencies
 
 - [Definition of Done](../00-governance/definition-of-done.md) — requires action tracker update

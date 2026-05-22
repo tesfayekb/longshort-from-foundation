@@ -1737,3 +1737,82 @@ The 5 verifiers below are importable Deno shared modules under `supabase/functio
 | `BrokerQuoteFetcher` | same | verifyQuote, verifyQuoteFreshness | sub-step 6.7 |
 | `BrokerLocateFetcher` | same | verifyShortAvailability | sub-step 6.7 |
 | `BrokerSSRStatusFetcher` | same | verifySSRStatus | sub-step 6.7 |
+
+### verify_* Batch B (#6–#10) — sub-step 6.3b (ACT-079)
+
+The 5 verifiers below extend the Batch A registry. Same module path + spec/wrapper shape per Batch A; tolerance + escalation per CROSSWIND §11.0.9. Three first-occurrence cases land here: #8 emits `expected_divergence_handled` (lifecycle's shouldRunAction guard suppresses failure_action), #9 is the first system-level verifier (symbol=null; lifecycle skips state surface), #10 is the first structural-escalation classifier (categorical materially_excluded condition).
+
+#### `verifyHaltStatus`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3b) |
+| **Classification** | financial-critical (strong tier per §11.0.10) |
+| **Signature** | `verifyHaltStatus(args: {symbol, operator_id}, fetcher: BrokerHaltStatusFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_halt_status.ts` |
+| **Tolerance class** | low_tolerance per §11.0.9 line 247 (3 firings in 1h escalates) |
+| **Failure action** | `name_skipped_halted_this_tick` per §11.0.7 #6 |
+| **Side effects** | Via reconcile() lifecycle: INSERT row in reconciliation_events; upsert row in longshort_reconciliation_state |
+| **Determinism** | Pure given (args, fetcher, ts); replay-safe per DEC-035 clause (1) |
+| **Added by** | FP-006 sub-step 6.3b, ACT-079 |
+
+#### `verifyBorrowRate`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3b) |
+| **Classification** | financial-critical (strong tier per §11.0.10) |
+| **Signature** | `verifyBorrowRate(args: {symbol, operator_id, internal_rate_pct}, fetcher: BrokerBorrowRateFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_borrow_rate.ts` |
+| **Tolerance class** | low_tolerance per §11.0.9 line 249 + 200bps single-firing magnitude escalation per §11.0.9 line 271 |
+| **Failure action** | `short_entry_blocked_htb_or_rate_divergence` per §11.0.7 #7 |
+| **Determinism** | Pure given (args, fetcher, ts) |
+| **Added by** | FP-006 sub-step 6.3b, ACT-079 |
+
+#### `verifyBorrowPersistence`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3b) |
+| **Classification** | financial-critical (strong tier per §11.0.10) — EXPECTED-DIVERGENCE-AWARE per §11.0.7 #8 |
+| **Signature** | `verifyBorrowPersistence(args: {symbol, operator_id, locate_id}, fetcher: BrokerLocatePersistenceFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_borrow_persistence.ts` |
+| **Tolerance class** | low_tolerance per §11.0.9 line 250 |
+| **Failure action** | end-of-TTL → `expected_divergence_handled` (no action; lifecycle guard skips); pre-TTL disappearance → `locate_lost_pre_ttl_short_close_required` |
+| **Coverage** | DEC-035 clause (4) — first emission of `expected_divergence_handled` outcome in the engine |
+| **Added by** | FP-006 sub-step 6.3b, ACT-079 |
+
+#### `verifyBuyingPower`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3b) |
+| **Classification** | financial-critical (strong tier per §11.0.10) — SYSTEM-LEVEL (symbol=null) per §11.0.7 #9 |
+| **Signature** | `verifyBuyingPower(args: {operator_id, expected_bp, requested_position_size}, fetcher: BrokerBuyingPowerFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_buying_power.ts` |
+| **Tolerance class** | low_tolerance per §11.0.9 line 245 + 10% pct-divergence single-firing magnitude escalation per §11.0.9 line 269 |
+| **Failure action** | insufficient_for_request → `entry_skipped_insufficient_bp`; pct_diff divergence → `bp_divergence_logged` |
+| **State surface** | Lifecycle skips per-symbol state surface (symbol=null); evidence lives in `reconciliation_events` only — first verifier exercising this branch |
+| **Added by** | FP-006 sub-step 6.3b, ACT-079 |
+
+#### `verifyUniverseMembership`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3b) |
+| **Classification** | financial-critical (strong tier per §11.0.10) — STRUCTURAL ESCALATION per §11.0.9 line 273 |
+| **Signature** | `verifyUniverseMembership(args: {symbol, operator_id, internal_in_universe}, fetcher: UniverseMembershipFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_universe_membership.ts` |
+| **Tolerance class** | low_tolerance per §11.0.9 line 246 + categorical structural escalation when `exclusion_reasons` intersects `{in_ma, halted_5d_plus}` |
+| **Failure action** | materially_excluded → `entry_blocked_materially_excluded`; otherwise → `entry_blocked_universe_membership_failure` |
+| **Added by** | FP-006 sub-step 6.3b, ACT-079 |
+
+#### Broker fetcher interfaces — sub-step 6.3b (ACT-079)
+
+| Interface | File | Consumed by | Real impl |
+|---|---|---|---|
+| `BrokerHaltStatusFetcher` | `supabase/functions/_shared/longshort-broker-interfaces.ts` | verifyHaltStatus | sub-step 6.7 (Alpaca paper) |
+| `BrokerBorrowRateFetcher` | same | verifyBorrowRate | sub-step 6.7 |
+| `BrokerLocatePersistenceFetcher` | same | verifyBorrowPersistence | sub-step 6.7 |
+| `BrokerBuyingPowerFetcher` | same | verifyBuyingPower | sub-step 6.7 |
+| `UniverseMembershipFetcher` | same | verifyUniverseMembership | sub-step 6.7 |

@@ -22,6 +22,11 @@ import {
   buildVerifyQuoteFreshnessSpec,
   buildVerifyShortAvailabilitySpec,
   buildVerifySSRStatusSpec,
+  buildVerifyHaltStatusSpec,
+  buildVerifyBorrowRateSpec,
+  buildVerifyBorrowPersistenceSpec,
+  buildVerifyBuyingPowerSpec,
+  buildVerifyUniverseMembershipSpec,
   IMPLEMENTED_VERIFIERS,
   isVerifierImplemented,
 } from './index.ts';
@@ -260,17 +265,248 @@ Deno.test('AC-20: verify_ssr_status — state=indeterminate → failure_handled 
 
 // ─── Registry sanity ───────────────────────────────────────────────
 
-Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 5 batch-A verifiers in canonical order', () => {
+Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 10 batch-A+B verifiers in canonical order', () => {
   assertEquals(IMPLEMENTED_VERIFIERS, [
     'verify_position',
     'verify_quote',
     'verify_quote_freshness',
     'verify_short_availability',
     'verify_ssr_status',
+    'verify_halt_status',
+    'verify_borrow_rate',
+    'verify_borrow_persistence',
+    'verify_buying_power',
+    'verify_universe_membership',
   ]);
 });
 
-Deno.test('Registry — isVerifierImplemented reflects batch-A membership', () => {
+Deno.test('Registry — isVerifierImplemented reflects batch-A+B membership', () => {
   assertEquals(isVerifierImplemented('verify_position'), true);
-  assertEquals(isVerifierImplemented('verify_halt_status'), false);
+  assertEquals(isVerifierImplemented('verify_halt_status'), true);
+  assertEquals(isVerifierImplemented('verify_universe_membership'), true);
+  // Batch C/D (#11-#17) not yet implemented:
+  assertEquals(isVerifierImplemented('verify_corporate_action_clean'), false);
+  assertEquals(isVerifierImplemented('verify_rebalance_aggregate'), false);
+});
+
+// ─── AC-21: verify_halt_status (#6 — Low/strong) ──────────────────
+
+Deno.test('AC-21: verify_halt_status spec — strong + low_tolerance', () => {
+  const spec = buildVerifyHaltStatusSpec({ symbol: 'AAPL', operator_id: OP });
+  assertEquals(spec.call_name, 'verify_halt_status');
+  assertEquals(spec.tier, 'strong');
+  assertEquals(spec.tolerance_class, 'low_tolerance');
+  assertEquals(spec.symbol, 'AAPL');
+});
+
+Deno.test('AC-21: verify_halt_status — halted=true → failure_handled + name_skipped_halted_this_tick', async () => {
+  const spec = buildVerifyHaltStatusSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = { symbol: 'AAPL', halted: true, halt_reason: 'T1', fetched_at: new Date(0) };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_handled', divergence: div, expected: null, observed,
+  });
+  assertEquals(action.action_taken, 'name_skipped_halted_this_tick');
+});
+
+Deno.test('AC-21: verify_halt_status — halted=false → false_positive_within_tolerance', () => {
+  const spec = buildVerifyHaltStatusSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = { symbol: 'AAPL', halted: false, halt_reason: null, fetched_at: new Date(0) };
+  const div = spec.compute_divergence(null, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+// ─── AC-22: verify_borrow_rate (#7 — Low/strong + 200bps magnitude) ──
+
+Deno.test('AC-22: verify_borrow_rate spec — strong + low_tolerance + 200bps magnitude config (§11.0.9 line 271)', () => {
+  const spec = buildVerifyBorrowRateSpec({ symbol: 'GME', operator_id: OP });
+  assertEquals(spec.tier, 'strong');
+  assertEquals(spec.tolerance_class, 'low_tolerance');
+  assertEquals((spec.tolerance as { bps_magnitude_escalation: number }).bps_magnitude_escalation, 200);
+  assertEquals((spec.tolerance as { bps_tolerance: number }).bps_tolerance, 50);
+});
+
+Deno.test('AC-22: verify_borrow_rate — bps_diff >= 200 → failure_escalated (magnitude per §11.0.9 line 271)', () => {
+  const spec = buildVerifyBorrowRateSpec({ symbol: 'GME', operator_id: OP });
+  // internal 1.0%, observed 4.0% → 300bps diff
+  const observed = { symbol: 'GME', annual_rate_pct: 4.0, is_htb: false, fetched_at: new Date(0) };
+  const div = spec.compute_divergence({ annual_rate_pct: 1.0 }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+});
+
+Deno.test('AC-22: verify_borrow_rate — broker is_htb=true while internal rate is finite → failure_handled', async () => {
+  const spec = buildVerifyBorrowRateSpec({ symbol: 'GME', operator_id: OP });
+  // internal 2.0%, observed 2.5% with is_htb=true → 50bps diff, broker says HTB
+  const observed = { symbol: 'GME', annual_rate_pct: 2.5, is_htb: true, fetched_at: new Date(0) };
+  const div = spec.compute_divergence({ annual_rate_pct: 2.0 }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_handled', divergence: div,
+    expected: { annual_rate_pct: 2.0 }, observed,
+  });
+  assertEquals(action.action_taken, 'short_entry_blocked_htb_or_rate_divergence');
+});
+
+Deno.test('AC-22: verify_borrow_rate — bps_diff within 50bps tolerance → false_positive_within_tolerance', () => {
+  const spec = buildVerifyBorrowRateSpec({ symbol: 'GME', operator_id: OP });
+  // internal 3.00%, observed 3.10% → 10bps diff
+  const observed = { symbol: 'GME', annual_rate_pct: 3.10, is_htb: false, fetched_at: new Date(0) };
+  const div = spec.compute_divergence({ annual_rate_pct: 3.00 }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+// ─── AC-23: verify_borrow_persistence (#8 — EXPECTED-DIVERGENCE-AWARE — FIRST USE) ──
+
+Deno.test('AC-23: verify_borrow_persistence spec — strong + low_tolerance + expected-divergence-aware', () => {
+  const spec = buildVerifyBorrowPersistenceSpec({ symbol: 'GME', operator_id: OP });
+  assertEquals(spec.call_name, 'verify_borrow_persistence');
+  assertEquals(spec.tier, 'strong');
+  assertEquals(spec.tolerance_class, 'low_tolerance');
+});
+
+Deno.test('AC-23: verify_borrow_persistence — end-of-TTL (still_valid=false, expired_at_ttl=true) → expected_divergence_handled (does NOT count toward escalation)', () => {
+  const spec = buildVerifyBorrowPersistenceSpec({ symbol: 'GME', operator_id: OP });
+  const observed = {
+    symbol: 'GME', locate_id: 'L1', still_valid: false, expired_at_ttl: true,
+    ttl_expires_at: new Date(0), fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ locate_id: 'L1' }, observed);
+  // FIRST emission of expected_divergence_handled in batch B.
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'expected_divergence_handled');
+  // Lifecycle's shouldRunAction guard excludes expected_divergence_handled → failure_action is not invoked.
+  // This is enforced by reconciliation-lifecycle.ts; here we just confirm the classifier emits the right outcome.
+});
+
+Deno.test('AC-23: verify_borrow_persistence — pre-TTL disappearance → failure_handled + locate_lost_pre_ttl_short_close_required', async () => {
+  const spec = buildVerifyBorrowPersistenceSpec({ symbol: 'GME', operator_id: OP });
+  const observed = {
+    symbol: 'GME', locate_id: 'L1', still_valid: false, expired_at_ttl: false,
+    ttl_expires_at: new Date(10_000), fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ locate_id: 'L1' }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_handled', divergence: div,
+    expected: { locate_id: 'L1' }, observed,
+  });
+  assertEquals(action.action_taken, 'locate_lost_pre_ttl_short_close_required');
+});
+
+Deno.test('AC-23: verify_borrow_persistence — still_valid=true → false_positive_within_tolerance', () => {
+  const spec = buildVerifyBorrowPersistenceSpec({ symbol: 'GME', operator_id: OP });
+  const observed = {
+    symbol: 'GME', locate_id: 'L1', still_valid: true, expired_at_ttl: false,
+    ttl_expires_at: null, fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ locate_id: 'L1' }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+// ─── AC-24: verify_buying_power (#9 — SYSTEM-LEVEL symbol=null FIRST + 10% magnitude) ──
+
+Deno.test('AC-24: verify_buying_power spec — strong + low_tolerance + symbol=null + 10% magnitude (§11.0.9 line 269)', () => {
+  const spec = buildVerifyBuyingPowerSpec({ operator_id: OP });
+  assertEquals(spec.call_name, 'verify_buying_power');
+  assertEquals(spec.tier, 'strong');
+  assertEquals(spec.tolerance_class, 'low_tolerance');
+  // FIRST system-level verifier: symbol MUST be null per §11.0.7.
+  assertEquals(spec.symbol, null);
+  assertEquals((spec.tolerance as { pct_magnitude_escalation: number }).pct_magnitude_escalation, 10);
+});
+
+Deno.test('AC-24: verify_buying_power — insufficient_for_request=true → failure_handled + entry_skipped_insufficient_bp', async () => {
+  const spec = buildVerifyBuyingPowerSpec({ operator_id: OP });
+  // expected_bp 50_000, observed 40_000 (matches internal somewhat, but request 45_000 > observed)
+  const observed = { available_bp: 40_000, account_equity: 100_000, fetched_at: new Date(0) };
+  const div = spec.compute_divergence(
+    { expected_bp: 40_000, requested_position_size: 45_000 },
+    observed,
+  );
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_handled', divergence: div,
+    expected: { expected_bp: 40_000, requested_position_size: 45_000 }, observed,
+  });
+  assertEquals(action.action_taken, 'entry_skipped_insufficient_bp');
+});
+
+Deno.test('AC-24: verify_buying_power — pct_diff >= 10 → failure_escalated (magnitude per §11.0.9 line 269)', () => {
+  const spec = buildVerifyBuyingPowerSpec({ operator_id: OP });
+  // internal 55_000, observed 50_000 → diff 5000 / max(55000,50000) = ~9.09% — under 10
+  // Use internal 60_000 observed 50_000 → 10000/60000 = 16.67% > 10%
+  const observed = { available_bp: 50_000, account_equity: 100_000, fetched_at: new Date(0) };
+  const div = spec.compute_divergence(
+    { expected_bp: 60_000, requested_position_size: 10_000 },
+    observed,
+  );
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+});
+
+Deno.test('AC-24: verify_buying_power — pct_diff within 2% band → false_positive_within_tolerance', () => {
+  const spec = buildVerifyBuyingPowerSpec({ operator_id: OP });
+  // internal 50_000, observed 50_500 → 1% diff
+  const observed = { available_bp: 50_500, account_equity: 100_000, fetched_at: new Date(0) };
+  const div = spec.compute_divergence(
+    { expected_bp: 50_000, requested_position_size: 10_000 },
+    observed,
+  );
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+// ─── AC-25: verify_universe_membership (#10 — STRUCTURAL ESCALATION — FIRST USE) ──
+
+Deno.test('AC-25: verify_universe_membership spec — strong + low_tolerance + structural-escalation config', () => {
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP });
+  assertEquals(spec.call_name, 'verify_universe_membership');
+  assertEquals(spec.tier, 'strong');
+  assertEquals(spec.tolerance_class, 'low_tolerance');
+  const reasons = (spec.tolerance as { materially_excluded_reasons: string[] }).materially_excluded_reasons;
+  assertEquals(reasons.includes('in_ma'), true);
+  assertEquals(reasons.includes('halted_5d_plus'), true);
+});
+
+Deno.test('AC-25: verify_universe_membership — materially_excluded (in_ma) + internal_in_universe=true → failure_escalated (structural per §11.0.9 line 273)', async () => {
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', in_universe: false, excluded: true,
+    exclusion_reasons: ['in_ma'], fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ in_universe: true }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_escalated', divergence: div,
+    expected: { in_universe: true }, observed,
+  });
+  assertEquals(action.action_taken, 'entry_blocked_materially_excluded');
+});
+
+Deno.test('AC-25: verify_universe_membership — non-material exclusion (low_volume) + internal_in_universe=true → failure_handled (count-based; not structural)', () => {
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', in_universe: false, excluded: true,
+    exclusion_reasons: ['low_volume'], fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ in_universe: true }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
+});
+
+Deno.test('AC-25: verify_universe_membership — cache stale (observed_in_universe=false, no exclusion) + internal=true → failure_handled', () => {
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', in_universe: false, excluded: false,
+    exclusion_reasons: [], fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ in_universe: true }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
+});
+
+Deno.test('AC-25: verify_universe_membership — consistent inclusion → false_positive_within_tolerance', () => {
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP });
+  const observed = {
+    symbol: 'AAPL', in_universe: true, excluded: false,
+    exclusion_reasons: [], fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ in_universe: true }, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
 });
