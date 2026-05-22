@@ -207,6 +207,24 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved |
 | Supersession Links | None — DEC-003 remains active as the scope-discipline anchor; DEC-030 is an amendment, not a supersession |
 
+### v13.0 → v13.1 (2026-05-22)
+
+**Type:** In-cycle DEC amendment — DEC-034 clause (5) verifier regex correction per Round Final §22.5 Option 1 reconciliation
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.0 → v13.1 |
+| Section IDs Created | (none) |
+| Section IDs Changed | (none) |
+| Decision IDs Affected | DEC-034 clause (5) only — verifier regex amended from plain-substring `rg -c 'logAuditEvent'` to call/import-shaped pattern `rg -nE 'import\s.*\blogAuditEvent\b\|\blogAuditEvent\s*\('` with markdown exclusion |
+| What Changed | DEC-034 clause (5) verifier specification corrected to distinguish documentation (JSDoc warnings reinforcing the T4 trap; e.g., `longshort-emit-init/index.ts:10`) from real structural violations (imports/calls). Same defect class as DEC-036 clause (2) regex correction from Round 3 governance authoring. |
+| Why | Lovable's §22.8.4 STOP discipline at Gate 6.0 closure surfaced the broken substring regex; supervisor reconciliation cycle resolved per Option 1 (fix-at-source) rather than Option 2 (strip JSDoc — rejected: removes legitimate defense-in-depth) or Option 3 (footnote exception — rejected: 13+ sub-step repetitions = systemic drift class per supervisor v0.4 §9). |
+| What Stayed | All other DEC-034 clauses (1)(2)(3)(4)(6)(7); all other DECs (DEC-034.1, DEC-035, DEC-036, DEC-037); all FP-006 entry text; PLAN-TRADING-001-LONGSHORT-002 plan section content (only Phase Gate checkbox format-fix added); ADR-002 placeholder; DW-054/055/056/057; ACT-073 closure record; Round Final HEAD `30ff765` outputs preserved. |
+| What Was Added | ACT-074 (Gate 6.0 closure); `supabase/functions/_shared/strategy-reconciliation.ts` (empty stub per DEC-033 v4.1 precedent); Phase Gate checkboxes in master-plan PLAN-TRADING-001-LONGSHORT-002 plan section; DEC-034 clause (5) amendment text. |
+| What Was Removed | None (DEC-034 clause (5) old verifier text replaced in place; not deleted from history — historical version remains in plan-changelog audit trail via this entry). |
+| Approval Status | Approved (in-cycle DEC amendment per Option 1 reconciliation; preserves all other Round Final ratifications). |
+| Supersession Links | DEC-034 clause (5) v13.0 verifier → DEC-034 clause (5) v13.1 verifier (in-place amendment; clause-level not entry-level supersession). |
+
 ### v12.1 → v13.0 (2026-05-22)
 
 **Type:** Governance authoring — FP-006 reservation activated; 5 DECs ratified; PLAN-TRADING-001-LONGSHORT-002 created; ADR-002 placeholder positioned
