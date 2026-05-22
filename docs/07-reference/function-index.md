@@ -1816,3 +1816,70 @@ The 5 verifiers below extend the Batch A registry. Same module path + spec/wrapp
 | `BrokerLocatePersistenceFetcher` | same | verifyBorrowPersistence | sub-step 6.7 |
 | `BrokerBuyingPowerFetcher` | same | verifyBuyingPower | sub-step 6.7 |
 | `UniverseMembershipFetcher` | same | verifyUniverseMembership | sub-step 6.7 |
+
+### verify_* Batch C (#11–#14) — sub-step 6.3c (ACT-080)
+
+The 4 verifiers below extend the Batch A+B registry. Four first-occurrence cases land here:
+#11 combines Low-tolerance count-based escalation with structural 48h escalation; #12 is
+the FIRST hybrid Zero/expected-divergence-aware verifier per §11.0.9 line 235; #13 is the
+second tri-state verifier (after #5) per DEC-035 clause (4) with explicit cancel-and-retry
+ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_position.
+
+#### `verifyCorporateActionClean`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3c) |
+| **Classification** | financial-critical (strong tier per §11.0.10) — EXPECTED-DIVERGENCE-AWARE + STRUCTURAL 48h ESCALATION per §11.0.7 #11 + §11.0.9 line 272 |
+| **Signature** | `verifyCorporateActionClean(args: {symbol, operator_id, lookback_days?}, fetcher: BrokerCorporateActionFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_corporate_action_clean.ts` |
+| **Tolerance class** | low_tolerance per §11.0.9 line 247 + structural 48h escalation per §11.0.9 line 272 |
+| **Failure action** | 24-48h → `mtm_skipped_corporate_action_propagating`; beyond 48h → `operator_alert_corporate_action_unresolved_48h` |
+| **Determinism** | Pure given (args, fetcher, ts) |
+| **Added by** | FP-006 sub-step 6.3c, ACT-080 |
+
+#### `verifySettlementStatus`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3c) |
+| **Classification** | financial-critical (strong tier per §11.0.10) — HYBRID Zero/expected-div per §11.0.9 line 235 (FIRST hybrid verifier) |
+| **Signature** | `verifySettlementStatus(args: {symbol, side, trade_ts, operator_id}, fetcher: BrokerSettlementStatusFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_settlement_status.ts` |
+| **Tolerance class** | zero_tolerance (post-T+1 path only); pre-T+1 unsettled emits `expected_divergence_handled` per §11.0.9 line 235 |
+| **Failure action** | post-T+1 unsettled → `post_t1_unsettled_operator_alert_emitted` (pre-T+1 path bypasses failure_action via lifecycle guard) |
+| **Added by** | FP-006 sub-step 6.3c, ACT-080 |
+
+#### `verifyOrderAcceptance`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3c) |
+| **Classification** | financial-critical (strong tier per §11.0.10) — TRI-STATE per §11.0.7 #13 (second tri-state after #5 verify_ssr_status); cancel-and-retry EXPLICITLY BANNED per §11.0.7 |
+| **Signature** | `verifyOrderAcceptance(args: {order_id, symbol, operator_id, timeout_s?}, fetcher: BrokerOrderAcceptanceFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_order_acceptance.ts` |
+| **Tolerance class** | zero_tolerance for `rejected` per §11.0.9 line 234; pending sub-classified by elapsed (60s operator-alert threshold per §11.0.7 #13) |
+| **Failure action** | rejected → `order_marked_rejected_no_retry`; pending<60s → `polling_escalated_2s_interval`; pending>60s → `operator_alert_pending_60s_exceeded`; NEVER `cancel_and_retry` (§11.0.7 ban) |
+| **Coverage** | DEC-035 clause (4) ≥3 scenarios — all three tri-state branches (accepted/rejected/pending) exercised in tests |
+| **Added by** | FP-006 sub-step 6.3c, ACT-080 |
+
+#### `verifyRealizedPnL`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3c) |
+| **Classification** | financial-critical **strong_plus** tier per §11.0.10 line 334 (tax/regulatory retention indefinite) — FIRST strong_plus verifier outside #1 verify_position |
+| **Signature** | `verifyRealizedPnL(args: {trade_id, symbol, claimed_pnl, operator_id}, fetcher: BrokerRealizedPnLFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_realized_pnl.ts` |
+| **Tolerance class** | zero_tolerance (single firing escalates per §11.0.9 line 233) + 1¢ tolerance on total P&L per §11.0.9 line 226 |
+| **Failure action** | diff > 1¢ → `realized_pnl_divergence_operator_alert_emitted` (event row retained indefinitely per Strong+ retention) |
+| **Added by** | FP-006 sub-step 6.3c, ACT-080 |
+
+#### Broker fetcher interfaces — sub-step 6.3c (ACT-080)
+
+| Interface | File | Consumed by | Real impl |
+|---|---|---|---|
+| `BrokerCorporateActionFetcher` | `supabase/functions/_shared/longshort-broker-interfaces.ts` | verifyCorporateActionClean | sub-step 6.7 (Alpaca paper) |
+| `BrokerSettlementStatusFetcher` | same | verifySettlementStatus | sub-step 6.7 |
+| `BrokerOrderAcceptanceFetcher` | same | verifyOrderAcceptance | sub-step 6.7 |
+| `BrokerRealizedPnLFetcher` | same | verifyRealizedPnL | sub-step 6.7 |
