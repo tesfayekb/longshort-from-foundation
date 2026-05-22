@@ -45,7 +45,7 @@ current_plan_version: v13.1
 #   Step 2b precedent). Constitution Rule 9 (Execution Lock) is satisfied: code
 #   execution Steps 5.0a-5.6 cannot begin until v12.1 baseline is approved, which
 #   it becomes at Step 5.0 PR merge.
-approved_plan_baseline: v13.0
+approved_plan_baseline: v13.1
 plan_status: approved
 artifact_governance: active (artifact-index.md, database-migration-ledger.md, phase-closures/)
 deferred_work_open: []
