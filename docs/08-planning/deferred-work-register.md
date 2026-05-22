@@ -358,6 +358,16 @@ At each phase boundary (before advancing to the next phase):
 | DW-041 | Cursor-based Pagination (list-users, list-invitations) | Performance review | `unassigned` (v2) | `deferred (v2)` |
 | DW-042 | Trigram Index for ILIKE Search | Performance review | `unassigned` (v2) | `deferred (v2)` |
 | DW-043 | HTTP Cache Headers on Edge Functions | Performance review | `unassigned` (v2) | `deferred (v2)` |
+| DW-044 | Longshort Decision Engine | FP-005 | FP-006 | `deferred` |
+| DW-045 | Longshort Reconciliation Logic | FP-005 | FP-006 | `deferred` |
+| DW-046 | Longshort Order Management / Execution Path | FP-005 | FP-006 | `deferred` |
+| DW-047 | `longshort.execute` Permission Key | FP-005 | FP-006 | `deferred` |
+| DW-048 | Residual CROSSWIND §10.3 Phase 0A Items | FP-005 | FP-006 | `deferred` |
+| DW-049 | All CROSSWIND §10.4 Phase 0B Items | FP-005 | FP-006 | `deferred` |
+| DW-050 | Tier 3 Runbooks Under docs/09-runbooks/ | FP-005 | FP-006 | `deferred` |
+| DW-051 | >150s Long-Running-Job Detection / Hand-Off Pattern | FP-005 | FP-006 | `deferred` |
+| DW-052 | CI/CD Pipeline for longshort | FP-005 | FP-007 | `deferred` |
+| DW-053 | CROSSWIND §15 Risk Register Reconciliation (v0.10) | FP-005 | FP-006 (post-v0.10) | `deferred` |
 
 ### DW-011: Distributed Rate Limiting
 
@@ -1141,6 +1151,236 @@ At each phase boundary (before advancing to the next phase):
 | **Required Tests for Closure** | Read endpoints return appropriate Cache-Control headers; no caching of user-specific mutable data; CDN respects directives |
 | **Status** | `deferred (v2)` |
 | **Trigger** | When edge function invocation costs or latency warrant reduction |
+
+---
+
+### DW-044: Longshort Decision Engine
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-044 |
+| **Date Deferred** | 2026-05-21 |
+| **Source Plan Section** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Bootstrap) |
+| **Source Phase** | FP-005 / CROSSWIND §10.3 Phase 0A boundary |
+| **Title** | Longshort decision engine (signal stack + combiner + sizing) |
+| **Reason Deferred** | Per DEC-032 clauses (2)–(4) + (7): FP-005 bootstrap surface is intentionally narrow (T1 scaffold + RBAC seed + audit table + init edge function + façade + carve-out + page wrappers). Decision engine is FP-006 territory. |
+| **Blocking Dependencies** | FP-006 governance authoring; CROSSWIND §10.4 Phase 0B reconciliation engine + 17 `verify_*` interfaces operational |
+| **Impact on Source Phase** | None — FP-005 closed clean with explicit out-of-scope enumeration (item #1 in closure-doc Deferred / Follow-up) |
+| **Future Owner Phase** | FP-006 (PLAN-TRADING-001-LONGSHORT-002 — pending authoring) |
+| **Future Owner Module** | `longshort` (`src/features/longshort/`) |
+| **Required Plan Realignment** | FP-006 entry must scope decision engine deliverables per CROSSWIND v0.9 Part 4a §11.1–§11.10; reconciliation cross-references per §10.4 priority deliverable #1 |
+| **Related Decisions** | DEC-031, DEC-032 (clauses 2–4, 7) |
+| **Related Actions** | ACT-070, ACT-071, ACT-072 (FP-005 closure cycle) |
+| **Required Tests for Closure** | Signal-stack unit + integration tests; combiner replay determinism; sizing logic property tests; reconciliation engine cross-validation |
+| **Status** | `deferred` |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` (Deferred / Follow-up item #1) |
+
+---
+
+### DW-045: Longshort Reconciliation Logic
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-045 |
+| **Date Deferred** | 2026-05-21 |
+| **Source Plan Section** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Bootstrap) |
+| **Source Phase** | FP-005 / CROSSWIND §10.4 Phase 0B boundary |
+| **Title** | Longshort reconciliation logic (17 `verify_*` interfaces + A1 baseline aggregation) |
+| **Reason Deferred** | Per DEC-032 clauses (2)–(4): reconciliation engine is the CROSSWIND §10.4 Phase 0B priority deliverable #1; explicitly reserved to FP-006 per supervisor §22 rejection mandate. |
+| **Blocking Dependencies** | FP-006 governance authoring; ADR-001 reconciliation architecture lock; evidence-workflow tooling (<15-min wall-clock target) |
+| **Impact on Source Phase** | None — FP-005 deliberately excluded all reconciliation logic |
+| **Future Owner Phase** | FP-006 |
+| **Future Owner Module** | `longshort` |
+| **Required Plan Realignment** | FP-006 must scope 17 `verify_*` interfaces, A1 sustained-anomaly baseline aggregation infrastructure (cross-referenced from CROSSWIND §10.13 Phase 9 kill condition), and replay framework |
+| **Related Decisions** | DEC-031, DEC-032, DEC-033 v4.1 (canonical audit-writer helper used by reconciliation) |
+| **Related Actions** | ACT-070, ACT-071, ACT-072 |
+| **Required Tests for Closure** | Each `verify_*` interface coverage; replay-test PASS comparison <15-min wall-clock per §10.4; sustained-anomaly baseline computation correctness |
+| **Status** | `deferred` |
+| **Cross-references** | CROSSWIND v0.9 Part 3a §10.4; FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #2 |
+
+---
+
+### DW-046: Longshort Order Management / Execution Path
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-046 |
+| **Date Deferred** | 2026-05-21 |
+| **Source Plan Section** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Bootstrap) |
+| **Source Phase** | FP-005 |
+| **Title** | Longshort order management / execution path (two-phase state machine + short-stop parallel-order mechanism) |
+| **Reason Deferred** | Per DEC-032 clauses (2)–(4) + (7): order management requires Phase 0B reconciliation + Alpaca multi-pending-order validation (§8.6.1.1); both deferred to FP-006. |
+| **Blocking Dependencies** | DW-045 (reconciliation); §8.6.1.1 Alpaca multi-pending-order behavior determination; v0.7-locked escalation thresholds preservation |
+| **Impact on Source Phase** | None — FP-005 excluded all execution-path code |
+| **Future Owner Phase** | FP-006 |
+| **Future Owner Module** | `longshort` |
+| **Required Plan Realignment** | FP-006 must scope two-phase state machine per Part 2c §8.6.2 (Acceptance/Fill); trade-type-specific Phase 1 timeouts; parallel-order vs v0 fallback per Phase 0B outcome |
+| **Related Decisions** | DEC-031, DEC-032 |
+| **Related Actions** | ACT-070, ACT-071, ACT-072 |
+| **Required Tests for Closure** | Order lifecycle state machine paths (1.A/1.B/1.C; Phase 2 fill/partial/escalation/cancel); short-stop over-close detection + corrective trade synthetic test |
+| **Status** | `deferred` |
+| **Cross-references** | CROSSWIND v0.9 Part 2c §8.6.2, Part 3b §10.9 Phase 5; FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #3 |
+
+---
+
+### DW-047: `longshort.execute` Permission Key
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-047 |
+| **Date Deferred** | 2026-05-21 |
+| **Source Plan Section** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Bootstrap) |
+| **Source Phase** | FP-005 |
+| **Title** | `longshort.execute` two-segment RBAC permission key |
+| **Reason Deferred** | Per DEC-032 clause (4): execution permission must not exist before execution code exists, to prevent dormant high-blast-radius permission seeds. Coupled to DW-046 landing. |
+| **Blocking Dependencies** | DW-046 (order management / execution path) live |
+| **Impact on Source Phase** | None — FP-005 RBAC seed (MIG-037) intentionally scoped to `longshort.view` + `longshort.manage` only |
+| **Future Owner Phase** | FP-006 |
+| **Future Owner Module** | `longshort` (RBAC seed migration) |
+| **Required Plan Realignment** | FP-006 must add new migration seeding `longshort.execute`; permission-index registration; RLS policy review for execution-gated tables |
+| **Related Decisions** | DEC-031 (T3), DEC-032 (clause 4) |
+| **Related Actions** | ACT-070, ACT-071, ACT-072 |
+| **Required Tests for Closure** | E2E gate: user without `longshort.execute` blocked at execution edge functions; superadmin retains via wildcard; audit log records denial |
+| **Status** | `deferred` |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #4; constitution.md Rule 11 (critical module override) |
+
+---
+
+### DW-048: Residual CROSSWIND §10.3 Phase 0A Items
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-048 |
+| **Date Deferred** | 2026-05-21 |
+| **Source Plan Section** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Bootstrap) |
+| **Source Phase** | FP-005 / CROSSWIND §10.3 Phase 0A |
+| **Title** | Residual CROSSWIND §10.3 Phase 0A items not in DEC-032 clause (1) bootstrap surface |
+| **Reason Deferred** | DEC-032 clause (1) deliberately narrowed FP-005 to a minimal bootstrap subset of §10.3; remaining §10.3 deliverables (multi-instance schema across all `(operator_id, …)` tables, 10 v0.8 foundation deliverables, exit gate verification) carry to FP-006. |
+| **Blocking Dependencies** | FP-006 authoring |
+| **Impact on Source Phase** | None — FP-005 explicitly scoped per DEC-032 |
+| **Future Owner Phase** | FP-006 |
+| **Future Owner Module** | `longshort` + platform support |
+| **Required Plan Realignment** | FP-006 must enumerate and close all §10.3 residual deliverables before §10.4 Phase 0B exit gate |
+| **Related Decisions** | DEC-031, DEC-032 (clause 1) |
+| **Related Actions** | ACT-070, ACT-071, ACT-072 |
+| **Required Tests for Closure** | Phase 0A exit-gate verification per §10.3 (multi-instance schema convention verified across all Crosswind-specific tables) |
+| **Status** | `deferred` |
+| **Cross-references** | CROSSWIND v0.9 Part 3a §10.3; FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #5 |
+
+---
+
+### DW-049: All CROSSWIND §10.4 Phase 0B Items
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-049 |
+| **Date Deferred** | 2026-05-21 |
+| **Source Plan Section** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Bootstrap) |
+| **Source Phase** | FP-005 / CROSSWIND §10.4 Phase 0B |
+| **Title** | All CROSSWIND §10.4 Phase 0B items (reconciliation engine + replay framework + evidence tooling + Alpaca paper + captured Day 1 + ADR-001 + §8.6.1.1 multi-pending validation) |
+| **Reason Deferred** | Per DEC-032 clauses (2)–(7): entire §10.4 Phase 0B is FP-006 territory. Duration per V1: 6–10 wk baseline / 7–10 realistic / up to 11–12 wk contingency. |
+| **Blocking Dependencies** | FP-006 authoring; DW-048 (§10.3 residual closure) |
+| **Impact on Source Phase** | None — FP-005 deliberately excluded §10.4 in entirety |
+| **Future Owner Phase** | FP-006 |
+| **Future Owner Module** | `longshort` + platform reconciliation infrastructure |
+| **Required Plan Realignment** | FP-006 must scope the three priority deliverables (reconciliation engine + 17 `verify_*` + A1 baseline; evidence-workflow tooling with <15-min wall-clock; replay framework) plus all supporting deliverables |
+| **Related Decisions** | DEC-031, DEC-032, DEC-033 v4.1 |
+| **Related Actions** | ACT-070, ACT-071, ACT-072 |
+| **Required Tests for Closure** | §11.0.11 Phase 0B exit gate (every reconciliation firing root-caused; outcome classification per R3-R1); <15-min wall-clock evidence-tooling validation |
+| **Status** | `deferred` |
+| **Cross-references** | CROSSWIND v0.9 Part 3a §10.4 + Part 4a §11.0.11; FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #6 |
+
+---
+
+### DW-050: Tier 3 Runbooks Under `docs/09-runbooks/`
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-050 |
+| **Date Deferred** | 2026-05-21 |
+| **Source Plan Section** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Bootstrap) |
+| **Source Phase** | FP-005 |
+| **Title** | Tier 3 runbooks under `docs/09-runbooks/` for longshort operational procedures |
+| **Reason Deferred** | Runbooks require live operational surface (decision engine + reconciliation + execution) to document; FP-005 bootstrap has none of those. Deferred to FP-006. |
+| **Blocking Dependencies** | DW-044, DW-045, DW-046 live |
+| **Impact on Source Phase** | None — `docs/09-runbooks/` directory not created at FP-005 |
+| **Future Owner Phase** | FP-006 |
+| **Future Owner Module** | `longshort` operations |
+| **Required Plan Realignment** | FP-006 must create `docs/09-runbooks/` and scope per-procedure runbook authoring (reconciliation-firing triage, kill-switch escalation, broker-disconnect recovery, etc.) |
+| **Related Decisions** | DEC-032 (clause 7) |
+| **Related Actions** | ACT-070, ACT-071, ACT-072 |
+| **Required Tests for Closure** | Each runbook validated against synthetic incident drill |
+| **Status** | `deferred` |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #7 |
+
+---
+
+### DW-051: >150s Long-Running-Job Detection / Hand-Off Pattern
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-051 |
+| **Date Deferred** | 2026-05-21 |
+| **Source Plan Section** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Bootstrap) |
+| **Source Phase** | FP-005 |
+| **Title** | >150s long-running-job detection + hand-off pattern (edge function → background worker boundary) |
+| **Reason Deferred** | No FP-005 surface approaches edge function execution-time limits; deferred until reconciliation engine + replay framework (FP-006) introduce long-running workloads. |
+| **Blocking Dependencies** | DW-045 (reconciliation engine) live |
+| **Impact on Source Phase** | None |
+| **Future Owner Phase** | FP-006 |
+| **Future Owner Module** | `jobs-and-scheduler` + `longshort` |
+| **Required Plan Realignment** | FP-006 must specify detection mechanism (telemetry-driven), hand-off contract (idempotent resumption), and platform-tier helper extraction |
+| **Related Decisions** | DEC-032 (clause 7) |
+| **Related Actions** | ACT-070, ACT-071, ACT-072 |
+| **Required Tests for Closure** | Synthetic >150s job triggers hand-off; resumption idempotent; no duplicate side-effects |
+| **Status** | `deferred` |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #8 |
+
+---
+
+### DW-052: CI/CD Pipeline for `longshort`
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-052 |
+| **Date Deferred** | 2026-05-21 |
+| **Source Plan Section** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Bootstrap) |
+| **Source Phase** | FP-005 |
+| **Title** | CI/CD pipeline for `longshort` (lint + typecheck + test + e2e + migration-dry-run + reference-index reconciliation) |
+| **Reason Deferred** | Per DEC-032 clause (7): CI/CD is explicitly reserved to FP-007. FP-005 verification is supervisor-driven per §22; programmatic enforcement comes later. |
+| **Blocking Dependencies** | FP-007 authoring; sufficient `longshort` code surface to warrant a pipeline (post-FP-006) |
+| **Impact on Source Phase** | None — FP-005 verified manually per §22.6 |
+| **Future Owner Phase** | FP-007 |
+| **Future Owner Module** | `longshort` + platform CI |
+| **Required Plan Realignment** | FP-007 must scope GitHub Actions workflow, secrets management, branch-protection rules, and reference-index drift detection |
+| **Related Decisions** | DEC-032 (clause 7) |
+| **Related Actions** | ACT-070, ACT-071, ACT-072 |
+| **Required Tests for Closure** | Pipeline runs on PR; blocks merge on any gate failure; reference-index drift detection catches missing registrations |
+| **Status** | `deferred` |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #9 |
+
+---
+
+### DW-053: CROSSWIND §15 Risk Register Reconciliation (v0.10-Deferred)
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-053 |
+| **Date Deferred** | 2026-05-21 |
+| **Source Plan Section** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Bootstrap) |
+| **Source Phase** | FP-005 |
+| **Title** | CROSSWIND §15 Risk Register reconciliation with `docs/06-tracking/risk-register.md` |
+| **Reason Deferred** | CROSSWIND §15 Risk Register content is v0.10-deferred at spec level; reconciliation cannot begin until v0.10 lands. |
+| **Blocking Dependencies** | CROSSWIND v0.10 publication with §15 content |
+| **Impact on Source Phase** | None — FP-005 referenced v0.9 only |
+| **Future Owner Phase** | FP-006 (once v0.10 lands) |
+| **Future Owner Module** | `longshort` governance |
+| **Required Plan Realignment** | Once v0.10 lands: cross-reference each §15 risk into platform risk-register; identify gaps; create mitigations as needed |
+| **Related Decisions** | DEC-032 |
+| **Related Actions** | ACT-070, ACT-071, ACT-072 |
+| **Required Tests for Closure** | Every §15 v0.10 risk has a corresponding platform risk-register entry or explicit non-applicability note |
+| **Status** | `deferred` |
+| **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #10 |
 
 ---
 
