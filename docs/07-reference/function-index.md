@@ -1566,3 +1566,32 @@ When changing any indexed function:
 - [Permission Index](permission-index.md)
 - [Route Index](route-index.md)
 - [Env Var Index](env-var-index.md)
+
+---
+
+## Platform Kill-Switch RPCs (FP-006 Sub-Step 6.1)
+
+### `kill_switch_soft_pause(p_strategy_key text, p_reason text, p_operator_id uuid)` — db-function
+
+| Field | Value |
+|-------|-------|
+| **Type** | db-function (PostgreSQL SECURITY DEFINER) |
+| **Classification** | security-critical, destructive |
+| **Owner module** | platform |
+| **Authorization** | `is_superadmin(auth.uid())` predicate — raises `insufficient_privilege` otherwise |
+| **Side effects** | UPSERT into `kill_switches` (state='soft_paused'); INSERT into `audit_logs` (action='kill_switch.soft_pause', target_type='kill_switches', target_id=NULL, metadata.strategy_key=p_strategy_key) |
+| **Returns** | `jsonb { success, strategy_key, state, audit_id, correlation_id }` |
+| **Reauth** | Route-layer sudo gate via `<RequireSudo actionKey="kill_switch_route">` per DEC-029 |
+| **Added by** | FP-006 sub-step 6.1(d), MIG-040, ACT-075 |
+
+### `kill_switch_hard_pause(p_strategy_key text, p_reason text, p_operator_id uuid)` — db-function
+
+Same contract as soft_pause; sets `state='hard_paused'`; audit action `kill_switch.hard_pause`. Halts all activity (not just new entries).
+
+### `kill_switch_manual_liquidate(p_strategy_key text, p_reason text, p_operator_id uuid)` — db-function
+
+Same contract; sets `state='liquidating'`; audit action `kill_switch.manual_liquidate`. Sub-step 6.1 lands the STATE TRANSITION only; actual order-cancel + market-sell loop is Phase 5 territory (return jsonb includes `note` flagging this).
+
+### `kill_switch_resume(p_strategy_key text, p_reason text, p_operator_id uuid)` — db-function
+
+Resumes from `soft_paused` only. Raises `no_data_found` if no row; raises `invalid_transaction_state` if current state ≠ `soft_paused`. Audit action `kill_switch.resume`.

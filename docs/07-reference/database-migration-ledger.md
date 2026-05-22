@@ -693,6 +693,57 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 
 ---
 
+### MIG-039: FP-006 Sub-Step 6.1(b) — feature_flags Table
+
+| Field | Value |
+|-------|-------|
+| **ledger_id** | MIG-039 |
+| **migration_file** | `20260522091300_step_6_1_feature_flags.sql` |
+| **source_dir** | `supabase/migrations/` |
+| **applied_date** | 2026-05-22 |
+| **sequence_order** | 39 |
+| **purpose** | FP-006 sub-step 6.1(b) — platform-tier `feature_flags` table per CROSSWIND §12.5 evidence-tier hierarchy. Standalone `operator_id` column per DEC-034.1 clause (8); `operators` table NOT created (v1 single-operator). Composite PK `(operator_id, flag_key)`. CHECK constraint on `evidence_tier IN ('weak','medium','strong')`. |
+| **Objects created** | `feature_flags` table (7 columns); 2 RLS policies (`feature_flags_read_policy`, `feature_flags_superadmin_write_policy`); `feature_flags_evidence_tier_check` constraint |
+| **RLS** | Enabled. Read = authenticated. Write = superadmin-only via direct table (no governance RPC layer yet — sub-step 6.4 will land workflow tooling). |
+| **Linked Actions** | ACT-075 |
+| **Linked Decisions** | DEC-034.1 clause (8), DEC-037 §12.5 |
+| **Status** | active |
+
+### MIG-040: FP-006 Sub-Step 6.1(d) — Kill-Switch Infrastructure
+
+| Field | Value |
+|-------|-------|
+| **ledger_id** | MIG-040 |
+| **migration_file** | `20260522091400_step_6_1_kill_switches.sql` |
+| **source_dir** | `supabase/migrations/` |
+| **applied_date** | 2026-05-22 |
+| **sequence_order** | 40 |
+| **purpose** | FP-006 sub-step 6.1(d) — platform-tier kill-switch infrastructure per CROSSWIND §11.6. RPCs use `is_superadmin(auth.uid())` per actual function signature; audit emission uses `actor_id` / `target_type` / `target_id` (NULL — strategy_key text carried in metadata) per `audit_logs` schema at sql/01_rbac_schema.sql:45-56. v2-reconciled prior to commit per §22.8.4 Lovable STOP — see ACT-075 Evidence field. |
+| **Objects created** | `kill_switch_state` enum; `kill_switches` table; 4 RPCs (kill_switch_soft_pause / hard_pause / manual_liquidate / resume); `system.kill_switches.manage` permission row |
+| **RLS** | Enabled. Read = authenticated; direct INSERT/UPDATE blocked (sole write surface = RPCs). |
+| **Permission seed** | `system.kill_switches.manage` (no role grants — superadmin only) |
+| **Audit emission** | Each RPC INSERTs row in `audit_logs` via SQL-level INSERT (not subject to T4 TypeScript audit-writer trap) with `kill_switch.*` action; correlation_id stored as text; target_id NULL with strategy_key in metadata. |
+| **Linked Actions** | ACT-075 |
+| **Linked Decisions** | DEC-029 (sudo gate at route layer), DEC-031 sub-point 5 (operator_id pattern), DEC-033 v4.1 (T4 trap awareness — SQL INSERT carve-out), DEC-034.1 clause (9) (jobs/scheduler integration) |
+| **Status** | active |
+
+### MIG-041: FP-006 Sub-Step 6.1(e) — system_config Value Versioning
+
+| Field | Value |
+|-------|-------|
+| **ledger_id** | MIG-041 |
+| **migration_file** | `20260522091500_step_6_1_system_config_versioning.sql` |
+| **source_dir** | `supabase/migrations/` |
+| **applied_date** | 2026-05-22 |
+| **sequence_order** | 41 |
+| **purpose** | FP-006 sub-step 6.1(e) — adds `value_version` integer column (default 1) on `system_config` + auto-increment trigger `system_config_value_version_bump` that bumps version when `value` is distinct from prior. Enables optimistic concurrency control + replay determinism per CROSSWIND §12.7. |
+| **Objects created** | `system_config.value_version` column; `bump_system_config_value_version()` function; `system_config_value_version_bump` trigger |
+| **Linked Actions** | ACT-075 |
+| **Linked Decisions** | CROSSWIND §12.7 (config versioning) |
+| **Status** | active |
+
+---
+
 ### Tables (14)
 
 | Table | Created By | Status |
