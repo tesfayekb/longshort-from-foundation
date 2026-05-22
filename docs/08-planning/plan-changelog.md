@@ -207,6 +207,24 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved |
 | Supersession Links | None — DEC-003 remains active as the scope-discipline anchor; DEC-030 is an amendment, not a supersession |
 
+### v13.1 → v13.2 (2026-05-22)
+
+**Type:** In-FP-006 decomposition insertion (corrective sub-step 6.3a.1) + governance reduction discipline (interim verifier-exception register replacing exception-in-every-ACT pattern)
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.1 → v13.2 |
+| Section IDs Created | sub-step 6.3a.1 (corrective inserted between 6.3a and 6.3b within PLAN-TRADING-001-LONGSHORT-002) |
+| Section IDs Changed | PLAN-TRADING-001-LONGSHORT-002 sub-step inventory header `(14 + closure)` → `(15 + closure)` |
+| Decision IDs Affected | None — DEC-034 v13.1 verifier text unchanged in this version (DEC-034 v13.2 amendment lands at sub-step 6.4 alongside the CI script that replaces the embedded regex, per FOLLOWUP-004) |
+| What Changed | (a) Sub-step 6.3a.1 corrective inserted: closes FOLLOWUP-003 (TypeScript invariance collision in `updateStateSurface` + eager Deno.env.get reads in `supabase-admin.ts` — both 6.2 supervisor-side defects surfaced at 6.3a first-real-consumer testing). (b) Interim FINDING-001 disposition: `docs/06-tracking/known-verifier-exceptions.md` created to hold the AC-05 / audit-writer-trap exception at `longshort-reconciliation-lifecycle.ts:23` (JSDoc continuation line quoting `import logAuditEvent` verbatim as defense-in-depth documentation). Exception register exists pending FOLLOWUP-004 / sub-step 6.4 CI script that replaces embedded regex with tested code. |
+| Why | Operator A+ disposition on the two findings surfaced at sub-step 6.3a closure: workarounds in 6.3a tests (`--no-check` + dummy env vars) would compound across 12 more verifiers without the corrective; defending FOLLOWUP-003 to sub-step 6.3d means writing/testing 6.3b/c verifiers under type-check blindfold on Tier A surface. FINDING-001 interim register prevents Option-C "exception note in every ACT" across remaining sub-steps. |
+| What Stayed | All DEC entries unchanged (DEC-034 / DEC-034.1 / DEC-035 / DEC-036 / DEC-037); all FP-006 entry content; all Round Final / Gate 6.0 / sub-step 6.1 / 6.2 / 6.3a outputs untouched; .cursorrules unchanged; longshort module status `foundation-implemented`; all verifier files from 6.3a unchanged. |
+| What Was Added | ACT-078 (this corrective closure); `docs/06-tracking/known-verifier-exceptions.md` (interim register); sub-step 6.3a.1 checkbox in master-plan; this changelog entry. |
+| What Was Removed | None — `supabaseAdmin` export name preserved via Proxy (no consumer migration needed); `updateStateSurface` is internal to lifecycle.ts (no external callers affected). |
+| Approval Status | Approved (corrective insertion per operator A+ disposition). |
+| Supersession Links | None — this is an additive corrective, not a supersession. |
+
 ### v13.0 → v13.1 (2026-05-22)
 
 **Type:** In-cycle DEC amendment — DEC-034 clause (5) verifier regex correction per Round Final §22.5 Option 1 reconciliation

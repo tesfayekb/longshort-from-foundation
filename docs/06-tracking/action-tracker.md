@@ -2017,6 +2017,23 @@ Over time, action outcomes may become invalid due to later changes:
 
 ---
 
+### ACT-078: FP-006 Sub-Step 6.3a.1 — Corrective: Type Variance + Lazy supabase-admin + FINDING-001 Interim Register
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-078 |
+| **Date** | 2026-05-22 |
+| **Action** | Closed FP-006 sub-step 6.3a.1 (corrective inserted between 6.3a and 6.3b per operator A+ disposition). Three remediations: (1) `updateStateSurface(args)` in `supabase/functions/_shared/longshort-reconciliation-lifecycle.ts` refactored from `{ spec: ReconcileCallSpec<unknown, unknown>, outcome, ts }` to `{ call_name, operator_id, symbol, outcome, ts }` — passes only the discriminator fields the function body actually reads, eliminating the TypeScript invariance collision between `ReconcileCallSpec<TExpected, TObserved>` (reconcile's generic params) and `<unknown, unknown>` (updateStateSurface's signature) — operator preferred this over the `<any, any>` cast alternative. Call site at line 121 of `reconcile()` updated. (2) `supabase/functions/_shared/supabase-admin.ts` refactored from eager module-load `createClient(...!)` to Proxy-wrapped lazy `getClient()` construction — preserves the existing `supabaseAdmin` named export with method-dispatch semantics intact via `Reflect.get(client, prop, client)` + `value.bind(client)` for method-valued properties. Tests + type-check now run without setting SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars. (3) `docs/06-tracking/known-verifier-exceptions.md` created as interim register for FINDING-001 (the 4th-consecutive DEC-034 regex false-positive at `longshort-reconciliation-lifecycle.ts:23`) — exception lives here keyed by file:line + SHA + FOLLOWUP-004 remediation pointer rather than being re-litigated in every future sub-step's ACT entry. Plan version v13.1 → v13.2 minor merge per Constitution Rule 10 for in-FP-006 decomposition insertion + DEC-text governance reduction discipline. Master-plan sub-step inventory header updated `(14 + closure)` → `(15 + closure)`. Sub-step 6.3a.1 checkbox inserted between 6.3a and 6.3b and ticked. |
+| **Type** | Corrective (type-system + platform-tier helper) + Governance (interim verifier-exception register) |
+| **Impact Classification** | Medium (corrective on Tier A surface; no new business logic; restores test-time type safety + enables clean test runs across all subsequent verifier batches) |
+| **Modules Affected** | longshort (reconciliation engine lifecycle); platform (`_shared/supabase-admin.ts` lazy construction — affects all edge function consumers transparently via Proxy); governance (known-verifier-exceptions.md interim register; plan v13.2) |
+| **Files Changed** | `supabase/functions/_shared/longshort-reconciliation-lifecycle.ts` (updateStateSurface signature + call site); `supabase/functions/_shared/supabase-admin.ts` (Proxy refactor); `docs/06-tracking/known-verifier-exceptions.md` (new); `docs/06-tracking/action-tracker.md` (this ACT-078); `docs/08-planning/master-plan.md` (6.3a.1 insertion + tick + header bump); `docs/08-planning/plan-changelog.md` (v13.1 → v13.2 entry); `docs/00-governance/system-state.md` (version + last_updated) |
+| **Related Tests** | After this PR: `deno test supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts` — 23/23 tests green WITHOUT `--no-check` flag, WITHOUT dummy SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY env vars. This supersedes the workaround test invocation documented in ACT-077 Related Tests. FOLLOWUP-003 closed by this verification. |
+| **Evidence** | Type-system fix: `tsc --noEmit` or equivalent strict-mode check on the lifecycle file passes without `updateStateSurface` variance error; reconcile()'s call-site type-checks cleanly with the new args shape. Lazy supabase-admin: `deno eval "import('./supabase/functions/_shared/supabase-admin.ts')"` returns without throwing even with env vars unset (Proxy defers client construction); first method access triggers env-var presence check and clear error message if missing. Verifier tests: 23/23 green under bare `deno test <path>` invocation. FINDING-001: `known-verifier-exceptions.md` contains the exact `longshort-reconciliation-lifecycle.ts:23` entry with content verbatim, regex citation, defense-in-depth rationale, and FOLLOWUP-004 pointer. Plan v13.2: `system-state.md` `current_plan_version` + `approved_plan_baseline` both bumped to v13.2; `plan-changelog.md` records the v13.1 → v13.2 entry; master-plan inventory header `(15 + closure)`. |
+| **Status** | Verified |
+
+---
+
 ## Dependencies
 
 - [Definition of Done](../00-governance/definition-of-done.md) — requires action tracker update
