@@ -798,6 +798,26 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 
 ---
 
+### MIG-045: FP-006 Sub-Step 6.3d — Activate Reconciliation Periodic Sweep
+
+| Field | Value |
+|-------|-------|
+| **ledger_id** | MIG-045 |
+| **migration_file** | `20260522110000_step_6_3d_activate_reconciliation_periodic_sweep.sql` |
+| **source_dir** | `supabase/migrations/` |
+| **applied_date** | (operator populates after live application — FOLLOWUP-002 closure) |
+| **sequence_order** | 45 |
+| **purpose** | FP-006 sub-step 6.3d — activate `longshort.reconciliation_periodic_sweep` job by flipping `enabled=true`. Periodic-sweep edge function exists at this commit; the full 17-verifier roster is implemented; the periodic dispatch path is exercisable end-to-end. Replay-chain job stays `enabled=false` (activates at sub-step 6.5 replay framework). |
+| **Objects affected** | UPDATE on `job_registry` for `id='longshort.reconciliation_periodic_sweep'`; DO-block sanity check raises if row absent (MIG-044 must be applied first) |
+| **RLS** | N/A (UPDATE on existing table) |
+| **Idempotent** | yes (re-running is a no-op if already `enabled=true`) |
+| **Linked Actions** | ACT-081 |
+| **Linked Decisions** | DEC-034.1 clause (9); DEC-035 |
+| **Status** | committed to repo (live application pending FOLLOWUP-002) |
+| **superseded_by** | — |
+
+---
+
 ### Tables (14)
 
 | Table | Created By | Status |
