@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { AlertOctagon, Pause, Play, Square } from 'lucide-react';
 import { format } from 'date-fns';
@@ -58,7 +57,6 @@ export default function AdminKillSwitchPage() {
   const queryClient = useQueryClient();
   const [newStrategy, setNewStrategy] = useState('');
   const [dialog, setDialog] = useState<{ strategy_key: string; action: Action } | null>(null);
-  const [reason, setReason] = useState('');
 
   const { data: rows, isLoading, error } = useQuery({
     queryKey: ['admin', 'kill-switches'],
@@ -86,7 +84,6 @@ export default function AdminKillSwitchPage() {
       toast.success(`${ACTION_LABEL[vars.action]} succeeded for ${vars.strategy_key}`);
       void queryClient.invalidateQueries({ queryKey: ['admin', 'kill-switches'] });
       setDialog(null);
-      setReason('');
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -95,7 +92,7 @@ export default function AdminKillSwitchPage() {
   });
 
   if (isLoading) return <LoadingSkeleton variant="page" />;
-  if (error) return <ErrorState title="Failed to load kill switches" message={(error as Error).message} />;
+  if (error) return <ErrorState message={(error as Error).message} />;
 
   const knownStrategies = new Set((rows ?? []).map((r) => r.strategy_key));
 
@@ -103,7 +100,7 @@ export default function AdminKillSwitchPage() {
     <div className="space-y-6">
       <PageHeader
         title="Kill Switches"
-        description="Platform-tier emergency controls for all strategies. Soft-pause halts new entries; hard-pause halts all activity; manual-liquidate initiates position unwind (Phase 5)."
+        subtitle="Platform-tier emergency controls for all strategies. Soft-pause halts new entries; hard-pause halts all activity; manual-liquidate initiates position unwind (Phase 5)."
       />
 
       <Card>
@@ -220,30 +217,24 @@ export default function AdminKillSwitchPage() {
         onOpenChange={(open) => {
           if (!open) {
             setDialog(null);
-            setReason('');
           }
         }}
         title={dialog ? `${ACTION_LABEL[dialog.action]} — ${dialog.strategy_key}` : ''}
         description="Provide a reason for the audit log. This action is logged and may be irreversible."
         confirmLabel={dialog ? ACTION_LABEL[dialog.action] : 'Confirm'}
-        variant={dialog?.action === 'manual_liquidate' || dialog?.action === 'hard_pause' ? 'destructive' : 'default'}
-        onConfirm={async () => {
+        destructive={dialog?.action === 'manual_liquidate' || dialog?.action === 'hard_pause'}
+        requireReason
+        reasonLabel="Reason (required, recorded in audit log)"
+        loading={mutation.isPending}
+        onConfirm={async (reason) => {
           if (!dialog) return;
-          await mutation.mutateAsync({ strategy_key: dialog.strategy_key, action: dialog.action, reason });
+          await mutation.mutateAsync({
+            strategy_key: dialog.strategy_key,
+            action: dialog.action,
+            reason: reason ?? '',
+          });
         }}
-        isPending={mutation.isPending}
-      >
-        <div className="space-y-2 pt-2">
-          <Label htmlFor="reason">Reason</Label>
-          <Textarea
-            id="reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Why is this action being taken?"
-            rows={3}
-          />
-        </div>
-      </ConfirmActionDialog>
+      />
     </div>
   );
 }
