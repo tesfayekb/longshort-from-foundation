@@ -62,11 +62,10 @@ export async function reconcile<TExpected, TObserved>(
   const divergence = spec.compute_divergence(expected, observed);
   const outcome = spec.classify_outcome(divergence, spec.tolerance);
 
-  // STEP (e-pre) — execute failure action FIRST (before event INSERT) so failure_action
-  // can be persisted in the event row in a single INSERT. Per the spec the strict 6-step
-  // ordering allows either pre-INSERT or post-INSERT-then-UPDATE; we choose pre-INSERT
-  // because it (1) avoids a second round-trip, (2) keeps event rows atomically complete.
-  // failure_action errors are caught — never propagated past the lifecycle.
+  // STEP (e) — execute failure action BEFORE event INSERT so `failure_action` can be
+  // persisted in the event row in a single round-trip. The spec permits pre-INSERT or
+  // post-INSERT-then-UPDATE ordering; pre-INSERT keeps event rows atomically complete and
+  // avoids the second round-trip. failure_action errors are caught — never propagated.
   let action_taken: string | null = null;
   let action_error: string | null = null;
   const shouldRunAction =

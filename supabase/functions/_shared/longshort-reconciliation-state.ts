@@ -43,9 +43,9 @@ export interface RebuildOptions {
 
 export interface RebuildResult {
   rows: ReconciliationStateRow[];
-  wall_clock_ms: number;
+  wall_clock_ms: number;  // always 0 in scaffold; caller-side instrumentation owns budget timing
   events_read: number;
-  budget_exceeded: boolean;  // true if wall_clock_ms > REBUILD_BUDGET_MS
+  budget_exceeded: boolean;  // always false in scaffold; caller checks elapsed against REBUILD_BUDGET_MS
 }
 
 /** Event-row shape returned from the bounded-window SELECT. */
@@ -87,12 +87,12 @@ export async function rebuildStateFromEvents(
   options: RebuildOptions,
   ts: Date,
 ): Promise<RebuildResult> {
-  // allow-now-in-business-logic: DEC-034.1 clause (3) budget tracking
-  // Note: performance.now() reads here are for elapsed-time measurement only — not used in
-  // any financial computation, only for budget enforcement. Per DEC-034 clause (4) the
-  // "wall-clock leakage" ban targets business-logic paths; budget instrumentation is exempt.
-  const t0 = performance.now();
-
+  // Budget instrumentation is intentionally NOT performed inside this function — per
+  // DEC-034 clause (4) NO wall-clock reads occur in financial-logic modules outside the
+  // sanctioned `longshort-clock.ts` location. The caller (edge function or periodic-sweep
+  // job) is responsible for wrapping this call with its own elapsed-time measurement and
+  // comparing against `REBUILD_BUDGET_MS`. The returned `wall_clock_ms` is 0 and
+  // `budget_exceeded` is false; both are placeholders for future caller-side enrichment.
   let query = supabaseAdmin
     .from('reconciliation_events')
     .select('ts, symbol, call_name, outcome')
@@ -179,12 +179,11 @@ export async function rebuildStateFromEvents(
     });
   }
 
-  const wall_clock_ms = performance.now() - t0;
   return {
     rows,
-    wall_clock_ms,
+    wall_clock_ms: 0,
     events_read,
-    budget_exceeded: wall_clock_ms > REBUILD_BUDGET_MS,
+    budget_exceeded: false,
   };
 }
 
