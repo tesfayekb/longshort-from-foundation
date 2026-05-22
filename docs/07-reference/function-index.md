@@ -1595,3 +1595,67 @@ Same contract; sets `state='liquidating'`; audit action `kill_switch.manual_liqu
 ### `kill_switch_resume(p_strategy_key text, p_reason text, p_operator_id uuid)` — db-function
 
 Resumes from `soft_paused` only. Raises `no_data_found` if no row; raises `invalid_transaction_state` if current state ≠ `soft_paused`. Audit action `kill_switch.resume`.
+
+---
+
+## Reconciliation Engine Helpers (FP-006 Sub-Step 6.2)
+
+### `reconcile<TExpected, TObserved>(spec, invoke, ts)` — ts-function
+
+| Field | Value |
+|-------|-------|
+| **Type** | ts-function (Deno edge shared module) |
+| **Classification** | financial-critical + audit-critical |
+| **Owner module** | longshort (reconciliation engine) |
+| **Signature** | `reconcile<TExpected, TObserved>(spec: ReconcileCallSpec<TExpected, TObserved>, invoke: (ts: Date) => Promise<{expected: TExpected; observed: TObserved}>, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-reconciliation-lifecycle.ts` |
+| **6-step lifecycle** | (a) invoke → (b) classify → (c) write event row → (d) update state surface → (e) execute failure action → (f) return result. (e) runs before (c) in implementation so `failure_action` is persisted atomically with the event row; ordering is semantic, not strict source-line. |
+| **Side effects** | INSERTs row in `reconciliation_events`; upserts row in `longshort_reconciliation_state` (skipped for symbol=null system-level calls); invokes `spec.failure_action` when outcome ∈ {failure_handled, failure_escalated, system_bug} |
+| **Throws** | `invoke()` rejection; `reconciliation_events` INSERT failure |
+| **Does NOT throw** | `failure_action` errors (caught + recorded in event `notes`); state upsert errors (caught + recorded in event `notes`; lifecycle still returns per DEC-034.1 clause (2) state-as-cache contract) |
+| **Authorization** | Service-role only (via `supabaseAdmin`) — bypasses RLS write-block policies on both tables |
+| **Determinism** | Pure given `(spec, invoke, ts)` for replay-test PASS per DEC-035 clause (1). No internal wall-clock reads. |
+| **Added by** | FP-006 sub-step 6.2(c), ACT-076 |
+
+### `rebuildStateFromEvents(options, ts)` — ts-function
+
+| Field | Value |
+|-------|-------|
+| **Type** | ts-function (Deno edge shared module) |
+| **Classification** | financial-critical |
+| **Owner module** | longshort (reconciliation engine) |
+| **Signature** | `rebuildStateFromEvents(options: RebuildOptions, ts: Date): Promise<RebuildResult>` |
+| **File** | `supabase/functions/_shared/longshort-reconciliation-state.ts` |
+| **Purpose** | Project `reconciliation_events` over a bounded window back into the state surface per DEC-034.1 clause (2) state-as-projection contract. Used for cold-start, corruption recovery, instance migration. |
+| **Budget** | `REBUILD_BUDGET_MS = 5_000` (5s) per DEC-034.1 clause (3) on one operator's rolling-hour window. Returns `budget_exceeded: true` if elapsed exceeds budget (partial result still valid). |
+| **Side effects** | None (read-only SELECT against `reconciliation_events`; does NOT persist) |
+| **Throws** | SELECT error from `reconciliation_events` (no silent fallback per DEC-034 clause (2)) |
+| **Determinism** | Pure given `(options, ts)` for replay-test PASS per DEC-035 clause (1) |
+| **Added by** | FP-006 sub-step 6.2(d), ACT-076 |
+
+### `persistStateRows(rows)` — ts-function
+
+| Field | Value |
+|-------|-------|
+| **Type** | ts-function (Deno edge shared module) |
+| **Classification** | financial-critical |
+| **Owner module** | longshort (reconciliation engine) |
+| **Signature** | `persistStateRows(rows: ReconciliationStateRow[]): Promise<void>` |
+| **File** | `supabase/functions/_shared/longshort-reconciliation-state.ts` |
+| **Purpose** | Upsert state rows into `longshort_reconciliation_state` using composite PK `(operator_id, symbol, call_name)`. Called by lifecycle step (d) and post-rebuild flows. |
+| **Side effects** | Upserts rows in `longshort_reconciliation_state` |
+| **Throws** | Empty input (defensive contract — refuses silent noop); upsert error |
+| **Authorization** | Service-role only (via `supabaseAdmin`) — bypasses RLS write-block |
+| **Added by** | FP-006 sub-step 6.2(d), ACT-076 |
+
+### `productionClock` / `createFixedClock(ts)` — ts-helper
+
+| Field | Value |
+|-------|-------|
+| **Type** | ts-helper (Deno edge shared module) |
+| **Classification** | platform infrastructure (injected-clock) |
+| **Owner module** | longshort (sub-step 6.2; future DW-054 extraction trigger) |
+| **File** | `supabase/functions/_shared/longshort-clock.ts` |
+| **Purpose** | SOLE sanctioned location for wall-clock reads in the reconciliation engine path per DEC-034 clause (4) + DEC-035 clause (2). `productionClock.getWallClockTs()` reads `new Date()` (the only such read in the engine); `createFixedClock(ts)` returns deterministic clock for tests + replay. All downstream reconciliation code receives `ts: Date` as a parameter and propagates — never derives time internally. |
+| **Override mechanism** | `// allow-now-in-business-logic: <ADR-ID>` permits specific instances elsewhere with ADR. |
+| **Added by** | FP-006 sub-step 6.2(c), ACT-076 |
