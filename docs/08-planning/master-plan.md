@@ -437,10 +437,31 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 - **Feature Proposal:** FP-006
 - **Tier:** A (FINANCIAL-CRITICAL)
 - **Decisions ratified:** DEC-034 / DEC-034.1 / DEC-035 / DEC-036 / DEC-037
-- **Phase Gates (5):** Gate 6.0 (Prerequisites + DEC ratifications); Gate 6.3 (Phase 0A residual + reconciliation engine + 17 verify_*); Gate 6.4 (Strong-evidence workflow tooling, fail-fast); Gate 6.7 (Replay framework + A1 baseline + Alpaca paper); Gate 6.9 (ADR-002 multi-pending validation + Phase 0B exit gate quietness)
-- **Sub-step inventory (14):** 6.0a / 6.0b / 6.0c / 6.1 / 6.2 / 6.3a / 6.3b / 6.3c / 6.3d / 6.4 / 6.5 / 6.6 / 6.7 / 6.8 / 6.9 (+ 6.10 closure)
+- **Phase Gates (5):**
+  - [x] Gate 6.0 — Prerequisites + DEC ratifications + reconciliation stub + audit-writer trap rg-zero (closed 2026-05-22, ACT-074)
+  - [ ] Gate 6.3 — Phase 0A residual + reconciliation engine + 17 verify_*
+  - [ ] Gate 6.4 — Strong-evidence workflow tooling, fail-fast
+  - [ ] Gate 6.7 — Replay framework + A1 baseline + Alpaca paper
+  - [ ] Gate 6.9 — ADR-002 multi-pending validation + Phase 0B exit gate quietness
+- **Sub-step inventory (14 + closure):**
+  - [x] 6.0a — Prerequisite doc closures + DEC ratifications evidenced (closed 2026-05-22, ACT-074)
+  - [x] 6.0b — Platform-tier reconciliation stub landed at `supabase/functions/_shared/strategy-reconciliation.ts` (closed 2026-05-22, ACT-074)
+  - [x] 6.0c — Audit-writer trap rg-zero invariant verified per DEC-034 v13.1 corrected verifier (closed 2026-05-22, ACT-074)
+  - [ ] 6.1 — Phase 0A residual items + pg_cron precondition check
+  - [ ] 6.2 — Reconciliation engine state-machine + event-log scaffolding
+  - [ ] 6.3a — verify_* batch A (#1–#5)
+  - [ ] 6.3b — verify_* batch B (#6–#10)
+  - [ ] 6.3c — verify_* batch C (#11–#14)
+  - [ ] 6.3d — verify_* batch D (#15–#17) + Gate 6.3 closure
+  - [ ] 6.4 — Strong-evidence workflow tooling + Gate 6.4 closure
+  - [ ] 6.5 — Replay framework + L2 synthetic Day 1
+  - [ ] 6.6 — A1 baseline harness
+  - [ ] 6.7 — Alpaca paper integration + Gate 6.7 closure
+  - [ ] 6.8 — ADR-002 multi-pending validation harness
+  - [ ] 6.9 — Phase 0B exit gate quietness evidencing + Gate 6.9 closure
+  - [ ] 6.10 — Module status transition `foundation-implemented` → `phase-0b-validated` (closure)
 - **AC count:** 79
-- **Plan Version impact:** v12.1 → v13.0
+- **Plan Version impact:** v12.1 → v13.0 (Round Final); v13.0 → v13.1 (Gate 6.0 closure — DEC-034 clause (5) verifier amendment)
 - **Dependencies:** PLAN-TRADING-001-LONGSHORT-001 (FP-005) closed; FP-007 CI/CD Pipeline Bootstrap closed (hard prerequisite per DEC-032 clause (4))
 - **Out-of-scope:** 17 items per FP-006 entry (Phases 1-9, DW-046/047/051/052/053/054/056, sustained-anomaly kill VALUES, trader-class roles, real Day 1 capture, §15 risk register reconciliation)
 - **Risk register:** H1-H7 per FP-006 entry
