@@ -272,7 +272,7 @@ Deno.test('AC-20: verify_ssr_status — state=indeterminate → failure_handled 
 
 // ─── Registry sanity ───────────────────────────────────────────────
 
-Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 14 batch-A+B+C verifiers in canonical order', () => {
+Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 17 §11.0.7 verifiers in canonical order', () => {
   assertEquals(IMPLEMENTED_VERIFIERS, [
     'verify_position',
     'verify_quote',
@@ -288,19 +288,21 @@ Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 14 batch-A+B+C verifi
     'verify_settlement_status',
     'verify_order_acceptance',
     'verify_realized_pnl',
+    'verify_lot_record',
+    'verify_wash_sale_record',
+    'verify_rebalance_aggregate',
   ]);
 });
 
-Deno.test('Registry — isVerifierImplemented reflects batch-A+B+C membership', () => {
+Deno.test('Registry — isVerifierImplemented reflects full 17-verifier roster (6.3d closure)', () => {
   assertEquals(isVerifierImplemented('verify_position'), true);
   assertEquals(isVerifierImplemented('verify_halt_status'), true);
   assertEquals(isVerifierImplemented('verify_universe_membership'), true);
   assertEquals(isVerifierImplemented('verify_corporate_action_clean'), true);
   assertEquals(isVerifierImplemented('verify_realized_pnl'), true);
-  // Batch D (#15-#17) not yet implemented:
-  assertEquals(isVerifierImplemented('verify_lot_record'), false);
-  assertEquals(isVerifierImplemented('verify_wash_sale_record'), false);
-  assertEquals(isVerifierImplemented('verify_rebalance_aggregate'), false);
+  assertEquals(isVerifierImplemented('verify_lot_record'), true);
+  assertEquals(isVerifierImplemented('verify_wash_sale_record'), true);
+  assertEquals(isVerifierImplemented('verify_rebalance_aggregate'), true);
 });
 
 // ─── AC-21: verify_halt_status (#6 — Low/strong) ──────────────────
