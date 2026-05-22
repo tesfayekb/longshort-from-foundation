@@ -183,3 +183,84 @@ export interface UniverseMembershipFetcher {
    */
   fetchUniverseMembership(symbol: string, ts: Date): Promise<UniverseMembershipStatus>;
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Sub-step 6.3c additions (verify_*'s #11-#14 broker contracts)
+// ────────────────────────────────────────────────────────────────────
+
+/** Corporate action snapshot for verify_corporate_action_clean (#11). */
+export interface BrokerCorporateActionSnapshot {
+  symbol: string;
+  recent_action_within_lookback: boolean;  // true if a corporate action occurred within lookback_days
+  action_type: string | null;              // 'split' / 'dividend' / 'merger' / 'spinoff' / etc; null when no action
+  action_ts: Date | null;                  // when the corporate action occurred
+  broker_basis_adjusted: boolean;          // true if broker's adjusted cost basis already reflects the action
+  hours_since_action: number | null;       // wall-clock hours between action_ts and ts; null when no action
+  fetched_at: Date;
+}
+
+export interface BrokerCorporateActionFetcher {
+  /** Fetch corporate-action snapshot. Per §11.0.7 #11: returns whether recent CA exists + adjustment status. */
+  fetchCorporateActionSnapshot(symbol: string, lookback_days: number, ts: Date): Promise<BrokerCorporateActionSnapshot>;
+}
+
+/** Settlement status for verify_settlement_status (#12). */
+export interface BrokerSettlementStatus {
+  symbol: string;
+  side: 'long' | 'short';
+  trade_ts: Date;                          // when the trade was executed
+  settled: boolean;
+  expected_settlement_ts: Date;            // typically trade_ts + T+1
+  fetched_at: Date;
+}
+
+export interface BrokerSettlementStatusFetcher {
+  /**
+   * Fetch settlement status. Per §11.0.7 #12 + §11.0.9 line 235:
+   *   - Pre-T+1 "not settled" = expected (expected_divergence_handled)
+   *   - Post-T+1 "not settled" = failure_escalated (Zero-tolerance)
+   *   - Settled = false_positive_within_tolerance
+   */
+  fetchSettlementStatus(symbol: string, side: 'long' | 'short', trade_ts: Date, ts: Date): Promise<BrokerSettlementStatus>;
+}
+
+/** Order acceptance status for verify_order_acceptance (#13). Tri-state per §11.0.7. */
+export type OrderAcceptanceState = 'accepted' | 'rejected' | 'pending';
+
+export interface BrokerOrderAcceptanceResult {
+  order_id: string;
+  symbol: string | null;                   // populated when broker associates order with symbol; null permitted
+  state: OrderAcceptanceState;
+  rejection_reason: string | null;         // populated when state='rejected'
+  pending_elapsed_s: number;               // wall-clock seconds since order submission; relevant for state='pending'
+  fetched_at: Date;
+}
+
+export interface BrokerOrderAcceptanceFetcher {
+  /**
+   * Fetch order acceptance status. Per §11.0.7 #13 tri-state:
+   *   - accepted: broker confirmed
+   *   - rejected: broker returned explicit rejection (Zero-tolerance per §11.0.9 line 234)
+   *   - pending: no broker response within timeout_s; escalate polling but DO NOT cancel-and-retry
+   *     (cancellation of a just-filled order creates phantom-rejection / retry-storm class — banned per §11.0.7 #13)
+   */
+  fetchOrderAcceptance(order_id: string, timeout_s: number, ts: Date): Promise<BrokerOrderAcceptanceResult>;
+}
+
+/** Realized P&L confirmation for verify_realized_pnl (#14). Broker confirm is ground truth per §11.0.7 + §11.0.10. */
+export interface BrokerRealizedPnLConfirm {
+  trade_id: string;
+  symbol: string;
+  broker_confirmed_pnl: number;            // dollars; positive = gain, negative = loss
+  trade_ts: Date;
+  fetched_at: Date;
+}
+
+export interface BrokerRealizedPnLFetcher {
+  /**
+   * Fetch broker's confirmed realized P&L for a closed trade. Strong+ tier per §11.0.10:
+   * tax/regulatory retention indefinite. Zero-tolerance per §11.0.9 line 233: any non-trivial
+   * divergence escalates immediately.
+   */
+  fetchRealizedPnL(trade_id: string, ts: Date): Promise<BrokerRealizedPnLConfirm>;
+}
