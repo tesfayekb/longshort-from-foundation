@@ -27,6 +27,10 @@ import {
   buildVerifyBorrowPersistenceSpec,
   buildVerifyBuyingPowerSpec,
   buildVerifyUniverseMembershipSpec,
+  buildVerifyCorporateActionCleanSpec,
+  buildVerifySettlementStatusSpec,
+  buildVerifyOrderAcceptanceSpec,
+  buildVerifyRealizedPnLSpec,
   IMPLEMENTED_VERIFIERS,
   isVerifierImplemented,
 } from './index.ts';
@@ -265,7 +269,7 @@ Deno.test('AC-20: verify_ssr_status — state=indeterminate → failure_handled 
 
 // ─── Registry sanity ───────────────────────────────────────────────
 
-Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 10 batch-A+B verifiers in canonical order', () => {
+Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 14 batch-A+B+C verifiers in canonical order', () => {
   assertEquals(IMPLEMENTED_VERIFIERS, [
     'verify_position',
     'verify_quote',
@@ -277,15 +281,22 @@ Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 10 batch-A+B verifier
     'verify_borrow_persistence',
     'verify_buying_power',
     'verify_universe_membership',
+    'verify_corporate_action_clean',
+    'verify_settlement_status',
+    'verify_order_acceptance',
+    'verify_realized_pnl',
   ]);
 });
 
-Deno.test('Registry — isVerifierImplemented reflects batch-A+B membership', () => {
+Deno.test('Registry — isVerifierImplemented reflects batch-A+B+C membership', () => {
   assertEquals(isVerifierImplemented('verify_position'), true);
   assertEquals(isVerifierImplemented('verify_halt_status'), true);
   assertEquals(isVerifierImplemented('verify_universe_membership'), true);
-  // Batch C/D (#11-#17) not yet implemented:
-  assertEquals(isVerifierImplemented('verify_corporate_action_clean'), false);
+  assertEquals(isVerifierImplemented('verify_corporate_action_clean'), true);
+  assertEquals(isVerifierImplemented('verify_realized_pnl'), true);
+  // Batch D (#15-#17) not yet implemented:
+  assertEquals(isVerifierImplemented('verify_lot_record'), false);
+  assertEquals(isVerifierImplemented('verify_wash_sale_record'), false);
   assertEquals(isVerifierImplemented('verify_rebalance_aggregate'), false);
 });
 
