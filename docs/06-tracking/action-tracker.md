@@ -2000,6 +2000,23 @@ Over time, action outcomes may become invalid due to later changes:
 
 ---
 
+### ACT-077: FP-006 Sub-Step 6.3a — verify_* Batch A (#1–#5)
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-077 |
+| **Date** | 2026-05-22 |
+| **Action** | Closed FP-006 sub-step 6.3a by landing verify_* batch A: #1 verify_position (Zero-tolerance / strong_plus), #2 verify_quote (Noise-tolerant / medium + 100bps magnitude escalation), #3 verify_quote_freshness (Noise-tolerant / medium), #4 verify_short_availability (Low-tolerance / strong), #5 verify_ssr_status (Low-tolerance / strong / tri-state). Each verifier is an importable Deno module under `supabase/functions/_shared/longshort-verifiers/` exposing `buildVerifyXxxSpec()` + `verifyXxx()` convenience wrapper. Broker interfaces defined at `_shared/longshort-broker-interfaces.ts` (BrokerPositionFetcher / BrokerQuoteFetcher / BrokerLocateFetcher / BrokerSSRStatusFetcher); real implementations land at sub-step 6.7 (Alpaca paper). Combined Deno test file at `longshort-verifiers_test.ts` (23 tests, all passing) exercises each verifier's classify_outcome against §11.0.9 per-class rules + magnitude escalation + tri-state coverage. The verifiers do NOT yet dispatch from edge functions — that integration lands at sub-step 6.3d Gate 6.3 closure. Sub-step 6.3a checkbox ticked in PLAN-TRADING-001-LONGSHORT-002. |
+| **Type** | Feature (financial-critical reconciliation verifiers) |
+| **Impact Classification** | High (financial-correctness gates; the 6-step lifecycle now has real callers) |
+| **Modules Affected** | longshort (5 new verifiers + broker interfaces); reconciliation engine (now exercised end-to-end by unit tests with mock fetchers) |
+| **Files Changed** | `_shared/longshort-broker-interfaces.ts` (1); 5 verifier modules + `index.ts` + combined test file under `_shared/longshort-verifiers/` (7); `function-index.md` (9 new entries); this ACT-077; `master-plan.md` (6.3a tick) — exactly 11 files per §22.3 item 1 scope lock. |
+| **Related Tests** | `supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts` — 23 Deno tests, all passing. Run: `SUPABASE_URL=http://localhost SUPABASE_SERVICE_ROLE_KEY=dummy deno test --allow-net --allow-env --no-check supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts`. (The `--no-check` flag and dummy env vars work around a pre-existing 6.2 generic-variance type issue in `updateStateSurface(spec)` and the supabase-admin top-level client construction; tests exercise pure compute_divergence + classify_outcome + failure_action paths and do not hit DB. Logged as FOLLOWUP-003 for 6.3d to address before edge-function dispatch lands.) |
+| **Evidence** | AC-16: verify_position spec tier=strong_plus + tolerance_class=zero_tolerance verified; qty_diff !== 0 → failure_escalated; cost_basis diff > 1¢/share → failure_escalated; observed=null → failure_escalated; within-tolerance → false_positive_within_tolerance; failure_action returns `symbol_halt_alert_emitted` per §11.0.9 zero-tolerance verbatim. AC-17: verify_quote spec tier=medium + noise_tolerant verified; max_pairwise_bps ≥ 100 → failure_escalated (magnitude escalation per §11.0.9 line 270); 5bps + 1¢ both-must-exceed → failure_handled (interpretation of §11.0.9 line 224 "5bps OR 1¢ whichever greater"); within both → false_positive_within_tolerance; failure_action `logged_for_pattern_analysis`. AC-18: verify_quote_freshness spec default max_age_s=5 verified; stale (10s>5) → failure_handled + `mtm_skipped_quote_stale`; fresh (2s<5) → false_positive_within_tolerance. AC-19: verify_short_availability spec strong + low_tolerance verified; available=false → failure_handled + `short_entry_skipped_locate_unavailable`; partial qty (50<100) → failure_handled (no substitution per §11.0.7 #4); full qty → false_positive_within_tolerance. AC-20: verify_ssr_status tri-state verified — DEC-035 clause (4) ≥3 scenarios met: not_active → false_positive_within_tolerance; active → failure_handled + `ssr_compliant_routing_required`; indeterminate → failure_handled + `short_skipped_ssr_indeterminate`. Banned-pattern enforcement: no `Date.now()` / `new Date()` / `performance.now()` in verifier code paths; no sentinel coercion; no phantom-success try/catch; no `logAuditEvent` import (audit-writer trap rg-zero maintained). |
+| **Status** | Verified |
+
+---
+
 ## Dependencies
 
 - [Definition of Done](../00-governance/definition-of-done.md) — requires action tracker update
