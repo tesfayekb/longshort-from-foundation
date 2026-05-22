@@ -77,8 +77,8 @@ export function buildVerifyWashSaleRecordSpec(args: {
       const diverged: string[] = [];
       const details: Record<string, { expected: unknown; observed: unknown }> = {};
       for (const f of COMPARED_FIELDS) {
-        const e = (expected as Record<string, unknown>)[f];
-        const o = (observed as Record<string, unknown>)[f];
+        const e = (expected as unknown as Record<string, unknown>)[f];
+        const o = (observed as unknown as Record<string, unknown>)[f];
         if (!valuesEqual(e, o)) {
           diverged.push(f);
           details[f] = { expected: e, observed: o };
