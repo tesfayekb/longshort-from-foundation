@@ -196,12 +196,14 @@ async function writeEventRow(
  * Skips system-level calls (symbol === null) — state surface PK requires non-null symbol.
  */
 async function updateStateSurface(args: {
-  spec: ReconcileCallSpec<unknown, unknown>;
+  call_name: VerifyCallName;
+  operator_id: string;
+  symbol: string | null;
   outcome: ReconciliationOutcome;
   ts: Date;
 }): Promise<void> {
-  const { spec, outcome, ts } = args;
-  if (spec.symbol === null) {
+  const { call_name, operator_id, symbol, outcome, ts } = args;
+  if (symbol === null) {
     // System-level calls (verify_buying_power, verify_rebalance_aggregate) do not project
     // onto the per-symbol state surface. Their evidence lives in reconciliation_events only.
     return;
@@ -214,9 +216,9 @@ async function updateStateSurface(args: {
   const { data: existing, error: readErr } = await supabaseAdmin
     .from('longshort_reconciliation_state')
     .select('*')
-    .eq('operator_id', spec.operator_id)
-    .eq('symbol', spec.symbol)
-    .eq('call_name', spec.call_name)
+    .eq('operator_id', operator_id)
+    .eq('symbol', symbol)
+    .eq('call_name', call_name)
     .maybeSingle();
 
   if (readErr) {
@@ -258,9 +260,9 @@ async function updateStateSurface(args: {
     .from('longshort_reconciliation_state')
     .upsert(
       {
-        operator_id: spec.operator_id,
-        symbol: spec.symbol,
-        call_name: spec.call_name,
+        operator_id,
+        symbol,
+        call_name,
         rolling_window_count,
         rolling_window_start: rolling_window_start.toISOString(),
         last_firing_ts,
