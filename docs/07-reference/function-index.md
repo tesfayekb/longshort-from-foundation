@@ -1883,3 +1883,63 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | `BrokerSettlementStatusFetcher` | same | verifySettlementStatus | sub-step 6.7 |
 | `BrokerOrderAcceptanceFetcher` | same | verifyOrderAcceptance | sub-step 6.7 |
 | `BrokerRealizedPnLFetcher` | same | verifyRealizedPnL | sub-step 6.7 |
+
+### verify_* Batch D (#15–#17) + Periodic Dispatch — sub-step 6.3d (ACT-081)
+
+#### `verifyLotRecord`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3d) |
+| **Classification** | financial-critical **strong_plus** tier per §11.0.10 line 334 (tax/regulatory retention indefinite) |
+| **Signature** | `verifyLotRecord(args: {operator_id, expected: InternalLotRecord}, fetcher: BrokerLotRecordFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_lot_record.ts` |
+| **Tolerance class** | zero_tolerance + exact-match on {lot_id, symbol, entry_ts, qty, cost_basis, side, status, locate_id} per §11.0.7 #15 |
+| **Failure action** | any field divergence → `lot_record_divergence_tax_regulatory_alert_emitted` |
+| **Added by** | FP-006 sub-step 6.3d, ACT-081 |
+
+#### `verifyWashSaleRecord`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3d) |
+| **Classification** | financial-critical **strong_plus** tier per §11.0.10 line 334 (year-end 1099-B / Form 8949 reconciliation endpoint) |
+| **Signature** | `verifyWashSaleRecord(args: {operator_id, expected: InternalWashSaleRecord}, fetcher: BrokerWashSaleRecordFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_wash_sale_record.ts` |
+| **Tolerance class** | zero_tolerance + exact-match on {symbol, exit_ts, realized_loss, lot_ids_affected, status, block_until, attached_to_lot_id} |
+| **Failure action** | any field divergence → `wash_sale_record_divergence_tax_regulatory_alert_emitted` |
+| **Added by** | FP-006 sub-step 6.3d, ACT-081 |
+
+#### `verifyRebalanceAggregate`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3d) |
+| **Classification** | financial-critical **strong** tier per §11.0.7 #17; **SYSTEM-LEVEL** (symbol=null) — fourth system-level verifier (after #9 verify_buying_power) |
+| **Signature** | `verifyRebalanceAggregate(args: {operator_id}, fetcher: BrokerRebalanceAggregateFetcher, ts: Date): Promise<ReconcileResult>` |
+| **File** | `supabase/functions/_shared/longshort-verifiers/verify_rebalance_aggregate.ts` |
+| **Tolerance class** | zero_tolerance + 90-110% ratio band per §1.6 (ratio_lower=0.90, ratio_upper=1.10) |
+| **Failure action** | out-of-band → `rebalance_aggregate_band_violation_operator_alert_emitted_no_auto_retry` (do NOT auto-retry rebalance) |
+| **Added by** | FP-006 sub-step 6.3d, ACT-081 |
+
+#### Broker fetcher interfaces — sub-step 6.3d (ACT-081)
+
+| Interface | File | Consumed by | Real impl |
+|---|---|---|---|
+| `BrokerLotRecordFetcher` | `supabase/functions/_shared/longshort-broker-interfaces.ts` | verifyLotRecord | Phase 1+ (lot ledger schema) |
+| `BrokerWashSaleRecordFetcher` | same | verifyWashSaleRecord | Phase 1+ (wash_sale_events schema) |
+| `BrokerRebalanceAggregateFetcher` | same | verifyRebalanceAggregate | sub-step 6.7 (Alpaca `/v2/positions`) |
+
+#### Edge function `longshort-reconciliation-tick`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.3d) |
+| **Classification** | financial-critical (periodic-sweep dispatch path for reconciliation engine) |
+| **File** | `supabase/functions/longshort-reconciliation-tick/index.ts` |
+| **Method / Permission** | POST / `longshort.view` (observability discipline; `longshort.execute` reserved for Phase 5+) |
+| **Dispatches** | verify_buying_power (system-level), verify_universe_membership, verify_position (per-symbol; canned AAPL for 6.3d dispatch-path validation) |
+| **Clock** | `productionClock.getWallClockTs()` at top-of-call-chain (DEC-034 clause (4) injected-clock) |
+| **Mock fetchers** | YES — sub-step 6.3d proves dispatch path; real broker integration at sub-step 6.7 |
+| **Activated by job** | `longshort.reconciliation_periodic_sweep` (`enabled=true` via MIG-045) |
+| **Added by** | FP-006 sub-step 6.3d, ACT-081 |
