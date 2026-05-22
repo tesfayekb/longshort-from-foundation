@@ -31,6 +31,9 @@ import {
   buildVerifySettlementStatusSpec,
   buildVerifyOrderAcceptanceSpec,
   buildVerifyRealizedPnLSpec,
+  buildVerifyLotRecordSpec,
+  buildVerifyWashSaleRecordSpec,
+  buildVerifyRebalanceAggregateSpec,
   IMPLEMENTED_VERIFIERS,
   isVerifierImplemented,
 } from './index.ts';
@@ -269,7 +272,7 @@ Deno.test('AC-20: verify_ssr_status — state=indeterminate → failure_handled 
 
 // ─── Registry sanity ───────────────────────────────────────────────
 
-Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 14 batch-A+B+C verifiers in canonical order', () => {
+Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 17 §11.0.7 verifiers in canonical order', () => {
   assertEquals(IMPLEMENTED_VERIFIERS, [
     'verify_position',
     'verify_quote',
@@ -285,19 +288,21 @@ Deno.test('Registry — IMPLEMENTED_VERIFIERS contains all 14 batch-A+B+C verifi
     'verify_settlement_status',
     'verify_order_acceptance',
     'verify_realized_pnl',
+    'verify_lot_record',
+    'verify_wash_sale_record',
+    'verify_rebalance_aggregate',
   ]);
 });
 
-Deno.test('Registry — isVerifierImplemented reflects batch-A+B+C membership', () => {
+Deno.test('Registry — isVerifierImplemented reflects full 17-verifier roster (6.3d closure)', () => {
   assertEquals(isVerifierImplemented('verify_position'), true);
   assertEquals(isVerifierImplemented('verify_halt_status'), true);
   assertEquals(isVerifierImplemented('verify_universe_membership'), true);
   assertEquals(isVerifierImplemented('verify_corporate_action_clean'), true);
   assertEquals(isVerifierImplemented('verify_realized_pnl'), true);
-  // Batch D (#15-#17) not yet implemented:
-  assertEquals(isVerifierImplemented('verify_lot_record'), false);
-  assertEquals(isVerifierImplemented('verify_wash_sale_record'), false);
-  assertEquals(isVerifierImplemented('verify_rebalance_aggregate'), false);
+  assertEquals(isVerifierImplemented('verify_lot_record'), true);
+  assertEquals(isVerifierImplemented('verify_wash_sale_record'), true);
+  assertEquals(isVerifierImplemented('verify_rebalance_aggregate'), true);
 });
 
 // ─── AC-21: verify_halt_status (#6 — Low/strong) ──────────────────
@@ -742,4 +747,131 @@ Deno.test('AC-29: verify_realized_pnl — diff_cents > 1 → failure_escalated +
     ts: new Date(0), outcome: 'failure_escalated', divergence: div, expected: { trade_id: 't-1', claimed_pnl: 100.00 }, observed,
   });
   assertEquals(action.action_taken, 'realized_pnl_divergence_operator_alert_emitted');
+});
+
+// ─── AC-30: verify_lot_record (#15 — Zero + strong_plus / tax-regulatory) ───
+
+Deno.test('AC-30: verify_lot_record spec — strong_plus + zero_tolerance + exact-match config', () => {
+  const spec = buildVerifyLotRecordSpec({ symbol: 'AAPL', operator_id: OP });
+  assertEquals(spec.call_name, 'verify_lot_record');
+  assertEquals(spec.tier, 'strong_plus');
+  assertEquals(spec.tolerance_class, 'zero_tolerance');
+  assertEquals((spec.tolerance as { exact_match_required: boolean }).exact_match_required, true);
+});
+
+Deno.test('AC-30: verify_lot_record — all fields match → false_positive_within_tolerance', () => {
+  const spec = buildVerifyLotRecordSpec({ symbol: 'AAPL', operator_id: OP });
+  const entry = new Date('2026-05-22T14:00:00Z');
+  const expected = {
+    lot_id: 'lot-1', symbol: 'AAPL', entry_ts: entry, qty: 100, cost_basis: 15000,
+    side: 'long' as const, status: 'open', locate_id: null,
+  };
+  const observed = { ...expected, fetched_at: new Date(0) };
+  const div = spec.compute_divergence(expected, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+Deno.test('AC-30: verify_lot_record — any field divergence → failure_escalated + tax-regulatory alert', async () => {
+  const spec = buildVerifyLotRecordSpec({ symbol: 'AAPL', operator_id: OP });
+  const entry = new Date('2026-05-22T14:00:00Z');
+  const expected = {
+    lot_id: 'lot-1', symbol: 'AAPL', entry_ts: entry, qty: 100, cost_basis: 15000,
+    side: 'long' as const, status: 'open', locate_id: null,
+  };
+  const observed = { ...expected, qty: 99, fetched_at: new Date(0) };
+  const div = spec.compute_divergence(expected, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_escalated', divergence: div, expected, observed,
+  });
+  assertEquals(action.action_taken, 'lot_record_divergence_tax_regulatory_alert_emitted');
+});
+
+// ─── AC-31: verify_wash_sale_record (#16 — Zero + strong_plus / 1099-B) ───
+
+Deno.test('AC-31: verify_wash_sale_record spec — strong_plus + zero_tolerance + exact-match config', () => {
+  const spec = buildVerifyWashSaleRecordSpec({ symbol: 'AAPL', operator_id: OP });
+  assertEquals(spec.call_name, 'verify_wash_sale_record');
+  assertEquals(spec.tier, 'strong_plus');
+  assertEquals(spec.tolerance_class, 'zero_tolerance');
+  assertEquals((spec.tolerance as { exact_match_required: boolean }).exact_match_required, true);
+});
+
+Deno.test('AC-31: verify_wash_sale_record — all fields match → false_positive_within_tolerance', () => {
+  const spec = buildVerifyWashSaleRecordSpec({ symbol: 'AAPL', operator_id: OP });
+  const exit = new Date('2026-05-22T15:00:00Z');
+  const expected = {
+    event_id: 'ws-1', symbol: 'AAPL', exit_ts: exit, realized_loss: -250,
+    lot_ids_affected: ['lot-1', 'lot-2'], status: 'blocked',
+    block_until: new Date('2026-06-21T15:00:00Z'), attached_to_lot_id: null,
+  };
+  const observed = { ...expected, fetched_at: new Date(0) };
+  const div = spec.compute_divergence(expected, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+Deno.test('AC-31: verify_wash_sale_record — any field divergence → failure_escalated + tax-regulatory alert', async () => {
+  const spec = buildVerifyWashSaleRecordSpec({ symbol: 'AAPL', operator_id: OP });
+  const exit = new Date('2026-05-22T15:00:00Z');
+  const expected = {
+    event_id: 'ws-1', symbol: 'AAPL', exit_ts: exit, realized_loss: -250,
+    lot_ids_affected: ['lot-1', 'lot-2'], status: 'blocked',
+    block_until: new Date('2026-06-21T15:00:00Z'), attached_to_lot_id: null,
+  };
+  const observed = { ...expected, realized_loss: -260, fetched_at: new Date(0) };
+  const div = spec.compute_divergence(expected, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_escalated', divergence: div, expected, observed,
+  });
+  assertEquals(action.action_taken, 'wash_sale_record_divergence_tax_regulatory_alert_emitted');
+});
+
+// ─── AC-32: verify_rebalance_aggregate (#17 — Zero + strong + SYSTEM-LEVEL + 90-110% band) ───
+
+Deno.test('AC-32: verify_rebalance_aggregate spec — strong + zero_tolerance + symbol=null + 90-110% band config', () => {
+  const spec = buildVerifyRebalanceAggregateSpec({ operator_id: OP });
+  assertEquals(spec.call_name, 'verify_rebalance_aggregate');
+  assertEquals(spec.tier, 'strong');
+  assertEquals(spec.tolerance_class, 'zero_tolerance');
+  assertEquals(spec.symbol, null);
+  assertEquals((spec.tolerance as { ratio_lower: number }).ratio_lower, 0.90);
+  assertEquals((spec.tolerance as { ratio_upper: number }).ratio_upper, 1.10);
+});
+
+Deno.test('AC-32: verify_rebalance_aggregate — ratio within band (1.00) → false_positive_within_tolerance', () => {
+  const spec = buildVerifyRebalanceAggregateSpec({ operator_id: OP });
+  const observed = {
+    long_gross_dollars: 50000, short_gross_dollars: 50000,
+    rebalance_completed_at: new Date(0), fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({} as never, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+Deno.test('AC-32: verify_rebalance_aggregate — ratio < 0.90 → failure_escalated + no_auto_retry action', async () => {
+  const spec = buildVerifyRebalanceAggregateSpec({ operator_id: OP });
+  // short/long = 40000/50000 = 0.80 < 0.90
+  const observed = {
+    long_gross_dollars: 50000, short_gross_dollars: 40000,
+    rebalance_completed_at: new Date(0), fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({} as never, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
+  const action = await spec.failure_action({
+    ts: new Date(0), outcome: 'failure_escalated', divergence: div,
+    expected: {} as never, observed,
+  });
+  assertEquals(action.action_taken, 'rebalance_aggregate_band_violation_operator_alert_emitted_no_auto_retry');
+});
+
+Deno.test('AC-32: verify_rebalance_aggregate — ratio > 1.10 → failure_escalated', () => {
+  const spec = buildVerifyRebalanceAggregateSpec({ operator_id: OP });
+  // short/long = 60000/50000 = 1.20 > 1.10
+  const observed = {
+    long_gross_dollars: 50000, short_gross_dollars: 60000,
+    rebalance_completed_at: new Date(0), fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({} as never, observed);
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
 });

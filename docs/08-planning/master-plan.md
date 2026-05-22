@@ -439,7 +439,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 - **Decisions ratified:** DEC-034 / DEC-034.1 / DEC-035 / DEC-036 / DEC-037
 - **Phase Gates (5):**
   - [x] Gate 6.0 — Prerequisites + DEC ratifications + reconciliation stub + audit-writer trap rg-zero (closed 2026-05-22, ACT-074)
-  - [ ] Gate 6.3 — Phase 0A residual + reconciliation engine + 17 verify_*
+  - [x] Gate 6.3 — Phase 0A residual + reconciliation engine + 17 verify_* (closed 2026-05-22, ACT-081)
   - [ ] Gate 6.4 — Strong-evidence workflow tooling, fail-fast
   - [ ] Gate 6.7 — Replay framework + A1 baseline + Alpaca paper
   - [ ] Gate 6.9 — ADR-002 multi-pending validation + Phase 0B exit gate quietness
@@ -453,7 +453,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [x] 6.3a.1 — Corrective: type variance + lazy supabase-admin + FINDING-001 interim register (closed 2026-05-22, ACT-078)
   - [x] 6.3b — verify_* batch B (#6–#10) (closed 2026-05-22, ACT-079)
   - [x] 6.3c — verify_* batch C (#11–#14) (closed 2026-05-22, ACT-080)
-  - [ ] 6.3d — verify_* batch D (#15–#17) + Gate 6.3 closure
+  - [x] 6.3d — verify_* batch D (#15–#17) + Gate 6.3 closure (closed 2026-05-22, ACT-081)
   - [ ] 6.4 — Strong-evidence workflow tooling + Gate 6.4 closure
   - [ ] 6.5 — Replay framework + L2 synthetic Day 1
   - [ ] 6.6 — A1 baseline harness

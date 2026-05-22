@@ -1,7 +1,8 @@
 /**
- * longshort-verifiers — Registry for verify_* batches A (#1-#5) + B (#6-#10).
+ * longshort-verifiers — Registry for all 17 §11.0.7 verifiers.
  *
- * Extended at 6.3c with batch C (#11-#14). Future batch D (6.3d) adds #15-#17.
+ * Batches: A (#1-#5, 6.3a), B (#6-#10, 6.3b), C (#11-#14, 6.3c), D (#15-#17, 6.3d).
+ * Sub-step 6.3d closes the §11.0.7 17-verifier roster.
  */
 
 import type { VerifyCallName } from '../longshort-reconciliation-types.ts';
@@ -20,8 +21,11 @@ export { buildVerifyCorporateActionCleanSpec, verifyCorporateActionClean } from 
 export { buildVerifySettlementStatusSpec, verifySettlementStatus } from './verify_settlement_status.ts';
 export { buildVerifyOrderAcceptanceSpec, verifyOrderAcceptance } from './verify_order_acceptance.ts';
 export { buildVerifyRealizedPnLSpec, verifyRealizedPnL } from './verify_realized_pnl.ts';
+export { buildVerifyLotRecordSpec, verifyLotRecord } from './verify_lot_record.ts';
+export { buildVerifyWashSaleRecordSpec, verifyWashSaleRecord } from './verify_wash_sale_record.ts';
+export { buildVerifyRebalanceAggregateSpec, verifyRebalanceAggregate } from './verify_rebalance_aggregate.ts';
 
-/** Implemented verify_*'s as of sub-step 6.3c closure. */
+/** Implemented verify_*'s as of sub-step 6.3d closure — full §11.0.7 17-verifier roster. */
 export const IMPLEMENTED_VERIFIERS: readonly VerifyCallName[] = [
   'verify_position',
   'verify_quote',
@@ -37,6 +41,9 @@ export const IMPLEMENTED_VERIFIERS: readonly VerifyCallName[] = [
   'verify_settlement_status',
   'verify_order_acceptance',
   'verify_realized_pnl',
+  'verify_lot_record',
+  'verify_wash_sale_record',
+  'verify_rebalance_aggregate',
 ] as const;
 
 export function isVerifierImplemented(name: VerifyCallName): boolean {
