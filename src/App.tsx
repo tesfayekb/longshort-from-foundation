@@ -38,6 +38,7 @@ const AdminPermissionsPage = lazy(() => import("./pages/admin/AdminPermissionsPa
 const AdminAuditPage = lazy(() => import("./pages/admin/AdminAuditPage"));
 const AdminHealthPage = lazy(() => import("./pages/admin/AdminHealthPage"));
 const AdminJobsPage = lazy(() => import("./pages/admin/AdminJobsPage"));
+const AdminKillSwitchPage = lazy(() => import("./pages/admin/AdminKillSwitchPage"));
 const AdminOnboardingPage = lazy(() => import("./pages/admin/AdminOnboardingPage"));
 const AdminSecurityPage = lazy(() => import("./pages/admin/AdminSecurityPage"));
 const UserDetailPage = lazy(() => import("./pages/admin/UserDetailPage"));
@@ -185,6 +186,13 @@ const App = () => (
                   <PermissionGate permission="admin.config">
                     <AdminSecurityPage />
                   </PermissionGate>
+                } />
+                <Route path="kill-switch" element={
+                  <RequireSudo actionKey="kill_switch_route" fallback="/admin">
+                    <PermissionGate permission="system.kill_switches.manage">
+                      <AdminKillSwitchPage />
+                    </PermissionGate>
+                  </RequireSudo>
                 } />
                 <Route path="*" element={<DashboardNotFound />} />
               </Route>
