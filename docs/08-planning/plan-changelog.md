@@ -259,6 +259,23 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved per operator OOB application of MIG-046 + chat-verified pre-flight evidence per ADR-004 §22.5.2; CLAUDE.md v0.5 §22.5.1 first-clause evidence path satisfied. |
 | Supersession Links | None. |
 
+### Sub-step closure (2026-05-24) — Sub-step 6.6: A1 Baseline Aggregation Infrastructure
+
+**Type:** Sub-step closure within FP-006; plan v13.4 unchanged
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.4 (unchanged) |
+| Section IDs Created | None |
+| Decision IDs Affected | None |
+| What Changed | A1 sustained-anomaly baseline aggregation infrastructure landed per CROSSWIND §10.4 priority deliverable #1: 3 SQL views (daily/weekly/monthly per call_name per outcome on `reconciliation_events`) + `compare_reconciliation_baseline()` RPC (SECURITY INVOKER; excludes `expected_divergence_handled` + `false_positive_within_tolerance` per §11.6 verbatim) + TypeScript query helpers wrapping both. MIG-047 applied OOB by operator via Dashboard SQL editor per ADR-004 §22.5.2; Lovable pre-flight gate verified. |
+| Why | Phase 7 baseline establishment (§10.11 #2 — rolling 90-day trailing window) + Phase 9 §11.6 sustained-anomaly kill condition (current > 3× baseline for 7+ consecutive RTH days) both depend on this aggregation surface being in place during Phase 0B. Building infrastructure now per A1; population happens during Phase 7 paper trading. |
+| What Stayed | All DECs unchanged. ADRs unchanged. All prior 6.x sub-step modules frozen. Plan version unchanged. |
+| What Was Added | baseline-query-helpers.ts + tests; MIG-047 SQL file + ledger entry; ACT-090 entry; master-plan 6.6 tick; this changelog entry. |
+| What Was Removed | None — additive. |
+| Approval Status | Approved per operator OOB application of MIG-047 + verified pre-flight gate. Second sub-step under CLAUDE.md v0.5 §22.5.2 (after 6.5d). |
+| Supersession Links | None. |
+
 ### v13.2 → v13.3 (2026-05-22)
 
 **Type:** In-FP-006 sub-step closure (6.4) + FOLLOWUP-004 architectural fix landing (CI script + ADR-003 + DEC-034 v13.2 amendment)
