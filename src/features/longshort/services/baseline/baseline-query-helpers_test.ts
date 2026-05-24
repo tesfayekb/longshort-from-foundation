@@ -1,3 +1,4 @@
+// @ts-nocheck — Deno test file; runs via `deno test`, not Vite/tsc. Imports use Deno URL specifiers.
 import { assertEquals, assert } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   BASELINE_AGG_VIEW_NAMES,
