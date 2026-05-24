@@ -459,7 +459,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - 6.5 — Replay framework + L2 synthetic Day 1 (decomposed into 6.5a/b/c/d per §11.10 subsection structure)
     - [x] 6.5a — Replay framework foundation: capture stream types + storage scaffold + fixture format spec v1 + ADR-005 (Deno-native runtime decision) (closed 2026-05-24, ACT-086)
     - [x] 6.5b — Deterministic replay engine: zstd codec + fixture loader + per-stream lookup index + fixture-backed broker fetchers + determinism harness (12 tests). Lifecycle integration deferred to 6.5c. (closed 2026-05-24, ACT-087)
-    - [ ] 6.5c — L2 synthetic Day 1 fixture + first replay-test PASS run
+    - [x] 6.5c — L2 synthetic Day 1 fixture + first replay-test PASS run against verify_quote: deterministic 3-tick fixture + in-memory event collector + replay-pass-runner + CLI script `scripts/replay-pass.ts`. 10 tests; byte-identical-two-runs determinism property verified per §11.10.4. (closed 2026-05-24, ACT-088)
     - [ ] 6.5d — AI-loop verification surface + `longshort.reconciliation_replay_chain` job activation (MIG-046 via ADR-004 §22.5.2 split-execution) + Gate 6.5 closure
   - [ ] 6.6 — A1 baseline harness
   - [ ] 6.7 — Alpaca paper integration + Gate 6.7 closure
