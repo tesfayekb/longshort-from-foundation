@@ -242,6 +242,23 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved per operator-amended strict serial sequencing (083a → 083b → 084 v1→v2→v3 → 085); operator confirmed INC-20 Part (a) revoke (`still_superadmin=0`). |
 | Supersession Links | None — additive governance. |
 
+### Gate closure (2026-05-24) — Gate 6.5: §11.10 Replay Framework Complete
+
+**Type:** Sub-step gate closure within FP-006; plan v13.4 unchanged
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.4 (unchanged — gate closure within FP-006; plan-structure-bump deferred to FP-006 closure at sub-step 6.10) |
+| Section IDs Created | None |
+| Decision IDs Affected | None — ADR-001/-002/-003/-004/-005 all unchanged; DEC-035 replay-chain job lifecycle now active per its as-designed specification |
+| What Changed | Gate 6.5 closes with §11.10 replay framework complete across all five §11.10.x subsections: §11.10.1 capture scope + §11.10.2 storage (6.5a); §11.10.3 deterministic replay engine (6.5b); §11.10.4 replay-test PASS comparison (6.5c first PASS evidence against verify_quote); §11.10.5 AI-loop verification surface (6.5d). MIG-046 (`longshort.reconciliation_replay_chain` enabled=true) applied OOB by operator + verified via Lovable pre-flight gate per ADR-004 §22.5.2 split-execution. First sub-step under CLAUDE.md v0.5 to exercise the live-DB verification discipline end-to-end. |
+| Why | CROSSWIND §11.10 Phase 0B deliverable; ADR-001 §11.0.1 architectural commitment to "external verification source neither AI can manipulate or pre-cache" realized through §11.10.5 AI-loop verification surface. Closes the replay framework so sub-step 6.6 (A1 baseline harness) can produce replay-test PASS evidence against synthetic baselines forward. |
+| What Stayed | All DECs unchanged. ADR-001/-002/-003/-004/-005 unchanged. All verifiers + lifecycle + engine + PASS runner from prior sub-steps frozen. Plan version unchanged. system-state version unchanged. |
+| What Was Added | 4 new src/scripts modules (ai-loop-verifier + CLI + tests); MIG-046 SQL file + ledger entry; ACT-089 entry; master-plan 6.5d + Gate 6.5 ticks; this changelog entry. |
+| What Was Removed | None — additive. |
+| Approval Status | Approved per operator OOB application of MIG-046 + chat-verified pre-flight evidence per ADR-004 §22.5.2; CLAUDE.md v0.5 §22.5.1 first-clause evidence path satisfied. |
+| Supersession Links | None. |
+
 ### v13.2 → v13.3 (2026-05-22)
 
 **Type:** In-FP-006 sub-step closure (6.4) + FOLLOWUP-004 architectural fix landing (CI script + ADR-003 + DEC-034 v13.2 amendment)
