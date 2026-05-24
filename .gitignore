@@ -28,3 +28,7 @@ dist-ssr
 # Operator-staged Step 3.5 CROSSWIND copies (landing source); not tracked
 docs/longshort-design-source/
 
+
+# Replay framework fixtures (§11.10.2) — generated artifacts, not tracked
+replay_storage/*.jsonl.zst
+replay_storage/*.jsonl
