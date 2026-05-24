@@ -1943,3 +1943,74 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Mock fetchers** | YES — sub-step 6.3d proves dispatch path; real broker integration at sub-step 6.7 |
 | **Activated by job** | `longshort.reconciliation_periodic_sweep` (`enabled=true` via MIG-045) |
 | **Added by** | FP-006 sub-step 6.3d, ACT-081 |
+
+### Strong-evidence workflow tooling — sub-step 6.4 (ACT-082)
+
+#### `scripts/check-audit-writer-trap.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.4 / strong-evidence tooling) |
+| **Classification** | CI enforcement (DEC-034 clause (5) audit-writer trap) |
+| **Exports** | `detectViolations(source, filename): Violation[]`, `scanLongshortPaths(rootDir?): Promise<Violation[]>` |
+| **File** | `scripts/check-audit-writer-trap.ts` |
+| **Tests** | `scripts/check-audit-writer-trap_test.ts` — 8 unit tests (operator floor ≥6; FINDING-001 regression at test (3)) |
+| **CI gate** | `.github/workflows/strong-evidence.yml` Gate 1 — `deno run --allow-read scripts/check-audit-writer-trap.ts` must exit 0 |
+| **Added by** | FP-006 sub-step 6.4, ACT-082 (FOLLOWUP-004 closure) |
+
+#### `scripts/firing-diff.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.4) |
+| **Classification** | evidence tooling (E2 reconciliation telemetry per §11.0.10 + §12.5) |
+| **Exports** | `buildQuery(args): FiringDiffQuery`, `parseArguments(argv): FiringDiffArgs` |
+| **File** | `scripts/firing-diff.ts` |
+| **Tests** | `scripts/firing-diff_test.ts` — 3 unit tests |
+| **Mock mode** | If `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` env vars absent, prints query SQL only |
+| **Added by** | FP-006 sub-step 6.4, ACT-082 |
+
+#### `scripts/replay-run.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.4) |
+| **Classification** | evidence tooling (E1 replay execution scaffold per §11.10) |
+| **Exports** | `parseArguments(argv): ReplayRunArgs`, `executeReplay(args): ReplayRunResult` |
+| **File** | `scripts/replay-run.ts` |
+| **Tests** | `scripts/replay-run_test.ts` — 2 unit tests |
+| **Scope** | 6.4 ships `--dry-run` scaffold; fixture parsing lands at sub-step 6.5 |
+| **Added by** | FP-006 sub-step 6.4, ACT-082 |
+
+#### `scripts/telemetry-report.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.4) |
+| **Classification** | evidence tooling (E2 dashboard views per §11.0.10) |
+| **Exports** | `buildQueries(args): TelemetryReportQueries`, `parseArguments(argv): TelemetryReportArgs`, `renderMockReport(args, queries): string` |
+| **File** | `scripts/telemetry-report.ts` |
+| **Tests** | `scripts/telemetry-report_test.ts` — 3 unit tests |
+| **Output** | Markdown report (firing rate / outcome distribution / unresolved system_bug / expected-divergence ratio) |
+| **Added by** | FP-006 sub-step 6.4, ACT-082 |
+
+#### `scripts/broker-spot-check.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 6.4) |
+| **Classification** | evidence tooling (E3 ground-truth spot-check per ADR-001 §8) |
+| **Exports** | `parseArguments(argv): SpotCheckArgs`, `runSpotCheck(args): SpotCheckResult` |
+| **File** | `scripts/broker-spot-check.ts` |
+| **Tests** | `scripts/broker-spot-check_test.ts` — 3 unit tests |
+| **Provider modes** | `mock` (canned deterministic response per check type); `alpaca` (surfaces "not yet implemented — sub-step 6.7") |
+| **Added by** | FP-006 sub-step 6.4, ACT-082 |
+
+#### `scripts/README.md` (documentation)
+
+| Field | Value |
+|---|---|
+| **Type** | Directory documentation (not a function export) |
+| **File** | `scripts/README.md` |
+| **Purpose** | Inventory + CI integration + banned-pattern self-discipline reference for `scripts/` |
+| **Added by** | FP-006 sub-step 6.4, ACT-082 |
