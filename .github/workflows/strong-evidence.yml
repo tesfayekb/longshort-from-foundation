@@ -1,0 +1,46 @@
+name: strong-evidence
+
+# Per FP-006 sub-step 6.4 (ACT-082) + FOLLOWUP-004 closure + ADR-003.
+# Quality gates for strong-evidence tooling and the longshort verifier suite.
+# Target wall-clock: <15 minutes per CROSSWIND §11.0.13 (advisory at 6.4;
+# hard timeout layers in at sub-step 6.9).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  strong-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        run: npm ci || npm install
+
+      - name: Gate 1 — audit-writer trap (DEC-034 clause (5))
+        run: deno run --allow-read scripts/check-audit-writer-trap.ts
+
+      - name: Gate 2 — scripts/ Deno tests (19 tests)
+        run: deno test --allow-read --allow-net --allow-env scripts/
+
+      - name: Gate 3 — longshort verifier suite (71 tests)
+        run: deno test --allow-net supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts
+
+      - name: Gate 4 — Vitest + ESLint
+        run: |
+          npx vitest run
+          npx eslint .

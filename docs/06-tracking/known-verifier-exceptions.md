@@ -45,3 +45,17 @@ Documented exceptions to AC-level rg-zero verifier patterns embedded in DEC text
 ### 2026-05-22 (Gate 6.3 closure / ACT-081)
 
 FINDING-001 still active. Through Gate 6.3 closure the 17-verifier roster + edge function dispatch + MIG-045 job activation introduced NO new audit-writer trap regex false-positive cases — the JSDoc continuation pattern at `longshort-reconciliation-lifecycle.ts:23` remains the sole documented exception. FOLLOWUP-004 / sub-step 6.4 remains the canonical remediation owner.
+
+### 2026-05-22 (Sub-step 6.4 closure / ACT-082) — FINDING-001 CLOSED
+
+**Status transition:** Active exception → **CLOSED / superseded by ADR-003 + `scripts/check-audit-writer-trap.ts`**.
+
+Closure evidence:
+- `scripts/check-audit-writer-trap.ts` shipped with `detectViolations` + `scanLongshortPaths` (FP-006 sub-step 6.4 / ACT-082).
+- `scripts/check-audit-writer-trap_test.ts` ships 8 unit tests; **test (3) uses the EXACT lifecycle.ts:23 JSDoc continuation line as a regression fixture** — `assertEquals(violations.length, 0)` locks the false-positive class permanently.
+- Comment-aware detection (JSDoc/line/block) + string-literal heuristic + multi-line import handling implemented in pure exported function — unit-testable, not held in supervisor's head.
+- DEC-034 v13.2 amendment in `docs/08-planning/approved-decisions.md` replaces embedded regex with reference to the script.
+- ADR-003 codifies the precedent (`docs/04-modules/longshort/design-source/ADR-003-enforcement-as-scripts-not-prose.md`).
+- `.github/workflows/strong-evidence.yml` Gate 1 executes `deno run --allow-read scripts/check-audit-writer-trap.ts` on every PR + push to main.
+
+Per append-only discipline: the FINDING-001 entry above remains in place as historical record; this status note marks its lifecycle endpoint. Any future false-positive class belongs to a new FINDING-NNN entry, not a re-opening of FINDING-001.
