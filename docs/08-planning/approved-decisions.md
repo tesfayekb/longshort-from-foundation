@@ -508,9 +508,25 @@ If any field is missing → the decision is **INVALID**.
 
 ---
 
-## Decision Integrity Rules
+## DEC-034 amendment v13.2 (FP-006 sub-step 6.4 / ACT-082)
 
-<!-- ANCHOR: DEC-034 amendment v13.2 appended below per FP-006 sub-step 6.4 / ACT-082 -->
+- **Plan Section:** PLAN-TRADING-001-LONGSHORT-002
+- **Amendment Type:** clause replacement (does NOT supersede DEC-034; only clause (5) verifier text is replaced)
+- **Date Approved:** 2026-05-22
+- **Scope:** DEC-034 clause (5) "Audit-writer trap closure maintained" — verifier text amended.
+- **Replaces (within DEC-034 clause (5)):** The prior embedded rg-zero pattern `rg -nE 'import\s.*\blogAuditEvent\b|\blogAuditEvent\s*\(' src/features/longshort/ supabase/functions/longshort-* --glob '!*.md'` (v13.1 amendment text).
+- **New clause (5) verifier text:**
+
+> AC-05 (audit-writer trap rg-zero): enforced by `scripts/check-audit-writer-trap.ts` with companion test suite at `scripts/check-audit-writer-trap_test.ts` (8 unit tests including FINDING-001 lifecycle.ts:23 JSDoc continuation as regression fixture test (3); operator A+ floor was ≥6, shipped count is 8). CI executes via `.github/workflows/strong-evidence.yml`. AC-05 PASS = script exits 0 across longshort code paths.
+
+- **Why amended:** Per FOLLOWUP-004 + ADR-003 — DEC prose cannot be unit-tested. Embedded regex accumulated 4 defect classes (DEC-036 Alpaca regex / DEC-034 v1 substring / DEC-034 v13.1 import-shape / FINDING-001 JSDoc continuation). Architectural fix: move enforcement to tested CI scripts; DEC retains intent, script holds implementation, companion tests prove correctness.
+- **What stays:** DEC-034 clauses (1)-(4) and (6)-(7) unchanged. DEC-034.1, DEC-035, DEC-036, DEC-037 unchanged. The audit-writer trap *intent* (no longshort code may import or call `logAuditEvent`; canonical writer is `writeStrategyAuditEvent` per DEC-033 v4.1) is preserved verbatim.
+- **Status:** active
+- **Supersession reference:** Inline supersession of DEC-034 clause (5) v13.1 verifier text only; DEC-034 as a whole remains active.
+
+---
+
+## Decision Integrity Rules
 
 - Every approved plan section MUST have a corresponding `DEC-NNN` entry
 - Decisions are **NEVER** deleted — only superseded
