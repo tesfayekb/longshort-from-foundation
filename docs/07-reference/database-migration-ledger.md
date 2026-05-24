@@ -829,6 +829,19 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | Dependency | MIG-044 (`job_registry` seed for both longshort jobs). DO-block guard raises if MIG-044 not applied — same safety net pattern as MIG-045. |
 | Sub-step authority | ACT-089 (FP-006 sub-step 6.5d + Gate 6.5 closure) |
 
+### MIG-047: FP-006 Sub-Step 6.6 — A1 Baseline Aggregation Infrastructure
+
+| Field | Value |
+|---|---|
+| Migration version | `20260524130000` |
+| File | `supabase/migrations/20260524130000_step_6_6_a1_baseline_aggregation_infrastructure.sql` |
+| Applied | 2026-05-24 (operator OOB via Supabase Dashboard SQL editor per ADR-004 §22.5.2) |
+| Verified | 2026-05-24 (Lovable pre-flight: views_count=3, function_exists=1, mig_047_in_ledger='20260524130000') |
+| Pattern | 3× CREATE OR REPLACE VIEW + 1× CREATE OR REPLACE FUNCTION SECURITY INVOKER + GRANTs + REVOKE PUBLIC/anon |
+| Effect | Adds `reconciliation_events_daily_agg` / `_weekly_agg` / `_monthly_agg` views + `compare_reconciliation_baseline(p_call_name, p_outcome, p_window_days, p_baseline_days)` function to `public` schema. |
+| Dependency | MIG-043 (`reconciliation_events` table + `reconciliation_outcome` ENUM). All applied. |
+| Sub-step authority | ACT-090 (FP-006 sub-step 6.6 closure) |
+
 ---
 
 ### Tables (14)

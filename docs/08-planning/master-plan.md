@@ -461,7 +461,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
     - [x] 6.5b — Deterministic replay engine: zstd codec + fixture loader + per-stream lookup index + fixture-backed broker fetchers + determinism harness (12 tests). Lifecycle integration deferred to 6.5c. (closed 2026-05-24, ACT-087)
     - [x] 6.5c — L2 synthetic Day 1 fixture + first replay-test PASS run against verify_quote: deterministic 3-tick fixture + in-memory event collector + replay-pass-runner + CLI script `scripts/replay-pass.ts`. 10 tests; byte-identical-two-runs determinism property verified per §11.10.4. (closed 2026-05-24, ACT-088)
     - [x] 6.5d — AI-loop verification surface (§11.10.5 meta-runner producing AILoopVerificationResult artifact for §12.5 PR evidence bundles) + MIG-046 `longshort.reconciliation_replay_chain` activation (operator OOB apply via Dashboard SQL editor; Lovable pre-flight gate verified per ADR-004 §22.5.2) + Gate 6.5 closure. (closed 2026-05-24, ACT-089)
-  - [ ] 6.6 — A1 baseline harness
+  - [x] 6.6 — A1 baseline aggregation infrastructure: 3 SQL views (daily/weekly/monthly per call_name per outcome) + compare_reconciliation_baseline() RPC + TypeScript query helpers (MIG-047 via ADR-004 §22.5.2 split-execution). Phase 7 populates baselines; Phase 9 §11.6 kill condition queries this surface. (closed 2026-05-24, ACT-090)
   - [ ] 6.7 — Alpaca paper integration + Gate 6.7 closure
   - [ ] 6.8 — ADR-002 multi-pending validation harness
   - [ ] 6.9 — Phase 0B exit gate quietness evidencing + Gate 6.9 closure

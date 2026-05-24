@@ -2245,3 +2245,18 @@ HIGH — action tracker is the operational evidence backbone for the entire gove
 | **Related Tests** | `deno test --allow-read src/features/longshort/services/replay/ai-loop-verifier_test.ts scripts/ai-loop-verify_test.ts` — 8 tests total (6 verifier + 2 CLI) including AI-loop determinism property (test 6 of verifier suite). |
 | **Evidence** | (a) Pre-flight live-DB gate output captured: replay_chain_enabled=true, periodic_sweep_enabled=true, mig_046_in_ledger='20260524120000' (per §22.5.1 first clause — Lovable-pasted `supabase--read_query` output confirming live-DB state). (b) AI-loop verification surface invokable via CLI script producing JSON artifact suitable for §12.5 PR evidence bundles. (c) 8 tests green. (d) MIG-046 ledger entry matches applied state. (e) Both job_registry rows now `enabled=true`: periodic_sweep (MIG-045) + replay_chain (MIG-046). |
 | **Status** | Verified |
+
+### ACT-090: FP-006 Sub-Step 6.6 — A1 Baseline Aggregation Infrastructure
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-090 |
+| **Date** | 2026-05-24 |
+| **Action** | Closed FP-006 sub-step 6.6 — A1 sustained-anomaly baseline aggregation infrastructure per CROSSWIND §10.4 priority deliverable #1 + §11.6 sustained-anomaly kill condition. Second sub-step under CLAUDE.md v0.5 §22.5.2 split-execution. Operator applied MIG-047 OOB via Supabase Dashboard SQL editor (3 SQL views + 1 SQL function); Lovable pre-flight gate verified `views_count=3, function_exists=1, mig_047_in_ledger='20260524130000'` BEFORE repo writes. Landed: (a) `baseline-query-helpers.ts` — TypeScript wrappers for the 3 views + RPC; canonical view-name constants; outcome-exclusion constant matching §11.6 verbatim; isAnomalyKillTriggered predicate; (b) `baseline-query-helpers_test.ts` — 10 tests covering constants, query-shape builders, exclusion list verbatim match, ratio predicate edge cases; (c) MIG-047 SQL file (historical record); (d) migration ledger entry. Sub-step 6.6 ticked. Plan v13.4 unchanged. |
+| **Type** | Foundation (baseline aggregation infrastructure for Phase 7 baseline establishment + Phase 9 §11.6 kill condition) |
+| **Impact Classification** | HIGH (load-bearing for Phase 7 baseline computation + Phase 9 sustained-anomaly kill condition; without this, §11.6 kill condition cannot operate) |
+| **Modules Affected** | longshort/services/baseline (NEW directory); supabase/migrations (MIG-047); migration ledger |
+| **Files Changed** | 7: TypeScript helpers + tests; MIG-047 SQL file; ACT-090 entry; master-plan 6.6 tick; plan-changelog entry; migration ledger entry. |
+| **Related Tests** | `deno test src/features/longshort/services/baseline/baseline-query-helpers_test.ts` — 10 tests covering view-name correctness, RPC argument building, §11.6 outcome exclusion list verbatim, baseline-zero edge case (no spurious anomaly). |
+| **Evidence** | (a) Pre-flight live-DB gate output captured: views_count=3, function_exists=1, mig_047_in_ledger='20260524130000' (per §22.5.1 first-clause). (b) Query helpers expose canonical names; future callers don't hardcode view names. (c) Per §11.6 verbatim: outcome exclusion list (expected_divergence_handled + false_positive_within_tolerance) encoded as compile-time constant. (d) RPC default args match spec (window_days=7 per §11.6, baseline_days=90 per §10.11 #2). (e) Baseline-zero edge case handled (`exceeds_3x_threshold=false` when baseline=0, avoiding division-by-zero anomaly classification). |
+| **Status** | Verified |
