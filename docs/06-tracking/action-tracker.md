@@ -2143,6 +2143,21 @@ The v2 closure had six surfaced defects per operator review, of which five requi
 
 v3 makes ZERO live-DB writes, ZERO new migrations, ZERO code modifications. Plan version stays at v13.4 (v2's bump was correct; only the content inside was wrong). Sub-step 6.4.1 fully closes at v3 SHA. ACT-085 (§22.5 supervisor protocol amendment) sequences strict-serial next.
 
+### ACT-085: FP-006 Sub-Step 6.4.1 Closure — Supervisor Protocol Amendment via ADR-004
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-085 |
+| **Date** | 2026-05-24 |
+| **Action** | Closed FP-006 sub-step 6.4.1 by codifying four §22.5 supervisor protocol amendments via ADR-004 ("Live-DB Verification Discipline + Apply-Verify Separation"): (1) live-DB verification mandatory for DB-touching sub-step closures; (2) apply-step vs verify-step separation when executor capability mismatches contract; (3) executor migration-tool path banned for one-off DB operations during smoke/debugging (INC-20-motivated); (4) visibility-gap-across-sessions default of "request confirmation rather than infer absence." ADR-004 is the repo-durable audit trail; CLAUDE.md v0.5 (chat-context) is the authoritative behavioral specification. INC-20 Part (a) operator-confirmed resolved (verification query: `still_superadmin=0`); Part (b) closed by ADR-004 codification. Master-plan 6.4.1 tick line corrected (MIG-040..MIG-048 → MIG-037..MIG-045; FOLLOWUP-005 → FOLLOWUP-001 + FOLLOWUP-002) — gap surfaced from v3 scope. Sub-step 6.4.1 FULLY CLOSED. FOLLOWUP-001/-002/-003/-004 all CLOSED. Plan v13.4 unchanged. |
+| **Type** | Governance (supervisor protocol amendment + sub-step final closure) |
+| **Impact Classification** | HIGH (forward-applicable §22.5 amendment preventing recurrence of 8-cycle live-DB blind spot) |
+| **Modules Affected** | Supervisor protocol (CLAUDE.md v0.5 chat-context, operator-owned); longshort governance (ADR-004 repo entry); incidental-findings (INC-20 closure); action-tracker; plan-changelog; master-plan (6.4.1 tick correction) |
+| **Files Changed** | 5: ADR-004 (NEW); this ACT-085 entry; INC-20 two-part closure corrections; plan-changelog governance entry; master-plan 6.4.1 tick line correction. |
+| **Related Tests** | None (governance amendment) |
+| **Evidence** | ADR-004 landed with 4 amendments + rationale + forward applicability. INC-20 Part (a) operator-confirmed (`still_superadmin=0`, latest_migration_version=`20260524041920`). INC-20 Part (b) closed by ADR-004. Master-plan 6.4.1 tick line corrected to canonical MIG-037..MIG-045 + FOLLOWUP-001 + FOLLOWUP-002 references. |
+| **Status** | Verified |
+
 ---
 
 ## Dependencies

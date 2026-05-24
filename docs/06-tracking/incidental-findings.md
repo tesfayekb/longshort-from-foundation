@@ -123,6 +123,22 @@ Fix: change `.resolves.toBeUndefined()` to `.resolves.toBeDefined()` or assert o
 | **Disposition path to closure** | (a) operator-revokes grant; this INC entry receives "Resolved (Part a, 2026-05-24)" correction. (b) ACT-085 codifies the workflow rule; this INC entry receives "Resolved (Part b, at ACT-085 SHA)" correction. Both parts complete → INC-20 transitions to **Resolved (full)**. |
 | **Live-DB artifact disposition** | The migration file `supabase/migrations/20260524041921_d1be05aa-c76a-4289-a863-c16d6926c9c8.sql` STAYS IN REPO as historical — deleting it would create a "row in schema_migrations references missing file" drift class. The auto-regenerated `src/integrations/supabase/types.ts` changes also stay (legitimate type definitions for feature_flags table that should have been generated earlier anyway). |
 
+#### Resolved (Part a, 2026-05-24)
+
+Operator-confirmed revoke of `tesfayekb@me.com` temporary superadmin grant via Supabase Dashboard SQL editor against project `sftatlxatbdrotivxcip`. Verification query result:
+
+| still_superadmin | latest_migration_version |
+| ---------------- | ------------------------ |
+| 0                | 20260524041920           |
+
+Expected: `still_superadmin = 0` ✓. Part (a) **RESOLVED**.
+
+#### Resolved (Part b, 2026-05-24, at ACT-085 SHA `<TBD>`)
+
+ADR-004 landed at `docs/04-modules/longshort/design-source/ADR-004-live-db-verification-discipline.md` codifying Amendment 3 ("Executor migration-tool path banned for one-off DB operations during smoke/debugging"). Part (b) **RESOLVED**.
+
+INC-20 transitions to **Resolved (full)** at this SHA.
+
 ---
 
 ## Naming Conventions

@@ -455,7 +455,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [x] 6.3c — verify_* batch C (#11–#14) (closed 2026-05-22, ACT-080)
   - [x] 6.3d — verify_* batch D (#15–#17) + Gate 6.3 closure (closed 2026-05-22, ACT-081)
   - [x] 6.4 — Strong-evidence workflow tooling + Gate 6.4 closure (closed 2026-05-22, ACT-082)
-  - [x] 6.4.1 — Corrective: DB surfaces remediation (MIG-040..MIG-048 — kill_switch_state enum + reconciliation_outcome/tier enums + system_config.value_version + 4 kill-switch RPCs + 2 job_registry rows) applied OOB by operator + Lovable passive smoke 21/21 + Option A §22.5 AMBIGUITY closure for B.3 active 4-RPC cycle (deferred to 6.5.x) (closed 2026-05-24, ACT-084)
+  - [x] 6.4.1 — Corrective: DB surfaces remediation (MIG-037..MIG-045 per canonical ledger numbering — MIG-037 longshort permissions, MIG-038 longshort_audit_logs, MIG-039 feature_flags, MIG-040 kill-switch infrastructure + system.kill_switches.manage permission + kill_switch_state enum + 4 kill-switch RPCs, MIG-041 system_config.value_version + bump function + trigger, MIG-042 longshort_reconciliation_state, MIG-043 reconciliation_events + 2 ENUMs, MIG-044 job_registry seeds, MIG-045 activate periodic sweep) applied OOB by operator + Lovable passive smoke 21/21 + Option A §22.5 AMBIGUITY closure for B.3 active 4-RPC cycle (deferred to 6.5.x) (closed 2026-05-24, ACT-084 v3; final closure 2026-05-24, ACT-085)
   - [ ] 6.5 — Replay framework + L2 synthetic Day 1
   - [ ] 6.6 — A1 baseline harness
   - [ ] 6.7 — Alpaca paper integration + Gate 6.7 closure
