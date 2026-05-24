@@ -207,6 +207,24 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved |
 | Supersession Links | None — DEC-003 remains active as the scope-discipline anchor; DEC-030 is an amendment, not a supersession |
 
+### v13.3 → v13.4 (2026-05-24)
+
+**Type:** In-FP-006 corrective sub-step insertion (6.4.1) — repo-only remediation closure for operator-applied DB surfaces (MIG-040..MIG-048) + Lovable-verified passive smoke (21/21) + Option A §22.5 AMBIGUITY closure for B.3 active 4-RPC cycle (deferred to 6.5.x).
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.3 → v13.4 |
+| Section IDs Closed | sub-step 6.4.1 (within PLAN-TRADING-001-LONGSHORT-002 / FP-006) |
+| Section IDs Created | sub-step 6.4.1 (corrective insertion between 6.4 and 6.5 in master-plan inventory) |
+| Decision IDs Affected | None — no DECs modified. §22.5 AMBIGUITY clause invoked per existing supervisor doctrine ("either passive + inverse-positive OR active E2E is acceptable as long as evidence is captured"); deferral of active 4-RPC cycle to FP-006 6.5.x is governed by that clause and does not require a new DEC. |
+| What Changed | (a) Operator applied 9 migrations out-of-band via Supabase Dashboard SQL editor + manual `schema_migrations` ledger inserts (MIG-040 `kill_switch_state` enum; MIG-041 `reconciliation_outcome` enum; MIG-042 `reconciliation_tier` enum; MIG-043 `system_config.value_version` column + `bump_system_config_value_version` fn + `system_config_value_version_bump` trigger; MIG-044..047 four kill-switch RPCs `kill_switch_soft_pause` / `kill_switch_hard_pause` / `kill_switch_manual_liquidate` / `kill_switch_resume` with `is_superadmin(auth.uid())` gate + audit-logs writes; MIG-048 two `job_registry` rows for `longshort.reconciliation_periodic_sweep` enabled=true and `longshort.reconciliation_replay_chain` enabled=false). (b) Lovable ran full B.1..B.5 passive smoke via `supabase--read_query` against the live DB — 21/21 green; B.3 active 4-RPC cycle surfaced §22.5 AMBIGUITY (Dashboard SQL editor runs as `postgres` service role, `auth.uid()` is NULL, gate correctly fires `42501 requires superadmin` — captured as inverse-positive evidence). (c) Per operator Option A decision, passive + inverse-positive accepted as sufficient for ACT-084 closure; active state-transition cycle deferred to FP-006 6.5.x where an authenticated superadmin session exists in the running app. (d) Master-plan sub-step inventory updated: insert `[x] 6.4.1` between 6.4 and 6.5; header `(15 + closure)` → `(16 + closure)`. (e) action-tracker ACT-084 entry. (f) system-state version bumps to v13.4 + last_updated 2026-05-24. (g) NEW closure-note appendix `docs/08-planning/phase-closures/fp-006-sub-step-6-4-1-smoke-evidence.md` capturing verbatim 21/21 passive output + inverse-positive gate evidence + Option A acceptance rationale + 6.5.x deferral pointer. |
+| Why | FOLLOWUP-005 closure — sub-step 6.5 replay framework consumption requires DB surfaces (kill-switch RPCs, reconciliation enums, system_config optimistic-concurrency column, job_registry rows for periodic sweep + replay chain) that were missing after 6.4 closure. Repo-only remediation (Lovable cannot apply DB migrations directly in this operator's environment) split into: operator OOB apply (preferred `supabase db push` not available — fell back to Dashboard SQL editor + manual ledger inserts) + Lovable passive verification + Option A §22.5 AMBIGUITY acceptance for the unauthenticatable B.3 active cycle. |
+| What Stayed | All DECs unchanged (DEC-001..033 + DEC-034 v13.2 + DEC-034.1 + DEC-035 + DEC-036 + DEC-037). All 17 verifier files + lifecycle/types/state/clock/supabase-admin engine modules untouched. .github/workflows/strong-evidence.yml + scripts/ Deno tests untouched. 71-test verifier suite green (no source-code tests run — sub-step is repo-only governance writes). longshort module status `foundation-implemented` unchanged. Platform `audit_logs` schema unchanged. |
+| What Was Added | Sub-step 6.4.1 (master-plan); ACT-084 (action-tracker); v13.3 → v13.4 entry (this changelog); fp-006-sub-step-6-4-1-smoke-evidence.md (NEW closure-note appendix); 9 migration files (MIG-040..MIG-048) applied OOB by operator, ledgered in database-migration-ledger.md separately per D5. |
+| What Was Removed | None — additive diff per Constitution Rule 10 (Plan Merge Rule). |
+| Approval Status | Approved (operator Option A decision at ACT-084 closure; §22.5 AMBIGUITY clause governs the B.3 active-cycle deferral; no new DEC required). |
+| Supersession Links | None — additive corrective sub-step. FOLLOWUP-005 status transitions from active → closed (smoke evidence + Option A acceptance recorded in closure-note appendix). |
+
 ### v13.2 → v13.3 (2026-05-22)
 
 **Type:** In-FP-006 sub-step closure (6.4) + FOLLOWUP-004 architectural fix landing (CI script + ADR-003 + DEC-034 v13.2 amendment)
