@@ -510,6 +510,8 @@ If any field is missing → the decision is **INVALID**.
 
 ## Decision Integrity Rules
 
+<!-- ANCHOR: DEC-034 amendment v13.2 appended below per FP-006 sub-step 6.4 / ACT-082 -->
+
 - Every approved plan section MUST have a corresponding `DEC-NNN` entry
 - Decisions are **NEVER** deleted — only superseded
 - Superseded decisions MUST reference the original decision ID
