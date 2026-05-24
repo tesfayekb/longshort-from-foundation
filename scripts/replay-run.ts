@@ -8,6 +8,7 @@
  */
 
 import { parseArgs } from 'https://deno.land/std@0.224.0/cli/parse_args.ts';
+import { loadReplaySession, FixtureLoadError } from '../src/features/longshort/services/replay/replay-engine.ts';
 
 export interface ReplayRunArgs {
   fixture: string;
@@ -31,24 +32,69 @@ export interface ReplayRunResult {
   message: string;
 }
 
-export function executeReplay(args: ReplayRunArgs): ReplayRunResult {
+export interface ReplayLoadedResult {
+  status: 'fixture-loaded';
+  fixture: string;
+  envelope_replay_day_id: string;
+  event_count: number;
+  symbols_count: number;
+  message: string;
+}
+
+export interface ReplayLoadErrorResult {
+  status: 'fixture-load-error';
+  fixture: string;
+  error_kind: string;
+  error_message: string;
+  message: string;
+}
+
+export type AnyReplayResult = ReplayRunResult | ReplayLoadedResult | ReplayLoadErrorResult;
+
+export async function executeReplay(args: ReplayRunArgs): Promise<AnyReplayResult> {
   if (args.dryRun) {
     return {
       status: 'scaffold-ready',
       fixture: args.fixture,
-      message: 'replay-run: scaffold ready, fixture parsing deferred to sub-step 6.5',
+      message: 'replay-run: scaffold ready (dry-run mode; no fixture loaded)',
     };
   }
-  return {
-    status: 'fixture-replay-pending-6.5',
-    fixture: args.fixture,
-    message: 'replay-run: fixture parsing not yet implemented; pass --dry-run to verify scaffold',
-  };
+  if (!args.fixture) {
+    return {
+      status: 'fixture-replay-pending-6.5',
+      fixture: '',
+      message: 'replay-run: --fixture=<path> required when not in --dry-run mode',
+    };
+  }
+
+  try {
+    const session = await loadReplaySession({ fixturePath: args.fixture });
+    return {
+      status: 'fixture-loaded',
+      fixture: args.fixture,
+      envelope_replay_day_id: session.fixture.envelope.replay_day_id,
+      event_count: session.fixture.events.length,
+      symbols_count: session.fixture.envelope.symbols.length,
+      message: `replay-run: fixture loaded — replay_day_id=${session.fixture.envelope.replay_day_id}, event_count=${session.fixture.events.length}, symbols=${session.fixture.envelope.symbols.length}. Sub-step 6.5c integrates this session into the reconciliation lifecycle.`,
+    };
+  } catch (e) {
+    if (e instanceof FixtureLoadError) {
+      return {
+        status: 'fixture-load-error',
+        fixture: args.fixture,
+        error_kind: e.kind,
+        error_message: e.message,
+        message: `replay-run: fixture load FAILED — kind=${e.kind}, message=${e.message}`,
+      };
+    }
+    throw e;
+  }
 }
 
 if (import.meta.main) {
   const args = parseArguments(Deno.args);
-  const result = executeReplay(args);
+  const result = await executeReplay(args);
   console.log(result.message);
-  Deno.exit(result.status === 'scaffold-ready' ? 0 : 1);
+  const exitCleanly = result.status === 'scaffold-ready' || result.status === 'fixture-loaded';
+  Deno.exit(exitCleanly ? 0 : 1);
 }
