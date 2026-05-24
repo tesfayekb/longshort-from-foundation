@@ -1981,6 +1981,10 @@ Over time, action outcomes may become invalid due to later changes:
 | **Evidence** | AC-06 evidenced: `.cursorrules` contains Rules 8/9/10 blocks. AC-07 evidenced: feature_flags table exists with operator_id default UUID; operators table absent. AC-08 evidenced: pg_cron extension active (migration 20260412052259). AC-09 evidenced: kill_switches table + 4 RPCs + route + UI + permission seed all landed; manual trigger test runs through soft_pause → audit row → resume verification cycle with v2-corrected schema (actor_id / target_type / target_id NULL + metadata.strategy_key); RequireSudo wrap enforces DEC-029 sudo mode. AC-10 evidenced: system_config.value_version column exists with default 1; trigger fires on UPDATE; INSERT-then-UPDATE cycle increments value_version 1 → 2. v2 corrections verified: `grep -c 'is_superadmin(auth.uid())' supabase/migrations/*_step_6_1_kill_switches.sql` ≥ 4; `grep -c 'is_superadmin()' supabase/migrations/*_step_6_1_kill_switches.sql` = 0; `grep -c 'requireReauth' src/App.tsx` = 0; `grep -c 'RequireSudo actionKey="kill_switch_route"' src/App.tsx` = 1. |
 | **Status** | Verified |
 
+#### Post-remediation status correction (2026-05-24, ACT-084 v3 SHA `<TBD>`)
+
+At ACT-075 original closure, "Verified" meant verified-at-repo-code-level; the underlying claim that MIG-039 (feature_flags) / MIG-040 (kill_switches + 4 RPCs + system.kill_switches.manage permission) / MIG-041 (system_config.value_version column + trigger + function) were applied to the live database was NOT verified. ACT-083b investigation surfaced that all 3 migrations were unapplied. ACT-084 v2 closed the gap via operator out-of-band application + Lovable passive smoke verification (21/21 green); ACT-084 v3 corrected the v2 documentation (MIG label fixes + FOLLOWUP identifier fixes). Live-DB state now matches the ACT-075 evidence claims. This correction is append-only per governance discipline; ACT-075 entry body preserved for historical record.
+
 ---
 
 ### ACT-076: FP-006 Sub-Step 6.2 — Reconciliation Engine State-Machine + Event-Log Scaffolding
