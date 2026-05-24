@@ -225,6 +225,23 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved (operator Option A decision at ACT-084 closure; §22.5 AMBIGUITY clause governs the B.3 active-cycle deferral; no new DEC required). |
 | Supersession Links | None — additive corrective sub-step. FOLLOWUP-001 + FOLLOWUP-002 status transitions from active → closed (smoke evidence + Option A acceptance recorded in closure-note appendix). v2 incorrectly labeled as "FOLLOWUP-005" — v3 corrects per canonical supervisor inventory. |
 
+### Governance addition (2026-05-24) — ADR-004 introduced via ACT-085
+
+**Type:** Governance addition; plan v13.4 unchanged
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.4 (unchanged — governance addition, not plan-structure change per Constitution Rule 10) |
+| Section IDs Created | None |
+| Decision IDs Affected | ADR-004 introduced ("Live-DB Verification Discipline + Apply-Verify Separation") |
+| What Changed | ADR-004 landed codifying four §22.5 supervisor protocol amendments motivated by FP-006 sub-step 6.4.1. ACT-085 documents closure; INC-20 RESOLVED (full); master-plan 6.4.1 tick line MIG labels + FOLLOWUP refs corrected; sub-step 6.4.1 fully closes. CLAUDE.md v0.5 (chat-context) is the authoritative behavioral specification. |
+| Why | Sub-step 6.4.1 corrective cycle surfaced four defect classes the v0.4 §22.5 framework did not catch (live-DB blind spot; capability assumption; executor-path violation per INC-20; visibility-gap across sessions). ADR-004 codifies prevention discipline forward. |
+| What Stayed | All DECs unchanged. ADR-001/-002/-003 unchanged. Plan version unchanged. system-state unchanged. All code/migration/script/edge function files untouched. |
+| What Was Added | ADR-004; ACT-085 entry; INC-20 two-part closure notes; this plan-changelog entry; master-plan 6.4.1 tick line MIG label + FOLLOWUP correction. |
+| What Was Removed | None. |
+| Approval Status | Approved per operator-amended strict serial sequencing (083a → 083b → 084 v1→v2→v3 → 085); operator confirmed INC-20 Part (a) revoke (`still_superadmin=0`). |
+| Supersession Links | None — additive governance. |
+
 ### v13.2 → v13.3 (2026-05-22)
 
 **Type:** In-FP-006 sub-step closure (6.4) + FOLLOWUP-004 architectural fix landing (CI script + ADR-003 + DEC-034 v13.2 amendment)
