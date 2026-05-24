@@ -816,6 +816,19 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | **Status** | committed to repo (live application pending FOLLOWUP-002) |
 | **superseded_by** | — |
 
+### MIG-046: FP-006 Sub-Step 6.5d — Activate Reconciliation Replay-Chain Job
+
+| Field | Value |
+|---|---|
+| Migration version | `20260524120000` |
+| File | `supabase/migrations/20260524120000_step_6_5d_activate_replay_chain.sql` |
+| Applied | 2026-05-24 (operator OOB via Supabase Dashboard SQL editor per ADR-004 §22.5.2 split-execution) |
+| Verified | 2026-05-24 (Lovable pre-flight gate via `supabase--read_query`: replay_chain_enabled=true, mig_046_in_ledger='20260524120000') |
+| Pattern | UPDATE one row + DO-block dependency check (mirror of MIG-045) |
+| Effect | `public.job_registry` row `longshort.reconciliation_replay_chain` transitions `enabled` false → true. Both longshort job_registry rows now `enabled=true` (periodic_sweep via MIG-045; replay_chain via MIG-046). |
+| Dependency | MIG-044 (`job_registry` seed for both longshort jobs). DO-block guard raises if MIG-044 not applied — same safety net pattern as MIG-045. |
+| Sub-step authority | ACT-089 (FP-006 sub-step 6.5d + Gate 6.5 closure) |
+
 ---
 
 ### Tables (14)
