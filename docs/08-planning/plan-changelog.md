@@ -276,6 +276,23 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved per operator OOB application of MIG-047 + verified pre-flight gate. Second sub-step under CLAUDE.md v0.5 §22.5.2 (after 6.5d). |
 | Supersession Links | None. |
 
+### Gate closure (2026-05-24) — Gate 6.7: Replay Framework + A1 Baseline + Alpaca Paper
+
+**Type:** Gate closure within FP-006; plan v13.4 unchanged
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.4 (unchanged) |
+| Section IDs Created | None |
+| Decision IDs Affected | None — ADRs unchanged |
+| What Changed | Sub-step 6.7 closed: Alpaca paper integration landed. 6 fetcher implementations (Position / Quote / HaltStatus / Locate / BuyingPower / OrderAcceptance) against live Alpaca paper API, each implementing the corresponding interface in `longshort-broker-interfaces.ts` without modification. Minimal REST wrapper (`AlpacaPaperClient`) with typed error hierarchy (AlpacaCredentialError + AlpacaApiError + AlpacaNetworkError) — no phantom-success swallow per DEC-034 clause (3). Unit tests (≥9 client + ≥11 fetchers) use mocked fetch (CI-runnable, no credentials). Integration tests marked `Deno.test.ignore` (operator runs locally with credentials). Connection-test CLI emits per-fetcher JSON status suitable for §12.5 evidence. Gate 6.7 closes: all three §10.4 priority deliverables now operational — replay framework (Gate 6.5) + A1 baseline aggregation (6.6) + Alpaca paper integration (6.7). |
+| Why | §10.4 Phase 0B supporting deliverable: "Alpaca paper account integration (real broker connection for reconciliation against real Alpaca paper state, not mocked)". Foundation for all replay-test PASS evidence claims from Phase 7 forward. |
+| What Stayed | All DECs unchanged. ADRs unchanged. `longshort-broker-interfaces.ts` unchanged. All prior sub-step modules frozen (verifiers / lifecycle / engine / 6.5 / 6.6). 11 fetcher interfaces remain using 6.5b fixture-backed implementations; lit up in 6.10 or later. Captured Day 1 fixture deferred to 6.9 (requires full RTH market day). Plan v13.4 unchanged. |
+| What Was Added | 17 files: 1 REST client + 6 fetcher implementations + 1 integration test file + 2 unit test files + 2 scripts (CLI + arg-parsing test) + `.env.example` extension + `tsconfig.app.json` exclude amendment (per §22.3 item 7 capability-gap surface; same scoped-exclude pattern as 6.5b) + ACT-091 entry + master-plan 6.7 + Gate 6.7 ticks + this changelog entry. |
+| What Was Removed | None — additive. |
+| Approval Status | Approved per operator confirmation. Per §22.5.1 third clause: no live-DB state touched (Alpaca API is external; pure code + tests). |
+| Supersession Links | None. |
+
 ### v13.2 → v13.3 (2026-05-22)
 
 **Type:** In-FP-006 sub-step closure (6.4) + FOLLOWUP-004 architectural fix landing (CI script + ADR-003 + DEC-034 v13.2 amendment)
