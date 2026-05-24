@@ -458,7 +458,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [x] 6.4.1 — Corrective: DB surfaces remediation (MIG-037..MIG-045 per canonical ledger numbering — MIG-037 longshort permissions, MIG-038 longshort_audit_logs, MIG-039 feature_flags, MIG-040 kill-switch infrastructure + system.kill_switches.manage permission + kill_switch_state enum + 4 kill-switch RPCs, MIG-041 system_config.value_version + bump function + trigger, MIG-042 longshort_reconciliation_state, MIG-043 reconciliation_events + 2 ENUMs, MIG-044 job_registry seeds, MIG-045 activate periodic sweep) applied OOB by operator + Lovable passive smoke 21/21 + Option A §22.5 AMBIGUITY closure for B.3 active 4-RPC cycle (deferred to 6.5.x) (closed 2026-05-24, ACT-084 v3; final closure 2026-05-24, ACT-085)
   - 6.5 — Replay framework + L2 synthetic Day 1 (decomposed into 6.5a/b/c/d per §11.10 subsection structure)
     - [x] 6.5a — Replay framework foundation: capture stream types + storage scaffold + fixture format spec v1 + ADR-005 (Deno-native runtime decision) (closed 2026-05-24, ACT-086)
-    - [ ] 6.5b — Deterministic replay engine (consume v1 fixtures; produce identical reconciliation_events)
+    - [x] 6.5b — Deterministic replay engine: zstd codec + fixture loader + per-stream lookup index + fixture-backed broker fetchers + determinism harness (12 tests). Lifecycle integration deferred to 6.5c. (closed 2026-05-24, ACT-087)
     - [ ] 6.5c — L2 synthetic Day 1 fixture + first replay-test PASS run
     - [ ] 6.5d — AI-loop verification surface + `longshort.reconciliation_replay_chain` job activation (MIG-046 via ADR-004 §22.5.2 split-execution) + Gate 6.5 closure
   - [ ] 6.6 — A1 baseline harness
