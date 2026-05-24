@@ -401,6 +401,33 @@ export type Database = {
         }
         Relationships: []
       }
+      kill_switches: {
+        Row: {
+          operator_id: string
+          reason: string | null
+          set_at: string
+          set_by: string | null
+          state: Database["public"]["Enums"]["kill_switch_state"]
+          strategy_key: string
+        }
+        Insert: {
+          operator_id?: string
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+          state?: Database["public"]["Enums"]["kill_switch_state"]
+          strategy_key: string
+        }
+        Update: {
+          operator_id?: string
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+          state?: Database["public"]["Enums"]["kill_switch_state"]
+          strategy_key?: string
+        }
+        Relationships: []
+      }
       longshort_audit_logs: {
         Row: {
           action: string
@@ -840,6 +867,38 @@ export type Database = {
           }
         | { Args: { _role_key: string; _user_id: string }; Returns: boolean }
       is_superadmin: { Args: { _user_id: string }; Returns: boolean }
+      kill_switch_hard_pause: {
+        Args: {
+          p_operator_id?: string
+          p_reason: string
+          p_strategy_key: string
+        }
+        Returns: Json
+      }
+      kill_switch_manual_liquidate: {
+        Args: {
+          p_operator_id?: string
+          p_reason: string
+          p_strategy_key: string
+        }
+        Returns: Json
+      }
+      kill_switch_resume: {
+        Args: {
+          p_operator_id?: string
+          p_reason: string
+          p_strategy_key: string
+        }
+        Returns: Json
+      }
+      kill_switch_soft_pause: {
+        Args: {
+          p_operator_id?: string
+          p_reason: string
+          p_strategy_key: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
