@@ -2185,3 +2185,18 @@ HIGH — action tracker is the operational evidence backbone for the entire gove
 - [Regression Strategy](../05-quality/regression-strategy.md)
 - [Testing Strategy](../05-quality/testing-strategy.md)
 - [Health Monitoring](../04-modules/health-monitoring.md)
+
+### ACT-086: FP-006 Sub-Step 6.5a — Replay Framework Foundation (Types + Storage + Fixture Format Spec + ADR-005)
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-086 |
+| **Date** | 2026-05-24 |
+| **Action** | Closed FP-006 sub-step 6.5a — first of four sub-sub-steps (6.5a/b/c/d) decomposing sub-step 6.5 (Replay framework + L2 synthetic Day 1) per CROSSWIND §11.10. Per ADR-004 Amendment 1 (CLAUDE.md v0.5 §22.5.1) third clause: this sub-step does NOT touch live-DB state — explicit operator acknowledgment in prompt header; no live-DB evidence required. Landed: (a) `src/features/longshort/types/replay-fixture.ts` — discriminated union for 8 capture streams per §11.10.1 (broker_state, signal_quote, reconciliation_quote, broker_quote, halt_feed, locate_feed, corporate_actions, combiner_io); (b) `src/features/longshort/types/replay-storage.ts` — envelope + zstd compression contract per §11.10.2; (c) `src/features/longshort/types/replay-fixture_test.ts` — 8 type-shape unit tests (≥6 floor); (d) `replay_storage/.gitkeep` + `replay_storage/README.md` — directory contract anchored in git; (e) `.gitignore` extended with `replay_storage/*.jsonl.zst` pattern; (f) `docs/04-modules/longshort/replay-fixture-format.md` — normative v1 format spec; (g) ADR-005 — Deno-native replay runtime decision (§11.10 "pytest" reference treated as non-normative implementation guidance; normative requirements are language-agnostic and satisfiable in Deno). Master-plan 6.5 expanded to 6.5a/b/c/d sub-sub-steps; 6.5a ticked. Plan v13.4 unchanged. |
+| **Type** | Foundation (replay framework contract) + Governance (ADR-005) |
+| **Impact Classification** | HIGH (fixture contract is load-bearing for §11.10.4 replay-test PASS comparison + 6.5d AI-loop verification surface + all subsequent replay-evidence claims for Tier A merges per §12.5) |
+| **Modules Affected** | longshort (replay types + format spec + ADR-005); replay_storage directory (new); CI surface unchanged (6.5b will add replay test invocation) |
+| **Files Changed** | 10 files: 3 TypeScript modules (`src/features/longshort/types/replay-fixture.ts`, `replay-storage.ts`, `replay-fixture_test.ts`); 2 directory anchors (`replay_storage/.gitkeep`, `replay_storage/README.md`); 1 normative format spec doc; 1 ADR-005; this ACT-086 entry; master-plan 6.5 decomposition; `.gitignore` extension. |
+| **Related Tests** | `deno test src/features/longshort/types/replay-fixture_test.ts` — 8 type-shape tests including format version constant, file extension constant, 6 type-guard mutual-exclusion checks, envelope validation positive/negative cases. Verifier suite (90 tests) unchanged. |
+| **Evidence** | (a) 8-element discriminated union covers all §11.10.1 capture streams verbatim. (b) Envelope contract matches §11.10.2 storage requirements. (c) 8 unit tests green (≥6 floor). (d) ADR-005 establishes Deno-native decision + non-normative-spec-implementation-clause principle. (e) Per §22.5.1 third clause: no DB schema/permissions/RPCs/RLS/ENUMs/columns/triggers/job_registry touched. |
+| **Status** | Verified |
