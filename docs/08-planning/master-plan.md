@@ -440,7 +440,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 - **Phase Gates (5):**
   - [x] Gate 6.0 — Prerequisites + DEC ratifications + reconciliation stub + audit-writer trap rg-zero (closed 2026-05-22, ACT-074)
   - [x] Gate 6.3 — Phase 0A residual + reconciliation engine + 17 verify_* (closed 2026-05-22, ACT-081)
-  - [ ] Gate 6.4 — Strong-evidence workflow tooling, fail-fast
+  - [x] Gate 6.4 — Strong-evidence workflow tooling, fail-fast (closed 2026-05-22, ACT-082)
   - [ ] Gate 6.7 — Replay framework + A1 baseline + Alpaca paper
   - [ ] Gate 6.9 — ADR-002 multi-pending validation + Phase 0B exit gate quietness
 - **Sub-step inventory (15 + closure):**
@@ -454,7 +454,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [x] 6.3b — verify_* batch B (#6–#10) (closed 2026-05-22, ACT-079)
   - [x] 6.3c — verify_* batch C (#11–#14) (closed 2026-05-22, ACT-080)
   - [x] 6.3d — verify_* batch D (#15–#17) + Gate 6.3 closure (closed 2026-05-22, ACT-081)
-  - [ ] 6.4 — Strong-evidence workflow tooling + Gate 6.4 closure
+  - [x] 6.4 — Strong-evidence workflow tooling + Gate 6.4 closure (closed 2026-05-22, ACT-082)
   - [ ] 6.5 — Replay framework + L2 synthetic Day 1
   - [ ] 6.6 — A1 baseline harness
   - [ ] 6.7 — Alpaca paper integration + Gate 6.7 closure
