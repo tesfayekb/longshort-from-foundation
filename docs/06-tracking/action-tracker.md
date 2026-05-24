@@ -2091,6 +2091,10 @@ At ACT-076 original closure, "Verified" meant verified-at-repo-code-level; the u
 | **Evidence** | AC-30/-31/-32 evidenced via Deno test suite. #15/#16 spec.tier === 'strong_plus' (third + fourth strong_plus verifiers after #1 + #14); #17 spec.tier === 'strong' AND spec.symbol === null AND tolerance.ratio_lower === 0.90 + ratio_upper === 1.10 (90-110% band per §1.6). Edge function `/longshort-reconciliation-tick` dispatches 3 verifiers per tick via mock fetchers; ts injected via `productionClock.getWallClockTs()` at top-of-call-chain (no Date.now() in dispatch path); longshort.view permission gate. MIG-045 idempotent UPDATE; DO-block raises if MIG-044 absent. Gate 6.3 closure: master-plan Gate 6.3 checkbox ticked; consumers can iterate all 17 verifiers via IMPLEMENTED_VERIFIERS array. |
 | **Status** | Verified |
 
+#### Post-remediation status correction (2026-05-24, ACT-084 v3 SHA `<TBD>`)
+
+At ACT-081 original closure, "Verified" meant verified-at-repo-code-level; the underlying claim that MIG-045 (UPDATE flipping longshort.reconciliation_periodic_sweep to enabled=true with DO-block dependency-check on MIG-044) was applied to the live database was NOT verified. The DO-block guard never fired because no apply was ever attempted. ACT-083b investigation surfaced this. ACT-084 v2 closed the gap via operator out-of-band application + Lovable passive smoke verification (job_registry shows periodic_sweep enabled=true; replay_chain enabled=false per MIG-044 seed); ACT-084 v3 corrected the v2 documentation. Live-DB state now matches the ACT-081 evidence claims. This correction is append-only per governance discipline; ACT-081 entry body preserved for historical record.
+
 ---
 
 ### ACT-082: FP-006 Sub-Step 6.4 + Gate 6.4 Closure — Strong-Evidence Workflow Tooling + FOLLOWUP-004 Closure
