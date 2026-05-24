@@ -207,6 +207,24 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved |
 | Supersession Links | None — DEC-003 remains active as the scope-discipline anchor; DEC-030 is an amendment, not a supersession |
 
+### v13.2 → v13.3 (2026-05-22)
+
+**Type:** In-FP-006 sub-step closure (6.4) + FOLLOWUP-004 architectural fix landing (CI script + ADR-003 + DEC-034 v13.2 amendment)
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.2 → v13.3 |
+| Section IDs Closed | sub-step 6.4 + Phase Gate 6.4 (within PLAN-TRADING-001-LONGSHORT-002) |
+| Section IDs Created | None |
+| Decision IDs Affected | DEC-034 amendment v13.2 (clause (5) verifier text replaced — embedded regex removed; reference to `scripts/check-audit-writer-trap.ts` with 8 unit tests including FINDING-001 regression fixture). DEC-034 itself NOT superseded — clauses (1)-(4) + (6) unchanged. |
+| What Changed | (a) 5 strong-evidence tooling scripts landed under `scripts/` with 5 companion `_test.ts` files (19 total Deno tests: 8 audit-writer-trap + 3 firing-diff + 2 replay-run + 3 telemetry-report + 3 broker-spot-check) — all ship verbatim working implementations per D2 disposition (no throw-stubs). (b) `.github/workflows/strong-evidence.yml` CI workflow added with 4 quality gates. (c) ADR-003 (`docs/04-modules/longshort/design-source/ADR-003-enforcement-as-scripts-not-prose.md`) created — codifies "enforcement logic that requires pattern matching MUST live in tested scripts, not DEC prose" precedent; references DEC-036 (precedent established by ADR-002). (d) DEC-034 v13.2 amendment in approved-decisions.md replaces clause (5) embedded regex with reference to the script. (e) FINDING-001 status updated in `docs/06-tracking/known-verifier-exceptions.md` from "active exception pending FOLLOWUP-004" to "closed / superseded by ADR-003 + tested script — regression fixture lives at test (3) in check-audit-writer-trap_test.ts". (f) `scripts/README.md` created — directory documentation + authoring contract + banned-pattern self-discipline. (g) function-index.md registers 5 module entries + 1 doc entry. |
+| Why | FOLLOWUP-004 closure per operator A+ disposition at sub-step 6.3a closure (logged in ACT-077). The DEC-034 v13.1 embedded regex accumulated 4 distinct defect classes (DEC-036 Alpaca regex / DEC-034 v1 substring / DEC-034 v13.1 import-shape / FINDING-001 JSDoc continuation false-positive). Root cause: enforcement boundary held in supervisor's head, untested, ungoverned. Architectural fix: move enforcement to tested CI scripts (ADR-003 codifies the pattern; DEC-034 v13.2 amendment is the first application; this precedent applies to any future DEC clause requiring mechanical verification). |
+| What Stayed | All other DECs (DEC-034 clauses (1)-(4) + (6), DEC-034.1, DEC-035, DEC-036, DEC-037, DEC-001..033) unchanged. All 17 verifier files + edge function + MIG-045 from 6.3d untouched. Engine modules (lifecycle.ts, supabase-admin.ts, clock, state, types) untouched. 71-test verifier suite green. .cursorrules unchanged. longshort module status `foundation-implemented` (engine + tooling; signal/order logic remains FP-006 6.6+). |
+| What Was Added | ACT-082; scripts/ directory (5 modules + 5 test files + 1 README); .github/workflows/strong-evidence.yml; ADR-003; DEC-034 v13.2 amendment; FINDING-001 status update; function-index entries; master-plan 6.4 + Gate 6.4 ticks; this changelog entry. |
+| What Was Removed | DEC-034 v13.1 embedded regex pattern (replaced by reference to script — superseded inline within DEC-034 clause (5)). FINDING-001 exception register entry transitions to closed (still present, append-only, marked superseded by ADR-003). |
+| Approval Status | Approved (operator A+ disposition at 6.3a closure for FOLLOWUP-004; D1/D2/D3 pre-execution dispositions absorbed). |
+| Supersession Links | DEC-034 v13.1 clause (5) embedded regex → DEC-034 v13.2 amendment (script reference). FINDING-001 active exception → closed / superseded by ADR-003 + scripts/check-audit-writer-trap.ts test (3) regression fixture. |
+
 ### v13.1 → v13.2 (2026-05-22)
 
 **Type:** In-FP-006 decomposition insertion (corrective sub-step 6.3a.1) + governance reduction discipline (interim verifier-exception register replacing exception-in-every-ACT pattern)
