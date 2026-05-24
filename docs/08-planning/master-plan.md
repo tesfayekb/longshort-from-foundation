@@ -441,7 +441,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [x] Gate 6.0 — Prerequisites + DEC ratifications + reconciliation stub + audit-writer trap rg-zero (closed 2026-05-22, ACT-074)
   - [x] Gate 6.3 — Phase 0A residual + reconciliation engine + 17 verify_* (closed 2026-05-22, ACT-081)
   - [x] Gate 6.4 — Strong-evidence workflow tooling, fail-fast (closed 2026-05-22, ACT-082)
-  - [ ] Gate 6.7 — Replay framework + A1 baseline + Alpaca paper
+  - [x] Gate 6.7 — Replay framework + A1 baseline + Alpaca paper. All three §10.4 priority deliverables operational: replay framework (6.5 / Gate 6.5); A1 baseline aggregation (6.6); Alpaca paper integration (6.7). (closed 2026-05-24, ACT-091)
   - [ ] Gate 6.9 — ADR-002 multi-pending validation + Phase 0B exit gate quietness
 - **Sub-step inventory (16 + closure):**
   - [x] 6.0a — Prerequisite doc closures + DEC ratifications evidenced (closed 2026-05-22, ACT-074)
@@ -462,7 +462,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
     - [x] 6.5c — L2 synthetic Day 1 fixture + first replay-test PASS run against verify_quote: deterministic 3-tick fixture + in-memory event collector + replay-pass-runner + CLI script `scripts/replay-pass.ts`. 10 tests; byte-identical-two-runs determinism property verified per §11.10.4. (closed 2026-05-24, ACT-088)
     - [x] 6.5d — AI-loop verification surface (§11.10.5 meta-runner producing AILoopVerificationResult artifact for §12.5 PR evidence bundles) + MIG-046 `longshort.reconciliation_replay_chain` activation (operator OOB apply via Dashboard SQL editor; Lovable pre-flight gate verified per ADR-004 §22.5.2) + Gate 6.5 closure. (closed 2026-05-24, ACT-089)
   - [x] 6.6 — A1 baseline aggregation infrastructure: 3 SQL views (daily/weekly/monthly per call_name per outcome) + compare_reconciliation_baseline() RPC + TypeScript query helpers (MIG-047 via ADR-004 §22.5.2 split-execution). Phase 7 populates baselines; Phase 9 §11.6 kill condition queries this surface. (closed 2026-05-24, ACT-090)
-  - [ ] 6.7 — Alpaca paper integration + Gate 6.7 closure
+  - [x] 6.7 — Alpaca paper integration: REST client (AlpacaPaperClient with typed errors) + 6 fetcher implementations (Position / Quote / HaltStatus / Locate / BuyingPower / OrderAcceptance) against `longshort-broker-interfaces.ts` + connection-test CLI for Gate 6.7 PASS evidence. Other 11 fetchers stay using 6.5b fixture-backed implementations; lit up in 6.10 or later. Captured Day 1 fixture deferred to 6.9. (closed 2026-05-24, ACT-091)
   - [ ] 6.8 — ADR-002 multi-pending validation harness
   - [ ] 6.9 — Phase 0B exit gate quietness evidencing + Gate 6.9 closure
   - [ ] 6.10 — Module status transition `foundation-implemented` → `phase-0b-validated` (closure)

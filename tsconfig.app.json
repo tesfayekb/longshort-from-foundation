@@ -33,6 +33,7 @@
     "src"
   ],
   "exclude": [
-    "src/features/longshort/services/replay"
+    "src/features/longshort/services/replay",
+    "src/features/longshort/services/broker/alpaca"
   ]
 }
