@@ -849,9 +849,49 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      reconciliation_events_daily_agg: {
+        Row: {
+          bucket_day: string | null
+          call_name: string | null
+          event_count: number | null
+          outcome: Database["public"]["Enums"]["reconciliation_outcome"] | null
+        }
+        Relationships: []
+      }
+      reconciliation_events_monthly_agg: {
+        Row: {
+          bucket_month: string | null
+          call_name: string | null
+          event_count: number | null
+          outcome: Database["public"]["Enums"]["reconciliation_outcome"] | null
+        }
+        Relationships: []
+      }
+      reconciliation_events_weekly_agg: {
+        Row: {
+          bucket_week: string | null
+          call_name: string | null
+          event_count: number | null
+          outcome: Database["public"]["Enums"]["reconciliation_outcome"] | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      compare_reconciliation_baseline: {
+        Args: {
+          p_baseline_days?: number
+          p_call_name: string
+          p_outcome: Database["public"]["Enums"]["reconciliation_outcome"]
+          p_window_days?: number
+        }
+        Returns: {
+          baseline_rate_per_day: number
+          current_rate_per_day: number
+          exceeds_3x_threshold: boolean
+          ratio_current_vs_baseline: number
+        }[]
+      }
       get_my_authorization_context: { Args: never; Returns: Json }
       has_permission: {
         Args: { _permission_key: string; _user_id: string }
