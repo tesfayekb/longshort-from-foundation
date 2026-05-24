@@ -109,6 +109,22 @@ Fix: change `.resolves.toBeUndefined()` to `.resolves.toBeDefined()` or assert o
 
 ---
 
+### INC-20 — ACT-084 v2 scope-leak: Lovable migration-tool path used for superadmin grant during smoke debugging
+
+| Field | Value |
+|---|---|
+| **Discovered** | 2026-05-24 |
+| **Discovery Context** | During FP-006 sub-step 6.4.1 v2 execution, operator authorized a temporary superadmin grant for `tesfayekb@me.com` (UUID `8f8dfd8a-81bb-42f3-bb87-c58e33748b1b`) to enable Option C debugging of the B.3 active 4-RPC smoke cycle. Lovable chose to apply the grant via the Supabase migration tool path (creating `supabase/migrations/20260524041921_d1be05aa-c76a-4289-a863-c16d6926c9c8.sql` + auto-regenerating `src/integrations/supabase/types.ts`) — the EXACT workflow path that Option 3 (operator OOB apply + Lovable verification split-execution) was designed to prevent. The grant itself was operator-authorized; only the delivery path was the violation. |
+| **Severity** | Medium (workflow discipline violation: re-introduced the root-cause path that ACT-083b investigation surfaced and ACT-085 will codify as banned for future sub-steps; not a security violation since the grant itself was operator-authorized; not a live-DB drift since the migration applied cleanly and is in `schema_migrations`) |
+| **Disposition** | **Open** (two-part follow-up: (a) operator-revokes the temporary grant out-of-band; (b) ACT-085 codifies the path-violation rule formally) |
+| **Resolution** | Two-part: |
+| **Part (a) — Revoke temporary superadmin grant (operator OOB)** | Operator runs the following SQL via Supabase Dashboard SQL editor against project `sftatlxatbdrotivxcip` to revoke the temporary grant: `DELETE FROM public.user_roles WHERE user_id = '8f8dfd8a-81bb-42f3-bb87-c58e33748b1b' AND role_id = (SELECT id FROM public.roles WHERE key = 'superadmin');` followed by audit log entry: `INSERT INTO public.audit_logs (action, actor_id, target_type, target_id, metadata) VALUES ('rbac.role_revoked', '8f8dfd8a-81bb-42f3-bb87-c58e33748b1b'::uuid, 'user_roles', '8f8dfd8a-81bb-42f3-bb87-c58e33748b1b'::uuid, jsonb_build_object('role_key', 'superadmin', 'reason', 'INC-20 cleanup — ACT-084 v2 temporary smoke-test grant revoked per gate hygiene'));`. After operator confirms revoke, this INC entry status transitions to **Resolved** via append-only correction. |
+| **Part (b) — Path-violation root-cause codification (ACT-085 scope)** | ACT-085 (FP-006 sub-step 6.4.1 supervisor protocol amendment) codifies three §22.5 amendments motivated by sub-step 6.4.1's experience: (1) live-DB verification mandatory for CLEAN dispositions touching DB schema/permissions/RPCs/RLS/job_registry; (2) apply-step vs verify-step separation pattern when executor tool capabilities mismatch contract (Option 3 split-execution); (3) **pre-flight live-DB gate pattern as integrity barrier between operator OOB action and executor verification claim**. INC-20 specifically informs item (3): for any one-off DB operation during smoke debugging or capability-gap workaround, supervisor must provide SQL for operator to run out-of-band, NOT direct executor to apply via migration tool. ACT-085 amendment text references this INC entry as motivating evidence. |
+| **Disposition path to closure** | (a) operator-revokes grant; this INC entry receives "Resolved (Part a, 2026-05-24)" correction. (b) ACT-085 codifies the workflow rule; this INC entry receives "Resolved (Part b, at ACT-085 SHA)" correction. Both parts complete → INC-20 transitions to **Resolved (full)**. |
+| **Live-DB artifact disposition** | The migration file `supabase/migrations/20260524041921_d1be05aa-c76a-4289-a863-c16d6926c9c8.sql` STAYS IN REPO as historical — deleting it would create a "row in schema_migrations references missing file" drift class. The auto-regenerated `src/integrations/supabase/types.ts` changes also stay (legitimate type definitions for feature_flags table that should have been generated earlier anyway). |
+
+---
+
 ## Naming Conventions
 
 - **INC-N** numbering is sequential, never reused. INC-14 lives in `docs/04-modules/longshort/design-source/README.md` (CROSSWIND-specific path drift); INC-15 onward in this file unless they're long-short-module-specific.
