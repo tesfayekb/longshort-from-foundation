@@ -133,6 +133,36 @@ export type Database = {
         }
         Relationships: []
       }
+      feature_flags: {
+        Row: {
+          enabled: boolean
+          evidence_tier: string
+          flag_key: string
+          operator_id: string
+          reason: string | null
+          set_at: string
+          set_by: string | null
+        }
+        Insert: {
+          enabled?: boolean
+          evidence_tier?: string
+          flag_key: string
+          operator_id?: string
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+        }
+        Update: {
+          enabled?: boolean
+          evidence_tier?: string
+          flag_key?: string
+          operator_id?: string
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+        }
+        Relationships: []
+      }
       invitations: {
         Row: {
           accepted_at: string | null
@@ -371,6 +401,84 @@ export type Database = {
         }
         Relationships: []
       }
+      longshort_audit_logs: {
+        Row: {
+          action: string
+          correlation_id: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          metadata: Json
+          operator_id: string
+          target_id: string | null
+          target_type: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          correlation_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          operator_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          correlation_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          operator_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
+      longshort_reconciliation_state: {
+        Row: {
+          call_name: string
+          cooldown_until: string | null
+          escalation_active: boolean
+          escalation_count_24h: number
+          last_firing_ts: string | null
+          operator_id: string
+          rolling_window_count: number
+          rolling_window_start: string
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          call_name: string
+          cooldown_until?: string | null
+          escalation_active?: boolean
+          escalation_count_24h?: number
+          last_firing_ts?: string | null
+          operator_id?: string
+          rolling_window_count?: number
+          rolling_window_start: string
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          call_name?: string
+          cooldown_until?: string | null
+          escalation_active?: boolean
+          escalation_count_24h?: number
+          last_firing_ts?: string | null
+          operator_id?: string
+          rolling_window_count?: number
+          rolling_window_start?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       mfa_recovery_attempts: {
         Row: {
           failed_count: number
@@ -476,6 +584,69 @@ export type Database = {
         }
         Relationships: []
       }
+      reconciliation_events: {
+        Row: {
+          call_name: string
+          divergence: Json | null
+          engine_version: string
+          event_id: string
+          expected_value: Json | null
+          failure_action: string | null
+          notes: string | null
+          observed_value: Json | null
+          operator_id: string
+          outcome: Database["public"]["Enums"]["reconciliation_outcome"]
+          phase_0b_run_id: string | null
+          pr_evidence_ref: string | null
+          resolution_pr_ref: string | null
+          resolved_at: string | null
+          symbol: string | null
+          tier: Database["public"]["Enums"]["reconciliation_tier"]
+          tolerance: Json | null
+          ts: string
+        }
+        Insert: {
+          call_name: string
+          divergence?: Json | null
+          engine_version: string
+          event_id?: string
+          expected_value?: Json | null
+          failure_action?: string | null
+          notes?: string | null
+          observed_value?: Json | null
+          operator_id?: string
+          outcome: Database["public"]["Enums"]["reconciliation_outcome"]
+          phase_0b_run_id?: string | null
+          pr_evidence_ref?: string | null
+          resolution_pr_ref?: string | null
+          resolved_at?: string | null
+          symbol?: string | null
+          tier: Database["public"]["Enums"]["reconciliation_tier"]
+          tolerance?: Json | null
+          ts: string
+        }
+        Update: {
+          call_name?: string
+          divergence?: Json | null
+          engine_version?: string
+          event_id?: string
+          expected_value?: Json | null
+          failure_action?: string | null
+          notes?: string | null
+          observed_value?: Json | null
+          operator_id?: string
+          outcome?: Database["public"]["Enums"]["reconciliation_outcome"]
+          phase_0b_run_id?: string | null
+          pr_evidence_ref?: string | null
+          resolution_pr_ref?: string | null
+          resolved_at?: string | null
+          symbol?: string | null
+          tier?: Database["public"]["Enums"]["reconciliation_tier"]
+          tolerance?: Json | null
+          ts?: string
+        }
+        Relationships: []
+      }
       role_permissions: {
         Row: {
           id: string
@@ -552,6 +723,7 @@ export type Database = {
           updated_at: string | null
           updated_by: string | null
           value: Json
+          value_version: number
         }
         Insert: {
           description?: string | null
@@ -559,6 +731,7 @@ export type Database = {
           updated_at?: string | null
           updated_by?: string | null
           value: Json
+          value_version?: number
         }
         Update: {
           description?: string | null
@@ -566,6 +739,7 @@ export type Database = {
           updated_at?: string | null
           updated_by?: string | null
           value?: Json
+          value_version?: number
         }
         Relationships: []
       }
@@ -669,6 +843,18 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      kill_switch_state:
+        | "active"
+        | "soft_paused"
+        | "hard_paused"
+        | "liquidating"
+      reconciliation_outcome:
+        | "false_positive_within_tolerance"
+        | "failure_handled"
+        | "failure_escalated"
+        | "expected_divergence_handled"
+        | "system_bug"
+      reconciliation_tier: "strong_plus" | "strong" | "medium" | "weak"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -797,6 +983,20 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      kill_switch_state: [
+        "active",
+        "soft_paused",
+        "hard_paused",
+        "liquidating",
+      ],
+      reconciliation_outcome: [
+        "false_positive_within_tolerance",
+        "failure_handled",
+        "failure_escalated",
+        "expected_divergence_handled",
+        "system_bug",
+      ],
+      reconciliation_tier: ["strong_plus", "strong", "medium", "weak"],
     },
   },
 } as const
