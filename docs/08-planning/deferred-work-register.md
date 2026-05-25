@@ -1578,3 +1578,17 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 - [Feature Proposals](feature-proposals.md)
 - [Plan Changelog](plan-changelog.md)
 - [System State](../00-governance/system-state.md)
+
+### DW-063: §3.3c Halt 5-Trading-Day Lookback — Deferred Placeholder per R4
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-063 |
+| **Registered at** | ACT-107 (FP-008 sub-step 8.3, 2026-05-25) |
+| **Per** | ACT-107 §22.8.4 Surface 3 → Option β disposition |
+| **Cross-references** | FP-008 risk register R4; DW-058 B2 (halt-feed external data procurement Phase-7-blocking) |
+| **Scope** | `rule3_3c_Halts` accepts `halt_history: ReadonlyArray<HaltEvent>` but the refresh job (sub-step 8.4 / 8.5) supplies an empty array at v1. Rule body is wired correctly; activation is automatic when a real `HaltHistoryProvider` implementation lands. |
+| **Blocking deps** | Phase 7 halt-feed external data procurement (DW-058 B2). |
+| **Future phase** | Phase 7. |
+| **Risk acknowledged** | A name halted within the §3.3c 5-trading-day lookback may enter the eligible universe at v1; signal-layer filtering at Phase 2+ provides defense-in-depth via signal-quality checks on recently-halted names (degraded volume + spread). |
+| **Attestation** | FP-008 closure document at sub-step 8.13 attests this rule as deferred-placeholder. |

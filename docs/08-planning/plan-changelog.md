@@ -687,3 +687,15 @@ HIGH — loss of traceability breaks system integrity and decision history.
 
 - [Master Plan](master-plan.md)
 - [Action Tracker](../06-tracking/action-tracker.md)
+
+## v13.14 — 2026-05-25 — FP-008 Sub-Step 8.3 (ACT-107)
+
+| Field | Value |
+|-------|-------|
+| Change Type | Implementation (additive code + paired structural relocation) |
+| Scope | §3.3 hard-exclusion infrastructure (5 active rules + 3 N/A v1 stubs + orchestrator + 2 data-source fetchers + shared interfaces); ACT-104 flat-folder relocation to `constituent-ingestion/` sub-folder. |
+| Surfaces resolved | Surface 1 → 1A Polygon earnings (reuses `POLYGON_API_KEY`); Surface 2 → 2A FINRA short-interest (public CSV, no env var); Surface 3 → 3β deferred-placeholder + DW-063 cross-referencing R4 + DW-058 B2. |
+| Guardrails | G1 honored (`hard-exclusions/` directly enumerated in DEC-038.1 clause (1)); G2 honored (rules operate on Polygon-enriched output; iShares not wired into hard-exclusion data flow). |
+| v0.6.2 §22.3 discipline | (a) reference-index updates same-PR; (b) idiom-grep clean; (c) minimum-coupling (stateless rules, no clock injection, no reconcile coupling, no DB writes); (d) plan-version bump per Rule 10. |
+| Approval | Operator approval 2026-05-25: "1A, 2A, 3β. All three Lovable recommendations approved." |
+| Supersession | N/A — additive. |

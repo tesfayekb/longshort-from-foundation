@@ -34,8 +34,8 @@ import type {
   HttpFetch,
   IndexId,
   UniverseConstituent,
-} from '../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
-import { ConstituentFetchError } from '../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+} from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import { ConstituentFetchError } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
 
 /** Polygon ticker-set codes per their public reference-data taxonomy. */
 const POLYGON_INDEX_CODE: Readonly<Record<IndexId, string>> = {

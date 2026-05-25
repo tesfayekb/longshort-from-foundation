@@ -2098,3 +2098,58 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Files** | `src/features/longshort/services/universe/enrichment/types.ts`, `src/features/longshort/services/universe/filters/types.ts` |
 | **Tests** | Type-only; exercised indirectly via `polygon-enrichment-fetcher_test.ts` + `apply-filters_test.ts` |
 | **Added by** | FP-008 sub-step 8.2, ACT-106 |
+
+### `applyHardExclusions(constituents, input, as_of)` — §3.3 orchestrator
+
+| Field | Value |
+|-------|-------|
+| **Signature** | `(ReadonlyArray<EnrichedConstituent>, ExclusionInputData, Date) => HardExclusionResult` |
+| **File** | `src/features/longshort/services/universe/hard-exclusions/apply-hard-exclusions.ts` |
+| **Tests** | `apply-hard-exclusions_test.ts` (6 cases) |
+| **Added by** | FP-008 sub-step 8.3, ACT-107 |
+| **Notes** | Stateless; per-book eligibility (`long_eligible` / `short_eligible`); invokes 5 active rules (§3.3a/b/c/d/e); §3.3f/g/h are explicit N/A v1 stubs not invoked. |
+
+### `rule3_3a_EarningsWindow` / `rule3_3b_MA` / `rule3_3c_Halts` / `rule3_3d_HTB` / `rule3_3e_ShortInterest` — §3.3 rule implementations
+
+| Field | Value |
+|-------|-------|
+| **Files** | `hard-exclusions/rule-3-3{a,b,c,d,e}-*.ts` (+ companion `_test.ts`) |
+| **Signature** | `(EnrichedConstituent, <rule-input>, Date) => HardExclusionFiring \| null` |
+| **Added by** | FP-008 sub-step 8.3, ACT-107 |
+| **Notes** | §3.3c is v1 deferred-placeholder per R4 + DW-063; §3.3d/§3.3e are short-book-only (`applies_to: 'short'`); §3.3a/§3.3b/§3.3c are book-symmetric (`applies_to: 'both'`). |
+
+### `rule3_3f_SecondaryOfferings` / `rule3_3g_GoingConcern` / `rule3_3h_SectorRestrictions` — N/A v1 stubs
+
+| Field | Value |
+|-------|-------|
+| **Files** | `hard-exclusions/rule-3-3{f,g,h}-*.ts` |
+| **Signature** | `(EnrichedConstituent, Date) => HardExclusionFiring \| null` (always returns `null`) |
+| **Added by** | FP-008 sub-step 8.3, ACT-107 |
+| **Notes** | Explicit N/A v1 per §3.3 spec verbatim citations; not invoked by orchestrator. |
+
+### `PolygonEarningsCalendarFetcher` (Surface-1 Option A)
+
+| Field | Value |
+|-------|-------|
+| **File** | `src/features/longshort/services/universe/hard-exclusions/earnings-calendar-fetcher.ts` |
+| **Implements** | `EarningsCalendarFetcher` (shared interface at `_shared/longshort-hard-exclusion-interfaces.ts`) |
+| **Tests** | `earnings-calendar-fetcher_test.ts` (5 cases) |
+| **Added by** | FP-008 sub-step 8.3, ACT-107 |
+| **Notes** | Reuses `POLYGON_API_KEY`; 404 returns empty (typed-absence); other non-OK throws `EarningsCalendarFetchError` per Surface-1 STOP contract. |
+
+### `FinraShortInterestFetcher` (Surface-2 Option A)
+
+| Field | Value |
+|-------|-------|
+| **File** | `src/features/longshort/services/universe/hard-exclusions/short-interest-fetcher.ts` |
+| **Implements** | `ShortInterestFetcher` |
+| **Tests** | `short-interest-fetcher_test.ts` (5 cases) |
+| **Added by** | FP-008 sub-step 8.3, ACT-107 |
+| **Notes** | Public FINRA bulk CSV; no auth; `fromPrecomputedRecords()` factory for refresh-job pre-join path. |
+
+### ACT-104 constituent-ingestion fetchers — RELOCATED at ACT-107
+
+| Field | Value |
+|-------|-------|
+| **Files** | `src/features/longshort/services/universe/constituent-ingestion/{polygon,ishares}-constituent-fetcher.ts` (moved from flat-folder `services/universe/`) |
+| **Changed by** | ACT-107 — `git mv` only; file contents preserved verbatim per §22.8.3; only relative import-path depth updated (5 → 6 levels up) |

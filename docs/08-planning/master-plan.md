@@ -494,7 +494,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [x] 8.0a — Prerequisites + DEC-038 + DEC-038.1 ratified + per-sub-step AC matrix authored at ACT-103; SHA `<lovable-commit-sha>` (Gate 8.0 closed)
   - [x] 8.1 — Constituent ingestion (S&P 500 + S&P 400) from primary source per §3.1; per §10.5 deliverable 1 — closed at ACT-104 (Polygon primary + iShares IVV/IJH secondary per Option B; SHA `<lovable-commit-sha>`)
   - [x] 8.2 — Universe enrichment layer + §3.2 six filters operational at ACT-106; SHA `<lovable-commit-sha>` (AC-06 evidenced; `enrichment/` sub-folder added by accommodation per DEC-038.1 clause (1))
-  - [ ] 8.3 — Hard exclusion infrastructure per §3.3 (8 rules: 3.3a earnings windows; 3.3b M&A; 3.3c halts; 3.3d hard-to-borrow; 3.3e short interest; 3.3f secondary offerings N/A v1; 3.3g going-concern N/A v1; 3.3h no sector restrictions); halt-feed dependency per R4 risk
+  - [x] 8.3 — Hard exclusion infrastructure per §3.3 (8 rules: 3.3a earnings windows; 3.3b M&A; 3.3c halts deferred-placeholder per R4 + DW-063; 3.3d hard-to-borrow; 3.3e short interest; 3.3f/3.3g/3.3h N/A v1) + ACT-104 flat-folder relocation to `constituent-ingestion/`; closed at ACT-107; AC-07 evidenced (3.3c deferred-placeholder attested via DW-063 + FP-008 closure document at 8.13)
   - [ ] 8.4 — Quarterly atomic refresh job (first trading day Jan/Apr/Jul/Oct per §3.4)
   - [ ] 8.5 — Continuous hard-exclusion refresh
   - [ ] 8.6 — Schema migrations MIG-048 (universe_membership) + MIG-049 (hard_exclusions); both keyed by (operator_id, ticker, as_of_date) per multi-instance optionality; per §22.5.1 live-DB verification mandatory
