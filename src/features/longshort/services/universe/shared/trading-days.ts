@@ -215,37 +215,36 @@ function firstTradingDayOnOrAfter(d: Date): Date {
  * cadence check).
  *
  * Algorithm:
- *   - anchor A = 15th of `d`'s month → T+1 trading day on/after (15th + 1
- *     calendar day); if it equals `d` → true.
- *   - anchor B = last calendar day of the PRIOR month → T+1 trading day
- *     on/after (last + 1 calendar day) — equivalently, the first trading
- *     day on/after the 1st of `d`'s month; if it equals `d` → true.
- *   - else → false.
+ *   - anchor T = the 15th of `d`'s month, OR the last calendar day of the
+ *     PRIOR month. For each anchor:
+ *       settlement = first trading day on/after anchor (handles weekend /
+ *                    holiday anchors by rolling forward to a trading day)
+ *       trigger    = `tradingDaysAfter(settlement, 1)`  (T+1 publish)
+ *     If `d` equals either trigger, return true.
+ *   - Non-trading dates always return false.
  *
- * The "T+1 trading day on/after (anchor + 1 calendar day)" form correctly
- * handles weekend / holiday anchors: e.g., when the 15th falls on Friday
- * the trigger day is the following Monday; when EOM falls on Saturday the
- * trigger day is the following Tuesday (after Monday's first-of-month
- * trading day).
- *
- * Trigger days themselves must be trading days — non-trading dates always
- * return false.
+ * Edge cases honored:
+ *   - 15th on Friday          → settlement=Fri, trigger=Mon.
+ *   - 15th on Saturday        → settlement=Mon, trigger=Tue.
+ *   - EOM on a trading day    → settlement=EOM, trigger=next trading day.
+ *   - EOM on Saturday         → settlement=Mon, trigger=Tue (following).
+ *   - Anchor or settlement on NYSE holiday → rolls forward identically.
  */
 export function isShortInterestTriggerDay(d: Date): boolean {
   if (!isTradingDay(d)) return false;
+  const dIso = isoDate(d);
   const year = d.getUTCFullYear();
   const month = d.getUTCMonth();
-  const dIso = isoDate(d);
 
-  // Anchor A: T+1 after the 15th.
-  const dayAfter15th = new Date(Date.UTC(year, month, 16));
-  const triggerA = firstTradingDayOnOrAfter(dayAfter15th);
+  // Anchor A — the 15th of the current month.
+  const anchorA = new Date(Date.UTC(year, month, 15));
+  const triggerA = tradingDaysAfter(firstTradingDayOnOrAfter(anchorA), 1);
   if (isoDate(triggerA) === dIso) return true;
 
-  // Anchor B: T+1 after EOM of prior month
-  //         = first trading day on/after the 1st of `d`'s month.
-  const firstOfMonth = new Date(Date.UTC(year, month, 1));
-  const triggerB = firstTradingDayOnOrAfter(firstOfMonth);
+  // Anchor B — last calendar day of the prior month (month index 0 = Jan;
+  // Date.UTC(year, month, 0) yields the prior month's last day).
+  const anchorB = new Date(Date.UTC(year, month, 0));
+  const triggerB = tradingDaysAfter(firstTradingDayOnOrAfter(anchorB), 1);
   if (isoDate(triggerB) === dIso) return true;
 
   return false;
