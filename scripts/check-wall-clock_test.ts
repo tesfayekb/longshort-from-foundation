@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { findViolationsInLine, isInScope, isExcluded, scanRepository } from './check-wall-clock.ts';
+import { findViolationsInLines, isInScope, isExcluded, scanRepository } from './check-wall-clock.ts';
 
 Deno.test('isInScope — financial paths', () => {
   assertEquals(isInScope('src/features/longshort/services/foo.ts'), true);
@@ -16,43 +16,81 @@ Deno.test('isExcluded — sanctioned clock files', () => {
   assertEquals(isExcluded('src/features/longshort/services/foo_test.ts'), true);
 });
 
-Deno.test('findViolationsInLine — Date.now() banned', () => {
-  const v = findViolationsInLine('const ts = Date.now();', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationsInLines — Date.now() banned', () => {
+  const v = findViolationsInLines(['const ts = Date.now();'], 'src/features/longshort/services/foo.ts');
   assertEquals(v.length, 1);
   assertEquals(v[0].pattern, 'Date.now');
 });
 
-Deno.test('findViolationsInLine — new Date() banned', () => {
-  const v = findViolationsInLine('const d = new Date();', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationsInLines — new Date() banned', () => {
+  const v = findViolationsInLines(['const d = new Date();'], 'src/features/longshort/services/foo.ts');
   assertEquals(v.length, 1);
   assertEquals(v[0].pattern, 'new-Date-noarg');
 });
 
-Deno.test('findViolationsInLine — new Date(arg) acceptable', () => {
-  const v = findViolationsInLine('const d = new Date(isoString);', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationsInLines — new Date(arg) acceptable', () => {
+  const v = findViolationsInLines(['const d = new Date(isoString);'], 'src/features/longshort/services/foo.ts');
   assertEquals(v.length, 0);
 });
 
-Deno.test('findViolationsInLine — performance.now() banned', () => {
-  const v = findViolationsInLine('const t = performance.now();', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationsInLines — performance.now() banned', () => {
+  const v = findViolationsInLines(['const t = performance.now();'], 'src/features/longshort/services/foo.ts');
   assertEquals(v.length, 1);
   assertEquals(v[0].pattern, 'performance.now');
 });
 
-Deno.test('findViolationsInLine — Temporal.Now banned', () => {
-  const v = findViolationsInLine('const inst = Temporal.Now.instant();', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationsInLines — Temporal.Now banned', () => {
+  const v = findViolationsInLines(['const inst = Temporal.Now.instant();'], 'src/features/longshort/services/foo.ts');
   assertEquals(v.length, 1);
   assertEquals(v[0].pattern, 'Temporal.Now');
 });
 
-Deno.test('findViolationsInLine — comments excluded', () => {
-  const v = findViolationsInLine('// use Date.now() instead', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationsInLines — single-line comments excluded', () => {
+  const v = findViolationsInLines(['// use Date.now() instead'], 'src/features/longshort/services/foo.ts');
   assertEquals(v.length, 0);
 });
 
-Deno.test('findViolationsInLine — override annotation respected', () => {
-  const v = findViolationsInLine('return new Date(); // allow-now-in-business-logic: ADR-002', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationsInLines — override annotation respected', () => {
+  const v = findViolationsInLines(
+    ['return new Date(); // allow-now-in-business-logic: ADR-007'],
+    'src/features/longshort/services/foo.ts'
+  );
   assertEquals(v.length, 0);
+});
+
+Deno.test('findViolationsInLines — multi-line JSDoc prose mentioning Date.now() NOT flagged', () => {
+  const lines = [
+    '/**',
+    ' * Per DEC-034 clause (4) banned patterns:',
+    ' *   - Date.now() / new Date() outside of injected ts',
+    ' *   - performance.now()',
+    ' */',
+    'export function foo() { return 42; }',
+  ];
+  const v = findViolationsInLines(lines, 'src/features/longshort/services/foo.ts');
+  assertEquals(v.length, 0, 'JSDoc prose mentioning banned patterns must not be flagged');
+});
+
+Deno.test('findViolationsInLines — code AFTER multi-line JSDoc still detected', () => {
+  const lines = [
+    '/**',
+    ' * This docstring mentions Date.now() in prose.',
+    ' */',
+    'const ts = Date.now();',
+  ];
+  const v = findViolationsInLines(lines, 'src/features/longshort/services/foo.ts');
+  assertEquals(v.length, 1, 'Real code after JSDoc must still be detected');
+  assertEquals(v[0].line, 4);
+  assertEquals(v[0].pattern, 'Date.now');
+});
+
+Deno.test('findViolationsInLines — block-comment-then-code-on-same-line: code part detected', () => {
+  const v = findViolationsInLines(
+    ['/* setup */ const ts = Date.now();'],
+    'src/features/longshort/services/foo.ts'
+  );
+  assertEquals(v.length, 1);
+  assertEquals(v[0].pattern, 'Date.now');
 });
 
 Deno.test('scanRepository — clean on current repo', async () => {
