@@ -459,6 +459,25 @@ HIGH — loss of traceability breaks system integrity and decision history.
 
 ## Related Documents
 
+
+### Sub-step closure (2026-05-25) — Sub-step 6.8: ADR-002 Multi-Pending Validation + v0 Fallback Adoption
+
+**Type:** Sub-step closure within FP-006; plan v13.4 unchanged
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.4 (unchanged) |
+| Section IDs Created | None |
+| Decision IDs Affected | None (DECs unchanged); ADR-002 populated from placeholder to Accepted |
+| What Changed | FP-006 sub-step 6.8 closed: ADR-002 populated with empirical determination from 2026-05-25 02:46 UTC harness run against Alpaca paper account. v0 fallback per §8.6.2 adopted for v1 short-stop Phase 1 timeout handling. §8.6.1.1 parallel-order mechanism NOT operational on Alpaca paper due to wash-trade detector rejection. |
+| Why | §10.4 Phase 0B supporting deliverable + DEC-036 clause (6) required Phase 0B-level empirical validation of Alpaca multi-pending behavior before Phase 0B exit. Harness produced dispositive evidence (HTTP 403 + Alpaca code 40310000 wash-trade rejection on every opposite-side parallel-order test). Per §8.6.1.1 verbatim v0 fallback condition: "if Alpaca multi-pending-order support is unclean, v0 fallback... applies." Determination committed before Phase 0B exit per §10.4 verbatim requirement. |
+| What Stayed | All DECs unchanged. §8.6.1.1 spec text unchanged (canonical; ADR documents determination, not spec amendment). §8.6.2 v0 fallback adopted verbatim. All code modules frozen. Plan version unchanged. ADR-001 / ADR-003 / ADR-004 / ADR-005 unchanged. |
+| What Was Added | ADR-002 populated (placeholder → Accepted status); ADR-002-harness-output-2026-05-25.json evidence appendix; ACT-094 entry; master-plan 6.8 tick; this changelog entry. |
+| What Was Removed | None — ADR-002 placeholder content superseded by full content; placeholder commitments preserved as historical context within the new ADR. |
+| Approval Status | Approved per operator Path-A decision (accept wash-trade 403 as dispositive; do not chase cleaner re-runs that don't change determination). |
+| Supersession Links | ADR-002 placeholder superseded by ADR-002 Accepted. |
+
+
 - [Master Plan](master-plan.md)
 - [Approved Decisions](approved-decisions.md)
 - [Plan Review Log](plan-review-log.md)
