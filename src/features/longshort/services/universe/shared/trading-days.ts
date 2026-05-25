@@ -187,3 +187,66 @@ export function nextQuarterRefreshDate(as_of: Date): string {
   }
   return firstTradingDayOfQuarter(year, (q + 1) as 1 | 2 | 3 | 4);
 }
+
+// ===== NEW exports for FP-008 sub-step 8.5 §3.3e cadence-gating (ACT-109) =====
+
+/**
+ * Returns the first TRADING day on/after the given UTC midnight Date.
+ * If `d` is itself a trading day it is returned unchanged.
+ */
+function firstTradingDayOnOrAfter(d: Date): Date {
+  let cursor = new Date(d.getTime());
+  while (!isTradingDay(cursor)) {
+    cursor = new Date(cursor.getTime() + MS_PER_DAY);
+  }
+  return cursor;
+}
+
+/**
+ * True if `d` is the T+1 trading day following either the 15th of the
+ * current month OR the last calendar day of the prior month — the two
+ * FINRA short-interest publication anchors per §3.3e.
+ *
+ * Per CROSSWIND §3.3 spec: "short-interest exclusions update twice monthly
+ * with SEC reports" — FINRA publishes T+1 after the 15th and T+1 after
+ * end-of-month settlement dates. The §3.3e refresh-job handler (sub-step
+ * 8.5 / ACT-109) uses this helper to gate twice-monthly invocation
+ * (Option 2α — single job_registry row + daily cron + handler-internal
+ * cadence check).
+ *
+ * Algorithm:
+ *   - anchor A = 15th of `d`'s month → T+1 trading day on/after (15th + 1
+ *     calendar day); if it equals `d` → true.
+ *   - anchor B = last calendar day of the PRIOR month → T+1 trading day
+ *     on/after (last + 1 calendar day) — equivalently, the first trading
+ *     day on/after the 1st of `d`'s month; if it equals `d` → true.
+ *   - else → false.
+ *
+ * The "T+1 trading day on/after (anchor + 1 calendar day)" form correctly
+ * handles weekend / holiday anchors: e.g., when the 15th falls on Friday
+ * the trigger day is the following Monday; when EOM falls on Saturday the
+ * trigger day is the following Tuesday (after Monday's first-of-month
+ * trading day).
+ *
+ * Trigger days themselves must be trading days — non-trading dates always
+ * return false.
+ */
+export function isShortInterestTriggerDay(d: Date): boolean {
+  if (!isTradingDay(d)) return false;
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+  const dIso = isoDate(d);
+
+  // Anchor A: T+1 after the 15th.
+  const dayAfter15th = new Date(Date.UTC(year, month, 16));
+  const triggerA = firstTradingDayOnOrAfter(dayAfter15th);
+  if (isoDate(triggerA) === dIso) return true;
+
+  // Anchor B: T+1 after EOM of prior month
+  //         = first trading day on/after the 1st of `d`'s month.
+  const firstOfMonth = new Date(Date.UTC(year, month, 1));
+  const triggerB = firstTradingDayOnOrAfter(firstOfMonth);
+  if (isoDate(triggerB) === dIso) return true;
+
+  return false;
+}
