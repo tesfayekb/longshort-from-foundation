@@ -3,12 +3,18 @@
 /**
  * check-paper-only-url — CI enforcement script for DEC-036 clause (2) paper-only-URL ban.
  *
- * Banned: any reference to the Alpaca LIVE trading base URL (`://api.alpaca.markets`).
- * Allowed: paper trading URL `https://paper-api.alpaca.markets` and data URL `https://data.alpaca.markets`.
+ * Banned: any reference to the Alpaca LIVE trading base URL (://api.alpaca.markets).
+ * Allowed: paper trading URL https://paper-api.alpaca.markets and data URL https://data.alpaca.markets.
  *
- * Scanned scope per DEC-036 clause (2) verbatim: `src/features/longshort/**`.
+ * Scanned scope per DEC-036 clause (2) verbatim: src/features/longshort/**.
  *
- * Override: `// allow-live-alpaca-url: <ADR-ID>`.
+ * Override: // allow-live-alpaca-url: ADR-NNN
+ *
+ * String-literal awareness per ACT-099-post defect #19 fix:
+ *   The previous stripLineComment cut at first '//' regardless of string-literal context,
+ *   which masked URLs (whose '://' contains the '//' boundary) from detection. The fix
+ *   tracks string-literal state character-by-character so URLs inside string literals
+ *   remain visible to the pattern while legitimate '// ...' line comments are stripped.
  *
  * Exit code: 0 = clean; non-zero = violations.
  */
@@ -32,22 +38,51 @@ const SELF_EXCLUDE = [
 const OVERRIDE_ANNOTATION = /\/\/\s*allow-live-alpaca-url:\s*ADR-\d+/;
 const LIVE_URL_PATTERN = /:\/\/api\.alpaca\.markets/;
 
+/**
+ * String-literal-aware comment stripper. Preserves '...', "...", `...` content
+ * (so URLs containing '//' are not truncated), strips '// ...' line comments only
+ * when the '//' is outside any string literal. Block-comment handling is line-local
+ * (no in-scope file currently has multi-line JSDoc prose containing a live URL; if
+ * that ever changes, add an inBlockComment regression test and upgrade to ScanState).
+ */
+export function stripCommentsAndStrings(line: string): string {
+  let out = '';
+  let i = 0;
+  let inSingleString = false;
+  let inDoubleString = false;
+  let inBacktickString = false;
+  let inBlockComment = false;
+  while (i < line.length) {
+    const c = line[i];
+    const next = line[i + 1];
+    if (inBlockComment) {
+      if (c === '*' && next === '/') { inBlockComment = false; i += 2; continue; }
+      i++; continue;
+    }
+    if (inSingleString) { if (c === '\\') { out += c + (next ?? ''); i += 2; continue; } if (c === "'") inSingleString = false; out += c; i++; continue; }
+    if (inDoubleString) { if (c === '\\') { out += c + (next ?? ''); i += 2; continue; } if (c === '"') inDoubleString = false; out += c; i++; continue; }
+    if (inBacktickString) { if (c === '\\') { out += c + (next ?? ''); i += 2; continue; } if (c === '`') inBacktickString = false; out += c; i++; continue; }
+    if (c === '/' && next === '/') break;
+    if (c === '/' && next === '*') { inBlockComment = true; i += 2; continue; }
+    if (c === "'") { inSingleString = true; out += c; i++; continue; }
+    if (c === '"') { inDoubleString = true; out += c; i++; continue; }
+    if (c === '`') { inBacktickString = true; out += c; i++; continue; }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
 export function isExcluded(filePath: string): boolean {
   if (SELF_EXCLUDE.includes(filePath as typeof SELF_EXCLUDE[number])) return true;
   if (filePath.endsWith('_test.ts')) return true;
   return false;
 }
 
-export function stripLineComment(line: string): string {
-  const idx = line.indexOf('//');
-  if (idx === -1) return line;
-  return line.slice(0, idx);
-}
-
 export function findViolationInLine(line: string, filePath: string, lineNumber: number): Violation | null {
   if (OVERRIDE_ANNOTATION.test(line)) return null;
-  const beforeComment = stripLineComment(line);
-  if (LIVE_URL_PATTERN.test(beforeComment)) {
+  const stripped = stripCommentsAndStrings(line);
+  if (LIVE_URL_PATTERN.test(stripped)) {
     return {
       file: filePath,
       line: lineNumber,
