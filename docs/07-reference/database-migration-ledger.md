@@ -856,14 +856,9 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | Sub-step authority | ACT-108 (FP-008 sub-step 8.4 closure) |
 | AC evidence | AC-08 (quarterly atomic refresh job seeded; enabled=false initially) |
 
-### MIG-049 through MIG-052 — RESERVED (renumbered per ACT-108 Surface 1 Option α)
+### MIG renumbering reconciled per ACT-108 + ACT-109 + ACT-110 actuals
 
-| Reservation | Originally projected | Now reserved as | Authority |
-|-------------|---------------------|-----------------|-----------|
-| `job_registry` seeds for `longshort.universe.hard_exclusion_refresh_<rule>` | MIG-050 | **MIG-049** | **LANDED** at FP-008 sub-step 8.5 / ACT-109 — see MIG-049 entry below. Slot taken at sub-step 8.5 ahead of the originally projected sub-step-8.6 schema migrations per operator pre-flight at ACT-109 (sub-step 8.5 was the first available migration slot after MIG-048). |
-| `universe_membership` table | MIG-048 | **MIG-050** | FP-008 sub-step 8.6 (ACT-NNN) — shifted from MIG-049 to MIG-050 to accommodate the hard-exclusion-refresh-seed slot taken at MIG-049. |
-| `hard_exclusions` table | MIG-049 | **MIG-051** | FP-008 sub-step 8.6 (ACT-NNN) — keyed by `(operator_id, ticker, as_of_date)` per DEC-038.1 clause (7). |
-| `feature_flags` seed `universe.enabled=false` | MIG-051 | **MIG-052** | FP-008 sub-step 8.6 (ACT-NNN) — per DEC-038 clause (5) + DEC-038.1 clause (5). Slot number unchanged. |
+All previously RESERVED slots for FP-008 sub-steps 8.5 + 8.6 have LANDED. Final numbering: MIG-048 = `universe_refresh_log` + quarterly_refresh job seed (sub-step 8.4 / ACT-108); MIG-049 = 4 continuous hard-exclusion refresh job_registry seeds (sub-step 8.5 / ACT-109); MIG-050 = `universe_membership` table (sub-step 8.6 / ACT-110); MIG-051 = `hard_exclusions` table (sub-step 8.6 / ACT-110); MIG-052 = `feature_flags` `universe.enabled=false` seed (sub-step 8.6 / ACT-110).
 
 ### MIG-049: FP-008 Sub-Step 8.5 — `job_registry` Seeds for `longshort.universe.hard_exclusion_refresh_<rule>` (4 Rows)
 
@@ -878,6 +873,54 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | Dependency | MIG-025 (`job_registry` table). |
 | Sub-step authority | ACT-109 (FP-008 sub-step 8.5 closure) |
 | AC evidence | AC-09 (each rule has its own job_registry entry; failure of one rule does not block others — per-rule rows + `forbid` concurrency at the row level satisfy the isolation requirement at the registry layer; dispatcher edge function `longshort-universe-hard-exclusion-refresh` is the runtime chokepoint with per-rule audit emission). |
+
+---
+
+### MIG-050: FP-008 Sub-Step 8.6 — `universe_membership` Table
+
+| Field | Value |
+|---|---|
+| Migration version | `20260525111719` |
+| File | `supabase/migrations/20260525111719_72b21a28-e83e-49b2-b39c-a3d7cb81f8a8.sql` |
+| Applied | 2026-05-25 (Lovable atomic create+apply via executor migration tool; §22.5.1 evidence binding) |
+| Verified | 2026-05-25 (Lovable post-apply via `supabase--read_query` confirmed 8 columns / RLS enabled / 2 policies (operator-scoped read + insert) / CHECK `(long_eligible OR short_eligible)` present) |
+| Pattern | `CREATE TABLE IF NOT EXISTS` + `DROP POLICY IF EXISTS` / `CREATE POLICY` idempotent idiom (mirrors MIG-048 precedent) |
+| Effect | Creates `public.universe_membership` per DEC-038.1 clause (7) + §10.5 deliverable 6. PK `(operator_id, ticker, as_of_date)` per multi-instance optionality. Column inventory per ACT-110 Surface 1 Option A (operator-confirmed two-boolean shape mirroring `EligibleConstituent` at `src/features/longshort/services/universe/hard-exclusions/types.ts:50-54`): `long_eligible bool` + `short_eligible bool` + `quarter_label text` + `refresh_id uuid` (FK to `universe_refresh_log(refresh_id)` ON DELETE RESTRICT) + `created_at timestamptz DEFAULT now()`. CHECK `(long_eligible OR short_eligible)` excludes neither-rows (dead weight; rationale lives in `hard_exclusions` + `universe_refresh_log` aggregates). NO `universe_book` enum minted. Indexes on `as_of_date`, `(operator_id, as_of_date)`, `refresh_id`. RLS enabled; operator-scoped read + insert policies. NO write path lands at this sub-step (sub-step 8.7 wires `verify_universe_membership` real implementation + writes). |
+| Dependency | MIG-048 (`universe_refresh_log` is FK referent). |
+| Sub-step authority | ACT-110 (FP-008 sub-step 8.6 closure) |
+| AC evidence | AC-10 (universe_membership keyed per DEC-038.1 clause (7); Surface 1 Option A column inventory; CHECK constraint). |
+
+---
+
+### MIG-051: FP-008 Sub-Step 8.6 — `hard_exclusions` Table
+
+| Field | Value |
+|---|---|
+| Migration version | `20260525111742` |
+| File | `supabase/migrations/20260525111742_43c511d5-6972-494f-893e-acee1e937cee.sql` |
+| Applied | 2026-05-25 (Lovable atomic create+apply via executor migration tool; §22.5.1 evidence binding) |
+| Verified | 2026-05-25 (Lovable post-apply via `supabase--read_query` confirmed 7 columns / RLS enabled / 2 policies (operator-scoped read + insert)) |
+| Pattern | `CREATE TABLE IF NOT EXISTS` + `DROP POLICY IF EXISTS` / `CREATE POLICY` idempotent idiom |
+| Effect | Creates `public.hard_exclusions` per DEC-038.1 clause (7) + §10.5 deliverable 6. PK `(operator_id, ticker, as_of_date)` — rule_id NOT in PK; one row per ticker per date with `firing_rules text[]` array column (firing rules like `'3.3a'`, `'3.3d'`). Columns: `firing_rules text[]` NOT NULL + `firing_reasons jsonb` NOT NULL (per-rule structured rationale) + `applied_at timestamptz DEFAULT now()` + `refresh_id uuid` NULLABLE FK to `universe_refresh_log(refresh_id)` ON DELETE SET NULL (NULL for continuous-refresh firings 3.3a/b/e per MIG-049 which don't tie to a quarterly refresh). CHECK `array_length(firing_rules, 1) > 0`; CHECK `jsonb_typeof(firing_reasons) = 'object'`. Indexes on `as_of_date`, `(operator_id, as_of_date)`, `refresh_id`, plus GIN index on `firing_rules` (enables "which tickers had rule X fire?" queries). RLS enabled; operator-scoped read + insert policies. NO write path lands at this sub-step (sub-step 8.7+ wires refresh-handler persistence). |
+| Dependency | MIG-048 (`universe_refresh_log` is FK referent). |
+| Sub-step authority | ACT-110 (FP-008 sub-step 8.6 closure) |
+| AC evidence | AC-11 (hard_exclusions row granularity per DEC-038.1 clause (7); firing_rules array + firing_reasons jsonb; nullable refresh_id FK). |
+
+---
+
+### MIG-052: FP-008 Sub-Step 8.6 — `feature_flags` `universe.enabled=false` Seed
+
+| Field | Value |
+|---|---|
+| Migration version | `20260525111800` |
+| File | `supabase/migrations/20260525111800_295a5c4a-8b1b-4a09-b0bd-b31da05a8078.sql` |
+| Applied | 2026-05-25 (Lovable atomic create+apply via executor migration tool; §22.5.1 evidence binding) |
+| Verified | 2026-05-25 (Lovable post-apply via `supabase--read_query` confirmed 1 row with `enabled=false`, `evidence_tier='weak'`, reason citing FP-008 sub-step 8.6 / ACT-110 seed per DEC-038 clause (5)) |
+| Pattern | `INSERT ... ON CONFLICT (operator_id, flag_key) DO NOTHING` (idempotent per feature_flags PK; mirrors MIG-039/044/048/049) |
+| Effect | Seeds 1 row in `public.feature_flags` with `flag_key='universe.enabled'`, `enabled=false`, `evidence_tier='weak'`, `operator_id='00000000-0000-0000-0000-000000000001'::uuid` (default operator per MIG-039 convention), `set_by=NULL` (system-seeded). Per DEC-038 clause (5) + DEC-038.1 clause (5) verbatim: universe-component remains inert (typed-absence per §2 axiom 3) until flag flips to `true` operationally at sub-step 8.13 closure (FP-008 final closure). NO new policies / triggers / table changes. |
+| Dependency | MIG-039 (`feature_flags` table). |
+| Sub-step authority | ACT-110 (FP-008 sub-step 8.6 closure) |
+| AC evidence | AC-14 (feature_flags seed `universe.enabled=false` per DEC-038 clause (5) + DEC-038.1 clause (5); default operator_id per MIG-039 convention; idempotent). |
 
 ---
 
@@ -906,6 +949,9 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | `kill_switches` | MIG-040 | Active |
 | `longshort_reconciliation_state` | MIG-042 | Active |
 | `reconciliation_events` | MIG-043 | Active |
+| `universe_refresh_log` | MIG-048 | Active |
+| `universe_membership` | MIG-050 | Active |
+| `hard_exclusions` | MIG-051 | Active |
 
 ### Functions (12)
 
