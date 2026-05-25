@@ -17,7 +17,10 @@
  * worked-example coverage; full multi-year holiday table is a Phase-2
  * follow-up captured in DW-063 sibling entry if needed).
  *
- * Owner: longshort (FP-008 sub-step 8.3)
+ * Owner: longshort (FP-008 sub-step 8.3; relocated to shared/ at sub-step 8.4
+ * / ACT-108 per Surface 3 Option ii — content preserved verbatim apart from
+ * three new quarterly-arithmetic exports below; consumers under
+ * hard-exclusions/ updated to import from this location.)
  */
 
 /**
@@ -108,4 +111,79 @@ export function tradingDaysBetween(a: Date, b: Date): number {
     cursor = new Date(cursor.getTime() + MS_PER_DAY);
   }
   return count;
+}
+
+// ===== NEW exports for FP-008 sub-step 8.4 quarterly refresh job =====
+
+/**
+ * Quarter-start months (0-indexed). Per CROSSWIND §3.4: quarterly refresh
+ * runs on the first TRADING day of Jan/Apr/Jul/Oct.
+ */
+const QUARTER_START_MONTH: Record<1 | 2 | 3 | 4, number> = {
+  1: 0, // Jan
+  2: 3, // Apr
+  3: 6, // Jul
+  4: 9, // Oct
+};
+
+/**
+ * Returns the first TRADING day of the given quarter as ISO date (YYYY-MM-DD).
+ *
+ * Algorithm: start at the 1st of the quarter-start month (UTC); advance
+ * forward day-by-day until landing on a non-weekend, non-holiday date.
+ *
+ * @param year — e.g., 2026
+ * @param quarter — 1 (Jan), 2 (Apr), 3 (Jul), 4 (Oct)
+ */
+export function firstTradingDayOfQuarter(year: number, quarter: 1 | 2 | 3 | 4): string {
+  const month = QUARTER_START_MONTH[quarter];
+  let cursor = new Date(Date.UTC(year, month, 1));
+  while (!isTradingDay(cursor)) {
+    cursor = new Date(cursor.getTime() + MS_PER_DAY);
+  }
+  return isoDate(cursor);
+}
+
+/**
+ * Returns the (1-based) quarter for the given UTC date. Q1=Jan-Mar, Q2=Apr-Jun,
+ * Q3=Jul-Sep, Q4=Oct-Dec.
+ */
+function quarterOf(d: Date): 1 | 2 | 3 | 4 {
+  const m = d.getUTCMonth();
+  if (m < 3) return 1;
+  if (m < 6) return 2;
+  if (m < 9) return 3;
+  return 4;
+}
+
+/**
+ * True if the given date is the first TRADING day of its quarter.
+ *
+ * Used by the quarterly-refresh edge function handler for cron-trigger gating:
+ * the cron fires daily during the first week of Jan/Apr/Jul/Oct; only the
+ * first-trading-day invocation actually runs the pipeline.
+ */
+export function isFirstTradingDayOfQuarter(d: Date): boolean {
+  const q = quarterOf(d);
+  return isoDate(d) === firstTradingDayOfQuarter(d.getUTCFullYear(), q);
+}
+
+/**
+ * Returns the ISO date of the NEXT quarterly refresh date relative to `as_of`.
+ *
+ * If `as_of` is on/before the first trading day of its current quarter, returns
+ * that current-quarter date; otherwise returns the next quarter's first trading
+ * day (rolling into next year for Q4 → Q1).
+ */
+export function nextQuarterRefreshDate(as_of: Date): string {
+  const year = as_of.getUTCFullYear();
+  const q = quarterOf(as_of);
+  const currentQuarterRefresh = firstTradingDayOfQuarter(year, q);
+  if (isoDate(as_of) <= currentQuarterRefresh) {
+    return currentQuarterRefresh;
+  }
+  if (q === 4) {
+    return firstTradingDayOfQuarter(year + 1, 1);
+  }
+  return firstTradingDayOfQuarter(year, (q + 1) as 1 | 2 | 3 | 4);
 }
