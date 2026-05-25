@@ -2153,3 +2153,50 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 |-------|-------|
 | **Files** | `src/features/longshort/services/universe/constituent-ingestion/{polygon,ishares}-constituent-fetcher.ts` (moved from flat-folder `services/universe/`) |
 | **Changed by** | ACT-107 — `git mv` only; file contents preserved verbatim per §22.8.3; only relative import-path depth updated (5 → 6 levels up) |
+
+### FP-008 sub-step 8.4 — Quarterly Atomic Refresh Job (ACT-108)
+
+#### `createQuarterlyRefreshOrchestrator()`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-008 sub-step 8.4) |
+| **Classification** | job-critical (quarterly atomic universe refresh per CROSSWIND §3.4 + DEC-038.1 clause (4); AC-08 surface) |
+| **File** | `src/features/longshort/services/universe/refresh-jobs/quarterly-refresh-orchestrator.ts` |
+| **Tests** | `quarterly-refresh-orchestrator_test.ts` |
+| **Pipeline** | Polygon constituents → iShares cross-check (Guardrail 2) → Polygon enrichment → `applyFilters()` (§3.2) → `applyHardExclusions()` (§3.3) → `universe_refresh_log` finalize |
+| **Inputs** | `RefreshExecutionContext { polygonConstituents, iSharesConstituents, polygonEnrichment, exclusionInput, refreshLogPersister }`, `operatorId`, `as_of: Date` |
+| **Atomicity** | Start-row INSERT + finalize UPDATE pair; finalize runs even on pipeline failure (writes `outcome='failed'` + `failure_reason`); prior-quarter rows untouched |
+| **Added by** | FP-008 sub-step 8.4, ACT-108 |
+
+#### `longshort-universe-quarterly-refresh` edge function handler
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-008 sub-step 8.4) |
+| **Classification** | api-critical + job-critical (DEC-023 envelope per T7; permission gate `longshort.view`) |
+| **File** | `supabase/functions/longshort-universe-quarterly-refresh/index.ts` |
+| **Tests** | `index_test.ts` (4 Deno regression sentinels covering quarter-gating ordering + auth surface + atomicity-on-skip) |
+| **Skip semantics** | Handler short-circuits BEFORE auth when `isFirstTradingDayOfQuarter(as_of) === false`; emits `longshort.universe.refresh.skipped` audit event + returns 200 + `{status:'skipped'}`. This pre-auth gating is intentional (system-level cron path; no PII surface). |
+| **Persister** | `makeSupabasePersister()` → `RefreshLogPersister` backed by `supabaseAdmin`; targets `public.universe_refresh_log` (MIG-048) |
+| **Added by** | FP-008 sub-step 8.4, ACT-108 |
+
+#### `RefreshLogPersister`, `RefreshExecutionContext`, `QuarterlyRefreshResult`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-008 sub-step 8.4) |
+| **Classification** | shared-contract layer (mirrors `longshort-universe-interfaces.ts` precedent) |
+| **File** | `src/features/longshort/services/universe/refresh-jobs/types.ts` |
+| **Consumers** | `quarterly-refresh-orchestrator.ts` + `supabase/functions/longshort-universe-quarterly-refresh/index.ts` (cross-tree native import per FP-006 precedent) |
+| **Added by** | FP-008 sub-step 8.4, ACT-108 |
+
+#### `firstTradingDayOfQuarter()` / `isFirstTradingDayOfQuarter()` / `nextQuarterRefreshDate()`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-008 sub-step 8.4; appended to ACT-107 trading-days helper) |
+| **Classification** | utility (deterministic NYSE-holiday-aware trading-day arithmetic; consumed by edge-function gating + future hard-exclusion refresh cadences at sub-step 8.5) |
+| **File** | `src/features/longshort/services/universe/shared/trading-days.ts` (RELOCATED from `hard-exclusions/trading-days.ts` at sub-step 8.4 per Surface 3 resolution — second consumer triggers the move; `git mv` only, content preserved verbatim, import paths in `rule-3-3a-earnings-window.ts` updated to `../shared/trading-days.ts`) |
+| **Tests** | `shared/trading-days_test.ts` |
+| **Added by** | FP-008 sub-step 8.4, ACT-108 (functions); FP-008 sub-step 8.3, ACT-107 (file origin) |
