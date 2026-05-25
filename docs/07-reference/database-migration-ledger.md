@@ -856,14 +856,9 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | Sub-step authority | ACT-108 (FP-008 sub-step 8.4 closure) |
 | AC evidence | AC-08 (quarterly atomic refresh job seeded; enabled=false initially) |
 
-### MIG-049 through MIG-052 — RESERVED (renumbered per ACT-108 Surface 1 Option α)
+### MIG renumbering reconciled per ACT-108 + ACT-109 + ACT-110 actuals
 
-| Reservation | Originally projected | Now reserved as | Authority |
-|-------------|---------------------|-----------------|-----------|
-| `job_registry` seeds for `longshort.universe.hard_exclusion_refresh_<rule>` | MIG-050 | **MIG-049** | **LANDED** at FP-008 sub-step 8.5 / ACT-109 — see MIG-049 entry below. Slot taken at sub-step 8.5 ahead of the originally projected sub-step-8.6 schema migrations per operator pre-flight at ACT-109 (sub-step 8.5 was the first available migration slot after MIG-048). |
-| `universe_membership` table | MIG-048 | **MIG-050** | FP-008 sub-step 8.6 (ACT-NNN) — shifted from MIG-049 to MIG-050 to accommodate the hard-exclusion-refresh-seed slot taken at MIG-049. |
-| `hard_exclusions` table | MIG-049 | **MIG-051** | FP-008 sub-step 8.6 (ACT-NNN) — keyed by `(operator_id, ticker, as_of_date)` per DEC-038.1 clause (7). |
-| `feature_flags` seed `universe.enabled=false` | MIG-051 | **MIG-052** | FP-008 sub-step 8.6 (ACT-NNN) — per DEC-038 clause (5) + DEC-038.1 clause (5). Slot number unchanged. |
+All previously RESERVED slots for FP-008 sub-steps 8.5 + 8.6 have LANDED. Final numbering: MIG-048 = `universe_refresh_log` + quarterly_refresh job seed (sub-step 8.4 / ACT-108); MIG-049 = 4 continuous hard-exclusion refresh job_registry seeds (sub-step 8.5 / ACT-109); MIG-050 = `universe_membership` table (sub-step 8.6 / ACT-110); MIG-051 = `hard_exclusions` table (sub-step 8.6 / ACT-110); MIG-052 = `feature_flags` `universe.enabled=false` seed (sub-step 8.6 / ACT-110).
 
 ### MIG-049: FP-008 Sub-Step 8.5 — `job_registry` Seeds for `longshort.universe.hard_exclusion_refresh_<rule>` (4 Rows)
 
