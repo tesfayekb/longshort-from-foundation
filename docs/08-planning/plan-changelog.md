@@ -478,6 +478,24 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | Supersession Links | ADR-002 placeholder superseded by ADR-002 Accepted. |
 
 
+### Sub-step closure (2026-05-25) — Sub-step 6.9 + Gate 6.9: Phase 0B Exit Gate Disposition via §10.4 Captured-Day Deferral
+
+**Type:** Sub-step + gate closure within FP-006; plan v13.4 unchanged at this ACT (version bump deferred to 6.10 FP-closure)
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.4 (unchanged at this ACT; v13.4 → v13.5 bump scheduled for 6.10 FP-closure) |
+| Section IDs Created | ADR-006-phase-0b-captured-day-deferral.md |
+| Decision IDs Affected | None (DECs unchanged); ADR-006 introduced |
+| What Changed | Sub-step 6.9 closed via formal deferral of §10.4 "Captured Day 1" supporting deliverable to Phase 7 (rather than attempting to produce captured Day 1 in Phase 0B). ADR-006 records the deferral with: (a) the 4 structural prerequisites (DW-058/059/060/061 registered); (b) explicit vacuous-quietness-signal acknowledgment; (c) Option A/B/C evaluation with Option B selected; (d) reconsideration triggers. Gate 6.9 closes on this deferral basis, not on §11.0.11 firing-analysis (which is moved to Phase 7). |
+| Why | §10.4 priority deliverables (1–3) — replay framework, A1 baseline, Alpaca paper — are operational at FP-006 closure. The supporting deliverable "Captured Day 1" requires real fetcher wiring + capture writer + cron scheduling + full RTH run; all four are Phase-7-grade operational infrastructure rather than Phase-0B foundation. Producing Captured Day 1 in Phase 0B then sitting on a stale fixture pending Phase 7 entry uses operator-hours on evidence that decays. Constitution Rule 8 supersession documented-reason clause satisfied via ADR-006. Phantom-completion risk (Option C minimal-demo) explicitly rejected. |
+| What Stayed | All DECs unchanged. ADR-001/002/003/004/005 unchanged. §10.4 spec text unchanged. §11.0.11 spec text unchanged. All code modules frozen. Plan version unchanged (v13.4). system-state version unchanged. No migrations / no DB writes. Edge functions unchanged (mocks remain mocks; rewiring per DW-058 is Phase 7). |
+| What Was Added | ADR-006 new at design-source/; 4 DW entries (DW-058..DW-061); ACT-095 entry; master-plan 6.9 + Gate 6.9 ticks; this changelog entry. |
+| What Was Removed | None — additive. §10.4 "Captured Day 1" wording preserved canonically; ADR-006 records FP-006 interpretation, not spec amendment. |
+| Approval Status | Approved per operator option-evaluation 2026-05-25 chat record (Option B selected over Option A decompose / Option C minimal-demo). |
+| Supersession Links | None at spec level; ADR-006 supersedes the implicit assumption that "Captured Day 1" lands in Phase 0B (per the §10.4 text) and records the deferral disposition; Phase 7 FP closes the open loop. |
+
+
 - [Master Plan](master-plan.md)
 - [Approved Decisions](approved-decisions.md)
 - [Plan Review Log](plan-review-log.md)
