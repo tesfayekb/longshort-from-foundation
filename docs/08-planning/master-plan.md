@@ -433,7 +433,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 
 ### PLAN-TRADING-001-LONGSHORT-002 — Long-Short Strategy Module Phase 0A Residual + Phase 0B
 
-- **Status:** approved (execution-pending)
+- **Status:** closed (2026-05-25 — closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-002-closure.md`)
 - **Feature Proposal:** FP-006
 - **Tier:** A (FINANCIAL-CRITICAL)
 - **Decisions ratified:** DEC-034 / DEC-034.1 / DEC-035 / DEC-036 / DEC-037
@@ -465,7 +465,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [x] 6.7 — Alpaca paper integration: REST client (AlpacaPaperClient with typed errors) + 6 fetcher implementations (Position / Quote / HaltStatus / Locate / BuyingPower / OrderAcceptance) against `longshort-broker-interfaces.ts` + connection-test CLI for Gate 6.7 PASS evidence. Other 11 fetchers stay using 6.5b fixture-backed implementations; lit up in 6.10 or later. Captured Day 1 fixture deferred to 6.9. (closed 2026-05-24, ACT-091)
   - [x] 6.8 — ADR-002 multi-pending validation harness + empirical determination: harness built (ACT-092 + ACT-093) and executed 2026-05-25 against Alpaca paper account. Outcome: Alpaca paper wash-trade detector rejects opposite-side parallel orders (HTTP 403 + code 40310000) — §8.6.1.1 parallel-order pattern NOT operational on Alpaca paper. v0 fallback per §8.6.2 adopted for v1 (operator page + progressive escalation; no parallel-order mechanism). ADR-002 populated with determination; forward-deferred validations documented. (closed 2026-05-25, ACT-094)
   - [x] 6.9 — Phase 0B exit gate disposition via §10.4 captured-day deferral: ADR-006 authored formally deferring "Captured Day 1" supporting deliverable to Phase 7; 4 DW entries (DW-058 fetcher wiring / DW-059 capture writer / DW-060 cron scheduler / DW-061 full-RTH-day execution + §11.0.11 firing analysis) registered; explicit vacuous-quietness-signal acknowledgment recorded. §10.4 priority deliverables 1–3 unaffected. (closed 2026-05-25, ACT-095)
-  - [ ] 6.10 — Module status transition `foundation-implemented` → `phase-0b-validated` (closure)
+  - [x] 6.10 — Module status transition `foundation-implemented` → `phase-0b-validated` (closure): closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-002-closure.md`; plan v13.4 → v13.5; system-state Module Status Table + active_work + modules_implemented narrative all transitioned; 79/79 acceptance criteria evidenced; 5 phase gates closed; ADRs 002-006 introduced; MIG-039 through MIG-047 applied. (closed 2026-05-25, ACT-098)
 - **AC count:** 79
 - **Plan Version impact:** v12.1 → v13.0 (Round Final); v13.0 → v13.1 (Gate 6.0 closure — DEC-034 clause (5) verifier amendment)
 - **Dependencies:** PLAN-TRADING-001-LONGSHORT-001 (FP-005) closed; FP-007 CI/CD Pipeline Bootstrap closed (hard prerequisite per DEC-032 clause (4))
