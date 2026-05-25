@@ -605,6 +605,25 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | Approval Status | Approved per operator standing institutional-grade authority. §21.10 v0.6.1 pre-flight chain fully cite-anchored before draft. CROSSWIND v0.9 §10.5 + §3 + §11.0.5 + §11.0.7 #10 + §11.3 + §11.4 + §12.4 cited verbatim as scope anchors. |
 | Supersession Links | N/A — additive; no approved sections superseded. |
 
+### v13.11 → v13.12 (2026-05-25)
+
+**Type:** Additive per Constitution Rule 10 Plan Merge Rule. Reference-index reconciliation pass closing defect class #31 (reference-index update omission from ACT-104). ACT-105.
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.11 → v13.12 |
+| Section IDs Created | None |
+| Section IDs Closed | None (master-plan PLAN-TRADING-001-LONGSHORT-003 sub-step 8.1 checkbox already ticked at ACT-104; AC-04 + AC-05 evidence captured at ACT-104) |
+| FP IDs Created | None (FP-008 entry preserved verbatim; Status remains `execution-in-progress`) |
+| Decision IDs Affected | None (DEC-038/038.1 preserved verbatim; no in-cycle amendments) |
+| What Changed | function-index.md gained 5 entries for FP-008 sub-step 8.1 code paths (Polygon fetcher + iShares fetcher + shared interface layer). env-var-index.md gained POLYGON_API_KEY entry (Pre-production status; provisioning required before sub-step 8.4). docs/04-modules/longshort/longshort.md gained Universe Component (Phase 1 — In-Progress) sub-section under Phase Scope. ACT-105 entry in action-tracker.md. Plan version v13.11 → v13.12. system-state.md `current_plan_version` + `approved_plan_baseline` bumped. |
+| Why | ACT-104 (FP-008 sub-step 8.1 code drop) landed three divergences from prompt scope per §22.5 verification: D1 (flat folder accepted; sub-step 8.2 relocates), D2 (edge-function interface tier accepted as improvement), D3 (reference-index update omission requiring Path α follow-up). ACT-105 lands the D3 fix as forward-commit reconciliation per §22.8.5(d) immutable-forward-only history. Defect class #31 closed by mitigation. Forward-binding: future code-touching sub-step prompts list reference-index updates explicitly + Lovable surface confirms BEFORE commit. |
+| What Stayed | ACT-104 code drop preserved verbatim (zero changes under `src/features/longshort/services/universe/` or `supabase/functions/_shared/longshort-universe-interfaces.ts`). ACT-104 entry preserved verbatim. DEC-038/038.1 preserved verbatim. FP-008 entry preserved verbatim (Status `execution-in-progress` unchanged). All FP-001..FP-007 entries preserved. All other plan sections preserved (PLAN-TRADING-001 / PLAN-TRADING-001-LONGSHORT-001/002/003 / PLAN-CI-001-BOOTSTRAP-001 / PLAN-AUTH-001-A..D). All closure documents preserved. Module status `phase-0b-validated` unchanged. DW register unchanged. Supervisor-instructions v0.6.1 unchanged. 9-gate strong-evidence.yml workflow + 6 enforcement scripts + docs/banned-patterns.md all preserved. dependency-map.md NOT touched (file doesn't exist; over-specification in FP-008 Reference Impact field tolerated). master-plan.md PLAN-TRADING-001-LONGSHORT-003 section NOT touched (sub-step 8.1 already ticked at ACT-104). |
+| What Was Added | 5 function-index.md entries; 1 env-var-index.md entry; 1 docs/04-modules/longshort/longshort.md sub-section; ACT-105 entry; this changelog entry; system-state version bump v13.11 → v13.12. |
+| What Was Removed | None — additive only. |
+| Approval Status | Approved per operator standing institutional-grade authority + Path α explicit acknowledgment in ACT-104 §22.5 disposition exchange. §21.10 v0.6.1 5-FP pre-flight chain verified. |
+| Supersession Links | N/A — additive; no approved sections superseded. ACT-104's three divergences (D1/D2/D3) are part of the audit trail; ACT-105 patches forward, not retroactively. |
+
 ### v13.9 → v13.10 (2026-05-25)
 
 **Type:** Additive per Constitution Rule 10 Plan Merge Rule. FP-008 sub-step 8.0a / Gate 8.0 closure: DEC-038 + DEC-038.1 ratification + 38-AC matrix authoring within already-approved PLAN-TRADING-001-LONGSHORT-003 section. ACT-103.
