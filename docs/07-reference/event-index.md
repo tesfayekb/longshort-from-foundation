@@ -1683,6 +1683,74 @@ Key event chains showing upstream triggers and downstream effects:
 
 ## Dependencies
 
+<!-- Inserted before "Dependencies" closure: ACT-109 event registrations -->
+## Long-Short Universe Continuous Hard-Exclusion Refresh Events (FP-008 Sub-Step 8.5)
+
+All events below are emitted by the one-dispatcher edge function
+`supabase/functions/longshort-universe-hard-exclusion-refresh/index.ts`
+(Surface 1 Option (a) at ACT-109 — one function, rule routed by `rule`
+query/body param). Per-rule MIG-049 `job_registry` rows seed each rule's
+invocation. All events write to `public.longshort_audit_logs` via
+`writeStrategyAuditEvent`.
+
+Event-key format: `longshort.universe.hard_exclusion_refresh_<rule_slug>.<outcome>`
+where `<rule_slug>` ∈ `{3_3a, 3_3b, 3_3c, 3_3e}` (dot replaced with underscore
+to match the MIG-049 `job_registry.id` slugging) and `<outcome>` ∈
+`{skipped, completed, failed}`. The Cartesian product yields 12 stable event
+keys (4 rules × 3 outcomes); enumeration via the per-rule blocks below.
+
+#### `longshort.universe.hard_exclusion_refresh_<rule_slug>.skipped` — v1 (×4)
+
+| Field | Value |
+|-------|-------|
+| **Event Keys** | `longshort.universe.hard_exclusion_refresh_3_3a.skipped`, `..._3_3b.skipped`, `..._3_3c.skipped`, `..._3_3e.skipped` |
+| **Module** | longshort/universe |
+| **Version** | 1 |
+| **Classification** | audit-critical (dispatcher skip marker; dominant production path until sub-step 8.6 + 8.7 wire the `universe_membership` query source) |
+| **Description** | Emitted on any of three skip conditions: (a) Surface 0 Option α — POST body `tickers` array is absent / empty (`skip_reason='awaiting_universe_membership_8_6'`); (b) per-rule data fetcher not yet wired (`skipped_reason='awaiting_per_rule_fetcher_wiring'`); (c) §3.3e cadence gate did not fire on this trading day (`skipped_reason='not_short_interest_trigger_day'`, `_3_3e` only). |
+| **Emitted by** | `supabase/functions/longshort-universe-hard-exclusion-refresh/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `action`, `correlation_id`, `metadata` = `{ rule, as_of, skip_reason \| skipped_reason, ... }` |
+| **Added by** | FP-008 sub-step 8.5, ACT-109 |
+| **Lifecycle** | active |
+
+#### `longshort.universe.hard_exclusion_refresh_<rule_slug>.completed` — v1 (×4)
+
+| Field | Value |
+|-------|-------|
+| **Event Keys** | `longshort.universe.hard_exclusion_refresh_3_3a.completed`, `..._3_3b.completed`, `..._3_3c.completed`, `..._3_3e.completed` |
+| **Module** | longshort/universe |
+| **Version** | 1 |
+| **Classification** | audit-critical (per-rule refresh success marker; AC-09 evidence trail) |
+| **Description** | Emitted when the orchestrator returned `outcome='completed'` for the given rule. Sub-step 8.5 ships the dispatcher infrastructure; per-rule data fetchers wire in at later sub-steps, so this event becomes routinely emitted only after rule-fetcher integration lands. |
+| **Emitted by** | `supabase/functions/longshort-universe-hard-exclusion-refresh/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `action`, `correlation_id`, `metadata` = `{ rule, as_of, outcome, tickers_considered, firings_count, skipped_reason: null }` |
+| **Added by** | FP-008 sub-step 8.5, ACT-109 |
+| **Lifecycle** | active |
+
+#### `longshort.universe.hard_exclusion_refresh_<rule_slug>.failed` — v1 (×4)
+
+| Field | Value |
+|-------|-------|
+| **Event Keys** | `longshort.universe.hard_exclusion_refresh_3_3a.failed`, `..._3_3b.failed`, `..._3_3c.failed`, `..._3_3e.failed` |
+| **Module** | longshort/universe |
+| **Version** | 1 |
+| **Classification** | audit-critical (per-rule refresh failure marker; paired with §11.3 health surfacing at sub-step 8.9) |
+| **Description** | Emitted from the handler-level catch around `orch.run()`. Carries error message in metadata. Per AC-09 the failure of one rule does not block the other rules (separate `job_registry` rows + separate dispatcher invocations + `forbid` concurrency policy at the row level). |
+| **Emitted by** | `supabase/functions/longshort-universe-hard-exclusion-refresh/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `action`, `correlation_id`, `metadata` = `{ rule, as_of, error }` |
+| **Added by** | FP-008 sub-step 8.5, ACT-109 |
+| **Lifecycle** | active |
+
+---
+
+## Dependencies
+
 - [Dependency Map](../01-architecture/dependency-map.md)
 - [Action Tracker](../06-tracking/action-tracker.md) — critical events create entries
 - [Risk Register](../06-tracking/risk-register.md) — event patterns linked to risks
