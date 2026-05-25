@@ -1450,14 +1450,14 @@ At each phase boundary (before advancing to the next phase):
 | **Source Phase** | Phase 0B (FP-006) |
 | **Title** | Wire real Alpaca fetchers (from src/features/longshort/services/broker/alpaca/) into the periodic-sweep edge function (supabase/functions/longshort-reconciliation-tick/), replacing the 6.3d mock fetchers |
 | **Reason Deferred** | The 6 fetcher implementations landed at sub-step 6.7 (ACT-091) live in the Vite frontend tree (tsconfig.app.json-excluded; Deno-CLI runtime); the periodic-sweep edge function lives in supabase/functions/ (Supabase edge Deno runtime). Cross-tree + cross-runtime integration was not in FP-006 scope. The edge function's inline comment ("MOCK FETCHERS for 6.3d. Real broker integration lands at sub-step 6.7") was aspirational; 6.7 lit up the fetchers but did not perform the cross-tree wiring. ADR-006 records this deferral. |
-| **Blocking Dependencies** | Decision on whether to (a) move broker/alpaca/ modules under supabase/functions/_shared/ as a sibling to longshort-broker-interfaces.ts, or (b) build a thin adapter shim in supabase/functions/_shared/ that lazy-imports from a build artifact; both paths preserve Alpaca paper API contract; either path needs Phase 7 architectural decision |
+| **Blocking Dependencies** | Decision on whether to (a) move broker/alpaca/ modules under supabase/functions/_shared/ as a sibling to longshort-broker-interfaces.ts, or (b) build a thin adapter shim in supabase/functions/_shared/ that lazy-imports from a build artifact; both paths preserve Alpaca paper API contract; either path needs Phase 7 architectural decision. **Additional blocker per ACT-097 audit reconciliation:** real-time halt-feed data source (Polygon halt-feed channel, NYSE/Nasdaq halt subscription, or equivalent) MUST be available before live-order code paths wire — see Required Tests for Closure item B2. This may be an external data-vendor procurement step that precedes any fetcher-wiring code work. |
 | **Impact on Source Phase** | FP-006 closed as `approved-partial` for §10.4 supporting deliverable "Captured Day 1"; priority deliverables 1–3 unaffected |
 | **Future Owner Phase** | Phase 7 — Paper trading (FP-NNN, number TBD when Phase 7 planning opens) |
 | **Future Owner Module** | longshort/services/broker (cross-tree integration owner) |
 | **Required Plan Realignment** | Phase 7 FP scope must include fetcher-wiring sub-step before any continuous-execution sub-step; ADR amendment if path (a) chosen (file moves require import-graph audit) |
 | **Related Decisions** | DEC-036 clauses (1)(2)(3)(7); ADR-006 |
-| **Related Actions** | ACT-091 (6.7 fetchers landed); ACT-095 (this deferral) |
-| **Required Tests for Closure** | Integration test against live Alpaca paper API runs from supabase/functions/ runtime (not just Vite tree); periodic-sweep edge function invokes real fetchers (verified via supabase/functions integration test); zero mock-fetcher references in supabase/functions/longshort-reconciliation-tick/ |
+| **Related Actions** | ACT-091 (6.7 fetchers landed); ACT-095 (6.9 deferral registered); ACT-096 (Lovable independent audit Phase 1); ACT-097 (this audit reconciliation + Required-Tests amendment) |
+| **Required Tests for Closure** | (A) Integration test against live Alpaca paper API runs from supabase/functions/ runtime (not just Vite tree); periodic-sweep edge function invokes real fetchers (verified via supabase/functions integration test); zero mock-fetcher references in supabase/functions/longshort-reconciliation-tick/. (B) **Audit-findings remediation per ACT-097 reconciliation list (11 items from Lovable independent investigation, supervisor-confirmed):** (B1 — HIGH/BLOCKING) Number.isFinite() guards on all parseFloat() results in fetchers; throws on bad broker input with typed AlpacaSchemaError. (B2 — HIGH/BLOCKING) Halt-feed integration replaces /v2/assets querying with a real-time halt feed source (Polygon, NYSE/Nasdaq, or equivalent); LULD/T1/T12 intraday halt status is captured; daily tradability is a separate signal if needed. Phase 7 cannot wire live-order code paths until B2 is resolved — a phantom non-halt fetcher is structurally worse than no halt check. (B3 — MEDIUM) Locate fetcher distinguishes 404 endpoint-missing from 403 auth from 400 bad-symbol from broker explicit "no borrow"; typed LocateUnavailableReason field in return shape; caller can detect config errors vs market reality. (B4 — MEDIUM) Multi-pending harness raw-fetch DELETE sites refactored to AlpacaPaperClient.delete() (new method); zero ?? '' sentinels on Deno.env.get() in services/** scope; cleanup failure raises rather than masquerading as best-effort. (B5 — LOW/MEDIUM) Multi-pending harness new Date().toISOString() either annotated with explicit ADR-002-evidence-scope exemption comment OR harness relocated outside src/features/longshort/services/ scope. (B6 — MEDIUM) DEC-036 clause (1) endpoint allowlist enforced as runtime regex array in AlpacaPaperClient constructor; throws on mismatch; docstring-only enforcement removed. (B7 — LOW) order_acceptance pending_elapsed_s reports 0 (or null) when state !== 'pending'; field-meaning documented inline. (B8 — MEDIUM) Zod schema validation at every fetcher boundary; broker contract drift surfaces as AlpacaSchemaError rather than silent NaN/null propagation. (B9 — LOW) Order-acceptance fetcher acceptance test injects replay_as_of as ts parameter; asserts pending_elapsed_s deterministic across two replay runs. (B11 — LOW) Paper-API base URL consolidated to single ALPACA_PAPER_BASE_URL const; multi-pending harness raw-fetch sites import the const rather than re-hardcoding. (C) Banned-pattern detection scope amended to catch bare parseFloat() in fetcher-scope production source (current DEC-034 (2) rg patterns miss this). (Item B10 — ADR-002 Test 2 RTH re-run evidence gap — split out to new entry DW-062.) |
 | **Status** | `deferred` |
 | **Implemented by Action** | (TBD — Phase 7) |
 | **Implemented in Plan Version** | (TBD — Phase 7) |
@@ -1480,8 +1480,8 @@ At each phase boundary (before advancing to the next phase):
 | **Future Owner Module** | longshort/services/replay (writer-side counterpart to 6.5b reader) |
 | **Required Plan Realignment** | Phase 7 FP must include capture writer + storage backing decision; v1 fixture format from 6.5a held compatible (writer emits, reader consumes; same format) |
 | **Related Decisions** | DEC-035 (replay determinism); ADR-005 (Deno-native replay runtime); ADR-006 |
-| **Related Actions** | ACT-086/087/088 (6.5 framework reader-side); ACT-095 (this deferral) |
-| **Required Tests for Closure** | Writer produces `.jsonl.zst` envelope + events matching v1 spec from 6.5a verbatim; reader (from 6.5b) consumes writer output round-trip without error; byte-identical determinism property held across two writer runs on same input event stream |
+| **Related Actions** | ACT-086/087/088 (6.5 framework reader-side); ACT-095 (6.9 deferral registered); ACT-097 (audit reconciliation typed-null capture requirements) |
+| **Required Tests for Closure** | Writer produces `.jsonl.zst` envelope + events matching v1 spec from 6.5a verbatim; reader (from 6.5b) consumes writer output round-trip without error; byte-identical determinism property held across two writer runs on same input event stream. **Additional per ACT-097 audit reconciliation:** capture writer MUST serialize fetcher return values without coercing typed-null fields; specifically `BrokerQuote.last`, `BrokerLocateResult.locate_id`, `BrokerLocateResult.qty_available`, `BrokerHaltStatus.halt_reason`, `AlpacaSchemaError`-failed responses (from DW-058 Zod validation) must round-trip through the writer + reader preserving null/error semantics so replay-test PASS in Phase 7 detects the same divergence patterns live operation surfaces. |
 | **Status** | `deferred` |
 | **Implemented by Action** | (TBD — Phase 7) |
 | **Implemented in Plan Version** | (TBD — Phase 7) |
@@ -1536,7 +1536,32 @@ At each phase boundary (before advancing to the next phase):
 
 ---
 
+### DW-062: ADR-002 Test 2 (Fill Independence) RTH Re-Run Evidence
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-062 |
+| **Date Deferred** | 2026-05-25 |
+| **Source Plan Section** | CROSSWIND §8.6.1.1 (short-stop parallel-order mechanism) / DEC-036 clause (6) (7 empirical questions) / ADR-002 evidence basis |
+| **Source Phase** | Phase 0B (FP-006) |
+| **Title** | Re-run multi-pending validation harness Test 2 (fill independence) during RTH market hours and append second-pass evidence to ADR-002 before any v1 short-side go-live |
+| **Reason Deferred** | The 2026-05-25 02:46 UTC harness run for ADR-002 executed after Friday RTH close (Sunday UTC; AAPL quote ts 2026-05-22T20:00:00Z). Both fill-independence buy limits accepted at $326.37 and $331.37 but neither could fill (market closed). ADR-002 was Accepted on the strength of the dispositive wash-trade 403 evidence from tests 3-7 — that finding does not require Test 2 to be conclusive. **However:** the v0 fallback architecture's safety claim depends in part on the assumption that two same-symbol same-side orders fill independently rather than blocking each other. Test 2's premise underpins this. Per Lovable independent investigation ACT-096 finding #10, ADR-002 was Accepted on partial evidence; recommend Phase 7 RTH re-run before any v1 short go-live to confirm fill-independence assumption holds against live broker. |
+| **Blocking Dependencies** | RTH market hours availability; existing multi-pending harness (`scripts/alpaca-multi-pending-run.ts` + `multi-pending-harness.ts`); harness corrections per DW-058 item B4 if Lovable judges raw-fetch DELETE refactor must precede re-run (supervisor judgment: refactor not strictly required for re-run; Test 2 itself uses client.postJson, not raw fetch). |
+| **Impact on Source Phase** | None at Phase 0B — ADR-002 closure remains Accepted on dispositive wash-trade evidence. Impact lands at Phase 7 short-side activation: cannot proceed without Test 2 RTH evidence. |
+| **Future Owner Phase** | Phase 7 (specifically: pre-short-side-go-live evidence task within Phase 7) |
+| **Future Owner Module** | longshort/services/broker/alpaca (harness re-run); docs/04-modules/longshort/design-source (ADR-002 evidence appendix update) |
+| **Required Plan Realignment** | Phase 7 FP must include a "harness RTH re-run" task gating any v1 short-side feature go-live. ADR-002 evidence appendix updated to add second-pass JSON or amended if findings diverge from 2026-05-25 partial evidence. |
+| **Related Decisions** | DEC-036 clause (6) (7 empirical questions); ADR-002 (current Accepted state); §8.6.1.1 (canonical short-stop parallel-order spec); ADR-006 (the broader Phase-0B-to-Phase-7 deferral context) |
+| **Related Actions** | ACT-094 (ADR-002 Accepted); ACT-096 (audit identified the evidence gap); ACT-097 (this DW entry) |
+| **Required Tests for Closure** | Multi-pending harness Test 2 executed during RTH (NYSE 9:30 AM – 4:00 PM ET window); both buy limit orders fill at independent fill_at timestamps; JSON evidence appended to `docs/04-modules/longshort/design-source/ADR-002-harness-output-<DATE>-RTH.json`; ADR-002 evidence appendix updated. If Test 2 surfaces unexpected behavior (orders block each other; same-symbol limit-order serialization; etc.), ADR-002 Decision section is re-opened and the v0 fallback architecture re-evaluated. |
+| **Status** | `deferred` |
+| **Implemented by Action** | (TBD — Phase 7) |
+| **Implemented in Plan Version** | (TBD — Phase 7) |
+
+---
+
 ## Used By / Affects
+
 
 - Phase gate closure decisions
 - Future phase scoping and planning

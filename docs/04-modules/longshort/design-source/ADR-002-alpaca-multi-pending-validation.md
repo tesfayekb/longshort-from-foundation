@@ -109,3 +109,19 @@ Until any of (1) / (2) / (3), v0 fallback is the operational path for v1.
 - ACT-093 — FP-006 sub-step 6.8 implementation (verbatim test bodies)
 - ACT-094 — FP-006 sub-step 6.8 closure (this ADR populated)
 - §22.5.1 / ADR-004 — Live-DB verification discipline (third clause: this ADR is governance-only, no live-DB touched)
+
+---
+
+## Evidence completeness addendum (2026-05-25 — ACT-097 audit reconciliation)
+
+ACT-096 Phase 1 (Lovable independent investigation of the 6.7 Alpaca integration) surfaced finding #10: **ADR-002 was Accepted on the strength of the dispositive wash-trade 403 evidence from tests 3-5 and 7, but Test 2 (fill independence) was inconclusive due to market closure at run time.**
+
+The v0 fallback architecture's safety claim depends on a specific assumption: that two same-symbol same-side close orders fill independently of each other rather than blocking or serializing. Test 2 was designed to validate this assumption, but the 2026-05-25 02:46 UTC harness run executed outside RTH and produced an "INCONCLUSIVE" result on Test 2.
+
+**This addendum records that Test 2's premise underpins the v0 fallback architecture and an RTH re-run is required before any v1 short-side go-live.**
+
+The Phase 7 RTH re-run requirement is tracked in `deferred-work-register.md` as **DW-062** with explicit blocking-dependency-on-Phase-7-short-side-activation status. If the RTH re-run produces results that contradict the v0 fallback architecture's implicit fill-independence assumption (e.g., Alpaca serializes same-symbol limit orders, or blocks the second one until the first resolves), this ADR's Decision section is re-opened.
+
+ADR-002's current `Accepted` status holds for the wash-trade finding (§8.6.1.1 parallel-order mechanism rejected by Alpaca paper). The fill-independence premise of v0 fallback is recorded as Phase-7-evidence-gap rather than as ADR-002 deficiency.
+
+**Cross-reference:** DW-062 (Phase 7 RTH re-run); ACT-096 (Lovable independent audit); ACT-097 (this addendum); §22.5.4 (visibility-gap-across-sessions discipline; the evidence-gap was surfaced by Lovable's independent reading even though supervisor's prior analysis didn't catch it).

@@ -495,6 +495,22 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | Approval Status | Approved per operator option-evaluation 2026-05-25 chat record (Option B selected over Option A decompose / Option C minimal-demo). |
 | Supersession Links | None at spec level; ADR-006 supersedes the implicit assumption that "Captured Day 1" lands in Phase 0B (per the §10.4 text) and records the deferral disposition; Phase 7 FP closes the open loop. |
 
+### Audit reconciliation (2026-05-25) — ACT-097: DW-058 + DW-059 Amendments + DW-062 Creation
+
+**Type:** Governance reconciliation within FP-006; plan v13.4 unchanged
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.4 (unchanged) |
+| Section IDs Created | DW-062 |
+| Decision IDs Affected | DW-058 + DW-059 amended (Required Tests for Closure expanded; Blocking Dependencies amended on DW-058); ADR-002 evidence completeness addendum appended (Decision + Consequences sections unchanged) |
+| What Changed | Operator-requested Alpaca integration audit (ACT-096 Phase 1 = Lovable independent investigation; this ACT-097 = supervisor cross-check + governance amendments) produced 11 reconciled findings. Lovable's report canonical; supervisor confirmed 5/5 prior findings + verified 6 additional findings via direct repo inspection. DW-058 Required Tests for Closure expanded with B1-B11 remediation list (item B10 split to DW-062); halt-feed external data source registered as Blocking Dependency. DW-059 Required Tests for Closure expanded with typed-null preservation requirements. DW-062 created for ADR-002 Test 2 RTH re-run evidence gap. ADR-002 received evidence-completeness addendum. |
+| Why | Operator surfaced the question "are we creating phantom-trade risks or drifting from plan?" ahead of FP-006 closure. Audit confirmed: (1) no production code path wires Alpaca fetchers today (matches DW-058 premise); (2) but 11 latent defects exist in the fetcher implementations that would create phantom-non-halt + silent-NaN-acceptance + silent-short-disable failure modes at Phase 7 wiring time. Locking these into DW-058 + DW-059 Required Tests for Closure ensures Phase 7 fetcher-wiring closes only when remediation is complete + verified. The halt-feed wrong-endpoint finding is the most operationally severe; promoting it from Phase-7-internal-amendment to Phase-7-blocking ensures live-order code paths cannot wire before real-time halt status is sourced. |
+| What Stayed | All DECs unchanged. §11.0.3 / §11.0.7 / DEC-034 / DEC-036 spec text unchanged. ADR-001/003/004/005/006 unchanged (ADR-002 received append-only addendum; Decision section unchanged). All code modules frozen. Plan v13.4 unchanged. system-state version unchanged. Master-plan untouched. DW-060 / DW-061 untouched. |
+| What Was Added | DW-058 + DW-059 field amendments; DW-062 new entry; ADR-002 evidence completeness addendum section; ACT-097 entry; this changelog entry. Defect class #13 added to supervisor self-defect log (in ACT-097 entry text). |
+| What Was Removed | None — append-only + targeted-field amendments. |
+| Approval Status | Approved per operator audit request + Lovable independent investigation ACT-096 Phase 1 (canonical findings source) + supervisor cross-check confirmation. §7.4 dual-investigative-track protocol exercised end-to-end without manufactured consensus. |
+| Supersession Links | None at spec or DEC level. DW-058 + DW-059 field versions superseded by amended versions in this commit (prior versions preserved in git history; current text canonical). |
 
 - [Master Plan](master-plan.md)
 - [Approved Decisions](approved-decisions.md)
