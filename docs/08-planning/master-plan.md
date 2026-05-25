@@ -442,7 +442,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [x] Gate 6.3 — Phase 0A residual + reconciliation engine + 17 verify_* (closed 2026-05-22, ACT-081)
   - [x] Gate 6.4 — Strong-evidence workflow tooling, fail-fast (closed 2026-05-22, ACT-082)
   - [x] Gate 6.7 — Replay framework + A1 baseline + Alpaca paper. All three §10.4 priority deliverables operational: replay framework (6.5 / Gate 6.5); A1 baseline aggregation (6.6); Alpaca paper integration (6.7). (closed 2026-05-24, ACT-091)
-  - [ ] Gate 6.9 — ADR-002 multi-pending validation + Phase 0B exit gate quietness
+  - [x] Gate 6.9 — ADR-002 multi-pending validation (closed 6.8 / ACT-094) + Phase 0B exit gate disposition (closed 6.9 / ACT-095 via §10.4 captured-day deferral per ADR-006). (closed 2026-05-25, ACT-095)
 - **Sub-step inventory (16 + closure):**
   - [x] 6.0a — Prerequisite doc closures + DEC ratifications evidenced (closed 2026-05-22, ACT-074)
   - [x] 6.0b — Platform-tier reconciliation stub landed at `supabase/functions/_shared/strategy-reconciliation.ts` (closed 2026-05-22, ACT-074)
@@ -464,7 +464,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - [x] 6.6 — A1 baseline aggregation infrastructure: 3 SQL views (daily/weekly/monthly per call_name per outcome) + compare_reconciliation_baseline() RPC + TypeScript query helpers (MIG-047 via ADR-004 §22.5.2 split-execution). Phase 7 populates baselines; Phase 9 §11.6 kill condition queries this surface. (closed 2026-05-24, ACT-090)
   - [x] 6.7 — Alpaca paper integration: REST client (AlpacaPaperClient with typed errors) + 6 fetcher implementations (Position / Quote / HaltStatus / Locate / BuyingPower / OrderAcceptance) against `longshort-broker-interfaces.ts` + connection-test CLI for Gate 6.7 PASS evidence. Other 11 fetchers stay using 6.5b fixture-backed implementations; lit up in 6.10 or later. Captured Day 1 fixture deferred to 6.9. (closed 2026-05-24, ACT-091)
   - [x] 6.8 — ADR-002 multi-pending validation harness + empirical determination: harness built (ACT-092 + ACT-093) and executed 2026-05-25 against Alpaca paper account. Outcome: Alpaca paper wash-trade detector rejects opposite-side parallel orders (HTTP 403 + code 40310000) — §8.6.1.1 parallel-order pattern NOT operational on Alpaca paper. v0 fallback per §8.6.2 adopted for v1 (operator page + progressive escalation; no parallel-order mechanism). ADR-002 populated with determination; forward-deferred validations documented. (closed 2026-05-25, ACT-094)
-  - [ ] 6.9 — Phase 0B exit gate quietness evidencing + Gate 6.9 closure
+  - [x] 6.9 — Phase 0B exit gate disposition via §10.4 captured-day deferral: ADR-006 authored formally deferring "Captured Day 1" supporting deliverable to Phase 7; 4 DW entries (DW-058 fetcher wiring / DW-059 capture writer / DW-060 cron scheduler / DW-061 full-RTH-day execution + §11.0.11 firing analysis) registered; explicit vacuous-quietness-signal acknowledgment recorded. §10.4 priority deliverables 1–3 unaffected. (closed 2026-05-25, ACT-095)
   - [ ] 6.10 — Module status transition `foundation-implemented` → `phase-0b-validated` (closure)
 - **AC count:** 79
 - **Plan Version impact:** v12.1 → v13.0 (Round Final); v13.0 → v13.1 (Gate 6.0 closure — DEC-034 clause (5) verifier amendment)
