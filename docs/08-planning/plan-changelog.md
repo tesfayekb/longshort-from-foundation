@@ -567,6 +567,25 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | Approval Status | Approved per operator audit request + Lovable independent investigation ACT-096 Phase 1 (canonical findings source) + supervisor cross-check confirmation. §7.4 dual-investigative-track protocol exercised end-to-end without manufactured consensus. |
 | Supersession Links | None at spec or DEC level. DW-058 + DW-059 field versions superseded by amended versions in this commit (prior versions preserved in git history; current text canonical). |
 
+### v13.7 → v13.8 (2026-05-25)
+
+**Type:** Additive per Constitution Rule 10 Plan Merge Rule. Retroactive governance reconciliation closing FP-005 + FP-006 entry-format drift surfaced at ACT-100 / C.1 §21.10 pre-flight. Path 2-extended-refined per operator calibration.
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.7 → v13.8 |
+| Section IDs Created | None |
+| Section IDs Closed | None (FP-005 PLAN-TRADING-001-LONGSHORT-001 + FP-006 PLAN-TRADING-001-LONGSHORT-002 master-plan sections already correctly attest `closed`; only the feature-proposals.md entry-level Status fields were drift-stale) |
+| FP IDs Created | None (FP-005 + FP-006 corrected; FP-001/002/003/004/007 unchanged) |
+| Decision IDs Affected | None (DEC-030/031/032 etc. preserved verbatim) |
+| What Changed | FP-005 entry Status corrected from `proposed` to `closed (2026-05-21 — closure document; closure ACT-072; closure SHA `1358904`)`; `Closure SHA` field added. FP-006 entry Status corrected from `Approved (governance-authored; execution-pending)` to `closed (2026-05-25 — closure document; closure ACT-098; closure SHA `13fce9cd`)`; `Closure SHA` field added. INC-22 entry added (framing β process-defect; defect classes #22-#26 forward-binding). INC-21 entry received one-line corroborating-evidence note. ACT-101 entry added. system-state.md version v13.7 → v13.8. Supervisor-instructions v0.6 → v0.6.1 amendment delivered as operator-side artifact (§21.10 three-sub-case expansion). |
+| Why | ACT-100 / C.1 §21.10 pre-flight for FP-008 Phase 1 scoping surfaced that FP-005 + FP-006 entries in feature-proposals.md had stale Status fields and were missing Closure SHA fields (pre-FP-007-template convention). The §21.10 (b) Status verbatim citation requirement couldn't be satisfied truthfully without correcting the drift. Path 2-extended-refined adopted per operator calibration: fix FP-005 + FP-006 only; FP-001/002/003 out of scope (orthogonal to longshort prerequisite chain); FP-004 left as-is (pattern-type FP; `approved` factually correct). Supervisor-instructions v0.6.1 inline per operator calibration: defer would guarantee future §21.10 STOP and prose-creep. INC-22 framing β per operator calibration: defect #26 structurally isomorphic to defect #21; β strictly dominant on benefit. |
+| What Stayed | All DECs unchanged. All ADRs unchanged. FP-001 / FP-002 / FP-003 / FP-004 / FP-007 entries preserved verbatim. PLAN-TRADING-001-LONGSHORT-001 + PLAN-TRADING-001-LONGSHORT-002 master-plan sections preserved verbatim (already correctly attest `closed`). PLAN-CI-001-BOOTSTRAP-001 preserved verbatim. FP-005 + FP-006 closure documents preserved verbatim per §22.8.3 grandfathering. Module status remains `phase-0b-validated`. DW register unchanged. ACT-072 + ACT-098 + ACT-099 + ACT-100 closure attestations preserved verbatim. |
+| What Was Added | FP-005 + FP-006 entry Status field corrections + Closure SHA field additions; INC-22 entry; INC-21 corroborating-evidence one-line note; ACT-101 entry; this changelog entry; system-state.md version bump v13.7 → v13.8; supervisor-instructions v0.6.1 (operator-side). Defect classes #22 + #23 + #24 + #25 + #26 logged forward in supervisor self-defect log. |
+| What Was Removed | None — additive only. (Stale Status text in FP-005 + FP-006 entries is replaced, not removed — the replacement preserves the audit trail by citing closure document path + ACT + SHA, providing strictly more information than the stale text.) |
+| Approval Status | Approved per operator standing institutional-grade authority; Path 2-extended-refined + inline v0.6.1 + INC-22 framing β all operator-calibrated 2026-05-25. |
+| Supersession Links | N/A — additive; no approved sections superseded. (FP-005 + FP-006 entry corrections are within-entry field-level reconciliations, not section drops or rewrites.) |
+
 - [Master Plan](master-plan.md)
 - [Approved Decisions](approved-decisions.md)
 - [Plan Review Log](plan-review-log.md)
