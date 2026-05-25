@@ -586,6 +586,25 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | Approval Status | Approved per operator standing institutional-grade authority; Path 2-extended-refined + inline v0.6.1 + INC-22 framing β all operator-calibrated 2026-05-25. |
 | Supersession Links | N/A — additive; no approved sections superseded. (FP-005 + FP-006 entry corrections are within-entry field-level reconciliations, not section drops or rewrites.) |
 
+### v13.8 → v13.9 (2026-05-25)
+
+**Type:** Additive per Constitution Rule 10 Plan Merge Rule. New plan-section creation (PLAN-TRADING-001-LONGSHORT-003) under Constitution Rule 8 5-point procedure. FP-008 governance-authoring ACT-102.
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.8 → v13.9 |
+| Section IDs Created | `PLAN-TRADING-001-LONGSHORT-003` (Long-Short Strategy Module Phase 1: Universe Ingestion and Management; continues the PLAN-TRADING-001-LONGSHORT-NNN family; Status `approved (execution-pending)`; Feature Proposal FP-008; 13 sub-steps + closure; 8 exit gates per CROSSWIND v0.9 §10.5) |
+| Section IDs Closed | None (PLAN-TRADING-001-LONGSHORT-002 / FP-006 + PLAN-CI-001-BOOTSTRAP-001 / FP-007 + PLAN-TRADING-001-LONGSHORT-001 / FP-005 + PLAN-TRADING-001 / FP-004 all preserved verbatim per §22.8.3 grandfathering) |
+| FP IDs Created | FP-008 (governance-authored at this ACT; Status `approved (execution-pending)`; Plan Section PLAN-TRADING-001-LONGSHORT-003; scope per CROSSWIND v0.9 §10.5 + §3) |
+| Decision IDs Affected | None at this ACT (DEC-038 + DEC-038.1 forward-referenced; to be authored during FP-008 sub-step 8.0a). DEC-030 through DEC-037 preserved verbatim. |
+| What Changed | FP-008 entry created in feature-proposals.md (slotted after FP-007 entry; 12-deliverable scope per §10.5; 13-sub-step decomposition; 7-row R1-R7 risk register; 11-item Out-of-Scope list; forward-references DEC-038 + DEC-038.1 + ADR-007 + MIG-048 + MIG-049). New plan section PLAN-TRADING-001-LONGSHORT-003 in master-plan.md (continues PLAN-TRADING-001-LONGSHORT-NNN sequence; 8 exit gates per §10.5 verbatim; kill condition per §10.5; 13-sub-step inventory). ACT-102 entry in action-tracker.md. Plan version v13.8 → v13.9. system-state.md current_plan_version + approved_plan_baseline + last_updated. |
+| Why | Phase 0 fully closed (FP-005 + FP-006 + FP-007 all `closed`; module status `phase-0b-validated`; governance loose-ends retired at ACT-100 / C.1 + ACT-101 / C.2-lite). Per CROSSWIND v0.9 §10.5: Phase 1 (Universe ingestion and management) is the natural successor to Phase 0B and opens as a separate execution-tier scope. Per DEC-031 strategy-module pattern + DEC-032 + the FP-005 / FP-006 / FP-007 per-phase FP wrapper precedent: each phase gets its own FP entry + plan section + sub-step decomposition. FP-008 is the FP wrapper for Phase 1 work; this ACT authors the wrapper; sub-step execution opens at sub-step 8.0a per FP-006 precedent. Per §21.10 v0.6.1 pre-flight: all four prerequisite-chain FPs (FP-004 + FP-005 + FP-006 + FP-007) fully cite-anchored under their respective sub-cases; recursion walked to fixed-point; first FP-execution prompt under v0.6.1 discipline exercised end-to-end without STOP. |
+| What Stayed | All DECs unchanged. All ADRs unchanged. FP-001 through FP-007 entries preserved verbatim. PLAN-TRADING-001 / PLAN-TRADING-001-LONGSHORT-001 / PLAN-TRADING-001-LONGSHORT-002 / PLAN-CI-001-BOOTSTRAP-001 / PLAN-AUTH-001-A through PLAN-AUTH-001-D all preserved verbatim. All closure documents preserved verbatim per §22.8.3 grandfathering. Module status remains `phase-0b-validated` (transitions to `phase-1-validated` only at FP-008 closure / sub-step 8.13). DW register unchanged. Supervisor-instructions v0.6.1 unchanged (no amendment at this ACT). 9-gate strong-evidence.yml workflow + 6 enforcement scripts + docs/banned-patterns.md all preserved and active (guarding every future FP-008 PR per ADR-003). |
+| What Was Added | FP-008 entry; PLAN-TRADING-001-LONGSHORT-003 section; ACT-102 entry; this changelog entry; system-state.md version bump v13.8 → v13.9. |
+| What Was Removed | None — additive only. |
+| Approval Status | Approved per operator standing institutional-grade authority. §21.10 v0.6.1 pre-flight chain fully cite-anchored before draft. CROSSWIND v0.9 §10.5 + §3 + §11.0.5 + §11.0.7 #10 + §11.3 + §11.4 + §12.4 cited verbatim as scope anchors. |
+| Supersession Links | N/A — additive; no approved sections superseded. |
+
 - [Master Plan](master-plan.md)
 - [Approved Decisions](approved-decisions.md)
 - [Plan Review Log](plan-review-log.md)
