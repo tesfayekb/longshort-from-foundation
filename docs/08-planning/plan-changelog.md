@@ -740,3 +740,17 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | Live-DB evidence | `supabase--read_query` × 3 confirmed: (i) universe_membership — 8 columns / RLS enabled / 2 policies / CHECK `(long_eligible OR short_eligible)` present; (ii) hard_exclusions — 7 columns / RLS enabled / 2 policies; (iii) feature_flags — 1 row with `enabled=false`, `evidence_tier='weak'`, reason citing FP-008 sub-step 8.6 / ACT-110. §22.5.1 binding standard satisfied × 3. §22.5.2 NOT triggered per defect class #35 (no capability mismatch for new tables / seed). |
 | Approval | Operator approval 2026-05-25: "A go" (Surface 1 — two-boolean mirror + CHECK). |
 | Supersession | N/A — additive. RESERVED block in database-migration-ledger collapsed into final LANDED entries (MIG-050/051/052). |
+
+### v13.18 — 2026-05-25 — v0.6.3 Supervisor-Instructions Amendment Cycle Companion Artifact Landing (ACT-111)
+
+| Field | Value |
+|-------|-------|
+| Change Type | Governance artifact creation (additive; no code surface; no live-DB; no financial state) |
+| Scope | `docs/ai-failure-modes.md` landing (failure-mode catalog seeded with defect classes #34-#38; quarterly review cadence per §12.8; cross-cutting quarterly-review ADRs land in `docs/decisions/`); `docs/decisions/.gitkeep` materialization (operator Option C ruling on §22.8.4 STOP); DW-065 registered in canonical `docs/08-planning/deferred-work-register.md` (operator Option α ruling honoring Constitution Rule 5 single-SSOT discipline). |
+| Surfaces resolved | §22.8.4 STOP on §22.3 item 7 (`docs/decisions/` absence) → Option C (create `.gitkeep` + log forward as DW-065); DW append-target path drift (`06-tracking/` vs canonical `08-planning/`) → Option α (silent path correction to canonical register). |
+| Guardrails | Constitution Rule 5 honored (single-SSOT register; no duplicate at parallel path); Rule 8 honored (no approved sections dropped); Rule 10 honored (additive merge bump). |
+| v0.6.3 §22.3 discipline | (g) Supervisor Surface/path pre-resolution discipline confirmed structurally necessary: defect #36 fired TWICE in ACT-111 prompt-drafting cycle, both caught by Lovable §22.8.4 STOP. Pattern_signal — supervisor drafting checklist requires path-grep alongside idiom-grep + schema-grep. |
+| Live-DB evidence | N/A — governance artifact only; no DB touch. |
+| Defect class surfaced | #36 dual-firing in same prompt-delta; codification target v0.6.3 §22.3 (g) reinforced (already in target batch); no new defect class. |
+| Approval | Operator approval 2026-05-25: Option C (Surface 1 — `.gitkeep` materialization) + Option α (DW-065 canonical path correction) + "proceed confirmation" for full ACT-111 delta. |
+| Supersession | N/A — additive. v0.6.2 open governance loose-end resolved; v0.6.3 supervisor-instructions amendment cycle CLOSES pending operator confirmation that instructions are applied. |

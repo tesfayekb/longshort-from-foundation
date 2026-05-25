@@ -1,0 +1,1 @@
+# Decisions directory — cross-cutting governance ADRs land here per CROSSWIND_SPEC.md §12.10. Module-scoped ADRs live in docs/04-modules/<module>/design-source/. Materialized at ACT-111 (DW-065).

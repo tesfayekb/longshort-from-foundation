@@ -1592,3 +1592,19 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future phase** | Phase 7. |
 | **Risk acknowledged** | A name halted within the §3.3c 5-trading-day lookback may enter the eligible universe at v1; signal-layer filtering at Phase 2+ provides defense-in-depth via signal-quality checks on recently-halted names (degraded volume + spread). |
 | **Attestation** | FP-008 closure document at sub-step 8.13 attests this rule as deferred-placeholder. |
+
+---
+
+### DW-065: ADR Landing-Path Convention Drift — CROSSWIND_SPEC.md `docs/decisions/` vs FP-006 Module-Scoped Placement
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-065 |
+| **Registered at** | ACT-111 (v0.6.3 supervisor-instructions amendment cycle + `docs/ai-failure-modes.md` companion artifact landing, 2026-05-25) |
+| **Per** | ACT-111 §22.8.4 STOP on §22.3 item 7 (`docs/decisions/` directory absence); operator Option C ruling (create `.gitkeep` + log forward) |
+| **Cross-references** | CROSSWIND_SPEC.md §12 + §12.10 verbatim ("ADRs go to `docs/decisions/`"); DEC-032 clause (3); DEC-036 clause (6); supervisor-instructions §21.10 defect #36 (Surface pre-resolution without schema/capability repo-grep) |
+| **Scope** | Spec-vs-reality drift between CROSSWIND_SPEC.md ADR landing-path mandate (`docs/decisions/`) and FP-006 module-scoped placement (`docs/04-modules/longshort/design-source/`). Until ACT-111, `docs/decisions/` did not exist; CROSSWIND_SPEC.md references were forward-binding without a concrete landing zone. ACT-111 created `docs/decisions/.gitkeep` to materialize the directory but did NOT migrate existing FP-006 ADRs (ADR-001 through ADR-006), preserving DEC-032 + DEC-036 governance trail. Implicit governance split established: module-scoped ADRs → `docs/04-modules/<module>/design-source/`; cross-cutting governance ADRs (AI-failure-mode quarterly reviews per §12.10; evidence-tier discipline reviews per §12.5; cross-module decisions) → `docs/decisions/`. |
+| **Blocking deps** | None (no active CI gap; no broken-link; `.gitkeep` materializes the directory the spec assumes exists). |
+| **Future phase** | FP-008 sub-step 8.13 closure OR a dedicated governance reconciliation cycle. Open question: should existing FP-006 ADRs migrate to `docs/decisions/` to fully honor spec verbatim, OR should the spec be updated to ratify the module-scoped governance pattern, OR should the split be made explicit in a DEC amendment without migrating files? |
+| **Risk acknowledged** | Low — the implicit governance split is operationally defensible (module-scoped ADRs co-locate with module design artifacts; cross-cutting ADRs live in shared `docs/decisions/`); spec verbatim is now honored for the cross-cutting landing zone; future quarterly-review ADRs per §12.10 have a concrete target. |
+| **Attestation** | FP-008 closure document at sub-step 8.13 attests this register entry as a governance loose-end with implicit-split resolution in place. |
