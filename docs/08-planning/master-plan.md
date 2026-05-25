@@ -491,7 +491,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 - FP-007 closed — CI/CD bootstrap; closure SHA `cd4b8a14e37ad42986428380a3359dc9ec48e993` per ACT-099-cont (sub-case (i))
 
 **Sub-step inventory (13 + closure):**
-  - [ ] 8.0a — Prerequisites + DEC-038 (Phase 1 universe-component invariants) ratification + DEC-038.1 (Phase 1 architecture, if needed) ratification + per-sub-step AC matrix authoring (mirrors FP-006 Round Final consolidation)
+  - [x] 8.0a — Prerequisites + DEC-038 + DEC-038.1 ratified + per-sub-step AC matrix authored at ACT-103; SHA `<lovable-commit-sha>` (Gate 8.0 closed)
   - [ ] 8.1 — Constituent ingestion (S&P 500 + S&P 400) from primary source per §3.1; per §10.5 deliverable 1
   - [ ] 8.2 — Universe filters implementation per §3.2 (avg daily $-volume ≥ $20M; share price ≥ $5; market cap ≥ $1B; listing age ≥ 1 year; ADRs excluded; REITs excluded)
   - [ ] 8.3 — Hard exclusion infrastructure per §3.3 (8 rules: 3.3a earnings windows; 3.3b M&A; 3.3c halts; 3.3d hard-to-borrow; 3.3e short interest; 3.3f secondary offerings N/A v1; 3.3g going-concern N/A v1; 3.3h no sector restrictions); halt-feed dependency per R4 risk
@@ -513,6 +513,64 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
   - Gate 8.3 — Reconciliation surface live: §10.5 deliverables 7-9 + §11.0.5 + §11.0.7 #10 (sub-steps 8.7 / 8.8 / 8.9)
   - Gate 8.4 — Documentation + testing + runbooks: §10.5 deliverables 10-12 (sub-steps 8.10 / 8.11 / 8.12)
   - Closure — sub-step 8.13
+
+**Per-sub-step Acceptance Criteria (AC matrix):**
+
+The following 38 acceptance criteria (AC-01 through AC-38) decompose the 13-sub-step inventory. Each AC binds to one CROSSWIND scope anchor (§10.5 deliverable N OR §3 sub-section OR §11.0.X reference). Detailed implementation specs live in each sub-step's own execution prompt; this matrix authors the AC STRUCTURE (AC ID + 1-2-sentence text + scope anchor cross-reference).
+
+**Gate 8.0 — DEC ratification + AC matrix (sub-step 8.0a):**
+- AC-01: DEC-038 (Phase 1 universe-component invariants) ratified in approved-decisions.md with 8 clauses; status `active`. *Anchor: this ACT-103.*
+- AC-02: DEC-038.1 (Phase 1 universe-component architecture) ratified in approved-decisions.md with 8 clauses; status `active`. *Anchor: this ACT-103.*
+- AC-03: Per-sub-step AC matrix landed in master-plan PLAN-TRADING-001-LONGSHORT-003 section with AC-01 through AC-38 enumerated. *Anchor: this ACT-103.*
+
+**Gate 8.1 — Universe component buildable (sub-steps 8.1 / 8.2 / 8.3 / 8.4 / 8.5):**
+- AC-04: Constituent ingestion from primary source (Polygon reference data API) operational for S&P 500 + S&P 400 per §3.1; ~900 raw names ingested per refresh. *Anchor: §10.5 deliverable 1 + §3.1.*
+- AC-05: Secondary source operational for cross-check (S&P direct or iShares ETF holdings selected at sub-step 8.1 per Lovable evaluation); cross-check runs at every refresh per DEC-038 clause (2). *Anchor: §10.5 deliverable 1 (backup source clause) + §10.5 deliverable 8 + §11.0.5 + DEC-038 clause (2).*
+- AC-06: §3.2 six universe-filter implementations land (avg daily $-volume ≥ $20M / share price ≥ $5 / market cap ≥ $1B / listing age ≥ 1 year / ADR exclusion / REIT exclusion); eligible universe size post-filters ~750-820 names per §3.2 spec. *Anchor: §10.5 deliverable 2 + §3.2 (all 6 filter rows).*
+- AC-07: §3.3 eight hard-exclusion rule implementations: 3.3a earnings windows (BMO/AMC/intraday calendar discipline per §3.3 worked examples) + 3.3b M&A (acquirer + target asymmetric handling) + 3.3c halts (5-trading-day lookback; halt-feed dependency per R4) + 3.3d hard-to-borrow (pre-trade check; short book only) + 3.3e short interest (twice-monthly SEC; short book only) + 3.3f N/A v1 + 3.3g N/A v1 + 3.3h N/A v1. *Anchor: §10.5 deliverable 3 + §3.3 (all 8 rules).*
+- AC-08: Quarterly atomic refresh job operational; single transaction; mid-execution failure leaves prior quarter intact per DEC-038 clause (3). Job runs first trading day Jan/Apr/Jul/Oct per §3.4. *Anchor: §10.5 deliverable 4 + §3.4 LOCKED + DEC-038 clause (3).*
+- AC-09: Continuous hard-exclusion refresh operational with per-rule cadences per §3.4 LOCKED + DEC-038 clause (4); each rule has its own job_registry entry; failure of one rule does not block others. *Anchor: §10.5 deliverable 5 + §3.4 + DEC-038 clause (4).*
+
+**Gate 8.2 — Schema operational (sub-step 8.6):**
+- AC-10: MIG-048 lands `universe_membership` table keyed by `(operator_id, ticker, as_of_date)` per multi-instance optionality per DEC-038.1 clause (7). *Anchor: §10.5 deliverable 6 + DEC-038.1 clause (7).*
+- AC-11: MIG-049 lands `hard_exclusions` table keyed by same composite key. *Anchor: §10.5 deliverable 6 + DEC-038.1 clause (7).*
+- AC-12: Per §22.5.1 live-DB verification mandatory at sub-step 8.6 closure: operator-pasted Dashboard SQL editor query output OR executor-pasted `supabase--read_query` output confirming live-DB state matches MIG-048 + MIG-049 schemas. *Anchor: §22.5.1.*
+- AC-13: MIG-050 lands `job_registry` seeds for `longshort.universe.quarterly_refresh` + `longshort.universe.hard_exclusion_refresh_<rule>` per §3.4 cadences; all enabled=false initially per DEC-038.1 clause (4). *Anchor: DEC-038.1 clause (4) + DEC-034.1 clause (9).*
+- AC-14: MIG-051 lands `feature_flags` seed `universe.enabled=false` per DEC-038 clause (5) + DEC-038.1 clause (5). *Anchor: DEC-038 clause (5) + DEC-038.1 clause (5).*
+
+**Gate 8.3 — Reconciliation surface live (sub-steps 8.7 / 8.8 / 8.9):**
+- AC-15: `verify_universe_membership` #10 real implementation lands at sub-step 8.7; queries `universe_membership` table; emits `reconciliation_events` row per DEC-034 clause (3) outcome enum per call. *Anchor: §10.5 deliverable 7 + §11.0.7 #10 + DEC-038 clause (1).*
+- AC-16: verify_universe_membership signature does NOT change from FP-006 stub (DEC-038.1 clause (3) binding); only implementation body changes. *Anchor: DEC-038.1 clause (3).*
+- AC-17: Ingestion-time cross-check operational per §11.0.5 + DEC-038 clause (2); cross-check has run on at least one production refresh; emitted `reconciliation_events` rows are root-caused per §11.0.11 (no unresolved `system_bug` outcome firings). *Anchor: §10.5 deliverable 8 + §10.5 exit gate "Ingestion-time cross-check operational" + §11.0.5 + DEC-038 clause (2).*
+- AC-18: Cross-check invocation uses `ReconcileCallSpec` per DEC-038.1 clause (2); universe-component does NOT directly write `reconciliation_events` rows. *Anchor: DEC-038.1 clause (2) + DEC-034.1 clause (4).*
+- AC-19: Universe-component health monitoring per §11.3 + DEC-038 clause (7): universe size + filter rates + hard exclusion counts + refresh duration + cross-check divergence counts emitted to dashboard-queryable storage. *Anchor: §10.5 deliverable 9 + §11.3 + DEC-038 clause (7).*
+
+**Gate 8.4 — Documentation + testing + runbooks (sub-steps 8.10 / 8.11 / 8.12):**
+- AC-20: Component documentation per §12.4 lands at `docs/04-modules/longshort/universe/universe.md`; ART-NNN registered in artifact-index.md. *Anchor: §10.5 deliverable 10 + §12.4.*
+- AC-21: Replay-test integration per §10.5 deliverable 11: universe ingestion replayable against captured constituent data; replay parity contract per §11.10 satisfied. *Anchor: §10.5 deliverable 11 + §11.10 + DEC-038.1 clause (6).*
+- AC-22: Replay-test integration includes injected-clock + fixed constituent-list fixtures per DEC-038.1 clause (6) + DEC-035 clause (2). *Anchor: DEC-038.1 clause (6) + DEC-035.*
+- AC-23: Runbooks for known failure modes per §10.5 deliverable 12: quarterly refresh failure runbook + cross-check noise classification runbook + halt-feed unavailable runbook + earnings-calendar feed failure runbook. *Anchor: §10.5 deliverable 12.*
+
+**Gate 8.4 (continued) — Exit gates from §10.5 verbatim:**
+- AC-24: Universe produced reliably for current date; manual sanity review passes. *Anchor: §10.5 exit gate 1.*
+- AC-25: Hard exclusions correctly identify known recent events (synthetic and real). *Anchor: §10.5 exit gate 2.*
+- AC-26: Quarterly refresh executed successfully at least once in test mode. *Anchor: §10.5 exit gate 3.*
+- AC-27: All §12.4 documentation and §11.4 test coverage met. *Anchor: §10.5 exit gate 4 + §11.4.*
+- AC-28: Component can be disabled via configuration flag without breaking infrastructure per DEC-038 clause (5) + DEC-038.1 clause (5); flag flip produces typed-absence response not sentinel. *Anchor: §10.5 exit gate 5 + DEC-038 clause (5).*
+- AC-29: Component dashboards populated and reviewable per AC-19 emission. *Anchor: §10.5 exit gate 6 + §11.3.*
+- AC-30: verify_universe_membership operates against universe ingestion output without firing `system_bug` events during sub-phase validation; `failure_handled` outcome acceptable, `system_bug` blocks Phase 1 exit. *Anchor: §10.5 exit gate 7 + DEC-038 clause (2).*
+- AC-31: Ingestion-time cross-check operational per A4: cross-check has run on at least one production refresh; emitted `reconciliation_events` rows are root-caused per §11.0.11. *Anchor: §10.5 exit gate 8 + §11.0.11.*
+- AC-32: Phase 1 evidence-tier discipline operational per §10.4 + DEC-037: at least one Strong-tier change to universe component has gone through full evidence workflow with <15-min wall-clock artifact generation. *Anchor: §10.5 exit gate 9 + §10.4 + DEC-037.*
+
+**Closure (sub-step 8.13):**
+- AC-33: PLAN-TRADING-001-LONGSHORT-003 closure document published at `docs/08-planning/phase-closures/plan-trading-001-longshort-003-closure.md` enumerating all 38 ACs with evidence pointers + MIG-048 through MIG-051 + reference-index reconciliation + DEC-038 + DEC-038.1 attestations + sub-step-by-sub-step closure-SHA matrix. *Anchor: FP-005/006 closure-document precedent.*
+- AC-34: Module status transition `longshort: phase-0b-validated` → `longshort: phase-1-validated` in system-state.md (`modules_implemented` narrative + Module Status Table row + active_work narrative). *Anchor: FP-006 sub-step 6.10 / ACT-098 precedent.*
+- AC-35: Plan version bump from current (likely v13.10+ depending on sub-step transactions) to next minor + plan-changelog entry per Constitution Rule 10. *Anchor: Constitution Rule 10.*
+- AC-36: PLAN-TRADING-001-LONGSHORT-003 master-plan section Status field updated from `approved (execution-pending)` (current) to `closed (DATE — closure document; closure ACT-N; closure SHA <hash>)` per §21.10 v0.6.1 sub-case (i) pre-FP-007-template-equivalent shape OR newer template if v0.6.2+ introduces one. *Anchor: §21.10 v0.6.1 + ACT-101 precedent.*
+- AC-37: FP-008 entry Status field updated from `execution-in-progress` (post-ACT-103) to `closed (DATE — closure document; closure ACT-N; closure SHA <hash>)` + Closure SHA field added per FP-007 template precedent. *Anchor: §21.10 v0.6.1 sub-case (i) + FP-007 template.*
+- AC-38: Phase 1 exits; Phase 2 (signal stack) scope opens as separate FP (FP-009+ scoping TBD; not part of FP-008 closure). *Anchor: §10.6 Phase 2 + FP-006 closure-event-NOT-this-ACT precedent.*
+
+**Forward note on AC count drift:** if execution surfaces sub-step-specific ACs not enumerated here (e.g., capability-gap corrections per §22.8.4 STOP reconciliation), per FP-005/006 precedent: the AC matrix is amended in-cycle via Constitution Rule 8 5-point procedure within the relevant sub-step's execution ACT, NOT in a separate corrective ACT. The amendment IS the corrective.
 
 **Exit gates to Phase 2 (per CROSSWIND §10.5 verbatim):**
 - [ ] Universe produced reliably for current date; manual sanity review passes

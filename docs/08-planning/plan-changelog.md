@@ -605,6 +605,25 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | Approval Status | Approved per operator standing institutional-grade authority. §21.10 v0.6.1 pre-flight chain fully cite-anchored before draft. CROSSWIND v0.9 §10.5 + §3 + §11.0.5 + §11.0.7 #10 + §11.3 + §11.4 + §12.4 cited verbatim as scope anchors. |
 | Supersession Links | N/A — additive; no approved sections superseded. |
 
+### v13.9 → v13.10 (2026-05-25)
+
+**Type:** Additive per Constitution Rule 10 Plan Merge Rule. FP-008 sub-step 8.0a / Gate 8.0 closure: DEC-038 + DEC-038.1 ratification + 38-AC matrix authoring within already-approved PLAN-TRADING-001-LONGSHORT-003 section. ACT-103.
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.9 → v13.10 |
+| Section IDs Created | None (PLAN-TRADING-001-LONGSHORT-003 created at v13.9; this version UPDATES it with AC matrix + Gate 8.0 tick) |
+| Section IDs Closed | None (Gate 8.0 internal milestone; PLAN-TRADING-001-LONGSHORT-003 overall section remains `approved (execution-pending)` until sub-step 8.13 closure) |
+| FP IDs Created | None (FP-008 created at v13.9; this version UPDATES its Status field to `execution-in-progress` and populates its Decision IDs field with ratified citations) |
+| Decision IDs Affected | **DEC-038** RATIFIED (Phase 1 universe-component invariants; status `active`). **DEC-038.1** RATIFIED (Phase 1 universe-component architecture; status `active`). DEC-030 through DEC-037 preserved verbatim. |
+| What Changed | DEC-038 + DEC-038.1 entries added in approved-decisions.md (8 clauses each; both `active`). PLAN-TRADING-001-LONGSHORT-003 master-plan section updated: per-sub-step AC matrix (AC-01 through AC-38) inserted; Gate 8.0 / sub-step 8.0a checkbox ticked. FP-008 entry Status field updated from `approved (execution-pending)` to `execution-in-progress`; Decision IDs field updated to ratified citation. ACT-103 entry in action-tracker.md. Plan version v13.9 → v13.10. system-state.md current_plan_version + approved_plan_baseline. |
+| Why | FP-008 sub-step 8.0a / Gate 8.0 closure mirrors FP-006 Gate 6.0 / ACT-074 precedent: prerequisites + DEC ratifications + AC matrix authoring as the first execution-tier sub-step opening the per-sub-step execution chain. Per CROSSWIND v0.9 §10.5: Phase 1 invariants + architecture decisions must be locked before sub-step 8.1+ implementation begins. Per §21.10 v0.6.1 + §22.5.1 + §22.8.4 disciplines: 5-FP pre-flight chain verified before draft; no live-DB at this governance-authoring sub-step; capability-gap surface clean. |
+| What Stayed | All FP-001 through FP-007 entries preserved verbatim. FP-008 entry's other fields preserved verbatim — only Status + Decision IDs field updates. All DECs 030-037 preserved verbatim. All ADRs unchanged. All other plan sections preserved verbatim. All closure documents preserved verbatim. Module status remains `phase-0b-validated`. DW register unchanged. Supervisor-instructions v0.6.1 unchanged. 9-gate strong-evidence.yml workflow + 6 enforcement scripts + docs/banned-patterns.md all preserved and active. |
+| What Was Added | DEC-038 entry; DEC-038.1 entry; PLAN-TRADING-001-LONGSHORT-003 AC matrix (38 ACs); Gate 8.0 + sub-step 8.0a checkbox tick; FP-008 entry Status + Decision IDs field updates; ACT-103 entry; this changelog entry; system-state.md version bump v13.9 → v13.10. |
+| What Was Removed | None — additive only. |
+| Approval Status | Approved per operator standing institutional-grade authority. §21.10 v0.6.1 5-FP pre-flight chain fully cite-anchored. CROSSWIND v0.9 §10.5 + §3 + §11.0.5 + §11.0.7 #10 + §11.3 cited verbatim as DEC-038 substantive anchors. |
+| Supersession Links | N/A — additive; no approved sections superseded. |
+
 - [Master Plan](master-plan.md)
 - [Approved Decisions](approved-decisions.md)
 - [Plan Review Log](plan-review-log.md)
