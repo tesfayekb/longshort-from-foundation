@@ -1538,6 +1538,31 @@ At each phase boundary (before advancing to the next phase):
 
 ## Used By / Affects
 
+### DW-062: ADR-002 Test 2 (Fill Independence) RTH Re-Run Evidence
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-062 |
+| **Date Deferred** | 2026-05-25 |
+| **Source Plan Section** | CROSSWIND §8.6.1.1 (short-stop parallel-order mechanism) / DEC-036 clause (6) (7 empirical questions) / ADR-002 evidence basis |
+| **Source Phase** | Phase 0B (FP-006) |
+| **Title** | Re-run multi-pending validation harness Test 2 (fill independence) during RTH market hours and append second-pass evidence to ADR-002 before any v1 short-side go-live |
+| **Reason Deferred** | The 2026-05-25 02:46 UTC harness run for ADR-002 executed after Friday RTH close (Sunday UTC; AAPL quote ts 2026-05-22T20:00:00Z). Both fill-independence buy limits accepted at $326.37 and $331.37 but neither could fill (market closed). ADR-002 was Accepted on the strength of the dispositive wash-trade 403 evidence from tests 3-7 — that finding does not require Test 2 to be conclusive. **However:** the v0 fallback architecture's safety claim depends in part on the assumption that two same-symbol same-side orders fill independently rather than blocking each other. Test 2's premise underpins this. Per Lovable independent investigation ACT-096 finding #10, ADR-002 was Accepted on partial evidence; recommend Phase 7 RTH re-run before any v1 short go-live to confirm fill-independence assumption holds against live broker. |
+| **Blocking Dependencies** | RTH market hours availability; existing multi-pending harness (`scripts/alpaca-multi-pending-run.ts` + `multi-pending-harness.ts`); harness corrections per DW-058 item B4 if Lovable judges raw-fetch DELETE refactor must precede re-run (supervisor judgment: refactor not strictly required for re-run; Test 2 itself uses client.postJson, not raw fetch). |
+| **Impact on Source Phase** | None at Phase 0B — ADR-002 closure remains Accepted on dispositive wash-trade evidence. Impact lands at Phase 7 short-side activation: cannot proceed without Test 2 RTH evidence. |
+| **Future Owner Phase** | Phase 7 (specifically: pre-short-side-go-live evidence task within Phase 7) |
+| **Future Owner Module** | longshort/services/broker/alpaca (harness re-run); docs/04-modules/longshort/design-source (ADR-002 evidence appendix update) |
+| **Required Plan Realignment** | Phase 7 FP must include a "harness RTH re-run" task gating any v1 short-side feature go-live. ADR-002 evidence appendix updated to add second-pass JSON or amended if findings diverge from 2026-05-25 partial evidence. |
+| **Related Decisions** | DEC-036 clause (6) (7 empirical questions); ADR-002 (current Accepted state); §8.6.1.1 (canonical short-stop parallel-order spec); ADR-006 (the broader Phase-0B-to-Phase-7 deferral context) |
+| **Related Actions** | ACT-094 (ADR-002 Accepted); ACT-096 (audit identified the evidence gap); ACT-097 (this DW entry) |
+| **Required Tests for Closure** | Multi-pending harness Test 2 executed during RTH (NYSE 9:30 AM – 4:00 PM ET window); both buy limit orders fill at independent fill_at timestamps; JSON evidence appended to `docs/04-modules/longshort/design-source/ADR-002-harness-output-<DATE>-RTH.json`; ADR-002 evidence appendix updated. If Test 2 surfaces unexpected behavior (orders block each other; same-symbol limit-order serialization; etc.), ADR-002 Decision section is re-opened and the v0 fallback architecture re-evaluated. |
+| **Status** | `deferred` |
+| **Implemented by Action** | (TBD — Phase 7) |
+| **Implemented in Plan Version** | (TBD — Phase 7) |
+
+---
+
+
 - Phase gate closure decisions
 - Future phase scoping and planning
 - Action tracker (deferred items linked to actions)
