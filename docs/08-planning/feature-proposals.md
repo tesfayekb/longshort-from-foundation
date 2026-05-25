@@ -456,7 +456,7 @@ Execution decomposes into eight ordered sub-steps with the dependencies stated b
 | Field | Value |
 |-------|-------|
 | **ID** | FP-008 |
-| **Status** | `execution-in-progress` (Gate 8.0 closed at ACT-103; sub-steps 8.1-8.13 pending) |
+| **Status** | `execution-in-progress` (Gate 8.0 closed at ACT-103; sub-step 8.1 closed at ACT-104 — Polygon primary + iShares IVV/IJH secondary per Option B; sub-steps 8.2-8.13 pending) |
 | **Plan Section** | `PLAN-TRADING-001-LONGSHORT-003` (continues the PLAN-TRADING-001-LONGSHORT-NNN family; successor to PLAN-TRADING-001-LONGSHORT-002 / FP-006) |
 | **Date Proposed** | 2026-05-25 |
 | **Date Approved** | 2026-05-25 (governance-authored at ACT-102; sub-step execution opens at sub-step 8.0a per FP-006 precedent) |
