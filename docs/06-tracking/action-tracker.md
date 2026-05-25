@@ -2290,3 +2290,19 @@ HIGH — action tracker is the operational evidence backbone for the entire gove
 | **Related Tests** | `deno test src/features/longshort/services/broker/alpaca/multi-pending-harness_test.ts scripts/alpaca-multi-pending-run_test.ts` — 11 tests green; integration test skipped by default. |
 | **Evidence** | (a) Harness honors DEC-036 clause (6) 7 empirical questions verbatim in test names. (b) Safety guardrails: 1-share position cap; paper-URL-only (via AlpacaPaperClient default); pre-flight sanity abort; post-test cleanup. (c) Per §22.5.1 third clause: no DB schema / RPCs / RLS / migrations touched. (d) DEC-036 clause (2): live Alpaca URL absent from harness code (paper-only). (e) Per DEC-034 clauses (2)(3)(4): no Date.now, no sentinel coercion, no swallow-and-continue. |
 | **Status** | Verified |
+
+
+### ACT-093: FP-006 Sub-Step 6.8 (Continued) — Multi-Pending Harness Test Body Implementation
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-093 |
+| **Date** | 2026-05-25 |
+| **Action** | Filled in 7 skeleton test bodies in `multi-pending-harness.ts` with verbatim live-Alpaca implementations per DEC-036 clause (6). ACT-092 build-phase landed scaffold + skeletons; ACT-093 lands real implementations: (1) multi-pending acceptance via 2 far-from-market sell limits + poll for accepted + cancel cleanup; (2) fill independence via 2 marketable buys + close cleanup; (3) over-close detection latency via open-long → 2-sell-cycle measuring ISO-ts delta from 2nd fill to /v2/positions short visible; (4) corrective trade acceptance via construct-over-close → corrective buy → assert filled; (5) order ID collision via shared client_order_id 2-submit → record 422 vs accept; (6) locate persistence via short_locates POST + 2 short orders (graceful inconclusive on paper-not-supported); (7) TIF=DAY interaction via 2 TIF=DAY limit submits + clock check. All tests honor 1-share position cap + paper-URL-only + post-test cleanup. Operator re-runs harness after this lands; pastes JSON; supervisor drafts ADR-002 follow-on. Master-plan 6.8 stays untouched (ticks at follow-on). Plan v13.4 unchanged. |
+| **Type** | Implementation (ACT-092 build-phase scaffolding now functional) |
+| **Impact Classification** | HIGH (test bodies are the actual empirical instrument; without them ADR-002 determination can't be made) |
+| **Modules Affected** | longshort/services/broker/alpaca (single file: multi-pending-harness.ts); no other modifications |
+| **Files Changed** | 3: multi-pending-harness.ts implementation; ACT-093 entry; plan-changelog ACT-093 entry. |
+| **Related Tests** | Existing unit tests in `multi-pending-harness_test.ts` continue to pass (they test scaffold + pre-flight behavior, not test-body details). Integration test `Deno.test.ignore`'d. Operator runs full harness against live Alpaca paper after this lands. |
+| **Evidence** | (a) All 7 test bodies use only allowlisted endpoints per DEC-036 clause (1): POST/GET/DELETE /v2/orders, GET /v2/positions, GET /v2/clock, GET /v2/stocks/{symbol}/quotes/latest, POST /v2/short_locates. (b) DEC-036 clause (2): paper URL only (`paper-api.alpaca.markets`); live URL absent. (c) Position size capped at 1 share across all tests. (d) Post-test cleanup wraps each test (cancel open orders + close residual positions). (e) Per DEC-034: no Date.now in business logic — ISO timestamps come from Alpaca response fields; one `new Date().toISOString()` in test 3 is for measuring our-side polling latency (not business-logic decision input; documented inline). |
+| **Status** | Verified |
