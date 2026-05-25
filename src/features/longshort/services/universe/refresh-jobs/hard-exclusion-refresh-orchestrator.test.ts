@@ -12,12 +12,13 @@ import {
 import { HARD_EXCLUSION_RULE_KEYS } from './types.ts';
 
 // A guaranteed §3.3e trigger day per the FINRA T+1-after-15th anchor:
-// 2026-02-17 is a Tuesday (US trading day), settlement of Sun 2026-02-15
-// rolls forward to Mon 2026-02-16, T+1 = Tue 2026-02-17. Verified against
-// `isShortInterestTriggerDay` algorithm.
-const SHORT_INTEREST_TRIGGER_DAY = new Date('2026-02-17T09:00:00.000Z');
-// A trading day that is NOT a §3.3e trigger: Wed 2026-02-18.
-const NON_TRIGGER_TRADING_DAY = new Date('2026-02-18T09:00:00.000Z');
+// 2026-02-15 is Sun (anchor); firstTradingDayOnOrAfter → Mon 2026-02-16
+// (NYSE holiday: Presidents Day) → Tue 2026-02-17 (settlement); T+1 =
+// Wed 2026-02-18 = trigger. Verified against `isShortInterestTriggerDay`.
+const SHORT_INTEREST_TRIGGER_DAY = new Date('2026-02-18T09:00:00.000Z');
+// A trading day that is NOT a §3.3e trigger: Thu 2026-02-19 (no anchor
+// produces a T+1 landing on this date — verified against the algorithm).
+const NON_TRIGGER_TRADING_DAY = new Date('2026-02-19T09:00:00.000Z');
 
 describe('hard-exclusion refresh orchestrator', () => {
   it('skips all four rules with awaiting_per_rule_fetcher_wiring on a §3.3e trigger day', async () => {
