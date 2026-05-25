@@ -1681,9 +1681,6 @@ Key event chains showing upstream triggers and downstream effects:
 
 ---
 
-## Dependencies
-
-<!-- Inserted before "Dependencies" closure: ACT-109 event registrations -->
 ## Long-Short Universe Continuous Hard-Exclusion Refresh Events (FP-008 Sub-Step 8.5)
 
 All events below are emitted by the one-dispatcher edge function
