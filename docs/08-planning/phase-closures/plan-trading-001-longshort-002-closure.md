@@ -248,3 +248,38 @@ Per ACT-097 audit reconciliation: 11-finding latent-risk remediation list in the
 - Deferred work register: `docs/08-planning/deferred-work-register.md` (DW-058 / DW-059 / DW-060 / DW-061 / DW-062 — Phase 7 ownership)
 - Constitution: `docs/00-governance/constitution.md` (Rules 8, 10, 11)
 - System state: `docs/00-governance/system-state.md` (`longshort: phase-0b-validated` post-closure)
+
+---
+
+## Enforcement layer addendum (2026-05-25 — ACT-099 / sub-step 6.10.1 post-closure corrective)
+
+This closure document attests at the original closure (ACT-098) that DEC-034 clause (2), DEC-034 clause (4), DEC-036 clause (2), and DEC-037 clause (8) banned-pattern CI enforcement was satisfied at sub-step 6.4. **An operator-requested pre-closure audit + Lovable independent investigation 2026-05-25 surfaced that only 1 of the 4 enforcement surfaces was actually delivered** (the audit-writer trap, via `scripts/check-audit-writer-trap.ts`). The other 3 surfaces remained prose-only.
+
+**Post-closure corrective ACT-099 / sub-step 6.10.1 retires the gap.** Five enforcement scripts now live in CI per ADR-003 enforcement-as-scripts-not-prose:
+
+1. `scripts/check-sentinel-patterns.ts` — DEC-034 (2) `?? 0` / `|| 0` / hardcoded sentinels
+2. `scripts/check-wall-clock.ts` — DEC-034 (4) `Date.now()` / `new Date()` / `performance.now()` / `Temporal.Now.*`
+3. `scripts/check-paper-only-url.ts` — DEC-036 (2) live Alpaca URL `://api.alpaca.markets`
+4. `scripts/check-unguarded-parsefloat.ts` — ACT-097 finding #13 / DW-058 B1 bare parseFloat → NaN sentinel
+5. `scripts/check-catch-returns-zero.ts` — DEC-034 (2) `catch { return 0 }` phantom-success swallow
+
+Plus `docs/banned-patterns.md` as the DEC-034 (2) explicitly-referenced override registry with 5-row Active Overrides table (3 Phase-7-deferred + 2 Permanent per §22.8.4 Option-A reconciliation).
+
+**Constitution Rule 8 5-point procedure satisfied at ACT-099:**
+
+1. Prior approved section explicitly referenced by stable ID — PLAN-TRADING-001-LONGSHORT-002 / FP-006
+2. Reason for change documented — DEC-034 (2) + (4); DEC-036 (2); DEC-037 (8) enforcement debt
+3. Affected docs listed — 11 files modified at ACT-099-cont (10th test file + banned-patterns.md + CI workflow extension + 3 Alpaca annotation files + this addendum + governance entries); plus 9 enforcement script files from ACT-099 partial landing
+4. Plan-changelog entry — v13.5 → v13.6 with `superseded-by` link
+5. Updated section re-approved — operator standing institutional-grade authority + Lovable independent investigation reconciliation + §22.8.4 STOP-protocol reconciliation
+
+**ACT-098 closure record preserved verbatim per §22.8.3 grandfathering.** Per §22.8.3: "the substantive [closure] is intact; only the [enforcement-layer attestation] is affected. This note preserves the audit trail." The ACT-099 corrective adds the enforcement layer the closure attested but did not deliver; the closure-document attestation language "Banned-pattern enforcement per CROSSWIND §11.8 + §11.9" is now retroactively satisfied by ACT-099 rather than ACT-082 alone.
+
+**Two override classes registered in `docs/banned-patterns.md` Active Overrides table:**
+
+- **Phase-7-deferred (3 rows)** — Bare parseFloat sites in alpaca-position-fetcher.ts (×2) + alpaca-buying-power-fetcher.ts (×2) + multi-pending-harness.ts (×1); annotated `// allow-bare-parsefloat: DW-058-B1`. Phase 7 fetcher-wiring closes both DW-058 B1 (the typed-throw refactor) and the override annotations simultaneously.
+- **Permanent (2 rows)** — `new Date().toISOString()` in multi-pending-harness.ts lines 342 + 347; annotated `// allow-now-in-business-logic: ADR-002`. The wall-clock use is detection-latency measurement for the ADR-002 §8.6.1.1 empirical validation harness; the timestamp IS the value being measured, not a derived value. Lovable's §22.8.4 STOP discipline surfaced these sites; the original ACT-099 prompt scoped annotation-application section to parseFloat sites only and missed the harness's wall-clock sites that DEC-034 (4) scope covers. Reconciliation per §7.4 dual-investigative-tracks: ADR-002 is the chartering authority; the override is **permanent** because the wall-clock use is intrinsic to the harness's purpose.
+
+**Module status remains `phase-0b-validated`.** This corrective adds CI infrastructure; no module behavior change.
+
+**Cross-reference:** ACT-098 (FP-006 closure record-of-truth); ACT-099 (this corrective — single transaction across partial landing + continuation); ADR-003 enforcement-as-scripts-not-prose (the principle this corrective self-applies); ADR-002 (chartering authority for the Permanent wall-clock overrides); DW-058 B1 (the parseFloat-NaN-guard remediation Phase 7 owns).
