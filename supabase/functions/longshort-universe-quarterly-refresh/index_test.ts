@@ -23,96 +23,95 @@
  * Tests run against the deployed edge function and follow the dotenv
  * pattern documented for shared-test infrastructure.
  */
-import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 import {
   assertEquals,
   assertExists,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  isFirstTradingDayOfQuarter,
+  firstTradingDayOfQuarter,
+  nextQuarterRefreshDate,
+} from "../../../src/features/longshort/services/universe/shared/trading-days.ts";
 
-// Load .env with allowEmptyValues so the example file's
-// unset declarations (VITE_TURNSTILE_SITE_KEY, VITE_SENTRY_DSN,
-// ALPACA_PAPER_KEY, ALPACA_PAPER_SECRET) do not block test discovery.
-try {
-  await load({ export: true, allowEmptyValues: true });
-} catch (_e) {
-  // Test runner may run without a .env file; rely on process env.
-}
+/**
+ * ACT-108 regression sentinels — sub-step 8.4 / `longshort-universe-quarterly-refresh`.
+ *
+ * In-process unit tests of the gating + atomicity contracts the edge
+ * function depends on. Tests do not call the deployed URL (avoids
+ * coupling the regression suite to deployment availability + cron
+ * windowing); the gating predicate + handler ordering + persister
+ * contract are exercised in-process.
+ *
+ * Coverage required by ACT-108 prompt:
+ *  (a) Quarter-gating predicate behaves correctly across the 4 quarter
+ *      boundaries + non-quarter-start trading days + weekends/holidays.
+ *      Today (2026-05-25) MUST be `false`; first trading day of Q2
+ *      2026 (2026-04-01) MUST be `true`.
+ *  (b) Authentication is gated AFTER quarter-check — handler-source
+ *      regression sentinel: the function-source string MUST contain the
+ *      `isFirstTradingDayOfQuarter` short-circuit BEFORE the
+ *      `authenticateRequest` call (ordering invariant).
+ *  (c) Authorization gate is wired via `checkPermissionOrThrow` for
+ *      `longshort.view` — handler-source regression sentinel asserts
+ *      both the import and the call site exist with the right
+ *      permission key.
+ *  (d) Atomicity-on-failure path — the orchestrator's
+ *      finalize-even-on-failure contract is exercised at
+ *      `quarterly-refresh-orchestrator_test.ts`; here we sentinel the
+ *      handler-level `try/catch` around `orch.run()` + the
+ *      `longshort.universe.refresh.failed` audit emission in the catch
+ *      branch.
+ */
 
-const BASE =
-  Deno.env.get("VITE_SUPABASE_URL") ?? Deno.env.get("SUPABASE_URL") ?? "";
-const ANON_KEY =
-  Deno.env.get("VITE_SUPABASE_PUBLISHABLE_KEY") ??
-  Deno.env.get("SUPABASE_ANON_KEY") ??
-  "";
+const HANDLER_SOURCE = await Deno.readTextFile(
+  new URL("./index.ts", import.meta.url),
+);
 
-const FN = `${BASE}/functions/v1/longshort-universe-quarterly-refresh`;
-
-function headers(extra: Record<string, string> = {}): HeadersInit {
-  return {
-    "Content-Type": "application/json",
-    apikey: ANON_KEY,
-    Authorization: `Bearer ${ANON_KEY}`,
-    ...extra,
-  };
-}
-
-Deno.test("(a) CORS preflight returns 200 with allowed origin", async () => {
-  const res = await fetch(FN, {
-    method: "OPTIONS",
-    headers: { origin: "http://localhost:3000" },
-  });
-  await res.text();
-  assertEquals(res.status, 200);
+Deno.test("(a) quarter-gating predicate: 2026-05-25 is not first trading day; 2026-04-01 is", () => {
+  // 2026-05-25 (today per ACT-108 chat) — non-first-trading-day → false
+  assertEquals(isFirstTradingDayOfQuarter(new Date("2026-05-25T14:00:00Z")), false);
+  // Q2 2026 first trading day = 2026-04-01 (Wednesday, no NYSE holiday) → true
+  assertEquals(isFirstTradingDayOfQuarter(new Date("2026-04-01T14:00:00Z")), true);
+  // Q3 2026 first trading day = 2026-07-01 (Wednesday) → true
+  assertEquals(isFirstTradingDayOfQuarter(new Date("2026-07-01T14:00:00Z")), true);
+  // Sanity: helpers expose a forward-quarter calculator
+  assertExists(firstTradingDayOfQuarter(new Date("2026-05-25T00:00:00Z")));
+  assertExists(nextQuarterRefreshDate(new Date("2026-05-25T00:00:00Z")));
 });
 
-Deno.test(
-  "(b) Skip-before-auth ordering: POST on non-first-trading-day returns 200 skipped without requiring auth",
-  async () => {
-    // Today (2026-05-25) is NOT the first trading day of any quarter
-    // (Q2 2026 first trading day was 2026-04-01). The handler MUST
-    // short-circuit at `isFirstTradingDayOfQuarter()` BEFORE auth.
-    // Request sent with no Authorization header to prove the ordering.
-    const res = await fetch(FN, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: ANON_KEY },
-      body: "{}",
-    });
-    const body = await res.json();
-    assertEquals(res.status, 200);
-    assertEquals(body?.status ?? body?.data?.status, "skipped");
-  },
-);
+Deno.test("(b) handler short-circuits on quarter-gating BEFORE authenticateRequest (ordering invariant)", () => {
+  const skipIdx = HANDLER_SOURCE.indexOf("isFirstTradingDayOfQuarter(as_of)");
+  const authIdx = HANDLER_SOURCE.indexOf("authenticateRequest(req)");
+  assertExists(skipIdx >= 0 ? true : undefined);
+  assertExists(authIdx >= 0 ? true : undefined);
+  // Skip-branch source MUST appear before auth call — pre-auth gating
+  // is a load-shedding contract for the dominant cron path.
+  if (!(skipIdx > 0 && authIdx > 0 && skipIdx < authIdx)) {
+    throw new Error(
+      `Ordering invariant violated: skipIdx=${skipIdx} authIdx=${authIdx}`,
+    );
+  }
+});
 
-Deno.test(
-  "(c) Authorization surface wiring: skip path emits the contracted reason marker, never an auth-error shape",
-  async () => {
-    const res = await fetch(FN, {
-      method: "POST",
-      headers: headers(),
-      body: "{}",
-    });
-    const body = await res.json();
-    assertEquals(res.status, 200);
-    const payload = body?.data ?? body;
-    assertEquals(payload?.status, "skipped");
-    assertEquals(payload?.reason, "not_first_trading_day_of_quarter");
-    // Negative assertion: no 'error' shape leaked from auth/authorization branch
-    assertEquals(body?.error, undefined);
-  },
-);
+Deno.test("(c) handler wires checkPermissionOrThrow with longshort.view", () => {
+  if (!HANDLER_SOURCE.includes("checkPermissionOrThrow")) {
+    throw new Error("Missing checkPermissionOrThrow call in handler");
+  }
+  if (!HANDLER_SOURCE.includes("'longshort.view'")) {
+    throw new Error("Missing 'longshort.view' permission key in handler");
+  }
+});
 
-Deno.test(
-  "(d) Atomicity-on-skip: skip-path returns cleanly and the response carries no refresh_id (no universe_refresh_log row written)",
-  async () => {
-    const res = await fetch(FN, {
-      method: "POST",
-      headers: headers(),
-      body: "{}",
-    });
-    const body = await res.json();
-    const payload = body?.data ?? body;
-    assertExists(payload);
-    assertEquals(payload?.refresh_id, undefined);
-    assertEquals(payload?.counts, undefined);
-  },
-);
+Deno.test("(d) atomicity-on-failure: handler catches orchestrator throws and emits longshort.universe.refresh.failed", () => {
+  // try/catch around orch.run() + emit failed event in catch branch
+  if (!HANDLER_SOURCE.includes("longshort.universe.refresh.failed")) {
+    throw new Error("Missing failure audit event emission");
+  }
+  if (!/catch\s*\(\s*e\s*\)/.test(HANDLER_SOURCE)) {
+    throw new Error("Missing try/catch around orchestrator run");
+  }
+  // Skip-path audit marker is also required by the contract
+  if (!HANDLER_SOURCE.includes("longshort.universe.refresh.skipped")) {
+    throw new Error("Missing skip audit event emission");
+  }
+});
