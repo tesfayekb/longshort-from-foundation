@@ -1615,6 +1615,70 @@ Key event chains showing upstream triggers and downstream effects:
 | **Added by** | PLAN-TRADING-001-LONGSHORT-001 Step 5.3 |
 | **Lifecycle** | active |
 
+#### `longshort.universe.refresh.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.universe.refresh.started` |
+| **Module** | longshort/universe |
+| **Version** | 1 |
+| **Classification** | audit-critical (job-execution start marker; first-trading-day-of-quarter only) |
+| **Description** | Emitted by `longshort-universe-quarterly-refresh` after the quarter-gating check passes and authentication + `longshort.view` authorization succeed, but before pipeline execution begins. Pairs with `.completed` or `.failed` on the same correlation_id. |
+| **Emitted by** | `supabase/functions/longshort-universe-quarterly-refresh/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `action`, `correlation_id` (request lifecycle UUID), `metadata` = `{ as_of }` |
+| **Added by** | FP-008 sub-step 8.4, ACT-108 |
+| **Lifecycle** | active |
+
+#### `longshort.universe.refresh.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.universe.refresh.completed` |
+| **Module** | longshort/universe |
+| **Version** | 1 |
+| **Classification** | audit-critical (job-execution success marker; AC-08 evidence trail) |
+| **Description** | Emitted on successful pipeline completion + `universe_refresh_log` finalize. Carries refresh_id + counts (raw / post_filters / eligible_long / eligible_short) + outcome='completed'. |
+| **Emitted by** | `supabase/functions/longshort-universe-quarterly-refresh/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `action`, `correlation_id`, `metadata` = `{ refresh_id, as_of_date, quarter_label, outcome, total_constituents_raw, total_post_filters, total_eligible_long, total_eligible_short }` |
+| **Added by** | FP-008 sub-step 8.4, ACT-108 |
+| **Lifecycle** | active |
+
+#### `longshort.universe.refresh.skipped` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.universe.refresh.skipped` |
+| **Module** | longshort/universe |
+| **Version** | 1 |
+| **Classification** | audit-critical (cron-no-op marker; emitted pre-auth on non-first-trading-day requests) |
+| **Description** | Emitted when `isFirstTradingDayOfQuarter(as_of)` returns false. This is the dominant production path (≥99% of daily cron firings) — the job is registered to fire daily during the first week of Jan/Apr/Jul/Oct and skip on all but the first trading day of the quarter. |
+| **Emitted by** | `supabase/functions/longshort-universe-quarterly-refresh/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `action`, `correlation_id`, `metadata` = `{ reason: 'not_first_trading_day_of_quarter', as_of }` |
+| **Added by** | FP-008 sub-step 8.4, ACT-108 |
+| **Lifecycle** | active |
+
+#### `longshort.universe.refresh.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.universe.refresh.failed` |
+| **Module** | longshort/universe |
+| **Version** | 1 |
+| **Classification** | audit-critical (job-execution failure marker; paired with `universe_refresh_log.outcome='failed'`) |
+| **Description** | Emitted on either (a) pipeline-internal failure surfaced by the orchestrator with `outcome='failed'` + `failure_reason`, or (b) handler-level catch surrounding `orch.run()` where the orchestrator itself threw before finalize could record outcome. Paired with `universe_refresh_log.outcome='failed'` row when (a); orphan when (b). |
+| **Emitted by** | `supabase/functions/longshort-universe-quarterly-refresh/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `action`, `correlation_id`, `metadata` = `{ refresh_id?, outcome:'failed', failure_reason?, error? }` |
+| **Added by** | FP-008 sub-step 8.4, ACT-108 |
+| **Lifecycle** | active |
+
 ---
 
 ## Dependencies
