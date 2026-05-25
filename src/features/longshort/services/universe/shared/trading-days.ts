@@ -187,3 +187,65 @@ export function nextQuarterRefreshDate(as_of: Date): string {
   }
   return firstTradingDayOfQuarter(year, (q + 1) as 1 | 2 | 3 | 4);
 }
+
+// ===== NEW exports for FP-008 sub-step 8.5 §3.3e cadence-gating (ACT-109) =====
+
+/**
+ * Returns the first TRADING day on/after the given UTC midnight Date.
+ * If `d` is itself a trading day it is returned unchanged.
+ */
+function firstTradingDayOnOrAfter(d: Date): Date {
+  let cursor = new Date(d.getTime());
+  while (!isTradingDay(cursor)) {
+    cursor = new Date(cursor.getTime() + MS_PER_DAY);
+  }
+  return cursor;
+}
+
+/**
+ * True if `d` is the T+1 trading day following either the 15th of the
+ * current month OR the last calendar day of the prior month — the two
+ * FINRA short-interest publication anchors per §3.3e.
+ *
+ * Per CROSSWIND §3.3 spec: "short-interest exclusions update twice monthly
+ * with SEC reports" — FINRA publishes T+1 after the 15th and T+1 after
+ * end-of-month settlement dates. The §3.3e refresh-job handler (sub-step
+ * 8.5 / ACT-109) uses this helper to gate twice-monthly invocation
+ * (Option 2α — single job_registry row + daily cron + handler-internal
+ * cadence check).
+ *
+ * Algorithm:
+ *   - anchor T = the 15th of `d`'s month, OR the last calendar day of the
+ *     PRIOR month. For each anchor:
+ *       settlement = first trading day on/after anchor (handles weekend /
+ *                    holiday anchors by rolling forward to a trading day)
+ *       trigger    = `tradingDaysAfter(settlement, 1)`  (T+1 publish)
+ *     If `d` equals either trigger, return true.
+ *   - Non-trading dates always return false.
+ *
+ * Edge cases honored:
+ *   - 15th on Friday          → settlement=Fri, trigger=Mon.
+ *   - 15th on Saturday        → settlement=Mon, trigger=Tue.
+ *   - EOM on a trading day    → settlement=EOM, trigger=next trading day.
+ *   - EOM on Saturday         → settlement=Mon, trigger=Tue (following).
+ *   - Anchor or settlement on NYSE holiday → rolls forward identically.
+ */
+export function isShortInterestTriggerDay(d: Date): boolean {
+  if (!isTradingDay(d)) return false;
+  const dIso = isoDate(d);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+
+  // Anchor A — the 15th of the current month.
+  const anchorA = new Date(Date.UTC(year, month, 15));
+  const triggerA = tradingDaysAfter(firstTradingDayOnOrAfter(anchorA), 1);
+  if (isoDate(triggerA) === dIso) return true;
+
+  // Anchor B — last calendar day of the prior month (month index 0 = Jan;
+  // Date.UTC(year, month, 0) yields the prior month's last day).
+  const anchorB = new Date(Date.UTC(year, month, 0));
+  const triggerB = tradingDaysAfter(firstTradingDayOnOrAfter(anchorB), 1);
+  if (isoDate(triggerB) === dIso) return true;
+
+  return false;
+}
