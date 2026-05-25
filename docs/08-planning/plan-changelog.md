@@ -699,3 +699,17 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | v0.6.2 §22.3 discipline | (a) reference-index updates same-PR; (b) idiom-grep clean; (c) minimum-coupling (stateless rules, no clock injection, no reconcile coupling, no DB writes); (d) plan-version bump per Rule 10. |
 | Approval | Operator approval 2026-05-25: "1A, 2A, 3β. All three Lovable recommendations approved." |
 | Supersession | N/A — additive. |
+
+## v13.15 — 2026-05-25 — FP-008 Sub-Step 8.4 (ACT-108)
+
+| Field | Value |
+|-------|-------|
+| Change Type | Implementation (additive code + first live-DB landing under FP-008 + trading-days relocation) |
+| Scope | §3.4 quarterly atomic refresh job: orchestrator + types + edge function `longshort-universe-quarterly-refresh` + MIG-048 (`universe_refresh_log` table + `longshort.universe.quarterly_refresh` job_registry seed enabled=false) + `trading-days.ts` relocation `hard-exclusions/ → shared/` with quarterly arithmetic helpers appended. |
+| Surfaces resolved | Surface 1 → Option α MIG-049/050/051/052 renumbering (MIG-048 slot consumed at ACT-108 by `universe_refresh_log`); Surface 2 → live `supabaseAdmin` persister adopted at landing; Surface 3 → relocate `trading-days.ts` to `shared/` (second-consumer threshold). |
+| Guardrails | G1 honored (`refresh-jobs/` directly enumerated in DEC-038.1 clause (1)); G2 honored (Polygon constituents are the enrichment input; iShares is cross-check-only). |
+| v0.6.2 §22.3 discipline | (a) reference indices updated same-PR (function-index.md + database-migration-ledger.md + event-index.md + longshort.md + feature-proposals.md Reference Impact); (b) idiom-grep clean; (c) DEC-023 envelope via `createHandler` per T7; `writeStrategyAuditEvent` exclusively (DEC-033 v4.1 / T4); start+finalize atomicity contract for R3; (d) plan v13.14 → v13.15 per Rule 10. |
+| Live-DB evidence | `supabase--read_query` confirmed `job_registry` row `longshort.universe.quarterly_refresh` `enabled=false, status='registered'`. §22.5.1 binding standard satisfied. |
+| Defect class surfaced | #35 — supervisor §22.5.2 over-application when no capability mismatch exists; codification target v0.6.3 §22.3 (f); logged forward alongside #34, no in-cycle correction. |
+| Approval | Operator approval 2026-05-25: "1a 2a go" + post-landing continuation directive `proceed` to complete items 2-5 as ACT-108 (single transaction, not separate ACT). |
+| Supersession | N/A — additive. |
