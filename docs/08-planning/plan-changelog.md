@@ -207,6 +207,25 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved |
 | Supersession Links | None — DEC-003 remains active as the scope-discipline anchor; DEC-030 is an amendment, not a supersession |
 
+### v13.6 → v13.7 (2026-05-25)
+
+**Type:** Additive per Constitution Rule 10 Plan Merge Rule. Retroactive governance reconciliation closing DEC-032 clause (4) FP-006/FP-007 dependency-order loose-end before FP-008 Phase 1 scoping opens.
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.6 → v13.7 |
+| Section IDs Created | `PLAN-CI-001-BOOTSTRAP-001` (FP-007's home; first instance of `PLAN-CI-NNN` plan-section family; orthogonal to `PLAN-TRADING-001` per T6 removability principle) |
+| Section IDs Closed | `PLAN-CI-001-BOOTSTRAP-001` (closed at HEAD `cd4b8a14` retrospectively; closure document at `docs/08-planning/phase-closures/plan-ci-001-bootstrap-001-closure.md`) |
+| FP IDs Created | FP-007 (retroactively authored; reserved at DEC-032 clause (4) on 2026-05-17; entry filed 2026-05-25 at this ACT; status `closed (2026-05-25)`) |
+| Decision IDs Affected | None (DEC-032 clause (4) preserved verbatim; INC-21 records the dependency-order observation against unchanged DEC) |
+| What Changed | FP-007 entry created in feature-proposals.md (slotted between FP-005 and FP-006 numerically; 7 deliverable items + 5 closure-evidence items + 5 out-of-scope items enumerated). New plan section PLAN-CI-001-BOOTSTRAP-001 in master-plan.md (3 sub-steps + closure inventoried). New closure document `docs/08-planning/phase-closures/plan-ci-001-bootstrap-001-closure.md`. INC-21 entry in incidental-findings.md (framing β; process-defect; cross-references §21.10 amendment). ACT-100 entry in action-tracker.md. Master-plan version v13.6 → v13.7. system-state.md current_plan_version + approved_plan_baseline + last_updated. Supervisor-instructions v0.5 → v0.6 amendment (operator-side; §21.10 additive). |
+| Why | Pre-FP-008-scoping sanity check surfaced FP-007 entry absent from feature-proposals.md despite DEC-032 clause (4) reserving the slot as "CI/CD Pipeline Bootstrap" with verbatim language "FP-007 runs in parallel with FP-005 and is a hard prerequisite for FP-006 entry — FP-006 may NOT begin execution until both FP-005 and FP-007 are closed." FP-006 executed and closed (2026-05-25 at ACT-098 HEAD `13fce9cd`) without FP-007 being authored as an FP entry. The CI/CD scope reserved to FP-007 was nonetheless delivered through FP-006's own sub-steps 6.4 (ACT-082 audit-writer trap workflow) + 6.10.1 (ACT-099 transaction Gates 5-9 + override registry). The ordering invariant was violated in form but honored in substance. Per operator framing β calibration: resolution via process-amendment (this ACT) + forward-binding §21.10 supervisor-instruction codification, not informational note (α). |
+| What Stayed | All DECs unchanged. All ADRs unchanged. FP-006 entry preserved verbatim. PLAN-TRADING-001-LONGSHORT-002 closure document preserved verbatim per §22.8.3 grandfathering. All ACT-082 + ACT-099 transaction artifacts preserved (workflow + scripts + registry + annotations). Module status remains `phase-0b-validated`. DW register unchanged (no new DW entries; FP-007 scope was substantively delivered). 79 ACs from FP-006 closure remain locked. |
+| What Was Added | FP-007 entry (retro-authored); PLAN-CI-001-BOOTSTRAP-001 section + closure document; INC-21 entry; ACT-100 entry; this changelog entry; system-state version bump; supervisor-instructions v0.6 (operator-side). Defect classes #20 + #21 logged forward in supervisor self-defect log. |
+| What Was Removed | None — additive only. |
+| Approval Status | Approved per operator standing institutional-grade authority; framing β confirmed by operator pre-draft calibration (2026-05-25); both refinements (machine-checkable §21.10 artifact requirement + PLAN-CI-001-BOOTSTRAP-001 plan-section family) adopted from operator's refinement response. |
+| Supersession Links | N/A — additive; no approved sections superseded. (DEC-032 clause (4) preserved verbatim; INC-21 records observation without amending DEC.) |
+
 ### v13.5 → v13.6 (2026-05-25)
 
 **Type:** Post-closure additive corrective per Constitution Rule 8 5-point procedure + Rule 10 Plan Merge Rule (additive diff to approved baseline). Retires banned-pattern CI enforcement debt within FP-006 governance scope. Transaction completed across ACT-099 partial landing + ACT-099-cont continuation per §22.8.4 honest STOP discipline.
