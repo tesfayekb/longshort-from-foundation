@@ -145,6 +145,21 @@ Each action must include:
 | **Health Impact** | Improved |
 | **Status** | Verified |
 
+### ACT-103: FP-008 Sub-Step 8.0a — Gate 8.0 Closure (DEC-038 + DEC-038.1 Ratification + Per-Sub-Step AC Matrix Authoring)
+
+| Field | Value |
+|-------|-------|
+| **ID** | ACT-103 |
+| **Date** | 2026-05-25 |
+| **Action** | Closed FP-008 Gate 8.0 by ratifying **DEC-038** (Phase 1 universe-component invariants — 8 clauses) and **DEC-038.1** (Phase 1 universe-component architecture — 8 clauses). Authored **38-AC matrix (AC-01 through AC-38)** in PLAN-TRADING-001-LONGSHORT-003 master-plan section decomposing the 13 sub-steps across 4 Phase Gates + closure. FP-008 entry Status updated `approved (execution-pending)` → `execution-in-progress (Gate 8.0 closed at ACT-103; sub-steps 8.1-8.13 pending)`. FP-008 Decision IDs field updated to ratified citation. Gate 8.0 / sub-step 8.0a checkbox ticked. Plan version v13.9 → v13.10. Module status remains `phase-0b-validated`. NO sub-step 8.1+ execution at this ACT. |
+| **Type** | Governance (DEC ratification + AC matrix authoring + FP entry Status update + plan-section Phase Gate tick); first execution-tier sub-step of FP-008 |
+| **Impact Classification** | HIGH per Constitution Rule 11 (financial-critical module; DEC-038 + DEC-038.1 lock invariants + architecture binding all FP-008 sub-step execution). |
+| **Modules Affected** | governance + planning surfaces (approved-decisions.md DEC-038 + DEC-038.1 entries; master-plan.md PLAN-TRADING-001-LONGSHORT-003 AC matrix + Gate 8.0 tick; feature-proposals.md FP-008 entry Status + Decision IDs fields; this action-tracker entry; plan-changelog.md v13.10 entry; system-state.md version bumps); no code modules touched. |
+| **Files Changed** | 6 repo files: approved-decisions.md; master-plan.md; feature-proposals.md; this entry; plan-changelog.md; system-state.md. |
+| **Related Tests** | None at governance-authoring sub-step. The 9-gate strong-evidence.yml workflow + 6 enforcement scripts + docs/banned-patterns.md from FP-007 / ACT-099 remain active. |
+| **Evidence** | (a) §21.10 v0.6.1 5-FP pre-flight chain fully cite-anchored: FP-008 proposal-stage cite via Status field `approved (execution-pending)`; FP-007 sub-case (i) closure SHA `cd4b8a14...`; FP-006 sub-case (ii) closure SHA `13fce9cd...`; FP-005 sub-case (ii) closure SHA `1358904...`; FP-004 sub-case (iii) plan-section PLAN-TRADING-001 + DEC-030/031 active. (b) DEC-038 8 clauses cite verbatim CROSSWIND v0.9 §11.0.7 #10 + §11.0.5 + §3.4 + §3.3 + §10.5 exit gates + DEC-034 clause (3) outcome enum. (c) DEC-038.1 8 clauses cite verbatim DEC-031 folder pattern + DEC-034.1 reconcile() lifecycle + DEC-035 replay determinism + MIG-039 feature_flags table from FP-006. (d) AC matrix 38 ACs cite-anchored to §10.5 deliverables / exit gates / §3 / §11.0.X / DEC-038 references. (e) Per §22.5.1 third clause: zero live-DB / DB schema / RPCs / RLS / migrations / permissions / ENUMs / job_registry touched at this ACT. (f) Per Constitution Rule 8 5-point procedure: all five clauses satisfied. (g) Per Constitution Rule 10 Plan Merge Rule: additive diff; no superseded sections. (h) Per Constitution Rule 11 financial-critical override: HIGH classification + full governance attestation. (i) Module status remains `phase-0b-validated`; transitions only at sub-step 8.13. (j) No new defect classes logged. |
+| **Status** | Verified |
+
 ### ACT-002: Hardened Performance Documentation Suite
 
 | Field | Value |
