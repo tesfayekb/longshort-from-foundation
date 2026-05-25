@@ -407,3 +407,11 @@ All `secret` and `infrastructure-critical` vars must be reviewed quarterly to co
 - [Function Index](function-index.md)
 - [Route Index](route-index.md)
 - [Event Index](event-index.md)
+
+### `POLYGON_API_KEY` — reused for earnings calendar (§3.3a) at ACT-107
+
+Surface-1 disposition (ACT-107): `PolygonEarningsCalendarFetcher` for §3.3a reuses the existing `POLYGON_API_KEY` (registered at ACT-105 for constituent ingestion + enrichment). No new env var. If Polygon plan tier does not include the earnings endpoint, fallback per Surface-1 contingency requires a new `EARNINGS_CALENDAR_API_KEY` env var registered alongside the fallback fetcher class.
+
+### No env var added for §3.3e short-interest (FINRA)
+
+Surface-2 disposition (ACT-107): `FinraShortInterestFetcher` uses public FINRA bulk CSV; no auth, no new env var.
