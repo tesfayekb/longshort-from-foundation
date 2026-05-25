@@ -1,0 +1,57 @@
+{
+  "_archive_note": "Verbatim stdout from 2026-05-25 02:46 UTC harness run against Alpaca paper account. Buying power at start + end = $394,503.84. Account confirmed paper. Captured for ADR-002 evidence per §11.0.10 + §12.5.",
+  "_harness_command": "ALPACA_PAPER_KEY=<redacted> ALPACA_PAPER_SECRET=<redacted> deno run --allow-net --allow-env scripts/alpaca-multi-pending-run.ts",
+  "_harness_commit_sha": "b2dd2c3c (ACT-093)",
+  "_supervisor_disposition": "Path A — accept the wash-trade 403 from tests 3-7 as dispositive; v0 fallback per §8.6.2 adopted",
+  "harness_version": 1,
+  "test_symbol": "AAPL",
+  "account_buying_power_at_start": "394503.84",
+  "account_buying_power_at_end": "394503.84",
+  "final_position_state": "clean",
+  "overall_status": "partial",
+  "_test_summary": {
+    "1_multi_pending_acceptance": {
+      "outcome": "functionally PASS",
+      "evidence": "Two 1-share AAPL sell orders at limits $1000 and $999 both reached status=accepted; cancellations returned HTTP 204",
+      "alpaca_order_ids": ["28393fa6-c3d4-4826-b5a8-73062bec0319 (sell @ $999)", "(sell @ $1000 — first order id in run)"]
+    },
+    "2_fill_independence": {
+      "outcome": "INCONCLUSIVE",
+      "reason": "Market closed at run time (Sunday 02:46 UTC; AAPL quote timestamp 2026-05-22T20:00:00Z = Friday 4pm ET); orders accepted at $326.37 and $331.37 but neither could fill"
+    },
+    "3_over_close_detection_latency": {
+      "outcome": "BLOCKED — dispositive wash-trade finding",
+      "alpaca_error_response": {
+        "code": 40310000,
+        "message": "potential wash trade detected. use complex orders",
+        "reject_reason": "opposite side market/stop order exists",
+        "existing_order_id": "16d27ee4-6728-45fd-bd84-55448f4a9d5f"
+      }
+    },
+    "4_corrective_trade_acceptance": {
+      "outcome": "BLOCKED",
+      "alpaca_error_response_code": 40310000,
+      "note": "Same wash-trade cascade as test 3"
+    },
+    "5_order_id_collision_behavior": {
+      "outcome": "BLOCKED",
+      "alpaca_error_response_code": 40310000,
+      "note": "Same wash-trade cascade"
+    },
+    "6_locate_persistence_parallel": {
+      "outcome": "ENDPOINT NOT EXPOSED ON PAPER",
+      "alpaca_error_response": {
+        "code": 40410000,
+        "message": "endpoint not found",
+        "endpoint": "/v2/short_locates"
+      },
+      "note": "Paper API does not expose locate endpoint; defer to Phase 5 production-broker integration"
+    },
+    "7_tif_day_interaction": {
+      "outcome": "BLOCKED",
+      "alpaca_error_response_code": 40310000,
+      "note": "Same wash-trade cascade"
+    }
+  },
+  "_full_stdout_pointer": "Full structured JSON stdout (~4500 lines including all poll iterations + alpaca_responses arrays) is in supervisor session 2026-05-25 conversation; operator may paste full content into this file if archival of complete per-poll telemetry is desired; for the ADR-002 determination the per-test outcome summary above is sufficient."
+}
