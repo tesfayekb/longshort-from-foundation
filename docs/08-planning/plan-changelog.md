@@ -627,3 +627,22 @@ HIGH — loss of traceability breaks system integrity and decision history.
 - [Master Plan](master-plan.md)
 - [Approved Decisions](approved-decisions.md)
 - [Plan Review Log](plan-review-log.md)
+
+### v13.10 → v13.11 (2026-05-25)
+
+**Type:** Additive per Constitution Rule 10 Plan Merge Rule. FP-008 sub-step 8.1 — Constituent ingestion (Polygon primary + iShares secondary). First code-touching sub-step of FP-008. ACT-104.
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.10 → v13.11 |
+| Section IDs Created | None (PLAN-TRADING-001-LONGSHORT-003 created at v13.9; this version ticks sub-step 8.1 within it) |
+| Section IDs Closed | None (sub-step 8.1 closed; Gate 8.1 remains open pending sub-steps 8.2-8.5) |
+| FP IDs Created | None (FP-008 Status field annotated with sub-step 8.1 closure note) |
+| Decision IDs Affected | None (DEC-038 + DEC-038.1 ratified at v13.10 govern this sub-step verbatim; no amendment) |
+| What Changed | NEW `supabase/functions/_shared/longshort-universe-interfaces.ts` (interfaces + types + error class). NEW `src/features/longshort/services/universe/polygon-constituent-fetcher.ts` (PRIMARY, AC-04). NEW `src/features/longshort/services/universe/ishares-constituent-fetcher.ts` (SECONDARY, AC-05; iShares IVV/IJH per Option B). NEW companion Deno `_test.ts` files (14 tests total). Master-plan sub-step 8.1 checkbox ticked. FP-008 Status field augmented with sub-step 8.1 closure annotation. ACT-104 in action-tracker.md. system-state.md `current_plan_version` + `approved_plan_baseline` bumped. |
+| Why | First code-touching FP-008 sub-step per Gate 8.1 (sub-steps 8.1-8.5 per §10.5 deliverables 1-5). Establishes the constituent-ingestion data-flow foundation; sub-steps 8.2 (filters) / 8.3 (hard exclusions) / 8.4 (quarterly refresh) / 8.5 (continuous refresh) all consume the `ConstituentFetcher` contract landed here. Option B (iShares IVV/IJH) selected for the secondary cross-check source per Lovable Finding 3 evaluation + operator Route 1 approval: paid S&P direct rejected as cost-prohibitive; Wikipedia rejected as unauthoritative; iShares ETF holdings selected as free + machine-readable + daily-refreshed. Resolved Findings 1+2 in-line per operator: (1a) `Promise<T \| null>` typed-absence per §2 axiom 3 — no Optional<T> library; (2a) `as_of: Date` parameter — no Clock interface mirror (the parameter idiom is already established by `BrokerPositionFetcher` et al. at FP-006). |
+| What Stayed | All DECs / ADRs / prior FP entries / closure documents preserved verbatim. Module status remains `phase-0b-validated` (transitions only at sub-step 8.13 closure). No live-DB / DB schema / RPCs / RLS / migrations / permissions / ENUMs / job_registry touched (sub-step is pure module-side code). `universe.enabled=false` flag (deferred to sub-step 8.6 MIG-051) keeps fetchers as dead code until quarterly-refresh job at sub-step 8.4 wires them. 9-gate `strong-evidence.yml` workflow + 6 enforcement scripts + `docs/banned-patterns.md` from FP-007 remain active; both new fetchers comply (zero wall-clock reads; zero silent sentinels; HTTP fetch injectable). |
+| What Was Added | 5 new code files (1 interface module + 2 fetcher implementations + 2 Deno test files); ACT-104 entry; this changelog entry; master-plan sub-step 8.1 tick; FP-008 Status annotation; system-state version bump. |
+| What Was Removed | None — additive only. |
+| Approval Status | Approved per operator Route 1 (1a + 2a + Option B) at FP-008 sub-step 8.1 execution prompt; no DEC amendment cycle invoked; no supervisor review cycle invoked. |
+| Supersession Links | N/A — additive; no approved sections superseded. |
