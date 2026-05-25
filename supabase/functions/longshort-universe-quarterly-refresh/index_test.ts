@@ -23,11 +23,20 @@
  * Tests run against the deployed edge function and follow the dotenv
  * pattern documented for shared-test infrastructure.
  */
-import "https://deno.land/std@0.224.0/dotenv/load.ts";
+import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 import {
   assertEquals,
   assertExists,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
+
+// Load .env with allowEmptyValues so the example file's
+// unset declarations (VITE_TURNSTILE_SITE_KEY, VITE_SENTRY_DSN,
+// ALPACA_PAPER_KEY, ALPACA_PAPER_SECRET) do not block test discovery.
+try {
+  await load({ export: true, allowEmptyValues: true });
+} catch (_e) {
+  // Test runner may run without a .env file; rely on process env.
+}
 
 const BASE =
   Deno.env.get("VITE_SUPABASE_URL") ?? Deno.env.get("SUPABASE_URL") ?? "";
