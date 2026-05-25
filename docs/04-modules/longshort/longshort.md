@@ -73,6 +73,26 @@ This table maps every CROSSWIND v0.9 design-source part and key section anchor t
 
 **Column semantics.** *Source anchor* identifies a specific file or section in `design-source/`. *Brief description* summarizes what that anchor covers so a reader does not need to open the file. *Tracking FP* names the feature proposal that advances that anchor's deliverable: **FP-005** = the bootstrap surface itself (intentionally narrow per DEC-032 clause 1, mostly scaffolding rows); **FP-006** = CROSSWIND v0.9 implementation work the bootstrap does not undertake; **v0.10+** = items the CROSSWIND spec itself defers to a future spec version.
 
+### Universe Component (Phase 1 — In-Progress)
+
+Per FP-008 (PLAN-TRADING-001-LONGSHORT-003) + DEC-038 + DEC-038.1. Builds and validates the universe component as a complete operational deliverable behind the reconciliation engine. Per CROSSWIND §10.5: "Build and validate the universe component as a complete operational deliverable behind the reconciliation engine."
+
+**Status at sub-step 8.1 close (ACT-104, HEAD `f5d5a1e2`):** Constituent ingestion infrastructure operational. Primary source: Polygon reference data API for S&P 500 + S&P 400 (AC-04). Secondary cross-check source: iShares ETF holdings (IVV for S&P 500, IJH for S&P 400) per Option B selection (AC-05). Shared interface layer at `supabase/functions/_shared/longshort-universe-interfaces.ts` (`UniverseConstituent` + `ConstituentFetcher` + `IndexId` + `ISHARES_ETF_FOR_INDEX`) — will be consumed by `verify_universe_membership` at sub-step 8.7 per DEC-038.1 clause (3).
+
+**Sub-modules (per DEC-038.1 clause (1) folder pattern; some flat-folder-resident at sub-step 8.1; sub-step 8.2+ introduces nesting):**
+- Constituent ingestion (LANDED at 8.1 / ACT-104) — flat-folder under `src/features/longshort/services/universe/` currently; will relocate to `constituent-ingestion/` sub-folder at sub-step 8.2 alongside `filters/` introduction
+- §3.2 universe filters (PENDING sub-step 8.2) — `filters/` sub-folder
+- §3.3 hard-exclusion rules (PENDING sub-step 8.3) — `hard-exclusions/` sub-folder
+- Quarterly atomic + continuous hard-exclusion refresh jobs (PENDING sub-steps 8.4-8.5) — `refresh-jobs/` sub-folder
+- `verify_universe_membership` real implementation (PENDING sub-step 8.7) — `verify-membership/` (edge-function tier — under `supabase/functions/_shared/longshort-verifiers/`)
+- §11.3 health monitoring (PENDING sub-step 8.9) — `health-monitoring/` sub-folder
+
+**Feature-flag chokepoint:** `universe.enabled` per DEC-038 clause (5) + DEC-038.1 clause (5); default `universe.enabled=false` (will be seeded at MIG-051 / sub-step 8.6). Wrapping lives at module entry chokepoint; consumers receive typed-absence (`Promise<UniverseConstituent[] | null>` returning `null`) when disabled.
+
+**Banned-pattern enforcement:** Zero `Date.now()` outside sanctioned `as_of` parameter chokepoint per DEC-034 clause (4) + DEC-038 clause (6). Zero sentinel fallbacks per DEC-034 clause (2). Zero `logAuditEvent` imports per DEC-033 v4.1; audit emission via `writeStrategyAuditEvent`. All 6 FP-007 / ACT-099 enforcement scripts (sentinel-patterns + wall-clock + paper-only-URL + unguarded-parsefloat + catch-returns-zero + audit-writer-trap) verified clean on the new code paths.
+
+**Detailed component documentation:** Pending sub-step 8.10 / AC-20 (`docs/04-modules/longshort/universe/universe.md`; ART-NNN registration).
+
 ## Cross-references
 
 - Binding architectural pattern: `docs/04-modules/strategy-module-pattern.md` (T1–T9 contract)
