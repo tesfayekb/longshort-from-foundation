@@ -476,6 +476,61 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 
 ---
 
+### PLAN-TRADING-001-LONGSHORT-003 — Long-Short Strategy Module Phase 1: Universe Ingestion and Management
+**Parent Plan:** PLAN-TRADING-001
+**Status:** `approved (execution-pending)` (governance-authored at ACT-102; sub-step execution opens at sub-step 8.0a per FP-006 precedent)
+**Feature Proposal:** FP-008
+**Risk Level:** HIGH (Constitution Rule 11 — financial-critical module; per FP-008 R1-R7 risk register)
+**Module Doc:** [longshort/universe/universe.md](../04-modules/longshort/universe/universe.md) (to be created at sub-step 8.10; ART-NNN)
+**CROSSWIND anchors:** §10.5 Phase 1 (phase-plan view: 12 deliverables + 8 exit gates + kill condition + 2-4 week duration estimate); §3 (substantive universe definition: §3.1 base S&P 500 + S&P 400; §3.2 filters; §3.3 8-rule hard exclusions; §3.4 refresh cadences); §11.0.5 (ingestion-time reconciliation operational per A4); §11.0.7 #10 (verify_universe_membership — was stubbed at FP-006 Gate 6.3; FP-008 makes it real); §11.3 (health monitoring); §11.4 (testing); §12.4 (component documentation).
+
+**Dependencies:**
+- FP-004 closed — architectural pattern via DEC-030 + DEC-031 (status: both `active`; per §21.10 v0.6.1 sub-case (iii))
+- FP-005 closed — Bootstrap foundation; closure SHA `1358904cc7c03099b08860b019cb25c99f8ca1ac` per ACT-072 (sub-case (ii))
+- FP-006 closed — Phase 0B foundation; closure SHA `13fce9cd9bd4990391d111a6123f52631dfee25d` per ACT-098 (sub-case (ii))
+- FP-007 closed — CI/CD bootstrap; closure SHA `cd4b8a14e37ad42986428380a3359dc9ec48e993` per ACT-099-cont (sub-case (i))
+
+**Sub-step inventory (13 + closure):**
+  - [ ] 8.0a — Prerequisites + DEC-038 (Phase 1 universe-component invariants) ratification + DEC-038.1 (Phase 1 architecture, if needed) ratification + per-sub-step AC matrix authoring (mirrors FP-006 Round Final consolidation)
+  - [ ] 8.1 — Constituent ingestion (S&P 500 + S&P 400) from primary source per §3.1; per §10.5 deliverable 1
+  - [ ] 8.2 — Universe filters implementation per §3.2 (avg daily $-volume ≥ $20M; share price ≥ $5; market cap ≥ $1B; listing age ≥ 1 year; ADRs excluded; REITs excluded)
+  - [ ] 8.3 — Hard exclusion infrastructure per §3.3 (8 rules: 3.3a earnings windows; 3.3b M&A; 3.3c halts; 3.3d hard-to-borrow; 3.3e short interest; 3.3f secondary offerings N/A v1; 3.3g going-concern N/A v1; 3.3h no sector restrictions); halt-feed dependency per R4 risk
+  - [ ] 8.4 — Quarterly atomic refresh job (first trading day Jan/Apr/Jul/Oct per §3.4)
+  - [ ] 8.5 — Continuous hard-exclusion refresh
+  - [ ] 8.6 — Schema migrations MIG-048 (universe_membership) + MIG-049 (hard_exclusions); both keyed by (operator_id, ticker, as_of_date) per multi-instance optionality; per §22.5.1 live-DB verification mandatory
+  - [ ] 8.7 — verify_universe_membership #10 real implementation (was stub at FP-006 Gate 6.3 verify_* batch C); consumes universe component output; emits reconciliation_events rows under 5-value outcome enum per DEC-034 (3)
+  - [ ] 8.8 — Ingestion-time cross-check operational per §11.0.5 (per A4 — operational, not just documented); cross-check Polygon reference vs secondary source; divergence emits reconciliation_events row with `outcome = failure_handled` or `failure_escalated`
+  - [ ] 8.9 — Health monitoring per §11.3 (universe size; filter rates; hard exclusion counts)
+  - [ ] 8.10 — Component documentation per §12.4 (`docs/04-modules/longshort/universe/universe.md`; ART-NNN registration)
+  - [ ] 8.11 — Replay-test integration per §10.5 deliverable 11 + §11.10 (universe ingestion replayable against captured constituent data)
+  - [ ] 8.12 — Runbooks for known failure modes per §10.5 deliverable 12 (quarterly refresh failure; cross-check noise classification; halt-feed unavailable; earnings-calendar feed failure)
+  - [ ] 8.13 — Closure: PLAN-TRADING-001-LONGSHORT-003 closure document + module status transition `phase-0b-validated` → `phase-1-validated` + system-state update + master-plan section Status `closed` + plan-changelog entry
+
+**Phase Gates:**
+  - Gate 8.0 — DEC ratification + AC matrix authored (sub-step 8.0a)
+  - Gate 8.1 — Universe component buildable: §10.5 deliverables 1-5 closed (sub-steps 8.1 / 8.2 / 8.3 / 8.4 / 8.5)
+  - Gate 8.2 — Schema operational: sub-step 8.6 + live-DB verification
+  - Gate 8.3 — Reconciliation surface live: §10.5 deliverables 7-9 + §11.0.5 + §11.0.7 #10 (sub-steps 8.7 / 8.8 / 8.9)
+  - Gate 8.4 — Documentation + testing + runbooks: §10.5 deliverables 10-12 (sub-steps 8.10 / 8.11 / 8.12)
+  - Closure — sub-step 8.13
+
+**Exit gates to Phase 2 (per CROSSWIND §10.5 verbatim):**
+- [ ] Universe produced reliably for current date; manual sanity review passes
+- [ ] Hard exclusions correctly identify known recent events (synthetic and real)
+- [ ] Quarterly refresh executed successfully at least once in test mode
+- [ ] All §12.4 documentation and §11.4 test coverage met
+- [ ] Component can be disabled via configuration flag without breaking infrastructure
+- [ ] Component dashboards populated and reviewable
+- [ ] verify_universe_membership operates against universe ingestion output without firing `system_bug` events during sub-phase validation
+- [ ] Ingestion-time cross-check operational per A4: cross-check has run on at least one production refresh; emitted reconciliation_events rows are root-caused per §11.0.11
+- [ ] Phase 1 evidence-tier discipline operational: at least one Strong-tier change to universe component has gone through full evidence workflow with <15-minute artifact generation per §10.4 + DEC-037
+
+**Kill condition (per CROSSWIND §10.5):** Universe component cannot be built reliably (e.g., no reliable constituent source, or reconciliation cross-check fires `system_bug` events that cannot be root-caused). Without a universe, there's no Crosswind.
+
+**Plan Version impact:** v13.8 → v13.9 (Rule 8 5-point procedure for new plan-section creation; Rule 10 Plan Merge Rule additive).
+
+---
+
 ### PLAN-CI-001-BOOTSTRAP-001 — CI/CD Pipeline Bootstrap (FP-007)
 
 - **Status:** closed (2026-05-25 — closure document at `docs/08-planning/phase-closures/plan-ci-001-bootstrap-001-closure.md`; retroactively authored at ACT-100 / C.1)
