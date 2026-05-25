@@ -842,6 +842,29 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 | Dependency | MIG-043 (`reconciliation_events` table + `reconciliation_outcome` ENUM). All applied. |
 | Sub-step authority | ACT-090 (FP-006 sub-step 6.6 closure) |
 
+### MIG-048: FP-008 Sub-Step 8.4 — `universe_refresh_log` + `longshort.universe.quarterly_refresh` Job Seed
+
+| Field | Value |
+|---|---|
+| Migration version | `20260525093303` |
+| File | `supabase/migrations/20260525093303_7fe13534-fbe0-4089-9143-bc4ec98ce7d9.sql` |
+| Applied | 2026-05-25 (Lovable atomic create+apply via executor migration tool; §22.5.2 split-execution NOT triggered — see defect class #35 acknowledgment in ACT-108 evidence note (m); §22.5.1 evidence is the binding standard and is satisfied) |
+| Verified | 2026-05-25 (Lovable post-apply via `supabase--read_query`: `SELECT id, enabled, status FROM public.job_registry WHERE id='longshort.universe.quarterly_refresh'` → `[{enabled:false, status:'registered'}]`) |
+| Pattern | CREATE TABLE + ENABLE RLS + SELECT policy (`longshort.view`) + INSERT ON CONFLICT DO NOTHING into `job_registry` (idempotent per D3) |
+| Effect | Adds `public.universe_refresh_log` table (per-refresh atomic audit: `refresh_id`, `operator_id`, `refresh_started_at`, `refresh_completed_at`, `as_of_date`, `quarter_label`, counts, `outcome`, `failure_reason`, `ishares_cross_check_snapshot`). Seeds `job_registry` row `longshort.universe.quarterly_refresh` with `enabled=false`, `status='registered'` per DEC-038.1 clause (4). |
+| Dependency | MIG-025 (`job_registry` table). |
+| Sub-step authority | ACT-108 (FP-008 sub-step 8.4 closure) |
+| AC evidence | AC-08 (quarterly atomic refresh job seeded; enabled=false initially) |
+
+### MIG-049 through MIG-052 — RESERVED (renumbered per ACT-108 Surface 1 Option α)
+
+| Reservation | Originally projected | Now reserved as | Authority |
+|-------------|---------------------|-----------------|-----------|
+| `universe_membership` table | MIG-048 | **MIG-049** | FP-008 sub-step 8.6 (ACT-NNN) — was projected MIG-048 in FP-008 Reference Impact; MIG-048 slot consumed by ACT-108 `universe_refresh_log`. |
+| `hard_exclusions` table | MIG-049 | **MIG-050** | FP-008 sub-step 8.6 (ACT-NNN) — keyed by `(operator_id, ticker, as_of_date)` per DEC-038.1 clause (7). |
+| `job_registry` seeds for `longshort.universe.hard_exclusion_refresh_<rule>` | MIG-050 | **MIG-051** | FP-008 sub-step 8.5 (ACT-NNN) — per §3.4 continuous hard-exclusion refresh cadences; quarterly_refresh seed already landed at MIG-048. |
+| `feature_flags` seed `universe.enabled=false` | MIG-051 | **MIG-052** | FP-008 sub-step 8.6 (ACT-NNN) — per DEC-038 clause (5) + DEC-038.1 clause (5). |
+
 ---
 
 ### Tables (14)
