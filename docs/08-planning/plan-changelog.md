@@ -310,6 +310,23 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved per FP-006 sub-step 6.8 build-phase shape (two-phase: build + populate). |
 | Supersession Links | None. |
 
+### Sub-step implementation continuation (2026-05-25) — Sub-step 6.8 phase 1.5: Test body implementation (ACT-093)
+
+**Type:** Sub-step implementation continuation within FP-006; plan v13.4 unchanged; sub-step 6.8 ticks at ADR-002 follow-on
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.4 (unchanged) |
+| Section IDs Created | None |
+| Decision IDs Affected | None |
+| What Changed | ACT-093 replaces 7 skeleton test bodies in multi-pending-harness.ts with verbatim live-Alpaca implementations. ACT-092 build-phase landed the scaffold (pre-flight + cleanup + JSON output shape + CLI + tests); ACT-093 lands the actual empirical instrument. Each test honors safety guardrails (1-share cap; paper-URL only; per-test cleanup). |
+| Why | ACT-092 prompt left test bodies as skeletons by intention (per-test descriptions in prompt body were narrative, not verbatim code). Operator ran harness post-ACT-092 and got 7 inconclusive results — expected for skeletons. ACT-093 closes the gap with verbatim implementations so the operator's next harness run produces real ADR-002-deciding evidence. |
+| What Stayed | All DECs unchanged. ADRs unchanged (ADR-002 placeholder remains until next follow-on). All other modules frozen. Plan version unchanged. Master-plan 6.8 unticked. |
+| What Was Added | 7 verbatim test bodies; ACT-093 entry; this plan-changelog entry. |
+| What Was Removed | 7 skeleton stub bodies (replaced). |
+| Approval Status | Approved per supervisor self-acknowledgment of ACT-092 prompt ambiguity. |
+| Supersession Links | None — ACT-093 completes ACT-092's build phase work; not supersession. |
+
 ### v13.2 → v13.3 (2026-05-22)
 
 **Type:** In-FP-006 sub-step closure (6.4) + FOLLOWUP-004 architectural fix landing (CI script + ADR-003 + DEC-034 v13.2 amendment)
