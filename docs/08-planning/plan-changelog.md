@@ -207,6 +207,24 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved |
 | Supersession Links | None — DEC-003 remains active as the scope-discipline anchor; DEC-030 is an amendment, not a supersession |
 
+### v13.4 → v13.5 (2026-05-25)
+
+**Type:** FP-006 / PLAN-TRADING-001-LONGSHORT-002 closure — Phase 0B exit boundary established; module status transition; 79/79 acceptance criteria evidenced
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.4 → v13.5 |
+| Section IDs Closed | PLAN-TRADING-001-LONGSHORT-002 (FP-006) — closed in full |
+| Section IDs Created | None at this ACT (Phase 1 FP scoping opens as separate governance cycle) |
+| Decision IDs Affected | None (DECs unchanged; ADR-002 / ADR-003 / ADR-004 / ADR-005 / ADR-006 all introduced during FP-006 sub-steps remain at their respective approval state) |
+| What Changed | FP-006 closed: all 14 plan-section sub-steps (6.0a/6.0b/6.0c/6.1/6.2/6.3a/6.3a.1/6.3b/6.3c/6.3d/6.4/6.4.1/6.5a/6.5b/6.5c/6.5d/6.6/6.7/6.8/6.9/6.10) closed; all 5 phase gates closed (Gate 6.0/6.3/6.4/6.7/6.9); 79-AC coverage matrices satisfied per per-sub-step closure SHAs in the closure document. longshort module status transitioned `foundation-implemented` → `phase-0b-validated` in system-state.md. Master-plan PLAN-TRADING-001-LONGSHORT-002 marked `closed`. ACT-098 entry in action-tracker. Closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-002-closure.md` published with 9 sections (Summary / Acceptance Criteria — Evidence / Migrations / ADRs Created / Reference Index Reconciliation / Tests / Deferred-Follow-up / Grandfathering Note / Lock Statement / Related Documents). |
+| Why | Phase 0B is "the architectural commitment of v0.9 — the reconciliation layer is built before any business logic" per CROSSWIND §10.4 verbatim. FP-006 closure establishes the Phase 0B exit boundary per the supervisor §2 axiom 1 ("Reconciliation precedes business logic"). Phases 1-9 cannot open until Phase 0B closes; this closure unblocks Phase 1 (universe construction) opening as separate FP. The captured-day §10.4 supporting deliverable is honestly deferred to Phase 7 per ADR-006 rather than producing a phantom-completion claim; Constitution Rule 8 documented-reason clause satisfied via ADR-006 + the closure document's Lock Statement. The 11-finding Alpaca integration audit (Lovable independent investigation per §7.4 dual-investigative-tracks + supervisor cross-check at ACT-096 + ACT-097) is locked into DW-058 + DW-059 + DW-062 Required Tests for Closure ensuring Phase 7 fetcher-wiring cannot close until audit findings are remediated. |
+| What Stayed | All DECs unchanged (DEC-001..033 + DEC-034 + DEC-034.1 + DEC-035 + DEC-036 + DEC-037). All ADRs (001..006) at their canonical content. §10.4 / §11.0.11 / §11.0.7 / DEC-034 / DEC-036 spec text unchanged. All code modules frozen. All migrations applied (MIG-039..047). DW-058 / DW-059 / DW-060 / DW-061 / DW-062 remain at status `deferred` (Phase 7 ownership). 17-item Layer-1 out-of-scope list per FP-006 entry intact (DW-044/046/047/051/052/053/054/056 + Phase 1-9 deferrals + trader-class roles + §15 risk register). Reference indexes unchanged at this ACT (per-sub-step updates landed across FP-006 execution; closure attests via per-sub-step closure SHAs). |
+| What Was Added | Closure document `plan-trading-001-longshort-002-closure.md` (NEW); plan version bumps v13.4 → v13.5 in current_plan_version + approved_plan_baseline; modules_implemented narrative + Module Status Table row + active_work narrative all transitioned to reflect FP-006 closure; master-plan 6.10 tick + section Status closed marker; ACT-098 entry; this changelog entry. |
+| What Was Removed | None — closure is an additive plan-state-change per Constitution Rule 10. |
+| Approval Status | Approved per operator standing institutional-grade authority (operator AGREE/AMEND after supervisor proceeds with best decision per v0.5 supervisor instructions). All 5 phase gates verified closed; all 14 sub-steps verified closed; 79-AC coverage matrices satisfied per closure document attestation. |
+| Supersession Links | None at spec or DEC level. PLAN-TRADING-001-LONGSHORT-002 status transitions `approved (execution-pending)` → `closed`. The §10.4 captured-day supporting deliverable is not superseded but deferred per ADR-006 — the deferral disposition is recorded as the FP-006 interpretation of the §10.4 deliverable language, not a spec amendment. Phase 7 FP opens the work registered as DW-058 / DW-059 / DW-060 / DW-061 / DW-062. |
+
 ### v13.3 → v13.4 (2026-05-24)
 
 **Type:** In-FP-006 corrective sub-step insertion (6.4.1) — repo-only remediation closure for operator-applied DB surfaces (MIG-037..MIG-045 per canonical ledger numbering) + Lovable-verified passive smoke (21/21) + Option A §22.5 AMBIGUITY closure for B.3 active 4-RPC cycle (deferred to 6.5.x).
