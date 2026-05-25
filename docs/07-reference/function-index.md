@@ -2014,3 +2014,46 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **File** | `scripts/README.md` |
 | **Purpose** | Inventory + CI integration + banned-pattern self-discipline reference for `scripts/` |
 | **Added by** | FP-006 sub-step 6.4, ACT-082 |
+
+#### `src/features/longshort/services/universe/polygon-constituent-fetcher.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-008 sub-step 8.1) |
+| **Classification** | financial-critical (universe ingestion is upstream of every strategy decision; per DEC-038 clause (1) source-of-truth contract; AC-04) |
+| **Exports** | `class PolygonConstituentFetcher implements ConstituentFetcher` |
+| **File** | `src/features/longshort/services/universe/polygon-constituent-fetcher.ts` |
+| **Tests** | `src/features/longshort/services/universe/polygon-constituent-fetcher_test.ts` — 6 Deno unit tests |
+| **Secret** | `POLYGON_API_KEY` (see env-var-index.md) |
+| **API endpoint** | Polygon reference data API (constituent lists for S&P 500 + S&P 400 per CROSSWIND §3.1) |
+| **Typed-absence idiom** | `Promise<UniverseConstituent[] \| null>` per §2 axiom 3 (`null` = source explicitly reports no data; network/auth/parse failures throw) |
+| **Banned-pattern compliance** | Zero `Date.now()` outside sanctioned `as_of` parameter chokepoint; zero sentinel fallbacks per DEC-034 clause (2); zero `logAuditEvent` imports per DEC-033 v4.1 |
+| **Added by** | FP-008 sub-step 8.1, ACT-104 |
+
+#### `src/features/longshort/services/universe/ishares-constituent-fetcher.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-008 sub-step 8.1) |
+| **Classification** | financial-critical (secondary cross-check source per DEC-038 clause (2) + AC-05 Option B) |
+| **Exports** | `class iSharesConstituentFetcher implements ConstituentFetcher` |
+| **File** | `src/features/longshort/services/universe/ishares-constituent-fetcher.ts` |
+| **Tests** | `src/features/longshort/services/universe/ishares-constituent-fetcher_test.ts` — 8 Deno unit tests |
+| **Secret** | None (public CSV; no auth required) |
+| **Source URLs** | iShares Core S&P 500 ETF (IVV) + iShares Core S&P Mid-Cap ETF (IJH) holdings CSVs from blackrock.com per Option B selection at sub-step 8.1 (operator-confirmed; T+1 lag acceptable per quarterly atomic refresh cadence) |
+| **Caveats** | (1) iShares holdings include cash/derivatives rows that must be filtered out (ticker-prefix + asset-class column). (2) ETF holdings ≠ index membership exactly (sampling/optimization for IJH especially); tolerance threshold for ~0.5% sampling drift is set explicitly at sub-step 8.8 cross-check per DEC-038 clause (2) tolerance class assignment. |
+| **Typed-absence idiom** | `Promise<UniverseConstituent[] \| null>` per §2 axiom 3 |
+| **Banned-pattern compliance** | Same as Polygon fetcher (zero wall-clock leakage; zero sentinel fallbacks; zero `logAuditEvent` imports) |
+| **Added by** | FP-008 sub-step 8.1, ACT-104 |
+
+#### `supabase/functions/_shared/longshort-universe-interfaces.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-008 sub-step 8.1) |
+| **Classification** | shared-contract layer (mirrors `longshort-broker-interfaces.ts` precedent from FP-006 sub-step 6.3a; will be consumed by `verify_universe_membership` at sub-step 8.7 per DEC-038.1 clause (3)) |
+| **Exports** | `type IndexId = 'sp500' \| 'sp400'`; `const ISHARES_ETF_FOR_INDEX: Readonly<Record<IndexId, 'IVV' \| 'IJH'>>`; `interface UniverseConstituent`; `interface ConstituentFetcher`; `type HttpFetch`; `class ConstituentFetchError` |
+| **File** | `supabase/functions/_shared/longshort-universe-interfaces.ts` |
+| **Tests** | (Interfaces only; tested indirectly via concrete-fetcher tests in `src/features/longshort/services/universe/`) |
+| **Cross-tree consumers** | Imported by `src/features/longshort/services/universe/polygon-constituent-fetcher.ts` + `src/features/longshort/services/universe/ishares-constituent-fetcher.ts` via the FP-006 cross-tree import precedent. Will be imported by `supabase/functions/_shared/longshort-verifiers/verify_universe_membership.ts` at sub-step 8.7 per DEC-038.1 clause (3) (native edge-function path). |
+| **Added by** | FP-008 sub-step 8.1, ACT-104 |
