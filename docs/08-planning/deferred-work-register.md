@@ -1440,6 +1440,102 @@ At each phase boundary (before advancing to the next phase):
 
 ---
 
+### DW-058: Phase-7 Fetcher Wiring (src/broker/alpaca/ → supabase/functions/_shared/)
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-058 |
+| **Date Deferred** | 2026-05-25 |
+| **Source Plan Section** | CROSSWIND §10.4 — Phase 0B supporting deliverable "Captured Day 1" (transitive structural prerequisite) |
+| **Source Phase** | Phase 0B (FP-006) |
+| **Title** | Wire real Alpaca fetchers (from src/features/longshort/services/broker/alpaca/) into the periodic-sweep edge function (supabase/functions/longshort-reconciliation-tick/), replacing the 6.3d mock fetchers |
+| **Reason Deferred** | The 6 fetcher implementations landed at sub-step 6.7 (ACT-091) live in the Vite frontend tree (tsconfig.app.json-excluded; Deno-CLI runtime); the periodic-sweep edge function lives in supabase/functions/ (Supabase edge Deno runtime). Cross-tree + cross-runtime integration was not in FP-006 scope. The edge function's inline comment ("MOCK FETCHERS for 6.3d. Real broker integration lands at sub-step 6.7") was aspirational; 6.7 lit up the fetchers but did not perform the cross-tree wiring. ADR-006 records this deferral. |
+| **Blocking Dependencies** | Decision on whether to (a) move broker/alpaca/ modules under supabase/functions/_shared/ as a sibling to longshort-broker-interfaces.ts, or (b) build a thin adapter shim in supabase/functions/_shared/ that lazy-imports from a build artifact; both paths preserve Alpaca paper API contract; either path needs Phase 7 architectural decision |
+| **Impact on Source Phase** | FP-006 closed as `approved-partial` for §10.4 supporting deliverable "Captured Day 1"; priority deliverables 1–3 unaffected |
+| **Future Owner Phase** | Phase 7 — Paper trading (FP-NNN, number TBD when Phase 7 planning opens) |
+| **Future Owner Module** | longshort/services/broker (cross-tree integration owner) |
+| **Required Plan Realignment** | Phase 7 FP scope must include fetcher-wiring sub-step before any continuous-execution sub-step; ADR amendment if path (a) chosen (file moves require import-graph audit) |
+| **Related Decisions** | DEC-036 clauses (1)(2)(3)(7); ADR-006 |
+| **Related Actions** | ACT-091 (6.7 fetchers landed); ACT-095 (this deferral) |
+| **Required Tests for Closure** | Integration test against live Alpaca paper API runs from supabase/functions/ runtime (not just Vite tree); periodic-sweep edge function invokes real fetchers (verified via supabase/functions integration test); zero mock-fetcher references in supabase/functions/longshort-reconciliation-tick/ |
+| **Status** | `deferred` |
+| **Implemented by Action** | (TBD — Phase 7) |
+| **Implemented in Plan Version** | (TBD — Phase 7) |
+
+---
+
+### DW-059: Capture Writer Attached to Reconciliation Lifecycle
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-059 |
+| **Date Deferred** | 2026-05-25 |
+| **Source Plan Section** | CROSSWIND §10.4 — Phase 0B supporting deliverable "Captured Day 1"; CROSSWIND §11.10.2 — fixture storage format |
+| **Source Phase** | Phase 0B (FP-006) |
+| **Title** | Build `.jsonl.zst` fixture writer attached to reconciliation lifecycle so live reconciliation events stream to capture for replay-test PASS evidence |
+| **Reason Deferred** | Sub-step 6.5b (ACT-087) shipped the fixture **reader** (deterministic replay engine consuming `.jsonl.zst` files per v1 format spec from 6.5a). The corresponding **writer** — a module that observes the reconciliation lifecycle and serializes 8 streams (broker_state, signal_quote, reconciliation_quote, broker_quote, halt_feed, locate_feed, corporate_actions, combiner_io) to gzipped JSONL per the same v1 format — was not in FP-006 scope. Capture mechanism is consumer-coupled to live RTH operation, which is Phase 7. ADR-006 records the deferral. |
+| **Blocking Dependencies** | DW-058 (fetcher wiring must precede capture; without real fetchers, captured data is mocked); decision on capture-trigger semantics (event-driven via lifecycle hook vs. periodic polling); decision on capture-storage backing (filesystem replay_storage/ vs. Supabase Storage bucket vs. S3) |
+| **Impact on Source Phase** | Same as DW-058 |
+| **Future Owner Phase** | Phase 7 |
+| **Future Owner Module** | longshort/services/replay (writer-side counterpart to 6.5b reader) |
+| **Required Plan Realignment** | Phase 7 FP must include capture writer + storage backing decision; v1 fixture format from 6.5a held compatible (writer emits, reader consumes; same format) |
+| **Related Decisions** | DEC-035 (replay determinism); ADR-005 (Deno-native replay runtime); ADR-006 |
+| **Related Actions** | ACT-086/087/088 (6.5 framework reader-side); ACT-095 (this deferral) |
+| **Required Tests for Closure** | Writer produces `.jsonl.zst` envelope + events matching v1 spec from 6.5a verbatim; reader (from 6.5b) consumes writer output round-trip without error; byte-identical determinism property held across two writer runs on same input event stream |
+| **Status** | `deferred` |
+| **Implemented by Action** | (TBD — Phase 7) |
+| **Implemented in Plan Version** | (TBD — Phase 7) |
+
+---
+
+### DW-060: Periodic-Sweep Scheduler (pg_cron / Supabase Cron Job)
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-060 |
+| **Date Deferred** | 2026-05-25 |
+| **Source Plan Section** | CROSSWIND §10.4 — Phase 0B supporting deliverable "Captured Day 1" (transitive structural prerequisite); CROSSWIND §11.0.7 #13 — periodic-sweep timeout_s discipline |
+| **Source Phase** | Phase 0B (FP-006) |
+| **Title** | Schedule actual invocation of `longshort-reconciliation-tick` edge function on a recurring basis (every 5 minutes per DEC-034.1 clause (9) seed configuration) via pg_cron or Supabase Cron Job |
+| **Reason Deferred** | `public.job_registry.enabled=true` on `longshort.reconciliation_periodic_sweep` (MIG-045, ACT-081) is a **gate** (dispatcher refuses to run if false), not a **trigger**. No `cron.schedule()` exists in the repo to actually fire the edge function. Scheduling continuous execution is consumer-coupled to having something worth running continuously (real fetchers, capture writer); both are deferred. ADR-006 records this transitively-deferred work. |
+| **Blocking Dependencies** | DW-058 (real fetchers); DW-059 (capture writer) |
+| **Impact on Source Phase** | Same as DW-058/059 |
+| **Future Owner Phase** | Phase 7 |
+| **Future Owner Module** | longshort/services/scheduling (new sub-module; platform job-registry framework consumer) |
+| **Required Plan Realignment** | Phase 7 FP must include cron-schedule activation sub-step; pg_cron extension status verified; production-vs-paper cron-schedule discipline (paper continuous; production behind kill-switch per §11.6) |
+| **Related Decisions** | DEC-034.1 clause (9) (seed config); DEC-035 (replay determinism); ADR-006 |
+| **Related Actions** | ACT-076 (job_registry seed); ACT-081 (periodic-sweep activation); ACT-095 (this deferral) |
+| **Required Tests for Closure** | `pg_cron.job` table contains a row for `longshort.reconciliation_periodic_sweep` with schedule matching seed config; edge function invocation observed via `reconciliation_events` accruing during live RTH operation; kill-switch (§11.6) interaction verified |
+| **Status** | `deferred` |
+| **Implemented by Action** | (TBD — Phase 7) |
+| **Implemented in Plan Version** | (TBD — Phase 7) |
+
+---
+
+### DW-061: Full-RTH-Day Captured-Day Execution + §11.0.11 Firing Analysis
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-061 |
+| **Date Deferred** | 2026-05-25 |
+| **Source Plan Section** | CROSSWIND §10.4 — Phase 0B supporting deliverable "Captured Day 1"; CROSSWIND §11.0.11 — Phase 0B exit gate firing-analysis |
+| **Source Phase** | Phase 0B (FP-006) |
+| **Title** | Execute one full RTH market day (~6.5 hours) of continuous reconciliation tick with capture writer attached; produce a `.jsonl.zst` Captured Day 1 fixture; root-cause every `reconciliation_events` firing produced per §11.0.11 (a)/(b)/(c) classification |
+| **Reason Deferred** | This is the substantive empirical work the §10.4 deliverable describes. It requires DW-058 + DW-059 + DW-060 all operational, plus an operator-supervised RTH market day plus per-firing analysis. ADR-006 explicitly defers because (a) the prerequisites are Phase-7-grade operational infrastructure not Phase-0B foundation; (b) the deliverable's consumer (replay-test PASS evidence for paper trading) is Phase 7 itself; (c) producing it in Phase 0B and waiting weeks/months for Phase 7 to start uses the captured fixture stale. |
+| **Blocking Dependencies** | DW-058, DW-059, DW-060 (all three must close first); operator-supervised RTH market day |
+| **Impact on Source Phase** | FP-006 §10.4 "Captured Day 1" delivered as `deferred` rather than `done`. Priority deliverables 1–3 (replay framework foundation, A1 baseline aggregation, Alpaca paper integration) unaffected; this deferral is supporting-deliverable only |
+| **Future Owner Phase** | Phase 7 |
+| **Future Owner Module** | longshort (whole-system; firing analysis spans all 17 verifiers) |
+| **Required Plan Realignment** | Phase 7 FP must include captured-day execution sub-step + firing-analysis sub-step + (per §11.0.11 b/c outcomes) potential ADR-007+ for any new tolerance bands tuned + potential bug-fix evidence-tier work for any system_bug firings discovered |
+| **Related Decisions** | §11.0.11 firing-analysis discipline; §11.0.9 tolerance-amendment-by-ADR discipline; ADR-006 |
+| **Related Actions** | ACT-095 (this deferral) |
+| **Required Tests for Closure** | `.jsonl.zst` Captured Day 1 fixture exists in replay_storage/ matching v1 envelope; every `reconciliation_events` row from the captured day mapped to (a) documented false positive + tolerance ADR, (b) documented real-world divergence with failure-action evidence, or (c) system_bug with linked fix PR; zero unresolved/unexplained rows per §11.0.11 exit gate |
+| **Status** | `deferred` |
+| **Implemented by Action** | (TBD — Phase 7) |
+| **Implemented in Plan Version** | (TBD — Phase 7) |
+
+---
+
 ## Used By / Affects
 
 - Phase gate closure decisions
