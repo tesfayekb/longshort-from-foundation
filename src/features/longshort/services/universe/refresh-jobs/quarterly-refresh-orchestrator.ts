@@ -102,10 +102,10 @@ export function createQuarterlyRefreshOrchestrator(
 
         // 4. §3.2 filters.
         const filtered = applyFilters(enriched, as_of);
-        total_post_filters = filtered.kept.length;
+        total_post_filters = filtered.eligible.length;
 
         // 5. §3.3 hard-exclusions.
-        const hxResult = applyHardExclusions(filtered.kept, ctx.exclusionInput, as_of);
+        const hxResult = applyHardExclusions(filtered.eligible, ctx.exclusionInput, as_of);
         eligible = hxResult.eligible;
         total_eligible_long = eligible.filter((e) => e.long_eligible).length;
         total_eligible_short = eligible.filter((e) => e.short_eligible).length;
@@ -125,7 +125,7 @@ export function createQuarterlyRefreshOrchestrator(
         failure_reason,
         ishares_cross_check_snapshot: {
           snapshot_at: startedAt,
-          tickers: ishares_cross_check.map((c) => c.symbol),
+          tickers: (ishares_cross_check ?? []).map((c) => c.ticker),
         },
       });
 
@@ -153,6 +153,3 @@ export function createQuarterlyRefreshOrchestrator(
 function isoTimestamp(d: Date): string {
   return d.toISOString();
 }
-
-/** Lookup for filter-pipeline output shape — filters expose `kept` array. */
-type _FiltersKeptCheck = ReturnType<typeof applyFilters>['kept'];
