@@ -713,3 +713,17 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | Defect class surfaced | #35 — supervisor §22.5.2 over-application when no capability mismatch exists; codification target v0.6.3 §22.3 (f); logged forward alongside #34, no in-cycle correction. |
 | Approval | Operator approval 2026-05-25: "1a 2a go" + post-landing continuation directive `proceed` to complete items 2-5 as ACT-108 (single transaction, not separate ACT). |
 | Supersession | N/A — additive. |
+
+### v13.16 — 2026-05-25 — FP-008 Sub-Step 8.5 Closure (ACT-109)
+
+| Field | Value |
+|-------|-------|
+| Change Type | Implementation (additive code + MIG-049 seed-only live-DB landing under FP-008) |
+| Scope | §3.4 continuous hard-exclusion refresh: one-dispatcher edge function `longshort-universe-hard-exclusion-refresh` + per-rule orchestrator skeleton at `hard-exclusions/refresh-jobs/` + MIG-049 seeding 4 `job_registry` rows for `longshort.universe.hard_exclusion_refresh_{3_3a,3_3b,3_3c,3_3e}` all `enabled=false`; `isShortInterestTriggerDay` appended to `shared/trading-days.ts`; 12 audit events registered. |
+| Surfaces resolved | Surface 1 → Option (a) one-dispatcher (operator selection `1a`); Surface 2 → Option α single-row + handler-internal cadence (operator selection `2α`); Surface 0 (pre-flight discovery) → Option α stub-input (`{tickers?: string[]}` body; `universe_refresh_log` confirmed to lack eligible-constituent persistence). |
+| Guardrails | G1 honored (refresh-jobs/ directly enumerated in DEC-038.1 clause (1)); G2 N/A (no iShares path touched). |
+| v0.6.2 §22.3 discipline | (a) reference indices updated same-PR (function-index + event-index + database-migration-ledger + longshort.md + master-plan); (b) idiom-grep clean; (c) one-dispatcher minimum-coupling via DEC-023 envelope; orchestrator stateless + parameterized on `as_of` + universe; (d) plan v13.15 → v13.16 per Rule 10. |
+| Live-DB evidence | `supabase--read_query` confirmed 4 `job_registry` rows seeded `enabled=false, status='registered'`. §22.5.1 binding standard satisfied. §22.5.2 NOT triggered (no capability mismatch). |
+| Defect class surfaced | #36 — supervisor Surface-N pre-resolution without schema-grep verification; codification target v0.6.3 §22.3 (g); logged forward, no in-cycle correction. |
+| Approval | Operator approval 2026-05-25: "1a 2α go" → "α go" (Surface 0). |
+| Supersession | N/A — additive. database-migration-ledger MIG-049-052 renumbering table corrected: hard_exclusion_refresh seeds took MIG-049 slot ahead of sub-step 8.6; universe_membership shifts MIG-049 → MIG-050; hard_exclusions MIG-050 → MIG-051. |

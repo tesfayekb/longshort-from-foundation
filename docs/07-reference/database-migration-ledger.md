@@ -860,10 +860,24 @@ All SQL migrations applied to the external Supabase database, whether from `sql/
 
 | Reservation | Originally projected | Now reserved as | Authority |
 |-------------|---------------------|-----------------|-----------|
-| `universe_membership` table | MIG-048 | **MIG-049** | FP-008 sub-step 8.6 (ACT-NNN) — was projected MIG-048 in FP-008 Reference Impact; MIG-048 slot consumed by ACT-108 `universe_refresh_log`. |
-| `hard_exclusions` table | MIG-049 | **MIG-050** | FP-008 sub-step 8.6 (ACT-NNN) — keyed by `(operator_id, ticker, as_of_date)` per DEC-038.1 clause (7). |
-| `job_registry` seeds for `longshort.universe.hard_exclusion_refresh_<rule>` | MIG-050 | **MIG-051** | FP-008 sub-step 8.5 (ACT-NNN) — per §3.4 continuous hard-exclusion refresh cadences; quarterly_refresh seed already landed at MIG-048. |
-| `feature_flags` seed `universe.enabled=false` | MIG-051 | **MIG-052** | FP-008 sub-step 8.6 (ACT-NNN) — per DEC-038 clause (5) + DEC-038.1 clause (5). |
+| `job_registry` seeds for `longshort.universe.hard_exclusion_refresh_<rule>` | MIG-050 | **MIG-049** | **LANDED** at FP-008 sub-step 8.5 / ACT-109 — see MIG-049 entry below. Slot taken at sub-step 8.5 ahead of the originally projected sub-step-8.6 schema migrations per operator pre-flight at ACT-109 (sub-step 8.5 was the first available migration slot after MIG-048). |
+| `universe_membership` table | MIG-048 | **MIG-050** | FP-008 sub-step 8.6 (ACT-NNN) — shifted from MIG-049 to MIG-050 to accommodate the hard-exclusion-refresh-seed slot taken at MIG-049. |
+| `hard_exclusions` table | MIG-049 | **MIG-051** | FP-008 sub-step 8.6 (ACT-NNN) — keyed by `(operator_id, ticker, as_of_date)` per DEC-038.1 clause (7). |
+| `feature_flags` seed `universe.enabled=false` | MIG-051 | **MIG-052** | FP-008 sub-step 8.6 (ACT-NNN) — per DEC-038 clause (5) + DEC-038.1 clause (5). Slot number unchanged. |
+
+### MIG-049: FP-008 Sub-Step 8.5 — `job_registry` Seeds for `longshort.universe.hard_exclusion_refresh_<rule>` (4 Rows)
+
+| Field | Value |
+|---|---|
+| Migration version | `20260525103115` |
+| File | `supabase/migrations/20260525103115_033be824-f893-440d-b3b7-8f5314c2862c.sql` |
+| Applied | 2026-05-25 (Lovable atomic create+apply via executor migration tool; §22.5.2 split-execution NOT triggered per defect class #35 — `job_registry` is not capability-mismatched between the executor migration tool and operator OOB Dashboard SQL editor; §22.5.1 evidence is the binding standard and is satisfied) |
+| Verified | 2026-05-25 (Lovable post-apply via `supabase--read_query` against `public.job_registry` confirmed 4 seeded rows with `enabled=false`, `status='registered'` for ids `longshort.universe.hard_exclusion_refresh_3_3a` / `3_3b` / `3_3c` / `3_3e`) |
+| Pattern | INSERT ... ON CONFLICT (id) DO NOTHING (idempotent per D3; mirrors MIG-044 + MIG-048 precedent) |
+| Effect | Seeds 4 `job_registry` rows for continuous §3.3 hard-exclusion refresh per DEC-038.1 clause (4) verbatim. Per-rule cadence + execution_guarantee + concurrency_policy: 3.3a (daily 09:00 UTC / exactly_once / forbid), 3.3b (`schedule='manual'` event-triggered placeholder / at_least_once / allow), 3.3c (`schedule='manual'` deferred-placeholder per R4 + DW-063; `exactly_once` / `forbid` aligned to future real-feed cadence), 3.3e (daily 09:00 UTC cron + handler-internal twice-monthly cadence gating via `isShortInterestTriggerDay` / exactly_once / forbid). All rows ship `enabled=false`; activation gated by sub-step 8.13 end-to-end verification. NOT seeded: 3.3d (pre-trade check at order-execution layer per §3.3d; not continuous refresh), 3.3f / 3.3g / 3.3h (N/A v1 per §3.3). |
+| Dependency | MIG-025 (`job_registry` table). |
+| Sub-step authority | ACT-109 (FP-008 sub-step 8.5 closure) |
+| AC evidence | AC-09 (each rule has its own job_registry entry; failure of one rule does not block others — per-rule rows + `forbid` concurrency at the row level satisfy the isolation requirement at the registry layer; dispatcher edge function `longshort-universe-hard-exclusion-refresh` is the runtime chokepoint with per-rule audit emission). |
 
 ---
 

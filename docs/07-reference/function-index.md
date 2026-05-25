@@ -2200,3 +2200,40 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **File** | `src/features/longshort/services/universe/shared/trading-days.ts` (RELOCATED from `hard-exclusions/trading-days.ts` at sub-step 8.4 per Surface 3 resolution — second consumer triggers the move; `git mv` only, content preserved verbatim, import paths in `rule-3-3a-earnings-window.ts` updated to `../shared/trading-days.ts`) |
 | **Tests** | `shared/trading-days_test.ts` |
 | **Added by** | FP-008 sub-step 8.4, ACT-108 (functions); FP-008 sub-step 8.3, ACT-107 (file origin) |
+
+### FP-008 sub-step 8.5 — Continuous Hard-Exclusion Refresh Dispatcher (ACT-109)
+
+#### `createHardExclusionRefreshOrchestrator()`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-008 sub-step 8.5) |
+| **Classification** | job-critical skeleton (per-rule continuous refresh per CROSSWIND §3.4 + DEC-038.1 clause (4); AC-09 surface) |
+| **File** | `src/features/longshort/services/universe/hard-exclusions/refresh-jobs/hard-exclusion-refresh-orchestrator.ts` |
+| **Tests** | `hard-exclusion-refresh-orchestrator_test.ts` |
+| **Inputs** | `HardExclusionRefreshContext { as_of: Date }`, `HardExclusionRefreshInput { rule, tickers }` |
+| **Behavior** | Stateless transformation. §3.3e cadence gate (`isShortInterestTriggerDay`) short-circuits to `outcome='skipped'` / `skipped_reason='not_short_interest_trigger_day'` on non-trigger trading days. All four rules currently lack wired per-rule data fetchers → return `outcome='skipped'` / `skipped_reason='awaiting_per_rule_fetcher_wiring'` (analogous to sub-step 8.4 empty-`exclusionInput` pattern). |
+| **Added by** | FP-008 sub-step 8.5, ACT-109 |
+
+#### `longshort-universe-hard-exclusion-refresh` edge function handler (one-dispatcher per Surface 1 Option (a))
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-008 sub-step 8.5) |
+| **Classification** | api-critical + job-critical (DEC-023 envelope per T7; permission gate `longshort.view`; rule routed by `rule` query/body param) |
+| **File** | `supabase/functions/longshort-universe-hard-exclusion-refresh/index.ts` |
+| **Tests** | `index_test.ts` (5 Deno regression sentinels: method gate ordering / rule-param validation / authz wiring / Surface 0 Option α skip / orchestrator + failure-catch wiring) |
+| **Surface 0 (Option α at ACT-109)** | POST body `{ tickers?: string[] }`. Absent/empty → emit `longshort.universe.hard_exclusion_refresh_<rule_slug>.skipped` with `skip_reason='awaiting_universe_membership_8_6'` + return 200. At sub-step 8.7 the handler swaps the source to a `universe_membership` query (MIG-050) without changing the orchestrator signature. |
+| **Rule-param validation** | `isHardExclusionRuleKey(s)` — accepts only `{3.3a, 3.3b, 3.3c, 3.3e}` per MIG-049 seeds; 3.3d / 3.3f / 3.3g / 3.3h rejected by design. |
+| **Audit-action format** | `longshort.universe.hard_exclusion_refresh_<rule_slug>.<outcome>` where `<rule_slug>` mirrors MIG-049 `job_registry.id` slugging (dot → underscore). 12 stable event keys total (4 rules × 3 outcomes); see event-index.md. |
+| **Added by** | FP-008 sub-step 8.5, ACT-109 |
+
+#### `HardExclusionRefreshContext`, `HardExclusionRefreshInput`, `HardExclusionRefreshResult`, `HardExclusionRuleKey`, `HARD_EXCLUSION_RULE_KEYS`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-008 sub-step 8.5) |
+| **Classification** | shared-contract layer (types-only module per §22.3 (c) minimum-coupling) |
+| **File** | `src/features/longshort/services/universe/hard-exclusions/refresh-jobs/types.ts` |
+| **Consumers** | `hard-exclusion-refresh-orchestrator.ts` + `supabase/functions/longshort-universe-hard-exclusion-refresh/index.ts` (cross-tree native import per FP-006 precedent) |
+| **Added by** | FP-008 sub-step 8.5, ACT-109 |
