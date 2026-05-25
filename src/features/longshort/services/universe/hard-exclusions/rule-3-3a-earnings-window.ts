@@ -37,7 +37,7 @@ import {
   EARNINGS_WINDOW_TRADING_DAYS,
   type HardExclusionFiring,
 } from './types.ts';
-import { isoDate, parseIsoDate, tradingDaysBefore } from './trading-days.ts';
+import { isoDate, parseIsoDate, tradingDaysBefore } from '../shared/trading-days.ts';
 
 /**
  * Compute the earliest `as_of` date at which a position must already be
