@@ -293,6 +293,23 @@ Each entry MUST align with the required plan diff:
 | Approval Status | Approved per operator confirmation. Per §22.5.1 third clause: no live-DB state touched (Alpaca API is external; pure code + tests). |
 | Supersession Links | None. |
 
+### Sub-step build phase (2026-05-25) — Sub-step 6.8 phase 1: Multi-Pending Validation Harness
+
+**Type:** Sub-step build phase within FP-006; plan v13.4 unchanged; sub-step 6.8 ticks at follow-on completion
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.4 (unchanged) |
+| Section IDs Created | None |
+| Decision IDs Affected | None — ADR-002 placeholder unchanged at this phase; populated at follow-on |
+| What Changed | Build phase of sub-step 6.8 closed: multi-pending validation harness landed per DEC-036 clause (6) + §8.6.1.1. 7-test framework with pre-flight sanity, per-test cleanup, structured HarnessResult output, CLI entrypoint, unit tests with mocked fetch, integration test `Deno.test.ignore`'d. Sub-step closes at follow-on prompt after operator runs harness against live Alpaca paper + supervisor populates ADR-002 with determination. |
+| Why | §10.4 Phase 0B supporting deliverable: "Alpaca multi-pending-order behavior validation per §8.6.1.1 short-stop parallel-order mechanism requirement... Determination documented and committed before Phase 0B exits." Build phase produces the empirical-test instrument; follow-on phase produces the determination. |
+| What Stayed | All DECs unchanged. ADRs unchanged (ADR-002 placeholder remains until follow-on). All prior modules frozen. Plan version unchanged. Master-plan 6.8 unticked. |
+| What Was Added | 5 src/scripts modules + tests; ACT-092 entry; this plan-changelog entry. |
+| What Was Removed | None — additive. |
+| Approval Status | Approved per FP-006 sub-step 6.8 build-phase shape (two-phase: build + populate). |
+| Supersession Links | None. |
+
 ### v13.2 → v13.3 (2026-05-22)
 
 **Type:** In-FP-006 sub-step closure (6.4) + FOLLOWUP-004 architectural fix landing (CI script + ADR-003 + DEC-034 v13.2 amendment)
