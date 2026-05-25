@@ -74,8 +74,8 @@ Deno.test("(a) quarter-gating predicate: 2026-05-25 is not first trading day; 20
   assertEquals(isFirstTradingDayOfQuarter(new Date("2026-04-01T14:00:00Z")), true);
   // Q3 2026 first trading day = 2026-07-01 (Wednesday) → true
   assertEquals(isFirstTradingDayOfQuarter(new Date("2026-07-01T14:00:00Z")), true);
-  // Sanity: helpers expose a forward-quarter calculator
-  assertExists(firstTradingDayOfQuarter(new Date("2026-05-25T00:00:00Z")));
+  // Sanity: helpers expose a forward-quarter calculator (Q2 2026 = 2026-04-01)
+  assertExists(firstTradingDayOfQuarter(2026, 2));
   assertExists(nextQuarterRefreshDate(new Date("2026-05-25T00:00:00Z")));
 });
 
