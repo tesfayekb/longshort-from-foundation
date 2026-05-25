@@ -133,7 +133,7 @@ If inconsistency is detected → execution must **STOP** and be corrected.
 | user-onboarding | implemented (PLAN-INVITE-001 complete: 6 phases, 9 edge functions, 2 permissions, 7 audit events, admin UI, signup gate) | 2026-04-14 |
 | trading-panel | foundation-implemented (Step 4 complete: TradingLayout, trading.access seeded, panels.trading optional in dev; no strategies) | 2026-05-16 |
 | strategy-module-pattern | documented-only (PR #3 Step 2b: architectural binding contract at docs/04-modules/strategy-module-pattern.md; rules T1-T9 + D1-D5 in .cursorrules per PR #4; folder pattern reconciled PR #5) | 2026-05-16 |
-| longshort | foundation-implemented (FP-005 — module doc + RBAC + per-strategy audit + façade + route at /trading/longshort) | 2026-05-21 |
+| longshort | phase-0b-validated (FP-006 — Phase 0A residual + entire Phase 0B; 17 verify_* + replay framework + A1 baseline + Alpaca paper integration + ADR-002 v0 fallback determination; §10.4 captured Day 1 deferred to Phase 7 per ADR-006) | 2026-05-25 |
 
 ## AI Behavior Constraint
 
