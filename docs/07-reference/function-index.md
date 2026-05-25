@@ -2209,7 +2209,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 |-------|-------|
 | **Module** | longshort (FP-008 sub-step 8.5) |
 | **Classification** | job-critical skeleton (per-rule continuous refresh per CROSSWIND §3.4 + DEC-038.1 clause (4); AC-09 surface) |
-| **File** | `src/features/longshort/services/universe/hard-exclusions/refresh-jobs/hard-exclusion-refresh-orchestrator.ts` |
+| **File** | `src/features/longshort/services/universe/refresh-jobs/hard-exclusion-refresh-orchestrator.ts` (sibling to ACT-108 `quarterly-refresh-orchestrator.ts` per DEC-038.1 clause (1); in-cycle reconciliation at ACT-109 moved from initial nested placement under `hard-exclusions/refresh-jobs/`) |
 | **Tests** | `hard-exclusion-refresh-orchestrator_test.ts` |
 | **Inputs** | `HardExclusionRefreshContext { as_of: Date }`, `HardExclusionRefreshInput { rule, tickers }` |
 | **Behavior** | Stateless transformation. §3.3e cadence gate (`isShortInterestTriggerDay`) short-circuits to `outcome='skipped'` / `skipped_reason='not_short_interest_trigger_day'` on non-trigger trading days. All four rules currently lack wired per-rule data fetchers → return `outcome='skipped'` / `skipped_reason='awaiting_per_rule_fetcher_wiring'` (analogous to sub-step 8.4 empty-`exclusionInput` pattern). |
@@ -2234,6 +2234,6 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 |-------|-------|
 | **Module** | longshort (FP-008 sub-step 8.5) |
 | **Classification** | shared-contract layer (types-only module per §22.3 (c) minimum-coupling) |
-| **File** | `src/features/longshort/services/universe/hard-exclusions/refresh-jobs/types.ts` |
+| **File** | `src/features/longshort/services/universe/refresh-jobs/types.ts` (merged into the ACT-108 sibling file; quarterly + hard-exclusion type families co-located per DEC-038.1 clause (1)) |
 | **Consumers** | `hard-exclusion-refresh-orchestrator.ts` + `supabase/functions/longshort-universe-hard-exclusion-refresh/index.ts` (cross-tree native import per FP-006 precedent) |
 | **Added by** | FP-008 sub-step 8.5, ACT-109 |
