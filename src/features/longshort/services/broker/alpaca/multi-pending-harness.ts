@@ -58,7 +58,7 @@ async function preflightSanity(config: RunHarnessConfig): Promise<{ ok: boolean;
     if (account.account_blocked || account.trading_blocked) {
       return { ok: false, buying_power: account.buying_power, reason: 'account_or_trading_blocked' };
     }
-    if (parseFloat(account.buying_power) <= 0) {
+    if (parseFloat(account.buying_power) <= 0) { // allow-bare-parsefloat: DW-058-B1
       return { ok: false, buying_power: account.buying_power, reason: 'no_buying_power' };
     }
     return { ok: true, buying_power: account.buying_power };
@@ -339,12 +339,12 @@ export async function runMultiPendingHarness(config: RunHarnessConfig): Promise<
     // Poll /v2/positions until short position appears OR 30s elapsed; record ISO ts of detection
     let positionVisibleAt: string | null = null;
     let positionShownQty: string | null = null;
-    const positionPollStartIso = new Date().toISOString();
+    const positionPollStartIso = new Date().toISOString(); // allow-now-in-business-logic: ADR-002
     for (let i = 0; i < 30; i++) {
       try {
         const pos = await config.client.getJson<{ qty: string; side: string }>(`/v2/positions/${encodeURIComponent(config.symbol)}`);
         if (pos.qty && (pos.side === 'short' || parseInt(pos.qty, 10) < 0)) {
-          positionVisibleAt = new Date().toISOString();
+          positionVisibleAt = new Date().toISOString(); // allow-now-in-business-logic: ADR-002
           positionShownQty = pos.qty;
           alpacaResponses.push({ position_visible: pos });
           break;

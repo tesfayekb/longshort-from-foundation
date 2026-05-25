@@ -19,8 +19,8 @@ export class AlpacaBuyingPowerFetcher implements BrokerBuyingPowerFetcher {
   async fetchBuyingPower(ts: Date): Promise<BrokerBuyingPower> {
     const resp = await this.client.getJson<AlpacaAccountResponse>('/v2/account');
     return {
-      available_bp: parseFloat(resp.buying_power),
-      account_equity: parseFloat(resp.equity),
+      available_bp: parseFloat(resp.buying_power), // allow-bare-parsefloat: DW-058-B1
+      account_equity: parseFloat(resp.equity), // allow-bare-parsefloat: DW-058-B1
       fetched_at: ts,
     };
   }
