@@ -433,7 +433,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 
 ### PLAN-TRADING-001-LONGSHORT-002 — Long-Short Strategy Module Phase 0A Residual + Phase 0B
 
-- **Status:** approved (execution-pending)
+- **Status:** closed (2026-05-25 — closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-002-closure.md`)
 - **Feature Proposal:** FP-006
 - **Tier:** A (FINANCIAL-CRITICAL)
 - **Decisions ratified:** DEC-034 / DEC-034.1 / DEC-035 / DEC-036 / DEC-037
