@@ -41,7 +41,7 @@ import {
   type HttpFetch,
   type IndexId,
   type UniverseConstituent,
-} from '../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+} from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
 
 const ISHARES_HOLDINGS_URL: Readonly<Record<IndexId, string>> = {
   sp500:
