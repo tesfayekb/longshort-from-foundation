@@ -815,6 +815,57 @@ export type Database = {
         }
         Relationships: []
       }
+      universe_refresh_log: {
+        Row: {
+          as_of_date: string
+          created_at: string
+          failure_reason: string | null
+          ishares_cross_check_snapshot: Json | null
+          operator_id: string
+          outcome: string | null
+          quarter_label: string
+          refresh_completed_at: string | null
+          refresh_id: string
+          refresh_started_at: string
+          total_constituents_raw: number | null
+          total_eligible_long: number | null
+          total_eligible_short: number | null
+          total_post_filters: number | null
+        }
+        Insert: {
+          as_of_date: string
+          created_at?: string
+          failure_reason?: string | null
+          ishares_cross_check_snapshot?: Json | null
+          operator_id: string
+          outcome?: string | null
+          quarter_label: string
+          refresh_completed_at?: string | null
+          refresh_id?: string
+          refresh_started_at: string
+          total_constituents_raw?: number | null
+          total_eligible_long?: number | null
+          total_eligible_short?: number | null
+          total_post_filters?: number | null
+        }
+        Update: {
+          as_of_date?: string
+          created_at?: string
+          failure_reason?: string | null
+          ishares_cross_check_snapshot?: Json | null
+          operator_id?: string
+          outcome?: string | null
+          quarter_label?: string
+          refresh_completed_at?: string | null
+          refresh_id?: string
+          refresh_started_at?: string
+          total_constituents_raw?: number | null
+          total_eligible_long?: number | null
+          total_eligible_short?: number | null
+          total_post_filters?: number | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           assigned_at: string
