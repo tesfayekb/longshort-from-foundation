@@ -815,6 +815,47 @@ export type Database = {
         }
         Relationships: []
       }
+      universe_membership: {
+        Row: {
+          as_of_date: string
+          created_at: string
+          long_eligible: boolean
+          operator_id: string
+          quarter_label: string
+          refresh_id: string
+          short_eligible: boolean
+          ticker: string
+        }
+        Insert: {
+          as_of_date: string
+          created_at?: string
+          long_eligible: boolean
+          operator_id: string
+          quarter_label: string
+          refresh_id: string
+          short_eligible: boolean
+          ticker: string
+        }
+        Update: {
+          as_of_date?: string
+          created_at?: string
+          long_eligible?: boolean
+          operator_id?: string
+          quarter_label?: string
+          refresh_id?: string
+          short_eligible?: boolean
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "universe_membership_refresh_fk"
+            columns: ["refresh_id"]
+            isOneToOne: false
+            referencedRelation: "universe_refresh_log"
+            referencedColumns: ["refresh_id"]
+          },
+        ]
+      }
       universe_refresh_log: {
         Row: {
           as_of_date: string
