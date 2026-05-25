@@ -665,3 +665,25 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | What Was Removed | None — additive only. |
 | Approval Status | Approved per operator Route 1 (1a + 2a + Option B) at FP-008 sub-step 8.1 execution prompt; no DEC amendment cycle invoked; no supervisor review cycle invoked. |
 | Supersession Links | N/A — additive; no approved sections superseded. |
+
+### v13.12 → v13.13 (2026-05-25)
+
+**Type:** Additive per Constitution Rule 10 Plan Merge Rule. FP-008 sub-step 8.2 — Universe enrichment layer + §3.2 six-filter pipeline (Option β). Second code-touching sub-step of FP-008. ACT-106.
+
+| Field | Value |
+|---|---|
+| Plan Version | v13.12 → v13.13 |
+| Section IDs Created | None |
+| Section IDs Closed | None (sub-step 8.2 closed; Gate 8.1 remains open pending sub-steps 8.3-8.5; PLAN-TRADING-001-LONGSHORT-003 stays `approved (execution-pending)` until sub-step 8.13) |
+| FP IDs Created | None (FP-008 Status unchanged at `execution-in-progress`) |
+| Decision IDs Affected | None — DEC-038 + DEC-038.1 preserved verbatim. The `enrichment/` sub-folder extends DEC-038.1 clause (1) by accommodation per ACT-106 Guardrail 1; the "with sub-modules:" enumeration is non-exhaustive and naturally accommodates a sibling enrichment tier. No DEC amendment authored. |
+| What Changed | NEW `src/features/longshort/services/universe/enrichment/types.ts` (`EnrichedConstituent` extends `UniverseConstituent`; `UniverseEnrichmentFetcher` interface). NEW `src/features/longshort/services/universe/enrichment/polygon-enrichment-fetcher.ts` (`PolygonEnrichmentFetcher implements UniverseEnrichmentFetcher`; ticker-details + daily-aggregates Polygon endpoints; AC-06 path). NEW `src/features/longshort/services/universe/filters/types.ts` (`FILTER_THRESHOLDS` LOCKED constants; `FilterRejectionReason`; `FilterResult`). NEW `src/features/longshort/services/universe/filters/apply-filters.ts` (`applyFilters()` orchestrator; six §3.2 filters). NEW companion Deno `_test.ts` files (21 tests total — 10 enrichment + 11 filter). UPDATE `docs/07-reference/function-index.md` — 3 APPEND entries (enrichment fetcher + filter orchestrator + shared types). UPDATE `docs/04-modules/longshort/longshort.md` — Universe Component sub-section status updated from sub-step 8.1 close to sub-step 8.2 close; sub-modules list reflects `enrichment/` + `filters/` landed. UPDATE `docs/08-planning/master-plan.md` — sub-step 8.2 checkbox ticked. NEW ACT-106 entry in action-tracker.md. UPDATE system-state.md `current_plan_version` + `approved_plan_baseline` v13.12 → v13.13. |
+| Why | FP-008 sub-step 8.2 / AC-06 / §3.2 LOCKED filter implementation per Option β operator decision at pre-flight. Enrichment tier is the substantive load: ACT-104 `UniverseConstituent` carries membership but NOT filter-input fields (market_cap / avg_daily_dollar_volume / share_price / listing_date / asset class). Option β fetches them via a dedicated enrichment tier (vs. inline-in-filter); mirrors FP-006 fetcher-per-purpose precedent. Guardrails baked in: (1) `enrichment/` extends DEC-038.1 clause (1) by accommodation, no DEC amendment; (2) iShares stays unenriched — §3.2 filters operate on Polygon path only; iShares is cross-check at sub-step 8.8 per DEC-038 clause (2). |
+| What Stayed | All FP-001 through FP-008 entries preserved (FP-008 Status `execution-in-progress` unchanged). All DECs 030-038.1 preserved verbatim. All ADRs unchanged. All other plan sections preserved verbatim. All closure documents preserved. Module status `longshort: phase-0b-validated` preserved. DW register unchanged. Supervisor-instructions unchanged. 9-gate strong-evidence.yml + 6 enforcement scripts + docs/banned-patterns.md preserved. ACT-104 code paths preserved verbatim (zero modifications to constituent fetchers / their tests / `_shared/longshort-universe-interfaces.ts`). ACT-105 reference-index reconciliation preserved (POLYGON_API_KEY env-var registration intact; this changelog explicitly notes env-var-index.md NO-CHANGE). |
+| What Was Added | enrichment + filters sub-folders + 6 new code+test files + 3 function-index entries + module-doc status update + sub-step 8.2 tick + ACT-106 entry + this changelog entry + system-state version bump. |
+| What Was Removed | None — additive only. |
+| Approval Status | Approved per operator standing institutional-grade authority + v0.6.2 §22.3 (a)/(b)/(c)/(d) strengthening discipline applied at draft time + Option β + Guardrails 1+2 confirmed at pre-flight. |
+| Supersession Links | N/A — additive; no approved sections superseded. |
+
+- [Master Plan](master-plan.md)
+- [Action Tracker](../06-tracking/action-tracker.md)
