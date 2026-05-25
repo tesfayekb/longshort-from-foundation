@@ -492,7 +492,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 
 **Sub-step inventory (13 + closure):**
   - [x] 8.0a — Prerequisites + DEC-038 + DEC-038.1 ratified + per-sub-step AC matrix authored at ACT-103; SHA `<lovable-commit-sha>` (Gate 8.0 closed)
-  - [ ] 8.1 — Constituent ingestion (S&P 500 + S&P 400) from primary source per §3.1; per §10.5 deliverable 1
+  - [x] 8.1 — Constituent ingestion (S&P 500 + S&P 400) from primary source per §3.1; per §10.5 deliverable 1 — closed at ACT-104 (Polygon primary + iShares IVV/IJH secondary per Option B; SHA `<lovable-commit-sha>`)
   - [ ] 8.2 — Universe filters implementation per §3.2 (avg daily $-volume ≥ $20M; share price ≥ $5; market cap ≥ $1B; listing age ≥ 1 year; ADRs excluded; REITs excluded)
   - [ ] 8.3 — Hard exclusion infrastructure per §3.3 (8 rules: 3.3a earnings windows; 3.3b M&A; 3.3c halts; 3.3d hard-to-borrow; 3.3e short interest; 3.3f secondary offerings N/A v1; 3.3g going-concern N/A v1; 3.3h no sector restrictions); halt-feed dependency per R4 risk
   - [ ] 8.4 — Quarterly atomic refresh job (first trading day Jan/Apr/Jul/Oct per §3.4)
