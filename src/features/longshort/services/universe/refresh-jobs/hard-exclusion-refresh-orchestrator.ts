@@ -20,7 +20,7 @@
  * Owner: longshort (FP-008 sub-step 8.5)
  * Classification: financial-critical (skeleton).
  */
-import { isShortInterestTriggerDay } from '../../shared/trading-days.ts';
+import { isShortInterestTriggerDay } from '../shared/trading-days.ts';
 import type {
   HardExclusionRefreshContext,
   HardExclusionRefreshInput,
