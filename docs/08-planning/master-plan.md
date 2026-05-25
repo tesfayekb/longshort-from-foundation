@@ -476,6 +476,24 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 
 ---
 
+### PLAN-CI-001-BOOTSTRAP-001 — CI/CD Pipeline Bootstrap (FP-007)
+
+- **Status:** closed (2026-05-25 — closure document at `docs/08-planning/phase-closures/plan-ci-001-bootstrap-001-closure.md`; retroactively authored at ACT-100 / C.1)
+- **Feature Proposal:** FP-007
+- **Closure SHA:** `cd4b8a14e37ad42986428380a3359dc9ec48e993`
+- **Family rationale:** orthogonal to `PLAN-TRADING-001-LONGSHORT-NNN` per T6 removability — deleting any strategy module must not require deleting the CI pipeline. First instance of the `PLAN-CI-NNN` plan-section family; future CI surface FPs (e.g., ESLint custom rules, coverage gates, performance gates) attach here.
+- **Sub-step inventory (3 + closure):**
+  - [x] 7.1 — Audit-writer trap CI enforcement script + initial 4-gate strong-evidence.yml workflow (closed 2026-05-22, ACT-082 via FP-006 sub-step 6.4)
+  - [x] 7.2 — 5 banned-pattern enforcement scripts + docs/banned-patterns.md override registry + workflow extension to 9 gates (closed 2026-05-25, ACT-099 transaction via FP-006 sub-step 6.10.1)
+  - [x] 7.3 — Script-correctness defect fixes (defect classes #18 multi-line block-comment state + #19 string-literal-aware URL detection) (closed 2026-05-25, ACT-099-post via FP-006 sub-step 6.10.1 third turn)
+  - [x] Closure attestation at ACT-100 / C.1
+- **Plan Version impact:** v13.6 → v13.7 (additive per Constitution Rule 10 Plan Merge Rule; Rule 8 5-point procedure satisfied for new plan-section family creation)
+- **Dependencies:** None (no FP-X prerequisite; ran parallel-to-FP-005 per DEC-032 clause (4))
+- **Was hard-prerequisite for:** FP-006 (per DEC-032 clause (4) verbatim ordering; the ordering was violated retrospectively — FP-006 executed without FP-007 entry being authored; see INC-21)
+- **Closure attestation:** all 6 enforcement scripts present + 9-gate workflow present + override registry present at HEAD `cd4b8a14`; preserved through `3e5d6daf`; branch-coherence canary 5/5 green
+
+---
+
 ## Development Phases
 
 ### Phase 1 — Foundation (Auth + Infrastructure)
