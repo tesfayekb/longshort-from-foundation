@@ -163,6 +163,44 @@ export type Database = {
         }
         Relationships: []
       }
+      hard_exclusions: {
+        Row: {
+          applied_at: string
+          as_of_date: string
+          firing_reasons: Json
+          firing_rules: string[]
+          operator_id: string
+          refresh_id: string | null
+          ticker: string
+        }
+        Insert: {
+          applied_at?: string
+          as_of_date: string
+          firing_reasons: Json
+          firing_rules: string[]
+          operator_id: string
+          refresh_id?: string | null
+          ticker: string
+        }
+        Update: {
+          applied_at?: string
+          as_of_date?: string
+          firing_reasons?: Json
+          firing_rules?: string[]
+          operator_id?: string
+          refresh_id?: string | null
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hard_exclusions_refresh_fk"
+            columns: ["refresh_id"]
+            isOneToOne: false
+            referencedRelation: "universe_refresh_log"
+            referencedColumns: ["refresh_id"]
+          },
+        ]
+      }
       invitations: {
         Row: {
           accepted_at: string | null
