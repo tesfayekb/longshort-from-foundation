@@ -8,29 +8,76 @@ Deno.test('isExcluded — self and test files', () => {
   assertEquals(isExcluded('src/features/longshort/services/foo.ts'), false);
 });
 
-Deno.test('findViolationInLine — live URL banned', () => {
-  const v = findViolationInLine('const url = "https://api.alpaca.markets/v2/orders";', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationInLine — live URL inside double-quoted string detected', () => {
+  const v = findViolationInLine(
+    'const url = "https://api.alpaca.markets/v2/orders";',
+    'src/features/longshort/services/foo.ts',
+    1
+  );
+  assertEquals(v !== null, true, 'Live URL inside string literal must be detected (defect #19 regression)');
+});
+
+Deno.test('findViolationInLine — live URL inside single-quoted string detected', () => {
+  const v = findViolationInLine(
+    "const url = 'https://api.alpaca.markets/v2/orders';",
+    'src/features/longshort/services/foo.ts',
+    1
+  );
   assertEquals(v !== null, true);
 });
 
-Deno.test('findViolationInLine — paper URL acceptable', () => {
-  const v = findViolationInLine('const url = "https://paper-api.alpaca.markets/v2/orders";', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationInLine — live URL inside template string detected', () => {
+  const v = findViolationInLine(
+    'const url = `https://api.alpaca.markets/v2/orders/${id}`;',
+    'src/features/longshort/services/foo.ts',
+    1
+  );
+  assertEquals(v !== null, true);
+});
+
+Deno.test('findViolationInLine — paper URL acceptable (string)', () => {
+  const v = findViolationInLine(
+    'const url = "https://paper-api.alpaca.markets/v2/orders";',
+    'src/features/longshort/services/foo.ts',
+    1
+  );
   assertEquals(v, null);
 });
 
-Deno.test('findViolationInLine — data URL acceptable', () => {
-  const v = findViolationInLine('const dataUrl = "https://data.alpaca.markets/v2/stocks";', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationInLine — data URL acceptable (string)', () => {
+  const v = findViolationInLine(
+    'const dataUrl = "https://data.alpaca.markets/v2/stocks";',
+    'src/features/longshort/services/foo.ts',
+    1
+  );
   assertEquals(v, null);
 });
 
-Deno.test('findViolationInLine — comment excluded', () => {
-  const v = findViolationInLine('// live URL would be https://api.alpaca.markets', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationInLine — live URL inside line comment excluded', () => {
+  const v = findViolationInLine(
+    '// live URL would be https://api.alpaca.markets — banned per DEC-036 (2)',
+    'src/features/longshort/services/foo.ts',
+    1
+  );
   assertEquals(v, null);
 });
 
-Deno.test('findViolationInLine — override respected', () => {
-  const v = findViolationInLine('const url = "https://api.alpaca.markets"; // allow-live-alpaca-url: ADR-007', 'src/features/longshort/services/foo.ts', 1);
+Deno.test('findViolationInLine — override annotation respected', () => {
+  const v = findViolationInLine(
+    'const url = "https://api.alpaca.markets"; // allow-live-alpaca-url: ADR-007',
+    'src/features/longshort/services/foo.ts',
+    1
+  );
   assertEquals(v, null);
+});
+
+Deno.test('findViolationInLine — code-then-comment: violation in code part flagged', () => {
+  const v = findViolationInLine(
+    'const url = "https://api.alpaca.markets"; // paper would be safer',
+    'src/features/longshort/services/foo.ts',
+    1
+  );
+  assertEquals(v !== null, true, 'URL in code (pre-comment) must be flagged even when trailing comment exists');
 });
 
 Deno.test('scanRepository — clean on current repo', async () => {
