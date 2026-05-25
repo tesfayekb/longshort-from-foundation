@@ -27,8 +27,8 @@ export class AlpacaPositionFetcher implements BrokerPositionFetcher {
       );
       return {
         symbol: resp.symbol,
-        qty: parseFloat(resp.qty),
-        avg_entry_price: parseFloat(resp.avg_entry_price),
+        qty: parseFloat(resp.qty), // allow-bare-parsefloat: DW-058-B1
+        avg_entry_price: parseFloat(resp.avg_entry_price), // allow-bare-parsefloat: DW-058-B1
         fetched_at: ts,
       };
     } catch (e) {

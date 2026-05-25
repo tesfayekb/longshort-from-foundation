@@ -44,3 +44,18 @@ jobs:
         run: |
           npx vitest run
           npx eslint .
+
+      - name: Gate 5 — Sentinel patterns ban (DEC-034 clause (2))
+        run: deno run --allow-read scripts/check-sentinel-patterns.ts
+
+      - name: Gate 6 — Wall-clock leakage ban (DEC-034 clause (4))
+        run: deno run --allow-read scripts/check-wall-clock.ts
+
+      - name: Gate 7 — Paper-only Alpaca URL ban (DEC-036 clause (2))
+        run: deno run --allow-read scripts/check-paper-only-url.ts
+
+      - name: Gate 8 — Unguarded parseFloat (ACT-097 finding #13 / DW-058 B1)
+        run: deno run --allow-read scripts/check-unguarded-parsefloat.ts
+
+      - name: Gate 9 — catch { return 0 } phantom-success ban (DEC-034 clause (2))
+        run: deno run --allow-read scripts/check-catch-returns-zero.ts
