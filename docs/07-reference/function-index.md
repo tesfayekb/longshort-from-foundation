@@ -2057,3 +2057,44 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Tests** | (Interfaces only; tested indirectly via concrete-fetcher tests in `src/features/longshort/services/universe/`) |
 | **Cross-tree consumers** | Imported by `src/features/longshort/services/universe/polygon-constituent-fetcher.ts` + `src/features/longshort/services/universe/ishares-constituent-fetcher.ts` via the FP-006 cross-tree import precedent. Will be imported by `supabase/functions/_shared/longshort-verifiers/verify_universe_membership.ts` at sub-step 8.7 per DEC-038.1 clause (3) (native edge-function path). |
 | **Added by** | FP-008 sub-step 8.1, ACT-104 |
+
+#### `src/features/longshort/services/universe/enrichment/polygon-enrichment-fetcher.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-008 sub-step 8.2) |
+| **Classification** | financial-critical (enrichment provides §3.2 filter-input data; per DEC-038.1 clause (1) folder-pattern accommodation; AC-06 path) |
+| **Exports** | `class PolygonEnrichmentFetcher implements UniverseEnrichmentFetcher` |
+| **File** | `src/features/longshort/services/universe/enrichment/polygon-enrichment-fetcher.ts` |
+| **Tests** | `src/features/longshort/services/universe/enrichment/polygon-enrichment-fetcher_test.ts` — 10 Deno unit tests |
+| **Secret** | `POLYGON_API_KEY` (registered at ACT-105 / env-var-index.md) |
+| **API endpoints** | Polygon ticker-details (`/v3/reference/tickers/{ticker}`) + daily aggregates (`/v2/aggs/ticker/{ticker}/range/1/day/{from}/{to}`) |
+| **Typed-absence idiom** | `null` for missing market_cap / listing_date / share_price / avg_daily_dollar_volume per §2 axiom 3 + DEC-038 clause (6); throws `ConstituentFetchError` on network/auth/parse failure |
+| **Guardrail 2 enforcement** | Skips any input constituent where `source !== 'polygon'` — iShares constituents are NOT enriched (cross-check at sub-step 8.8 instead) |
+| **Banned-pattern compliance** | Zero `Date.now()` outside sanctioned `as_of` parameter chokepoint; zero sentinel fallbacks per DEC-034 clause (2); zero `logAuditEvent` imports per DEC-033 v4.1 |
+| **Added by** | FP-008 sub-step 8.2, ACT-106 |
+
+#### `src/features/longshort/services/universe/filters/apply-filters.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-008 sub-step 8.2) |
+| **Classification** | financial-critical (§3.2 LOCKED thresholds bind eligible universe; AC-06 anchor) |
+| **Exports** | `function applyFilters(constituents: EnrichedConstituent[], as_of: Date): FilterResult` |
+| **File** | `src/features/longshort/services/universe/filters/apply-filters.ts` |
+| **Tests** | `src/features/longshort/services/universe/filters/apply-filters_test.ts` — 11 Deno unit tests covering all 6 filter rules + edge cases + ~900→~750-820 pass-rate fixture |
+| **§3.2 thresholds** | LOCKED constants in `filters/types.ts`: `MIN_AVG_DAILY_DOLLAR_VOLUME=$20M` / `MIN_SHARE_PRICE=$5` / `MIN_MARKET_CAP=$1B` / `MIN_LISTING_AGE_DAYS=365` / `is_adr` exclusion / `is_reit` exclusion |
+| **Output** | `FilterResult { eligible, rejected }` with per-rejection-reason breakdown; `rejected[]` consumed by §11.3 health monitoring at sub-step 8.9 |
+| **Minimum coupling** | Stateless pure function — no clock injection (`as_of` is a parameter), no `reconcile()` call, no DB writes, no `_shared/` reconciliation-lifecycle touches |
+| **Added by** | FP-008 sub-step 8.2, ACT-106 |
+
+#### `src/features/longshort/services/universe/enrichment/types.ts` + `src/features/longshort/services/universe/filters/types.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-008 sub-step 8.2) |
+| **Classification** | shared types — universe enrichment + filter contracts |
+| **Exports** | `enrichment/types.ts`: `interface EnrichedConstituent extends UniverseConstituent`, `interface UniverseEnrichmentFetcher`. `filters/types.ts`: `const FILTER_THRESHOLDS`, `type FilterRejectionReason`, `interface FilterResult` |
+| **Files** | `src/features/longshort/services/universe/enrichment/types.ts`, `src/features/longshort/services/universe/filters/types.ts` |
+| **Tests** | Type-only; exercised indirectly via `polygon-enrichment-fetcher_test.ts` + `apply-filters_test.ts` |
+| **Added by** | FP-008 sub-step 8.2, ACT-106 |

@@ -77,11 +77,12 @@ This table maps every CROSSWIND v0.9 design-source part and key section anchor t
 
 Per FP-008 (PLAN-TRADING-001-LONGSHORT-003) + DEC-038 + DEC-038.1. Builds and validates the universe component as a complete operational deliverable behind the reconciliation engine. Per CROSSWIND §10.5: "Build and validate the universe component as a complete operational deliverable behind the reconciliation engine."
 
-**Status at sub-step 8.1 close (ACT-104, HEAD `f5d5a1e2`):** Constituent ingestion infrastructure operational. Primary source: Polygon reference data API for S&P 500 + S&P 400 (AC-04). Secondary cross-check source: iShares ETF holdings (IVV for S&P 500, IJH for S&P 400) per Option B selection (AC-05). Shared interface layer at `supabase/functions/_shared/longshort-universe-interfaces.ts` (`UniverseConstituent` + `ConstituentFetcher` + `IndexId` + `ISHARES_ETF_FOR_INDEX`) — will be consumed by `verify_universe_membership` at sub-step 8.7 per DEC-038.1 clause (3).
+**Status at sub-step 8.2 close (ACT-106, HEAD `<lovable-commit-sha>`):** Constituent ingestion infrastructure operational from 8.1 (Polygon primary + iShares secondary cross-check; AC-04 + AC-05). Universe enrichment layer operational at sub-step 8.2 (`PolygonEnrichmentFetcher`; security-properties data layer for §3.2 filter inputs — daily dollar volume + share price + market cap + listing date + ADR/REIT classification; AC-06 path). §3.2 six universe filters operational at sub-step 8.2 (`applyFilters()` pipeline; LOCKED thresholds from CROSSWIND v0.9 §3.2; deterministic ~750-820 eligible names from ~900 raw; AC-06 evidenced).
 
-**Sub-modules (per DEC-038.1 clause (1) folder pattern; some flat-folder-resident at sub-step 8.1; sub-step 8.2+ introduces nesting):**
-- Constituent ingestion (LANDED at 8.1 / ACT-104) — flat-folder under `src/features/longshort/services/universe/` currently; will relocate to `constituent-ingestion/` sub-folder at sub-step 8.2 alongside `filters/` introduction
-- §3.2 universe filters (PENDING sub-step 8.2) — `filters/` sub-folder
+**Sub-modules (per DEC-038.1 clause (1) folder pattern; `enrichment/` extends the enumerated pattern by accommodation per ACT-106 Guardrail 1; no DEC amendment needed):**
+- Constituent ingestion (LANDED at 8.1 / ACT-104) — currently flat-folder under `src/features/longshort/services/universe/`; relocation to `constituent-ingestion/` sub-folder deferred to sub-step 8.3 (paired with `hard-exclusions/` introduction; flat-folder files have multi-week settled history)
+- **Enrichment** (LANDED at 8.2 / ACT-106) — `enrichment/` sub-folder (Polygon-backed; primary path only per ACT-106 Guardrail 2; iShares stays unenriched)
+- **§3.2 universe filters** (LANDED at 8.2 / ACT-106) — `filters/` sub-folder (AC-06 evidenced)
 - §3.3 hard-exclusion rules (PENDING sub-step 8.3) — `hard-exclusions/` sub-folder
 - Quarterly atomic + continuous hard-exclusion refresh jobs (PENDING sub-steps 8.4-8.5) — `refresh-jobs/` sub-folder
 - `verify_universe_membership` real implementation (PENDING sub-step 8.7) — `verify-membership/` (edge-function tier — under `supabase/functions/_shared/longshort-verifiers/`)
