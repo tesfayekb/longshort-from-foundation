@@ -375,6 +375,12 @@ Before any deployment proceeds, the system must confirm:
 | `SUPABASE_SERVICE_ROLE_KEY` | — | Pre-production | Pending |
 | `SUPABASE_JWT_SECRET` | — | Pre-production | Pending |
 
+### Polygon API Key (FP-008 sub-step 8.1)
+
+| Env Var | Description | Environment | Status |
+|---------|-------------|-------------|--------|
+| `POLYGON_API_KEY` | Polygon.io REST API authentication key for reference-data + market-data feeds (FP-008 sub-step 8.1 ConstituentFetcher; future sub-steps may consume same key for halt feeds, corporate actions, earnings calendar per CROSSWIND §10.5 + §3.3) | Pre-production (provisioning required before sub-step 8.4 quarterly-refresh job wires) | Pending |
+
 ### Quarterly Review Required
 
 All `secret` and `infrastructure-critical` vars must be reviewed quarterly to confirm:
