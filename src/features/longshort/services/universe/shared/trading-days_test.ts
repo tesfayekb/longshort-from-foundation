@@ -1,3 +1,4 @@
+// @ts-nocheck — Deno test file.
 /**
  * Tests for shared/trading-days.ts — relocated from hard-exclusions/ at
  * FP-008 sub-step 8.4 / ACT-108 (Surface 3 Option ii). Original §3.3a
