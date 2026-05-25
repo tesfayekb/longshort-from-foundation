@@ -7,13 +7,23 @@
  * boundary for the wall-clock-leakage ban; DEC-034 clause (4) prose is the requirement.
  *
  * Banned patterns (per DEC-034 clause (4) verbatim):
- *   - `Date.now()`
- *   - `new Date()` (no-arg constructor; arg constructor with explicit ts is acceptable)
- *   - `performance.now()`
- *   - `Temporal.Now.*`
+ *   - Date.now()
+ *   - new Date() (no-arg constructor; arg constructor with explicit ts is acceptable)
+ *   - performance.now()
+ *   - Temporal.Now.*
+ *
+ * NOTE: this docstring intentionally avoids the banned patterns as code-style strings —
+ * the file-level pass below tracks /(asterisk)(asterisk) ... (asterisk)/ block-comment state
+ * correctly, but defensive avoidance here also ensures the script's own JSDoc is never
+ * a near-miss for its detector. Per ADR-003 self-discipline.
  *
  * Override mechanism per DEC-034 clause (4):
- *   `// allow-now-in-business-logic: <ADR-ID>` permits specific instances with ADR rationale.
+ *   // allow-now-in-business-logic: ADR-NNN  (permits specific instances with ADR rationale)
+ *
+ * Multi-line block-comment handling per ACT-099-post defect #18 fix:
+ *   Detection runs file-level (lines: string[]) with inBlockComment state persisted
+ *   across line boundaries. JSDoc prose mentioning the banned patterns is correctly
+ *   excluded from detection. Mirror architectural pattern from check-catch-returns-zero.ts.
  *
  * Exit code: 0 = clean; non-zero = violations.
  */
@@ -56,22 +66,28 @@ export const WALL_CLOCK_PATTERNS: ReadonlyArray<{ pattern: RegExp; reason: strin
   { name: 'Temporal.Now',   pattern: /\bTemporal\.Now\./,         reason: 'DEC-034 (4) Temporal.Now.* leaks wall-clock' },
 ];
 
-export function stripCommentsAndStrings(line: string): string {
+export interface ScanState {
+  inBlockComment: boolean;
+}
+
+export function stripCommentsAndStringsWithState(line: string, state: ScanState): string {
   let out = '';
   let i = 0;
   let inSingleString = false;
   let inDoubleString = false;
   let inBacktickString = false;
-  let inBlockComment = false;
   while (i < line.length) {
     const c = line[i];
     const next = line[i + 1];
-    if (inBlockComment) { if (c === '*' && next === '/') { inBlockComment = false; i += 2; continue; } i++; continue; }
+    if (state.inBlockComment) {
+      if (c === '*' && next === '/') { state.inBlockComment = false; i += 2; continue; }
+      i++; continue;
+    }
     if (inSingleString) { if (c === '\\') { i += 2; continue; } if (c === "'") inSingleString = false; i++; continue; }
     if (inDoubleString) { if (c === '\\') { i += 2; continue; } if (c === '"') inDoubleString = false; i++; continue; }
     if (inBacktickString) { if (c === '\\') { i += 2; continue; } if (c === '`') inBacktickString = false; i++; continue; }
     if (c === '/' && next === '/') break;
-    if (c === '/' && next === '*') { inBlockComment = true; i += 2; continue; }
+    if (c === '/' && next === '*') { state.inBlockComment = true; i += 2; continue; }
     if (c === "'") { inSingleString = true; i++; continue; }
     if (c === '"') { inDoubleString = true; i++; continue; }
     if (c === '`') { inBacktickString = true; i++; continue; }
@@ -92,13 +108,20 @@ export function isExcluded(filePath: string): boolean {
   return false;
 }
 
-export function findViolationsInLine(line: string, filePath: string, lineNumber: number): Violation[] {
-  if (OVERRIDE_ANNOTATION.test(line)) return [];
-  const stripped = stripCommentsAndStrings(line);
+export function findViolationsInLines(lines: string[], filePath: string): Violation[] {
   const violations: Violation[] = [];
-  for (const { pattern, reason, name } of WALL_CLOCK_PATTERNS) {
-    if (pattern.test(stripped)) {
-      violations.push({ file: filePath, line: lineNumber, text: line.trim(), pattern: name, reason });
+  const state: ScanState = { inBlockComment: false };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (OVERRIDE_ANNOTATION.test(line)) {
+      stripCommentsAndStringsWithState(line, state);
+      continue;
+    }
+    const stripped = stripCommentsAndStringsWithState(line, state);
+    for (const { pattern, reason, name } of WALL_CLOCK_PATTERNS) {
+      if (pattern.test(stripped)) {
+        violations.push({ file: filePath, line: i + 1, text: line.trim(), pattern: name, reason });
+      }
     }
   }
   return violations;
@@ -114,9 +137,7 @@ export async function scanRepository(rootDir = '.'): Promise<Violation[]> {
         if (isExcluded(relPath)) continue;
         const text = await Deno.readTextFile(entry.path);
         const lines = text.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          violations.push(...findViolationsInLine(lines[i], relPath, i + 1));
-        }
+        violations.push(...findViolationsInLines(lines, relPath));
       }
     } catch (e) {
       if (!(e instanceof Deno.errors.NotFound)) throw e;

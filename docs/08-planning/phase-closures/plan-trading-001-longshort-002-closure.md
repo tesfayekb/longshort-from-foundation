@@ -283,3 +283,19 @@ Plus `docs/banned-patterns.md` as the DEC-034 (2) explicitly-referenced override
 **Module status remains `phase-0b-validated`.** This corrective adds CI infrastructure; no module behavior change.
 
 **Cross-reference:** ACT-098 (FP-006 closure record-of-truth); ACT-099 (this corrective — single transaction across partial landing + continuation); ADR-003 enforcement-as-scripts-not-prose (the principle this corrective self-applies); ADR-002 (chartering authority for the Permanent wall-clock overrides); DW-058 B1 (the parseFloat-NaN-guard remediation Phase 7 owns).
+### ACT-099-post: third-turn script-correctness corrective (2026-05-25)
+
+Lovable's §22.8.4 post-write `scanRepository — clean on current repo` canary surfaced two pre-existing defects in the partial-landed enforcement scripts:
+
+- **Defect class #18 — `scripts/check-wall-clock.ts` line-local block-comment state.** The `stripCommentsAndStrings(line)` helper reset `inBlockComment` on each line, so JSDoc prose containing `Date.now()` / `new Date()` / `performance.now()` / `Temporal.Now.*` produced false positives. Specifically: `supabase/functions/_shared/longshort-reconciliation-lifecycle.ts:20` is inside a JSDoc block documenting the bans, and the line-local detector flagged the documentation as violations.
+- **Defect class #19 — `scripts/check-paper-only-url.ts` `stripLineComment` strips at first `//` irrespective of string-literal context.** For a string like `"https://api.alpaca.markets/..."`, the function returned `const url = "https:` (truncated at the URL's protocol-delimiter `//`), masking the live URL from detection. The script's `scanRepository` returned clean only because no in-scope file currently contains a live URL; the unit test correctly failed and surfaced the gap.
+
+**ACT-099-post resolution (Option α per operator decision):** converted `check-wall-clock.ts` detection to a file-level pass with persistent `inBlockComment` state across line boundaries (mirroring the architectural pattern of `check-catch-returns-zero.ts`); converted `check-paper-only-url.ts` detection to string-literal-aware comment stripping (preserving URLs inside string literals while correctly excluding line-comment text). Added regression tests for both edge cases (multi-line JSDoc + URL-in-single/double/template-string).
+
+**Branch-coherence canary restored to 5-of-5 green.** All 5 enforcement test suites pass with `scanRepository — clean on current repo` assertions holding.
+
+**No business-logic changes. No annotation modifications. No governance entries beyond this note.** Single ACT-099 transaction spans 3 turns: partial (9 files) + continuation (11 files) + post (4 file edits + this note) = 24 file ops total.
+
+**Supervisor self-defect log additions:** defect classes #18 (line-local block-comment state) + #19 (string-literal-aware URL detection) logged for future CI-enforcement-script authoring discipline. Forward-binding: any future enforcement script with scope including documentation paths MUST handle multi-line block comments via the `ScanState` pattern; any future URL/literal-detection script MUST handle string-literal contexts via the `stripCommentsAndStrings` pattern.
+
+**Cross-reference:** ACT-099 (parent transaction); ACT-099-cont (continuation turn); ACT-099-post (this third-turn corrective); ADR-003 (the enforcement-as-scripts-not-prose principle this corrective sustains via test-driven defect remediation).
