@@ -727,3 +727,16 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | Defect class surfaced | #36 — supervisor Surface-N pre-resolution without schema-grep verification; codification target v0.6.3 §22.3 (g); logged forward, no in-cycle correction. |
 | Approval | Operator approval 2026-05-25: "1a 2α go" → "α go" (Surface 0). |
 | Supersession | N/A — additive. database-migration-ledger MIG-049-052 renumbering table corrected: hard_exclusion_refresh seeds took MIG-049 slot ahead of sub-step 8.6; universe_membership shifts MIG-049 → MIG-050; hard_exclusions MIG-050 → MIG-051. |
+
+### v13.17 — 2026-05-25 — FP-008 Sub-Step 8.6 Closure (ACT-110)
+
+| Field | Value |
+|-------|-------|
+| Change Type | Implementation (3 atomic schema migrations + reference-index reconciliation + AC text amendments under FP-008) |
+| Scope | 3 new migrations: **MIG-050** `universe_membership` table (Surface 1 Option A two-boolean shape mirroring `EligibleConstituent`; CHECK `(long_eligible OR short_eligible)`; FK to `universe_refresh_log` ON DELETE RESTRICT; operator-scoped RLS; 3 indexes); **MIG-051** `hard_exclusions` table (PK `(operator_id, ticker, as_of_date)` per DEC-038.1 clause (7) — rule_id NOT in PK; `firing_rules text[]` + `firing_reasons jsonb` + nullable `refresh_id` FK ON DELETE SET NULL; operator-scoped RLS; 4 indexes including GIN on firing_rules); **MIG-052** `feature_flags` seed `universe.enabled=false` (default operator_id per MIG-039 convention; idempotent ON CONFLICT). AC-10/11/12/14 amended in master-plan with MIG renumbering; AC-13 retroactive evidence note added (satisfied at ACT-108 + ACT-109). FP-008 Reference Impact MIG renumbering corrected to post-ACT-110 actuals. FP-008 Status field forward-fixed (defect #34) to reflect 8.5 + 8.6 closures. Universe-component remains inert until 8.13 flips the flag. |
+| Surfaces resolved | Surface 1 → Option A (operator-confirmed two-boolean shape + CHECK; no `universe_book` enum minted). |
+| Guardrails | G1 honored (DEC-038/038.1 clauses (5) + (7) directly enumerate this sub-step's deliverables; no DEC amendment); G2 honored (iShares cross-check stays in `universe_refresh_log`; no wiring into membership/exclusions tables). |
+| v0.6.2 §22.3 discipline | (a) reference indices updated same-PR (database-migration-ledger + longshort.md + master-plan + feature-proposals); (b) idiom-grep clean (CREATE TABLE IF NOT EXISTS / ENABLE RLS / DROP-CREATE POLICY / PK / CHECK / ON CONFLICT / text[] / jsonb / FK precedents all verified); (c) 3 migrations independent (only FK to MIG-048; no cross-deps); no write paths landed (8.7 scope); (d) plan v13.16 → v13.17 per Rule 10. |
+| Live-DB evidence | `supabase--read_query` × 3 confirmed: (i) universe_membership — 8 columns / RLS enabled / 2 policies / CHECK `(long_eligible OR short_eligible)` present; (ii) hard_exclusions — 7 columns / RLS enabled / 2 policies; (iii) feature_flags — 1 row with `enabled=false`, `evidence_tier='weak'`, reason citing FP-008 sub-step 8.6 / ACT-110. §22.5.1 binding standard satisfied × 3. §22.5.2 NOT triggered per defect class #35 (no capability mismatch for new tables / seed). |
+| Approval | Operator approval 2026-05-25: "A go" (Surface 1 — two-boolean mirror + CHECK). |
+| Supersession | N/A — additive. RESERVED block in database-migration-ledger collapsed into final LANDED entries (MIG-050/051/052). |
