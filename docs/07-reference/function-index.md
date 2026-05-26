@@ -2000,7 +2000,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Method / Permission** | POST / `longshort.view` (observability discipline; `longshort.execute` reserved for Phase 5+) |
 | **Dispatches** | verify_buying_power (system-level), verify_universe_membership, verify_position (per-symbol; canned AAPL for 6.3d dispatch-path validation) |
 | **Clock** | `productionClock.getWallClockTs()` at top-of-call-chain (DEC-034 clause (4) injected-clock) |
-| **Mock fetchers** | YES — sub-step 6.3d proves dispatch path; real broker integration at sub-step 6.7 |
+| **Mock fetchers** | PARTIAL — `MOCK_POSITION_FETCHER` + `MOCK_BP_FETCHER` remain (real broker integration at sub-step 6.7 / Alpaca paper). `MOCK_UNIVERSE_FETCHER` REMOVED at FP-008 sub-step 8.7 / ACT-113; replaced by `createUniverseMembershipFetcher` LIVE supabaseAdmin-backed reads of `universe_membership` + `hard_exclusions` (per Surface 1 Option A fetcher-layer "stub-to-real" transition; verifier signature unchanged per AC-16) |
 | **Activated by job** | `longshort.reconciliation_periodic_sweep` (`enabled=true` via MIG-045) |
 | **Added by** | FP-006 sub-step 6.3d, ACT-081 |
 
