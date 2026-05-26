@@ -6,6 +6,7 @@ This folder contains all documentation for the long-short trading strategy modul
 
 - `longshort.md` — module doc (created in FP-005 long-short Phase 0; not yet present at the time of this folder's creation)
 - `design-source/` — canonical design source-of-truth: the CROSSWIND v0.9 spec set plus the ADR-001 reconciliation architecture decision and the spec-source-index attribution document. These files are preserved verbatim from pre-implementation design work. See `design-source/README.md` for full attribution.
+- `universe/` — universe component documentation per FP-008 / AC-20 (sub-step 8.10; landed 2026-05-26 / ACT-116). Contains `universe.md` (the detailed component reference).
 
 ## Modularity
 
