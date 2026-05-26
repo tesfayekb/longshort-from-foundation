@@ -835,3 +835,21 @@ HIGH — loss of traceability breaks system integrity and decision history.
 - AC-21 + AC-22 evidenced via 6 Deno tests at `replay-pass-runner_test.ts` (parse + 10-event count + 8/0/2 outcome distribution + materially-excluded escalation × 2 + AC-22 byte-identical determinism + AC-21 round-trip) + 8 Deno tests at `l2-synthetic-universe-quarterly-refresh-generator_test.ts`.
 - Landed across two Lovable commits per partial-landing pattern (third consecutive observation after ACT-113 + ACT-114; first commit 2 files at SHA afc73fd3; second commit 14 file touches).
 - ACT-103-116 code paths preserved verbatim; existing verify_quote replay path UNTOUCHED.
+
+### v13.25 — 2026-05-26 — FP-008 Sub-Step 8.12 Closure: Operator Runbooks for Known Failure Modes (AC-23; First Runbook Landing in Repo) (ACT-118)
+
+- Sub-step 8.12 closed at ACT-118 per AC-23 + CROSSWIND §10.5 deliverable 12 verbatim 4-runbook enumeration.
+- Surface choices locked (3-pass supervisor convergence): S1 β (4 separate runbook files; on-call utility wins over file-count economy at Tier B); S2 r (NEW `docs/04-modules/longshort/universe/runbooks/` nested sub-folder; ACT-116 calibration 2 explicit-exception applies); S3 i (7-section canonical: Symptoms → Detection → Diagnosis → Action → Verification → Escalation → Cross-references); S4 a (4 ART entries ART-020/021/022/023 with `Type = runbook` + `Owning Phase = Phase Trading-Foundation` per ART-018/019 verbatim precedent).
+- 5 peer-supervisor calibrations folded throughout: anti-completion-theater binding from ACT-116/117 precedent (calibration 1); ACT-116 sub-folder-lock explicit-exception applied to runbooks/ (calibration 2); ART phase-nomenclature lineage verbatim per ART-018/019 (calibration 3); longshort.md status-indicator preservation + module-tier README.md unchanged (calibration 4); §22.8.4 STOP-on-ambiguity discipline rather than speculative DW logging (calibration 5).
+- FIRST runbook artifact-class instantiation in the repo (`runbook` type was schema-registered in `artifact-index.md` but never instantiated until this sub-step).
+- Four runbooks landed satisfying AC-23 verbatim: quarterly refresh failure (ART-020) + cross-check noise classification (ART-021) + halt-feed unavailable (ART-022) + earnings-calendar feed failure (ART-023).
+- Runbook content sourced strictly from cited DEC clauses + CROSSWIND sections + ACT entries + DW register + src/ JSDoc per anti-completion-theater binding from ACT-116/117 precedent.
+- `universe.md` placeholder replacements at lines 33 + 221; module-tier README.md UNCHANGED (Surface 2 r); `longshort.md` UNCHANGED (ACT-116 calibration 4); `replay-fixture-format.md` UNCHANGED (ACT-117 scope preservation).
+- 4 ART entries appended to `artifact-index.md` with `Owning Phase = Phase Trading-Foundation` verbatim per ART-018/019 (defect-#40 lineage discipline; no `Phase 1` drift).
+- `docs/08-planning/feature-proposals.md` FP-008 Status field updated per defect #34 forward-fix (v0.6.3 §22.3 (e)).
+- AC-23 ticked; sub-step 8.12 checkbox ticked.
+- NO new DW entries logged at this sub-step — §22.8.4 STOP-on-ambiguity discipline rather than speculative deferral.
+- NO new DEC clauses; NO amendments to DEC-034 / DEC-038 / DEC-038.1; NO new ADR; runbooks are operational documentation, not governance.
+- Tier B documentation-only: no code changes; no schema changes; no live-DB writes; no §22.5.1 / §22.5.2 invocation.
+- Module status `phase-0b-validated` unchanged (8.13 closure transitions to `phase-1-validated`).
+- ACT-103-117 entries preserved verbatim (append-only).

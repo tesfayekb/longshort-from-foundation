@@ -30,7 +30,7 @@ It exists so that downstream signal generation (Phase 2+), sizing (Phase 4+), an
 - Position sizing (Phase 4+).
 - Order execution and `longshort.execute` permission (Phase 5+ per DEC-032 clause (2)).
 - Market data feeds outside constituent fetching.
-- Operator runbooks for known failure modes (sub-step 8.12 — pending).
+- Operator runbooks for known failure modes — LANDED at sub-step 8.12 / ACT-118 under `docs/04-modules/longshort/universe/runbooks/`. Four runbooks: quarterly refresh failure (ART-020) + cross-check noise classification (ART-021) + halt-feed unavailable (ART-022) + earnings-calendar feed failure (ART-023). 7-section canonical structure (Symptoms → Detection → Diagnosis → Action → Verification → Escalation → Cross-references) per Surface 3 Option i.
 - Phase 1 closure mechanics (sub-step 8.13 — pending; flips `universe.enabled` true, transitions module status `phase-0b-validated` → `phase-1-validated`).
 
 ## Enforcement Rules
@@ -218,7 +218,7 @@ Failure modes documented in the deferred-work register and the ACT-103-115 narra
 - **§3.3c halt-feed unavailability (v1)** — deferred-placeholder per DW-063; documented in FP-008 R4 risk register.
 - **Continuous-refresh metric staleness (speculative — currently zero firings)** — explicitly forward-looking per DW-071; revisit at per-rule-fetcher landing sub-step.
 - **Cross-check noise post-flag-flip (speculative)** — DW-068 logs continuous-refresh cross-check scope question; DW-068 also tracks jaccard threshold post-flag-flip calibration.
-- **Operator runbooks for the modes above** — pending sub-step 8.12 (out of 8.10 scope).
+- **Operator runbooks for the modes above** — LANDED at sub-step 8.12 / ACT-118 (ART-020 through ART-023) under `docs/04-modules/longshort/universe/runbooks/`. See `runbooks/` sub-folder for per-failure-mode operational procedures.
 
 ## Dependencies
 

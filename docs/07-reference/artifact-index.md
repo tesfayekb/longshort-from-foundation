@@ -411,6 +411,78 @@ For each phase, only **one** authoritative closure document may exist in the rep
 
 ---
 
+### ART-020: Quarterly Refresh Failure Runbook
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-020 |
+| **Type** | runbook |
+| **Title** | Quarterly Refresh Failure Runbook — operator procedures for FP-008 universe quarterly atomic refresh failure modes per AC-23 |
+| **Source Path** | `docs/04-modules/longshort/universe/runbooks/quarterly-refresh-failure-runbook.md` |
+| **Created Date** | 2026-05-26 |
+| **Owning Phase** | Phase Trading-Foundation |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-003 |
+| **Status** | `active` |
+| **Related Actions** | ACT-118 (this sub-step); ACT-108 (MIG-048 `universe_refresh_log` schema); ACT-114 (cross-check abort semantics); ACT-115 (emitter-skipped-on-non-completed semantic) |
+| **Related Decisions** | DEC-038 clause (3) atomicity contract; DEC-038.1 clause (4) per-rule cadence |
+| **Notes** | 7-section canonical structure per Surface 3 Option i: Symptoms → Detection → Diagnosis → Action → Verification → Escalation → Cross-references. Documents quarterly refresh atomic semantics + abort branches per ACT-114 Surface 5 Option q. Escalation contact placeholder pending Phase 7 operator on-call rotation. |
+
+---
+
+### ART-021: Cross-Check Noise Classification Runbook
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-021 |
+| **Type** | runbook |
+| **Title** | Cross-Check Noise Classification Runbook — operator procedures for `universe_cross_check` reconciliation_events outcome interpretation per AC-23 |
+| **Source Path** | `docs/04-modules/longshort/universe/runbooks/cross-check-noise-classification-runbook.md` |
+| **Created Date** | 2026-05-26 |
+| **Owning Phase** | Phase Trading-Foundation |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-003 |
+| **Status** | `active` |
+| **Related Actions** | ACT-118 (this sub-step); ACT-114 (cross-check operational + Surface 2 Option γ jaccard thresholds); ACT-115 (`reconciliation_events_daily_agg` view consumption via canonical dashboard query) |
+| **Related Decisions** | DEC-034 clause (3) outcome enum verbatim; DEC-038 clause (2) cross-check outcome assignments verbatim |
+| **Notes** | 7-section canonical structure. Diagnosis section is longest; covers all 5 `reconciliation_outcome` enum values per CROSSWIND §11.0.10 verbatim + §11.0.11 runbook-driven-vs-operator-bespoke distinction. Cross-references DW-068 forward-binding deferral on jaccard threshold post-flag-flip calibration. |
+
+---
+
+### ART-022: Halt-Feed Unavailable Runbook
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-022 |
+| **Type** | runbook |
+| **Title** | Halt-Feed Unavailable Runbook — documents v1 deferred-placeholder state + Phase 7 unblock path per AC-23 |
+| **Source Path** | `docs/04-modules/longshort/universe/runbooks/halt-feed-unavailable-runbook.md` |
+| **Created Date** | 2026-05-26 |
+| **Owning Phase** | Phase Trading-Foundation |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-003 |
+| **Status** | `active` |
+| **Related Actions** | ACT-118 (this sub-step); ACT-107 (DW-063 registration at sub-step 8.3); ACT-097 (audit reconciliation B2 HIGH/BLOCKING); ACT-110 (`hard_exclusions` schema landing) |
+| **Related Decisions** | DEC-038 clause (4) per-rule cadence; FP-008 R4 risk register |
+| **Notes** | 7-section canonical structure. v1 reality: deferred placeholder per DW-063; rule wired but inert at v1; signal-layer defense-in-depth per DW-063 risk acknowledgment. Phase 7 dependency on halt-feed external data procurement per DW-058 B2 HIGH/BLOCKING. |
+
+---
+
+### ART-023: Earnings-Calendar Feed Failure Runbook
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-023 |
+| **Type** | runbook |
+| **Title** | Earnings-Calendar Feed Failure Runbook — operator procedures for `PolygonEarningsCalendarFetcher` failure modes per AC-23 |
+| **Source Path** | `docs/04-modules/longshort/universe/runbooks/earnings-calendar-feed-failure-runbook.md` |
+| **Created Date** | 2026-05-26 |
+| **Owning Phase** | Phase Trading-Foundation |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-003 |
+| **Status** | `active` |
+| **Related Actions** | ACT-118 (this sub-step); ACT-107 (§3.3a rule landing); ACT-109 (continuous-refresh dispatcher); ACT-113 (`hard_exclusions` persister wiring) |
+| **Related Decisions** | DEC-038 clause (4) per-rule independence verbatim; DEC-038.1 clause (4) job-registry seeds verbatim |
+| **Notes** | 7-section canonical structure. Sourced from `PolygonEarningsCalendarFetcher` class behavior at `src/features/longshort/services/universe/hard-exclusions/earnings-calendar-fetcher.ts` including `POLYGON_API_KEY` constructor validation + silent-skip on malformed events. Per-rule independence per DEC-038 clause (4) governs cascade semantics. |
+
+---
+
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
