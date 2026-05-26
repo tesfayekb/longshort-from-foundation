@@ -16,6 +16,7 @@ import type {
   UniverseMembershipPersisterInput,
   HardExclusionsPersisterInput,
 } from '../verify-membership/types.ts';
+import type { ReconciliationOutcome } from '../../../../../../supabase/functions/_shared/longshort-reconciliation-types.ts';
 
 /** Per CROSSWIND §3.4 LOCKED: quarterly cadence Jan/Apr/Jul/Oct. */
 export type RefreshOutcome = 'completed' | 'failed' | 'partial';
@@ -79,7 +80,28 @@ export interface RefreshExecutionContext {
    *  orchestrators) + Option c (firing_rules array-union via caller-side
    *  per-ticker grouping). */
   hardExclusionsPersister: HardExclusionsPersister;
+  /** Cross-check invocation — FP-008 sub-step 8.8 / ACT-114 (Surface 4
+   *  Option a OUTSIDE persistence, step 2b). Builds `ReconcileCallSpec` per
+   *  `buildUniverseCrossCheckSpec` and invokes `reconcile()`. Edge function
+   *  injects the production wiring; tests inject stubs returning the
+   *  outcome under assertion (abort vs proceed path). Per AC-18 verbatim:
+   *  universe-component does NOT directly write `reconciliation_events`
+   *  rows — `reconcile()` writes via its own supabaseAdmin path. */
+  crossCheck: CrossCheckFn;
 }
+
+/**
+ * Cross-check function signature — FP-008 sub-step 8.8 / ACT-114.
+ * Returns ONLY the outcome surface the orchestrator needs to route the
+ * abort/proceed decision (per Surface 5 Option q). Full `ReconcileResult`
+ * persistence + divergence emission is handled by `reconcile()` internally.
+ */
+export type CrossCheckFn = (input: {
+  readonly operator_id: string;
+  readonly polygon_tickers: ReadonlyArray<string>;
+  readonly ishares_tickers: ReadonlyArray<string>;
+  readonly as_of: Date;
+}) => Promise<{ readonly outcome: ReconciliationOutcome }>;
 
 /**
  * Persistence sink contract — keeps the orchestrator decoupled from
