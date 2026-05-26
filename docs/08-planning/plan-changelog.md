@@ -796,3 +796,14 @@ HIGH — loss of traceability breaks system integrity and decision history.
 | Defect class surfaced | "Code-heavy sub-step file-count predicts partial-landing risk" — pattern statistically meaningful after 2 consecutive partial-landings (ACT-113 + ACT-114) on ~17-20 file targets. Logging in supervisor handoff catalog for forward consideration; pre-organize file-scope into "implementation tier" + "governance tier" sections candidate. Not codifying on second observation. |
 | Approval | Operator approval 2026-05-26: pre-flight Surfaces A / γ / i / a / q + Cont-Refresh (ii) + S6 Option I confirmation; "resume per recommendation" for the 8 governance file touches comprising the second commit. |
 | Supersession | N/A — additive execution. Next deliverable: FP-008 sub-step 8.9 (health monitoring per §11.3 + DEC-038 clause (7); universe size + filter rates + hard exclusion counts + refresh duration + cross-check divergence counts emitted to dashboard-queryable storage; AC-19 binds). |
+
+### v13.22 — 2026-05-26 — FP-008 Sub-Step 8.9 Closure: Universe-Component Health Monitoring Operational (FIRST dashboard-queryable metric emission; AC-19) (ACT-115)
+
+- Sub-step 8.9 closed at ACT-115 per AC-19 + DEC-038 clause (7) verbatim binding.
+- Surface choices locked (3-pass supervisor convergence): S1 γ (extend `universe_refresh_log` via MIG-053; reuse `reconciliation_events_daily_agg` view); S2 q (7-bucket `FilterRejectionReason` enum; DW-070); S3 ii (refresh-time snapshot); S4 x (cross-check via existing view; no denormalization); S5 A (single `metrics-emitter.ts` under new `health-monitoring/` sub-folder); S6 m (quarterly-only; DW-071 forward-binding deferral).
+- MIG-053 adds `filter_rejection_counts jsonb` + `hard_exclusion_counts jsonb` columns to `universe_refresh_log` with point-in-time-snapshot DDL comments.
+- Quarterly orchestrator Step 7 (post-finalize) emits metrics on `outcome='completed'`; emitter errors are observability-only (do NOT fail the refresh).
+- Canonical dashboard query block landed in `docs/04-modules/longshort/longshort.md` (Surface 4 Option x discovery binding).
+- DW-070 logs clause-(7) verbatim drift (7 enum buckets vs spec's 6 §3.2 filters); DW-071 logs continuous-refresh metric emission deferral.
+- AC-19 evidenced (code-operational portion; runtime evidence defers to sub-step 8.13 flag flip per AC-17 pattern).
+- ACT-104-114 code paths preserved verbatim; continuous-refresh orchestrator untouched (S6 Option m).
