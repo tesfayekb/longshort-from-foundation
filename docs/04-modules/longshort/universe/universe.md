@@ -1,6 +1,6 @@
 # Universe Component
 
-> **Owner:** longshort strategy module | **Phase:** Trading-Foundation / FP-008 (PLAN-TRADING-001-LONGSHORT-003) | **Status:** sub-steps 8.0a / 8.1 / 8.2 / 8.3 / 8.4 / 8.5 / 8.6 / 8.7 / 8.8 / 8.9 / 8.10 LANDED; 8.11-8.13 pending
+> **Owner:** longshort strategy module | **Phase:** Trading-Foundation / FP-008 (PLAN-TRADING-001-LONGSHORT-003) | **Status:** sub-steps 8.0a / 8.1 / 8.2 / 8.3 / 8.4 / 8.5 / 8.6 / 8.7 / 8.8 / 8.9 / 8.10 / 8.11 LANDED; 8.12-8.13 pending
 
 This document is the detailed component reference for the long-short strategy's universe component. It satisfies CROSSWIND §12.4 per-component documentation and FP-008 AC-20. Content is sourced strictly from DEC-038 + DEC-038.1 verbatim clauses, ACT-103 through ACT-115 entries in `docs/06-tracking/action-tracker.md`, the longshort module overview (`docs/04-modules/longshort/longshort.md`), and the JSDoc / type signatures in `src/features/longshort/services/universe/`. Sections without sufficient documented evidence say so explicitly rather than fabricate.
 
@@ -23,13 +23,13 @@ It exists so that downstream signal generation (Phase 2+), sizing (Phase 4+), an
 - Ingestion-time cross-check per §11.0.5 / sub-step 8.8 (operational, not just documented — per A4 amendment in §10.5).
 - Health monitoring per §11.3 / sub-step 8.9.
 - Component documentation per §12.4 / sub-step 8.10 (this file).
+- Replay-test integration per §11.10 / sub-step 8.11 (verify_universe_membership chokepoint; L2 synthetic universe quarterly-refresh fixture).
 
 **Out of scope (other components / phases own):**
 - Signal generation (Phase 2+ / future FPs).
 - Position sizing (Phase 4+).
 - Order execution and `longshort.execute` permission (Phase 5+ per DEC-032 clause (2)).
 - Market data feeds outside constituent fetching.
-- Replay-test integration (sub-step 8.11; AC-21 + AC-22 — pending).
 - Operator runbooks for known failure modes (sub-step 8.12 — pending).
 - Phase 1 closure mechanics (sub-step 8.13 — pending; flips `universe.enabled` true, transitions module status `phase-0b-validated` → `phase-1-validated`).
 
@@ -67,7 +67,7 @@ Per DEC-038.1 (Phase 1 universe-component architecture; status `active`) clauses
 3. **`verify_universe_membership` real implementation hook.** Fetcher-layer transition (Surface 1 Option A at ACT-113): verifier signature preserved (AC-16); `createUniverseMembershipFetcher` + `createUniverseService` land under `verify-membership/`.
 4. **Job-registry seeds.** One quarterly + four continuous seeds, all initially `enabled=false`.
 5. **Feature-flag wrapping at module entry chokepoint.** Single read site at `getEligibleUniverse()`; downstream code is unaware of the flag.
-6. **Replay framework integration.** Pending sub-step 8.11; see AC-21 + AC-22.
+6. **Replay framework integration.** LANDED sub-step 8.11 / ACT-117 per AC-21 + AC-22. `verify_universe_membership` chokepoint is replayable against the L2 synthetic universe quarterly-refresh fixture (`replay_storage/l2-synthetic-universe-quarterly-refresh.jsonl.zst`); two replay-pass runs produce byte-identical event sequences (§11.10.4 PASS). Snapshot-style fixture extension does NOT amend §11.10.1's 8-stream tick enumeration (parallel loader in `l2-synthetic-universe-quarterly-refresh-generator.ts` sidesteps `fixture-loader.ts`). Full quarterly orchestrator determinism (Polygon + iShares fetch + cross-check + enrichment + filters + hard-exclusions + persistence) deferred to DW-073 / Phase 7 captured-day work per Surface 4 Option a scope-limit.
 7. **Schema architecture.** Two new tables — `universe_membership` (PK `(operator_id, ticker, as_of_date)`; two-boolean shape `long_eligible bool` + `short_eligible bool`) and `hard_exclusions` (PK same; `firing_rules text[]` + `firing_reasons jsonb`) — plus the `universe_refresh_log` audit table.
 8. **Dependencies on other decisions.** See Dependencies section.
 
@@ -233,7 +233,7 @@ Per DEC-038 clause (8) + DEC-038.1 clause (8):
 - **DEC-037** — evidence-workflow tooling; Phase 1 evidence-tier discipline.
 - **DEC-038** — universe-component invariants (this component's governing decision).
 - **DEC-038.1** — universe-component architecture.
-- **Replay framework integration** — pending sub-step 8.11; see AC-21 + AC-22.
+- **Replay framework integration** — LANDED sub-step 8.11 / ACT-117 per AC-21 + AC-22. See `src/features/longshort/services/replay/l2-synthetic-universe-quarterly-refresh-generator.ts` + `replay-pass-runner.ts#runUniverseMembershipReplayPass` + `scripts/replay-pass.ts --verifier=verify_universe_membership` + `e2e/longshort/replay-fixtures/coverage-matrix.md`.
 
 ## Cross-references
 
@@ -244,8 +244,9 @@ Per DEC-038 clause (8) + DEC-038.1 clause (8):
 - **Plan section:** PLAN-TRADING-001-LONGSHORT-003 in [`docs/08-planning/master-plan.md`](../../../08-planning/master-plan.md)
 - **Acceptance criteria:** AC-01 through AC-38 (master-plan PLAN-TRADING-001-LONGSHORT-003).
 - **Migrations:** MIG-048 / MIG-049 / MIG-050 / MIG-051 / MIG-052 / MIG-053 in [`docs/07-reference/database-migration-ledger.md`](../../../07-reference/database-migration-ledger.md).
-- **Action tracker:** ACT-103 / ACT-104 / ACT-106 / ACT-107 / ACT-108 / ACT-109 / ACT-110 / ACT-113 / ACT-114 / ACT-115 / ACT-116 (this sub-step closure) in [`docs/06-tracking/action-tracker.md`](../../../06-tracking/action-tracker.md).
+- **Action tracker:** ACT-103 / ACT-104 / ACT-106 / ACT-107 / ACT-108 / ACT-109 / ACT-110 / ACT-113 / ACT-114 / ACT-115 / ACT-116 / ACT-117 in [`docs/06-tracking/action-tracker.md`](../../../06-tracking/action-tracker.md).
 - **Function index:** `verify_universe_membership`, `createUniverseService`, `createUniverseMembershipFetcher`, `createQuarterlyRefreshOrchestrator`, `buildUniverseCrossCheckSpec`, `makeMetricsEmitter`, `emitRefreshMetrics` in [`docs/07-reference/function-index.md`](../../../07-reference/function-index.md).
 - **Reconciliation events daily aggregate view:** `reconciliation_events_daily_agg` (MIG-047).
-- **Deferred work:** DW-063 (halts v1 deferred-placeholder); DW-066 (spec-terminology drift, verifier signature); DW-067 (spec-terminology drift, typed-absence via null); DW-068 (continuous-refresh cross-check scope; jaccard threshold post-flag-flip calibration); DW-069 (`VerifyCallName` → `ReconcileCallName` forward-rename); DW-070 (Surface 2 clause-(7) verbatim drift); DW-071 (Surface 6 continuous-refresh metric emission deferral). All in [`docs/08-planning/deferred-work-register.md`](../../../08-planning/deferred-work-register.md).
+- **Deferred work:** DW-063 (halts v1 deferred-placeholder); DW-066 / DW-067 (spec-terminology drift); DW-068 (jaccard calibration); DW-069 (`VerifyCallName` rename); DW-070 / DW-071 (clause-(7) drift + continuous-refresh metric deferral); DW-072 (replay coverage matrix verifier build-out); DW-073 (full quarterly orchestrator determinism deferral; Surface 4 Option a); DW-074 (DEC-035 clause (8) Vitest citation vs ADR-005 Deno-native substrate drift). All in [`docs/08-planning/deferred-work-register.md`](../../../08-planning/deferred-work-register.md).
 - **Artifact index entry:** ART-019 in [`docs/07-reference/artifact-index.md`](../../../07-reference/artifact-index.md).
+- **Replay coverage matrix:** [`e2e/longshort/replay-fixtures/coverage-matrix.md`](../../../../e2e/longshort/replay-fixtures/coverage-matrix.md).
