@@ -90,7 +90,36 @@ Per FP-008 (PLAN-TRADING-001-LONGSHORT-003) + DEC-038 + DEC-038.1. Builds and va
 - **Universe schema tables** (LANDED at sub-step 8.6 close (ACT-110)) — MIG-050 `universe_membership` (Surface 1 Option A two-boolean shape: `long_eligible bool` + `short_eligible bool` + `quarter_label` + `refresh_id` FK + `created_at`; PK `(operator_id, ticker, as_of_date)`; CHECK (long_eligible OR short_eligible); operator-scoped RLS); MIG-051 `hard_exclusions` (PK `(operator_id, ticker, as_of_date)` per DEC-038.1 clause (7); `firing_rules text[]` + `firing_reasons jsonb` + nullable `refresh_id` FK; GIN index on firing_rules; operator-scoped RLS); MIG-052 `feature_flags` seed `universe.enabled=false` (default operator_id per MIG-039 convention; idempotent). Write paths land at sub-step 8.7 (verify_universe_membership real implementation + hard_exclusions persistence from refresh handlers); universe-component remains inert until 8.13 flips the flag. AC-10/11/12/14 evidenced; AC-13 evidenced retroactively at ACT-109.
 - `verify_universe_membership` real implementation (LANDED at sub-step 8.7 / ACT-113) — `verify-membership/` chokepoint at `src/features/longshort/services/universe/verify-membership/` (`createUniverseMembershipFetcher` + `createUniverseService` with BULK-tier `getEligibleUniverse()` per DEC-038.1 clause (5); Surface 1 Option A fetcher-layer transition preserving verifier signature per AC-16; tick handler MOCK_UNIVERSE_FETCHER replaced with LIVE supabaseAdmin-backed fetcher; AC-15 + AC-16 evidenced)
 - **Ingestion-time cross-check** (LANDED at sub-step 8.8 / ACT-114) — `buildUniverseCrossCheckSpec()` ReconcileCallSpec at `constituent-ingestion/cross-check-spec.ts` per S6 Option I (co-located with primary fetcher; Surface 3 Option i no `verify-cross-check/` sub-folder). Surface 2 Option γ jaccard-similarity classification with explicit safety bounds: floor `sym-diff ≤ 3 → false_positive_within_tolerance` + ceiling `sym-diff > 100 OR empty observed/expected → system_bug`. Surface 4 Option a `VerifyCallName` widened with `'universe_cross_check'` literal (DW-069 forward-rename to `ReconcileCallName`). Surface 5 Option q quarterly orchestrator Step 2b aborts on `failure_escalated` OR `system_bug` BEFORE downstream `universe_membership` + `hard_exclusions` persistence per DEC-038.1 clause (2) + DEC-038 clause (3) prior-quarter intactness. Cont-Refresh Option (ii) continuous-refresh orchestrator untouched (cross-check applies only at quarterly atomic refresh boundary). Production `crossCheck` wired via `reconcile()` at the quarterly edge function per AC-18 (orchestrator does NOT write to `reconciliation_events` directly; only `reconcile()` writes per DEC-034.1). AC-17 + AC-18 evidenced. DW-068 logged for post-flag-flip threshold calibration.
-- §11.3 health monitoring (PENDING sub-step 8.9) — `health-monitoring/` sub-folder
+- **Health monitoring** (LANDED at sub-step 8.9 / ACT-115) — `health-monitoring/` sub-folder per DEC-038.1 clause (1); single-file `metrics-emitter.ts` (Surface 5 Option A) computes `filter_rejection_counts` (7-bucket `FilterRejectionReason` jsonb per Surface 2 Option q; DW-070 tracks clause-(7) verbatim drift between 7 enum literals vs spec's 6 §3.2 filters) + `hard_exclusion_counts` (7-bucket `HardExclusionReason` jsonb per Surface 3 Option ii point-in-time snapshot) from in-memory pipeline state and UPDATEs `universe_refresh_log` via MIG-053 columns (Surface 1 Option γ — extend existing table; no new table). Quarterly orchestrator Step 7 invokes emitter post-finalize, ONLY on `outcome='completed'`; emitter failures logged but do NOT fail the refresh (observability, not correctness). Cross-check divergence counts NOT denormalized (Surface 4 Option x — read from existing `reconciliation_events_daily_agg` view). Continuous-refresh metric emission deferred per DW-071 forward-binding (Surface 6 Option m — currently zero firings produced; revisit at per-rule-fetcher landing sub-step). AC-19 evidenced (code-operational portion; runtime evidence "metrics populated post-refresh" defers to sub-step 8.13 flag flip parallel to AC-17 pattern).
+
+**Dashboard queries (cross-check divergence counts per DEC-038 clause (7) metric 5):**
+
+Cross-check divergence counts are NOT persisted to `universe_refresh_log` (Surface 4 Option x at ACT-115). Read from existing `reconciliation_events_daily_agg` view (MIG-047):
+
+```sql
+SELECT bucket_day, outcome, event_count
+FROM public.reconciliation_events_daily_agg
+WHERE call_name = 'universe_cross_check'
+  AND bucket_day >= now() - interval '90 days'
+ORDER BY bucket_day DESC, outcome;
+```
+
+Weekly + monthly aggregation views (`reconciliation_events_weekly_agg` + `reconciliation_events_monthly_agg`) also available for longer-horizon dashboards.
+
+Filter rejection counts + hard exclusion counts + universe size + refresh duration are queryable from `universe_refresh_log`:
+
+```sql
+SELECT
+  as_of_date,
+  quarter_label,
+  total_post_filters AS universe_size,
+  EXTRACT(EPOCH FROM (refresh_completed_at - refresh_started_at)) AS refresh_duration_seconds,
+  filter_rejection_counts,
+  hard_exclusion_counts
+FROM public.universe_refresh_log
+WHERE outcome = 'completed'
+ORDER BY as_of_date DESC;
+```
 
 **Feature-flag chokepoint:** `universe.enabled` per DEC-038 clause (5) + DEC-038.1 clause (5); default `universe.enabled=false` (SEEDED at MIG-052 / sub-step 8.6 / ACT-110). Wrapping lives at module entry chokepoint; consumers receive typed-absence (`Promise<UniverseConstituent[] | null>` returning `null`) when disabled. Flag flips to `true` operationally at sub-step 8.13 closure.
 

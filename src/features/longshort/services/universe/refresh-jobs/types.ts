@@ -17,6 +17,7 @@ import type {
   HardExclusionsPersisterInput,
 } from '../verify-membership/types.ts';
 import type { ReconciliationOutcome } from '../../../../../../supabase/functions/_shared/longshort-reconciliation-types.ts';
+import type { MetricsEmitter } from '../health-monitoring/metrics-emitter.ts';
 
 /** Per CROSSWIND §3.4 LOCKED: quarterly cadence Jan/Apr/Jul/Oct. */
 export type RefreshOutcome = 'completed' | 'failed' | 'partial';
@@ -88,6 +89,14 @@ export interface RefreshExecutionContext {
    *  universe-component does NOT directly write `reconciliation_events`
    *  rows — `reconcile()` writes via its own supabaseAdmin path. */
   crossCheck: CrossCheckFn;
+  /** Optional health-metrics emitter — FP-008 sub-step 8.9 / ACT-115 (Surface 1
+   *  Option γ + Surface 3 Option ii). Invoked post-finalize on outcome='completed'
+   *  to UPDATE universe_refresh_log with filter_rejection_counts +
+   *  hard_exclusion_counts jsonb. Optional for backwards-compat with tests
+   *  without emitter; production edge function wires the supabaseAdmin-backed
+   *  implementation. Emitter errors do NOT fail the refresh (emission is
+   *  observability, not correctness — orchestrator logs + continues). */
+  metricsEmitter?: MetricsEmitter;
 }
 
 /**

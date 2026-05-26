@@ -19,6 +19,10 @@
  *   5. applyHardExclusions (§3.3 eight rules)
  *   6. Persistence transaction (universe_membership INSERT + hard_exclusions
  *      UPSERT + refresh_log finalize) [FP-008 sub-step 8.7 / ACT-113]
+ *   7. Health metrics emission (filter_rejection_counts + hard_exclusion_counts
+ *      jsonb UPDATE on universe_refresh_log) [FP-008 sub-step 8.9 / ACT-115;
+ *      emitted only on outcome='completed'; emitter errors logged but do NOT
+ *      fail the refresh — emission is observability, not correctness]
  *
  * No clock injection (`as_of` is parameter); no `logAuditEvent` import
  * (DEC-033 v4.1 — audit emission lives in the edge function handler
@@ -34,6 +38,7 @@ import { applyFilters } from '../filters/apply-filters.ts';
 import { applyHardExclusions } from '../hard-exclusions/apply-hard-exclusions.ts';
 import { isoDate } from '../shared/trading-days.ts';
 import type { EligibleConstituent, HardExclusionFiring } from '../hard-exclusions/types.ts';
+import type { FilterRejectionReason } from '../filters/types.ts';
 import type {
   RefreshExecutionContext,
   RefreshResult,
@@ -83,6 +88,7 @@ export function createQuarterlyRefreshOrchestrator(
       let total_eligible_short = 0;
       let eligible: ReadonlyArray<EligibleConstituent> = [];
       let firings: ReadonlyArray<HardExclusionFiring> = [];
+      let filter_rejection_reasons: ReadonlyArray<FilterRejectionReason> = [];
       let ishares_cross_check: Awaited<
         ReturnType<typeof ctx.iSharesConstituents.fetchConstituents>
       > = [];
@@ -129,6 +135,7 @@ export function createQuarterlyRefreshOrchestrator(
         // 4. §3.2 filters.
         const filtered = applyFilters(enriched, as_of);
         total_post_filters = filtered.eligible.length;
+        filter_rejection_reasons = filtered.rejected.map((r) => r.reason);
 
         // 5. §3.3 hard-exclusions.
         const hxResult = applyHardExclusions(filtered.eligible, ctx.exclusionInput, as_of);
@@ -184,6 +191,28 @@ export function createQuarterlyRefreshOrchestrator(
           tickers: (ishares_cross_check ?? []).map((c) => c.ticker),
         },
       });
+
+      // 7. Health metrics emission — FP-008 sub-step 8.9 / ACT-115.
+      // Surface 3 Option ii point-in-time-snapshot: emit ONLY on outcome='completed'.
+      // Failed/aborted refreshes produce no canonical metric snapshot
+      // (refresh-log.outcome='failed' is the dashboard signal). Emitter errors are
+      // observability defects, not correctness defects — orchestrator logs and
+      // continues so a metric-emission failure does not flip a successful refresh
+      // to outcome='failed'.
+      if (ctx.metricsEmitter !== undefined && outcome === 'completed') {
+        try {
+          await ctx.metricsEmitter.emitRefreshMetrics({
+            refresh_id,
+            filter_rejection_reasons,
+            hard_exclusion_reasons: firings.map((f) => f.reason),
+          });
+        } catch (emitErr) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `quarterly-refresh-orchestrator: metrics emission failed for refresh_id ${refresh_id}: ${emitErr instanceof Error ? emitErr.message : String(emitErr)}`,
+          );
+        }
+      }
 
       return {
         refresh_id,

@@ -1672,3 +1672,35 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future phase** | DEC amendment cycle OR FP-008 sub-step 8.13 closure cleanup OR opportunistic during a Phase 2+ ACT that already touches the reconciliation-types layer. |
 | **Risk acknowledged** | Very low — name-only drift; functional behavior unaffected; banned-pattern enforcement + type-checking both unaffected. |
 | **Attestation** | FP-008 closure document at sub-step 8.13 attests this register entry as a name-drift loose-end with operational semantics intact.
+
+---
+
+### DW-070: Surface 2 Clause (7) Verbatim Drift — 7-Bucket FilterRejectionReason Enum vs Spec's 6 §3.2 Filters
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-070 |
+| **Registered at** | ACT-115 (FP-008 sub-step 8.9, 2026-05-26) |
+| **Per** | ACT-115 pre-flight Surface 2 → Option q disposition (operator-locked across 3-pass supervisor convergence) |
+| **Cross-references** | DEC-038 clause (7); `src/features/longshort/services/universe/filters/types.ts` `FilterRejectionReason` 7-literal enum; CROSSWIND §3.2 (6 filters); FP-008 sub-step 8.9; AC-19; MIG-053 column-DDL comment |
+| **Scope** | DEC-038 clause (7) verbatim assigns "filter rates (per-§3.2-filter rejection counts)" as one of 5 mandatory metrics. §3.2 specifies 6 filters. The implementation-side enum `FilterRejectionReason` has 7 literals: 6 §3.2-filter rejection codes plus 1 pre-filter data-completeness sentinel (`missing_filter_input_data`) firing before §3.2 evaluation. Surface 2 Option q persists all 7 buckets to `universe_refresh_log.filter_rejection_counts jsonb` for operator visibility into upstream data-quality issues. Generic column name `filter_rejection_counts` does not claim "§3.2-only" semantics. |
+| **Blocking deps** | None. |
+| **Future phase** | DEC-038 clause (7) amendment ("per-FilterRejectionReason-bucket counts") OR accept indefinitely with this entry + MIG-053 DDL comment as canonical documentation. Recommended path: amendment at FP-008 sub-step 8.13 closure. |
+| **Risk acknowledged** | Low — 1 extra bucket; clause (7) intent operationally honored + exceeded. |
+| **Attestation** | FP-008 closure document at sub-step 8.13 attests this clause (7) interpretation as Surface 2 Option q locked at ACT-115. |
+
+---
+
+### DW-071: Surface 6 Continuous-Refresh Metric Emission Deferral (Forward-Binding)
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-071 |
+| **Registered at** | ACT-115 (FP-008 sub-step 8.9, 2026-05-26) |
+| **Per** | ACT-115 pre-flight Surface 6 → Option m disposition (operator-locked across 3-pass supervisor convergence) |
+| **Cross-references** | DEC-038 clause (7); `src/features/longshort/services/universe/refresh-jobs/hard-exclusion-refresh-orchestrator.ts` (`skipped_reason: 'awaiting_per_rule_fetcher_wiring'`); FP-008 sub-steps 8.5 / 8.7 / 8.9; MIG-053 `hard_exclusion_counts` DDL comment |
+| **Scope** | DEC-038 clause (7) read literally covers BOTH quarterly + continuous hard-exclusion refreshes. Sub-step 8.9 ships quarterly-only emission. At HEAD `87374a83` the continuous-refresh orchestrator returns `firings: []` with `skipped_reason: 'awaiting_per_rule_fetcher_wiring'` for all 4 rules; per-rule fetchers land in subsequent sub-steps OR FP-009+. Forward-binding rationale: today `hard_exclusion_counts` reflects the quarterly snapshot accurately because continuous-refresh produces zero firings; staleness scenario between quarterlies is forward-looking. This DW entry locks the deferral so the future per-rule-fetcher-landing sub-step does not silently inherit a broken metric path. |
+| **Blocking deps** | None currently. |
+| **Future phase** | At per-rule-fetcher-landing sub-step, decide: (1) extend metrics emission to continuous-refresh-orchestrator OR (2) document compute-on-read from `hard_exclusions` table as canonical between-quarterly state path. |
+| **Risk acknowledged** | Low currently (zero continuous-refresh firings); becomes operationally relevant when per-rule fetchers land. |
+| **Attestation** | FP-008 closure document at sub-step 8.13 attests this Surface 6 interpretation as Option m locked at ACT-115. Per-rule-fetcher landing sub-step MUST re-surface this DW entry. |

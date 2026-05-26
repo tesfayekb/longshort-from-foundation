@@ -33,6 +33,7 @@ import { makeUniverseMembershipPersister } from '../../../src/features/longshort
 import { makeHardExclusionsPersister } from '../../../src/features/longshort/services/universe/refresh-jobs/hard-exclusions-persister.ts';
 import { buildUniverseCrossCheckSpec } from '../../../src/features/longshort/services/universe/constituent-ingestion/cross-check-spec.ts';
 import { reconcile } from '../_shared/longshort-reconciliation-lifecycle.ts';
+import { makeMetricsEmitter } from '../../../src/features/longshort/services/universe/health-monitoring/metrics-emitter.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -149,6 +150,11 @@ export default createHandler(async (req: Request) => {
       );
       return { outcome: result.outcome };
     },
+    // FP-008 sub-step 8.9 / ACT-115 — health metrics emitter (Surface 1
+    // Option γ + Surface 3 Option ii). Invoked from orchestrator step 7
+    // post-finalize on outcome='completed' to UPDATE universe_refresh_log
+    // with filter_rejection_counts + hard_exclusion_counts jsonb.
+    metricsEmitter: makeMetricsEmitter({ supabaseAdmin }),
   };
 
   await writeStrategyAuditEvent({
