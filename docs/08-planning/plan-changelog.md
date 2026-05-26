@@ -822,3 +822,16 @@ HIGH — loss of traceability breaks system integrity and decision history.
 - Tier B documentation-only: no code changes; no schema changes; no live-DB writes; no §22.5.1 / §22.5.2 invocation; no new DEC clauses; no new DW entries.
 - Module status `phase-0b-validated` unchanged (8.13 closure transitions to `phase-1-validated`).
 - ACT-103-115 entries preserved verbatim (append-only).
+
+### v13.24 — 2026-05-26 — FP-008 Sub-Step 8.11 Closure: Replay-Test Integration (verify_universe_membership Chokepoint; AC-21 + AC-22) (ACT-117)
+
+- Sub-step 8.11 closed at ACT-117 per AC-21 + AC-22 + DEC-038.1 clause (6) verbatim binding.
+- Surface choices locked (3-pass supervisor convergence): S1 β (separate `l2-synthetic-universe-quarterly-refresh.jsonl.zst` snapshot fixture; L2 Day 1 UNTOUCHED; §11.10.1 8-stream tick enumeration UNAMENDED via parallel-loader pattern); S2 p (extend `replay-pass-runner.ts` with verifier-dispatch; anti-premature-decomposition guard honored — ~80-line addition); S3 i (inline TypeScript constituent constants per `l2-synthetic-day-1-generator.ts` precedent); S4 a (`verify_universe_membership` chokepoint ONLY scope; full quarterly orchestrator determinism deferred to DW-073); S5 x (extend `scripts/replay-pass.ts` Deno CLI per ADR-005 Deno-native runtime precedent; DEC-035 clause (8) Vitest citation drift logged at DW-074).
+- 5 peer-supervisor calibrations applied: verify_quote path VERBATIM preservation (calibration 1); DW-073 Phase 7 future-phase assignment (calibration 2); DW-074 governance-tier resolution path (calibration 3); ART-020 omission ratified per ART-016 precedent (calibration 4); parallel-loader pattern refinement honoring §11.10.1-non-amendment guard (calibration 5).
+- FIRST snapshot-style fixture extension to §11.10 framework; documented at `docs/04-modules/longshort/replay-fixture-format.md` Appendix A.
+- FIRST verify_* replay chokepoint beyond verify_quote (landed at FP-006 sub-step 6.5c).
+- Coverage matrix partial scaffold landed at `e2e/longshort/replay-fixtures/coverage-matrix.md` (4 rows: 2 verify_quote + 2 verify_universe_membership); DW-072 tracks remaining 16 verifier scenarios build-out.
+- DW-072 + DW-073 + DW-074 logged tracking coverage matrix build-out, full-orchestrator determinism deferral, and DEC-035 clause (8) substrate drift.
+- AC-21 + AC-22 evidenced via 6 Deno tests at `replay-pass-runner_test.ts` (parse + 10-event count + 8/0/2 outcome distribution + materially-excluded escalation × 2 + AC-22 byte-identical determinism + AC-21 round-trip) + 8 Deno tests at `l2-synthetic-universe-quarterly-refresh-generator_test.ts`.
+- Landed across two Lovable commits per partial-landing pattern (third consecutive observation after ACT-113 + ACT-114; first commit 2 files at SHA afc73fd3; second commit 14 file touches).
+- ACT-103-116 code paths preserved verbatim; existing verify_quote replay path UNTOUCHED.

@@ -1704,3 +1704,45 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future phase** | At per-rule-fetcher-landing sub-step, decide: (1) extend metrics emission to continuous-refresh-orchestrator OR (2) document compute-on-read from `hard_exclusions` table as canonical between-quarterly state path. |
 | **Risk acknowledged** | Low currently (zero continuous-refresh firings); becomes operationally relevant when per-rule fetchers land. |
 | **Attestation** | FP-008 closure document at sub-step 8.13 attests this Surface 6 interpretation as Option m locked at ACT-115. Per-rule-fetcher landing sub-step MUST re-surface this DW entry. |
+
+### DW-072: Replay Fixture Coverage Matrix — Verifier Build-Out Beyond Sub-Step 8.11
+
+| Field | Value |
+|---|---|
+| **ID** | DW-072 |
+| **Date logged** | 2026-05-26 |
+| **Source** | FP-008 sub-step 8.11 / ACT-117 pre-flight Surface 4 Option a scope-limit + coverage-matrix partial-scaffold disposition |
+| **Description** | `e2e/longshort/replay-fixtures/coverage-matrix.md` landed at sub-step 8.11 as a 4-row partial scaffold (2 rows for `verify_quote` from FP-006 sub-step 6.5c + 2 rows for `verify_universe_membership` landed at ACT-117). The remaining 16 `verify_*` interfaces (`verify_position`, `verify_borrow_locate`, `verify_halt`, `verify_short_sale_restriction`, `verify_corporate_action_clean`, `verify_settlement_status`, `verify_dividend_event`, `verify_order_lifecycle`, `verify_account_balance`, `verify_mark_to_market`, `verify_pdt_status`, `verify_options_assignment`, `verify_wash_sale`, `verify_regulation_t_margin`, `verify_buying_power`, `verify_options_exercise`) plus the `universe_cross_check` non-`verify_*` reconciliation surface need fixture rows + driving scenarios + outcome class coverage entries. |
+| **Why deferred** | Per ACT-117 Surface 4 Option a binding: sub-step 8.11 scope is `verify_universe_membership` ONLY; expanding to the remaining 16 verifiers would extend execution beyond §10.5 deliverable 11 scope and would touch verify_* call sites outside the universe component (T1 strategy-module scope creep risk). |
+| **Future phase assignment** | Phase 2+ per-verifier replay coverage build-out — concrete entries to be authored as each verifier's chokepoint exercises a captured-day scenario (i.e., when a real captured fixture exercises that verifier). |
+| **Blocking dependencies** | None at sub-step 8.11 closure. Build-out gated by per-verifier downstream sub-step opening (signal generation Phase 2+, sizing Phase 4+, execution Phase 5+, Phase 7 captured-day work for cross-check scenarios per DW-061). |
+| **Owner** | longshort module |
+| **Cross-references** | `e2e/longshort/replay-fixtures/coverage-matrix.md`; AC-21 + AC-22 (master-plan); DW-061 (full-RTH-day captured-day execution); DW-073 (full quarterly orchestrator determinism deferral). |
+
+### DW-073: Full Quarterly Orchestrator Determinism — Deferred to Phase 7 Captured-Day Work
+
+| Field | Value |
+|---|---|
+| **ID** | DW-073 |
+| **Date logged** | 2026-05-26 |
+| **Source** | FP-008 sub-step 8.11 / ACT-117 pre-flight Surface 4 Option a |
+| **Description** | Sub-step 8.11 replay-test integration is scoped to the `verify_universe_membership` chokepoint via the L2 synthetic universe quarterly-refresh snapshot fixture. Full quarterly orchestrator determinism (the complete pipeline: Polygon constituent fetch + iShares cross-check via `buildUniverseCrossCheckSpec` + enrichment + §3.2 six filters + §3.3 hard-exclusions + `universe_membership` bulk INSERT + `hard_exclusions` UPSERT + `universe_refresh_log` finalize + Step 7 metrics emission) is NOT yet replay-driven. Two end-to-end orchestrator runs under identical seed + identical captured Polygon/iShares fetcher outputs SHOULD produce byte-identical `universe_membership` + `hard_exclusions` writes + identical metric emissions, but this is not currently asserted by a replay-pass verifier. |
+| **Why deferred** | The full-pipeline determinism gate requires captured Polygon constituent + iShares ETF holding feeds (real or hand-authored at sufficient fidelity to exercise all 8 hard-exclusion rules + all 6 §3.2 filters). The synthetic 10-ticker fixture landed at sub-step 8.11 deliberately does NOT carry filter-rejection or hard-exclusion-firing rows — those exercise downstream orchestrator branches outside the verifier chokepoint scope. Surface 4 Option a at ACT-117 pre-flight ratified the chokepoint-only scope as sufficient for AC-21 + AC-22 binding (verifier-level replay parity per §11.10.4) without committing to full-pipeline determinism gate which would expand sub-step 8.11 scope. |
+| **Future phase assignment** | Phase 7 paper-trading validation per DW-056 + DW-061 — captured-day fixtures from real Polygon + iShares feeds exercise full orchestrator pipeline; new `verify_universe_refresh_log_finalize` or equivalent end-to-end determinism verifier added at that point. |
+| **Blocking dependencies** | DW-058 (Phase-7 fetcher wiring src/broker/alpaca/ → supabase/functions/_shared/); DW-061 (full-RTH-day captured-day execution); real Polygon constituent feed access; real iShares ETF holdings feed access. |
+| **Owner** | longshort module |
+| **Cross-references** | AC-21 + AC-22 (master-plan); ACT-117 (sub-step 8.11 closure); DEC-038.1 clause (6); DEC-035 clauses (1)(2)(3)(7)(8); DW-072 (coverage matrix build-out). |
+
+### DW-074: DEC-035 Clause (8) Vitest Citation vs ADR-005 Deno-Native Substrate Drift
+
+| Field | Value |
+|---|---|
+| **ID** | DW-074 |
+| **Date logged** | 2026-05-26 |
+| **Source** | FP-008 sub-step 8.11 / ACT-117 pre-flight Surface 5 elicitation |
+| **Description** | DEC-035 clause (8) cites the spec-side replay-verifier substrate as Vitest, but the actual implementation per ADR-005 (Deno-native replay runtime; ratified at FP-006 sub-step 6.5a / ACT-086) lands replay verifiers as Deno `Deno.test()` cases driven by `scripts/replay-pass.ts` + `scripts/replay-run.ts` Deno CLI entrypoints. Sub-step 8.11 / ACT-117 honored the implementation substrate (Surface 5 Option x extends the existing Deno CLI) rather than the spec citation; this preserves the established `replay-pass-runner_test.ts` precedent and avoids dual-substrate (Vitest + Deno) for the same verifier chokepoint. The spec-vs-implementation citation drift remains unreconciled at the DEC-035 / ADR-005 level. |
+| **Why deferred** | Resolving the drift requires either (a) DEC-035 clause (8) amendment ratifying ADR-005's Deno-native runtime as the binding citation (preferred per ADR-005 ratification precedent) OR (b) re-platforming the replay-verifier substrate to Vitest (which would invalidate `replay-pass-runner_test.ts` + `replay-pass_test.ts` precedents established at FP-006 sub-step 6.5c). Either path requires DEC governance scope not appropriate to sub-step 8.11 execution closure. |
+| **Future phase assignment** | DEC-035 next amendment cycle OR a dedicated drift-reconciliation FP at any point during FP-008 to Phase 7. Recommended path: amend DEC-035 clause (8) to cite ADR-005 verbatim during the next governance touch of DEC-035. |
+| **Blocking dependencies** | None — drift is recognized + documented. Forward-fix is governance-tier (DEC amendment), not execution-tier. |
+| **Owner** | longshort module (governance) |
+| **Cross-references** | DEC-035 clause (8); ADR-005; FP-006 sub-step 6.5a / ACT-086 (ADR-005 ratification); FP-008 sub-step 8.11 / ACT-117 (drift surfaced). |
