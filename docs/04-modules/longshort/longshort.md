@@ -75,7 +75,7 @@ This table maps every CROSSWIND v0.9 design-source part and key section anchor t
 
 ### Universe Component (Phase 1 — Operational)
 
-**Status:** sub-steps 8.1-8.10 LANDED (ACT-104 / 106 / 107 / 108 / 109 / 110 / 113 / 114 / 115 / 116); sub-steps 8.11-8.13 pending. Universe component (constituent ingestion + §3.2 filters + §3.3 hard-exclusions + quarterly atomic refresh + continuous hard-exclusion refresh + verify_universe_membership real implementation + ingestion-time cross-check + health monitoring) operational behind `universe.enabled` feature flag (default false; flips at 8.13 closure).
+**Status:** sub-steps 8.1-8.13 LANDED (ACT-104 / 106 / 107 / 108 / 109 / 110 / 113 / 114 / 115 / 116 / 117 / 118 / 119) — **FP-008 / PHASE 1 CLOSED (2026-05-26 / ACT-119)**. Module status `phase-1-validated`. Universe component (constituent ingestion + §3.2 filters + §3.3 hard-exclusions + quarterly atomic refresh + continuous hard-exclusion refresh + verify_universe_membership real implementation + ingestion-time cross-check + health monitoring + replay-test integration + 4 operator runbooks) operational with `universe.enabled=true` flipped operationally per DEC-038.1 clause (5) (MIG-054 at sub-step 8.13). Production runtime evidence for AC-17 / AC-19 / AC-26 / AC-31 deferred to Phase 7 first production refresh per ADR-007 + DW-075.
 
 See `docs/04-modules/longshort/universe/universe.md` for full component documentation (Architecture + Data Model + Sub-modules + Reconciliation Surface + Health Monitoring + Feature-Flag Wrapping + Events + Jobs + Failure Modes + Dependencies).
 

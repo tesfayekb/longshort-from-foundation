@@ -1746,3 +1746,33 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Blocking dependencies** | None — drift is recognized + documented. Forward-fix is governance-tier (DEC amendment), not execution-tier. |
 | **Owner** | longshort module (governance) |
 | **Cross-references** | DEC-035 clause (8); ADR-005; FP-006 sub-step 6.5a / ACT-086 (ADR-005 ratification); FP-008 sub-step 8.11 / ACT-117 (drift surfaced). |
+
+### DW-075: Phase 1 Runtime Evidence Completion at Phase 7 First Production Refresh
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-075 |
+| **Registered at** | ACT-119 (FP-008 sub-step 8.13 — Phase 1 closure; ADR-007 vacuous-quietness signal disposition Accepted) |
+| **Per** | ACT-119 Surface 3 → Option X disposition (operator-locked); ADR-007 forward-binding tracker |
+| **Cross-references** | AC-17 + AC-19 + AC-26 + AC-31 runtime portions; ADR-007 (Phase 1 Runtime Evidence Deferral); FP-006 ADR-006 precedent (Phase 0B Captured-Day Deferral); CROSSWIND §11.0.11 root-cause-mandatory phase exit gate |
+| **Scope** | Runtime evidence for: (a) AC-17 cross-check has run on at least one production refresh; (b) AC-19 metrics populated post-refresh on real data; (c) AC-26 quarterly refresh executed successfully at least once; (d) AC-31 cross-check emitted reconciliation_events rows root-caused per §11.0.11. The MIG-054 flag flip at closure is operational gate-open signal per DEC-038.1 clause (5) verbatim — NOT a claim that production runtime has been observed. Code-operational portions of these ACs are evidenced at their respective sub-step closures (ACT-114 / ACT-115 / ACT-108 / ACT-114); runtime portions accrue at Phase 7 first production refresh. |
+| **Blocking deps** | Phase 7 work that triggers the first production quarterly refresh against real Polygon + iShares fetch endpoints (cadence: first trading day Jan/Apr/Jul/Oct per §3.4) |
+| **Future phase** | Phase 7 (operational state + captured-day work) — natural landing point where real fetcher responses + real cross-check data + real reconciliation_events firings produce observation. Per §11.0.11 verbatim: "every firing understood and either accepted as real-world divergence or fixed as defect" gate applies at Phase 7 first production refresh, NOT at Phase 1 closure. |
+| **Risk acknowledged** | Closure attests code readiness without runtime confirmation; honest framing per ADR-007 acknowledges this explicitly. Future supervisor pre-flights for Phase 7 sub-steps touching universe component runtime consume this DW + ADR-007 as canonical reading. |
+| **Attestation** | FP-008 closure document Lock Statement attests this deferral disposition; ADR-007 contains the full Honest Framing paragraph. |
+
+---
+
+### DW-076: Supervisor-Side Pre-Flight Finding Defect — §22.3 (g) Mirror at Supervisor's Own Pre-Flight Surface Document
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-076 |
+| **Registered at** | ACT-119 (FP-008 sub-step 8.13 — supervisor-side defect-#42 candidate logged at pre-flight Option A-correction) |
+| **Per** | ACT-119 Surface 5 Option A-correction (operator-corrected at supervisor's own pre-flight Finding 1 grep-defect catch) |
+| **Cross-references** | Supervisor-instructions §22.3 (g) (Supervisor Surface pre-resolution claims must be backed by repo-grep); §22.3 (b) (TypeScript idiom repo-grep verification); defect-#36 family (Surface pre-resolution without schema-grep); pre-flight surface document `FP-008-substep-8-13-pre-flight-surfaces.md` Finding 1 (erroneously claimed AC-38 missing) |
+| **Scope** | Supervisor pre-flight surface document Finding 1 claimed "AC-38 is missing from master-plan" based on supervisor grep that either (a) was never actually executed at pre-flight or (b) was misread when the pre-flight was authored. The claim was unbacked; the executor (Lovable) adopted it without independent re-verification at terminal-closure-time pre-flight cycle. Operator-corrected at execution-prompt drafting via independent re-grep at HEAD `2bb125b9`: master-plan contains AC-01 through AC-38 contiguous (38 ACs total); AC-33 verbatim "all 38 ACs" is correct, NOT drift. This is the §22.3 (g) supervisor-Surface pre-resolution discipline applied to the supervisor's OWN pre-flight surface document — defect-#36 family mirrored back at supervisor authoring tier. |
+| **Blocking deps** | None — defect-#42 candidate codification is forward-binding; recurrence triggers consideration for §22.3 (j) supervisor-instructions amendment. |
+| **Future phase** | If pattern recurs (supervisor pre-flight surface document Finding-N adopted by executor without independent re-verification at terminal-closure or governance-transition events): codify as new §22.3 (j) — "Supervisor pre-flight Finding-N grep-claims must be independently re-verified by executor before adopting at terminal-closure or governance-transition events." Current single-occurrence logged as candidate; codification deferred per usual §21.10 discipline. |
+| **Risk acknowledged** | Single-occurrence terminal-closure incident; mitigated by operator catch + Option A-correction at execution-prompt drafting. No downstream effect on FP-008 closure correctness (corrected before §22.3 execution prompt finalized; all 38 ACs included in closure document per Option A-corrected ruling). |
+| **Attestation** | FP-008 closure document Lock Statement contains the one-line acknowledgment: "Pre-flight surface document FP-008-substep-8-13-pre-flight-surfaces.md Finding 1 erroneously claimed AC-38 missing; corrected at execution-prompt drafting time via independent re-grep at HEAD 2bb125b9 (38 ACs verified contiguous); defect-#42 candidate logged at DW-076." |

@@ -1,6 +1,6 @@
 # Universe Component
 
-> **Owner:** longshort strategy module | **Phase:** Trading-Foundation / FP-008 (PLAN-TRADING-001-LONGSHORT-003) | **Status:** sub-steps 8.0a / 8.1 / 8.2 / 8.3 / 8.4 / 8.5 / 8.6 / 8.7 / 8.8 / 8.9 / 8.10 / 8.11 LANDED; 8.12-8.13 pending
+> **Owner:** longshort strategy module | **Phase:** Trading-Foundation / FP-008 (PLAN-TRADING-001-LONGSHORT-003) | **Status:** sub-steps 8.0a / 8.1 / 8.2 / 8.3 / 8.4 / 8.5 / 8.6 / 8.7 / 8.8 / 8.9 / 8.10 / 8.11 / 8.12 / 8.13 LANDED — **PHASE 1 CLOSED (2026-05-26 / ACT-119)**; module status `phase-1-validated`; `universe.enabled=true` operationally per DEC-038.1 clause (5) (MIG-054); production runtime evidence deferred to Phase 7 per ADR-007 + DW-075
 
 This document is the detailed component reference for the long-short strategy's universe component. It satisfies CROSSWIND §12.4 per-component documentation and FP-008 AC-20. Content is sourced strictly from DEC-038 + DEC-038.1 verbatim clauses, ACT-103 through ACT-115 entries in `docs/06-tracking/action-tracker.md`, the longshort module overview (`docs/04-modules/longshort/longshort.md`), and the JSDoc / type signatures in `src/features/longshort/services/universe/`. Sections without sufficient documented evidence say so explicitly rather than fabricate.
 
@@ -31,7 +31,7 @@ It exists so that downstream signal generation (Phase 2+), sizing (Phase 4+), an
 - Order execution and `longshort.execute` permission (Phase 5+ per DEC-032 clause (2)).
 - Market data feeds outside constituent fetching.
 - Operator runbooks for known failure modes — LANDED at sub-step 8.12 / ACT-118 under `docs/04-modules/longshort/universe/runbooks/`. Four runbooks: quarterly refresh failure (ART-020) + cross-check noise classification (ART-021) + halt-feed unavailable (ART-022) + earnings-calendar feed failure (ART-023). 7-section canonical structure (Symptoms → Detection → Diagnosis → Action → Verification → Escalation → Cross-references) per Surface 3 Option i.
-- Phase 1 closure mechanics (sub-step 8.13 — pending; flips `universe.enabled` true, transitions module status `phase-0b-validated` → `phase-1-validated`).
+- Phase 1 closure mechanics — LANDED at sub-step 8.13 / ACT-119 / 2026-05-26. Flag `universe.enabled` flipped to `true` operationally (MIG-054); module status transitioned `phase-0b-validated` → `phase-1-validated`; closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-003-closure.md`. ADR-007 (Phase 1 Runtime Evidence Deferral) introduced — AC-17 / AC-19 / AC-26 / AC-31 runtime portions accrue at Phase 7 first production refresh per DW-075.
 
 ## Enforcement Rules
 
@@ -179,7 +179,7 @@ Weekly + monthly aggregation views (`reconciliation_events_weekly_agg` + `reconc
 Per DEC-038 clause (5) + DEC-038.1 clause (5):
 
 - **Flag:** `universe.enabled` in the `feature_flags` table (default operator scope per MIG-039 convention).
-- **Default state:** `false` at MIG-052 seed. Flips to `true` operationally at sub-step 8.13 closure.
+- **Default state:** `false` at MIG-052 seed. Flipped to `true` operationally at sub-step 8.13 closure (MIG-054 / ACT-119 / 2026-05-26) per DEC-038.1 clause (5).
 - **Chokepoint:** `universeService.getEligibleUniverse(as_of)` at `verify-membership/`. Downstream code MUST NOT read the flag directly.
 - **Disabled behavior:** returns typed-absence — `Promise<EligibleUniverse | null>` returning `null` (null-with-narrowing per §2 axiom 3; DW-067 mitigation). NOT `Optional.none()`.
 - **Enabled behavior:** proceeds with the real query against `universe_membership`.
@@ -199,7 +199,7 @@ Quarterly-refresh audit events follow the same 4-outcome shape (`started` / `com
 
 ## Jobs
 
-Per `job_registry` seeds (all ship `enabled=false`; activate at sub-step 8.13 closure):
+Per `job_registry` seeds (all shipped `enabled=false`; activation gated by `universe.enabled` feature flag which flipped at sub-step 8.13 closure via MIG-054 / ACT-119):
 
 - `longshort.universe.quarterly_refresh` — MIG-048; cron `0 9 1-7 1,4,7,10 *`; `exactly_once`; forbid concurrency; first-trading-day-of-quarter gating in the edge handler (skip-before-auth).
 - `longshort.universe.hard_exclusion_refresh_3_3a` — MIG-049; daily cadence (§3.3a earnings windows).
