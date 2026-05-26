@@ -193,6 +193,10 @@ Operator handbook notes:
 
 Twelve stable audit events (4 §3.3 continuous-refresh rules × 3 outcomes) were registered at sub-step 8.5 / ACT-109; cross-check audit events were registered at sub-step 8.8 / ACT-114. The authoritative event list lives at `docs/07-reference/event-index.md`. Universe.md does NOT enumerate inline — pointer only.
 
+The 3-outcome shape per continuous-refresh rule (started / completed / failed) is the same shape used elsewhere in the longshort module; the per-rule fanout is what produces the 4 × 3 = 12 stable IDs at this sub-step.
+
+Quarterly-refresh audit events follow the same 4-outcome shape (`started` / `completed` / `skipped` / `failed`) registered at sub-step 8.4 / ACT-108.
+
 ## Jobs
 
 Per `job_registry` seeds (all ship `enabled=false`; activate at sub-step 8.13 closure):
