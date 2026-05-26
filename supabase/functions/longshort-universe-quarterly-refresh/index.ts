@@ -31,6 +31,8 @@ import { iSharesConstituentFetcher } from '../../../src/features/longshort/servi
 import { PolygonEnrichmentFetcher } from '../../../src/features/longshort/services/universe/enrichment/polygon-enrichment-fetcher.ts';
 import { makeUniverseMembershipPersister } from '../../../src/features/longshort/services/universe/refresh-jobs/universe-membership-persister.ts';
 import { makeHardExclusionsPersister } from '../../../src/features/longshort/services/universe/refresh-jobs/hard-exclusions-persister.ts';
+import { buildUniverseCrossCheckSpec } from '../../../src/features/longshort/services/universe/constituent-ingestion/cross-check-spec.ts';
+import { reconcile } from '../_shared/longshort-reconciliation-lifecycle.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -130,6 +132,23 @@ export default createHandler(async (req: Request) => {
     // executes only after pipeline success.
     universeMembershipPersister: makeUniverseMembershipPersister(supabaseAdmin),
     hardExclusionsPersister: makeHardExclusionsPersister(supabaseAdmin),
+    // FP-008 sub-step 8.8 / ACT-114 — cross-check (step 2b) per DEC-038.1
+    // clause (2) + AC-17 + AC-18. Builds spec + invokes reconcile(); the
+    // lifecycle writes the reconciliation_events row via its own
+    // supabaseAdmin path. Orchestrator inspects outcome and routes
+    // abort/proceed per Surface 5 Option q.
+    crossCheck: async ({ operator_id, polygon_tickers, ishares_tickers, as_of }) => {
+      const spec = buildUniverseCrossCheckSpec({ operator_id });
+      const result = await reconcile(
+        spec,
+        async () => ({
+          expected: { polygon_tickers: new Set(polygon_tickers) },
+          observed: { ishares_tickers: new Set(ishares_tickers) },
+        }),
+        as_of,
+      );
+      return { outcome: result.outcome };
+    },
   };
 
   await writeStrategyAuditEvent({
