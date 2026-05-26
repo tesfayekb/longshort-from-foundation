@@ -1640,3 +1640,35 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future phase** | DEC amendment cycle (likely tied to next supervisor-instructions revision) OR FP-008 sub-step 8.13 closure attestation. |
 | **Risk acknowledged** | Low — typed-absence discipline is honored; `null`-with-narrowing is TypeScript-idiomatic and matches existing repo conventions (see `BrokerPositionFetcher.fetchPosition` returning `Position \| null`). |
 | **Attestation** | FP-008 closure document at sub-step 8.13 attests this register entry as a spec-terminology loose-end.
+
+---
+
+### DW-068: Surface 2 Option γ Jaccard Threshold Calibration — Post-Flag-Flip Tuning
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-068 |
+| **Registered at** | ACT-114 (FP-008 sub-step 8.8, 2026-05-26) |
+| **Per** | ACT-114 pre-flight Surface 2 → Option γ disposition |
+| **Cross-references** | DEC-038 clause (2); DEC-034 clause (6) asymmetric-tolerance discipline; FP-008 sub-step 8.8; AC-17 / AC-18; `src/features/longshort/services/universe/constituent-ingestion/cross-check-spec.ts` (`SURFACE_2_THRESHOLDS`) |
+| **Scope** | Surface 2 Option γ landed jaccard-similarity classification with conservative initial thresholds: safety floor `sym-diff ≤ 3 → false_positive_within_tolerance` and ceiling `sym-diff > 100 OR empty set → system_bug`; middle band classified per jaccard score. Initial bounds are pre-flag-flip estimates; calibration against real Polygon-vs-iShares divergence distributions (timing-of-day delivery variance per §11.0.5 + DEC-034 clause (3) tolerance class assignment) requires `universe.enabled=true` operational data. |
+| **Blocking deps** | `universe.enabled=true` flip at sub-step 8.13 closure + ≥1 full quarterly refresh cycle of observed cross-check outcomes. |
+| **Future phase** | FP-008 sub-step 8.13 closure attestation OR forward post-flag-flip calibration cycle (likely an early Phase 2 ACT once first quarterly refresh data lands). |
+| **Risk acknowledged** | Low at the false_positive floor (sym-diff ≤ 3 is structurally conservative; legitimate divergences ≤ 3 names are statistically expected from delivery-time variance). Low-medium at the system_bug ceiling (sym-diff > 100 on ~900-name base is structurally indicative of feed corruption; calibration may tighten to >50 once distribution data exists). |
+| **Attestation** | FP-008 closure document at sub-step 8.13 attests this register entry as a calibration-pending loose-end with conservative initial bounds in place. |
+
+---
+
+### DW-069: `VerifyCallName` Type Rename — `ReconcileCallName`
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-069 |
+| **Registered at** | ACT-114 (FP-008 sub-step 8.8, 2026-05-26) |
+| **Per** | ACT-114 pre-flight Surface 4 → Option a disposition |
+| **Cross-references** | DEC-038.1 clause (2); DEC-034.1 reconcile() lifecycle; FP-008 sub-step 8.8; `supabase/functions/_shared/longshort-reconciliation-types.ts` (`VerifyCallName` union) |
+| **Scope** | Surface 4 Option a widened the `VerifyCallName` discriminated-union with the literal `'universe_cross_check'` to accommodate the first non-`verify_*` invocation of `reconcile()` (cross-check is structural verification, not a `verify_*` interface per §11.0.7's 17-entry registry). The union's name still reads `VerifyCallName` despite now hosting a non-verify member. Forward rename to `ReconcileCallName` is the principled fix (matches the function it names: `reconcile()` — DEC-034.1) but is mechanical and deferred to avoid churn during 8.8 closure. |
+| **Blocking deps** | None (mechanical rename across the union + all consumers; no semantic change). |
+| **Future phase** | DEC amendment cycle OR FP-008 sub-step 8.13 closure cleanup OR opportunistic during a Phase 2+ ACT that already touches the reconciliation-types layer. |
+| **Risk acknowledged** | Very low — name-only drift; functional behavior unaffected; banned-pattern enforcement + type-checking both unaffected. |
+| **Attestation** | FP-008 closure document at sub-step 8.13 attests this register entry as a name-drift loose-end with operational semantics intact.
