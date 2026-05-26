@@ -125,6 +125,61 @@ For events with identical `ts`, ordering between them is **not** semantically me
 
 Current version: **1**.
 
+## Appendix A — Snapshot-style fixture extension (FP-008 sub-step 8.11 / ACT-117)
+
+The §11.10.1 8-stream tick enumeration above is **not amended** by this appendix. The
+universe-membership replay fixture introduced at sub-step 8.11 uses the same JSONL+zstd
+container + the same envelope shape but carries a **snapshot-style event type** outside
+the 8-stream union. The standard `fixture-loader.ts` strict-union validator is therefore
+sidestepped via a parallel loader.
+
+### Snapshot event: `universe_membership_snapshot`
+
+```json
+{
+  "stream": "universe_membership_snapshot",
+  "ts": "2026-01-02T14:30:00.000Z",
+  "symbol": "AAPL",
+  "as_of_date": "2026-01-02",
+  "internal_in_universe": true,
+  "long_eligible": true,
+  "short_eligible": true,
+  "observed_in_universe": true,
+  "observed_excluded": false,
+  "observed_exclusion_reasons": []
+}
+```
+
+**Semantics:**
+- Point-in-time snapshot: all events in a fixture share the same `ts` (no tick stream).
+- Field shape mirrors `universe_membership` (MIG-050) `long_eligible` / `short_eligible`
+  booleans + the observed cross-source classification inputs that drive
+  `verify_universe_membership` per the verifier's `compute_divergence` shape.
+- Materially-excluded reasons follow `verify_universe_membership.MATERIALLY_EXCLUDED_REASONS`
+  (`in_ma`, `halted_5d_plus`).
+
+### Parallel loader contract
+
+- Generator + loader live at `src/features/longshort/services/replay/l2-synthetic-universe-quarterly-refresh-generator.ts`.
+- `parseUniverseQuarterlyRefreshFixture(jsonl)` validates envelope marker + format
+  version + per-event `stream` literal + `event_count` tally; throws on any mismatch.
+- Producers MUST set `replay_day_id` to `l2-synthetic-universe-quarterly-refresh` (or
+  a future captured-real-day equivalent following the same `<source>-day-<NN>` pattern).
+
+### Why not amend §11.10.1?
+
+§11.10.1 enumerates **tick streams** for ingestion-time event replay. Quarterly universe
+refresh is a **snapshot** event (one row per ticker per `as_of`), not a tick stream.
+Splicing it into the 8-stream union would conflate two semantically distinct event
+models and would trigger spec-governance amendment scope unbounded by this sub-step.
+The parallel loader pattern preserves §11.10.1 verbatim.
+
+### Coverage matrix
+
+See [`e2e/longshort/replay-fixtures/coverage-matrix.md`](../../e2e/longshort/replay-fixtures/coverage-matrix.md)
+for the verifier×fixture×scenario mapping (DW-072 tracks build-out beyond the 4 rows
+landed at sub-step 8.11).
+
 ## Sub-step traceability
 
 - **6.5a (this spec):** v1 spec frozen
