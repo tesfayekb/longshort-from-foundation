@@ -15,6 +15,10 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { createQuarterlyRefreshOrchestrator } from './quarterly-refresh-orchestrator.ts';
 import type { RefreshExecutionContext, RefreshLogPersister } from './types.ts';
+import type {
+  UniverseMembershipPersister,
+  HardExclusionsPersister,
+} from './types.ts';
 import type { UniverseConstituent } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
 import type { EnrichedConstituent } from '../enrichment/types.ts';
 
@@ -51,8 +55,26 @@ function makePersister() {
   return { persister, calls };
 }
 
+function makeUniverseMembershipPersister() {
+  const persisted: unknown[] = [];
+  const persister: UniverseMembershipPersister = {
+    async persist(input) { persisted.push(input); },
+  };
+  return { persister, persisted };
+}
+
+function makeHardExclusionsPersister() {
+  const persisted: unknown[] = [];
+  const persister: HardExclusionsPersister = {
+    async persist(input) { persisted.push(input); },
+  };
+  return { persister, persisted };
+}
+
 function makeContext(opts: { polygonReturnsNull?: boolean; enrichmentThrows?: boolean } = {}) {
   const { persister, calls } = makePersister();
+  const ump = makeUniverseMembershipPersister();
+  const hxp = makeHardExclusionsPersister();
   const polyTickers = ['AAA', 'BBB', 'CCC'];
   const sharesTickers = ['AAA', 'XXX'];
   const ctx: RefreshExecutionContext = {
@@ -81,12 +103,14 @@ function makeContext(opts: { polygonReturnsNull?: boolean; enrichmentThrows?: bo
       short_interest: [],
     },
     refreshLogPersister: persister,
+    universeMembershipPersister: ump.persister,
+    hardExclusionsPersister: hxp.persister,
   };
-  return { ctx, calls };
+  return { ctx, calls, umpPersisted: ump.persisted, hxpPersisted: hxp.persisted };
 }
 
-Deno.test('happy path → outcome=completed; counts populated; eligible returned', async () => {
-  const { ctx, calls } = makeContext();
+Deno.test('happy path → outcome=completed; counts populated; eligible returned + persisted', async () => {
+  const { ctx, calls, umpPersisted, hxpPersisted } = makeContext();
   const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
   const result = await orch.run(AS_OF);
 
@@ -108,6 +132,11 @@ Deno.test('happy path → outcome=completed; counts populated; eligible returned
   const start = calls[0].payload as { operator_id: string; quarter_label: string };
   assertEquals(start.operator_id, OPERATOR_ID);
   assertEquals(start.quarter_label, 'Q2_2026');
+
+  // Surface 5 Option q — universe_membership persistence invoked once
+  // after pipeline success; no firings → hard_exclusions persister NOT invoked.
+  assertEquals(umpPersisted.length, 1);
+  assertEquals(hxpPersisted.length, 0);
 });
 
 Deno.test('atomicity-on-failure → outcome=failed; finalize still called with reason', async () => {
