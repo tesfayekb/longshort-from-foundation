@@ -200,6 +200,12 @@ export interface HardExclusionRefreshContext {
   /** Caller-supplied trading-day clock. `as_of.toISOString()` is recorded
    *  in the result + audit metadata. */
   as_of: Date;
+  /** Optional hard-exclusions persister — FP-008 sub-step 8.7 / ACT-113
+   *  (Surface 4 Option b shared contract). Continuous-refresh handler
+   *  wires the supabaseAdmin-backed persister; sub-step 8.5 + 8.7 tests
+   *  may omit (orchestrator does NOT yet invoke pending per-rule fetcher
+   *  wiring at later sub-steps). */
+  hardExclusionsPersister?: HardExclusionsPersister;
 }
 
 export interface HardExclusionRefreshInput {
