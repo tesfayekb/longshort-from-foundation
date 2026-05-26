@@ -20,6 +20,7 @@ import type {
   HardExclusionsPersister,
   CrossCheckFn,
 } from './types.ts';
+import type { MetricsEmitter, RefreshMetricsInput } from '../health-monitoring/metrics-emitter.ts';
 import type { UniverseConstituent } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
 import type { EnrichedConstituent } from '../enrichment/types.ts';
 
@@ -81,15 +82,31 @@ function makeCrossCheck(outcome: 'false_positive_within_tolerance' | 'failure_ha
   return { fn, calls };
 }
 
+function makeMetricsEmitter(opts: { throws?: boolean } = {}) {
+  const calls: RefreshMetricsInput[] = [];
+  const emitter: MetricsEmitter = {
+    async emitRefreshMetrics(input) {
+      calls.push(input);
+      if (opts.throws) throw new Error('metrics_update_failed');
+    },
+  };
+  return { emitter, calls };
+}
+
 function makeContext(opts: {
   polygonReturnsNull?: boolean;
   enrichmentThrows?: boolean;
   crossCheckOutcome?: 'false_positive_within_tolerance' | 'failure_handled' | 'failure_escalated' | 'expected_divergence_handled' | 'system_bug';
+  withMetricsEmitter?: boolean;
+  metricsEmitterThrows?: boolean;
 } = {}) {
   const { persister, calls } = makePersister();
   const ump = makeUniverseMembershipPersister();
   const hxp = makeHardExclusionsPersister();
   const cc = makeCrossCheck(opts.crossCheckOutcome ?? 'false_positive_within_tolerance');
+  const me = (opts.withMetricsEmitter ?? false)
+    ? makeMetricsEmitter({ throws: opts.metricsEmitterThrows })
+    : null;
   const polyTickers = ['AAA', 'BBB', 'CCC'];
   const sharesTickers = ['AAA', 'XXX'];
   const ctx: RefreshExecutionContext = {
@@ -121,8 +138,16 @@ function makeContext(opts: {
     universeMembershipPersister: ump.persister,
     hardExclusionsPersister: hxp.persister,
     crossCheck: cc.fn,
+    ...(me === null ? {} : { metricsEmitter: me.emitter }),
   };
-  return { ctx, calls, umpPersisted: ump.persisted, hxpPersisted: hxp.persisted, ccCalls: cc.calls };
+  return {
+    ctx,
+    calls,
+    umpPersisted: ump.persisted,
+    hxpPersisted: hxp.persisted,
+    ccCalls: cc.calls,
+    metricsCalls: me === null ? null : me.calls,
+  };
 }
 
 Deno.test('happy path → outcome=completed; counts populated; eligible returned + persisted', async () => {
@@ -266,4 +291,57 @@ Deno.test('AC-18 regression sentinel — orchestrator does NOT write reconciliat
   );
   assert(!src.includes("from('reconciliation_events')"),
     'AC-18: orchestrator must not write reconciliation_events directly; reconcile() owns the write');
+});
+
+// ============================================================================
+// FP-008 sub-step 8.9 / ACT-115 — health metrics emission (step 7) coverage.
+// Surface 1 Option γ + Surface 3 Option ii (emit only on outcome='completed').
+// ============================================================================
+
+Deno.test('metrics emitter invoked on outcome=completed with reason arrays', async () => {
+  const { ctx, metricsCalls } = makeContext({ withMetricsEmitter: true });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'completed');
+  assert(metricsCalls !== null);
+  assertEquals(metricsCalls!.length, 1);
+  assertEquals(metricsCalls![0].refresh_id, 'refresh-uuid-stub');
+  // happy-path mkEnriched constituents all pass filters → no rejections, no firings.
+  assertEquals(metricsCalls![0].filter_rejection_reasons.length, 0);
+  assertEquals(metricsCalls![0].hard_exclusion_reasons.length, 0);
+});
+
+Deno.test('metrics emitter NOT invoked on outcome=failed (enrichment throws)', async () => {
+  const { ctx, metricsCalls } = makeContext({ withMetricsEmitter: true, enrichmentThrows: true });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'failed');
+  assertEquals(metricsCalls!.length, 0);
+});
+
+Deno.test('metrics emitter NOT invoked on cross-check abort (failure_escalated)', async () => {
+  const { ctx, metricsCalls } = makeContext({
+    withMetricsEmitter: true,
+    crossCheckOutcome: 'failure_escalated',
+  });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'failed');
+  assertEquals(metricsCalls!.length, 0);
+});
+
+Deno.test('metrics emitter absent → orchestrator runs unchanged (backwards-compat)', async () => {
+  const { ctx } = makeContext({ withMetricsEmitter: false });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'completed');
+});
+
+Deno.test('metrics emitter error does NOT fail refresh (observability, not correctness)', async () => {
+  const { ctx, metricsCalls } = makeContext({ withMetricsEmitter: true, metricsEmitterThrows: true });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'completed');
+  assertEquals(result.failure_reason, null);
+  assertEquals(metricsCalls!.length, 1);
 });
