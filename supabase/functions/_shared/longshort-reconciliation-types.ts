@@ -10,7 +10,15 @@
  * sub-step 6.3a/b/c/d implementations import this type and exhaustive-switch over it.
  */
 
-/** Canonical 17 verify_* call names per CROSSWIND §11.0.7 (verbatim ordering). */
+/**
+ * Canonical 17 verify_* call names per CROSSWIND §11.0.7 (verbatim ordering)
+ * PLUS non-verify_* reconcile() call identifiers per FP-008 sub-step 8.8 / S6 Option I.
+ *
+ * Type-name vs scope discrepancy logged as DW-069: this union now includes a
+ * non-verify_* identifier (`'universe_cross_check'`). Rename to `ReconcileCallName`
+ * is the natural future-cleanup target but deferred per S6 Option I scope-discipline
+ * (Option II rename touches 17+ verify_* implementations; out of 8.8 scope).
+ */
 export type VerifyCallName =
   | 'verify_position'              // #1
   | 'verify_quote'                 // #2
@@ -28,7 +36,14 @@ export type VerifyCallName =
   | 'verify_realized_pnl'          // #14
   | 'verify_lot_record'            // #15
   | 'verify_wash_sale_record'      // #16
-  | 'verify_rebalance_aggregate';  // #17
+  | 'verify_rebalance_aggregate'   // #17
+  // Non-verify_* reconcile() call identifiers — added at FP-008 sub-step 8.8 / ACT-114.
+  // Per S6 Option I (operator-locked): widen union to accommodate §11.0.5 ingestion-time
+  // cross-check (distinct mechanism from §11.0.7 verify_* trade-decision pre-checks).
+  // See DW-069 for naming-vs-scope discrepancy (type name remains 'VerifyCallName' but
+  // scope now includes non-verify_* identifiers; future cleanup at FP-008 closure OR
+  // FP-009+ refactor cycle).
+  | 'universe_cross_check';        // FP-008 sub-step 8.8 / §11.0.5 ingestion-time cross-check
 
 /** Outcome enum per CROSSWIND §11.0.10 verbatim — must match reconciliation_outcome enum in MIG-043. */
 export type ReconciliationOutcome =
