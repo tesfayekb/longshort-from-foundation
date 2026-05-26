@@ -18,6 +18,7 @@ import type { RefreshExecutionContext, RefreshLogPersister } from './types.ts';
 import type {
   UniverseMembershipPersister,
   HardExclusionsPersister,
+  CrossCheckFn,
 } from './types.ts';
 import type { UniverseConstituent } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
 import type { EnrichedConstituent } from '../enrichment/types.ts';
@@ -71,10 +72,24 @@ function makeHardExclusionsPersister() {
   return { persister, persisted };
 }
 
-function makeContext(opts: { polygonReturnsNull?: boolean; enrichmentThrows?: boolean } = {}) {
+function makeCrossCheck(outcome: 'false_positive_within_tolerance' | 'failure_handled' | 'failure_escalated' | 'expected_divergence_handled' | 'system_bug' = 'false_positive_within_tolerance') {
+  const calls: unknown[] = [];
+  const fn: CrossCheckFn = async (input) => {
+    calls.push(input);
+    return { outcome };
+  };
+  return { fn, calls };
+}
+
+function makeContext(opts: {
+  polygonReturnsNull?: boolean;
+  enrichmentThrows?: boolean;
+  crossCheckOutcome?: 'false_positive_within_tolerance' | 'failure_handled' | 'failure_escalated' | 'expected_divergence_handled' | 'system_bug';
+} = {}) {
   const { persister, calls } = makePersister();
   const ump = makeUniverseMembershipPersister();
   const hxp = makeHardExclusionsPersister();
+  const cc = makeCrossCheck(opts.crossCheckOutcome ?? 'false_positive_within_tolerance');
   const polyTickers = ['AAA', 'BBB', 'CCC'];
   const sharesTickers = ['AAA', 'XXX'];
   const ctx: RefreshExecutionContext = {
@@ -105,8 +120,9 @@ function makeContext(opts: { polygonReturnsNull?: boolean; enrichmentThrows?: bo
     refreshLogPersister: persister,
     universeMembershipPersister: ump.persister,
     hardExclusionsPersister: hxp.persister,
+    crossCheck: cc.fn,
   };
-  return { ctx, calls, umpPersisted: ump.persisted, hxpPersisted: hxp.persisted };
+  return { ctx, calls, umpPersisted: ump.persisted, hxpPersisted: hxp.persisted, ccCalls: cc.calls };
 }
 
 Deno.test('happy path → outcome=completed; counts populated; eligible returned + persisted', async () => {
@@ -184,4 +200,70 @@ Deno.test('iShares snapshot captured separately — does NOT flow into enrichmen
     ishares_cross_check_snapshot: { tickers: string[] };
   };
   assertEquals(finalize.ishares_cross_check_snapshot.tickers.length, 4);
+});
+
+// ============================================================================
+// FP-008 sub-step 8.8 / ACT-114 — cross-check (step 2b) test coverage.
+// Surface 4 Option a (OUTSIDE persistence, BEFORE enrichment) + Surface 5
+// Option q (conditional abort on failure_escalated/system_bug).
+// ============================================================================
+
+Deno.test('cross-check pass path (false_positive_within_tolerance) → pipeline + persistence executes', async () => {
+  const { ctx, ccCalls, umpPersisted } = makeContext({ crossCheckOutcome: 'false_positive_within_tolerance' });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'completed');
+  assertEquals(ccCalls.length, 1);
+  assertEquals(umpPersisted.length, 1);
+});
+
+Deno.test('cross-check expected_divergence_handled → proceed (full pipeline + persistence)', async () => {
+  const { ctx, umpPersisted } = makeContext({ crossCheckOutcome: 'expected_divergence_handled' });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'completed');
+  assertEquals(umpPersisted.length, 1);
+});
+
+Deno.test('cross-check failure_handled → proceed (logged divergence; persistence still happens)', async () => {
+  const { ctx, umpPersisted } = makeContext({ crossCheckOutcome: 'failure_handled' });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'completed');
+  assertEquals(umpPersisted.length, 1);
+});
+
+Deno.test('cross-check failure_escalated → ABORT (Surface 5 Option q); persistence NOT called', async () => {
+  const { ctx, calls, umpPersisted, hxpPersisted } = makeContext({ crossCheckOutcome: 'failure_escalated' });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'failed');
+  assertEquals(result.failure_reason, 'cross_check_failure_escalated');
+  // No persistence side-effects on abort.
+  assertEquals(umpPersisted.length, 0);
+  assertEquals(hxpPersisted.length, 0);
+  // refresh-log finalize STILL emitted (R3 atomicity).
+  const finalize = calls[1].payload as { outcome: string; failure_reason: string | null };
+  assertEquals(finalize.outcome, 'failed');
+  assertEquals(finalize.failure_reason, 'cross_check_failure_escalated');
+});
+
+Deno.test('cross-check system_bug → ABORT; failure_reason=cross_check_system_bug', async () => {
+  const { ctx, calls, umpPersisted } = makeContext({ crossCheckOutcome: 'system_bug' });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'failed');
+  assertEquals(result.failure_reason, 'cross_check_system_bug');
+  assertEquals(umpPersisted.length, 0);
+  const finalize = calls[1].payload as { outcome: string; failure_reason: string | null };
+  assertEquals(finalize.failure_reason, 'cross_check_system_bug');
+});
+
+Deno.test('AC-18 regression sentinel — orchestrator does NOT write reconciliation_events directly', async () => {
+  // The orchestrator file MUST NOT contain a direct `.from('reconciliation_events')` insert.
+  const src = await Deno.readTextFile(
+    new URL('./quarterly-refresh-orchestrator.ts', import.meta.url),
+  );
+  assert(!src.includes("from('reconciliation_events')"),
+    'AC-18: orchestrator must not write reconciliation_events directly; reconcile() owns the write');
 });
