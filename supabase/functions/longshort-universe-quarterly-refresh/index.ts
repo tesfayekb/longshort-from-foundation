@@ -29,6 +29,8 @@ import type {
 import { PolygonConstituentFetcher } from '../../../src/features/longshort/services/universe/constituent-ingestion/polygon-constituent-fetcher.ts';
 import { iSharesConstituentFetcher } from '../../../src/features/longshort/services/universe/constituent-ingestion/ishares-constituent-fetcher.ts';
 import { PolygonEnrichmentFetcher } from '../../../src/features/longshort/services/universe/enrichment/polygon-enrichment-fetcher.ts';
+import { makeUniverseMembershipPersister } from '../../../src/features/longshort/services/universe/refresh-jobs/universe-membership-persister.ts';
+import { makeHardExclusionsPersister } from '../../../src/features/longshort/services/universe/refresh-jobs/hard-exclusions-persister.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -122,6 +124,12 @@ export default createHandler(async (req: Request) => {
       short_interest: [],
     },
     refreshLogPersister: makeSupabasePersister(),
+    // FP-008 sub-step 8.7 / ACT-113 — universe-membership + hard-exclusions
+    // persistence wired (Surface 5 Option q two-phase + Surface 4 Option b
+    // shared persister). Pipeline runs OUTSIDE persistence; persistence
+    // executes only after pipeline success.
+    universeMembershipPersister: makeUniverseMembershipPersister(supabaseAdmin),
+    hardExclusionsPersister: makeHardExclusionsPersister(supabaseAdmin),
   };
 
   await writeStrategyAuditEvent({
