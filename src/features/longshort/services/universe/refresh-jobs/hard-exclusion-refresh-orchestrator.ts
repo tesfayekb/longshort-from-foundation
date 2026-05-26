@@ -57,6 +57,15 @@ export function createHardExclusionRefreshOrchestrator(
       // sub-step 8.5. Per the deferred-work register and DEC-038.1 clause
       // (4) implementation order, the dispatcher infrastructure ships
       // first; fetcher wiring follows in subsequent sub-steps.
+      //
+      // FP-008 sub-step 8.7 / ACT-113 note: a `hardExclusionsPersister` slot
+      // is now available on `HardExclusionRefreshContext` (Surface 4 Option b
+      // — same contract shared with quarterly orchestrator). Per-rule
+      // fetchers landing at subsequent sub-steps will populate `firings`
+      // and invoke `ctx.hardExclusionsPersister.persist({...refresh_id:
+      // null})` per MIG-051 continuous-refresh design (NULL refresh_id;
+      // ON DELETE SET NULL preserves rows). At sub-step 8.5 + 8.7, firings
+      // remains empty so the persister is not yet exercised here.
       return {
         rule: input.rule,
         as_of,
