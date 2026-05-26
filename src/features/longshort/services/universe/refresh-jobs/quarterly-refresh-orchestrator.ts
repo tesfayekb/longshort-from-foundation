@@ -9,17 +9,23 @@
  *
  * Pipeline order (BINDING):
  *   1. Polygon constituent fetch (membership)
- *   2. iShares constituent fetch (cross-check snapshot only — Guardrail 2)
+ *   2. iShares constituent fetch (cross-check signal — Guardrail 2)
+ *   2b. Cross-check (reconcile() invocation; failure_escalated/system_bug
+ *       aborts pipeline) [FP-008 sub-step 8.8 / ACT-114 — Surface 4 Option a
+ *       OUTSIDE persistence, BEFORE enrichment, for early-abort efficiency;
+ *       Surface 5 Option q conditional abort on failure_escalated/system_bug]
  *   3. Polygon enrichment (Polygon-enriched primary path only)
  *   4. applyFilters (§3.2 six filters)
  *   5. applyHardExclusions (§3.3 eight rules)
- *   6. Finalize universe_refresh_log row (sub-step 8.4)
- *      [universe_membership persistence lands at sub-step 8.6 / MIG-050]
+ *   6. Persistence transaction (universe_membership INSERT + hard_exclusions
+ *      UPSERT + refresh_log finalize) [FP-008 sub-step 8.7 / ACT-113]
  *
- * No reconcile() coupling at this layer (cross-check at 8.8 per
- * DEC-038.1 clause (2)); no clock injection (`as_of` is parameter); no
- * `logAuditEvent` import (DEC-033 v4.1 — audit emission lives in the edge
- * function handler chokepoint).
+ * No clock injection (`as_of` is parameter); no `logAuditEvent` import
+ * (DEC-033 v4.1 — audit emission lives in the edge function handler
+ * chokepoint). Cross-check invocation per DEC-038.1 clause (2) flows through
+ * `ctx.crossCheck` (edge function wires `buildUniverseCrossCheckSpec` +
+ * `reconcile()`); universe-component does NOT directly write
+ * `reconciliation_events` rows per AC-18.
  *
  * Owner: longshort (FP-008 sub-step 8.4)
  * Classification: financial-critical.
