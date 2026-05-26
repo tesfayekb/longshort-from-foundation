@@ -39,13 +39,13 @@ modules_implemented: auth implemented (A+B+D implemented + hardened incl. Google
 # ⚠ active_work — narrative replaced to reflect FP-005 closure
 active_work: FP-006 (Long-Short Strategy Module Phase 0A Residual + Entire Phase 0B) CLOSED — all 79 acceptance criteria evidenced; closure document at docs/08-planning/phase-closures/plan-trading-001-longshort-002-closure.md; ACT-074 through ACT-098 registered (ACT-083 + ACT-096 are non-FP-006 / investigation-mode entries). All 5 phase gates closed (Gate 6.0 / 6.3 / 6.4 / 6.7 / 6.9). Reconciliation engine + 17 verify_* + replay framework + A1 baseline + Alpaca paper integration + ADR-002 v0 fallback determination live. Phase 0B captured Day 1 deferred to Phase 7 per ADR-006 (DW-058 through DW-061); ADR-002 Test 2 RTH re-run deferred per DW-062. NO longshort.execute permission; NO production code path imports Alpaca fetchers. PLAN-TRADING-001-LONGSHORT-002 closed; Phase 0B exit boundary established. Next: Phase 1 (universe construction) opens as separate FP. All prior PLAN-* sections remain CLOSED.
 # ⚠ current_plan_version — minor merge bump per Constitution Rule 10 (Plan Merge Rule)
-current_plan_version: v13.20
+current_plan_version: v13.21
 # ⚠ approved_plan_baseline — bumps to v13.1 at FP-006 Gate 6.0 closure per DEC-034 clause (5) amendment (Option 1 reconciliation)
 #   resolution. Step 5.0 PR is the approval mechanism (matches v11.0 → v12.0 PR #3
 #   Step 2b precedent). Constitution Rule 9 (Execution Lock) is satisfied: code
 #   execution Steps 5.0a-5.6 cannot begin until v12.1 baseline is approved, which
 #   it becomes at Step 5.0 PR merge.
-approved_plan_baseline: v13.20
+approved_plan_baseline: v13.21
 plan_status: approved
 artifact_governance: active (artifact-index.md, database-migration-ledger.md, phase-closures/)
 deferred_work_open: []
@@ -62,7 +62,7 @@ deployment_config_completed:
   - rls_hardening_2026_05_13: "Migration 20260513195212 — restricted system_config SELECT to is_superadmin(); added owner-scoped SELECT policies on mfa_recovery_codes and mfa_recovery_attempts; added admin/accepting-user SELECT policy on invitations."
   - route_index_reconciliation_2026_05_13: "Added auth-hook-pre-signup and verify-turnstile entries to docs/07-reference/route-index.md (Reconciliation Addendum)."
 # ⚠ last_updated
-last_updated: 2026-05-25
+last_updated: 2026-05-26
 ```
 
 > **Note on `status: complete`:** This field reflects the closure of the historical platform-module programme (auth through PLAN-INVITE-001 inclusive, all phases through Phase 6). It does NOT mean the project is closed or that no work is active. PLAN-TRADING-001 (Trading Panel + Strategy Module Architectural Pattern) governance and implementation steps are currently in progress as recorded in the `active_work` field above. A future `status:` value bump (e.g., to `in_progress` or `closed`, when PLAN-TRADING-001 reaches its own closure or another plan supersedes it) is a separately-governed edit and is intentionally NOT introduced by this PR — preserving backward compatibility with any tooling that reads the existing `status` value.

@@ -1877,6 +1877,42 @@ Option i typed-absence per §2 axiom 3), and the two refresh-job persisters
 | **Cross-tree consumers** | Wired into `supabase/functions/longshort-universe-quarterly-refresh/index.ts`; `HardExclusionRefreshContext.hardExclusionsPersister` slot reserved for continuous-refresh wiring at later sub-steps |
 | **Added by** | FP-008 sub-step 8.7, ACT-113 |
 
+#### Universe ingestion-time cross-check — FP-008 sub-step 8.8 (ACT-114)
+
+The following entries register the `buildUniverseCrossCheckSpec()` ReconcileCallSpec
+(first non-`verify_*` invocation of `reconcile()` per DEC-034.1; Surface 4 Option a
+widens `VerifyCallName` union with `'universe_cross_check'` literal — DW-069 logged
+for forward rename to `ReconcileCallName`) and the supporting `jaccardSimilarity<T>()`
+set-theoretic utility (Surface 2 Option γ classification primitive).
+
+##### `buildUniverseCrossCheckSpec`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.8) |
+| **Classification** | financial-critical (first universe-component contribution to `reconciliation_events` table via `reconcile()`; structural verification surface for constituent-ingestion correctness per §11.0.5 / A4) |
+| **Signature** | `buildUniverseCrossCheckSpec(args: { operator_id: string; polygon_tickers: readonly string[]; ishares_tickers: readonly string[]; as_of: Date }): ReconcileCallSpec` |
+| **File** | `src/features/longshort/services/universe/constituent-ingestion/cross-check-spec.ts` |
+| **Tests** | `cross-check-spec.test.ts` — vitest cases covering jaccard math + safety floor (sym-diff ≤ 3 → `false_positive_within_tolerance`) + safety ceiling (sym-diff > 100 OR empty observed/expected → `system_bug`) + middle-band outcome classification |
+| **call_name** | `'universe_cross_check'` (Surface 4 Option a — `VerifyCallName` union widened to host this non-`verify_*` literal; DW-069 logged for rename to `ReconcileCallName`) |
+| **Surface 2 Option γ thresholds** | `SURFACE_2_THRESHOLDS = { FALSE_POSITIVE_SYM_DIFF_FLOOR: 3, SYSTEM_BUG_SYM_DIFF_CEILING: 100 }` — DW-068 logged for post-flag-flip calibration |
+| **Cross-tree consumers** | Imported by `src/features/longshort/services/universe/refresh-jobs/quarterly-refresh-orchestrator.ts` Step 2b; production `reconcile()` wiring at `supabase/functions/longshort-universe-quarterly-refresh/index.ts` (AC-18 — orchestrator does NOT write to `reconciliation_events` directly) |
+| **Abort contract** | Quarterly orchestrator Step 2b throws on `failure_escalated` OR `system_bug` outcomes BEFORE downstream `universeMembershipPersister` + `hardExclusionsPersister` invocation per Surface 5 Option q + DEC-038 clause (3) prior-quarter intactness |
+| **Added by** | FP-008 sub-step 8.8, ACT-114 |
+
+##### `jaccardSimilarity`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.8) |
+| **Classification** | utility (set-theoretic primitive consumed by `buildUniverseCrossCheckSpec`; pure function; deterministic; no side effects) |
+| **Signature** | `jaccardSimilarity<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): number` |
+| **File** | `src/features/longshort/services/universe/constituent-ingestion/cross-check-spec.ts` |
+| **Semantics** | Returns `|a ∩ b| / |a ∪ b|`; returns `0` for two empty sets (caller — `buildUniverseCrossCheckSpec` — handles empty-set safety ceiling as `system_bug` BEFORE invoking this primitive, so the empty-set fallback here is defensively-typed not silently-defaulted per anti-phantom discipline) |
+| **Tests** | Covered by `cross-check-spec.test.ts` (math correctness + symmetric behavior + empty-set boundary) |
+| **Cross-tree consumers** | Internal to `cross-check-spec.ts`; no external imports |
+| **Added by** | FP-008 sub-step 8.8, ACT-114 |
+
 ### verify_* Batch C (#11–#14) — sub-step 6.3c (ACT-080)
 
 The 4 verifiers below extend the Batch A+B registry. Four first-occurrence cases land here:
