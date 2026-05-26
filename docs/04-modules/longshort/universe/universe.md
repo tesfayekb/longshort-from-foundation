@@ -94,6 +94,22 @@ Per DEC-038.1 clause (1) folder enumeration. Each sub-folder is described by wha
 - **`health-monitoring/`** — single-file `metrics-emitter.ts` (Surface 5 Option A at ACT-115). Emits `filter_rejection_counts` + `hard_exclusion_counts` jsonb aggregates from in-memory pipeline state and UPDATEs `universe_refresh_log` via MIG-053 columns. See Health Monitoring section.
 - **`shared/`** — `trading-days.ts` (NYSE-holiday-aware) plus quarterly arithmetic helpers (`firstTradingDayOfQuarter` / `isFirstTradingDayOfQuarter` / `nextQuarterRefreshDate`). Relocated from `hard-exclusions/` at sub-step 8.4 per the second-consumer rule.
 
+### Hard-exclusion locked thresholds (sourced from `hard-exclusions/types.ts`)
+
+| Constant | Value | Source clause |
+|---|---|---|
+| `HTB_BORROW_RATE_THRESHOLD_BPS` | 1000 (10% annualized) | §3.3d hard-to-borrow / borrow-rate ceiling |
+| `SHORT_INTEREST_PCT_FLOAT_THRESHOLD` | 0.25 (25% of float) | §3.3e short-interest ceiling |
+| `MA_LARGE_ACQUIRER_RATIO_THRESHOLD` | 0.25 (deal size / acquirer market cap) | §3.3b acquirer-asymmetric ceiling |
+| `EARNINGS_WINDOW_TRADING_DAYS` | 2 trading days pre-print | §3.3a earnings window |
+| `HALT_LOOKBACK_TRADING_DAYS` | 5 trading days | §3.3c halt-history lookback (v1 deferred-placeholder per DW-063) |
+
+Revisions to any of these constants require a CROSSWIND spec amendment + DEC-038 amendment + AC-07 retest (the constants are marked LOCKED in the source).
+
+### Book-asymmetric rules
+
+Two §3.3 rules apply only to the short book: §3.3d (HTB / borrow-rate) and §3.3e (short-interest ceiling). All other rules apply to both books. `EligibleConstituent` exposes per-book booleans (`long_eligible`, `short_eligible`) so downstream sizing can honor the asymmetry; the `universe_membership` CHECK constraint enforces at least one book stays eligible per row.
+
 ## Reconciliation Surface
 
 Per DEC-038 clause (1) + DEC-038.1 clauses (2)-(3):
@@ -102,6 +118,16 @@ Per DEC-038 clause (1) + DEC-038.1 clauses (2)-(3):
 - **`universe_cross_check`** — `ReconcileCallSpec` landed at sub-step 8.8 / ACT-114 via `buildUniverseCrossCheckSpec()`. The `VerifyCallName` literal union was widened from 17 to 18 members to add `'universe_cross_check'` (DW-069 logs the forward-rename to `ReconcileCallName`). Classification (Surface 2 Option γ) is jaccard-similarity with explicit safety bounds: floor `sym-diff ≤ 3 → false_positive_within_tolerance`; ceiling `sym-diff > 100 OR empty observed/expected → system_bug`. Quarterly orchestrator Step 2b aborts on `failure_escalated` OR `system_bug` BEFORE downstream `universe_membership` + `hard_exclusions` persistence (DEC-038 clause (3) prior-quarter intactness). Continuous-refresh cross-check is deferred per DW-068 (semantic mismatch: iShares = membership; continuous = exclusion state).
 
 Production wiring: `crossCheck` is invoked via `reconcile()` at the quarterly edge function per AC-18. The orchestrator does NOT write to `reconciliation_events` directly; only `reconcile()` writes per DEC-034.1.
+
+### Outcome enum (per DEC-034 clause (3))
+
+| Outcome | Quarterly orchestrator behavior |
+|---|---|
+| `false_positive_within_tolerance` | Proceed with persistence. |
+| `expected_divergence_handled` | Proceed with persistence. |
+| `failure_handled` | Proceed with persistence. |
+| `failure_escalated` | ABORT before any downstream persistence (DEC-038 clause (3)). |
+| `system_bug` | ABORT before any downstream persistence; root-cause per CROSSWIND §11.0.11 mandatory before the refresh can be retried. |
 
 ## Health Monitoring
 
@@ -121,6 +147,33 @@ Per DEC-038 clause (7) + CROSSWIND §11.3:
 
 Canonical dashboard query blocks (cross-check via `reconciliation_events_daily_agg`; size + duration + rejections + exclusions via `universe_refresh_log`) live in `docs/04-modules/longshort/longshort.md` (landed at ACT-115 per Surface 4 Option x discovery binding).
 
+The canonical shapes (reproduced verbatim from `longshort.md`):
+
+```sql
+-- Cross-check divergence counts (Surface 4 Option x — read from existing view)
+SELECT bucket_day, outcome, event_count
+FROM public.reconciliation_events_daily_agg
+WHERE call_name = 'universe_cross_check'
+  AND bucket_day >= now() - interval '90 days'
+ORDER BY bucket_day DESC, outcome;
+```
+
+```sql
+-- Size + duration + rejections + exclusions (from universe_refresh_log; MIG-053 jsonb columns)
+SELECT
+  as_of_date,
+  quarter_label,
+  total_post_filters AS universe_size,
+  EXTRACT(EPOCH FROM (refresh_completed_at - refresh_started_at)) AS refresh_duration_seconds,
+  filter_rejection_counts,
+  hard_exclusion_counts
+FROM public.universe_refresh_log
+WHERE outcome = 'completed'
+ORDER BY as_of_date DESC;
+```
+
+Weekly + monthly aggregation views (`reconciliation_events_weekly_agg` + `reconciliation_events_monthly_agg`) are available for longer-horizon dashboards.
+
 ## Feature-Flag Wrapping
 
 Per DEC-038 clause (5) + DEC-038.1 clause (5):
@@ -131,7 +184,10 @@ Per DEC-038 clause (5) + DEC-038.1 clause (5):
 - **Disabled behavior:** returns typed-absence — `Promise<EligibleUniverse | null>` returning `null` (null-with-narrowing per §2 axiom 3; DW-067 mitigation). NOT `Optional.none()`.
 - **Enabled behavior:** proceeds with the real query against `universe_membership`.
 
-Operator handbook note: the only sanctioned way to disable the universe component (rollback, incident response, controlled cutover) is via the flag. Toggling the flag does not require code deploy or migration; downstream callers will receive `null` and apply their own typed-absence handling.
+Operator handbook notes:
+- The only sanctioned way to disable the universe component (rollback, incident response, controlled cutover) is via the flag. Toggling the flag does not require code deploy or migration; downstream callers will receive `null` and apply their own typed-absence handling.
+- Pre-flag-flip evidence pattern: AC-19 (health monitoring) and AC-17 (cross-check operational) both evidence the code-operational portion at the sub-step that lands the implementation; the runtime portion ("metrics populated post-refresh" / "cross-check has run on at least one production refresh") defers to sub-step 8.13 when the flag flips. Operators should expect the first post-flip refresh to be the first real-data write into `universe_membership` + `hard_exclusions` + the MIG-053 jsonb columns.
+- The flag is operator-scoped, not strategy-wide. Each operator can disable independently.
 
 ## Events
 
