@@ -393,6 +393,24 @@ For each phase, only **one** authoritative closure document may exist in the rep
 
 ---
 
+### ART-019: Universe Component Documentation
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-019 |
+| **Type** | reference |
+| **Title** | Universe Component Documentation — long-short strategy universe component detailed documentation per FP-008 sub-step 8.10 / AC-20 |
+| **Source Path** | `docs/04-modules/longshort/universe/universe.md` |
+| **Created Date** | 2026-05-26 |
+| **Owning Phase** | Phase Trading-Foundation |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-003 |
+| **Status** | `active` |
+| **Related Actions** | ACT-103 (Gate 8.0 sentinel); ACT-104 (constituent ingestion); ACT-106 (enrichment + §3.2 filters); ACT-107 (§3.3 hard-exclusions); ACT-108 (quarterly atomic refresh + MIG-048); ACT-109 (continuous hard-exclusion refresh + MIG-049); ACT-110 (schema migrations MIG-050/051/052); ACT-113 (verify_universe_membership real implementation); ACT-114 (ingestion-time cross-check via ReconcileCallSpec); ACT-115 (health monitoring + MIG-053); ACT-116 (this documentation sub-step) |
+| **Related Decisions** | DEC-038 (universe-component invariants); DEC-038.1 (universe-component architecture); DEC-030 (long-short scope expansion); DEC-031 (strategy-module folder pattern); DEC-033 v4.1 (canonical shared strategy audit-writer); DEC-034 + DEC-034.1 (reconciliation engine invariants + architecture); DEC-035 (replay framework determinism); DEC-036 (Alpaca paper integration scope); DEC-037 (evidence-workflow tooling) |
+| **Notes** | Documents the universe component as a complete operational deliverable per CROSSWIND §10.5. Covers all 8 sub-modules (constituent-ingestion + enrichment + filters + hard-exclusions + refresh-jobs + verify-membership + health-monitoring + shared; constituent-ingestion houses cross-check infrastructure per DEC-038.1 clause (1) + ACT-114 Surface 3 Option i). Surface choices from sub-steps 8.6 / 8.7 / 8.8 / 8.9 documented with surface-letter references. Deferred work (DW-063 / DW-066 / DW-067 / DW-068 / DW-069 / DW-070 / DW-071) cross-linked. Sub-folder lock at 8.10 per peer-supervisor calibration: `universe.md` is the only file in `docs/04-modules/longshort/universe/`; future sub-steps (8.11 replay; 8.12 runbooks) may add focused appendices per their own surface elicitation. |
+
+---
+
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)

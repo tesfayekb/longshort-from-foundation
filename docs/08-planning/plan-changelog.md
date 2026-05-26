@@ -807,3 +807,18 @@ HIGH — loss of traceability breaks system integrity and decision history.
 - DW-070 logs clause-(7) verbatim drift (7 enum buckets vs spec's 6 §3.2 filters); DW-071 logs continuous-refresh metric emission deferral.
 - AC-19 evidenced (code-operational portion; runtime evidence defers to sub-step 8.13 flag flip per AC-17 pattern).
 - ACT-104-114 code paths preserved verbatim; continuous-refresh orchestrator untouched (S6 Option m).
+
+### v13.23 — 2026-05-26 — FP-008 Sub-Step 8.10 Closure: Universe Component Detailed Documentation + ART-019 Registration (AC-20) (ACT-116)
+
+- Sub-step 8.10 closed at ACT-116 per AC-20 verbatim binding (FIRST documentation-only sub-step in FP-008).
+- Surface choices locked (4-pass supervisor convergence): S1 γ (comprehensive component reference + operator handbook woven through; 250-line target); S2 p (single `universe.md`; sub-folder lock — no other files in `docs/04-modules/longshort/universe/` at 8.10); S3 i (standard component-doc shape; 15 sections locked verbatim); S5 a (consolidate into `universe.md`; `longshort.md` Universe Component sub-section reduces to ~5 lines preserving status indicator); S4 ART-019 with `Phase Trading-Foundation` owning_phase matching ART-018 verbatim.
+- 5 peer-supervisor calibrations folded throughout: (1) anti-completion-theater binding — universe.md content sourced strictly from DEC-038 + DEC-038.1 + ACT-103-115 + longshort.md sub-section + src/ JSDoc; (2) sub-folder lock; (3) 15-section verbatim list; (4) longshort.md status-indicator preservation; (5) ART-019 phase-nomenclature lineage match.
+- NEW `docs/04-modules/longshort/universe/universe.md` (250 lines; 15 sections in locked verbatim order: Purpose / Scope / Enforcement Rules / Key Rules / Architecture / Data Model / Sub-modules / Reconciliation Surface / Health Monitoring / Feature-Flag Wrapping / Events / Jobs / Failure Modes / Dependencies / Cross-references).
+- `docs/04-modules/longshort/longshort.md` Universe Component sub-section reduced from 54 content lines to ~5 lines (status indicator "8.1-8.10 LANDED" + 1-sentence summary + pointer to `universe.md`).
+- `docs/04-modules/longshort/README.md` Contents section gains 1 bullet for `universe/`.
+- `docs/07-reference/artifact-index.md` gains ART-019 entry with `Phase Trading-Foundation` owning_phase.
+- `docs/08-planning/feature-proposals.md` FP-008 Status field updated per defect #34 forward-fix (v0.6.3 §22.3 (e)).
+- AC-20 ticked; sub-step 8.10 checkbox ticked.
+- Tier B documentation-only: no code changes; no schema changes; no live-DB writes; no §22.5.1 / §22.5.2 invocation; no new DEC clauses; no new DW entries.
+- Module status `phase-0b-validated` unchanged (8.13 closure transitions to `phase-1-validated`).
+- ACT-103-115 entries preserved verbatim (append-only).
