@@ -1042,3 +1042,17 @@ HIGH — inaccurate migration history makes future schema changes dangerous and 
 - [Action Tracker](../06-tracking/action-tracker.md)
 - [RBAC Module](../04-modules/rbac.md)
 - [Project Structure](../01-architecture/project-structure.md)
+
+### MIG-054: FP-008 Sub-Step 8.13 / Phase 1 Closure — `feature_flags` `universe.enabled=true` Operational Flip
+
+| Field | Value |
+|---|---|
+| Migration version | (Lovable atomic create+apply timestamp at execution) |
+| File | `supabase/migrations/<timestamp>_step_8_13_universe_flag_flip.sql` |
+| Applied | 2026-05-26 (Lovable atomic create+apply via executor migration tool; §22.5.1 evidence binding) |
+| Verified | 2026-05-26 (Lovable post-apply via `supabase--read_query` confirms `enabled=true` for `flag_key='universe.enabled'` / `operator_id='00000000-0000-0000-0000-000000000001'`) |
+| Pattern | `UPDATE feature_flags SET enabled = true WHERE flag_key = 'universe.enabled' AND operator_id = ... AND enabled = false` — idempotent (no-op if already true); mirrors MIG-045 + MIG-046 (`UPDATE job_registry SET enabled=true`) first-class operational-state migration pattern verbatim |
+| Effect | Flips the `public.feature_flags` row seeded by MIG-052 from `enabled=false` to `enabled=true` for `flag_key='universe.enabled'` / default operator_id `'00000000-0000-0000-0000-000000000001'::uuid`. Per DEC-038 clause (5) + DEC-038.1 clause (5) verbatim: "flag flipped to true operationally when sub-step 8.13 closes." This is the operational gate-open signal — production runtime evidence accrual is a separate Phase 7 concern per ADR-007 + DW-075. NO schema changes; NO new tables/columns/policies/triggers; affects exactly 1 row. |
+| Dependency | MIG-052 (`feature_flags` `universe.enabled=false` seed must be present). |
+| Sub-step authority | ACT-119 (FP-008 sub-step 8.13 / PLAN-TRADING-001-LONGSHORT-003 closure) |
+| AC evidence | AC-28 (component disabled via configuration flag without breaking infrastructure — flag-flip confirms the typed-absence chokepoint at universe-service.ts handles both states); AC-34 (module status transition `phase-0b-validated` → `phase-1-validated` requires operational flag flip per DEC-038.1 clause (5)). |

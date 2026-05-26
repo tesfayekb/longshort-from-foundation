@@ -853,3 +853,21 @@ HIGH — loss of traceability breaks system integrity and decision history.
 - Tier B documentation-only: no code changes; no schema changes; no live-DB writes; no §22.5.1 / §22.5.2 invocation.
 - Module status `phase-0b-validated` unchanged (8.13 closure transitions to `phase-1-validated`).
 - ACT-103-117 entries preserved verbatim (append-only).
+
+### v13.26 — 2026-05-26 — FP-008 Sub-Step 8.13 / Phase 1 Closure: PLAN-TRADING-001-LONGSHORT-003 CLOSED (AC-24 through AC-38; Module Status `phase-0b-validated` → `phase-1-validated`; MIG-054 Flag Flip; ADR-007 Phase 1 Runtime Evidence Deferral) (ACT-119)
+
+**What Changed:** FP-008 closed (terminal sub-step 8.13). PLAN-TRADING-001-LONGSHORT-003 closure document published at `docs/08-planning/phase-closures/plan-trading-001-longshort-003-closure.md` with full 38-AC × evidence matrix + 14-row sub-step closure-SHA matrix + Migrations + ADRs Created + Reference Index Reconciliation + Tests + Deferred Work + Out-of-Scope + Lock Statement (Surface 1 Option γ hybrid). MIG-054 `UPDATE feature_flags SET enabled=true WHERE flag_key='universe.enabled'` applied per DEC-038.1 clause (5) verbatim (Surface 2 Option q; parallels MIG-045 + MIG-046 first-class operational-state precedent). ADR-007 (Phase 1 Runtime Evidence Deferral) introduced at `docs/04-modules/longshort/design-source/ADR-007-phase-1-runtime-evidence-deferral.md` per Surface 3 Option X (vacuous-quietness deferral; FP-006 ADR-006 captured-day deferral precedent applied symmetrically; AC-17 / AC-19 / AC-26 / AC-31 runtime portions deferred to Phase 7 first production refresh). Module status `phase-0b-validated` → `phase-1-validated` per AC-34. AC-24 through AC-38 ticked (15 new ticks at closure). Sub-step 8.13 checkbox ticked. Master-plan PLAN-TRADING-001-LONGSHORT-003 section Status: `approved (execution-pending)` → `closed` per AC-36. FP-008 entry Status: `execution-in-progress` → `closed` + NEW Closure SHA / Date Closed / Closure Evidence fields per AC-37 (sub-case (i) FP-007 template). system-state.md modules_implemented narrative + active_work narrative + Module Status Table row + plan version + last_updated all updated.
+
+**Why:** Terminal sub-step 8.13 closure transaction per FP-008 / DEC-038 / DEC-038.1.
+
+**What Stayed:** DEC-038 + DEC-038.1 + DEC-034 + DEC-034.1 + DEC-035 active; ART-018 through ART-023 unchanged; ADR-001 through ADR-006 preserved verbatim; MIG-048 through MIG-053 preserved verbatim; all 4 runbooks at `docs/04-modules/longshort/universe/runbooks/` preserved verbatim; ACT-103 through ACT-118 preserved verbatim (append-only); function-index / event-index / route-index / permission-index / component-inventory unchanged; CROSSWIND_SPEC.md unchanged; supervisor-instructions / scripts/ / .github/ / docs/banned-patterns.md / docs/ai-failure-modes.md / docs/decisions/ unchanged.
+
+**What Was Added:** Closure document; MIG-054 (operational flag flip); ADR-007 (Phase 1 Runtime Evidence Deferral); DW-075 (Phase 1 runtime evidence completion at Phase 7 first production refresh); DW-076 (supervisor-side defect-#42 candidate: pre-flight Finding adopted by executor without independent re-verification at terminal-closure time); ACT-119 entry; FP-008 Closure SHA / Date Closed / Closure Evidence fields; database-migration-ledger.md MIG-054 entry.
+
+**What Was Removed:** Nothing.
+
+**Approval Status:** Per Constitution Rule 11 financial-critical HIGH classification. Operator surface rulings locked across 3-pass supervisor convergence + Option A-correction: S1=γ / S2=q / S3=X / S4=a / S5=Option A-corrected.
+
+**Supersession Links:** FP-008 supersedes the execution-in-progress phase as the closed Phase 1. Phase 2 (signal stack) opens as separate FP per AC-38 (FP-009+ scoping TBD).
+
+**Defect-#42 candidate lineage:** Pre-flight surface document `FP-008-substep-8-13-pre-flight-surfaces.md` Finding 1 erroneously claimed AC-38 missing; corrected at execution-prompt drafting time via independent re-grep at HEAD `2bb125b9` (38 ACs verified contiguous AC-01 through AC-38). Logged at DW-076 + Lock Statement of closure document; forward-binding consideration for §22.3 (j) codification on recurrence.
