@@ -104,6 +104,25 @@ export function createQuarterlyRefreshOrchestrator(
         const ijh = await ctx.iSharesConstituents.fetchConstituents(SECONDARY_INDEX, as_of);
         ishares_cross_check = [...(ivv ?? []), ...(ijh ?? [])];
 
+        // 2b. Cross-check invocation per DEC-038.1 clause (2) + AC-17 + AC-18 —
+        // FP-008 sub-step 8.8 / ACT-114 (Surface 4 Option a: OUTSIDE
+        // persistence, BEFORE enrichment, for early-abort efficiency;
+        // Surface 5 Option q: abort on failure_escalated/system_bug to
+        // preserve prior-quarter intactness per DEC-038 clause (3)).
+        const cross = await ctx.crossCheck({
+          operator_id,
+          polygon_tickers: primary.map((c) => c.ticker),
+          ishares_tickers: ishares_cross_check.map((c) => c.ticker),
+          as_of,
+        });
+        if (cross.outcome === 'failure_escalated' || cross.outcome === 'system_bug') {
+          throw new Error(
+            cross.outcome === 'system_bug'
+              ? 'cross_check_system_bug'
+              : 'cross_check_failure_escalated',
+          );
+        }
+
         // 3. Polygon enrichment (primary path only).
         const enriched = await ctx.polygonEnrichment.enrich(primary, as_of);
 
