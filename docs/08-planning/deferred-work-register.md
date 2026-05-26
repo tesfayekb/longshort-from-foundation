@@ -1608,3 +1608,35 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future phase** | FP-008 sub-step 8.13 closure OR a dedicated governance reconciliation cycle. Open question: should existing FP-006 ADRs migrate to `docs/decisions/` to fully honor spec verbatim, OR should the spec be updated to ratify the module-scoped governance pattern, OR should the split be made explicit in a DEC amendment without migrating files? |
 | **Risk acknowledged** | Low — the implicit governance split is operationally defensible (module-scoped ADRs co-locate with module design artifacts; cross-cutting ADRs live in shared `docs/decisions/`); spec verbatim is now honored for the cross-cutting landing zone; future quarterly-review ADRs per §12.10 have a concrete target. |
 | **Attestation** | FP-008 closure document at sub-step 8.13 attests this register entry as a governance loose-end with implicit-split resolution in place. |
+
+---
+
+### DW-066: DEC-038.1 Clause (3) Spec-vs-Repo Terminology Drift — "Stub-to-Real" Layer
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-066 |
+| **Registered at** | ACT-113 (FP-008 sub-step 8.7, 2026-05-26) |
+| **Per** | ACT-113 pre-flight Surface 1 → Option A disposition |
+| **Cross-references** | DEC-038.1 clause (3); FP-008 sub-step 8.7; AC-15 / AC-16; `supabase/functions/_shared/longshort-verifiers/verify_universe_membership.ts` |
+| **Scope** | DEC-038.1 clause (3) describes the "stub-to-real" transition as occurring at the verifier level. Repo reality (per FP-006 Gate 6.3 closure) shows the verifier body is already complete; the actual stub-to-real transition lives at the fetcher implementation injected into the verifier. ACT-113 Surface 1 Option A locks the fetcher-layer interpretation as operationally correct and preserves the verifier signature per AC-16. Spec verbatim NOT migrated to fetcher-language in this cycle; future DEC amendment cycle may ratify the fetcher-layer interpretation explicitly. |
+| **Blocking deps** | None (no functional gap; clause is operationally interpretable). |
+| **Future phase** | DEC amendment cycle (likely tied to next supervisor-instructions revision) OR FP-008 sub-step 8.13 closure attestation. |
+| **Risk acknowledged** | Low — clause-vs-implementation drift is operationally interpretable via the existing broker-fetcher abstraction pattern established at FP-006 sub-step 6.3a. |
+| **Attestation** | FP-008 closure document at sub-step 8.13 attests this register entry as a spec-terminology loose-end. |
+
+---
+
+### DW-067: DEC-038.1 Clause (5) Spec-vs-Repo Terminology Drift — Optional.none() vs null-typed-absence
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-067 |
+| **Registered at** | ACT-113 (FP-008 sub-step 8.7, 2026-05-26) |
+| **Per** | ACT-113 pre-flight Surface 3 → Option i disposition |
+| **Cross-references** | DEC-038.1 clause (5); §2 axiom 3 (typed-absence discipline); FP-008 sub-step 8.7; `src/features/longshort/services/universe/verify-membership/universe-service.ts` |
+| **Scope** | DEC-038.1 clause (5) describes the chokepoint feature-flag-disabled path as returning `Optional.none()`. Repo reality has no Optional<T> module in the TypeScript codebase; equivalent typed-absence semantics are provided by `null`-with-narrowing per §2 axiom 3. ACT-113 Surface 3 Option i locks the `Promise<EligibleUniverse \| null>` shape as operationally equivalent (consumer pattern: `if (result === null) { ... }` mirrors Optional.isNone()). Future DEC amendment cycle may ratify the null-typed-absence interpretation explicitly OR introduce an Optional<T> primitive (currently no operational driver). |
+| **Blocking deps** | None (no functional gap; clause is operationally interpretable). |
+| **Future phase** | DEC amendment cycle (likely tied to next supervisor-instructions revision) OR FP-008 sub-step 8.13 closure attestation. |
+| **Risk acknowledged** | Low — typed-absence discipline is honored; `null`-with-narrowing is TypeScript-idiomatic and matches existing repo conventions (see `BrokerPositionFetcher.fetchPosition` returning `Position \| null`). |
+| **Attestation** | FP-008 closure document at sub-step 8.13 attests this register entry as a spec-terminology loose-end.
