@@ -899,6 +899,8 @@ export type Database = {
           as_of_date: string
           created_at: string
           failure_reason: string | null
+          filter_rejection_counts: Json | null
+          hard_exclusion_counts: Json | null
           ishares_cross_check_snapshot: Json | null
           operator_id: string
           outcome: string | null
@@ -915,6 +917,8 @@ export type Database = {
           as_of_date: string
           created_at?: string
           failure_reason?: string | null
+          filter_rejection_counts?: Json | null
+          hard_exclusion_counts?: Json | null
           ishares_cross_check_snapshot?: Json | null
           operator_id: string
           outcome?: string | null
@@ -931,6 +935,8 @@ export type Database = {
           as_of_date?: string
           created_at?: string
           failure_reason?: string | null
+          filter_rejection_counts?: Json | null
+          hard_exclusion_counts?: Json | null
           ishares_cross_check_snapshot?: Json | null
           operator_id?: string
           outcome?: string | null
