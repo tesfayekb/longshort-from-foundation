@@ -27,7 +27,7 @@
 import { applyFilters } from '../filters/apply-filters.ts';
 import { applyHardExclusions } from '../hard-exclusions/apply-hard-exclusions.ts';
 import { isoDate } from '../shared/trading-days.ts';
-import type { EligibleConstituent } from '../hard-exclusions/types.ts';
+import type { EligibleConstituent, HardExclusionFiring } from '../hard-exclusions/types.ts';
 import type {
   RefreshExecutionContext,
   RefreshResult,
@@ -76,6 +76,7 @@ export function createQuarterlyRefreshOrchestrator(
       let total_eligible_long = 0;
       let total_eligible_short = 0;
       let eligible: ReadonlyArray<EligibleConstituent> = [];
+      let firings: ReadonlyArray<HardExclusionFiring> = [];
       let ishares_cross_check: Awaited<
         ReturnType<typeof ctx.iSharesConstituents.fetchConstituents>
       > = [];
@@ -107,8 +108,38 @@ export function createQuarterlyRefreshOrchestrator(
         // 5. §3.3 hard-exclusions.
         const hxResult = applyHardExclusions(filtered.eligible, ctx.exclusionInput, as_of);
         eligible = hxResult.eligible;
+        firings = hxResult.firings;
         total_eligible_long = eligible.filter((e) => e.long_eligible).length;
         total_eligible_short = eligible.filter((e) => e.short_eligible).length;
+
+        // Surface 5 Option q — two-phase persistence: pipeline transformation
+        // completed without throwing; now persist eligible universe + hard-
+        // exclusion firings. Any persistence failure rolls into the catch
+        // block below, finalizing the refresh-log row with outcome='failed'
+        // and preserving prior-quarter intactness per DEC-038 clause (3).
+        await ctx.universeMembershipPersister.persist({
+          operator_id,
+          as_of_date,
+          quarter_label,
+          refresh_id,
+          rows: eligible.map((e) => ({
+            ticker: e.ticker,
+            long_eligible: e.long_eligible,
+            short_eligible: e.short_eligible,
+          })),
+        });
+
+        // Surface 4 Option c — group multi-rule firings into one row per
+        // (ticker, as_of_date) with firing_rules array per MIG-051 PK.
+        const exclusionRows = groupFiringsByTicker(firings);
+        if (exclusionRows.length > 0) {
+          await ctx.hardExclusionsPersister.persist({
+            operator_id,
+            as_of_date,
+            refresh_id,
+            rows: exclusionRows,
+          });
+        }
       } catch (err) {
         outcome = 'failed';
         failure_reason = err instanceof Error ? err.message : String(err);
@@ -152,4 +183,49 @@ export function createQuarterlyRefreshOrchestrator(
  */
 function isoTimestamp(d: Date): string {
   return d.toISOString();
+}
+
+/**
+ * Surface 4 Option c — caller-side per-ticker grouping of HardExclusionFiring
+ * entries into the MIG-051 one-row-per-(ticker, as_of_date) shape with
+ * firing_rules text[] array. Reason code → §3.3 rule key mapping mirrors the
+ * HardExclusionReason union enumerated in hard-exclusions/types.ts.
+ */
+function groupFiringsByTicker(
+  firings: ReadonlyArray<HardExclusionFiring>,
+): Array<{
+  ticker: string;
+  firing_rules: ReadonlyArray<string>;
+  firing_reasons: Record<string, unknown>;
+}> {
+  const map = new Map<string, { rules: string[]; reasons: Record<string, unknown> }>();
+  for (const f of firings) {
+    const ticker = f.constituent.ticker;
+    const rule = reasonToRuleKey(f.reason);
+    const entry = map.get(ticker) ?? { rules: [], reasons: {} };
+    if (!entry.rules.includes(rule)) entry.rules.push(rule);
+    entry.reasons[rule] = {
+      reason: f.reason,
+      applies_to: f.applies_to,
+      evidence: f.evidence,
+    };
+    map.set(ticker, entry);
+  }
+  return Array.from(map.entries()).map(([ticker, v]) => ({
+    ticker,
+    firing_rules: v.rules,
+    firing_reasons: v.reasons,
+  }));
+}
+
+function reasonToRuleKey(reason: HardExclusionFiring['reason']): string {
+  switch (reason) {
+    case 'earnings_window': return '3.3a';
+    case 'ma_target':
+    case 'ma_large_acquirer': return '3.3b';
+    case 'halted_5d_lookback': return '3.3c';
+    case 'htb_no_locate':
+    case 'htb_borrow_rate_excessive': return '3.3d';
+    case 'short_interest_excessive': return '3.3e';
+  }
 }

@@ -28,6 +28,8 @@ import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
+import { supabaseAdmin } from '../_shared/supabase-admin.ts';
+import { createUniverseMembershipFetcher } from '../../../src/features/longshort/services/universe/verify-membership/universe-membership-fetcher.ts';
 import {
   verifyPosition,
   verifyUniverseMembership,
@@ -35,7 +37,6 @@ import {
 } from '../_shared/longshort-verifiers/index.ts';
 import type {
   BrokerPositionFetcher,
-  UniverseMembershipFetcher,
   BrokerBuyingPowerFetcher,
 } from '../_shared/longshort-broker-interfaces.ts';
 
@@ -55,19 +56,6 @@ const MOCK_POSITION_FETCHER: BrokerPositionFetcher = {
   },
 };
 
-const MOCK_UNIVERSE_FETCHER: UniverseMembershipFetcher = {
-  // deno-lint-ignore require-await
-  async fetchUniverseMembership(symbol: string, ts: Date) {
-    return {
-      symbol,
-      in_universe: true,
-      excluded: false,
-      exclusion_reasons: [] as string[],
-      fetched_at: ts,
-    };
-  },
-};
-
 const MOCK_BP_FETCHER: BrokerBuyingPowerFetcher = {
   // deno-lint-ignore require-await
   async fetchBuyingPower(ts: Date) {
@@ -81,6 +69,15 @@ const MOCK_BP_FETCHER: BrokerBuyingPowerFetcher = {
 
 // Operator UUID per DEC-031 F-2 standalone-operator-id default
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
+
+// FP-008 sub-step 8.7 / ACT-113 — LIVE universe-membership fetcher backed by
+// supabaseAdmin reads of `universe_membership` + `hard_exclusions` (MIG-050 +
+// MIG-051). Replaces former MOCK_UNIVERSE_FETCHER per Surface 1 Option A
+// (verifier signature unchanged; transition lands at fetcher layer).
+const LIVE_UNIVERSE_FETCHER = createUniverseMembershipFetcher({
+  supabaseAdmin,
+  operator_id: DEFAULT_OPERATOR_ID,
+});
 
 Deno.serve(createHandler(async (req: Request) => {
   if (req.method !== 'POST') {
@@ -120,7 +117,7 @@ Deno.serve(createHandler(async (req: Request) => {
         operator_id: DEFAULT_OPERATOR_ID,
         internal_in_universe: true,
       },
-      MOCK_UNIVERSE_FETCHER,
+      LIVE_UNIVERSE_FETCHER,
       ts,
     );
     results.push({ call: 'verify_universe_membership', outcome: ums.outcome, symbol: 'AAPL' });

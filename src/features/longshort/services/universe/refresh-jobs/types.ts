@@ -12,6 +12,10 @@ import type { EligibleConstituent } from '../hard-exclusions/types.ts';
 import type { ExclusionInputData } from '../hard-exclusions/types.ts';
 import type { ConstituentFetcher } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
 import type { UniverseEnrichmentFetcher } from '../enrichment/types.ts';
+import type {
+  UniverseMembershipPersisterInput,
+  HardExclusionsPersisterInput,
+} from '../verify-membership/types.ts';
 
 /** Per CROSSWIND §3.4 LOCKED: quarterly cadence Jan/Apr/Jul/Oct. */
 export type RefreshOutcome = 'completed' | 'failed' | 'partial';
@@ -65,6 +69,16 @@ export interface RefreshExecutionContext {
   /** Persistence sink for `universe_refresh_log` rows. Edge function injects
    *  the supabase-admin-backed implementation; tests inject in-memory stub. */
   refreshLogPersister: RefreshLogPersister;
+  /** Persistence sink for `universe_membership` rows — FP-008 sub-step 8.7 /
+   *  ACT-113 (Surface 5 Option q two-phase persistence). Quarterly
+   *  orchestrator invokes after pipeline success; pipeline failures skip
+   *  persistence and finalize the refresh-log row with outcome='failed'. */
+  universeMembershipPersister: UniverseMembershipPersister;
+  /** Persistence sink for `hard_exclusions` rows — Surface 4 Option b
+   *  (orchestrator-internal; consumed by BOTH quarterly + continuous-refresh
+   *  orchestrators) + Option c (firing_rules array-union via caller-side
+   *  per-ticker grouping). */
+  hardExclusionsPersister: HardExclusionsPersister;
 }
 
 /**
@@ -93,6 +107,26 @@ export interface RefreshLogFinalizePatch {
   outcome: RefreshOutcome;
   failure_reason: string | null;
   ishares_cross_check_snapshot: unknown;
+}
+
+/**
+ * Universe-membership persister contract. Mirrors the public surface of
+ * `src/features/longshort/services/universe/refresh-jobs/universe-membership-persister.ts`
+ * — kept as a separate interface here so tests can inject an in-memory stub
+ * without importing the production module (decoupling per §22.5.3 INC-20
+ * orchestrator-stateless-transformation pattern).
+ */
+export interface UniverseMembershipPersister {
+  persist(input: UniverseMembershipPersisterInput): Promise<void>;
+}
+
+/**
+ * Hard-exclusions persister contract — see types note on
+ * `UniverseMembershipPersister`. Per Surface 4 Option b: BOTH quarterly +
+ * continuous orchestrators invoke this same contract.
+ */
+export interface HardExclusionsPersister {
+  persist(input: HardExclusionsPersisterInput): Promise<void>;
 }
 
 // ============================================================================
@@ -166,6 +200,12 @@ export interface HardExclusionRefreshContext {
   /** Caller-supplied trading-day clock. `as_of.toISOString()` is recorded
    *  in the result + audit metadata. */
   as_of: Date;
+  /** Optional hard-exclusions persister — FP-008 sub-step 8.7 / ACT-113
+   *  (Surface 4 Option b shared contract). Continuous-refresh handler
+   *  wires the supabaseAdmin-backed persister; sub-step 8.5 + 8.7 tests
+   *  may omit (orchestrator does NOT yet invoke pending per-rule fetcher
+   *  wiring at later sub-steps). */
+  hardExclusionsPersister?: HardExclusionsPersister;
 }
 
 export interface HardExclusionRefreshInput {

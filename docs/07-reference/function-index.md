@@ -1817,6 +1817,66 @@ The 5 verifiers below extend the Batch A registry. Same module path + spec/wrapp
 | `BrokerBuyingPowerFetcher` | same | verifyBuyingPower | sub-step 6.7 |
 | `UniverseMembershipFetcher` | same | verifyUniverseMembership | sub-step 6.7 |
 
+#### Universe verify-membership — FP-008 sub-step 8.7 (ACT-113)
+
+The following entries register the LIVE `UniverseMembershipFetcher` implementation
+(replacing MOCK_UNIVERSE_FETCHER at the tick handler per Surface 1 Option A
+fetcher-layer transition; verifier signature unchanged per AC-16), the BULK-tier
+`universeService.getEligibleUniverse()` chokepoint (Surface 2 Option γ + Surface 3
+Option i typed-absence per §2 axiom 3), and the two refresh-job persisters
+(Surface 4 Option b shared + Surface 5 Option q two-phase).
+
+##### `createUniverseMembershipFetcher`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.7) |
+| **Classification** | financial-critical (per-symbol fetcher tier consumed by `verify_universe_membership` per §11.0.7 #10) |
+| **Signature** | `createUniverseMembershipFetcher(deps: {supabaseAdmin, operator_id}): UniverseMembershipFetcher` |
+| **File** | `src/features/longshort/services/universe/verify-membership/universe-membership-fetcher.ts` |
+| **Tests** | `universe-membership-fetcher.test.ts` — 4 vitest cases (row present, exclusions present, absence, DB error) |
+| **Consumes tables** | `universe_membership` (MIG-050), `hard_exclusions` (MIG-051) |
+| **Cross-tree consumers** | Imported by `supabase/functions/longshort-reconciliation-tick/index.ts` (replaces former `MOCK_UNIVERSE_FETCHER`) via the FP-006 cross-tree import precedent |
+| **Forward-binding notes** | DW-066 logged for DEC-038.1 clause (3) spec-vs-repo terminology drift ("stub-to-real" at fetcher vs verifier layer) |
+| **Added by** | FP-008 sub-step 8.7, ACT-113 |
+
+##### `createUniverseService` (chokepoint per DEC-038.1 clause (5))
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.7) |
+| **Classification** | financial-critical (BULK-tier chokepoint; consumed by trade-decision pre-checks at later phases) |
+| **Signature** | `createUniverseService(deps: {supabaseAdmin}): { getEligibleUniverse(as_of: Date, operator_id: string): Promise<EligibleUniverse \| null> }` |
+| **File** | `src/features/longshort/services/universe/verify-membership/universe-service.ts` |
+| **Tests** | `universe-service.test.ts` — 6 vitest cases (feature-flag disabled via absent row + via enabled=false; partitioning of long/short rows; empty-rows enabled state; DB error paths × 2) |
+| **Feature-flag gate** | `feature_flags.universe.enabled` per operator (MIG-052) — disabled returns `null` (typed-absence per §2 axiom 3 / Surface 3 Option i) |
+| **Forward-binding notes** | DW-067 logged for DEC-038.1 clause (5) spec-vs-repo terminology drift (`Optional.none()` vs null-with-narrowing) |
+| **Added by** | FP-008 sub-step 8.7, ACT-113 |
+
+##### `makeUniverseMembershipPersister`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.7) |
+| **Classification** | financial-critical (Surface 5 Option q two-phase persistence) |
+| **Signature** | `makeUniverseMembershipPersister(supabaseAdmin): { persist(input: UniverseMembershipPersisterInput): Promise<void> }` |
+| **File** | `src/features/longshort/services/universe/refresh-jobs/universe-membership-persister.ts` |
+| **Persists to** | `universe_membership` (MIG-050) via bulk INSERT; honors CHECK (long_eligible OR short_eligible) by filtering neither-state rows out at the persister boundary |
+| **Cross-tree consumers** | Wired into `supabase/functions/longshort-universe-quarterly-refresh/index.ts` via `RefreshExecutionContext.universeMembershipPersister` |
+| **Added by** | FP-008 sub-step 8.7, ACT-113 |
+
+##### `makeHardExclusionsPersister`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.7) |
+| **Classification** | financial-critical (Surface 4 Option b shared persister + Option c array-union via caller-side per-ticker grouping) |
+| **Signature** | `makeHardExclusionsPersister(supabaseAdmin): { persist(input: HardExclusionsPersisterInput): Promise<void> }` |
+| **File** | `src/features/longshort/services/universe/refresh-jobs/hard-exclusions-persister.ts` |
+| **Persists to** | `hard_exclusions` (MIG-051) via UPSERT on `(operator_id, ticker, as_of_date)`; `refresh_id` populated for quarterly firings, NULL for continuous-refresh firings per MIG-051 design |
+| **Cross-tree consumers** | Wired into `supabase/functions/longshort-universe-quarterly-refresh/index.ts`; `HardExclusionRefreshContext.hardExclusionsPersister` slot reserved for continuous-refresh wiring at later sub-steps |
+| **Added by** | FP-008 sub-step 8.7, ACT-113 |
+
 ### verify_* Batch C (#11–#14) — sub-step 6.3c (ACT-080)
 
 The 4 verifiers below extend the Batch A+B registry. Four first-occurrence cases land here:
@@ -1940,7 +2000,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Method / Permission** | POST / `longshort.view` (observability discipline; `longshort.execute` reserved for Phase 5+) |
 | **Dispatches** | verify_buying_power (system-level), verify_universe_membership, verify_position (per-symbol; canned AAPL for 6.3d dispatch-path validation) |
 | **Clock** | `productionClock.getWallClockTs()` at top-of-call-chain (DEC-034 clause (4) injected-clock) |
-| **Mock fetchers** | YES — sub-step 6.3d proves dispatch path; real broker integration at sub-step 6.7 |
+| **Mock fetchers** | PARTIAL — `MOCK_POSITION_FETCHER` + `MOCK_BP_FETCHER` remain (real broker integration at sub-step 6.7 / Alpaca paper). `MOCK_UNIVERSE_FETCHER` REMOVED at FP-008 sub-step 8.7 / ACT-113; replaced by `createUniverseMembershipFetcher` LIVE supabaseAdmin-backed reads of `universe_membership` + `hard_exclusions` (per Surface 1 Option A fetcher-layer "stub-to-real" transition; verifier signature unchanged per AC-16) |
 | **Activated by job** | `longshort.reconciliation_periodic_sweep` (`enabled=true` via MIG-045) |
 | **Added by** | FP-006 sub-step 6.3d, ACT-081 |
 
