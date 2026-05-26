@@ -1913,6 +1913,41 @@ set-theoretic utility (Surface 2 Option γ classification primitive).
 | **Cross-tree consumers** | Internal to `cross-check-spec.ts`; no external imports |
 | **Added by** | FP-008 sub-step 8.8, ACT-114 |
 
+#### Universe health-monitoring metrics emitter — FP-008 sub-step 8.9 (ACT-115)
+
+The following entries register the `makeMetricsEmitter()` factory and its
+`emitRefreshMetrics()` method per DEC-038 clause (7) verbatim "metrics emission
+MUST land at sub-step 8.9" + DEC-038.1 clause (1) `health-monitoring/` sub-folder
+binding. FIRST universe-component dashboard-queryable storage emission. Surface
+choices locked across 3-pass supervisor convergence (S1 γ / S2 q / S3 ii / S4 x /
+S5 A / S6 m).
+
+##### `makeMetricsEmitter`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.9) |
+| **Classification** | financial-critical adjacent (dashboard-queryable storage emission gates Phase 1 exit per DEC-038 clause (7); missing emission is §22.5 DRIFT-class defect). Not on money path — observability only; emitter errors logged but do NOT fail refresh per quarterly orchestrator Step 7 wrapping. |
+| **Signature** | `makeMetricsEmitter(deps: { supabaseAdmin: SupabaseClient }): MetricsEmitter` |
+| **File** | `src/features/longshort/services/universe/health-monitoring/metrics-emitter.ts` |
+| **Tests** | `metrics-emitter.test.ts` — vitest cases covering empty-array → empty-object (no zero-filled bucket sentinel per §11.8); single-reason → single-key; multi-reason aggregation; supabase UPDATE error propagation; idempotent re-emission keyed by `refresh_id`. |
+| **Surface bindings** | S1 γ (extend `universe_refresh_log` via MIG-053; no new `universe_health_metrics` table); S5 A (single-file emitter under `health-monitoring/`); S6 m (quarterly-only — continuous-refresh orchestrator UNTOUCHED per DW-071). |
+| **Cross-tree consumers** | Wired in `supabase/functions/longshort-universe-quarterly-refresh/index.ts` (production); invoked by `src/features/longshort/services/universe/refresh-jobs/quarterly-refresh-orchestrator.ts` Step 7 (post-finalize, `outcome='completed'` gate only). |
+| **Added by** | FP-008 sub-step 8.9, ACT-115 |
+
+##### `emitRefreshMetrics`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.9) |
+| **Classification** | financial-critical adjacent (point-in-time snapshot semantic per Surface 3 Option ii; refresh-time aggregate of per-§3.2-filter rejection counts + per-§3.3-rule hard-exclusion counts written to `universe_refresh_log` jsonb columns landed by MIG-053). |
+| **Signature** | `emitRefreshMetrics(input: { refresh_id: string; filter_rejection_reasons: ReadonlyArray<FilterRejectionReason>; hard_exclusion_reasons: ReadonlyArray<HardExclusionReason> }): Promise<void>` |
+| **File** | `src/features/longshort/services/universe/health-monitoring/metrics-emitter.ts` (method of `MetricsEmitter` returned by `makeMetricsEmitter`) |
+| **Semantics** | Counts per-reason via `groupByReason` helper; UPDATE `public.universe_refresh_log` SET `filter_rejection_counts` + `hard_exclusion_counts` WHERE `refresh_id = input.refresh_id`. Empty arrays produce empty `{}` jsonb (NOT zero-filled bucket objects — preserves §11.8 sentinel-fallback ban). Idempotent: re-emission with same `refresh_id` overwrites with identical computed value. |
+| **Cross-check coverage** | Surface 4 Option x: cross-check divergence counts NOT emitted here; consumers read `reconciliation_events_daily_agg` view (MIG-047) WHERE `call_name = 'universe_cross_check'`. Canonical dashboard SQL block in `docs/04-modules/longshort/longshort.md`. |
+| **Failure behavior** | Throws on supabase UPDATE error; quarterly orchestrator Step 7 catches + logs + swallows (observability, not correctness). |
+| **Added by** | FP-008 sub-step 8.9, ACT-115 |
+
 ### verify_* Batch C (#11–#14) — sub-step 6.3c (ACT-080)
 
 The 4 verifiers below extend the Batch A+B registry. Four first-occurrence cases land here:

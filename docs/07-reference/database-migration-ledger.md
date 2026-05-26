@@ -924,6 +924,22 @@ All previously RESERVED slots for FP-008 sub-steps 8.5 + 8.6 have LANDED. Final 
 
 ---
 
+### MIG-053: FP-008 Sub-Step 8.9 — `universe_refresh_log` Metrics Columns (`filter_rejection_counts` + `hard_exclusion_counts` jsonb)
+
+| Field | Value |
+|---|---|
+| Migration version | `20260526075352` |
+| File | `supabase/migrations/20260526075352_30f81abe-0cac-4c1c-8bf6-449e04a34f7e.sql` |
+| Applied | 2026-05-26 (Lovable atomic create+apply via executor migration tool; §22.5.1 evidence binding) |
+| Verified | 2026-05-26 (Lovable post-apply via `supabase--read_query` against `information_schema.columns` for `table_schema='public'` AND `table_name='universe_refresh_log'` confirmed 2 rows: `filter_rejection_counts` (`data_type=jsonb`) + `hard_exclusion_counts` (`data_type=jsonb`)) |
+| Pattern | `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... jsonb` (idempotent — re-run safe per D3); 2 column-DDL `COMMENT ON COLUMN` statements documenting point-in-time-snapshot semantic + Surface 3 Option ii binding. NO data backfill (NULL for historical rows pre-emitter wiring; emitter UPDATEs the row at refresh completion). |
+| Effect | Adds 2 jsonb columns to `public.universe_refresh_log` per DEC-038 clause (7) verbatim "filter rates (per-§3.2-filter rejection counts); hard exclusion counts (per-§3.3-rule active exclusion counts)" + Surface 1 Option γ (extend existing table; do NOT create new `universe_health_metrics` table). Columns populated by `emitRefreshMetrics()` (see `function-index.md` — sub-step 8.9 / ACT-115) on `outcome='completed'` post-finalize. Empty `{}` values land when zero firings occurred (NOT zero-filled bucket objects — preserves §11.8 sentinel-fallback ban). Existing RLS policies on `universe_refresh_log` (`universe_refresh_log_read_policy` gated on `longshort.view`; `universe_refresh_log_no_direct_write_policy` blocking direct writes — service-role-only via emitter) automatically govern new columns; NO policy changes. |
+| Dependency | MIG-048 (`universe_refresh_log` table). |
+| Sub-step authority | ACT-115 (FP-008 sub-step 8.9 closure) |
+| AC evidence | AC-19 (universe-component metrics emission code-operational; runtime portion defers to sub-step 8.13 flag flip per AC-17 pattern from sub-step 8.8). |
+
+---
+
 ### Tables (14)
 
 | Table | Created By | Status |
@@ -952,6 +968,8 @@ All previously RESERVED slots for FP-008 sub-steps 8.5 + 8.6 have LANDED. Final 
 | `universe_refresh_log` | MIG-048 | Active |
 | `universe_membership` | MIG-050 | Active |
 | `hard_exclusions` | MIG-051 | Active |
+| `universe_refresh_log.filter_rejection_counts` | MIG-053 | Active (jsonb column on existing `universe_refresh_log` table) |
+| `universe_refresh_log.hard_exclusion_counts` | MIG-053 | Active (jsonb column on existing `universe_refresh_log` table) |
 
 ### Functions (12)
 
