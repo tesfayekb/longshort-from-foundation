@@ -23,6 +23,11 @@ import type { QuoteEvent, ReplayTimestamp } from '../../types/replay-fixture.ts'
 import {
   VERIFY_QUOTE_TOLERANCE,
 } from '../../../../../supabase/functions/_shared/longshort-verifiers/verify_quote.ts';
+import type {
+  L2SyntheticUniverseQuarterlyRefreshFixture,
+  UniverseMembershipSnapshotEvent,
+} from './l2-synthetic-universe-quarterly-refresh-generator.ts';
+import { MATERIALLY_EXCLUDED_REASONS } from '../../../../../supabase/functions/_shared/longshort-verifiers/verify_universe_membership.ts';
 
 const OPERATOR_ID = 'l2-synth-operator';
 const SYMBOL = 'AAPL';
@@ -111,4 +116,106 @@ export function runReplayPassAgainstSession(session: ReplaySession): CollectedRe
     if (event !== null) collector.collect(event);
   }
   return collector.snapshot();
+}
+
+// =============================================================================
+// FP-008 sub-step 8.11 / ACT-117 — universe-membership replay pass
+//
+// Drives `verify_universe_membership` classifier logic against the snapshot
+// fixture produced by `l2-synthetic-universe-quarterly-refresh-generator.ts`.
+// Surface 4 Option a: `verify_universe_membership` ONLY scope; full quarterly
+// orchestrator determinism deferred to DW-073.
+// Surface 2 Option p: extends THIS file (verifier-dispatch substrate). Anti-
+// premature-decomposition guard per pre-flight calibration: this section adds
+// ~80 lines; extraction to a separate file is NOT warranted at this size.
+// Per AC-22 verbatim: pure function; deterministic; no `Date.now()`; no `new
+// Date()`; no wall-clock reads. `as_of` is an explicit parameter.
+// =============================================================================
+
+export interface CollectedUniverseMembershipEvent {
+  ts: ReplayTimestamp;
+  call_name: 'verify_universe_membership';
+  operator_id: string;
+  symbol: string;
+  tier: 'strong';
+  outcome:
+    | 'failure_escalated'
+    | 'failure_handled'
+    | 'false_positive_within_tolerance';
+  divergence: {
+    internal_in_universe: boolean;
+    observed_in_universe: boolean;
+    observed_excluded: boolean;
+    observed_exclusion_reasons: string[];
+    materially_excluded: boolean;
+  };
+  action_taken:
+    | 'entry_blocked_materially_excluded'
+    | 'entry_blocked_universe_membership_failure'
+    | null;
+}
+
+const UNIVERSE_OPERATOR_ID = 'l2-synth-operator';
+
+function classifyUniverseRow(
+  row: UniverseMembershipSnapshotEvent,
+): CollectedUniverseMembershipEvent {
+  const materially_excluded =
+    row.observed_excluded === true &&
+    row.observed_exclusion_reasons.some((r) =>
+      MATERIALLY_EXCLUDED_REASONS.includes(r),
+    );
+
+  let outcome: CollectedUniverseMembershipEvent['outcome'];
+  if (row.internal_in_universe === true && materially_excluded === true) {
+    outcome = 'failure_escalated';
+  } else if (row.internal_in_universe === true && row.observed_excluded === true) {
+    outcome = 'failure_handled';
+  } else if (row.internal_in_universe === true && row.observed_in_universe === false) {
+    outcome = 'failure_handled';
+  } else {
+    outcome = 'false_positive_within_tolerance';
+  }
+
+  let action_taken: CollectedUniverseMembershipEvent['action_taken'];
+  if (outcome === 'failure_escalated') {
+    action_taken = 'entry_blocked_materially_excluded';
+  } else if (outcome === 'failure_handled') {
+    action_taken = 'entry_blocked_universe_membership_failure';
+  } else {
+    action_taken = null;
+  }
+
+  return {
+    ts: row.ts,
+    call_name: 'verify_universe_membership',
+    operator_id: UNIVERSE_OPERATOR_ID,
+    symbol: row.symbol,
+    tier: 'strong',
+    outcome,
+    divergence: {
+      internal_in_universe: row.internal_in_universe,
+      observed_in_universe: row.observed_in_universe,
+      observed_excluded: row.observed_excluded,
+      observed_exclusion_reasons: [...row.observed_exclusion_reasons],
+      materially_excluded,
+    },
+    action_taken,
+  };
+}
+
+/**
+ * Drive the universe-membership snapshot fixture through the
+ * `verify_universe_membership` classifier, returning collected events in
+ * fixture event order (point-in-time snapshot — all events share `as_of`).
+ *
+ * AC-21 + AC-22 binding: two calls with the same fixture + same `as_of`
+ * produce byte-identical results (§11.10.4 PASS evidence at the
+ * verify_universe_membership chokepoint).
+ */
+export function runUniverseMembershipReplayPass(
+  fixture: L2SyntheticUniverseQuarterlyRefreshFixture,
+  _as_of: ReplayTimestamp,
+): CollectedUniverseMembershipEvent[] {
+  return fixture.events.map(classifyUniverseRow);
 }

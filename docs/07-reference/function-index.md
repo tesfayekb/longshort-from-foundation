@@ -2368,3 +2368,68 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **File** | `src/features/longshort/services/universe/refresh-jobs/types.ts` (merged into the ACT-108 sibling file; quarterly + hard-exclusion type families co-located per DEC-038.1 clause (1)) |
 | **Consumers** | `hard-exclusion-refresh-orchestrator.ts` + `supabase/functions/longshort-universe-hard-exclusion-refresh/index.ts` (cross-tree native import per FP-006 precedent) |
 | **Added by** | FP-008 sub-step 8.5, ACT-109 |
+
+#### Universe replay-test integration — FP-008 sub-step 8.11 (ACT-117)
+
+The following entries register the L2 synthetic universe quarterly-refresh snapshot
+fixture generator + parallel loader + verify_universe_membership replay-pass driver
+(FIRST snapshot-style fixture extension to §11.10 framework per Surface 1 Option β at
+ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
+
+##### `buildL2SyntheticUniverseQuarterlyRefresh`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.11) |
+| **Classification** | test-infrastructure (deterministic synthetic-fixture generator; pure function; banned-pattern compliant — no `Date.now()`, no `new Date()`, no `?? 0` sentinel fallback, no `logAuditEvent` import) |
+| **Signature** | `buildL2SyntheticUniverseQuarterlyRefresh(): L2SyntheticUniverseQuarterlyRefreshFixture` |
+| **File** | `src/features/longshort/services/replay/l2-synthetic-universe-quarterly-refresh-generator.ts` |
+| **Tests** | `_test.ts` — 8 Deno tests (envelope contract + eligibility distribution + point-in-time semantics + AC-22 byte-identical determinism + AC-21 round-trip + stream-extension strictness + event_count enforcement + banned-pattern source self-check) |
+| **Determinism** | Pure; two calls produce byte-identical output (AC-22 binding) |
+| **Cross-tree consumers** | `replay-pass-runner.ts#runUniverseMembershipReplayPass`; `scripts/replay-pass.ts` --verifier=verify_universe_membership dispatch path |
+| **Added by** | FP-008 sub-step 8.11, ACT-117 |
+
+##### `serializeL2SyntheticUniverseQuarterlyRefreshToJsonl`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.11) |
+| **Classification** | test-infrastructure (envelope-first JSONL serializer per §11.10.2) |
+| **Signature** | `serializeL2SyntheticUniverseQuarterlyRefreshToJsonl(fixture): string` |
+| **File** | same as `buildL2SyntheticUniverseQuarterlyRefresh` |
+| **Added by** | FP-008 sub-step 8.11, ACT-117 |
+
+##### `parseUniverseQuarterlyRefreshFixture`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.11) |
+| **Classification** | test-infrastructure (parallel loader sidestepping `fixture-loader.ts` strict 8-stream validation; snapshot-style event extension outside §11.10.1's `ReplayFixtureEvent` union — see `replay-fixture-format.md` Appendix A) |
+| **Signature** | `parseUniverseQuarterlyRefreshFixture(jsonl: string): L2SyntheticUniverseQuarterlyRefreshFixture` |
+| **File** | same as `buildL2SyntheticUniverseQuarterlyRefresh` |
+| **Validation** | envelope_marker + format_version + per-event stream literal + event_count tally; throws on any mismatch |
+| **Cross-tree consumers** | `scripts/replay-pass.ts` --verifier=verify_universe_membership dispatch path; `replay-pass-runner_test.ts` round-trip tests |
+| **Added by** | FP-008 sub-step 8.11, ACT-117 |
+
+##### `UniverseMembershipSnapshotEvent` + `L2SyntheticUniverseQuarterlyRefreshFixture` + `FIXTURE_AS_OF_TS` / `FIXTURE_AS_OF_DATE` / `FIXTURE_OPERATOR_ID` / `L2_SYNTHETIC_UNIVERSE_QUARTERLY_REFRESH_ID`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.11) |
+| **Classification** | test-infrastructure types + constants (NOT a member of `ReplayFixtureEvent` 8-stream union per §11.10.1 non-amendment guard) |
+| **File** | `src/features/longshort/services/replay/l2-synthetic-universe-quarterly-refresh-generator.ts` |
+| **Added by** | FP-008 sub-step 8.11, ACT-117 |
+
+##### `runUniverseMembershipReplayPass`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (sub-step 8.11) |
+| **Classification** | test-infrastructure / replay verifier-dispatch (drives `verify_universe_membership` classifier logic against snapshot fixture; mirrors verify_universe_membership.ts classify_outcome rules verbatim per Surface 4 Option a chokepoint scope) |
+| **Signature** | `runUniverseMembershipReplayPass(fixture: L2SyntheticUniverseQuarterlyRefreshFixture, as_of: ReplayTimestamp): CollectedUniverseMembershipEvent[]` |
+| **File** | `src/features/longshort/services/replay/replay-pass-runner.ts` |
+| **Tests** | `replay-pass-runner_test.ts` — 6 Deno tests U1-U6 (parse via parallel loader + 10-event count + 8/0/2 outcome distribution + materially-excluded escalation × 2 + AC-22 byte-identical + AC-21 round-trip) |
+| **Determinism** | Pure given (fixture, as_of); no `Date.now()`, no `new Date()`; AC-22 binding satisfied |
+| **Cross-tree consumers** | `scripts/replay-pass.ts` --verifier=verify_universe_membership dispatch path |
+| **Anti-premature-decomposition guard** | Added in-place to existing `replay-pass-runner.ts` per Surface 2 Option p (~80-line addition; extraction not warranted at this size; soft limit ~300 lines per pre-flight calibration) |
+| **Added by** | FP-008 sub-step 8.11, ACT-117 |

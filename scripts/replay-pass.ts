@@ -15,7 +15,15 @@
 
 import { parseArgs } from 'https://deno.land/std@0.224.0/cli/parse_args.ts';
 import { loadReplaySession } from '../src/features/longshort/services/replay/replay-engine.ts';
-import { runReplayPassAgainstSession } from '../src/features/longshort/services/replay/replay-pass-runner.ts';
+import {
+  runReplayPassAgainstSession,
+  runUniverseMembershipReplayPass,
+} from '../src/features/longshort/services/replay/replay-pass-runner.ts';
+import {
+  parseUniverseQuarterlyRefreshFixture,
+  FIXTURE_AS_OF_TS,
+} from '../src/features/longshort/services/replay/l2-synthetic-universe-quarterly-refresh-generator.ts';
+import { decompressZstdFile } from '../src/features/longshort/services/replay/zstd-codec.ts';
 
 export interface ReplayPassArgs {
   fixture: string;
@@ -50,26 +58,43 @@ export async function executeReplayPass(args: ReplayPassArgs): Promise<ReplayPas
       message: 'replay-pass: --fixture=<path> required',
     };
   }
-  if (args.verifier !== 'verify_quote') {
+  if (args.verifier === 'verify_quote') {
+    const session = await loadReplaySession({ fixturePath: args.fixture });
+    const events = runReplayPassAgainstSession(session);
+    return {
+      status: 'pass',
+      fixture: args.fixture,
+      verifier: args.verifier,
+      event_count: events.length,
+      events_json: JSON.stringify(events),
+      message: `replay-pass: PASS — verifier=${args.verifier}, fixture=${args.fixture}, event_count=${events.length}`,
+    };
+  }
+  if (args.verifier === 'verify_universe_membership') {
+    // FP-008 sub-step 8.11 / ACT-117 — Surface 5 Option x: extend this Deno
+    // CLI substrate per ADR-005 Deno-native replay runtime precedent. Parallel
+    // fixture-loader path (snapshot envelope outside §11.10.1's 8-stream
+    // enumeration).
+    const jsonl = await decompressZstdFile(args.fixture);
+    const fixture = parseUniverseQuarterlyRefreshFixture(jsonl);
+    const events = runUniverseMembershipReplayPass(fixture, FIXTURE_AS_OF_TS);
+    return {
+      status: 'pass',
+      fixture: args.fixture,
+      verifier: args.verifier,
+      event_count: events.length,
+      events_json: JSON.stringify(events),
+      message: `replay-pass: PASS — verifier=${args.verifier}, fixture=${args.fixture}, event_count=${events.length}`,
+    };
+  }
     return {
       status: 'fail',
       fixture: args.fixture,
       verifier: args.verifier,
       event_count: 0,
       events_json: '',
-      message: `replay-pass: verifier=${args.verifier} not supported in 6.5c (only verify_quote); additional verifiers land in 6.5d`,
+    message: `replay-pass: verifier=${args.verifier} not supported (supported: verify_quote, verify_universe_membership); additional verifiers land in downstream sub-steps`,
     };
-  }
-  const session = await loadReplaySession({ fixturePath: args.fixture });
-  const events = runReplayPassAgainstSession(session);
-  return {
-    status: 'pass',
-    fixture: args.fixture,
-    verifier: args.verifier,
-    event_count: events.length,
-    events_json: JSON.stringify(events),
-    message: `replay-pass: PASS — verifier=${args.verifier}, fixture=${args.fixture}, event_count=${events.length}`,
-  };
 }
 
 if (import.meta.main) {
