@@ -39,7 +39,6 @@ import { applyHardExclusions } from '../hard-exclusions/apply-hard-exclusions.ts
 import { isoDate } from '../shared/trading-days.ts';
 import type { EligibleConstituent, HardExclusionFiring } from '../hard-exclusions/types.ts';
 import type { FilterRejectionReason } from '../filters/types.ts';
-import type { HardExclusionReason } from '../hard-exclusions/types.ts';
 import type {
   RefreshExecutionContext,
   RefreshResult,
