@@ -478,7 +478,7 @@ First concrete application of the FP-004 / DEC-031 strategy-module pattern. Boot
 
 ### PLAN-TRADING-001-LONGSHORT-003 — Long-Short Strategy Module Phase 1: Universe Ingestion and Management
 **Parent Plan:** PLAN-TRADING-001
-**Status:** `closed (2026-05-26 — closure document at docs/08-planning/phase-closures/plan-trading-001-longshort-003-closure.md; closure ACT-119; closure SHA <commit SHA>)`
+**Status:** `closed (2026-05-26 — closure document at docs/08-planning/phase-closures/plan-trading-001-longshort-003-closure.md; closure ACT-119; closure SHA 4ecc4004 (governance landing) + <this-commit-SHA> (MIG-054 apply))`
 **Feature Proposal:** FP-008
 **Risk Level:** HIGH (Constitution Rule 11 — financial-critical module; per FP-008 R1-R7 risk register)
 **Module Doc:** [longshort/universe/universe.md](../04-modules/longshort/universe/universe.md) (to be created at sub-step 8.10; ART-NNN)
