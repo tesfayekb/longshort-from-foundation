@@ -36,6 +36,7 @@ import type {
   UniverseConstituent,
 } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
 import { ConstituentFetchError } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import { fetchWithTimeoutAndRetry, DEFAULT_FETCH_TIMEOUT_MS } from '../shared/fetch-with-timeout.ts';
 
 /** Polygon ticker-set codes per their public reference-data taxonomy. */
 const POLYGON_INDEX_CODE: Readonly<Record<IndexId, string>> = {
@@ -45,8 +46,11 @@ const POLYGON_INDEX_CODE: Readonly<Record<IndexId, string>> = {
 
 const POLYGON_BASE_URL = 'https://api.polygon.io';
 const PAGE_LIMIT = 1000;
-/** Hard cap on pagination follows to avoid runaway in case of API bug. */
-const MAX_PAGES = 10;
+/** Hard cap on pagination follows. S&P 500 + S&P 400 = ~900 tickers; at
+ *  PAGE_LIMIT=1000 we fit in 1-2 pages, but Polygon may split results
+ *  unpredictably during corporate-action windows. 50-page cap accommodates
+ *  worst-case fragmentation while still bounding runaway. */
+const MAX_PAGES = 50;
 
 interface PolygonTickerRow {
   ticker?: string;
@@ -102,9 +106,17 @@ export class PolygonConstituentFetcher implements ConstituentFetcher {
 
       let resp: Awaited<ReturnType<HttpFetch>>;
       try {
-        resp = await this.httpFetch(requestUrl, { method: 'GET' });
+        resp = await fetchWithTimeoutAndRetry(this.httpFetch, requestUrl, { method: 'GET' });
       } catch (e) {
-        throw new ConstituentFetchError('polygon', index, `network error on page ${page}`, e);
+        const isTimeout = e instanceof Error && e.name === 'AbortError';
+        throw new ConstituentFetchError(
+          'polygon',
+          index,
+          isTimeout
+            ? `request timeout after ${DEFAULT_FETCH_TIMEOUT_MS}ms on page ${page}`
+            : `network error on page ${page}`,
+          e,
+        );
       }
 
       if (!resp.ok) {
