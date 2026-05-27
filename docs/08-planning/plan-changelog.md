@@ -1005,3 +1005,48 @@ HIGH — loss of traceability breaks system integrity and decision history.
 **Supersession Links:** AC-32 + AC-32-equivalent mechanical-realization anchor at `<this commit SHA>` completes the two-SHA attestation chain. GOV-ERRATA-01 (parallel doc-only FP) and DEFECT-PLATFORM-01 (Stage 2) authorization open on this closure; FP-009 (Stage 3) gated on Stage 1 + Stage 2 CLEAN.
 
 **v0.6.4 third-validation-event attestation:** §22.3 (l) inline-citation + §22.5 (g) external CI verification request + operator-caveat-1 recursive anti-bundling honor exercised at the third validation event.
+
+### v13.31 — 2026-05-27 — CI-FIX-03 / Stage 1.6: Approach A Env-Shim Fix (Two-Location Module-Init + beforeEach) + AC-32 + AC-32-Equivalent Mechanical Satisfaction REALIZED (Path C-Hybrid Three-SHA Attestation Chain Complete) (ACT-124)
+
+**What Changed:**
+- Fixed Gate 4 (Vitest + ESLint) of strong-evidence.yml workflow at the env-shim timing tier
+- `src/test/setup.ts` env-shim ADDED at module-init (top-level, after imports, before any beforeEach) per operator caveat 2.1 two-location ADD-not-MOVE specification
+- Existing beforeEach `vi.stubEnv` calls RETAINED unchanged (belt-and-suspenders for RW-021 afterEach within-file teardown)
+- Total `vi.stubEnv` count in setup.ts post-fix = 6 (3 at module-init + 3 in beforeEach); CI-FIX-02 form had 3 in beforeEach only
+- RW-021 fail-fast contract preserved verbatim (src/lib/env.ts unchanged; rw021-env-loader-fail-fast.test.ts unchanged; workflow yml unchanged)
+- rw017 + rw018 + rw019 unchanged (CI-FIX-02 vi.hoisted refactor stays — that was correct for postMock factory hoist defect; only timing of env-shim was the CI-FIX-02 defect)
+- DW-077 extended with pattern-establishing instance #8 (supervisor verification-tier, sub-type grep-convention assumption) + pattern-establishing instance #9 (test-infrastructure-gap + author-time Vitest-semantics composite) per operator caveat 3 Scope A
+- DW-077 future-split trigger updated with operator-verbatim tightened conjunctive language per operator caveat 4: "Density alone (currently 5-of-9) does not trigger; cleavage clarity does"
+- DW-079 split DEFERRED — cleavage criterion unmet despite 5-of-9 density crossing the loose threshold
+- Local-vs-CI divergence (Lovable 248/248 local vs CI 246/248 at SHA a00ce8eb) noted as forward-binding flag in ACT-124 evidence per operator caveat 5; root cause was env-shim timing per instance #9, not container divergence; INC-25 escalation deferred unless pattern continues
+- AC-32 + AC-32-equivalent mechanical satisfaction REALIZED at this closure SHA per Path C-Hybrid THREE-SHA attestation chain (4af83178 partial-1 + a00ce8eb partial-2 + this commit SHA final)
+- First FULL-GREEN run of strong-evidence.yml in repo history at <this commit SHA> (subject to operator external CI confirmation)
+- Vitest hoist-order pre-flight verification table cited inline per operator caveat (the 30-second sanity check hard-codified per https://vitest.dev/guide/mocking + GitHub issue #3228 + GitHub issue #4232 primary sources)
+
+**Why:** Stage 1.6 of the CI-INVESTIGATION-01 Path C-Hybrid corrective sequencing. CI-FIX-02 closed Gate 4 at the local-Vitest tier (Lovable's verifiable layer) but failed external CI on env-shim timing — vi.mock factories hoist BEFORE imports within their own test file; setupFiles top-level executes BEFORE the test file loads. CI-FIX-02 caveat 2 conflated those two boundaries. CI-FIX-03 (this fix) applies the correct two-location shim: module-init for primary vi.mock-factory-timing protection + beforeEach for RW-021 afterEach belt-and-suspenders. Per Path C-Hybrid Three-SHA extension: each SHA in the chain represents real progress with honest forward-binding to the next SHA when partial-realization remains; this commit's SHA completes the chain.
+
+**What Stayed:**
+- DEC-038 + DEC-038.1 + DEC-034 + DEC-034.1 + DEC-035 + DEC-031 + DEC-032 + DEC-036 active
+- ART-018 through ART-023 unchanged
+- ADR-001 through ADR-007 unchanged
+- All FP closure documents frozen per Option C-corrected (erratum addenda via GOV-ERRATA-01 will publish all three SHAs)
+- Module status `phase-1-validated` (Option C-corrected ruling — no rollback)
+- FP entry Status / Date Closed / Closure Evidence preserved (GOV-ERRATA-01 publishes addenda)
+- Master-plan AC ticks unchanged (AC-32 tick lands via GOV-ERRATA-01 addendum referencing all three closure SHAs)
+- `src/lib/env.ts` RW-021 fail-fast contract preserved verbatim (operator caveat 2)
+- `.github/workflows/strong-evidence.yml` preserved verbatim
+- `src/test/rw021-env-loader-fail-fast.test.ts` preserved verbatim
+- rw017 + rw018 + rw019 preserved (CI-FIX-02 vi.hoisted refactor stays)
+- setup.ts beforeEach block RETAINED unchanged per operator caveat 2.1
+- INC-23 + ACT-103 through ACT-123 preserved (append-only)
+- DW-077 instances #1-#7 preserved verbatim; only Scope — Part B appends #8 + #9 + updates future-split trigger
+
+**What Was Added:** Module-init `vi.stubEnv` calls in src/test/setup.ts (3 lines + JSDoc updates) + DW-077 instances #8 + #9 + DW-077 future-split trigger tightened-conjunctive update + ACT-124 + this changelog entry + system-state version bumps.
+
+**What Was Removed:** Nothing.
+
+**Approval Status:** Per Constitution Rule 11 financial-critical HIGH classification; operator-ratified CI-FIX-03 four-caveat authorization 2026-05-27 with Scope A confirmation + caveat 2.1 two-location-ADD-not-MOVE pre-paste flag + DEFER DW-079 split tightened-conjunctive ruling.
+
+**Supersession Links:** AC-32 + AC-32-equivalent mechanical-realization anchor at `<this commit SHA>` completes the THREE-SHA attestation chain (4af83178 + a00ce8eb + this SHA). GOV-ERRATA-01 parallel doc-only FP authorization opens immediately on this closure. DEFECT-PLATFORM-01 (Stage 2) authorization also opens (can run in parallel with GOV-ERRATA-01). FP-009 (Stage 3) gated on Stage 1 + Stage 2 CLEAN.
+
+**v0.6.4 fourth-validation-event attestation:** §22.3 (l) inline-citation + §22.5 (g) external CI verification request + operator-caveat-1 recursive anti-bundling honor + Vitest hoist-order pre-flight verification + operator-caveat-2.1 two-location ADD-not-MOVE diff specification exercised at the fourth validation event (CI-FIX-01 first; ACT-122 second; ACT-123 third; ACT-124 fourth).
