@@ -974,3 +974,34 @@ HIGH — loss of traceability breaks system integrity and decision history.
 **Defect-#36 family lineage update:** Instance #5 (test-infrastructure-gap class — env-shim absence) + Instance #6 (author-time-Vitest-semantics class — vi.mock factory hoist) + Instance #7 (supervisor verification-tier class — ambiguity-as-CLEAN acceptance) all logged transparently. 4-of-7 platform/tool-behavior pattern density now drives the future-split decision; supervisor recommends preserving unified DW-077 discipline pending operator decision; tightened taxonomy options preserved in DW-077 trigger text.
 
 **v0.6.4 second-validation-event attestation:** This commit's §22.3 (l) inline-citation pre-flight + §22.5 (g) honest capability-gap disclosure + supervisor self-finding (instance #7) all exercise v0.6.4 discipline at the second validation event (CI-FIX-01 was first; ACT-122 is second). Future commits binding to v0.6.4 must mirror this evidence shape.
+
+### v13.30 — 2026-05-27 — CI-FIX-02 / Stage 1.5: Gate 4 Closure + AC-32 + AC-32-Equivalent Mechanical Satisfaction REALIZED (Path C-Hybrid Two-SHA Attestation Chain Complete) (ACT-123)
+
+**What Changed:**
+- Closed Gate 4 (Vitest + ESLint) of strong-evidence.yml workflow
+- Env-shim added to src/test/setup.ts via beforeEach + vi.stubEnv per operator caveat 2 (preserves RW-021 fail-fast contract verbatim; no workflow yml env injection; no .env.test divergence)
+- vi.mock factory hoist defect in rw018 + rw019 refactored to vi.hoisted() pattern per operator caveat 3 (preserves shared postMock spy semantics; assertion intent verified by 27/27 files + 248/248 tests green locally)
+- AC-32 + AC-32-equivalent mechanical satisfaction REALIZED at this closure SHA per Path C-Hybrid two-SHA attestation chain (4af83178 partial + <this commit SHA> final)
+- Recursive anti-bundling fence per operator caveat 1 honored at the Vitest tier (no other Vitest gate fallout); external Gates 1–9 confirmation pending operator GitHub Actions UI
+
+**Why:** Stage 1.5 of the CI-INVESTIGATION-01 Path C-Hybrid corrective sequencing. CI-FIX-01 / Stage 1 closed 8 of 9 gates and surfaced Gate 4 pre-existing failures (env-shim absence + vi.mock factory hoist; pre-date FP-007 workflow auth by 11 days). Path C-Hybrid preserved ACT-121 at 4af83178 + documented partial closure at ACT-122 + scoped CI-FIX-02 strictly to Gate 4 per anti-bundling discipline. This commit closes the mechanical-enforcement-infrastructure realization arc that began at FP-006 / ACT-099.
+
+**What Stayed:**
+- All DECs / ARTs / ADRs unchanged
+- All FP closure documents frozen per Option C-corrected (erratum addenda via GOV-ERRATA-01 will publish both 4af83178 + this SHA references)
+- Module status `phase-1-validated`
+- Master-plan AC ticks unchanged (AC-32 tick lands via GOV-ERRATA-01 addendum)
+- `src/lib/env.ts` RW-021 fail-fast contract preserved verbatim (operator caveat 2)
+- `.github/workflows/strong-evidence.yml` preserved verbatim
+- `src/test/rw021-env-loader-fail-fast.test.ts` preserved verbatim
+- DW-077 preserved (instances #5/#6/#7 documented at ACT-122; this ACT closes them at resolution-application tier without register modification)
+
+**What Was Added:** Env-shim in src/test/setup.ts + vi.hoisted() refactor in rw018 + rw019 + ACT-123 + this changelog entry + system-state version bumps.
+
+**What Was Removed:** Nothing.
+
+**Approval Status:** Per Constitution Rule 11 financial-critical HIGH classification; operator-ratified Path C-Hybrid 2026-05-27 with four caveats codified verbatim.
+
+**Supersession Links:** AC-32 + AC-32-equivalent mechanical-realization anchor at `<this commit SHA>` completes the two-SHA attestation chain. GOV-ERRATA-01 (parallel doc-only FP) and DEFECT-PLATFORM-01 (Stage 2) authorization open on this closure; FP-009 (Stage 3) gated on Stage 1 + Stage 2 CLEAN.
+
+**v0.6.4 third-validation-event attestation:** §22.3 (l) inline-citation + §22.5 (g) external CI verification request + operator-caveat-1 recursive anti-bundling honor exercised at the third validation event.

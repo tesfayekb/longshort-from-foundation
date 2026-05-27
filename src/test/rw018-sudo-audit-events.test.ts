@@ -25,7 +25,9 @@ import { renderHook, act } from '@testing-library/react';
 
 // ─── apiClient must be mocked BEFORE importing modules that capture it ──────
 
-const postMock = vi.fn().mockResolvedValue({ logged: true });
+const { postMock } = vi.hoisted(() => ({
+  postMock: vi.fn().mockResolvedValue({ logged: true }),
+}));
 vi.mock('@/lib/api-client', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api-client')>('@/lib/api-client');
   return {

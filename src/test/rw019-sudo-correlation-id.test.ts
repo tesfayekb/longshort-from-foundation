@@ -20,7 +20,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-const postMock = vi.fn();
+const { postMock } = vi.hoisted(() => ({
+  postMock: vi.fn(),
+}));
 vi.mock('@/lib/api-client', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api-client')>('@/lib/api-client');
   return {
