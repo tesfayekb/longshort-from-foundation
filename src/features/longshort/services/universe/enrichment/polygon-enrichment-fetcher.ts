@@ -39,6 +39,7 @@ import type {
 } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
 import { ConstituentFetchError } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
 import type { EnrichedConstituent, UniverseEnrichmentFetcher } from './types.ts';
+import { fetchWithTimeoutAndRetry, DEFAULT_FETCH_TIMEOUT_MS } from '../shared/fetch-with-timeout.ts';
 
 const POLYGON_BASE_URL = 'https://api.polygon.io';
 /** Trading-day lookback window for avg-daily-dollar-volume + share_price. */
@@ -137,9 +138,17 @@ export class PolygonEnrichmentFetcher implements UniverseEnrichmentFetcher {
 
     let resp: Awaited<ReturnType<HttpFetch>>;
     try {
-      resp = await this.httpFetch(url, { method: 'GET' });
+      resp = await fetchWithTimeoutAndRetry(this.httpFetch, url, { method: 'GET' });
     } catch (e) {
-      throw new ConstituentFetchError('polygon', 'sp500', `network error on ticker-details for ${ticker}`, e);
+      const isTimeout = e instanceof Error && e.name === 'AbortError';
+      throw new ConstituentFetchError(
+        'polygon',
+        'sp500',
+        isTimeout
+          ? `request timeout after ${DEFAULT_FETCH_TIMEOUT_MS}ms on ticker-details for ${ticker}`
+          : `network error on ticker-details for ${ticker}`,
+        e,
+      );
     }
 
     if (resp.status === 404) {
@@ -188,9 +197,17 @@ export class PolygonEnrichmentFetcher implements UniverseEnrichmentFetcher {
 
     let resp: Awaited<ReturnType<HttpFetch>>;
     try {
-      resp = await this.httpFetch(url, { method: 'GET' });
+      resp = await fetchWithTimeoutAndRetry(this.httpFetch, url, { method: 'GET' });
     } catch (e) {
-      throw new ConstituentFetchError('polygon', 'sp500', `network error on aggregates for ${ticker}`, e);
+      const isTimeout = e instanceof Error && e.name === 'AbortError';
+      throw new ConstituentFetchError(
+        'polygon',
+        'sp500',
+        isTimeout
+          ? `request timeout after ${DEFAULT_FETCH_TIMEOUT_MS}ms on aggregates for ${ticker}`
+          : `network error on aggregates for ${ticker}`,
+        e,
+      );
     }
 
     if (!resp.ok) {
