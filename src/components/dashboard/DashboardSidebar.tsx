@@ -119,7 +119,7 @@ export const DashboardSidebar = React.memo(function DashboardSidebar({ sections,
         >
           <NavLink
             to={item.url}
-            end={['/admin', '/dashboard', '/settings'].includes(item.url)}
+            end={true}
             className="hover:bg-sidebar-accent/50"
             activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
           >
