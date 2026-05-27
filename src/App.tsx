@@ -48,6 +48,9 @@ const RoleDetailPage = lazy(() => import("./pages/admin/RoleDetailPage"));
 const UserDashboard = lazy(() => import("./pages/user/UserDashboard"));
 const TradingDashboard = lazy(() => import("./pages/trading/TradingDashboard"));
 const LongShortDashboardPage = lazy(() => import("./pages/trading/longshort/LongShortDashboardPage"));
+const UniverseMembershipPage = lazy(() => import("./pages/trading/longshort/UniverseMembershipPage"));
+const UniverseRefreshHistoryPage = lazy(() => import("./pages/trading/longshort/UniverseRefreshHistoryPage"));
+const ReconciliationEventsPage = lazy(() => import("./pages/trading/longshort/ReconciliationEventsPage"));
 const ProfilePage = lazy(() => import("./pages/user/ProfilePage"));
 const SecurityPage = lazy(() => import("./pages/user/SecurityPage"));
 
@@ -203,6 +206,21 @@ const App = () => (
                 <Route path="longshort" element={
                   <PermissionGate permission="longshort.view">
                     <LongShortDashboardPage />
+                  </PermissionGate>
+                } />
+                <Route path="longshort/universe" element={
+                  <PermissionGate permission="longshort.view">
+                    <UniverseMembershipPage />
+                  </PermissionGate>
+                } />
+                <Route path="longshort/refresh-history" element={
+                  <PermissionGate permission="longshort.view">
+                    <UniverseRefreshHistoryPage />
+                  </PermissionGate>
+                } />
+                <Route path="longshort/reconciliation" element={
+                  <PermissionGate permission="longshort.view">
+                    <ReconciliationEventsPage />
                   </PermissionGate>
                 } />
               </Route>
