@@ -58,14 +58,13 @@ export const DashboardSidebar = React.memo(function DashboardSidebar({ sections,
 
   const isActive = useCallback(
     (path: string) => {
-      // Routes that are also a prefix of another nav route must match
-      // exactly, otherwise both items light up at the same time
-      // (e.g. `/trading` would match `/trading/longshort`).
-      const exactMatchRoutes = ['/admin', '/dashboard', '/settings', '/trading'];
-      if (exactMatchRoutes.includes(path)) {
-        return location.pathname === path;
-      }
-      return location.pathname.startsWith(path);
+      // Exact path match only. Prefix-match is intentionally NOT used because
+      // sidebar items overlap as the route tree nests (e.g. /trading is a
+      // prefix of /trading/longshort which is a prefix of
+      // /trading/longshort/universe). Highlighting all ancestors makes the
+      // active state ambiguous to the user. The user model is "which page am
+      // I on" — exact match expresses that directly.
+      return location.pathname === path;
     },
     [location.pathname],
   );
