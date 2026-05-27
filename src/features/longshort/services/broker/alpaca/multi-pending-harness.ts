@@ -249,8 +249,8 @@ export async function runMultiPendingHarness(config: RunHarnessConfig): Promise<
       const polledA = await config.client.getJson<{ id: string; status: string; filled_at: string | null }>(`/v2/orders/${orderA.id}`);
       const polledB = await config.client.getJson<{ id: string; status: string; filled_at: string | null }>(`/v2/orders/${orderB.id}`);
       alpacaResponses.push({ poll_iter: i, A: polledA, B: polledB });
-      orderAFinal = polledA as typeof orderAFinal;
-      orderBFinal = polledB as typeof orderBFinal;
+      orderAFinal = polledA as unknown as typeof orderAFinal;
+      orderBFinal = polledB as unknown as typeof orderBFinal;
       if ((polledA.status === 'filled' || polledA.status === 'canceled') && (polledB.status === 'filled' || polledB.status === 'canceled')) break;
     }
 
@@ -280,8 +280,8 @@ export async function runMultiPendingHarness(config: RunHarnessConfig): Promise<
         limit_B: limitB,
         order_A_status: orderAFinal.status,
         order_B_status: orderBFinal.status,
-        order_A_filled_at: (orderAFinal as { filled_at: string | null }).filled_at,
-        order_B_filled_at: (orderBFinal as { filled_at: string | null }).filled_at,
+        order_A_filled_at: (orderAFinal as unknown as { filled_at: string | null }).filled_at,
+        order_B_filled_at: (orderBFinal as unknown as { filled_at: string | null }).filled_at,
         both_filled: bothFilled,
       },
       alpaca_responses: alpacaResponses,
