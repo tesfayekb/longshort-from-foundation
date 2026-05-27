@@ -31,7 +31,7 @@ Deno.test('fetchUpcomingEarnings parses earnings events with explicit BMO flag',
         ok: true, status: 200,
         body: { results: { events: [{ type: 'earnings', date: '2026-05-01', time_of_day: 'BMO' }] } },
       },
-    }) as any,
+    }) as unknown as typeof fetch,
   );
   const snap = await f.fetchUpcomingEarnings(['AAPL'], new Date('2026-04-27T00:00:00Z'));
   assertEquals(snap.entries.length, 1);
@@ -43,7 +43,7 @@ Deno.test('fetchUpcomingEarnings parses earnings events with explicit BMO flag',
 Deno.test('fetchUpcomingEarnings 404 returns empty for that ticker (typed-absence)', async () => {
   const f = new PolygonEarningsCalendarFetcher(
     'key',
-    mockFetch({ 'AAPL': { ok: false, status: 404, body: '' } }) as any,
+    mockFetch({ 'AAPL': { ok: false, status: 404, body: '' } }) as unknown as typeof fetch,
   );
   const snap = await f.fetchUpcomingEarnings(['AAPL'], new Date());
   assertEquals(snap.entries.length, 0);
@@ -52,7 +52,7 @@ Deno.test('fetchUpcomingEarnings 404 returns empty for that ticker (typed-absenc
 Deno.test('fetchUpcomingEarnings non-OK non-404 throws EarningsCalendarFetchError (Surface 1 STOP)', async () => {
   const f = new PolygonEarningsCalendarFetcher(
     'key',
-    mockFetch({ 'AAPL': { ok: false, status: 403, body: 'forbidden' } }) as any,
+    mockFetch({ 'AAPL': { ok: false, status: 403, body: 'forbidden' } }) as unknown as typeof fetch,
   );
   await assertRejects(
     () => f.fetchUpcomingEarnings(['AAPL'], new Date()),
@@ -68,7 +68,7 @@ Deno.test('inference: date-only string defaults to AMC (conservative cutoff)', a
         ok: true, status: 200,
         body: { results: { events: [{ type: 'earnings', date: '2026-05-01' }] } },
       },
-    }) as any,
+    }) as unknown as typeof fetch,
   );
   const snap = await f.fetchUpcomingEarnings(['AAPL'], new Date());
   assertEquals(snap.entries[0].time_of_day, 'AMC');

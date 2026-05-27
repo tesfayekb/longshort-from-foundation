@@ -27,8 +27,10 @@ Deno.test('orchestrator: empty input → all constituents eligible long, ineligi
 });
 
 Deno.test('orchestrator: with locate, empty other inputs → fully eligible both books', () => {
-  const input = emptyInput();
-  (input as any).locate_data = [{ ticker: 'AAPL', locate_available: true, borrow_rate_bps: 50 }];
+  const input: ExclusionInputData = {
+    ...emptyInput(),
+    locate_data: [{ ticker: 'AAPL', locate_available: true, borrow_rate_bps: 50 }],
+  };
   const result = applyHardExclusions([ec({ ticker: 'AAPL' })], input, TEST_AS_OF);
   assertEquals(result.eligible[0].long_eligible, true);
   assertEquals(result.eligible[0].short_eligible, true);
@@ -36,11 +38,13 @@ Deno.test('orchestrator: with locate, empty other inputs → fully eligible both
 });
 
 Deno.test('orchestrator: book-symmetric firing (earnings) excludes BOTH books', () => {
-  const input = emptyInput();
-  (input as any).locate_data = [{ ticker: 'AAPL', locate_available: true, borrow_rate_bps: 50 }];
-  (input as any).earnings_calendar = {
-    entries: [{ ticker: 'AAPL', scheduled_date: '2026-04-29', time_of_day: 'AMC' }],
-    fetched_at: TEST_AS_OF,
+  const input: ExclusionInputData = {
+    ...emptyInput(),
+    locate_data: [{ ticker: 'AAPL', locate_available: true, borrow_rate_bps: 50 }],
+    earnings_calendar: {
+      entries: [{ ticker: 'AAPL', scheduled_date: '2026-04-29', time_of_day: 'AMC' }],
+      fetched_at: TEST_AS_OF,
+    },
   };
   const result = applyHardExclusions([ec({ ticker: 'AAPL' })], input, TEST_AS_OF);
   assertEquals(result.eligible[0].long_eligible, false);
@@ -49,26 +53,30 @@ Deno.test('orchestrator: book-symmetric firing (earnings) excludes BOTH books', 
 });
 
 Deno.test('orchestrator: book-asymmetric firing (short interest) excludes ONLY short', () => {
-  const input = emptyInput();
-  (input as any).locate_data = [{ ticker: 'AAPL', locate_available: true, borrow_rate_bps: 50 }];
-  (input as any).short_interest = [{
-    ticker: 'AAPL',
-    report_date: '2026-04-15',
-    short_interest_shares: 300,
-    float_shares: 1000,
-    short_interest_pct_float: 0.30,
-  }];
+  const input: ExclusionInputData = {
+    ...emptyInput(),
+    locate_data: [{ ticker: 'AAPL', locate_available: true, borrow_rate_bps: 50 }],
+    short_interest: [{
+      ticker: 'AAPL',
+      report_date: '2026-04-15',
+      short_interest_shares: 300,
+      float_shares: 1000,
+      short_interest_pct_float: 0.30,
+    }],
+  };
   const result = applyHardExclusions([ec({ ticker: 'AAPL' })], input, TEST_AS_OF);
   assertEquals(result.eligible[0].long_eligible, true);
   assertEquals(result.eligible[0].short_eligible, false);
 });
 
 Deno.test('orchestrator: multiple constituents handled independently', () => {
-  const input = emptyInput();
-  (input as any).locate_data = [
-    { ticker: 'AAPL', locate_available: true, borrow_rate_bps: 50 },
-    { ticker: 'MSFT', locate_available: true, borrow_rate_bps: 50 },
-  ];
+  const input: ExclusionInputData = {
+    ...emptyInput(),
+    locate_data: [
+      { ticker: 'AAPL', locate_available: true, borrow_rate_bps: 50 },
+      { ticker: 'MSFT', locate_available: true, borrow_rate_bps: 50 },
+    ],
+  };
   const result = applyHardExclusions(
     [ec({ ticker: 'AAPL' }), ec({ ticker: 'MSFT' })],
     input,
@@ -79,8 +87,10 @@ Deno.test('orchestrator: multiple constituents handled independently', () => {
 });
 
 Deno.test('orchestrator: §3.3f/§3.3g/§3.3h N/A v1 — never fire (no entries in firings)', () => {
-  const input = emptyInput();
-  (input as any).locate_data = [{ ticker: 'AAPL', locate_available: true, borrow_rate_bps: 50 }];
+  const input: ExclusionInputData = {
+    ...emptyInput(),
+    locate_data: [{ ticker: 'AAPL', locate_available: true, borrow_rate_bps: 50 }],
+  };
   const result = applyHardExclusions([ec({ ticker: 'AAPL' })], input, TEST_AS_OF);
   for (const f of result.firings) {
     assert(

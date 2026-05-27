@@ -9,6 +9,7 @@
  *   - DB error on universe_membership read → throws
  */
 import { describe, it, expect } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createUniverseService } from './universe-service.ts';
 import type { UniverseEligibilityRow } from './types.ts';
 
@@ -17,6 +18,18 @@ const AS_OF = new Date(Date.UTC(2026, 3, 1));
 
 type StubFlag = { data: { enabled: boolean } | null; error: { message: string } | null };
 type StubRows = { data: UniverseEligibilityRow[] | null; error: { message: string } | null };
+
+interface MockFlagBuilder {
+  select: () => MockFlagBuilder;
+  eq: (col: string, val: unknown) => MockFlagBuilder;
+  maybeSingle: () => Promise<StubFlag>;
+}
+
+interface MockRowsBuilder {
+  select: () => MockRowsBuilder;
+  eq: (col: string, val: unknown) => MockRowsBuilder;
+  then: <T>(resolve: (v: StubRows) => T) => Promise<T>;
+}
 
 function mkRow(
   ticker: string,
@@ -48,7 +61,7 @@ function makeStubAdmin(flagResp: StubFlag, rowsResp: StubRows) {
       from(table: string) {
         calls.push(`from:${table}`);
         if (table === 'feature_flags') {
-          const builder: any = {
+          const builder: MockFlagBuilder = {
             select: () => builder,
             eq: () => builder,
             maybeSingle: async () => flagResp,
@@ -56,7 +69,7 @@ function makeStubAdmin(flagResp: StubFlag, rowsResp: StubRows) {
           return builder;
         }
         if (table === 'universe_membership') {
-          const builder: any = {
+          const builder: MockRowsBuilder = {
             select: () => builder,
             eq: () => builder,
             then: (resolve: (v: StubRows) => unknown) => Promise.resolve(rowsResp).then(resolve),
@@ -65,7 +78,7 @@ function makeStubAdmin(flagResp: StubFlag, rowsResp: StubRows) {
         }
         throw new Error(`unexpected table: ${table}`);
       },
-    } as any,
+    } as unknown as SupabaseClient,
   };
 }
 
