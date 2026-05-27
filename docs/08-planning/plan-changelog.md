@@ -1050,3 +1050,42 @@ HIGH — loss of traceability breaks system integrity and decision history.
 **Supersession Links:** AC-32 + AC-32-equivalent mechanical-realization anchor at `<this commit SHA>` completes the THREE-SHA attestation chain (4af83178 + a00ce8eb + this SHA). GOV-ERRATA-01 parallel doc-only FP authorization opens immediately on this closure. DEFECT-PLATFORM-01 (Stage 2) authorization also opens (can run in parallel with GOV-ERRATA-01). FP-009 (Stage 3) gated on Stage 1 + Stage 2 CLEAN.
 
 **v0.6.4 fourth-validation-event attestation:** §22.3 (l) inline-citation + §22.5 (g) external CI verification request + operator-caveat-1 recursive anti-bundling honor + Vitest hoist-order pre-flight verification + operator-caveat-2.1 two-location ADD-not-MOVE diff specification exercised at the fourth validation event (CI-FIX-01 first; ACT-122 second; ACT-123 third; ACT-124 fourth).
+
+### v13.32 — 2026-05-27 — CI-FIX-04 / Stage 1.7: FP-Scope `any` Fixes + DW-078 Deferral + ACT-124 Forward-Binding to PARTIAL (Option B + B.1 Framing) (ACT-125)
+
+**What Changed:**
+- Fixed 17 `@typescript-eslint/no-explicit-any` violations across 4 FP-scope test files (apply-hard-exclusions_test.ts 7× via typed `ExclusionInputData` object-spread; earnings-calendar-fetcher_test.ts 4× via `as unknown as typeof fetch`; short-interest-fetcher_test.ts 3× via `as unknown as typeof fetch`; universe-service.test.ts 3× via typed `MockFlagBuilder`/`MockRowsBuilder` interfaces + `as unknown as SupabaseClient`)
+- Registered DW-078 with full inventory of deferred ESLint violations (47 total: 24 @ts-nocheck + 2 @ts-ignore + ~17 app-layer `any` + 4 misc) per operator Option B explicit deferral
+- ACT-125 forward-binds ACT-124's "AC-32 REALIZED" language to PARTIAL per operator B.1 framing + ACT-121→ACT-122 shape precedent; ACT-124 preserved verbatim
+- Path C-Hybrid attestation chain extends from 3-SHA to 4-SHA-with-5th-pending: 4af83178 + a00ce8eb + 9ebce0fd + this commit SHA + <DW-078 resolution SHA>
+- AC-32 + AC-32-equivalent mechanical satisfaction remains PARTIAL pending DW-078 resolution (honest forward-binding per operator B.1 rationale)
+- §22.3 (l) PRE-FLIGHT discipline extended per Decision 4: ESLint pre-execution surface now required in supervisor pre-flight tables for future CI-fix cycles
+
+**Why:** Stage 1.7 of CI-INVESTIGATION-01 Path C-Hybrid corrective sequencing. CI-FIX-03 closed Gate 4 Vitest portion (27/27 + 248/248 green externally) but external CI surfaced 59 pre-existing ESLint errors in Gate 4 ESLint portion that had been shadowed by TS compile failures (pre-CI-FIX-01) and env-shim timing defect (pre-CI-FIX-03). Per operator caveat 1 (recursive anti-bundling fence) and Option (B) authorization: CI-FIX-04 fixes only the FP-scope `any` violations and defers the @ts-nocheck architectural question + app-layer technical debt to DW-078. Per operator B.1 framing: AC-32 stays PARTIAL rather than redefining the success criterion mid-execution.
+
+**What Stayed:**
+- DEC-038 + DEC-038.1 + DEC-034 + DEC-034.1 + DEC-035 + DEC-031 + DEC-032 + DEC-036 active
+- ART-018 through ART-023 unchanged
+- ADR-001 through ADR-007 unchanged
+- All FP closure documents frozen per Option C-corrected
+- Module status `phase-1-validated` preserved
+- FP entry Status / Date Closed / Closure Evidence preserved (GOV-ERRATA-01 publishes addenda AFTER DW-078 resolves)
+- Master-plan AC ticks unchanged (AC-32 + AC-32-equivalent still PARTIAL)
+- `src/lib/env.ts` RW-021 fail-fast contract preserved verbatim
+- `.github/workflows/strong-evidence.yml` preserved verbatim
+- `src/test/setup.ts` CI-FIX-03 two-location shim preserved verbatim
+- `src/test/rw021-env-loader-fail-fast.test.ts` + rw017 + rw018 + rw019 preserved
+- `eslint.config.js` preserved (Option B — architectural question deferred)
+- DW-077 entry preserved verbatim (no instance #10 per Decision 4)
+- INC-23 preserved
+- ACT-001 through ACT-124 preserved verbatim (ACT-124 explicitly NOT modified per operator pre-flight note; ACT-125 carries forward-binding correction)
+
+**What Was Added:** 4 FP-scope test file fixes (17 `any` violations remediated) + DW-078 new register entry + ACT-125 forward-binding entry + this changelog entry + system-state version bumps.
+
+**What Was Removed:** Nothing.
+
+**Approval Status:** Per Constitution Rule 11 financial-critical HIGH classification; operator-ratified CI-FIX-04 Option (B) + B.1 framing 2026-05-27.
+
+**Supersession Links:** AC-32 + AC-32-equivalent mechanical-realization anchor REMAINS PARTIAL at this CI-FIX-04 closure SHA; final realization forward-bound to `<DW-078 resolution SHA>` (unscheduled pending architectural authorization for @ts-nocheck disposition). GOV-ERRATA-01 parallel doc-only FP authorization deferred to AFTER DW-078 resolves. DEFECT-PLATFORM-01 (Stage 2) authorization MAY proceed in parallel. FP-009 (Stage 3) remains gated on Stage 1 + Stage 2 CLEAN — Stage 1 closure now requires DW-078 resolution as the gating event.
+
+**v0.6.4 fifth-validation-event attestation:** §22.3 (l) inline-citation + §22.5 (g) external CI verification request + operator-caveat-1 recursive anti-bundling honor + ESLint pre-execution surface added per Decision 4 + forward-binding ACT-124→ACT-125 honoring ACT-121→ACT-122 shape precedent.

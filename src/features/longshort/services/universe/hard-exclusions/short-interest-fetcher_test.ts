@@ -36,7 +36,7 @@ Deno.test('fetchShortInterest parses pipe-delimited CSV and filters to requested
     '20260415|MSFT|100|2000',
     '20260415|NOTREQUESTED|999|999',
   ].join('\n');
-  const f = new FinraShortInterestFetcher(mockTextFetch(csv) as any);
+  const f = new FinraShortInterestFetcher(mockTextFetch(csv) as unknown as typeof fetch);
   const rows = await f.fetchShortInterest(['AAPL', 'MSFT'], new Date('2026-04-30T00:00:00Z'));
   assertEquals(rows.length, 2);
   const aapl = rows.find((r) => r.ticker === 'AAPL')!;
@@ -44,7 +44,7 @@ Deno.test('fetchShortInterest parses pipe-delimited CSV and filters to requested
 });
 
 Deno.test('fetchShortInterest throws on HTTP error', async () => {
-  const f = new FinraShortInterestFetcher(mockTextFetch('', 500) as any);
+  const f = new FinraShortInterestFetcher(mockTextFetch('', 500) as unknown as typeof fetch);
   await assertRejects(() => f.fetchShortInterest(['AAPL'], new Date()), ShortInterestFetchError);
 });
 
@@ -54,7 +54,7 @@ Deno.test('fetchShortInterest skips rows with malformed numbers (no silent zero)
     '20260415|AAPL|notanumber|1000',
     '20260415|MSFT|100|0',
   ].join('\n');
-  const f = new FinraShortInterestFetcher(mockTextFetch(csv) as any);
+  const f = new FinraShortInterestFetcher(mockTextFetch(csv) as unknown as typeof fetch);
   const rows = await f.fetchShortInterest(['AAPL', 'MSFT'], new Date('2026-04-30T00:00:00Z'));
   assertEquals(rows.length, 0);
 });
