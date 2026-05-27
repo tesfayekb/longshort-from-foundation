@@ -10,9 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { AlertOctagon, Pause, Play, Square } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+
+// Untyped client view for tables/RPCs not present in generated Database types.
+const sb = supabase as unknown as SupabaseClient;
 
 type KillSwitchRow = {
   operator_id: string;
@@ -61,7 +65,7 @@ export default function AdminKillSwitchPage() {
   const { data: rows, isLoading, error } = useQuery({
     queryKey: ['admin', 'kill-switches'],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await sb
         .from('kill_switches')
         .select('*')
         .order('strategy_key');
@@ -73,7 +77,7 @@ export default function AdminKillSwitchPage() {
   const mutation = useMutation({
     mutationFn: async (input: { strategy_key: string; action: Action; reason: string }) => {
       const fnName = ACTION_RPC[input.action];
-      const { data, error } = await (supabase as any).rpc(fnName, {
+      const { data, error } = await sb.rpc(fnName, {
         p_strategy_key: input.strategy_key,
         p_reason: input.reason,
       });

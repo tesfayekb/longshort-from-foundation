@@ -144,7 +144,9 @@ export default function SecurityPage() {
       return;
     }
     setLinkingProvider(provider);
-    const { error } = await supabase.auth.unlinkIdentity({ provider, id: identityId } as any);
+    const { error } = await supabase.auth.unlinkIdentity(
+      { provider, id: identityId } as unknown as Parameters<typeof supabase.auth.unlinkIdentity>[0],
+    );
     if (error) {
       toast.error(error.message);
     } else {

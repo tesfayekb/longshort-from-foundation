@@ -38,15 +38,19 @@ function resolveEntityName(
 
   if (parentSegment === 'users') {
     // useUserDetail uses key ['admin', 'user', id]
-    const data = queryClient.getQueryData<any>(['admin', 'user', uuid]);
-    if (data?.display_name || data?.last_name) return [data.display_name, data.last_name].filter(Boolean).join(' ');
-    if (data?.email) return data.email;
+    const data = queryClient.getQueryData<Record<string, unknown>>(['admin', 'user', uuid]);
+    const displayName = data?.display_name as string | undefined;
+    const lastName = data?.last_name as string | undefined;
+    const email = data?.email as string | undefined;
+    if (displayName || lastName) return [displayName, lastName].filter(Boolean).join(' ');
+    if (email) return email;
   }
 
   if (parentSegment === 'roles') {
     // Role detail cache key
-    const data = queryClient.getQueryData<any>(['admin', 'role', uuid]);
-    if (data?.name) return data.name;
+    const data = queryClient.getQueryData<Record<string, unknown>>(['admin', 'role', uuid]);
+    const name = data?.name as string | undefined;
+    if (name) return name;
   }
 
   return 'Detail';

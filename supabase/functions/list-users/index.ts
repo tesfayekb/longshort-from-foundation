@@ -84,7 +84,11 @@ Deno.serve(createHandler(async (req: Request) => {
 
     const rolesMap = new Map<string, { role_key: string; role_name: string }[]>()
     if (userRoles) {
-      for (const ur of userRoles as any[]) {
+      type UserRoleRow = {
+        user_id: string
+        roles: { key: string | null; name: string | null } | null
+      }
+      for (const ur of userRoles as unknown as UserRoleRow[]) {
         const existing = rolesMap.get(ur.user_id) ?? []
         existing.push({
           role_key: ur.roles?.key ?? '',

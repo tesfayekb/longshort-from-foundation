@@ -9,7 +9,7 @@
  * Owner: health-monitoring module
  * Job ID: metrics_aggregate
  * Classification: operational
- * Schedule: *​/5 * * * * (every 5 min)
+ * Schedule: every 5 minutes (cron: 0,5,10,... see pg_cron registration)
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts'
 import { supabaseAdmin } from '../_shared/supabase-admin.ts'

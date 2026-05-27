@@ -33,7 +33,13 @@ async function fetchUserRolesAdmin(userId: string): Promise<UserRoleAssignment[]
 
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((ur: any) => ({
+  type Row = {
+    id: string;
+    role_id: string;
+    assigned_at: string;
+    roles: { key: string | null; name: string | null; is_base: boolean | null; is_immutable: boolean | null } | null;
+  };
+  return (data ?? []).map((ur: Row) => ({
     id: ur.id,
     role_id: ur.role_id,
     role_key: ur.roles?.key ?? '',
