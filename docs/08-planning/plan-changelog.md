@@ -938,3 +938,39 @@ HIGH — loss of traceability breaks system integrity and decision history.
 **Supersession Links:** AC-32 + AC-32-equivalent mechanical satisfaction realized at this SHA; per-affected-FP erratum addenda forthcoming via GOV-ERRATA-01 parallel doc-only FP.
 
 **v0.6.4 first full-cycle validation-event attestation:** This commit's §22.3 (k) + §22.3 (l) + §22.5 (g) compliance is recorded inline at ACT-121 evidence section (c)–(e). The §22.5 (g) STOP discipline was independently validated when Lovable correctly refused to write false-green attestation upon discovering Gates 5/6 surfaces after the initial 3 TS fixes — proving the rule works as designed. Future commits binding to v0.6.4 must mirror this evidence shape.
+
+### v13.29 — 2026-05-27 — Stage 1 PARTIAL Closure Attestation per Path C-Hybrid Ruling: External CI Confirmation 8-of-9 Green at SHA 4af83178 + DW-077 Extension (Instances #5, #6, #7) + AC-32 Forward-Bound to CI-FIX-02 (ACT-122)
+
+**What Changed:**
+- External GitHub Actions UI verification at SHA `4af83178` confirmed 8 of 9 strong-evidence.yml gates green (first time in repo history that DEC-034 + DEC-036 + ACT-097 + DW-058 B1 banned-pattern enforcement gates executed against any FP-008 code)
+- Gate 4 (Vitest + ESLint) red on pre-existing test failures (env-shim absence + vi.mock factory hoist; both pre-date FP-007 workflow auth by 11 days; shadowed by Gate 2 TS compile failures throughout CI-INVESTIGATION-01 surface)
+- AC-32 + AC-32-equivalent mechanical satisfaction REFRAMED from "REALIZED at 4af83178" to "PARTIAL at 4af83178 (8/9 gates green); REALIZATION forward-bound to CI-FIX-02 closure SHA"
+- DW-077 extended with three new pattern-establishing instances per operator caveat 4 (split by class, not collapsed): #5 test-infrastructure-gap class (env-shim absence in src/test/setup.ts); #6 author-time-Vitest-semantics class (vi.mock factory hoist in rw018/rw019); #7 supervisor verification-tier class (accepting ambiguity-as-CLEAN when Lovable's §22.5 disposition disclosed capability gap without pass/fail count)
+- Future-split trigger language updated to reflect 4-of-7 platform/tool-behavior pattern density across instances (#3 §22.8.5-constraint; #4 + #5 + #6 test-runner/build-tool-behavior; #7 supervisor-discipline-application); tightened taxonomy proposed but deferred to operator decision
+
+**Why:** Path C-Hybrid ruling preserves ACT-121 attestation of real progress at 4af83178 (3 TS fixes + 2 detector fixes + ishares refactor + DW-077 extension) while documenting Stage 1 PARTIAL closure honestly. Gate 4 failures are structurally distinct from CI-FIX-01 scope (test-infrastructure + test-authoring vs TS compile + detectors); folding them into CI-FIX-01 would be unbounded scope creep that anti-bundling discipline exists to prevent. CI-FIX-02 / Stage 1.5 with strict env-shim + vi.hoisted refactor scope follows per operator caveats 2 + 3. Supervisor self-finding (instance #7) acknowledged transparently — §22.5 CLEAN acceptance should have been AMBIGUITY per disposition shape definitions; logged for forward-binding discipline.
+
+**What Stayed:**
+- DEC-038 + DEC-038.1 + DEC-034 + DEC-034.1 + DEC-035 + DEC-031 + DEC-032 + DEC-036 active
+- ART-018 through ART-023 unchanged
+- ADR-001 through ADR-007 unchanged
+- All FP closure documents frozen per Option C-corrected (erratum addenda via GOV-ERRATA-01 will reference both SHAs — 4af83178 partial + CI-FIX-02 closure SHA final)
+- Module status `phase-1-validated` (Option C-corrected = no rollback even at PARTIAL framing)
+- FP entry Status / Date Closed / Closure Evidence preserved
+- Master-plan AC ticks unchanged (GOV-ERRATA-01 publishes the final realization SHA reference)
+- `.github/workflows/strong-evidence.yml` preserved verbatim
+- INC-23 entry unchanged
+- ACT-121 entry preserved verbatim (attests what it attested at 4af83178; ACT-122 documents subsequent external-verification outcome)
+- DW-077 Field table + Part A + base Part B paragraphs (instances #1-#4) preserved verbatim; only Part B section appends three new instance paragraphs + updates future-split trigger
+
+**What Was Added:** DW-077 instances #5 + #6 + #7 + updated future-split trigger + ACT-122 + this changelog entry + system-state version bumps. CI-FIX-02 / Stage 1.5 execution prompt forthcoming (separate authorization event).
+
+**What Was Removed:** Nothing.
+
+**Approval Status:** Per Constitution Rule 11 financial-critical HIGH classification; operator-ratified Path C-Hybrid 2026-05-27 with four caveats codified verbatim in DW-077 + ACT-122 evidence.
+
+**Supersession Links:** None at this plan version. AC-32 + AC-32-equivalent mechanical-realization anchor forward-bound to CI-FIX-02 closure SHA per Path C-Hybrid two-SHA attestation chain; GOV-ERRATA-01 publishes per-affected-FP erratum addenda referencing both SHAs.
+
+**Defect-#36 family lineage update:** Instance #5 (test-infrastructure-gap class — env-shim absence) + Instance #6 (author-time-Vitest-semantics class — vi.mock factory hoist) + Instance #7 (supervisor verification-tier class — ambiguity-as-CLEAN acceptance) all logged transparently. 4-of-7 platform/tool-behavior pattern density now drives the future-split decision; supervisor recommends preserving unified DW-077 discipline pending operator decision; tightened taxonomy options preserved in DW-077 trigger text.
+
+**v0.6.4 second-validation-event attestation:** This commit's §22.3 (l) inline-citation pre-flight + §22.5 (g) honest capability-gap disclosure + supervisor self-finding (instance #7) all exercise v0.6.4 discipline at the second validation event (CI-FIX-01 was first; ACT-122 is second). Future commits binding to v0.6.4 must mirror this evidence shape.
