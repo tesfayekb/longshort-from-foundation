@@ -102,9 +102,29 @@ export async function fetchWithTimeoutAndRetry(
   const sleep = opts.sleep ?? defaultSleep;
 
   let lastError: unknown;
+  // Guard: backoffMs must be non-empty so the index lookup below is always
+  // defined for any attempt >= 1. Empty backoffMs is a configuration error,
+  // not a runtime condition we silently zero through.
+  if (maxAttempts > 1 && backoffMs.length === 0) {
+    throw new Error(
+      'fetch-with-timeout: backoffMs must be non-empty when maxAttempts > 1',
+    );
+  }
+
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (attempt > 0) {
-      const delay = backoffMs[Math.min(attempt - 1, backoffMs.length - 1)] ?? 0;
+      // Math.min clamp keeps idx within [0, backoffMs.length-1]. The
+      // pre-loop guard above proves backoffMs.length >= 1 here, so the
+      // index lookup is always defined. The explicit undefined-check is
+      // §2 axiom 3 typed-absence discipline: if the invariant ever breaks
+      // we throw rather than silently sleep(0) and burn retries instantly.
+      const idx = Math.min(attempt - 1, backoffMs.length - 1);
+      const delay = backoffMs[idx];
+      if (delay === undefined) {
+        throw new Error(
+          `fetch-with-timeout: backoff index out of range (idx=${idx}, len=${backoffMs.length})`,
+        );
+      }
       await sleep(delay);
     }
     try {
