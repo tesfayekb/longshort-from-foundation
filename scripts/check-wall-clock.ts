@@ -107,6 +107,39 @@ export function stripCommentsAndStringsWithState(line: string, state: ScanState)
   return out;
 }
 
+/**
+ * Like stripCommentsAndStringsWithState, but preserves string-literal contents.
+ * Only block comments (across lines) and `//` line comments are removed. Used by
+ * the `new-Date-noarg` pattern's `requireLiteralEmpty` discriminator so that
+ * `new Date('iso-string')` is NOT mistaken for `new Date()` after stripping.
+ */
+export function stripCommentsOnlyWithState(line: string, state: ScanState): string {
+  let out = '';
+  let i = 0;
+  let inSingleString = false;
+  let inDoubleString = false;
+  let inBacktickString = false;
+  while (i < line.length) {
+    const c = line[i];
+    const next = line[i + 1];
+    if (state.inBlockComment) {
+      if (c === '*' && next === '/') { state.inBlockComment = false; i += 2; continue; }
+      i++; continue;
+    }
+    if (inSingleString) { out += c; if (c === '\\') { out += line[i + 1] ?? ''; i += 2; continue; } if (c === "'") inSingleString = false; i++; continue; }
+    if (inDoubleString) { out += c; if (c === '\\') { out += line[i + 1] ?? ''; i += 2; continue; } if (c === '"') inDoubleString = false; i++; continue; }
+    if (inBacktickString) { out += c; if (c === '\\') { out += line[i + 1] ?? ''; i += 2; continue; } if (c === '`') inBacktickString = false; i++; continue; }
+    if (c === '/' && next === '/') break;
+    if (c === '/' && next === '*') { state.inBlockComment = true; i += 2; continue; }
+    if (c === "'") { inSingleString = true; out += c; i++; continue; }
+    if (c === '"') { inDoubleString = true; out += c; i++; continue; }
+    if (c === '`') { inBacktickString = true; out += c; i++; continue; }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
 export function isInScope(filePath: string): boolean {
   return SCOPE_GLOB_PREFIXES.some(prefix => filePath.startsWith(prefix));
 }
