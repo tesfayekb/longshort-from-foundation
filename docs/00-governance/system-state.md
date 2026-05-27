@@ -62,7 +62,7 @@ deployment_config_completed:
   - rls_hardening_2026_05_13: "Migration 20260513195212 — restricted system_config SELECT to is_superadmin(); added owner-scoped SELECT policies on mfa_recovery_codes and mfa_recovery_attempts; added admin/accepting-user SELECT policy on invitations."
   - route_index_reconciliation_2026_05_13: "Added auth-hook-pre-signup and verify-turnstile entries to docs/07-reference/route-index.md (Reconciliation Addendum)."
 # ⚠ last_updated
-last_updated: 2026-05-26
+last_updated: 2026-05-27
 ```
 
 > **Note on `status: complete`:** This field reflects the closure of the historical platform-module programme (auth through PLAN-INVITE-001 inclusive, all phases through Phase 6). It does NOT mean the project is closed or that no work is active. PLAN-TRADING-001 (Trading Panel + Strategy Module Architectural Pattern) governance and implementation steps are currently in progress as recorded in the `active_work` field above. A future `status:` value bump (e.g., to `in_progress` or `closed`, when PLAN-TRADING-001 reaches its own closure or another plan supersedes it) is a separately-governed edit and is intentionally NOT introduced by this PR — preserving backward compatibility with any tooling that reads the existing `status` value.
