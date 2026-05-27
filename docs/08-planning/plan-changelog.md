@@ -871,3 +871,36 @@ HIGH — loss of traceability breaks system integrity and decision history.
 **Supersession Links:** FP-008 supersedes the execution-in-progress phase as the closed Phase 1. Phase 2 (signal stack) opens as separate FP per AC-38 (FP-009+ scoping TBD).
 
 **Defect-#42 candidate lineage:** Pre-flight surface document `FP-008-substep-8-13-pre-flight-surfaces.md` Finding 1 erroneously claimed AC-38 missing; corrected at execution-prompt drafting time via independent re-grep at HEAD `2bb125b9` (38 ACs verified contiguous AC-01 through AC-38). Logged at DW-076 + Lock Statement of closure document; forward-binding consideration for §22.3 (j) codification on recurrence.
+
+### v13.27 — 2026-05-26 — Stage 0.5: Supervisor-Instructions v0.6.4 Path Broad Codification (Defect #43 — CI Gate Enforcement Gap + Defect #36 Family Unified Discipline) + Closure-SHA Placeholder Cleanup (ACT-120)
+
+**What Changed:**
+- Governance discipline codification per CI-INVESTIGATION-01 disposition Option C-corrected + Path Broad v0.6.4 amendment scope ruling (operator-ratified 2026-05-26)
+- DW-077 logged: CI gate enforcement gap (strong-evidence.yml continuously red since FP-007 / ACT-099 closure) + defect #36 family unified discipline + defect #43 codification
+- INC-23 logged: CI-INVESTIGATION-01 disposition lineage + 8-stage sequencing + AC-38 phantom finding (DW-076 / pattern-establishing instance #1) + `ur.created_at` phantom column (Stage 0 SQL incident / pattern-establishing instance #2)
+- Operator-side supervisor-instructions v0.6.4 amendment (Claude Project Knowledge update; not repo-tracked per Claude Project Knowledge boundary) codifies defect class #43 with three sub-clauses per Path Broad ruling: §22.3 (k) supervisor pre-flight CI-status check requirement + §22.5 (g) executor disposition CI-status confirmation requirement + §22.3 (l) broad supervisor-side repo-state-reference inline grep-citation requirement with operator-locked inline-citation refinement (artifact contains literal grep/read command + output excerpt proving repo-state reference, OR artifact is invalid — mechanically auditable not trust-based)
+- Stage 0.5 of the corrective sequencing: discipline codification doc-only commit, ~20 min
+- Bundled hygiene: FP-008 entry line 7 Closure SHA placeholder + master-plan PLAN-TRADING-001-LONGSHORT-003 line 3 placeholder resolved (anchor-cite hygiene; closure document untouched per Option C-corrected)
+
+**Why:** Two distinct failure-mode pattern-establishing instances surfaced within ~48 hours on distinct artifact types: (1) strong-evidence.yml workflow continuously red since FP-007 / ACT-099 — three TypeScript compile errors entered tree before FP-007 closure (workflow auth SHA `4605255` 2026-05-24; errors at SHAs `1e4bd29` + `5d5e6de` + `7c9ad7a`; FP-007 closure SHA `cd4b8a14` 2026-05-25); Gate 2 (Deno TypeScript compile) fails before tests run; Gates 3-9 (banned-pattern enforcement) never execute; 53 visible workflow runs all red; AC-32 + AC-32-equivalent attestations in FP-007 + FP-008 closures mechanically false. (2) Two supervisor-side artifact-authoring incidents (AC-38 phantom finding at ACT-119 pre-flight + `ur.created_at` phantom column in Stage 0 SQL) demonstrate defect #36 family extends beyond v0.6.3 §22.3 (g) Surface-only scoping. Discipline gap that hid CI failure for 53 runs is absence of `gh run list --workflow=<name>` CI-status check in both supervisor §22.3 pre-flight + executor §22.5 disposition. Path Broad codification addresses both the CI-status check gap AND the deeper supervisor-side repo-state-reference discipline gap — codifying once now (v0.6.4) is cheaper than codifying twice (v0.6.4 narrow + v0.6.5 broad later when next defect #36 instance forces it). Codifying §22.3 (k) + §22.3 (l) + §22.5 (g) NOW (before CI-FIX-01 Stage 1) means CI-FIX-01's own closure transaction is the first one to exercise the new checks — the right validation event for the new rules.
+
+**What Stayed:**
+- DEC-038 + DEC-038.1 + DEC-034 + DEC-034.1 + DEC-035 + DEC-031 + DEC-032 + DEC-036 active
+- ART-018 through ART-023 unchanged
+- ADR-001 through ADR-007 unchanged
+- All FP closure documents (FP-005 / FP-006 / FP-007 / FP-008) frozen per Option C-corrected (closure-docs-stay-frozen + per-affected-FP erratum addendum via separate GOV-ERRATA-01 parallel FP)
+- Module status `phase-1-validated` (Option C-corrected = AC-32 mechanical satisfaction realized at CI-FIX-01 closure, not now)
+- FP entry Status / Date Closed / Closure Evidence fields preserved verbatim (only Closure SHA placeholder line 7 fixed; FP entry attestation otherwise unchanged)
+- Master-plan section Status field text preserved verbatim except `<this-commit-SHA>` token replacement
+- `.github/workflows/strong-evidence.yml` preserved verbatim (CI fixes are CI-FIX-01 / Stage 1 scope)
+- All code under src/ and supabase/ preserved verbatim
+
+**What Was Added:** DW-077 + INC-23 + ACT-120 + this changelog entry + system-state version bumps + 2 placeholder-cleanup hygiene fixes. Operator-side supervisor-instructions v0.6.4 amendment authored in parallel (Claude Project Knowledge update; not repo-tracked per longstanding boundary).
+
+**What Was Removed:** Nothing.
+
+**Approval Status:** Per Constitution Rule 11 financial-critical HIGH classification; operator-ratified Path Broad codification 2026-05-26 per CI-INVESTIGATION-01 disposition Option C-corrected.
+
+**Supersession Links:** None at this plan version. (FP-007 + FP-008 closure documents are NOT superseded; erratum addenda via GOV-ERRATA-01 parallel doc-only FP forthcoming.)
+
+**Defect #43 codification lineage:** Pattern-establishing instance #1 = AC-38 phantom finding at ACT-119 pre-flight (logged at DW-076 as defect #42 candidate; resolved via operator catch + Option A-correction). Pattern-establishing instance #2 = `ur.created_at` phantom column in Stage 0 OOB SQL (caught by Postgres error 42703 at operator-attempted execution; supervisor issued corrected SQL acknowledging the recurrence). Two instances on distinct artifact types within ~48 hours establish defect #36 family as recurring pattern; v0.6.4 Path Broad codification addresses prospectively with operator-locked inline-citation refinement.
