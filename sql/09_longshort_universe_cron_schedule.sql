@@ -27,16 +27,13 @@
 -- precedent: environment-specific secrets must not be committed to version
 -- control. Apply via Supabase SQL Editor after replacing placeholders.
 --
--- Idempotent: cron.unschedule before cron.schedule so re-running this file
--- replaces existing entries cleanly.
+-- Idempotent: cron.schedule() upserts on (jobname, username) — re-running this
+-- file replaces existing entries automatically (matches sql/05 MIG-031 pattern).
 -- =============================================================================
 
 -- 1. Quarterly refresh — daily 09:00 UTC during first week of Jan/Apr/Jul/Oct.
 --    Handler's bootstrap-aware guard runs the pipeline on first-ever invocation
 --    (empty universe_refresh_log) OR on first trading day of each quarter (steady-state).
-SELECT cron.unschedule('longshort-universe-quarterly-refresh')
-WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'longshort-universe-quarterly-refresh');
-
 SELECT cron.schedule(
   'longshort-universe-quarterly-refresh',
   '0 9 1-7 1,4,7,10 *',
@@ -50,9 +47,6 @@ SELECT cron.schedule(
 );
 
 -- 2. Hard exclusion refresh — rule 3.3a (earnings window) — daily 09:00 UTC.
-SELECT cron.unschedule('longshort-universe-hard-exclusion-refresh-3_3a')
-WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'longshort-universe-hard-exclusion-refresh-3_3a');
-
 SELECT cron.schedule(
   'longshort-universe-hard-exclusion-refresh-3_3a',
   '0 9 * * *',
@@ -66,9 +60,6 @@ SELECT cron.schedule(
 );
 
 -- 3. Hard exclusion refresh — rule 3.3e (short interest) — daily 09:00 UTC.
-SELECT cron.unschedule('longshort-universe-hard-exclusion-refresh-3_3e')
-WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'longshort-universe-hard-exclusion-refresh-3_3e');
-
 SELECT cron.schedule(
   'longshort-universe-hard-exclusion-refresh-3_3e',
   '0 9 * * *',
