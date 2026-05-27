@@ -42,6 +42,11 @@ import {
   type IndexId,
   type UniverseConstituent,
 } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import { fetchWithTimeoutAndRetry } from '../shared/fetch-with-timeout.ts';
+
+/** iShares CSVs are public but the holdings download is heavier than a JSON
+ *  API response; allow a 30s per-attempt cap (vs the 15s default elsewhere). */
+const ISHARES_FETCH_TIMEOUT_MS = 30_000;
 
 const ISHARES_HOLDINGS_URL: Readonly<Record<IndexId, string>> = {
   sp500:
@@ -176,12 +181,20 @@ export class iSharesConstituentFetcher implements ConstituentFetcher {
 
     let resp: Awaited<ReturnType<HttpFetch>>;
     try {
-      resp = await this.httpFetch(url, {
-        method: 'GET',
-        headers: { 'Accept': 'text/csv, */*;q=0.1' },
-      });
+      resp = await fetchWithTimeoutAndRetry(
+        this.httpFetch,
+        url,
+        { method: 'GET', headers: { 'Accept': 'text/csv, */*;q=0.1' } },
+        { timeoutMs: ISHARES_FETCH_TIMEOUT_MS },
+      );
     } catch (e) {
-      throw new ConstituentFetchError('ishares', index, 'network error', e);
+      const isTimeout = e instanceof Error && e.name === 'AbortError';
+      throw new ConstituentFetchError(
+        'ishares',
+        index,
+        isTimeout ? `request timeout after ${ISHARES_FETCH_TIMEOUT_MS}ms` : 'network error',
+        e,
+      );
     }
 
     if (!resp.ok) {
