@@ -19,8 +19,11 @@ import type {
 import type { ReconciliationOutcome } from '../../../../../../supabase/functions/_shared/longshort-reconciliation-types.ts';
 import type { MetricsEmitter } from '../health-monitoring/metrics-emitter.ts';
 
-/** Per CROSSWIND §3.4 LOCKED: quarterly cadence Jan/Apr/Jul/Oct. */
-export type RefreshOutcome = 'completed' | 'failed' | 'partial';
+/** Per CROSSWIND §3.4 LOCKED: quarterly cadence Jan/Apr/Jul/Oct.
+ *  `'circuit_breaker_open'` added in FP-009a: the orchestrator halts before
+ *  attempting a refresh when the last N attempts all failed, requiring
+ *  manual operator intervention to clear the streak. */
+export type RefreshOutcome = 'completed' | 'failed' | 'partial' | 'circuit_breaker_open';
 
 /**
  * Result of a quarterly refresh execution. Persisted to
@@ -120,6 +123,11 @@ export type CrossCheckFn = (input: {
 export interface RefreshLogPersister {
   insertStart(row: RefreshLogStartRow): Promise<{ refresh_id: string }>;
   finalize(refresh_id: string, patch: RefreshLogFinalizePatch): Promise<void>;
+  /** FP-009a circuit breaker — returns the count of consecutive
+   *  `outcome='failed'` rows at the tail of `universe_refresh_log`, capped
+   *  at `limit`. Optional for backward compatibility with existing test
+   *  stubs; missing implementation is treated as 0 (breaker open never). */
+  countConsecutiveFailures?(limit: number): Promise<number>;
 }
 
 export interface RefreshLogStartRow {
