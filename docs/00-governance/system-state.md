@@ -39,13 +39,13 @@ modules_implemented: auth implemented (A+B+D implemented + hardened incl. Google
 # ⚠ active_work — narrative replaced to reflect FP-005 closure
 active_work: FP-008 (Long-Short Strategy Module Phase 1 — Universe Ingestion and Management) CLOSED — all 38 acceptance criteria evidenced; closure document at docs/08-planning/phase-closures/plan-trading-001-longshort-003-closure.md; ACT-102 through ACT-119 registered (ACT-105 = ACT-104 reconciliation; ACT-111 + ACT-112 governance — supervisor-instructions amendment cycle landing). All 5 phase gates closed (Gate 8.0 / 8.1 / 8.2 / 8.3 / 8.4 + closure 8.13). 13 sub-steps + ACT-105 reconciliation closed. Universe component code-operational; runtime evidence deferred to Phase 7 per ADR-007 + DW-075. MIG-048 through MIG-054 applied. ADR-007 introduced. 4 operator runbooks landed at sub-step 8.12 (ART-020 through ART-023). universe.enabled flag flipped operationally at MIG-054. NO longshort.execute permission per DEC-032 + DEC-036; backend-only at Phase 1 — UI is future FP. PLAN-TRADING-001-LONGSHORT-003 closed; Phase 1 exit boundary established. Phase 7 first production refresh consumes DW-075 + ADR-007 + DW-058 through DW-062 as canonical reading. Next: Phase 2 (signal stack) opens as separate FP per AC-38 (FP-009+ scoping TBD). All prior PLAN-* sections remain CLOSED. (Historical: FP-006 CLOSED — all 79 acceptance criteria evidenced; closure document at docs/08-planning/phase-closures/plan-trading-001-longshort-002-closure.md; ACT-074 through ACT-098 registered (ACT-083 + ACT-096 are non-FP-006 / investigation-mode entries). All 5 phase gates closed (Gate 6.0 / 6.3 / 6.4 / 6.7 / 6.9). Reconciliation engine + 17 verify_* + replay framework + A1 baseline + Alpaca paper integration + ADR-002 v0 fallback determination live. Phase 0B captured Day 1 deferred to Phase 7 per ADR-006 (DW-058 through DW-061); ADR-002 Test 2 RTH re-run deferred per DW-062. NO longshort.execute permission; NO production code path imports Alpaca fetchers. PLAN-TRADING-001-LONGSHORT-002 closed; Phase 0B exit boundary established. Next: Phase 1 (universe construction) opens as separate FP. All prior PLAN-* sections remain CLOSED.
 # ⚠ current_plan_version — minor merge bump per Constitution Rule 10 (Plan Merge Rule)
-current_plan_version: v13.26
+current_plan_version: v13.27
 # ⚠ approved_plan_baseline — bumps to v13.1 at FP-006 Gate 6.0 closure per DEC-034 clause (5) amendment (Option 1 reconciliation)
 #   resolution. Step 5.0 PR is the approval mechanism (matches v11.0 → v12.0 PR #3
 #   Step 2b precedent). Constitution Rule 9 (Execution Lock) is satisfied: code
 #   execution Steps 5.0a-5.6 cannot begin until v12.1 baseline is approved, which
 #   it becomes at Step 5.0 PR merge.
-approved_plan_baseline: v13.26
+approved_plan_baseline: v13.27
 plan_status: approved
 artifact_governance: active (artifact-index.md, database-migration-ledger.md, phase-closures/)
 deferred_work_open: []
