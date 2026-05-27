@@ -19,7 +19,7 @@ export const tradingNavigation: NavSection[] = [
     label: 'Overview',
     items: [
       {
-        title: 'Dashboard',
+        title: 'Overview',
         url: ROUTES.TRADING,
         icon: LayoutDashboard,
         permission: 'trading.access',

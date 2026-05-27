@@ -60,8 +60,8 @@ export const DashboardSidebar = React.memo(function DashboardSidebar({ sections,
     (path: string) => {
       // Routes that are also a prefix of another nav route must match
       // exactly, otherwise both items light up at the same time
-      // (e.g. `/settings` would match `/settings/security`).
-      const exactMatchRoutes = ['/admin', '/dashboard', '/settings'];
+      // (e.g. `/trading` would match `/trading/longshort`).
+      const exactMatchRoutes = ['/admin', '/dashboard', '/settings', '/trading'];
       if (exactMatchRoutes.includes(path)) {
         return location.pathname === path;
       }
