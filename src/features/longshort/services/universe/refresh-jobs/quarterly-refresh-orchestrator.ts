@@ -130,8 +130,13 @@ export function createQuarterlyRefreshOrchestrator(
       let ishares_cross_check: Awaited<
         ReturnType<typeof ctx.iSharesConstituents.fetchConstituents>
       > = [];
-      let outcome: RefreshOutcome = 'completed';
-      let failure_reason: string | null = null;
+      // outcome defaults to 'failed' per §2 axiom 3 / DEC-034 (2): success must
+      // be asserted positively at end-of-pipeline, never defaulted. Any code
+      // path that reaches finalize() without explicitly setting
+      // outcome='completed' writes failed — eliminating the phantom-success
+      // class.
+      let outcome: RefreshOutcome = 'failed';
+      let failure_reason: string | null = 'pipeline_did_not_complete';
 
       try {
         // 1. Primary constituent fetch (Polygon S&P 500 + S&P 400).
@@ -210,6 +215,11 @@ export function createQuarterlyRefreshOrchestrator(
             rows: exclusionRows,
           });
         }
+
+        // Positive success assertion — only after every pipeline step + both
+        // persistence calls completed without throwing.
+        outcome = 'completed';
+        failure_reason = null;
       } catch (err) {
         outcome = 'failed';
         failure_reason = err instanceof Error ? err.message : String(err);

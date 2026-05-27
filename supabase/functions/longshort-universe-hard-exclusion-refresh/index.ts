@@ -28,8 +28,7 @@
  * Manual invocations (operator test, sub-step verification) are safe.
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
-import { authenticateRequest } from '../_shared/authenticate-request.ts';
-import { checkPermissionOrThrow } from '../_shared/authorization.ts';
+import { verifyCronSecret } from '../_shared/cron-auth.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
@@ -92,13 +91,9 @@ export default createHandler(async (req: Request) => {
     return apiError(400, 'rule_param_required_or_invalid', { correlationId });
   }
 
-  // ── Authn / authz (parity with sub-step 8.4 handler) ──
-  try {
-    const { user } = await authenticateRequest(req);
-    await checkPermissionOrThrow(user, 'longshort.view');
-  } catch {
-    return apiError(401, 'unauthorized', { correlationId });
-  }
+  // ── Cron-only system path: cron-secret header auth ──
+  const cronAuthError = verifyCronSecret(req);
+  if (cronAuthError) return cronAuthError;
 
   const as_of = productionClock.now();
 

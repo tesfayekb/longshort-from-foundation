@@ -14,8 +14,7 @@
  * Permission: longshort.view (system-level cron path).
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
-import { authenticateRequest } from '../_shared/authenticate-request.ts';
-import { checkPermissionOrThrow } from '../_shared/authorization.ts';
+import { verifyCronSecret } from '../_shared/cron-auth.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
@@ -111,24 +110,54 @@ export default createHandler(async (req: Request) => {
   const as_of = clock.now();
   const correlationId = crypto.randomUUID();
 
+  // Cron-only system path — JWT auth would fail from pg_cron. Operator-
+  // triggered manual refresh paths should be a separate edge function that
+  // proxies into this dispatcher with the cron secret.
+  const cronAuthError = verifyCronSecret(req);
+  if (cronAuthError) return cronAuthError;
+
+  // Bootstrap-aware gating: on a non-quarter-start day, only skip if
+  // universe_refresh_log already has a completed row. First-ever run must
+  // fire regardless of calendar to populate the dashboard.
   if (!isFirstTradingDayOfQuarter(as_of)) {
+    const { data: existingCompleted, error: existingCheckError } = await supabaseAdmin
+      .from('universe_refresh_log')
+      .select('refresh_id')
+      .eq('outcome', 'completed')
+      .limit(1)
+      .maybeSingle();
+
+    if (existingCheckError) {
+      return apiError(500, 'universe_refresh_log_read_failed', {
+        correlationId,
+        details: existingCheckError.message,
+      });
+    }
+
+    if (existingCompleted !== null) {
+      await writeStrategyAuditEvent({
+        strategyKey: 'longshort',
+        action: 'longshort.universe.refresh.skipped',
+        correlationId,
+        metadata: {
+          reason: 'not_first_trading_day_of_quarter',
+          as_of: as_of.toISOString(),
+        },
+      });
+      return apiSuccess({ status: 'skipped', reason: 'not_first_trading_day_of_quarter' });
+    }
+
+    // Bootstrap case: universe_refresh_log has no completed row yet.
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
-      action: 'longshort.universe.refresh.skipped',
+      action: 'longshort.universe.refresh.bootstrap',
       correlationId,
       metadata: {
-        reason: 'not_first_trading_day_of_quarter',
+        reason: 'no_prior_completed_refresh',
         as_of: as_of.toISOString(),
+        note: 'Bootstrap run — quarter-start gating bypassed because universe_refresh_log has no completed row',
       },
     });
-    return apiSuccess({ status: 'skipped', reason: 'not_first_trading_day_of_quarter' });
-  }
-
-  try {
-    const { user } = await authenticateRequest(req);
-    await checkPermissionOrThrow(user, 'longshort.view');
-  } catch (e) {
-    return apiError(401, 'unauthorized', { correlationId });
   }
 
   const polygonApiKey = Deno.env.get('POLYGON_API_KEY');
