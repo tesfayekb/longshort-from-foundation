@@ -79,6 +79,30 @@ function makeSupabasePersister(): RefreshLogPersister {
         throw new Error(`universe_refresh_log_finalize_failed: ${error.message}`);
       }
     },
+    async countConsecutiveFailures(limit) {
+      // FP-009a circuit breaker — read the tail N rows ordered DESC by
+      // refresh_started_at; count contiguous outcome='failed' from the top.
+      // A non-failed row (or NULL for in-flight) breaks the streak.
+      const { data, error } = await supabaseAdmin
+        .from('universe_refresh_log')
+        .select('outcome')
+        .order('refresh_started_at', { ascending: false })
+        .limit(limit);
+      if (error) {
+        // Observability defect, not correctness — return 0 so a transient
+        // read failure does not falsely trip the breaker.
+        console.warn(
+          `universe_refresh_log_count_failures_read_failed: ${error.message}`,
+        );
+        return 0;
+      }
+      let count = 0;
+      for (const row of data ?? []) {
+        if (row.outcome === 'failed') count += 1;
+        else break;
+      }
+      return count;
+    },
   };
 }
 
