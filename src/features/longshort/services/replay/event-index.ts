@@ -98,7 +98,8 @@ export function findAtOrBefore<E extends ReplayFixtureEvent>(
   if (upperIdx < 0) return null;
 
   for (let i = upperIdx; i >= 0; i--) {
-    if (predicate(events[i])) return events[i];
+    const event = events[i];
+    if (predicate(event)) return event;
   }
   return null;
 }
@@ -126,7 +127,8 @@ export function findExactAt<E extends ReplayFixtureEvent>(
 
   // Walk forward over all events at exactly ts looking for a match
   for (let i = lo; i < events.length && events[i].ts === ts; i++) {
-    if (predicate(events[i])) return events[i];
+    const event = events[i];
+    if (predicate(event)) return event;
   }
   return null;
 }
