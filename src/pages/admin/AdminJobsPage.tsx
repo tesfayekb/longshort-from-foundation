@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { apiClient } from '@/lib/api-client';
 import {
   Cog, Play, Pause, AlertOctagon, RotateCcw, Inbox,
@@ -19,6 +20,9 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useUserRoles } from '@/hooks/useUserRoles';
 import { checkPermission } from '@/lib/rbac';
+
+// Untyped client view for tables/RPCs not present in generated Database types.
+const sb = supabase as unknown as SupabaseClient;
 
 type JobRegistry = {
   id: string;
@@ -74,7 +78,7 @@ export default function AdminJobsPage() {
   const { data: jobs, isLoading: loadingJobs, error: jobsError } = useQuery({
     queryKey: ['admin', 'job-registry'],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await sb
         .from('job_registry')
         .select('*')
         .order('id');
@@ -87,7 +91,7 @@ export default function AdminJobsPage() {
   const { data: executions } = useQuery({
     queryKey: ['admin', 'job-executions'],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await sb
         .from('job_executions')
         .select('*')
         .order('created_at', { ascending: false })
@@ -103,7 +107,7 @@ export default function AdminJobsPage() {
   const { data: deadLetters, refetch: refetchDeadLetters } = useQuery({
     queryKey: ['admin', 'dead-letters'],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await sb
         .from('job_executions')
         .select('*')
         .eq('state', 'dead_lettered')
