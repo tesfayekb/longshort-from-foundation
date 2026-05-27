@@ -127,3 +127,29 @@ describe('fetchWithTimeoutAndRetry', () => {
     ).rejects.toThrow(/parse exploded/);
   });
 });
+describe('fetchWithTimeoutAndRetry — configuration guards', () => {
+  it('throws on empty backoffMs when maxAttempts > 1', async () => {
+    const httpFetch = vi.fn();
+    await expect(
+      fetchWithTimeoutAndRetry(httpFetch as unknown as MinimalHttpFetch, 'https://example.test/x', {}, {
+        maxAttempts: 3,
+        backoffMs: [],
+      }),
+    ).rejects.toThrow(/backoffMs must be non-empty/);
+    expect(httpFetch).not.toHaveBeenCalled();
+  });
+
+  it('accepts empty backoffMs when maxAttempts = 1 (no retry path exercised)', async () => {
+    const ok: MinimalHttpResponse = {
+      ok: true, status: 200, statusText: 'OK',
+      text: async () => '', json: async () => ({}),
+    };
+    const httpFetch = vi.fn().mockResolvedValue(ok);
+    const resp = await fetchWithTimeoutAndRetry(httpFetch as unknown as MinimalHttpFetch, 'https://example.test/x', {}, {
+      maxAttempts: 1,
+      backoffMs: [],
+    });
+    expect(resp.ok).toBe(true);
+    expect(httpFetch).toHaveBeenCalledTimes(1);
+  });
+});
