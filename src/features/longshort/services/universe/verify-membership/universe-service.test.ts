@@ -28,7 +28,7 @@ interface MockFlagBuilder {
 interface MockRowsBuilder {
   select: () => MockRowsBuilder;
   eq: (col: string, val: unknown) => MockRowsBuilder;
-  then: <T>(resolve: (v: StubRows) => T) => Promise<T>;
+  then: (resolve: (v: StubRows) => unknown) => Promise<unknown>;
 }
 
 function mkRow(
