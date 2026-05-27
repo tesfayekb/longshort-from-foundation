@@ -23,4 +23,19 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
+  // Deno test files (*_test.ts) and scripts run outside the Vite bundle's TS checker.
+  // @ts-nocheck is the canonical escape hatch for the Deno/Vite dual-runtime separation.
+  {
+    files: ["**/*_test.ts", "scripts/**/*.ts"],
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off",
+    },
+  },
+  // tailwind.config.ts uses CommonJS require() for plugin loading per Tailwind convention.
+  {
+    files: ["tailwind.config.ts"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 );

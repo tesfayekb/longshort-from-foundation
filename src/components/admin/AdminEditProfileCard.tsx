@@ -67,8 +67,8 @@ export function AdminEditProfileCard({
       await queryClient.invalidateQueries({ queryKey: ['admin', 'user', userId] });
       toast.success('Profile updated');
       setEditing(false);
-    } catch (err: any) {
-      toast.error('Update failed', { description: err.message });
+    } catch (err: unknown) {
+      toast.error('Update failed', { description: err instanceof Error ? err.message : 'Unknown error' });
     } finally {
       setSubmitting(false);
     }

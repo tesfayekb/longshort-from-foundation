@@ -74,7 +74,7 @@ Deno.serve(createHandler(async (req: Request) => {
 
   // For non-superadmin, non-user roles we need overlap with user-role permissions.
   // Fetch all role_permissions to compute effective counts accurately.
-  let rolePermMap = new Map<string, Set<string>>()
+  const rolePermMap = new Map<string, Set<string>>()
   if (userRolePermCount > 0) {
     const { data: allRp } = await supabaseAdmin
       .from('role_permissions')
@@ -85,7 +85,20 @@ Deno.serve(createHandler(async (req: Request) => {
     }
   }
 
-  const result: RoleListItem[] = (rolesResult.data ?? []).map((r: any) => {
+  type RoleRow = {
+    id: string
+    key: string
+    name: string
+    description: string | null
+    is_base: boolean
+    is_immutable: boolean
+    is_permission_locked: boolean
+    created_at: string
+    updated_at: string
+    role_permissions?: { count: number }[]
+    user_roles?: { count: number }[]
+  }
+  const result: RoleListItem[] = (rolesResult.data ?? []).map((r: RoleRow) => {
     let permCount: number
     if (r.key === 'superadmin') {
       permCount = totalPermCount
