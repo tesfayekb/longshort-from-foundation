@@ -904,3 +904,37 @@ HIGH — loss of traceability breaks system integrity and decision history.
 **Supersession Links:** None at this plan version. (FP-007 + FP-008 closure documents are NOT superseded; erratum addenda via GOV-ERRATA-01 parallel doc-only FP forthcoming.)
 
 **Defect #43 codification lineage:** Pattern-establishing instance #1 = AC-38 phantom finding at ACT-119 pre-flight (logged at DW-076 as defect #42 candidate; resolved via operator catch + Option A-correction). Pattern-establishing instance #2 = `ur.created_at` phantom column in Stage 0 OOB SQL (caught by Postgres error 42703 at operator-attempted execution; supervisor issued corrected SQL acknowledging the recurrence). Two instances on distinct artifact types within ~48 hours establish defect #36 family as recurring pattern; v0.6.4 Path Broad codification addresses prospectively with operator-locked inline-citation refinement.
+
+### v13.28 — 2026-05-27 — Stage 1: CI-FIX-01 — 3 TS Error Fixes + Gate-Detector Defect + Sentinel Refactor + Gates 1–9 Green Verification (Path 1 Operator-Authorized Scope Expansion; First Full-Cycle Validation Event for v0.6.4 §22.3 (k) + (l) + §22.5 (g); Pattern Instance #3 + #4 Logged at DW-077) (ACT-121)
+
+**What Changed:**
+- Fixed 3 TypeScript compile errors that had been continuously failing Gate 2 of `strong-evidence.yml` since FP-007 / ACT-099 workflow authoring (SHA `4605255` 2026-05-24): (a) `zstd-codec.ts:13` unresolvable `https://deno.land/x/zstd@v0.20.2/mod.ts` URL replaced with `jsr:@yu7400ki/zstd-wasm@0.1.0` (Path B; pure-WASM, no native plugin); (b) `multi-pending-harness.ts:252/253/283/284` non-overlapping struct casts via Path A `as unknown as T` intermediate casts; (c) `event-index.ts:101/129` generic predicate-narrowing return-type loss via α-style explicit narrowed binding
+- Path 1 operator-authorized scope expansion: (d) `scripts/check-wall-clock.ts` detector defect fix — new `stripCommentsOnlyWithState` helper + per-pattern `requireLiteralEmpty` flag on `new-Date-noarg` to suppress false positives from `new Date('iso')` → `new Date()` synthetic match after string-strip; `isExcluded` extended to also cover `.test.ts` naming convention; (e) `ishares-constituent-fetcher.ts` Option α refactor — `findHeaderRowIndex` return type `number` → `number | null` per DEC-034 clause (2) typed-absence discipline; caller `parseISharesCsv` line 116 + companion test line 41 updated
+- Gates 3-9 (banned-pattern enforcement per DEC-034 clauses (2)/(4)/(5) + DEC-036 clause (2) + ACT-097 finding #13 + DW-058 B1) execute end-to-end CLEAN against current main for the first time
+- **AC-32** (in PLAN-TRADING-001-LONGSHORT-003 / FP-008 closure) + **AC-32-equivalent** (in PLAN-TRADING-001-LONGSHORT-002 / FP-006 via ACT-099 deliverables) **mechanical satisfaction REALIZED at this closure SHA**
+- DW-077 extended with pattern-establishing instance #3 (Stage 0.5 §22.3 item 5 `git rev-list --count` constraint contradicting §22.8.5(b)) + instance #4 (Stage 1 §22.3 (l) inline-citation table omitting executed-gate-output state) + future-split trigger update (2-of-2 most-recent recurrences are tool-behavior-state-shaped) + Path 1 scope-expansion attestation paragraph
+- First full-cycle validation event for v0.6.4 §22.3 (k) (supervisor pre-flight CI-status check) + §22.3 (l) (broad supervisor-side repo-state-reference inline grep-citation) + §22.5 (g) (executor disposition CI-status confirmation) codified at Stage 0.5 / ACT-120 — the §22.5 (g) STOP discipline proved itself when Lovable refused to write false-green attestation upon discovering Gates 5/6 surfaces
+
+**Why:** Stage 1 of the CI-INVESTIGATION-01 disposition Option C-corrected corrective sequencing. The §22.8.4 STOP after the original 3 TS fixes (Gates 5 + 6 surfacing pre-existing violations + detector defects masked since FP-007 closure) prompted operator three-path adjudication; Path 1 (extend scope) chosen because detector defect + sentinel refactor are direct prerequisites for the named CI-FIX-01 goal ("verify Gates 1-9 green end-to-end"), not adjacent feature work. Path 2 (split CI-FIX-02) would have fragmented the AC-32 attestation chain across two SHAs; Path 3 (revert) would have destroyed the 3 verified-clean TS fixes. The §22.5 (g) STOP that triggered the path-decision IS the validation event proving the v0.6.4 discipline works.
+
+**What Stayed:**
+- DEC-038 + DEC-038.1 + DEC-034 + DEC-034.1 + DEC-035 + DEC-031 + DEC-032 + DEC-036 active
+- ART-018 through ART-023 unchanged
+- ADR-001 through ADR-007 unchanged
+- All FP closure documents (FP-005 / FP-006 / FP-007 / FP-008) frozen per Option C-corrected (erratum addenda via GOV-ERRATA-01 parallel doc-only FP forthcoming)
+- Module status `phase-1-validated` (Option C-corrected = no rollback even at AC-32 realization)
+- FP entry Status / Date Closed / Closure Evidence preserved (GOV-ERRATA-01 handles addenda)
+- Master-plan AC ticks unchanged (GOV-ERRATA-01 handles section addenda)
+- `.github/workflows/strong-evidence.yml` preserved verbatim (workflow IS the test artifact)
+- INC-23 entry unchanged (CI-FIX-01 closes the corrective; doesn't re-author lineage)
+- No code under `supabase/` touched; no migrations; no edge functions
+
+**What Was Added:** 5 code-fix files (zstd-codec.ts + multi-pending-harness.ts + event-index.ts + check-wall-clock.ts + ishares-constituent-fetcher.ts) + 1 test update (ishares-constituent-fetcher_test.ts) + DW-077 instances #3 + #4 extension + ACT-121 + this changelog entry + system-state version bumps. Cumulative diff vs pre-execution SHA `4bdbabb` = 10 files (per §22.8.5(b) cumulative-diff verification, NOT commit count).
+
+**What Was Removed:** Nothing.
+
+**Approval Status:** Per Constitution Rule 11 financial-critical HIGH classification; operator-ratified Path 1 scope expansion 2026-05-27 per CI-INVESTIGATION-01 Option C-corrected + Stage 1 §22.8.4 STOP adjudication.
+
+**Supersession Links:** AC-32 + AC-32-equivalent mechanical satisfaction realized at this SHA; per-affected-FP erratum addenda forthcoming via GOV-ERRATA-01 parallel doc-only FP.
+
+**v0.6.4 first full-cycle validation-event attestation:** This commit's §22.3 (k) + §22.3 (l) + §22.5 (g) compliance is recorded inline at ACT-121 evidence section (c)–(e). The §22.5 (g) STOP discipline was independently validated when Lovable correctly refused to write false-green attestation upon discovering Gates 5/6 surfaces after the initial 3 TS fixes — proving the rule works as designed. Future commits binding to v0.6.4 must mirror this evidence shape.

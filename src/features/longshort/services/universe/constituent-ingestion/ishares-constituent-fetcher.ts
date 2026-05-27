@@ -92,14 +92,19 @@ export function parseCsvLine(line: string): string[] {
  * header row is the first line that contains a column literally named
  * `Ticker` (case-insensitive, possibly quoted).
  *
- * Returns the zero-based line index of the header row, or `-1` if not found.
+ * Returns the zero-based line index of the header row, or `null` if not found.
+ *
+ * Per DEC-034 clause (2) typed-absence discipline: explicit `null` for the
+ * not-found case (instead of an in-band `-1` sentinel) — caller pattern-matches
+ * on `null` rather than range-checking. Refactored in CI-FIX-01 / ACT-121 to
+ * satisfy Gate 5 (sentinel-patterns ban).
  */
-export function findHeaderRowIndex(lines: string[]): number {
+export function findHeaderRowIndex(lines: string[]): number | null {
   for (let i = 0; i < lines.length; i += 1) {
     const fields = parseCsvLine(lines[i]).map((f) => f.toLowerCase());
     if (fields.includes('ticker')) return i;
   }
-  return -1;
+  return null;
 }
 
 /** Parse iShares CSV body into raw rows. Exported for testing. */
@@ -114,7 +119,7 @@ export function parseISharesCsv(
     .filter((l) => l.length > 0);
 
   const headerIdx = findHeaderRowIndex(lines);
-  if (headerIdx < 0) {
+  if (headerIdx === null) {
     throw new ConstituentFetchError(
       'ishares',
       index,

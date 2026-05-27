@@ -59,9 +59,19 @@ const SELF_EXCLUDE = [
 
 const OVERRIDE_ANNOTATION = /\/\/\s*allow-now-in-business-logic:\s*ADR-\d+/;
 
-export const WALL_CLOCK_PATTERNS: ReadonlyArray<{ pattern: RegExp; reason: string; name: string }> = [
+export const WALL_CLOCK_PATTERNS: ReadonlyArray<{
+  pattern: RegExp;
+  reason: string;
+  name: string;
+  // When true, the pattern must ALSO match the line with comments stripped but
+  // string literals preserved. This prevents false positives where the generic
+  // strip-strings-and-comments pass collapses `new Date('iso')` into `new Date()`
+  // and the regex then matches the synthetic empty-arg shape. See CI-FIX-01 /
+  // ACT-121 (detector defect #4 in defect-#36 family lineage).
+  requireLiteralEmpty?: boolean;
+}> = [
   { name: 'Date.now',       pattern: /\bDate\.now\(\s*\)/,        reason: 'DEC-034 (4) Date.now() leaks wall-clock into business logic' },
-  { name: 'new-Date-noarg', pattern: /\bnew\s+Date\(\s*\)/,       reason: 'DEC-034 (4) new Date() with no argument leaks wall-clock; use injected ts parameter' },
+  { name: 'new-Date-noarg', pattern: /\bnew\s+Date\(\s*\)/,       reason: 'DEC-034 (4) new Date() with no argument leaks wall-clock; use injected ts parameter', requireLiteralEmpty: true },
   { name: 'performance.now',pattern: /\bperformance\.now\(\s*\)/, reason: 'DEC-034 (4) performance.now() leaks wall-clock' },
   { name: 'Temporal.Now',   pattern: /\bTemporal\.Now\./,         reason: 'DEC-034 (4) Temporal.Now.* leaks wall-clock' },
 ];
@@ -97,6 +107,39 @@ export function stripCommentsAndStringsWithState(line: string, state: ScanState)
   return out;
 }
 
+/**
+ * Like stripCommentsAndStringsWithState, but preserves string-literal contents.
+ * Only block comments (across lines) and `//` line comments are removed. Used by
+ * the `new-Date-noarg` pattern's `requireLiteralEmpty` discriminator so that
+ * `new Date('iso-string')` is NOT mistaken for `new Date()` after stripping.
+ */
+export function stripCommentsOnlyWithState(line: string, state: ScanState): string {
+  let out = '';
+  let i = 0;
+  let inSingleString = false;
+  let inDoubleString = false;
+  let inBacktickString = false;
+  while (i < line.length) {
+    const c = line[i];
+    const next = line[i + 1];
+    if (state.inBlockComment) {
+      if (c === '*' && next === '/') { state.inBlockComment = false; i += 2; continue; }
+      i++; continue;
+    }
+    if (inSingleString) { out += c; if (c === '\\') { out += line[i + 1] ?? ''; i += 2; continue; } if (c === "'") inSingleString = false; i++; continue; }
+    if (inDoubleString) { out += c; if (c === '\\') { out += line[i + 1] ?? ''; i += 2; continue; } if (c === '"') inDoubleString = false; i++; continue; }
+    if (inBacktickString) { out += c; if (c === '\\') { out += line[i + 1] ?? ''; i += 2; continue; } if (c === '`') inBacktickString = false; i++; continue; }
+    if (c === '/' && next === '/') break;
+    if (c === '/' && next === '*') { state.inBlockComment = true; i += 2; continue; }
+    if (c === "'") { inSingleString = true; out += c; i++; continue; }
+    if (c === '"') { inDoubleString = true; out += c; i++; continue; }
+    if (c === '`') { inBacktickString = true; out += c; i++; continue; }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
 export function isInScope(filePath: string): boolean {
   return SCOPE_GLOB_PREFIXES.some(prefix => filePath.startsWith(prefix));
 }
@@ -104,24 +147,38 @@ export function isInScope(filePath: string): boolean {
 export function isExcluded(filePath: string): boolean {
   if (SELF_EXCLUDE.includes(filePath as typeof SELF_EXCLUDE[number])) return true;
   if (SANCTIONED_CLOCK_FILES.includes(filePath as typeof SANCTIONED_CLOCK_FILES[number])) return true;
+  // Exclude both Deno (`_test.ts`) and Vitest (`.test.ts`) naming conventions.
+  // Test files are exempt from wall-clock checks because they routinely
+  // construct `new Date('iso-string')` for fixture timestamps. See CI-FIX-01 /
+  // ACT-121 (detector defect #5 in defect-#36 family lineage — naming-convention drift).
   if (filePath.endsWith('_test.ts')) return true;
+  if (filePath.endsWith('.test.ts')) return true;
   return false;
 }
 
 export function findViolationsInLines(lines: string[], filePath: string): Violation[] {
   const violations: Violation[] = [];
   const state: ScanState = { inBlockComment: false };
+  const commentOnlyState: ScanState = { inBlockComment: false };
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (OVERRIDE_ANNOTATION.test(line)) {
       stripCommentsAndStringsWithState(line, state);
+      stripCommentsOnlyWithState(line, commentOnlyState);
       continue;
     }
     const stripped = stripCommentsAndStringsWithState(line, state);
-    for (const { pattern, reason, name } of WALL_CLOCK_PATTERNS) {
-      if (pattern.test(stripped)) {
-        violations.push({ file: filePath, line: i + 1, text: line.trim(), pattern: name, reason });
+    const commentStrippedOnly = stripCommentsOnlyWithState(line, commentOnlyState);
+    for (const { pattern, reason, name, requireLiteralEmpty } of WALL_CLOCK_PATTERNS) {
+      if (!pattern.test(stripped)) continue;
+      if (requireLiteralEmpty && !pattern.test(commentStrippedOnly)) {
+        // The strings-and-comments strip turned a `new Date('iso')` into a
+        // synthetic `new Date()` shape. The comment-only strip preserves the
+        // string contents, so the regex does not match the literal source —
+        // therefore not a real violation. Suppress.
+        continue;
       }
+        violations.push({ file: filePath, line: i + 1, text: line.trim(), pattern: name, reason });
     }
   }
   return violations;

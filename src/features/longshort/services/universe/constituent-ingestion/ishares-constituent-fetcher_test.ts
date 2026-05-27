@@ -38,8 +38,8 @@ Deno.test('(2) parseCsvLine handles escaped quotes', () => {
 Deno.test('(3) findHeaderRowIndex locates the Ticker header past the preamble', () => {
   const lines = SAMPLE_CSV.split('\n').filter((l) => l.length > 0);
   const idx = findHeaderRowIndex(lines);
-  assert(idx > 0);
-  assert(lines[idx].toLowerCase().includes('ticker'));
+  assert(idx !== null && idx > 0);
+  assert(lines[idx!].toLowerCase().includes('ticker'));
 });
 
 Deno.test('(4) parseISharesCsv extracts equity rows + skips cash/futures/non-equity', () => {
