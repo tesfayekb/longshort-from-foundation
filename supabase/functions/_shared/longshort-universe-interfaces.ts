@@ -85,7 +85,7 @@ export interface ConstituentFetcher {
 /** Minimal HTTP fetch function shape — injected for testability per FP-006 fetcher precedent. */
 export type HttpFetch = (
   input: string,
-  init?: { method?: string; headers?: Record<string, string> },
+  init?: { method?: string; headers?: Record<string, string>; signal?: AbortSignal },
 ) => Promise<{
   ok: boolean;
   status: number;
