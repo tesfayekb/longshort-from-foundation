@@ -82,6 +82,44 @@ export function createQuarterlyRefreshOrchestrator(
         quarter_label,
       });
 
+      // FP-009a circuit breaker — halt if the last 3 attempts all failed.
+      // Manual operator intervention is required to clear the streak by
+      // updating universe_refresh_log (e.g., mark a prior row 'partial').
+      // Missing `countConsecutiveFailures` on the persister (older test
+      // stubs) is treated as 0 → breaker never trips.
+      const recentFailures = ctx.refreshLogPersister.countConsecutiveFailures
+        ? await ctx.refreshLogPersister.countConsecutiveFailures(3)
+        : 0;
+      if (recentFailures >= 3) {
+        const breaker_reason =
+          `Circuit breaker open: ${recentFailures} consecutive failed refreshes. ` +
+          `Manual intervention required to clear the streak (operator must inspect ` +
+          `and update universe_refresh_log).`;
+        await ctx.refreshLogPersister.finalize(refresh_id, {
+          refresh_completed_at: isoTimestamp(as_of),
+          total_constituents_raw: 0,
+          total_post_filters: 0,
+          total_eligible_long: 0,
+          total_eligible_short: 0,
+          outcome: 'circuit_breaker_open',
+          failure_reason: breaker_reason,
+          ishares_cross_check_snapshot: { snapshot_at: startedAt, tickers: [] },
+        });
+        return {
+          refresh_id,
+          as_of_date,
+          quarter_label,
+          outcome: 'circuit_breaker_open',
+          total_constituents_raw: 0,
+          total_post_filters: 0,
+          total_eligible_long: 0,
+          total_eligible_short: 0,
+          eligible: [],
+          failure_reason: breaker_reason,
+          ishares_cross_check: [],
+        };
+      }
+
       let total_constituents_raw = 0;
       let total_post_filters = 0;
       let total_eligible_long = 0;
