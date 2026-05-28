@@ -59,3 +59,6 @@ jobs:
 
       - name: Gate 9 — catch { return 0 } phantom-success ban (DEC-034 clause (2))
         run: deno run --allow-read scripts/check-catch-returns-zero.ts
+
+      - name: Gate 10 — Edge functions must not import from src/ (FP-011)
+        run: deno run --allow-read scripts/check-edge-imports.ts
