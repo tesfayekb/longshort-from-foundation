@@ -70,7 +70,7 @@ function actionFor(rule: HardExclusionRuleKey, suffix: string): string {
   return `longshort.universe.hard_exclusion_refresh_${ruleSlug}.${suffix}`;
 }
 
-export default createHandler(async (req: Request) => {
+Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
 
   if (req.method !== 'POST') {
@@ -156,4 +156,4 @@ export default createHandler(async (req: Request) => {
     });
     return apiError(500, 'hard_exclusion_refresh_failed', { correlationId });
   }
-});
+}));
