@@ -1,8 +1,8 @@
 // @ts-nocheck — Deno test file; runs via `deno test`, not Vite/tsc.
 import { assert, assertEquals, assertRejects } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { PolygonEnrichmentFetcher } from './polygon-enrichment-fetcher.ts';
-import { ConstituentFetchError } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
-import type { UniverseConstituent } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import { ConstituentFetchError } from '../../longshort-universe-interfaces.ts';
+import type { UniverseConstituent } from '../../longshort-universe-interfaces.ts';
 
 const AS_OF = new Date('2026-05-25T14:30:00Z');
 

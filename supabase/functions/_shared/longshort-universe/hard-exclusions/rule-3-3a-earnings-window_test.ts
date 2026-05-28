@@ -2,7 +2,7 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { rule3_3a_EarningsWindow } from './rule-3-3a-earnings-window.ts';
 import { ec } from './test-fixtures.ts';
-import type { EarningsCalendarSnapshot } from '../../../../../../supabase/functions/_shared/longshort-hard-exclusion-interfaces.ts';
+import type { EarningsCalendarSnapshot } from '../../longshort-hard-exclusion-interfaces.ts';
 
 function snap(entries: EarningsCalendarSnapshot['entries']): EarningsCalendarSnapshot {
   return { entries, fetched_at: new Date('2026-04-27T00:00:00Z') };

@@ -15,7 +15,7 @@
  * via `null`-with-narrowing per §2 axiom 3; `Optional.none()` from
  * DEC-038.1 clause (5) is spec-side drift logged as DW-067.
  */
-import type { UniverseMembershipStatus } from '../../../../../../supabase/functions/_shared/longshort-broker-interfaces.ts';
+import type { UniverseMembershipStatus } from '../../longshort-broker-interfaces.ts';
 
 /** Re-export for consumer convenience. */
 export type { UniverseMembershipStatus };

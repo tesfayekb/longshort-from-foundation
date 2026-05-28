@@ -15,7 +15,7 @@
  * (returns null); `applies_to: 'both'` per §3.3b book-symmetric semantics.
  */
 import type { EnrichedConstituent } from '../enrichment/types.ts';
-import type { MAAction } from '../../../../../../supabase/functions/_shared/longshort-hard-exclusion-interfaces.ts';
+import type { MAAction } from '../../longshort-hard-exclusion-interfaces.ts';
 import {
   MA_LARGE_ACQUIRER_RATIO_THRESHOLD,
   type HardExclusionFiring,

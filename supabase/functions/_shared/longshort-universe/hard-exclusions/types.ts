@@ -16,7 +16,7 @@ import type {
   HaltEvent,
   MAAction,
   ShortInterestRecord,
-} from '../../../../../../supabase/functions/_shared/longshort-hard-exclusion-interfaces.ts';
+} from '../../longshort-hard-exclusion-interfaces.ts';
 
 /** Which book(s) a firing applies to. §3.3d + §3.3e are short-book-only; others are both. */
 export type BookSide = 'long' | 'short' | 'both';

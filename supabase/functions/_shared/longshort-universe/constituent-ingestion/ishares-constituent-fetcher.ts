@@ -41,7 +41,7 @@ import {
   type HttpFetch,
   type IndexId,
   type UniverseConstituent,
-} from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+} from '../../longshort-universe-interfaces.ts';
 import { fetchWithTimeoutAndRetry } from '../shared/fetch-with-timeout.ts';
 
 /** iShares CSVs are public but the holdings download is heavier than a JSON

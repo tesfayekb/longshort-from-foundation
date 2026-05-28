@@ -25,7 +25,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   UniverseMembershipFetcher,
   UniverseMembershipStatus,
-} from '../../../../../../supabase/functions/_shared/longshort-broker-interfaces.ts';
+} from '../../longshort-broker-interfaces.ts';
 import type { UniverseEligibilityRow, HardExclusionRow } from './types.ts';
 
 /**

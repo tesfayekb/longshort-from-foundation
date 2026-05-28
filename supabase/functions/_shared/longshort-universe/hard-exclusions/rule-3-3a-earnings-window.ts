@@ -32,7 +32,7 @@ import type { EnrichedConstituent } from '../enrichment/types.ts';
 import type {
   EarningsCalendarSnapshot,
   ScheduledEarnings,
-} from '../../../../../../supabase/functions/_shared/longshort-hard-exclusion-interfaces.ts';
+} from '../../longshort-hard-exclusion-interfaces.ts';
 import {
   EARNINGS_WINDOW_TRADING_DAYS,
   type HardExclusionFiring,

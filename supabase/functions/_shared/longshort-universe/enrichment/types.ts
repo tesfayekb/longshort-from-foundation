@@ -13,7 +13,7 @@
  * Classification: financial-critical (enrichment provides §3.2 filter inputs;
  * AC-06 path).
  */
-import type { UniverseConstituent } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import type { UniverseConstituent } from '../../longshort-universe-interfaces.ts';
 
 /**
  * Constituent enriched with §3.2 filter-input fields.

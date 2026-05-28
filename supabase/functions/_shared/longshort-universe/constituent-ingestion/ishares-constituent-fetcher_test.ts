@@ -6,7 +6,7 @@ import {
   parseCsvLine,
   parseISharesCsv,
 } from './ishares-constituent-fetcher.ts';
-import { ConstituentFetchError } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import { ConstituentFetchError } from '../../longshort-universe-interfaces.ts';
 
 const AS_OF = new Date('2026-05-25T14:30:00Z');
 
