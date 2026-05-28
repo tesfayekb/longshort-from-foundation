@@ -117,6 +117,19 @@ Deno.serve(createHandler(async (req: Request) => {
     hasPolygon: !!Deno.env.get('POLYGON_API_KEY'),
   });
 
+  // [DIAG] one-shot CRON_SECRET reconciliation — remove after FP-014.
+  const _cs = Deno.env.get('CRON_SECRET') ?? '';
+  const _provided = req.headers.get('X-Cron-Secret') ?? req.headers.get('x-cron-secret') ?? '';
+  console.log('[DIAG] cron-secret', {
+    correlationId,
+    env_value: _cs,
+    env_len: _cs.length,
+    provided_value: _provided,
+    provided_len: _provided.length,
+    match: _cs === _provided,
+    header_names: [...req.headers.keys()],
+  });
+
   // Cron-only system path — JWT auth would fail from pg_cron. Operator-
   // triggered manual refresh paths should be a separate edge function that
   // proxies into this dispatcher with the cron secret.
