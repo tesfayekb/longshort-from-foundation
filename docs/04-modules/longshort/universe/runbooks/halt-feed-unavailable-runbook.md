@@ -16,9 +16,9 @@ Confirm the deferred-placeholder state:
 
 ```bash
 # Rule body wired but inert
-rg -n 'HaltEvent|halt_history' src/features/longshort/services/universe/hard-exclusions/rule-3-3c-halts.ts
+rg -n 'HaltEvent|halt_history' supabase/functions/_shared/longshort-universe/hard-exclusions/rule-3-3c-halts.ts
 # Refresh-jobs supply empty array at v1
-rg -n '3.3c|halt_history' src/features/longshort/services/universe/refresh-jobs/
+rg -n '3.3c|halt_history' supabase/functions/_shared/longshort-universe/refresh-jobs/
 ```
 
 ```sql
@@ -61,4 +61,4 @@ Escalation contact: TBD per operator on-call rotation; placeholder pending opera
 - ACT-107 sub-step 8.3 rule-3.3c landing as deferred placeholder — `docs/06-tracking/action-tracker.md`
 - CROSSWIND §3.3c (halts hard-exclusion rule) — `docs/04-modules/longshort/design-source/`
 - `docs/04-modules/longshort/universe/universe.md` — Failure Modes section "§3.3c halt-feed unavailability (v1)" entry
-- `src/features/longshort/services/universe/hard-exclusions/rule-3-3c-halts.ts` — rule wiring
+- `supabase/functions/_shared/longshort-universe/hard-exclusions/rule-3-3c-halts.ts` — rule wiring
