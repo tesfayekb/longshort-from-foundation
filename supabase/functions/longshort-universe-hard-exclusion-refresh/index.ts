@@ -156,4 +156,4 @@ export default createHandler(async (req: Request) => {
     });
     return apiError(500, 'hard_exclusion_refresh_failed', { correlationId });
   }
-});
+}));

@@ -292,4 +292,4 @@ Deno.serve(createHandler(async (req: Request) => {
     });
     return apiError(500, 'quarterly_refresh_failed', { correlationId });
   }
-});
+}));
