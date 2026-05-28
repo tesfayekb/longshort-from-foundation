@@ -105,7 +105,7 @@ function makeSupabasePersister(): RefreshLogPersister {
   };
 }
 
-export default createHandler(async (req: Request) => {
+Deno.serve(createHandler(async (req: Request) => {
   const clock = productionClock;
   const as_of = clock.now();
   const correlationId = crypto.randomUUID();
