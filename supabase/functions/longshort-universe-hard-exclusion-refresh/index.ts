@@ -95,7 +95,7 @@ Deno.serve(createHandler(async (req: Request) => {
   const cronAuthError = verifyCronSecret(req);
   if (cronAuthError) return cronAuthError;
 
-  const as_of = productionClock.now();
+  const as_of = productionClock.getWallClockTs();
 
   // ── Surface 0 Option α: stub-input fallback when tickers absent/empty ──
   const tickers = parseTickers(body);

@@ -106,8 +106,7 @@ function makeSupabasePersister(): RefreshLogPersister {
 }
 
 Deno.serve(createHandler(async (req: Request) => {
-  const clock = productionClock;
-  const as_of = clock.now();
+  const as_of = productionClock.getWallClockTs();
   const correlationId = crypto.randomUUID();
 
   console.log('[PHASE] handler-entry', { correlationId });
