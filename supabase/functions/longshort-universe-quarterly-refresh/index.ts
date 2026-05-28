@@ -110,22 +110,42 @@ export default createHandler(async (req: Request) => {
   const as_of = clock.now();
   const correlationId = crypto.randomUUID();
 
+  console.log('[PHASE] handler-entry', { correlationId });
+  console.log('[PHASE] env-check', {
+    correlationId,
+    hasUrl: !!Deno.env.get('SUPABASE_URL'),
+    hasServiceKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+    hasPolygon: !!Deno.env.get('POLYGON_API_KEY'),
+  });
+
   // Cron-only system path — JWT auth would fail from pg_cron. Operator-
   // triggered manual refresh paths should be a separate edge function that
   // proxies into this dispatcher with the cron secret.
   const cronAuthError = verifyCronSecret(req);
   if (cronAuthError) return cronAuthError;
 
+  console.log('[PHASE] gating-decision', {
+    correlationId,
+    as_of: as_of.toISOString(),
+    isFirstTradingDay: isFirstTradingDayOfQuarter(as_of),
+  });
+
   // Bootstrap-aware gating: on a non-quarter-start day, only skip if
   // universe_refresh_log already has a completed row. First-ever run must
   // fire regardless of calendar to populate the dashboard.
   if (!isFirstTradingDayOfQuarter(as_of)) {
+    console.log('[PHASE] before-bootstrap-select', { correlationId });
     const { data: existingCompleted, error: existingCheckError } = await supabaseAdmin
       .from('universe_refresh_log')
       .select('refresh_id')
       .eq('outcome', 'completed')
       .limit(1)
       .maybeSingle();
+    console.log('[PHASE] after-bootstrap-select', {
+      correlationId,
+      hasError: !!existingCheckError,
+      foundRow: existingCompleted !== null,
+    });
 
     if (existingCheckError) {
       return apiError(500, 'universe_refresh_log_read_failed', {
@@ -148,6 +168,7 @@ export default createHandler(async (req: Request) => {
     }
 
     // Bootstrap case: universe_refresh_log has no completed row yet.
+    console.log('[PHASE] before-bootstrap-audit', { correlationId });
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
       action: 'longshort.universe.refresh.bootstrap',
@@ -158,6 +179,7 @@ export default createHandler(async (req: Request) => {
         note: 'Bootstrap run — quarter-start gating bypassed because universe_refresh_log has no completed row',
       },
     });
+    console.log('[PHASE] after-bootstrap-audit', { correlationId });
   }
 
   const polygonApiKey = Deno.env.get('POLYGON_API_KEY');
@@ -165,6 +187,7 @@ export default createHandler(async (req: Request) => {
     return apiError(500, 'polygon_api_key_unset', { correlationId });
   }
 
+  console.log('[PHASE] before-orchestrator-construct', { correlationId });
   const ctx: RefreshExecutionContext = {
     polygonConstituents: new PolygonConstituentFetcher({ apiKey: polygonApiKey }),
     iSharesConstituents: new iSharesConstituentFetcher(),
@@ -219,7 +242,12 @@ export default createHandler(async (req: Request) => {
 
   try {
     const orch = createQuarterlyRefreshOrchestrator(ctx, DEFAULT_OPERATOR_ID);
+    console.log('[PHASE] before-orchestrator-run', { correlationId });
     const result = await orch.run(as_of);
+    console.log('[PHASE] after-orchestrator-run', {
+      correlationId,
+      outcome: result.outcome,
+    });
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
       action:
@@ -239,6 +267,7 @@ export default createHandler(async (req: Request) => {
         failure_reason: result.failure_reason,
       },
     });
+    console.log('[PHASE] before-final-response', { correlationId });
     return apiSuccess({
       refresh_id: result.refresh_id,
       as_of_date: result.as_of_date,
