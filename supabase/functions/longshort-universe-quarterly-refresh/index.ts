@@ -19,20 +19,20 @@ import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
-import { isFirstTradingDayOfQuarter } from '../../../src/features/longshort/services/universe/shared/trading-days.ts';
-import { createQuarterlyRefreshOrchestrator } from '../../../src/features/longshort/services/universe/refresh-jobs/quarterly-refresh-orchestrator.ts';
+import { isFirstTradingDayOfQuarter } from '../_shared/longshort-universe/shared/trading-days.ts';
+import { createQuarterlyRefreshOrchestrator } from '../_shared/longshort-universe/refresh-jobs/quarterly-refresh-orchestrator.ts';
 import type {
   RefreshExecutionContext,
   RefreshLogPersister,
-} from '../../../src/features/longshort/services/universe/refresh-jobs/types.ts';
-import { PolygonConstituentFetcher } from '../../../src/features/longshort/services/universe/constituent-ingestion/polygon-constituent-fetcher.ts';
-import { iSharesConstituentFetcher } from '../../../src/features/longshort/services/universe/constituent-ingestion/ishares-constituent-fetcher.ts';
-import { PolygonEnrichmentFetcher } from '../../../src/features/longshort/services/universe/enrichment/polygon-enrichment-fetcher.ts';
-import { makeUniverseMembershipPersister } from '../../../src/features/longshort/services/universe/refresh-jobs/universe-membership-persister.ts';
-import { makeHardExclusionsPersister } from '../../../src/features/longshort/services/universe/refresh-jobs/hard-exclusions-persister.ts';
-import { buildUniverseCrossCheckSpec } from '../../../src/features/longshort/services/universe/constituent-ingestion/cross-check-spec.ts';
+} from '../_shared/longshort-universe/refresh-jobs/types.ts';
+import { PolygonConstituentFetcher } from '../_shared/longshort-universe/constituent-ingestion/polygon-constituent-fetcher.ts';
+import { iSharesConstituentFetcher } from '../_shared/longshort-universe/constituent-ingestion/ishares-constituent-fetcher.ts';
+import { PolygonEnrichmentFetcher } from '../_shared/longshort-universe/enrichment/polygon-enrichment-fetcher.ts';
+import { makeUniverseMembershipPersister } from '../_shared/longshort-universe/refresh-jobs/universe-membership-persister.ts';
+import { makeHardExclusionsPersister } from '../_shared/longshort-universe/refresh-jobs/hard-exclusions-persister.ts';
+import { buildUniverseCrossCheckSpec } from '../_shared/longshort-universe/constituent-ingestion/cross-check-spec.ts';
 import { reconcile } from '../_shared/longshort-reconciliation-lifecycle.ts';
-import { makeMetricsEmitter } from '../../../src/features/longshort/services/universe/health-monitoring/metrics-emitter.ts';
+import { makeMetricsEmitter } from '../_shared/longshort-universe/health-monitoring/metrics-emitter.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 

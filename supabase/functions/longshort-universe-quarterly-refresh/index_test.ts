@@ -31,7 +31,7 @@ import {
   isFirstTradingDayOfQuarter,
   firstTradingDayOfQuarter,
   nextQuarterRefreshDate,
-} from "../../../src/features/longshort/services/universe/shared/trading-days.ts";
+} from "../_shared/longshort-universe/shared/trading-days.ts";
 
 /**
  * ACT-108 regression sentinels — sub-step 8.4 / `longshort-universe-quarterly-refresh`.

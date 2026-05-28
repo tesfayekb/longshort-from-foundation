@@ -1833,7 +1833,7 @@ Option i typed-absence per §2 axiom 3), and the two refresh-job persisters
 | **Module** | longshort (sub-step 8.7) |
 | **Classification** | financial-critical (per-symbol fetcher tier consumed by `verify_universe_membership` per §11.0.7 #10) |
 | **Signature** | `createUniverseMembershipFetcher(deps: {supabaseAdmin, operator_id}): UniverseMembershipFetcher` |
-| **File** | `src/features/longshort/services/universe/verify-membership/universe-membership-fetcher.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/verify-membership/universe-membership-fetcher.ts` |
 | **Tests** | `universe-membership-fetcher.test.ts` — 4 vitest cases (row present, exclusions present, absence, DB error) |
 | **Consumes tables** | `universe_membership` (MIG-050), `hard_exclusions` (MIG-051) |
 | **Cross-tree consumers** | Imported by `supabase/functions/longshort-reconciliation-tick/index.ts` (replaces former `MOCK_UNIVERSE_FETCHER`) via the FP-006 cross-tree import precedent |
@@ -1847,7 +1847,7 @@ Option i typed-absence per §2 axiom 3), and the two refresh-job persisters
 | **Module** | longshort (sub-step 8.7) |
 | **Classification** | financial-critical (BULK-tier chokepoint; consumed by trade-decision pre-checks at later phases) |
 | **Signature** | `createUniverseService(deps: {supabaseAdmin}): { getEligibleUniverse(as_of: Date, operator_id: string): Promise<EligibleUniverse \| null> }` |
-| **File** | `src/features/longshort/services/universe/verify-membership/universe-service.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/verify-membership/universe-service.ts` |
 | **Tests** | `universe-service.test.ts` — 6 vitest cases (feature-flag disabled via absent row + via enabled=false; partitioning of long/short rows; empty-rows enabled state; DB error paths × 2) |
 | **Feature-flag gate** | `feature_flags.universe.enabled` per operator (MIG-052) — disabled returns `null` (typed-absence per §2 axiom 3 / Surface 3 Option i) |
 | **Forward-binding notes** | DW-067 logged for DEC-038.1 clause (5) spec-vs-repo terminology drift (`Optional.none()` vs null-with-narrowing) |
@@ -1860,7 +1860,7 @@ Option i typed-absence per §2 axiom 3), and the two refresh-job persisters
 | **Module** | longshort (sub-step 8.7) |
 | **Classification** | financial-critical (Surface 5 Option q two-phase persistence) |
 | **Signature** | `makeUniverseMembershipPersister(supabaseAdmin): { persist(input: UniverseMembershipPersisterInput): Promise<void> }` |
-| **File** | `src/features/longshort/services/universe/refresh-jobs/universe-membership-persister.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/refresh-jobs/universe-membership-persister.ts` |
 | **Persists to** | `universe_membership` (MIG-050) via bulk INSERT; honors CHECK (long_eligible OR short_eligible) by filtering neither-state rows out at the persister boundary |
 | **Cross-tree consumers** | Wired into `supabase/functions/longshort-universe-quarterly-refresh/index.ts` via `RefreshExecutionContext.universeMembershipPersister` |
 | **Added by** | FP-008 sub-step 8.7, ACT-113 |
@@ -1872,7 +1872,7 @@ Option i typed-absence per §2 axiom 3), and the two refresh-job persisters
 | **Module** | longshort (sub-step 8.7) |
 | **Classification** | financial-critical (Surface 4 Option b shared persister + Option c array-union via caller-side per-ticker grouping) |
 | **Signature** | `makeHardExclusionsPersister(supabaseAdmin): { persist(input: HardExclusionsPersisterInput): Promise<void> }` |
-| **File** | `src/features/longshort/services/universe/refresh-jobs/hard-exclusions-persister.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/refresh-jobs/hard-exclusions-persister.ts` |
 | **Persists to** | `hard_exclusions` (MIG-051) via UPSERT on `(operator_id, ticker, as_of_date)`; `refresh_id` populated for quarterly firings, NULL for continuous-refresh firings per MIG-051 design |
 | **Cross-tree consumers** | Wired into `supabase/functions/longshort-universe-quarterly-refresh/index.ts`; `HardExclusionRefreshContext.hardExclusionsPersister` slot reserved for continuous-refresh wiring at later sub-steps |
 | **Added by** | FP-008 sub-step 8.7, ACT-113 |
@@ -1892,11 +1892,11 @@ set-theoretic utility (Surface 2 Option γ classification primitive).
 | **Module** | longshort (sub-step 8.8) |
 | **Classification** | financial-critical (first universe-component contribution to `reconciliation_events` table via `reconcile()`; structural verification surface for constituent-ingestion correctness per §11.0.5 / A4) |
 | **Signature** | `buildUniverseCrossCheckSpec(args: { operator_id: string; polygon_tickers: readonly string[]; ishares_tickers: readonly string[]; as_of: Date }): ReconcileCallSpec` |
-| **File** | `src/features/longshort/services/universe/constituent-ingestion/cross-check-spec.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/constituent-ingestion/cross-check-spec.ts` |
 | **Tests** | `cross-check-spec.test.ts` — vitest cases covering jaccard math + safety floor (sym-diff ≤ 3 → `false_positive_within_tolerance`) + safety ceiling (sym-diff > 100 OR empty observed/expected → `system_bug`) + middle-band outcome classification |
 | **call_name** | `'universe_cross_check'` (Surface 4 Option a — `VerifyCallName` union widened to host this non-`verify_*` literal; DW-069 logged for rename to `ReconcileCallName`) |
 | **Surface 2 Option γ thresholds** | `SURFACE_2_THRESHOLDS = { FALSE_POSITIVE_SYM_DIFF_FLOOR: 3, SYSTEM_BUG_SYM_DIFF_CEILING: 100 }` — DW-068 logged for post-flag-flip calibration |
-| **Cross-tree consumers** | Imported by `src/features/longshort/services/universe/refresh-jobs/quarterly-refresh-orchestrator.ts` Step 2b; production `reconcile()` wiring at `supabase/functions/longshort-universe-quarterly-refresh/index.ts` (AC-18 — orchestrator does NOT write to `reconciliation_events` directly) |
+| **Cross-tree consumers** | Imported by `supabase/functions/_shared/longshort-universe/refresh-jobs/quarterly-refresh-orchestrator.ts` Step 2b; production `reconcile()` wiring at `supabase/functions/longshort-universe-quarterly-refresh/index.ts` (AC-18 — orchestrator does NOT write to `reconciliation_events` directly) |
 | **Abort contract** | Quarterly orchestrator Step 2b throws on `failure_escalated` OR `system_bug` outcomes BEFORE downstream `universeMembershipPersister` + `hardExclusionsPersister` invocation per Surface 5 Option q + DEC-038 clause (3) prior-quarter intactness |
 | **Added by** | FP-008 sub-step 8.8, ACT-114 |
 
@@ -1907,7 +1907,7 @@ set-theoretic utility (Surface 2 Option γ classification primitive).
 | **Module** | longshort (sub-step 8.8) |
 | **Classification** | utility (set-theoretic primitive consumed by `buildUniverseCrossCheckSpec`; pure function; deterministic; no side effects) |
 | **Signature** | `jaccardSimilarity<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): number` |
-| **File** | `src/features/longshort/services/universe/constituent-ingestion/cross-check-spec.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/constituent-ingestion/cross-check-spec.ts` |
 | **Semantics** | Returns `|a ∩ b| / |a ∪ b|`; returns `0` for two empty sets (caller — `buildUniverseCrossCheckSpec` — handles empty-set safety ceiling as `system_bug` BEFORE invoking this primitive, so the empty-set fallback here is defensively-typed not silently-defaulted per anti-phantom discipline) |
 | **Tests** | Covered by `cross-check-spec.test.ts` (math correctness + symmetric behavior + empty-set boundary) |
 | **Cross-tree consumers** | Internal to `cross-check-spec.ts`; no external imports |
@@ -1929,10 +1929,10 @@ S5 A / S6 m).
 | **Module** | longshort (sub-step 8.9) |
 | **Classification** | financial-critical adjacent (dashboard-queryable storage emission gates Phase 1 exit per DEC-038 clause (7); missing emission is §22.5 DRIFT-class defect). Not on money path — observability only; emitter errors logged but do NOT fail refresh per quarterly orchestrator Step 7 wrapping. |
 | **Signature** | `makeMetricsEmitter(deps: { supabaseAdmin: SupabaseClient }): MetricsEmitter` |
-| **File** | `src/features/longshort/services/universe/health-monitoring/metrics-emitter.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/health-monitoring/metrics-emitter.ts` |
 | **Tests** | `metrics-emitter.test.ts` — vitest cases covering empty-array → empty-object (no zero-filled bucket sentinel per §11.8); single-reason → single-key; multi-reason aggregation; supabase UPDATE error propagation; idempotent re-emission keyed by `refresh_id`. |
 | **Surface bindings** | S1 γ (extend `universe_refresh_log` via MIG-053; no new `universe_health_metrics` table); S5 A (single-file emitter under `health-monitoring/`); S6 m (quarterly-only — continuous-refresh orchestrator UNTOUCHED per DW-071). |
-| **Cross-tree consumers** | Wired in `supabase/functions/longshort-universe-quarterly-refresh/index.ts` (production); invoked by `src/features/longshort/services/universe/refresh-jobs/quarterly-refresh-orchestrator.ts` Step 7 (post-finalize, `outcome='completed'` gate only). |
+| **Cross-tree consumers** | Wired in `supabase/functions/longshort-universe-quarterly-refresh/index.ts` (production); invoked by `supabase/functions/_shared/longshort-universe/refresh-jobs/quarterly-refresh-orchestrator.ts` Step 7 (post-finalize, `outcome='completed'` gate only). |
 | **Added by** | FP-008 sub-step 8.9, ACT-115 |
 
 ##### `emitRefreshMetrics`
@@ -1942,7 +1942,7 @@ S5 A / S6 m).
 | **Module** | longshort (sub-step 8.9) |
 | **Classification** | financial-critical adjacent (point-in-time snapshot semantic per Surface 3 Option ii; refresh-time aggregate of per-§3.2-filter rejection counts + per-§3.3-rule hard-exclusion counts written to `universe_refresh_log` jsonb columns landed by MIG-053). |
 | **Signature** | `emitRefreshMetrics(input: { refresh_id: string; filter_rejection_reasons: ReadonlyArray<FilterRejectionReason>; hard_exclusion_reasons: ReadonlyArray<HardExclusionReason> }): Promise<void>` |
-| **File** | `src/features/longshort/services/universe/health-monitoring/metrics-emitter.ts` (method of `MetricsEmitter` returned by `makeMetricsEmitter`) |
+| **File** | `supabase/functions/_shared/longshort-universe/health-monitoring/metrics-emitter.ts` (method of `MetricsEmitter` returned by `makeMetricsEmitter`) |
 | **Semantics** | Counts per-reason via `groupByReason` helper; UPDATE `public.universe_refresh_log` SET `filter_rejection_counts` + `hard_exclusion_counts` WHERE `refresh_id = input.refresh_id`. Empty arrays produce empty `{}` jsonb (NOT zero-filled bucket objects — preserves §11.8 sentinel-fallback ban). Idempotent: re-emission with same `refresh_id` overwrites with identical computed value. |
 | **Cross-check coverage** | Surface 4 Option x: cross-check divergence counts NOT emitted here; consumers read `reconciliation_events_daily_agg` view (MIG-047) WHERE `call_name = 'universe_cross_check'`. Canonical dashboard SQL block in `docs/04-modules/longshort/longshort.md`. |
 | **Failure behavior** | Throws on supabase UPDATE error; quarterly orchestrator Step 7 catches + logs + swallows (observability, not correctness). |
@@ -2146,30 +2146,30 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Purpose** | Inventory + CI integration + banned-pattern self-discipline reference for `scripts/` |
 | **Added by** | FP-006 sub-step 6.4, ACT-082 |
 
-#### `src/features/longshort/services/universe/polygon-constituent-fetcher.ts`
+#### `supabase/functions/_shared/longshort-universe/polygon-constituent-fetcher.ts`
 
 | Field | Value |
 |---|---|
 | **Module** | longshort (FP-008 sub-step 8.1) |
 | **Classification** | financial-critical (universe ingestion is upstream of every strategy decision; per DEC-038 clause (1) source-of-truth contract; AC-04) |
 | **Exports** | `class PolygonConstituentFetcher implements ConstituentFetcher` |
-| **File** | `src/features/longshort/services/universe/polygon-constituent-fetcher.ts` |
-| **Tests** | `src/features/longshort/services/universe/polygon-constituent-fetcher_test.ts` — 6 Deno unit tests |
+| **File** | `supabase/functions/_shared/longshort-universe/polygon-constituent-fetcher.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-universe/polygon-constituent-fetcher_test.ts` — 6 Deno unit tests |
 | **Secret** | `POLYGON_API_KEY` (see env-var-index.md) |
 | **API endpoint** | Polygon reference data API (constituent lists for S&P 500 + S&P 400 per CROSSWIND §3.1) |
 | **Typed-absence idiom** | `Promise<UniverseConstituent[] \| null>` per §2 axiom 3 (`null` = source explicitly reports no data; network/auth/parse failures throw) |
 | **Banned-pattern compliance** | Zero `Date.now()` outside sanctioned `as_of` parameter chokepoint; zero sentinel fallbacks per DEC-034 clause (2); zero `logAuditEvent` imports per DEC-033 v4.1 |
 | **Added by** | FP-008 sub-step 8.1, ACT-104 |
 
-#### `src/features/longshort/services/universe/ishares-constituent-fetcher.ts`
+#### `supabase/functions/_shared/longshort-universe/ishares-constituent-fetcher.ts`
 
 | Field | Value |
 |---|---|
 | **Module** | longshort (FP-008 sub-step 8.1) |
 | **Classification** | financial-critical (secondary cross-check source per DEC-038 clause (2) + AC-05 Option B) |
 | **Exports** | `class iSharesConstituentFetcher implements ConstituentFetcher` |
-| **File** | `src/features/longshort/services/universe/ishares-constituent-fetcher.ts` |
-| **Tests** | `src/features/longshort/services/universe/ishares-constituent-fetcher_test.ts` — 8 Deno unit tests |
+| **File** | `supabase/functions/_shared/longshort-universe/ishares-constituent-fetcher.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-universe/ishares-constituent-fetcher_test.ts` — 8 Deno unit tests |
 | **Secret** | None (public CSV; no auth required) |
 | **Source URLs** | iShares Core S&P 500 ETF (IVV) + iShares Core S&P Mid-Cap ETF (IJH) holdings CSVs from blackrock.com per Option B selection at sub-step 8.1 (operator-confirmed; T+1 lag acceptable per quarterly atomic refresh cadence) |
 | **Caveats** | (1) iShares holdings include cash/derivatives rows that must be filtered out (ticker-prefix + asset-class column). (2) ETF holdings ≠ index membership exactly (sampling/optimization for IJH especially); tolerance threshold for ~0.5% sampling drift is set explicitly at sub-step 8.8 cross-check per DEC-038 clause (2) tolerance class assignment. |
@@ -2185,19 +2185,19 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Classification** | shared-contract layer (mirrors `longshort-broker-interfaces.ts` precedent from FP-006 sub-step 6.3a; will be consumed by `verify_universe_membership` at sub-step 8.7 per DEC-038.1 clause (3)) |
 | **Exports** | `type IndexId = 'sp500' \| 'sp400'`; `const ISHARES_ETF_FOR_INDEX: Readonly<Record<IndexId, 'IVV' \| 'IJH'>>`; `interface UniverseConstituent`; `interface ConstituentFetcher`; `type HttpFetch`; `class ConstituentFetchError` |
 | **File** | `supabase/functions/_shared/longshort-universe-interfaces.ts` |
-| **Tests** | (Interfaces only; tested indirectly via concrete-fetcher tests in `src/features/longshort/services/universe/`) |
-| **Cross-tree consumers** | Imported by `src/features/longshort/services/universe/polygon-constituent-fetcher.ts` + `src/features/longshort/services/universe/ishares-constituent-fetcher.ts` via the FP-006 cross-tree import precedent. Will be imported by `supabase/functions/_shared/longshort-verifiers/verify_universe_membership.ts` at sub-step 8.7 per DEC-038.1 clause (3) (native edge-function path). |
+| **Tests** | (Interfaces only; tested indirectly via concrete-fetcher tests in `supabase/functions/_shared/longshort-universe/`) |
+| **Cross-tree consumers** | Imported by `supabase/functions/_shared/longshort-universe/polygon-constituent-fetcher.ts` + `supabase/functions/_shared/longshort-universe/ishares-constituent-fetcher.ts` via the FP-006 cross-tree import precedent. Will be imported by `supabase/functions/_shared/longshort-verifiers/verify_universe_membership.ts` at sub-step 8.7 per DEC-038.1 clause (3) (native edge-function path). |
 | **Added by** | FP-008 sub-step 8.1, ACT-104 |
 
-#### `src/features/longshort/services/universe/enrichment/polygon-enrichment-fetcher.ts`
+#### `supabase/functions/_shared/longshort-universe/enrichment/polygon-enrichment-fetcher.ts`
 
 | Field | Value |
 |---|---|
 | **Module** | longshort (FP-008 sub-step 8.2) |
 | **Classification** | financial-critical (enrichment provides §3.2 filter-input data; per DEC-038.1 clause (1) folder-pattern accommodation; AC-06 path) |
 | **Exports** | `class PolygonEnrichmentFetcher implements UniverseEnrichmentFetcher` |
-| **File** | `src/features/longshort/services/universe/enrichment/polygon-enrichment-fetcher.ts` |
-| **Tests** | `src/features/longshort/services/universe/enrichment/polygon-enrichment-fetcher_test.ts` — 10 Deno unit tests |
+| **File** | `supabase/functions/_shared/longshort-universe/enrichment/polygon-enrichment-fetcher.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-universe/enrichment/polygon-enrichment-fetcher_test.ts` — 10 Deno unit tests |
 | **Secret** | `POLYGON_API_KEY` (registered at ACT-105 / env-var-index.md) |
 | **API endpoints** | Polygon ticker-details (`/v3/reference/tickers/{ticker}`) + daily aggregates (`/v2/aggs/ticker/{ticker}/range/1/day/{from}/{to}`) |
 | **Typed-absence idiom** | `null` for missing market_cap / listing_date / share_price / avg_daily_dollar_volume per §2 axiom 3 + DEC-038 clause (6); throws `ConstituentFetchError` on network/auth/parse failure |
@@ -2205,28 +2205,28 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Banned-pattern compliance** | Zero `Date.now()` outside sanctioned `as_of` parameter chokepoint; zero sentinel fallbacks per DEC-034 clause (2); zero `logAuditEvent` imports per DEC-033 v4.1 |
 | **Added by** | FP-008 sub-step 8.2, ACT-106 |
 
-#### `src/features/longshort/services/universe/filters/apply-filters.ts`
+#### `supabase/functions/_shared/longshort-universe/filters/apply-filters.ts`
 
 | Field | Value |
 |---|---|
 | **Module** | longshort (FP-008 sub-step 8.2) |
 | **Classification** | financial-critical (§3.2 LOCKED thresholds bind eligible universe; AC-06 anchor) |
 | **Exports** | `function applyFilters(constituents: EnrichedConstituent[], as_of: Date): FilterResult` |
-| **File** | `src/features/longshort/services/universe/filters/apply-filters.ts` |
-| **Tests** | `src/features/longshort/services/universe/filters/apply-filters_test.ts` — 11 Deno unit tests covering all 6 filter rules + edge cases + ~900→~750-820 pass-rate fixture |
+| **File** | `supabase/functions/_shared/longshort-universe/filters/apply-filters.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-universe/filters/apply-filters_test.ts` — 11 Deno unit tests covering all 6 filter rules + edge cases + ~900→~750-820 pass-rate fixture |
 | **§3.2 thresholds** | LOCKED constants in `filters/types.ts`: `MIN_AVG_DAILY_DOLLAR_VOLUME=$20M` / `MIN_SHARE_PRICE=$5` / `MIN_MARKET_CAP=$1B` / `MIN_LISTING_AGE_DAYS=365` / `is_adr` exclusion / `is_reit` exclusion |
 | **Output** | `FilterResult { eligible, rejected }` with per-rejection-reason breakdown; `rejected[]` consumed by §11.3 health monitoring at sub-step 8.9 |
 | **Minimum coupling** | Stateless pure function — no clock injection (`as_of` is a parameter), no `reconcile()` call, no DB writes, no `_shared/` reconciliation-lifecycle touches |
 | **Added by** | FP-008 sub-step 8.2, ACT-106 |
 
-#### `src/features/longshort/services/universe/enrichment/types.ts` + `src/features/longshort/services/universe/filters/types.ts`
+#### `supabase/functions/_shared/longshort-universe/enrichment/types.ts` + `supabase/functions/_shared/longshort-universe/filters/types.ts`
 
 | Field | Value |
 |---|---|
 | **Module** | longshort (FP-008 sub-step 8.2) |
 | **Classification** | shared types — universe enrichment + filter contracts |
 | **Exports** | `enrichment/types.ts`: `interface EnrichedConstituent extends UniverseConstituent`, `interface UniverseEnrichmentFetcher`. `filters/types.ts`: `const FILTER_THRESHOLDS`, `type FilterRejectionReason`, `interface FilterResult` |
-| **Files** | `src/features/longshort/services/universe/enrichment/types.ts`, `src/features/longshort/services/universe/filters/types.ts` |
+| **Files** | `supabase/functions/_shared/longshort-universe/enrichment/types.ts`, `supabase/functions/_shared/longshort-universe/filters/types.ts` |
 | **Tests** | Type-only; exercised indirectly via `polygon-enrichment-fetcher_test.ts` + `apply-filters_test.ts` |
 | **Added by** | FP-008 sub-step 8.2, ACT-106 |
 
@@ -2235,7 +2235,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | Field | Value |
 |-------|-------|
 | **Signature** | `(ReadonlyArray<EnrichedConstituent>, ExclusionInputData, Date) => HardExclusionResult` |
-| **File** | `src/features/longshort/services/universe/hard-exclusions/apply-hard-exclusions.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/hard-exclusions/apply-hard-exclusions.ts` |
 | **Tests** | `apply-hard-exclusions_test.ts` (6 cases) |
 | **Added by** | FP-008 sub-step 8.3, ACT-107 |
 | **Notes** | Stateless; per-book eligibility (`long_eligible` / `short_eligible`); invokes 5 active rules (§3.3a/b/c/d/e); §3.3f/g/h are explicit N/A v1 stubs not invoked. |
@@ -2262,7 +2262,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 
 | Field | Value |
 |-------|-------|
-| **File** | `src/features/longshort/services/universe/hard-exclusions/earnings-calendar-fetcher.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/hard-exclusions/earnings-calendar-fetcher.ts` |
 | **Implements** | `EarningsCalendarFetcher` (shared interface at `_shared/longshort-hard-exclusion-interfaces.ts`) |
 | **Tests** | `earnings-calendar-fetcher_test.ts` (5 cases) |
 | **Added by** | FP-008 sub-step 8.3, ACT-107 |
@@ -2272,7 +2272,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 
 | Field | Value |
 |-------|-------|
-| **File** | `src/features/longshort/services/universe/hard-exclusions/short-interest-fetcher.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/hard-exclusions/short-interest-fetcher.ts` |
 | **Implements** | `ShortInterestFetcher` |
 | **Tests** | `short-interest-fetcher_test.ts` (5 cases) |
 | **Added by** | FP-008 sub-step 8.3, ACT-107 |
@@ -2282,7 +2282,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 
 | Field | Value |
 |-------|-------|
-| **Files** | `src/features/longshort/services/universe/constituent-ingestion/{polygon,ishares}-constituent-fetcher.ts` (moved from flat-folder `services/universe/`) |
+| **Files** | `supabase/functions/_shared/longshort-universe/constituent-ingestion/{polygon,ishares}-constituent-fetcher.ts` (moved from flat-folder `services/universe/`) |
 | **Changed by** | ACT-107 — `git mv` only; file contents preserved verbatim per §22.8.3; only relative import-path depth updated (5 → 6 levels up) |
 
 ### FP-008 sub-step 8.4 — Quarterly Atomic Refresh Job (ACT-108)
@@ -2293,7 +2293,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 |-------|-------|
 | **Module** | longshort (FP-008 sub-step 8.4) |
 | **Classification** | job-critical (quarterly atomic universe refresh per CROSSWIND §3.4 + DEC-038.1 clause (4); AC-08 surface) |
-| **File** | `src/features/longshort/services/universe/refresh-jobs/quarterly-refresh-orchestrator.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/refresh-jobs/quarterly-refresh-orchestrator.ts` |
 | **Tests** | `quarterly-refresh-orchestrator_test.ts` |
 | **Pipeline** | Polygon constituents → iShares cross-check (Guardrail 2) → Polygon enrichment → `applyFilters()` (§3.2) → `applyHardExclusions()` (§3.3) → `universe_refresh_log` finalize |
 | **Inputs** | `RefreshExecutionContext { polygonConstituents, iSharesConstituents, polygonEnrichment, exclusionInput, refreshLogPersister }`, `operatorId`, `as_of: Date` |
@@ -2318,7 +2318,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 |-------|-------|
 | **Module** | longshort (FP-008 sub-step 8.4) |
 | **Classification** | shared-contract layer (mirrors `longshort-universe-interfaces.ts` precedent) |
-| **File** | `src/features/longshort/services/universe/refresh-jobs/types.ts` |
+| **File** | `supabase/functions/_shared/longshort-universe/refresh-jobs/types.ts` |
 | **Consumers** | `quarterly-refresh-orchestrator.ts` + `supabase/functions/longshort-universe-quarterly-refresh/index.ts` (cross-tree native import per FP-006 precedent) |
 | **Added by** | FP-008 sub-step 8.4, ACT-108 |
 
@@ -2328,7 +2328,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 |-------|-------|
 | **Module** | longshort (FP-008 sub-step 8.4; appended to ACT-107 trading-days helper) |
 | **Classification** | utility (deterministic NYSE-holiday-aware trading-day arithmetic; consumed by edge-function gating + future hard-exclusion refresh cadences at sub-step 8.5) |
-| **File** | `src/features/longshort/services/universe/shared/trading-days.ts` (RELOCATED from `hard-exclusions/trading-days.ts` at sub-step 8.4 per Surface 3 resolution — second consumer triggers the move; `git mv` only, content preserved verbatim, import paths in `rule-3-3a-earnings-window.ts` updated to `../shared/trading-days.ts`) |
+| **File** | `supabase/functions/_shared/longshort-universe/shared/trading-days.ts` (RELOCATED from `hard-exclusions/trading-days.ts` at sub-step 8.4 per Surface 3 resolution — second consumer triggers the move; `git mv` only, content preserved verbatim, import paths in `rule-3-3a-earnings-window.ts` updated to `../shared/trading-days.ts`) |
 | **Tests** | `shared/trading-days_test.ts` |
 | **Added by** | FP-008 sub-step 8.4, ACT-108 (functions); FP-008 sub-step 8.3, ACT-107 (file origin) |
 
@@ -2340,7 +2340,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 |-------|-------|
 | **Module** | longshort (FP-008 sub-step 8.5) |
 | **Classification** | job-critical skeleton (per-rule continuous refresh per CROSSWIND §3.4 + DEC-038.1 clause (4); AC-09 surface) |
-| **File** | `src/features/longshort/services/universe/refresh-jobs/hard-exclusion-refresh-orchestrator.ts` (sibling to ACT-108 `quarterly-refresh-orchestrator.ts` per DEC-038.1 clause (1); in-cycle reconciliation at ACT-109 moved from initial nested placement under `hard-exclusions/refresh-jobs/`) |
+| **File** | `supabase/functions/_shared/longshort-universe/refresh-jobs/hard-exclusion-refresh-orchestrator.ts` (sibling to ACT-108 `quarterly-refresh-orchestrator.ts` per DEC-038.1 clause (1); in-cycle reconciliation at ACT-109 moved from initial nested placement under `hard-exclusions/refresh-jobs/`) |
 | **Tests** | `hard-exclusion-refresh-orchestrator_test.ts` |
 | **Inputs** | `HardExclusionRefreshContext { as_of: Date }`, `HardExclusionRefreshInput { rule, tickers }` |
 | **Behavior** | Stateless transformation. §3.3e cadence gate (`isShortInterestTriggerDay`) short-circuits to `outcome='skipped'` / `skipped_reason='not_short_interest_trigger_day'` on non-trigger trading days. All four rules currently lack wired per-rule data fetchers → return `outcome='skipped'` / `skipped_reason='awaiting_per_rule_fetcher_wiring'` (analogous to sub-step 8.4 empty-`exclusionInput` pattern). |
@@ -2365,7 +2365,7 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 |-------|-------|
 | **Module** | longshort (FP-008 sub-step 8.5) |
 | **Classification** | shared-contract layer (types-only module per §22.3 (c) minimum-coupling) |
-| **File** | `src/features/longshort/services/universe/refresh-jobs/types.ts` (merged into the ACT-108 sibling file; quarterly + hard-exclusion type families co-located per DEC-038.1 clause (1)) |
+| **File** | `supabase/functions/_shared/longshort-universe/refresh-jobs/types.ts` (merged into the ACT-108 sibling file; quarterly + hard-exclusion type families co-located per DEC-038.1 clause (1)) |
 | **Consumers** | `hard-exclusion-refresh-orchestrator.ts` + `supabase/functions/longshort-universe-hard-exclusion-refresh/index.ts` (cross-tree native import per FP-006 precedent) |
 | **Added by** | FP-008 sub-step 8.5, ACT-109 |
 

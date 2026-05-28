@@ -36,8 +36,8 @@
 import type {
   HttpFetch,
   UniverseConstituent,
-} from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
-import { ConstituentFetchError } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+} from '../../longshort-universe-interfaces.ts';
+import { ConstituentFetchError } from '../../longshort-universe-interfaces.ts';
 import type { EnrichedConstituent, UniverseEnrichmentFetcher } from './types.ts';
 import { fetchWithTimeoutAndRetry, DEFAULT_FETCH_TIMEOUT_MS } from '../shared/fetch-with-timeout.ts';
 

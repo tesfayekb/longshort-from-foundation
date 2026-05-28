@@ -34,8 +34,8 @@ import type {
   HttpFetch,
   IndexId,
   UniverseConstituent,
-} from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
-import { ConstituentFetchError } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+} from '../../longshort-universe-interfaces.ts';
+import { ConstituentFetchError } from '../../longshort-universe-interfaces.ts';
 import { fetchWithTimeoutAndRetry, DEFAULT_FETCH_TIMEOUT_MS } from '../shared/fetch-with-timeout.ts';
 
 /** Polygon ticker-set codes per their public reference-data taxonomy. */

@@ -21,7 +21,7 @@
  * Classification: financial-critical.
  */
 import type { EnrichedConstituent } from '../enrichment/types.ts';
-import type { ShortInterestRecord } from '../../../../../../supabase/functions/_shared/longshort-hard-exclusion-interfaces.ts';
+import type { ShortInterestRecord } from '../../longshort-hard-exclusion-interfaces.ts';
 import {
   SHORT_INTEREST_PCT_FLOAT_THRESHOLD,
   type HardExclusionFiring,

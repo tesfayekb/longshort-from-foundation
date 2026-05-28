@@ -32,7 +32,7 @@
 import type {
   ReconcileCallSpec,
   ReconciliationOutcome,
-} from '../../../../../../supabase/functions/_shared/longshort-reconciliation-types.ts';
+} from '../../longshort-reconciliation-types.ts';
 
 /**
  * Expected set — universe-component's primary source (Polygon) ticker set for the

@@ -479,7 +479,7 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Status** | `active` |
 | **Related Actions** | ACT-118 (this sub-step); ACT-107 (§3.3a rule landing); ACT-109 (continuous-refresh dispatcher); ACT-113 (`hard_exclusions` persister wiring) |
 | **Related Decisions** | DEC-038 clause (4) per-rule independence verbatim; DEC-038.1 clause (4) job-registry seeds verbatim |
-| **Notes** | 7-section canonical structure. Sourced from `PolygonEarningsCalendarFetcher` class behavior at `src/features/longshort/services/universe/hard-exclusions/earnings-calendar-fetcher.ts` including `POLYGON_API_KEY` constructor validation + silent-skip on malformed events. Per-rule independence per DEC-038 clause (4) governs cascade semantics. |
+| **Notes** | 7-section canonical structure. Sourced from `PolygonEarningsCalendarFetcher` class behavior at `supabase/functions/_shared/longshort-universe/hard-exclusions/earnings-calendar-fetcher.ts` including `POLYGON_API_KEY` constructor validation + silent-skip on malformed events. Per-rule independence per DEC-038 clause (4) governs cascade semantics. |
 
 ---
 

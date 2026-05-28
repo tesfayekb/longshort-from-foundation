@@ -27,7 +27,7 @@
  * Classification: financial-critical (deferred-placeholder pattern).
  */
 import type { EnrichedConstituent } from '../enrichment/types.ts';
-import type { HaltEvent } from '../../../../../../supabase/functions/_shared/longshort-hard-exclusion-interfaces.ts';
+import type { HaltEvent } from '../../longshort-hard-exclusion-interfaces.ts';
 import type { HardExclusionFiring } from './types.ts';
 
 export function rule3_3c_Halts(

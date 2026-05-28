@@ -7,16 +7,16 @@
  *
  * Owner: longshort (FP-008 sub-step 8.4)
  */
-import type { UniverseConstituent } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import type { UniverseConstituent } from '../../longshort-universe-interfaces.ts';
 import type { EligibleConstituent } from '../hard-exclusions/types.ts';
 import type { ExclusionInputData } from '../hard-exclusions/types.ts';
-import type { ConstituentFetcher } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import type { ConstituentFetcher } from '../../longshort-universe-interfaces.ts';
 import type { UniverseEnrichmentFetcher } from '../enrichment/types.ts';
 import type {
   UniverseMembershipPersisterInput,
   HardExclusionsPersisterInput,
 } from '../verify-membership/types.ts';
-import type { ReconciliationOutcome } from '../../../../../../supabase/functions/_shared/longshort-reconciliation-types.ts';
+import type { ReconciliationOutcome } from '../../longshort-reconciliation-types.ts';
 import type { MetricsEmitter } from '../health-monitoring/metrics-emitter.ts';
 
 /** Per CROSSWIND §3.4 LOCKED: quarterly cadence Jan/Apr/Jul/Oct.

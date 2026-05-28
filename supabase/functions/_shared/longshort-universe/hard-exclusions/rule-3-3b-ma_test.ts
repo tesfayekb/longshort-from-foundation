@@ -2,7 +2,7 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { rule3_3b_MA } from './rule-3-3b-ma.ts';
 import { ec, TEST_AS_OF } from './test-fixtures.ts';
-import type { MAAction } from '../../../../../../supabase/functions/_shared/longshort-hard-exclusion-interfaces.ts';
+import type { MAAction } from '../../longshort-hard-exclusion-interfaces.ts';
 
 Deno.test('§3.3b target full exclusion fires applies_to=both', () => {
   const ma: MAAction = {

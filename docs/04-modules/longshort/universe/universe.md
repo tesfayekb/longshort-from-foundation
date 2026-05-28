@@ -2,7 +2,7 @@
 
 > **Owner:** longshort strategy module | **Phase:** Trading-Foundation / FP-008 (PLAN-TRADING-001-LONGSHORT-003) | **Status:** sub-steps 8.0a / 8.1 / 8.2 / 8.3 / 8.4 / 8.5 / 8.6 / 8.7 / 8.8 / 8.9 / 8.10 / 8.11 / 8.12 / 8.13 LANDED — **PHASE 1 CLOSED (2026-05-26 / ACT-119)**; module status `phase-1-validated`; `universe.enabled=true` operationally per DEC-038.1 clause (5) (MIG-054); production runtime evidence deferred to Phase 7 per ADR-007 + DW-075
 
-This document is the detailed component reference for the long-short strategy's universe component. It satisfies CROSSWIND §12.4 per-component documentation and FP-008 AC-20. Content is sourced strictly from DEC-038 + DEC-038.1 verbatim clauses, ACT-103 through ACT-115 entries in `docs/06-tracking/action-tracker.md`, the longshort module overview (`docs/04-modules/longshort/longshort.md`), and the JSDoc / type signatures in `src/features/longshort/services/universe/`. Sections without sufficient documented evidence say so explicitly rather than fabricate.
+This document is the detailed component reference for the long-short strategy's universe component. It satisfies CROSSWIND §12.4 per-component documentation and FP-008 AC-20. Content is sourced strictly from DEC-038 + DEC-038.1 verbatim clauses, ACT-103 through ACT-115 entries in `docs/06-tracking/action-tracker.md`, the longshort module overview (`docs/04-modules/longshort/longshort.md`), and the JSDoc / type signatures in `supabase/functions/_shared/longshort-universe/`. Sections without sufficient documented evidence say so explicitly rather than fabricate.
 
 ## Purpose
 
@@ -62,7 +62,7 @@ Operational summary cross-cutting the clauses above:
 
 Per DEC-038.1 (Phase 1 universe-component architecture; status `active`) clauses (1)-(8) verbatim summary:
 
-1. **Module folder structure.** `src/features/longshort/services/universe/` contains 8 sub-folders enumerated by the clause: `constituent-ingestion/` (houses cross-check infrastructure per ACT-114 Surface 3 Option i), `enrichment/` (added by accommodation per ACT-106 Guardrail 1; no DEC amendment needed), `filters/`, `hard-exclusions/`, `refresh-jobs/`, `verify-membership/`, `health-monitoring/`, plus a `shared/` utility folder (added at ACT-108 when a second consumer triggered the `trading-days.ts` relocation; `git mv` only).
+1. **Module folder structure.** `supabase/functions/_shared/longshort-universe/` contains 8 sub-folders enumerated by the clause: `constituent-ingestion/` (houses cross-check infrastructure per ACT-114 Surface 3 Option i), `enrichment/` (added by accommodation per ACT-106 Guardrail 1; no DEC amendment needed), `filters/`, `hard-exclusions/`, `refresh-jobs/`, `verify-membership/`, `health-monitoring/`, plus a `shared/` utility folder (added at ACT-108 when a second consumer triggered the `trading-days.ts` relocation; `git mv` only).
 2. **Cross-check execution shape.** `buildUniverseCrossCheckSpec()` returns a `ReconcileCallSpec` consumed by `reconcile()`. Co-located under `constituent-ingestion/cross-check-spec.ts` per S6 Option I at ACT-114.
 3. **`verify_universe_membership` real implementation hook.** Fetcher-layer transition (Surface 1 Option A at ACT-113): verifier signature preserved (AC-16); `createUniverseMembershipFetcher` + `createUniverseService` land under `verify-membership/`.
 4. **Job-registry seeds.** One quarterly + four continuous seeds, all initially `enabled=false`.

@@ -35,13 +35,13 @@
  * Owner: longshort (FP-008 sub-step 8.3 / ACT-107)
  * Classification: financial-critical (data source for §3.3a hard exclusion).
  */
-import type { HttpFetch } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
 import type {
   EarningsCalendarFetcher,
   EarningsCalendarSnapshot,
   EarningsTimeOfDay,
   ScheduledEarnings,
-} from '../../../../../../supabase/functions/_shared/longshort-hard-exclusion-interfaces.ts';
+} from '../../longshort-hard-exclusion-interfaces.ts';
 
 const POLYGON_BASE_URL = 'https://api.polygon.io';
 

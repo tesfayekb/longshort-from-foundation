@@ -35,11 +35,11 @@
  * Owner: longshort (FP-008 sub-step 8.3 / ACT-107)
  * Classification: financial-critical (data source for §3.3e hard exclusion).
  */
-import type { HttpFetch } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
 import type {
   ShortInterestFetcher,
   ShortInterestRecord,
-} from '../../../../../../supabase/functions/_shared/longshort-hard-exclusion-interfaces.ts';
+} from '../../longshort-hard-exclusion-interfaces.ts';
 
 const DEFAULT_FINRA_BASE_URL = 'https://cdn.finra.org/equity/regsho/monthly';
 

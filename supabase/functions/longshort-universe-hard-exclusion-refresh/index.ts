@@ -35,8 +35,8 @@ import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import {
   createHardExclusionRefreshOrchestrator,
   isHardExclusionRuleKey,
-} from '../../../src/features/longshort/services/universe/refresh-jobs/hard-exclusion-refresh-orchestrator.ts';
-import type { HardExclusionRuleKey } from '../../../src/features/longshort/services/universe/refresh-jobs/types.ts';
+} from '../_shared/longshort-universe/refresh-jobs/hard-exclusion-refresh-orchestrator.ts';
+import type { HardExclusionRuleKey } from '../_shared/longshort-universe/refresh-jobs/types.ts';
 
 interface RequestBody {
   rule?: unknown;

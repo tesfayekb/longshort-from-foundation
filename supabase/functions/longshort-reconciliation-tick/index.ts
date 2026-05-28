@@ -29,7 +29,7 @@ import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
-import { createUniverseMembershipFetcher } from '../../../src/features/longshort/services/universe/verify-membership/universe-membership-fetcher.ts';
+import { createUniverseMembershipFetcher } from '../_shared/longshort-universe/verify-membership/universe-membership-fetcher.ts';
 import {
   verifyPosition,
   verifyUniverseMembership,

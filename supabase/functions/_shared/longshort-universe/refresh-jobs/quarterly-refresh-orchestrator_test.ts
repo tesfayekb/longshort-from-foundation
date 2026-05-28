@@ -21,7 +21,7 @@ import type {
   CrossCheckFn,
 } from './types.ts';
 import type { MetricsEmitter, RefreshMetricsInput } from '../health-monitoring/metrics-emitter.ts';
-import type { UniverseConstituent } from '../../../../../../supabase/functions/_shared/longshort-universe-interfaces.ts';
+import type { UniverseConstituent } from '../../longshort-universe-interfaces.ts';
 import type { EnrichedConstituent } from '../enrichment/types.ts';
 
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';

@@ -17,7 +17,7 @@ The continuous-refresh dispatcher (sub-step 8.5 / ACT-109) returns a per-rule ou
 
 ```bash
 # Confirm fetcher class + behavior
-rg -n 'PolygonEarningsCalendarFetcher|POLYGON_API_KEY' src/features/longshort/services/universe/hard-exclusions/earnings-calendar-fetcher.ts
+rg -n 'PolygonEarningsCalendarFetcher|POLYGON_API_KEY' supabase/functions/_shared/longshort-universe/hard-exclusions/earnings-calendar-fetcher.ts
 ```
 
 ```sql
@@ -71,7 +71,7 @@ Escalation contact: TBD per operator on-call rotation; placeholder pending opera
 
 ## Cross-references
 
-- `src/features/longshort/services/universe/hard-exclusions/earnings-calendar-fetcher.ts` — `PolygonEarningsCalendarFetcher` source + behavior
+- `supabase/functions/_shared/longshort-universe/hard-exclusions/earnings-calendar-fetcher.ts` — `PolygonEarningsCalendarFetcher` source + behavior
 - DEC-038 clause (4) per-rule independence verbatim — `docs/08-planning/approved-decisions.md`
 - DEC-038.1 clause (4) job-registry seeds verbatim — `docs/08-planning/approved-decisions.md`
 - CROSSWIND §3.3a (earnings-window hard-exclusion rule) — `docs/04-modules/longshort/design-source/`
