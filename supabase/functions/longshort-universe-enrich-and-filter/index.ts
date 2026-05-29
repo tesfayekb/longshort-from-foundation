@@ -212,34 +212,42 @@ Deno.serve(createHandler(async (req: Request) => {
 
   const eligibleTickers = new Set(filterResult.eligible.map((c) => c.ticker));
 
-  // Step 5 — persistence. Update universe_membership eligibility first, then
-  // write the refresh-log row capturing the outcome. We chunk the UPDATEs by
-  // eligibility class (one UPDATE for long-eligible, one for the rest);
-  // PostgREST's `.in()` filter handles batches of ~1000 comfortably.
+  // Step 5 — persistence. Per MIG-050 CHECK (long_eligible OR short_eligible)
+  // and the universe-membership-persister design (ACT-113): ineligible rows
+  // do NOT exist in universe_membership. So we DELETE filtered-out tickers
+  // for this as_of_date; eligible rows are already long=short=true from the
+  // FP-008 manual seed and stay as-is.
+  //
+  // On a `partial` outcome we DELETE only the ineligibles we actually
+  // evaluated; remaining (unprocessed) rows stay untouched so a follow-up
+  // invocation can resume. Tickers we processed but couldn't enrich (Polygon
+  // 404 / per-ticker fetch fail) are NOT deleted — they remain in the
+  // candidate set for a future enrichment retry rather than being
+  // permanently dropped on a transient failure.
   const eligibleArr = Array.from(eligibleTickers);
-  const ineligibleArr = constituents
+  const enrichedTickers = new Set(enriched.map((c) => c.ticker));
+  const ineligibleArr = enriched
     .map((c) => c.ticker)
     .filter((t) => !eligibleTickers.has(t));
 
-  async function updateEligibility(tickers: string[], eligible: boolean) {
+  async function deleteIneligible(tickers: string[]) {
     if (tickers.length === 0) return;
     const BATCH = 500;
     for (let i = 0; i < tickers.length; i += BATCH) {
       const slice = tickers.slice(i, i + BATCH);
       const { error } = await supabaseAdmin
         .from('universe_membership')
-        .update({ long_eligible: eligible, short_eligible: eligible })
+        .delete()
         .eq('as_of_date', asOfDate)
         .in('ticker', slice);
-      if (error) throw new Error(`universe_membership_update_failed: ${error.message}`);
+      if (error) throw new Error(`universe_membership_delete_failed: ${error.message}`);
     }
   }
 
   try {
-    await updateEligibility(eligibleArr, true);
-    await updateEligibility(ineligibleArr, false);
+    await deleteIneligible(ineligibleArr);
   } catch (e) {
-    return apiError(500, 'universe_membership_update_failed', {
+    return apiError(500, 'universe_membership_delete_failed', {
       correlationId,
       details: (e as Error).message,
     });
@@ -284,6 +292,8 @@ Deno.serve(createHandler(async (req: Request) => {
       total_constituents_raw: constituents.length,
       total_enriched: enriched.length,
       total_eligible: eligibleArr.length,
+      total_deleted_ineligible: ineligibleArr.length,
+      total_unenrichable: processed - enrichedTickers.size,
       filter_rejection_counts: rejectionCounts,
       tickers_processed: processed,
       tickers_remaining: timedOut ? constituents.length - processed : 0,
@@ -297,6 +307,8 @@ Deno.serve(createHandler(async (req: Request) => {
     total_constituents_raw: constituents.length,
     total_enriched: enriched.length,
     total_eligible: eligibleArr.length,
+    total_deleted_ineligible: ineligibleArr.length,
+    total_unenrichable: processed - enrichedTickers.size,
     filter_rejection_counts: rejectionCounts,
     tickers_processed: processed,
     tickers_remaining: timedOut ? constituents.length - processed : 0,
