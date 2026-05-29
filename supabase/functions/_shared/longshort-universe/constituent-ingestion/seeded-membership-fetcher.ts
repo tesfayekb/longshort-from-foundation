@@ -27,7 +27,7 @@
  * Owner: longshort (FP-008.2).
  * Classification: financial-critical (primary universe source).
  */
-import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import type {
   ConstituentFetcher,
   IndexId,
