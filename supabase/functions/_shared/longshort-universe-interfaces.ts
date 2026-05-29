@@ -49,8 +49,9 @@ export interface UniverseConstituent {
   ticker: string;
   /** Company / security name as reported by the source (best-effort; may be empty for iShares). */
   name: string;
-  /** Source identifier — `'polygon'` for primary, `'ishares'` for secondary cross-check. */
-  source: 'polygon' | 'ishares';
+  /** Source identifier — `'polygon'` for primary, `'ishares'` for secondary cross-check,
+   *  `'manual'` for operator-seeded universe rows (bootstrap / enrich-and-filter path). */
+  source: 'polygon' | 'ishares' | 'manual';
   /** Caller-injected timestamp; stamped on every row from the same fetch invocation. */
   fetched_at: Date;
 }
