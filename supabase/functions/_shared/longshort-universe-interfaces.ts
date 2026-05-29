@@ -50,8 +50,9 @@ export interface UniverseConstituent {
   /** Company / security name as reported by the source (best-effort; may be empty for iShares). */
   name: string;
   /** Source identifier — `'polygon'` for primary, `'ishares'` for secondary cross-check,
-   *  `'manual'` for operator-seeded universe rows (bootstrap / enrich-and-filter path). */
-  source: 'polygon' | 'ishares' | 'manual';
+ *  `'manual'` for operator-seeded universe rows (bootstrap / enrich-and-filter path),
+ *  `'wikipedia'` for the FP-008.2 Step C secondary cross-check source. */
+  source: 'polygon' | 'ishares' | 'manual' | 'wikipedia';
   /** Caller-injected timestamp; stamped on every row from the same fetch invocation. */
   fetched_at: Date;
 }
@@ -98,7 +99,7 @@ export type HttpFetch = (
 /** Thrown by fetchers on network / auth / parse failure. */
 export class ConstituentFetchError extends Error {
   constructor(
-    public readonly source: 'polygon' | 'ishares',
+    public readonly source: 'polygon' | 'ishares' | 'wikipedia',
     public readonly index: IndexId,
     message: string,
     public readonly cause?: unknown,
