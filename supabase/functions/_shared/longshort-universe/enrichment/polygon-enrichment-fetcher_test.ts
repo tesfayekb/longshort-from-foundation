@@ -16,7 +16,10 @@ function jsonResp(body: unknown, ok = true, status = 200) {
   };
 }
 
-function constituent(ticker: string, source: 'polygon' | 'ishares' = 'polygon'): UniverseConstituent {
+function constituent(
+  ticker: string,
+  source: 'polygon' | 'ishares' | 'manual' = 'polygon',
+): UniverseConstituent {
   return { index: 'sp500', ticker, name: ticker, source, fetched_at: AS_OF };
 }
 
@@ -146,6 +149,22 @@ Deno.test('(9) iShares-sourced constituents are skipped (Guardrail 2)', async ()
   const out = await fetcher.enrich([constituent('AAPL', 'ishares')], AS_OF);
   assertEquals(out.length, 0);
   assertEquals(called, false);
+});
+
+Deno.test("(9a) source='manual' constituents are enriched (operator-seeded bootstrap path)", async () => {
+  const fetcher = new PolygonEnrichmentFetcher('test-key', async (url) => {
+    if (url.includes('/v3/reference/tickers/')) {
+      return jsonResp({
+        results: { market_cap: 1e9, list_date: '2010-01-01', type: 'CS', sic_description: 'SOFTWARE' },
+      });
+    }
+    return jsonResp({ results: aggBars(60, 50, 1_000_000) });
+  });
+  const out = await fetcher.enrich([constituent('AAPL', 'manual')], AS_OF);
+  assertEquals(out.length, 1);
+  assertEquals(out[0].ticker, 'AAPL');
+  assertEquals(out[0].source, 'manual');
+  assertEquals(out[0].market_cap, 1e9);
 });
 
 Deno.test('(10) preserves fetched_at + index + ticker from input constituent', async () => {

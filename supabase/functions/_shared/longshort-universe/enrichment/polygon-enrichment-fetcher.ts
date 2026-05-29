@@ -104,10 +104,11 @@ export class PolygonEnrichmentFetcher implements UniverseEnrichmentFetcher {
   ): Promise<EnrichedConstituent[]> {
     const out: EnrichedConstituent[] = [];
     for (const c of constituents) {
-      if (c.source !== 'polygon') {
-        // Guardrail 2: only the Polygon-sourced primary path is enriched.
-        // iShares constituents flow through the cross-check at sub-step 8.8,
-        // not through the filter pipeline. Defensive skip; not a hard error.
+      if (c.source === 'ishares') {
+        // Guardrail 2: iShares constituents flow through the cross-check at
+        // sub-step 8.8, not through the filter pipeline. Defensive skip; not a
+        // hard error. `'polygon'` (primary) and `'manual'` (operator-seeded
+        // bootstrap) are both enrichable via the Polygon reference path.
         continue;
       }
       const details = await this.fetchTickerDetails(c.ticker);
