@@ -25,7 +25,7 @@ import type {
   RefreshExecutionContext,
   RefreshLogPersister,
 } from '../_shared/longshort-universe/refresh-jobs/types.ts';
-import { PolygonConstituentFetcher } from '../_shared/longshort-universe/constituent-ingestion/polygon-constituent-fetcher.ts';
+import { SeededMembershipFetcher } from '../_shared/longshort-universe/constituent-ingestion/seeded-membership-fetcher.ts';
 import { iSharesConstituentFetcher } from '../_shared/longshort-universe/constituent-ingestion/ishares-constituent-fetcher.ts';
 import { PolygonEnrichmentFetcher } from '../_shared/longshort-universe/enrichment/polygon-enrichment-fetcher.ts';
 import { makeUniverseMembershipPersister } from '../_shared/longshort-universe/refresh-jobs/universe-membership-persister.ts';
@@ -165,7 +165,12 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   const ctx: RefreshExecutionContext = {
-    polygonConstituents: new PolygonConstituentFetcher({ apiKey: polygonApiKey }),
+    // FP-008.2 Step D-1 — primary constituent source is now the operator-
+    // seeded membership reader (Polygon's tier returns index values, not
+    // membership; verified via Task 0 probes). POLYGON_API_KEY is still
+    // required because the enrichment fetcher below uses it for per-ticker
+    // reference + aggregate data, which works on the held tier.
+    polygonConstituents: new SeededMembershipFetcher(supabaseAdmin, DEFAULT_OPERATOR_ID),
     iSharesConstituents: new iSharesConstituentFetcher(),
     polygonEnrichment: new PolygonEnrichmentFetcher({ apiKey: polygonApiKey }),
     exclusionInput: {
