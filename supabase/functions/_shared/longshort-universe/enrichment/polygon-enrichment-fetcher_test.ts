@@ -16,7 +16,10 @@ function jsonResp(body: unknown, ok = true, status = 200) {
   };
 }
 
-function constituent(ticker: string, source: 'polygon' | 'ishares' = 'polygon'): UniverseConstituent {
+function constituent(
+  ticker: string,
+  source: 'polygon' | 'ishares' | 'manual' = 'polygon',
+): UniverseConstituent {
   return { index: 'sp500', ticker, name: ticker, source, fetched_at: AS_OF };
 }
 
