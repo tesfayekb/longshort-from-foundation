@@ -26,7 +26,7 @@ import type {
   RefreshLogPersister,
 } from '../_shared/longshort-universe/refresh-jobs/types.ts';
 import { SeededMembershipFetcher } from '../_shared/longshort-universe/constituent-ingestion/seeded-membership-fetcher.ts';
-import { iSharesConstituentFetcher } from '../_shared/longshort-universe/constituent-ingestion/ishares-constituent-fetcher.ts';
+import { WikipediaConstituentFetcher } from '../_shared/longshort-universe/constituent-ingestion/wikipedia-constituent-fetcher.ts';
 import { PolygonEnrichmentFetcher } from '../_shared/longshort-universe/enrichment/polygon-enrichment-fetcher.ts';
 import { makeUniverseMembershipPersister } from '../_shared/longshort-universe/refresh-jobs/universe-membership-persister.ts';
 import { makeHardExclusionsPersister } from '../_shared/longshort-universe/refresh-jobs/hard-exclusions-persister.ts';
@@ -171,7 +171,12 @@ Deno.serve(createHandler(async (req: Request) => {
     // required because the enrichment fetcher below uses it for per-ticker
     // reference + aggregate data, which works on the held tier.
     polygonConstituents: new SeededMembershipFetcher(supabaseAdmin, DEFAULT_OPERATOR_ID),
-    iSharesConstituents: new iSharesConstituentFetcher(),
+    // FP-008.2 Step C — secondary cross-check source is Wikipedia.
+    // iShares CSV server-side bot-blocks Deno fetch from Edge Functions
+    // (Task 0 probes); Wikipedia is publicly accessible. The context field
+    // is still named `iSharesConstituents` (storage-layer name unchanged
+    // pending broader rename); only the implementation swaps.
+    iSharesConstituents: new WikipediaConstituentFetcher(),
     polygonEnrichment: new PolygonEnrichmentFetcher({ apiKey: polygonApiKey }),
     exclusionInput: {
       // Sub-step 8.4 ships with empty exclusion input; per-rule fetchers
@@ -196,12 +201,16 @@ Deno.serve(createHandler(async (req: Request) => {
     // supabaseAdmin path. Orchestrator inspects outcome and routes
     // abort/proceed per Surface 5 Option q.
     crossCheck: async ({ operator_id, polygon_tickers, ishares_tickers, as_of }) => {
+      // CrossCheckFn signature retains legacy `polygon_tickers` /
+      // `ishares_tickers` field names (storage-layer; deferred rename).
+      // Inside the spec, these are mapped to the source-agnostic
+      // `primary_tickers` / `secondary_tickers` (FP-008.2 Step C).
       const spec = buildUniverseCrossCheckSpec({ operator_id });
       const result = await reconcile(
         spec,
         async () => ({
-          expected: { polygon_tickers: new Set(polygon_tickers) },
-          observed: { ishares_tickers: new Set(ishares_tickers) },
+          expected: { primary_tickers: new Set(polygon_tickers) },
+          observed: { secondary_tickers: new Set(ishares_tickers) },
         }),
         as_of,
       );
