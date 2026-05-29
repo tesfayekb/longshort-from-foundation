@@ -35,18 +35,25 @@ import type {
 } from '../../longshort-reconciliation-types.ts';
 
 /**
- * Expected set — universe-component's primary source (Polygon) ticker set for the
- * current refresh's as_of_date.
+ * Expected set — universe-component's PRIMARY source ticker set for the
+ * current refresh's as_of_date. Renamed from `polygon_tickers` to
+ * `primary_tickers` at FP-008.2 Step C: the primary source is now the
+ * operator-seeded membership table (SeededMembershipFetcher), no longer
+ * Polygon's reference endpoint. Field name is source-agnostic so future
+ * primary-source swaps do not invalidate the divergence schema.
  */
 export interface CrossCheckExpected {
-  readonly polygon_tickers: ReadonlySet<string>;
+  readonly primary_tickers: ReadonlySet<string>;
 }
 
 /**
- * Observed set — secondary source (iShares IVV + IJH) ticker set for cross-check.
+ * Observed set — SECONDARY cross-check source ticker set. Renamed from
+ * `ishares_tickers` to `secondary_tickers` at FP-008.2 Step C: the
+ * secondary source is now Wikipedia (WikipediaConstituentFetcher); iShares
+ * CSV server-side bot-blocks Deno fetch from Edge Functions.
  */
 export interface CrossCheckObserved {
-  readonly ishares_tickers: ReadonlySet<string>;
+  readonly secondary_tickers: ReadonlySet<string>;
 }
 
 /**
@@ -54,16 +61,16 @@ export interface CrossCheckObserved {
  * DEC-035 clause (1) replay-test determinism contract.
  */
 export interface CrossCheckDivergence extends Record<string, unknown> {
-  readonly polygon_set_size: number;
-  readonly ishares_set_size: number;
+  readonly primary_set_size: number;
+  readonly secondary_set_size: number;
   readonly intersection_size: number;
-  readonly polygon_only_count: number;
-  readonly ishares_only_count: number;
+  readonly primary_only_count: number;
+  readonly secondary_only_count: number;
   readonly symmetric_difference_count: number;
   readonly jaccard_similarity: number;
   /** First 10 tickers in each "only" set for forensic context (jsonb size bounded). */
-  readonly polygon_only_sample: ReadonlyArray<string>;
-  readonly ishares_only_sample: ReadonlyArray<string>;
+  readonly primary_only_sample: ReadonlyArray<string>;
+  readonly secondary_only_sample: ReadonlyArray<string>;
 }
 
 /**
@@ -133,43 +140,43 @@ export function buildUniverseCrossCheckSpec(args: {
     },
 
     compute_divergence: (expected, observed): CrossCheckDivergence => {
-      const polygonSet = expected.polygon_tickers;
-      const isharesSet = observed.ishares_tickers;
+      const primarySet = expected.primary_tickers;
+      const secondarySet = observed.secondary_tickers;
 
-      const polygonOnly: string[] = [];
-      const isharesOnly: string[] = [];
+      const primaryOnly: string[] = [];
+      const secondaryOnly: string[] = [];
       let intersectionSize = 0;
 
-      for (const ticker of polygonSet) {
-        if (isharesSet.has(ticker)) {
+      for (const ticker of primarySet) {
+        if (secondarySet.has(ticker)) {
           intersectionSize += 1;
         } else {
-          polygonOnly.push(ticker);
+          primaryOnly.push(ticker);
         }
       }
-      for (const ticker of isharesSet) {
-        if (!polygonSet.has(ticker)) {
-          isharesOnly.push(ticker);
+      for (const ticker of secondarySet) {
+        if (!primarySet.has(ticker)) {
+          secondaryOnly.push(ticker);
         }
       }
 
-      const symDiff = polygonOnly.length + isharesOnly.length;
-      const unionSize = polygonSet.size + isharesSet.size - intersectionSize;
+      const symDiff = primaryOnly.length + secondaryOnly.length;
+      const unionSize = primarySet.size + secondarySet.size - intersectionSize;
       const jaccard = unionSize === 0 ? 0 : intersectionSize / unionSize;
 
-      polygonOnly.sort();
-      isharesOnly.sort();
+      primaryOnly.sort();
+      secondaryOnly.sort();
 
       return {
-        polygon_set_size: polygonSet.size,
-        ishares_set_size: isharesSet.size,
+        primary_set_size: primarySet.size,
+        secondary_set_size: secondarySet.size,
         intersection_size: intersectionSize,
-        polygon_only_count: polygonOnly.length,
-        ishares_only_count: isharesOnly.length,
+        primary_only_count: primaryOnly.length,
+        secondary_only_count: secondaryOnly.length,
         symmetric_difference_count: symDiff,
         jaccard_similarity: jaccard,
-        polygon_only_sample: polygonOnly.slice(0, 10),
-        ishares_only_sample: isharesOnly.slice(0, 10),
+        primary_only_sample: primaryOnly.slice(0, 10),
+        secondary_only_sample: secondaryOnly.slice(0, 10),
       };
     },
 
@@ -177,7 +184,7 @@ export function buildUniverseCrossCheckSpec(args: {
       const d = divergence as CrossCheckDivergence;
 
       // Safety ceiling — catastrophic-source-failure cases regardless of jaccard.
-      if (d.polygon_set_size === 0 || d.ishares_set_size === 0) {
+      if (d.primary_set_size === 0 || d.secondary_set_size === 0) {
         return 'system_bug';
       }
       if (d.symmetric_difference_count > SURFACE_2_THRESHOLDS.SAFETY_CEILING_SYM_DIFF) {
@@ -213,8 +220,8 @@ export function buildUniverseCrossCheckSpec(args: {
         action_metadata: {
           jaccard_similarity: d.jaccard_similarity,
           symmetric_difference_count: d.symmetric_difference_count,
-          polygon_only_sample: d.polygon_only_sample,
-          ishares_only_sample: d.ishares_only_sample,
+          primary_only_sample: d.primary_only_sample,
+          secondary_only_sample: d.secondary_only_sample,
         },
       };
     },

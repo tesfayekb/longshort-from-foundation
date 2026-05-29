@@ -23,11 +23,11 @@ function setOf(...tickers: string[]): Set<string> {
   return new Set(tickers);
 }
 
-function divergenceFor(polygon: string[], ishares: string[]): CrossCheckDivergence {
+function divergenceFor(primary: string[], secondary: string[]): CrossCheckDivergence {
   const spec = buildUniverseCrossCheckSpec({ operator_id: OPERATOR_ID });
   return spec.compute_divergence(
-    { polygon_tickers: new Set(polygon) },
-    { ishares_tickers: new Set(ishares) },
+    { primary_tickers: new Set(primary) },
+    { secondary_tickers: new Set(secondary) },
   ) as CrossCheckDivergence;
 }
 
@@ -144,12 +144,12 @@ describe('compute_divergence — jsonb shape', () => {
     const polygon = Array.from({ length: 20 }, (_, i) => `P${String(i).padStart(2, '0')}`);
     const ishares = Array.from({ length: 20 }, (_, i) => `I${String(i).padStart(2, '0')}`);
     const d = divergenceFor(polygon, ishares);
-    expect(d.polygon_only_count).toBe(20);
-    expect(d.ishares_only_count).toBe(20);
-    expect(d.polygon_only_sample.length).toBe(10);
-    expect(d.ishares_only_sample.length).toBe(10);
-    expect([...d.polygon_only_sample]).toEqual([...d.polygon_only_sample].slice().sort());
-    expect([...d.ishares_only_sample]).toEqual([...d.ishares_only_sample].slice().sort());
+    expect(d.primary_only_count).toBe(20);
+    expect(d.secondary_only_count).toBe(20);
+    expect(d.primary_only_sample.length).toBe(10);
+    expect(d.secondary_only_sample.length).toBe(10);
+    expect([...d.primary_only_sample]).toEqual([...d.primary_only_sample].slice().sort());
+    expect([...d.secondary_only_sample]).toEqual([...d.secondary_only_sample].slice().sort());
     expect(d.symmetric_difference_count).toBe(40);
     expect(d.intersection_size).toBe(0);
     expect(d.jaccard_similarity).toBe(0);
@@ -158,8 +158,8 @@ describe('compute_divergence — jsonb shape', () => {
   it('intersection_size correct for partial overlap', () => {
     const d = divergenceFor(['A', 'B', 'C', 'D'], ['B', 'C', 'D', 'E']);
     expect(d.intersection_size).toBe(3);
-    expect(d.polygon_only_count).toBe(1);
-    expect(d.ishares_only_count).toBe(1);
+    expect(d.primary_only_count).toBe(1);
+    expect(d.secondary_only_count).toBe(1);
     expect(d.symmetric_difference_count).toBe(2);
     expect(d.jaccard_similarity).toBeCloseTo(3 / 5, 6);
   });
