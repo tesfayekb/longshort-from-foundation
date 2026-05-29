@@ -151,6 +151,22 @@ Deno.test('(9) iShares-sourced constituents are skipped (Guardrail 2)', async ()
   assertEquals(called, false);
 });
 
+Deno.test("(9a) source='manual' constituents are enriched (operator-seeded bootstrap path)", async () => {
+  const fetcher = new PolygonEnrichmentFetcher('test-key', async (url) => {
+    if (url.includes('/v3/reference/tickers/')) {
+      return jsonResp({
+        results: { market_cap: 1e9, list_date: '2010-01-01', type: 'CS', sic_description: 'SOFTWARE' },
+      });
+    }
+    return jsonResp({ results: aggBars(60, 50, 1_000_000) });
+  });
+  const out = await fetcher.enrich([constituent('AAPL', 'manual')], AS_OF);
+  assertEquals(out.length, 1);
+  assertEquals(out[0].ticker, 'AAPL');
+  assertEquals(out[0].source, 'manual');
+  assertEquals(out[0].market_cap, 1e9);
+});
+
 Deno.test('(10) preserves fetched_at + index + ticker from input constituent', async () => {
   const fetcher = new PolygonEnrichmentFetcher('test-key', async (url) => {
     if (url.includes('/v3/reference/tickers/')) {
