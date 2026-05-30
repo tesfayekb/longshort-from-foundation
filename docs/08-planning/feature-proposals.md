@@ -539,3 +539,9 @@ HIGH — weakening this document allows scope creep and unauthorized feature add
 - [Plan Changelog](plan-changelog.md)
 - [Open Questions](open-questions.md)
 - [Change Control Policy](../00-governance/change-control-policy.md)
+
+---
+
+### FP-008.3 — `verify_universe_membership` side-awareness contract fix
+
+`verify_universe_membership` chokepoint (CROSSWIND §11.0.7 #10) fused short-only hard-exclusions with universe-membership failures, over-firing on every long lookup against the htb-default-firing universe (§3.3d `htb_no_locate` typed-absence default-fire-on-empty-locate-data per §2 axiom 3 — fires for every constituent until Phase 5+ broker locate integration). Adds required `side: 'long' | 'short'` parameter to `verifyUniverseMembership` + `UniverseMembershipFetcher.fetchUniverseMembership`; fetcher filters `hard_exclusions.firing_reasons[*].applies_to` against the requested side and reads the corresponding `universe_membership.{long,short}_eligible` column; `UniverseMembershipStatus` gains `side` + `eligible_for_side`; divergence carries `side` + `observed_eligible_for_side`; production `longshort-reconciliation-tick` caller now loops both sides explicitly (generic health probe with no position-driven side intent). §3.3d `rule-3-3d-htb.ts` UNCHANGED — the typed-absence default-fire is correct per spec; the defect was the verifier consuming side-fused exclusion booleans. Outcome-enum overloading on `false_positive_within_tolerance` remains a separate DRIFT-class observation (Step E follow-up); not touched here. Surfaced by FP-008.2 Step B smoke (`reconciliation_events` rows for tickers A/AA/AAL/AAON/AAPL on 2026-05-30 returned `failure_handled` with `entry_blocked_universe_membership_failure` for `internal_in_universe=true` long-intent lookups). Supersedes AC-16 signature-preservation invariant under DEC-038.1 clause (3). Reference index updates: `function-index.md` signature line + `universe.md` chokepoint section.

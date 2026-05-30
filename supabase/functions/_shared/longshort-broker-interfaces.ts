@@ -164,24 +164,57 @@ export interface BrokerBuyingPowerFetcher {
   fetchBuyingPower(ts: Date): Promise<BrokerBuyingPower>;
 }
 
-/** Universe membership response. Used by verify_universe_membership (#10) per §11.0.7 + §11.0.6 stale-ranking detection. */
+/**
+ * Universe membership response. Used by verify_universe_membership (#10) per
+ * §11.0.7 + §11.0.6 stale-ranking detection.
+ *
+ * FP-008.3 — SIDE-AWARE CONTRACT. The chokepoint answers: "can I trade
+ * `symbol` on `side` for `operator_id`?" Prior side-agnostic shape fused
+ * short-only hard-exclusions (e.g., §3.3d `htb_no_locate` typed-absence
+ * default-fire) with long-eligibility lookups, over-firing every long
+ * verification on every tick from FP-008.2 hard-exclusion-refresh onward.
+ *
+ * Fields:
+ *   - `side`                — the side the call queried (echoed back for audit).
+ *   - `in_universe`         — universe presence (side-agnostic: row exists in
+ *                              universe_membership at as_of_date).
+ *   - `eligible_for_side`   — `{side}_eligible` column from universe_membership
+ *                              (write-time snapshot already factoring in §3.3
+ *                              `applies_to` semantics per apply-hard-exclusions).
+ *   - `excluded`            — TRUE iff at least one currently-firing
+ *                              hard_exclusions rule applies to `side` or `'both'`.
+ *   - `exclusion_reasons`   — side-filtered structured reason codes.
+ */
 export interface UniverseMembershipStatus {
   symbol: string;
+  side: 'long' | 'short';
   in_universe: boolean;
+  eligible_for_side: boolean;
   excluded: boolean;
-  exclusion_reasons: string[]; // structured reason codes: 'in_ma', 'halted_5d_plus', 'earnings_window', 'low_volume', etc.
+  exclusion_reasons: string[];
   fetched_at: Date;
 }
 
 export interface UniverseMembershipFetcher {
   /**
-   * Fetch universe membership + exclusion status for symbol. Per §11.0.7 #10 + §11.0.6:
-   * checks BOTH eligibility in universe AND absence from hard-exclusion list.
-   * Per §11.0.9 line 273 structural escalation: if observed.excluded=true with reason
-   * in {'in_ma', 'halted_5d_plus'} (materially-excluded conditions) but internal cache
-   * shows in_universe=true -> single firing escalates immediately regardless of count.
+   * Fetch universe membership + exclusion status for `symbol` on `side`. Per
+   * §11.0.7 #10 + §11.0.6: checks BOTH per-side eligibility in universe AND
+   * absence from side-applicable hard-exclusion list.
+   *
+   * Side filtering: hard_exclusions firings carry `applies_to ∈ {'long',
+   * 'short', 'both'}` (per hard-exclusions/types.ts BookSide). A firing
+   * contributes to `excluded`/`exclusion_reasons` only when its `applies_to`
+   * matches the requested `side` or equals `'both'`.
+   *
+   * Per §11.0.9 line 273 structural escalation: if observed.excluded=true with
+   * reason in {'in_ma', 'halted_5d_plus'} but internal cache shows
+   * in_universe=true → single firing escalates immediately regardless of count.
    */
-  fetchUniverseMembership(symbol: string, ts: Date): Promise<UniverseMembershipStatus>;
+  fetchUniverseMembership(
+    symbol: string,
+    side: 'long' | 'short',
+    ts: Date,
+  ): Promise<UniverseMembershipStatus>;
 }
 
 // ────────────────────────────────────────────────────────────────────

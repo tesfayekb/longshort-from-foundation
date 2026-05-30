@@ -29,6 +29,21 @@ import type {
 import type { UniverseEligibilityRow, HardExclusionRow } from './types.ts';
 
 /**
+ * FP-008.3 — `applies_to` is persisted inside `hard_exclusions.firing_reasons`
+ * keyed by §3.3 rule key (e.g., `'3.3d'`), shape
+ * `{ reason, applies_to: 'long' | 'short' | 'both', evidence }` per
+ * quarterly-refresh-orchestrator.groupFiringsByTicker. Filtering at SQL level
+ * would require jsonb traversal per row; client-side filtering on the single
+ * row read keeps the chokepoint query simple and the side-resolution
+ * deterministic.
+ */
+interface FiringReason {
+  readonly reason?: unknown;
+  readonly applies_to?: unknown;
+  readonly evidence?: unknown;
+}
+
+/**
  * Materially-excluded reason codes per §11.0.9 line 273. Re-exported for
  * verifier callers that wish to align escalation logic against the same
  * structured-reason vocabulary.
@@ -54,6 +69,7 @@ export function createUniverseMembershipFetcher(
   return {
     async fetchUniverseMembership(
       symbol: string,
+      side: 'long' | 'short',
       ts: Date,
     ): Promise<UniverseMembershipStatus> {
       const as_of_date = isoDateOf(ts);
@@ -68,7 +84,7 @@ export function createUniverseMembershipFetcher(
           .maybeSingle(),
         deps.supabaseAdmin
           .from('hard_exclusions')
-          .select('firing_rules')
+          .select('firing_rules,firing_reasons')
           .eq('operator_id', deps.operator_id)
           .eq('ticker', symbol)
           .eq('as_of_date', as_of_date)
@@ -90,21 +106,42 @@ export function createUniverseMembershipFetcher(
         | Pick<UniverseEligibilityRow, 'long_eligible' | 'short_eligible'>
         | null;
       const exclusion = exclusionResult.data as
-        | Pick<HardExclusionRow, 'firing_rules'>
+        | Pick<HardExclusionRow, 'firing_rules' | 'firing_reasons'>
         | null;
 
       // Surface 3 Option i: null-with-narrowing typed-absence. No row →
-      // not-in-universe. UniverseMembershipStatus contract requires
-      // structured booleans + reason codes.
+      // not-in-universe.
       const in_universe = membership !== null;
-      const exclusion_reasons = exclusion !== null
-        ? [...exclusion.firing_rules]
+      const eligible_for_side = membership !== null
+        ? (side === 'long' ? membership.long_eligible : membership.short_eligible)
+        : false;
+
+      // FP-008.3 — side-filter firings. A firing's `applies_to` value lives
+      // inside firing_reasons[rule_key]. Defensive defaults treat unparseable
+      // / missing `applies_to` as `'both'` (most-restrictive — surfaces the
+      // firing to both sides rather than silently dropping it).
+      const reasonsMap: Record<string, FiringReason> =
+        exclusion !== null && exclusion.firing_reasons !== null &&
+          typeof exclusion.firing_reasons === 'object'
+          ? (exclusion.firing_reasons as Record<string, FiringReason>)
+          : {};
+      const allFiringRules: ReadonlyArray<string> = exclusion !== null
+        ? exclusion.firing_rules
         : [];
+      const exclusion_reasons = allFiringRules.filter((rule) => {
+        const meta = reasonsMap[rule];
+        const appliesTo = typeof meta?.applies_to === 'string'
+          ? (meta.applies_to as string)
+          : 'both';
+        return appliesTo === side || appliesTo === 'both';
+      });
       const excluded = exclusion_reasons.length > 0;
 
       return {
         symbol,
+        side,
         in_universe,
+        eligible_for_side,
         excluded,
         exclusion_reasons,
         fetched_at: ts,

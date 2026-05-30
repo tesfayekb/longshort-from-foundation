@@ -1801,7 +1801,7 @@ The 5 verifiers below extend the Batch A registry. Same module path + spec/wrapp
 |---|---|
 | **Module** | longshort (sub-step 6.3b) |
 | **Classification** | financial-critical (strong tier per §11.0.10) — STRUCTURAL ESCALATION per §11.0.9 line 273 |
-| **Signature** | `verifyUniverseMembership(args: {symbol, operator_id, internal_in_universe}, fetcher: UniverseMembershipFetcher, ts: Date): Promise<ReconcileResult>` |
+| **Signature** | `verifyUniverseMembership(args: {symbol, operator_id, side: 'long' \| 'short', internal_in_universe}, fetcher: UniverseMembershipFetcher, ts: Date): Promise<ReconcileResult>` — FP-008.3: required `side` parameter; fetcher signature is `fetchUniverseMembership(symbol, side, ts)`; divergence carries `side` + `observed_eligible_for_side`. Prior side-agnostic shape fused short-only hard-exclusions with long-eligibility lookups (over-fired every long verification on every tick after FP-008.2 hard-exclusion refresh). |
 | **File** | `supabase/functions/_shared/longshort-verifiers/verify_universe_membership.ts` |
 | **Tolerance class** | low_tolerance per §11.0.9 line 246 + categorical structural escalation when `exclusion_reasons` intersects `{in_ma, halted_5d_plus}` |
 | **Failure action** | materially_excluded → `entry_blocked_materially_excluded`; otherwise → `entry_blocked_universe_membership_failure` |

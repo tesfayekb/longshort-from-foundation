@@ -472,21 +472,22 @@ Deno.test('AC-24: verify_buying_power — pct_diff within 2% band → false_posi
 
 // ─── AC-25: verify_universe_membership (#10 — STRUCTURAL ESCALATION — FIRST USE) ──
 
-Deno.test('AC-25: verify_universe_membership spec — strong + low_tolerance + structural-escalation config', () => {
-  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP });
+Deno.test('AC-25: verify_universe_membership spec — strong + low_tolerance + structural-escalation config + side echo', () => {
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP, side: 'long' });
   assertEquals(spec.call_name, 'verify_universe_membership');
   assertEquals(spec.tier, 'strong');
   assertEquals(spec.tolerance_class, 'low_tolerance');
-  const reasons = (spec.tolerance as { materially_excluded_reasons: string[] }).materially_excluded_reasons;
-  assertEquals(reasons.includes('in_ma'), true);
-  assertEquals(reasons.includes('halted_5d_plus'), true);
+  const tol = spec.tolerance as { materially_excluded_reasons: string[]; side: 'long' | 'short' };
+  assertEquals(tol.materially_excluded_reasons.includes('in_ma'), true);
+  assertEquals(tol.materially_excluded_reasons.includes('halted_5d_plus'), true);
+  assertEquals(tol.side, 'long');
 });
 
 Deno.test('AC-25: verify_universe_membership — materially_excluded (in_ma) + internal_in_universe=true → failure_escalated (structural per §11.0.9 line 273)', async () => {
-  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP });
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP, side: 'long' });
   const observed = {
-    symbol: 'AAPL', in_universe: false, excluded: true,
-    exclusion_reasons: ['in_ma'], fetched_at: new Date(0),
+    symbol: 'AAPL', side: 'long' as const, in_universe: false, eligible_for_side: false,
+    excluded: true, exclusion_reasons: ['in_ma'], fetched_at: new Date(0),
   };
   const div = spec.compute_divergence({ in_universe: true }, observed);
   assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_escalated');
@@ -495,36 +496,88 @@ Deno.test('AC-25: verify_universe_membership — materially_excluded (in_ma) + i
     expected: { in_universe: true }, observed,
   });
   assertEquals(action.action_taken, 'entry_blocked_materially_excluded');
+  assertEquals((action.action_metadata as { side: string }).side, 'long');
 });
 
 Deno.test('AC-25: verify_universe_membership — non-material exclusion (low_volume) + internal_in_universe=true → failure_handled (count-based; not structural)', () => {
-  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP });
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP, side: 'long' });
   const observed = {
-    symbol: 'AAPL', in_universe: false, excluded: true,
-    exclusion_reasons: ['low_volume'], fetched_at: new Date(0),
+    symbol: 'AAPL', side: 'long' as const, in_universe: false, eligible_for_side: false,
+    excluded: true, exclusion_reasons: ['low_volume'], fetched_at: new Date(0),
   };
   const div = spec.compute_divergence({ in_universe: true }, observed);
   assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
 });
 
 Deno.test('AC-25: verify_universe_membership — cache stale (observed_in_universe=false, no exclusion) + internal=true → failure_handled', () => {
-  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP });
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP, side: 'long' });
   const observed = {
-    symbol: 'AAPL', in_universe: false, excluded: false,
-    exclusion_reasons: [], fetched_at: new Date(0),
+    symbol: 'AAPL', side: 'long' as const, in_universe: false, eligible_for_side: false,
+    excluded: false, exclusion_reasons: [], fetched_at: new Date(0),
   };
   const div = spec.compute_divergence({ in_universe: true }, observed);
   assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
 });
 
 Deno.test('AC-25: verify_universe_membership — consistent inclusion → false_positive_within_tolerance', () => {
-  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP });
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP, side: 'long' });
   const observed = {
-    symbol: 'AAPL', in_universe: true, excluded: false,
-    exclusion_reasons: [], fetched_at: new Date(0),
+    symbol: 'AAPL', side: 'long' as const, in_universe: true, eligible_for_side: true,
+    excluded: false, exclusion_reasons: [], fetched_at: new Date(0),
   };
   const div = spec.compute_divergence({ in_universe: true }, observed);
   assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+// FP-008.3 — side-awareness contract tests. The defect surfaced in FP-008.2
+// Step B: prior side-agnostic shape fired failure_handled on every long
+// lookup against the htb_no_locate-firing universe.
+
+Deno.test('FP-008.3: side=long against ticker with short-only exclusion → false_positive_within_tolerance (long unaffected)', () => {
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP, side: 'long' });
+  // Fetcher already side-filtered: long lookup sees no exclusions when the
+  // ticker only has short-applicable §3.3d firings.
+  const observed = {
+    symbol: 'AAPL', side: 'long' as const, in_universe: true, eligible_for_side: true,
+    excluded: false, exclusion_reasons: [], fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ in_universe: true }, observed);
+  assertEquals((div as { side: string }).side, 'long');
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'false_positive_within_tolerance');
+});
+
+Deno.test('FP-008.3: side=short against same ticker with §3.3d htb_no_locate → failure_handled (short correctly blocked)', () => {
+  const spec = buildVerifyUniverseMembershipSpec({ symbol: 'AAPL', operator_id: OP, side: 'short' });
+  const observed = {
+    symbol: 'AAPL', side: 'short' as const, in_universe: true, eligible_for_side: false,
+    excluded: true, exclusion_reasons: ['3.3d'], fetched_at: new Date(0),
+  };
+  const div = spec.compute_divergence({ in_universe: true }, observed);
+  assertEquals((div as { side: string }).side, 'short');
+  assertEquals(spec.classify_outcome(div, spec.tolerance), 'failure_handled');
+});
+
+Deno.test('FP-008.3: symmetric — long-only exclusion blocks side=long; side=short clean', () => {
+  // Ticker with a hypothetical long-only exclusion (e.g., long-side concentration rule).
+  const longSpec = buildVerifyUniverseMembershipSpec({ symbol: 'XYZ', operator_id: OP, side: 'long' });
+  const longObs = {
+    symbol: 'XYZ', side: 'long' as const, in_universe: true, eligible_for_side: false,
+    excluded: true, exclusion_reasons: ['long_concentration'], fetched_at: new Date(0),
+  };
+  assertEquals(
+    longSpec.classify_outcome(longSpec.compute_divergence({ in_universe: true }, longObs), longSpec.tolerance),
+    'failure_handled',
+  );
+
+  const shortSpec = buildVerifyUniverseMembershipSpec({ symbol: 'XYZ', operator_id: OP, side: 'short' });
+  const shortObs = {
+    symbol: 'XYZ', side: 'short' as const, in_universe: true, eligible_for_side: true,
+    excluded: false, exclusion_reasons: [], fetched_at: new Date(0),
+  };
+  assertEquals(
+    shortSpec.classify_outcome(shortSpec.compute_divergence({ in_universe: true }, shortObs), shortSpec.tolerance),
+    'false_positive_within_tolerance',
+  );
 });
 // ─── AC-26: verify_corporate_action_clean (#11 — Low + expected-div + 48h structural) ───
 
