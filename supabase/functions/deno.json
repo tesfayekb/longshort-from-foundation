@@ -1,6 +1,9 @@
 {
+  "exclude": [
+    "**/*.test.ts",
+    "node_modules/"
+  ],
   "test": {
-    "include": ["**/*_test.ts"],
-    "exclude": ["**/*.test.ts", "node_modules/"]
+    "include": ["**/*_test.ts"]
   }
 }
