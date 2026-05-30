@@ -62,3 +62,15 @@ jobs:
 
       - name: Gate 10 — Edge functions must not import from src/ (FP-011)
         run: deno run --allow-read scripts/check-edge-imports.ts
+
+      - name: Gate 11 — Edge function suite type-check (FP-008.4 #12 / Commit 1)
+        # Enforces type-check (deno check) over the entire test-reachable
+        # dependency graph for supabase/functions/_shared. Catches the
+        # FP-008.3-shape regression class: type-contract-shape defects
+        # (missing .ts extensions, override modifiers, implicit any, bare
+        # specifier resolution). Runtime test execution gate is deferred to
+        # Commit 1.5 pending runtime-failure investigation pass; this
+        # explicitly closes type-contract-shape defects only — runtime
+        # behavioral failures are a separate defect category.
+        working-directory: supabase/functions
+        run: deno test --no-run --allow-net --allow-env --allow-read _shared/
