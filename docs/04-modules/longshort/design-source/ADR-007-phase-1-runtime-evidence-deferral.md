@@ -62,3 +62,9 @@ The distinction matters: per CROSSWIND §11.0.11 verbatim, a literal-zero-firing
 ## Status
 
 Accepted 2026-05-26 at FP-008 sub-step 8.13 / ACT-119 closure transaction. Cross-references DW-075 forward-binding. Not amended; not superseded.
+
+## Amendment (2026-05-30) — Runtime evidence accrued
+
+**Status of original disposition:** the vacuous-quietness-signal framing above remains historically accurate for the 2026-05-26 paper closure. AC-17 / AC-19 / AC-26 / AC-31 runtime portions have since been runtime-evidenced via the FP-011 / FP-012 / FP-013 / FP-014 / enrich-and-filter (`universe_refresh_log.refresh_id=df55cb4f…`) / D-1 / Step C (`reconciliation_events.event_id=7619bf86…`, `call_name='universe_cross_check'`, `outcome='expected_divergence_handled'`, 2026-05-30T07:30:40Z) / FP-008.3 / Step A sequence.
+
+**Disposition:** ADR-007 is **superseded in part** for the four AC runtime portions; the original framing remains valid for the 2026-05-26 paper closure record. See the honest-re-closure addendum at `docs/08-planning/phase-closures/plan-trading-001-longshort-003-closure.md` § "Honest Re-closure Addendum (2026-05-30)" for the per-AC runtime evidence reconciliation, the binding eligibility-caveat contract, the phase-anchored honest deferrals, and the 8-item known-follow-ups catalog. DW-075 remains open as the audit-trail anchor.
