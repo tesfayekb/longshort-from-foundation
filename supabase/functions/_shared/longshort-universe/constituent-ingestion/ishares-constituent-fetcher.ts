@@ -189,12 +189,21 @@ export class iSharesConstituentFetcher implements ConstituentFetcher {
       );
     } catch (e) {
       const isTimeout = e instanceof Error && e.name === 'AbortError';
-      throw new ConstituentFetchError(
-        'ishares',
-        index,
-        isTimeout ? `request timeout after ${ISHARES_FETCH_TIMEOUT_MS}ms` : 'network error',
-        e,
-      );
+      // fetchWithTimeoutAndRetry throws a plain Error('HTTP <status> <statusText>')
+      // after exhausting retries on 429/5xx (per its own contract in
+      // fetch-with-timeout-and-retry.test.ts:71-84). Without this branch the
+      // post-retry HTTP context is silently collapsed into the generic
+      // "network error" label, losing the status code that downstream
+      // health-monitoring and test assertions depend on (FP-008.4 Commit 1.5
+      // failure #1; surfaced when the suite was first run end-to-end).
+      const isHttpAfterRetries =
+        e instanceof Error && /^HTTP \d{3}/.test(e.message);
+      const message = isTimeout
+        ? `request timeout after ${ISHARES_FETCH_TIMEOUT_MS}ms`
+        : isHttpAfterRetries
+        ? e.message
+        : 'network error';
+      throw new ConstituentFetchError('ishares', index, message, e);
     }
 
     if (!resp.ok) {
