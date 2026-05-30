@@ -25,11 +25,13 @@ type ReconciliationEventRow = {
 };
 
 function outcomeBadge(outcome: string) {
-  if (outcome === 'match') return <Badge>Match</Badge>;
-  if (outcome === 'mismatch') return <Badge variant="destructive">Mismatch</Badge>;
-  if (outcome === 'within_tolerance') return <Badge variant="secondary">Within Tolerance</Badge>;
-  if (outcome === 'failure_escalated') return <Badge variant="destructive">Escalated</Badge>;
-  if (outcome === 'system_bug') return <Badge variant="destructive">System Bug</Badge>;
+  if (outcome === 'false_positive_within_tolerance' || outcome === 'expected_divergence_handled') {
+    return <Badge>{outcome}</Badge>;
+  }
+  if (outcome === 'failure_handled') return <Badge variant="secondary">{outcome}</Badge>;
+  if (outcome === 'failure_escalated' || outcome === 'system_bug') {
+    return <Badge variant="destructive">{outcome}</Badge>;
+  }
   return <Badge variant="outline">{outcome}</Badge>;
 }
 
@@ -47,7 +49,6 @@ export default function ReconciliationEventsPage() {
       const { data, error } = await sb
         .from('reconciliation_events')
         .select('event_id, ts, engine_version, call_name, tier, symbol, outcome, failure_action, notes, resolved_at')
-        .like('call_name', 'longshort.%')
         .order('ts', { ascending: false })
         .limit(100);
       if (error) throw error;
@@ -60,7 +61,10 @@ export default function ReconciliationEventsPage() {
   if (error) return <ErrorState message={(error as Error).message} />;
 
   const unresolvedCount = (rows ?? []).filter(
-    (r) => !r.resolved_at && r.outcome !== 'match' && r.outcome !== 'within_tolerance',
+    (r) =>
+      !r.resolved_at &&
+      r.outcome !== 'false_positive_within_tolerance' &&
+      r.outcome !== 'expected_divergence_handled',
   ).length;
 
   return (

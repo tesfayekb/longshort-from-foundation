@@ -72,10 +72,22 @@ export function LongShortDashboard() {
         )
         .eq('outcome', 'completed')
         .order('refresh_completed_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(10);
       if (error) throw error;
-      return data;
+      // Surface the most-recent completed refresh that actually carries a
+      // filter-rejection breakdown. Smoke/force-runs against an already-
+      // filtered universe_membership state write
+      // total_post_filters == total_constituents_raw and
+      // filter_rejection_counts == {} (correct idempotence behavior, not a
+      // defect). The dashboard's rejection-breakdown surface must reflect a
+      // meaningful refresh — see deferred Phase 2 follow-up for smoke
+      // hardening (reset universe_membership or filter from raw upstream).
+      const rows = data ?? [];
+      const meaningful = rows.find((r) => {
+        const counts = r.filter_rejection_counts as Record<string, number> | null;
+        return counts != null && Object.keys(counts).length > 0;
+      });
+      return meaningful ?? rows[0] ?? null;
     },
   });
 
