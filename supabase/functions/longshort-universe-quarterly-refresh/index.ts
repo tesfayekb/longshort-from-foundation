@@ -177,7 +177,7 @@ Deno.serve(createHandler(async (req: Request) => {
     // is still named `iSharesConstituents` (storage-layer name unchanged
     // pending broader rename); only the implementation swaps.
     iSharesConstituents: new WikipediaConstituentFetcher(),
-    polygonEnrichment: new PolygonEnrichmentFetcher({ apiKey: polygonApiKey }),
+    polygonEnrichment: new PolygonEnrichmentFetcher(polygonApiKey),
     exclusionInput: {
       // Sub-step 8.4 ships with empty exclusion input; per-rule fetchers
       // wire in at later sub-steps (8.5+). Empty arrays still produce a
