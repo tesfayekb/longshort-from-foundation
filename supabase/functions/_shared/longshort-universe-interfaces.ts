@@ -102,7 +102,7 @@ export class ConstituentFetchError extends Error {
     public readonly source: 'polygon' | 'ishares' | 'wikipedia',
     public readonly index: IndexId,
     message: string,
-    public readonly cause?: unknown,
+    public override readonly cause?: unknown,
   ) {
     super(`[${source}:${index}] ${message}`);
     this.name = 'ConstituentFetchError';
