@@ -173,7 +173,7 @@ Deno.serve(createHandler(async (req: Request) => {
   let processed = 0;
 
   const settled = await pLimitedMap(constituents, ENRICHMENT_CONCURRENCY, async (c): Promise<EnrichOutcome> => {
-    if (timedOut || Date.now() - startMs > WALL_CLOCK_BUDGET_MS) {
+    if (timedOut || productionClock.getWallClockTs().getTime() - startMs > WALL_CLOCK_BUDGET_MS) {
       timedOut = true;
       return { kind: 'timed_out' };
     }
@@ -254,7 +254,7 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   const outcome: 'completed' | 'partial' = timedOut ? 'partial' : 'completed';
-  const completedAt = new Date();
+  const completedAt = productionClock.getWallClockTs();
 
   const { error: logErr } = await supabaseAdmin
     .from('universe_refresh_log')
@@ -297,7 +297,7 @@ Deno.serve(createHandler(async (req: Request) => {
       filter_rejection_counts: rejectionCounts,
       tickers_processed: processed,
       tickers_remaining: timedOut ? constituents.length - processed : 0,
-      wall_clock_ms: Date.now() - startMs,
+      wall_clock_ms: productionClock.getWallClockTs().getTime() - startMs,
     },
   });
 
@@ -312,7 +312,7 @@ Deno.serve(createHandler(async (req: Request) => {
     filter_rejection_counts: rejectionCounts,
     tickers_processed: processed,
     tickers_remaining: timedOut ? constituents.length - processed : 0,
-    wall_clock_ms: Date.now() - startMs,
+    wall_clock_ms: productionClock.getWallClockTs().getTime() - startMs,
     correlation_id: correlationId,
   });
 }));
