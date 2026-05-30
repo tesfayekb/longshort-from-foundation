@@ -69,7 +69,7 @@ async function main(): Promise<void> {
   const ctx: RefreshExecutionContext = {
     polygonConstituents: new SeededMembershipFetcher(supabaseAdmin, DEFAULT_OPERATOR_ID),
     iSharesConstituents: new WikipediaConstituentFetcher(),
-    polygonEnrichment: new PolygonEnrichmentFetcher({ apiKey: polygonApiKey }),
+    polygonEnrichment: new PolygonEnrichmentFetcher(polygonApiKey),
     exclusionInput: {
       earnings_calendar: { entries: [], fetched_at: asOf },
       ma_actions: [],
@@ -137,7 +137,7 @@ async function main(): Promise<void> {
   // evidence is in-band.
   const { data: lastEvent, error: eventErr } = await supabaseAdmin
     .from('reconciliation_events')
-    .select('id, call_name, outcome, ts, divergence')
+    .select('event_id, call_name, outcome, expected_value, observed_value, divergence, tolerance, ts')
     .eq('call_name', 'universe_cross_check')
     .order('ts', { ascending: false })
     .limit(1)
