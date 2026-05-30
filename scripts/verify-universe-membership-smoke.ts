@@ -150,8 +150,18 @@ async function main(): Promise<void> {
     });
   }
 
+  // Per verify_universe_membership classify_outcome (CROSSWIND §11.0.10 / MIG-043):
+  // both "consistent inclusion" (internal=true, observed=true) and "consistent
+  // exclusion" (internal=false, observed=false) collapse onto the single enum
+  // value `false_positive_within_tolerance`. There is no distinct clean-match
+  // outcome in the engine's 5-value ReconciliationOutcome enum — this is a
+  // known spec overloading worth flagging in Step E's known-follow-ups (one
+  // enum value covers three semantically distinct conditions: consistent-in,
+  // consistent-out, and in-tolerance divergence).
+  const EXPECTED_CLEAN_MATCH: string = 'false_positive_within_tolerance';
   const systemBugs = reports.filter((r) => r.outcome === 'system_bug');
   const failuresEscalated = reports.filter((r) => r.outcome === 'failure_escalated');
+  const offSpec = reports.filter((r) => r.outcome !== EXPECTED_CLEAN_MATCH);
 
   // Pull the persisted reconciliation_events rows for this run so the
   // checkpoint evidence is in-band.
@@ -177,9 +187,19 @@ async function main(): Promise<void> {
     in_universe_symbols: inUniverseSymbols,
     not_in_universe_symbol: NOT_IN_UNIVERSE_SENTINEL,
     invariants: {
+      expected_outcome_for_all_calls: EXPECTED_CLEAN_MATCH,
       system_bug_count: systemBugs.length,
       failure_escalated_count: failuresEscalated.length,
-      all_pass: systemBugs.length === 0 && failuresEscalated.length === 0,
+      off_expected_outcome_count: offSpec.length,
+      off_expected_outcome_calls: offSpec.map((r) => ({ symbol: r.symbol, outcome: r.outcome })),
+      all_pass:
+        systemBugs.length === 0 &&
+        failuresEscalated.length === 0 &&
+        offSpec.length === 0,
+    },
+    spec_notes: {
+      outcome_enum_overloading:
+        "`false_positive_within_tolerance` is overloaded in CROSSWIND §11.0.10 / MIG-043: it labels (a) consistent-inclusion clean match, (b) consistent-exclusion clean match, and (c) in-tolerance numeric divergence. No distinct clean_match / no_divergence outcome exists in the 5-value enum. Flag for Step E known-follow-ups (DRIFT-class spec smell, non-blocking).",
     },
     call_reports: reports,
     persisted_reconciliation_events: persistedErr
@@ -187,7 +207,7 @@ async function main(): Promise<void> {
       : persistedEvents,
   }, null, 2));
 
-  if (systemBugs.length > 0 || failuresEscalated.length > 0) {
+  if (systemBugs.length > 0 || failuresEscalated.length > 0 || offSpec.length > 0) {
     Deno.exit(1);
   }
 }
