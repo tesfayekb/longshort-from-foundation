@@ -131,7 +131,18 @@ function makeContext(opts: {
       earnings_calendar: { entries: [], fetched_at: AS_OF },
       ma_actions: [],
       halt_history: [],
-      locate_data: [],
+      // §3.3d typed-absence: a ticker MISSING from `locate_data` fires
+      // `htb_no_locate` per the rule's documented contract
+      // (rule-3-3d-htb.ts:15-17 — "better to skip a short than enter one
+      // blind"). For a happy-path fixture every polygon ticker therefore
+      // requires a POSITIVE locate record; an empty array is NOT neutral.
+      // §3.3e is the opposite polarity (missing → no firing); the
+      // asymmetry is the hazard. See INC-26.
+      locate_data: polyTickers.map((ticker) => ({
+        ticker,
+        locate_available: true,
+        borrow_rate_bps: 0,
+      })),
       short_interest: [],
     },
     refreshLogPersister: persister,
