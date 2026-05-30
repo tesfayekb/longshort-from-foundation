@@ -3,12 +3,16 @@
  *
  * FP-009a: replaces the FP-005 placeholder with a real (read-only) operator
  * view sourced directly from supabase tables — no new edge functions in this
- * commit. Surfaces three cards:
+ * commit. Surfaces four cards:
  *   1. Last successful universe refresh (universe_refresh_log latest
- *      outcome='completed')
- *   2. Universe-job registry status (job_registry rows under the
+ *      outcome='completed') — now also surfaces filter_rejection_counts
+ *      breakdown and an out-of-band indicator on total_post_filters per
+ *      FP-008.2 Step A (computed comparison only, NOT an alert pipeline).
+ *   2. Latest universe cross-check status (reconciliation_events latest row
+ *      where call_name='universe_cross_check') — FP-008.2 Step A.
+ *   3. Universe-job registry status (job_registry rows under the
  *      `longshort.universe.*` namespace)
- *   3. Recent reconciliation events (reconciliation_events last 10 rows)
+ *   4. Recent reconciliation events (reconciliation_events last 10 rows)
  *
  * RBAC: gated upstream at the route layer via `longshort.view`. Queries
  * inherit the caller's RLS; tables the caller cannot see render an empty
@@ -40,6 +44,23 @@ function formatTs(ts: string | null | undefined): string {
   }
 }
 
+/**
+ * Step A (FP-008.2): expected eligible-universe band. Computed comparison
+ * only — NOT an alert pipeline. Sourced from CROSSWIND §11 (S&P 500 +
+ * cross-listed adds typically lands in ~[750, 820] post-filter).
+ */
+const EXPECTED_UNIVERSE_BAND: readonly [number, number] = [750, 820];
+
+type FilterRejectionCounts = Record<string, number> | null | undefined;
+
+function bandStatus(
+  size: number | null | undefined,
+  [lo, hi]: readonly [number, number],
+): 'unknown' | 'in_band' | 'out_of_band' {
+  if (size == null) return 'unknown';
+  return size >= lo && size <= hi ? 'in_band' : 'out_of_band';
+}
+
 export function LongShortDashboard() {
   const refreshQuery = useQuery({
     queryKey: ['longshort', 'last-universe-refresh'],
@@ -47,10 +68,25 @@ export function LongShortDashboard() {
       const { data, error } = await supabase
         .from('universe_refresh_log')
         .select(
-          'refresh_id,as_of_date,quarter_label,refresh_completed_at,outcome,total_eligible_long,total_eligible_short,total_constituents_raw',
+          'refresh_id,as_of_date,quarter_label,refresh_completed_at,outcome,total_eligible_long,total_eligible_short,total_constituents_raw,total_post_filters,filter_rejection_counts,hard_exclusion_counts',
         )
         .eq('outcome', 'completed')
         .order('refresh_completed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const crossCheckQuery = useQuery({
+    queryKey: ['longshort', 'latest-universe-cross-check'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reconciliation_events')
+        .select('event_id,outcome,ts,divergence,tolerance,failure_action')
+        .eq('call_name', 'universe_cross_check')
+        .order('ts', { ascending: false })
         .limit(1)
         .maybeSingle();
       if (error) throw error;
@@ -106,31 +142,147 @@ export function LongShortDashboard() {
             <p className="text-sm text-muted-foreground">
               No successful refresh recorded yet.
             </p>
-          ) : (
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
-              <div>
-                <dt className="text-muted-foreground">Quarter</dt>
-                <dd className="font-medium">{refreshQuery.data.quarter_label}</dd>
+          ) : (() => {
+            const r = refreshQuery.data;
+            const postFilters = r.total_post_filters ?? null;
+            const status = bandStatus(postFilters, EXPECTED_UNIVERSE_BAND);
+            const rejections = (r.filter_rejection_counts ?? null) as FilterRejectionCounts;
+            const rejectionEntries = rejections
+              ? Object.entries(rejections).sort((a, b) => Number(b[1]) - Number(a[1]))
+              : [];
+            return (
+              <div className="space-y-5">
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-5">
+                  <div>
+                    <dt className="text-muted-foreground">Quarter</dt>
+                    <dd className="font-medium">{r.quarter_label}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">As-of</dt>
+                    <dd className="font-medium">{r.as_of_date}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Completed</dt>
+                    <dd className="font-medium">{formatTs(r.refresh_completed_at)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Eligible (long / short)</dt>
+                    <dd className="font-medium">
+                      {r.total_eligible_long ?? 0} / {r.total_eligible_short ?? 0}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">
+                      Universe size{' '}
+                      <span className="font-mono text-xs">
+                        (exp {EXPECTED_UNIVERSE_BAND[0]}–{EXPECTED_UNIVERSE_BAND[1]})
+                      </span>
+                    </dt>
+                    <dd className="flex items-center gap-2">
+                      <span className="font-medium">{postFilters ?? '—'}</span>
+                      {status === 'in_band' && (
+                        <Badge
+                          className="bg-success/10 text-success border-success/20 hover:bg-success/10"
+                          variant="outline"
+                        >
+                          in band
+                        </Badge>
+                      )}
+                      {status === 'out_of_band' && (
+                        <Badge
+                          className="bg-warning/10 text-warning border-warning/20 hover:bg-warning/10"
+                          variant="outline"
+                          title="Universe size outside expected ~[750, 820] band — investigate constituent source or filter rules"
+                        >
+                          out of band
+                        </Badge>
+                      )}
+                      {status === 'unknown' && (
+                        <Badge variant="outline">unknown</Badge>
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Filter rejection breakdown</h3>
+                  {rejectionEntries.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No filter-rejection counts recorded for this refresh.
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Filter</TableHead>
+                          <TableHead className="text-right">Rejected</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rejectionEntries.map(([key, count]) => (
+                          <TableRow key={key}>
+                            <TableCell className="font-mono text-xs">{key}</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {Number(count)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
               </div>
-              <div>
-                <dt className="text-muted-foreground">As-of</dt>
-                <dd className="font-medium">{refreshQuery.data.as_of_date}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Completed</dt>
-                <dd className="font-medium">
-                  {formatTs(refreshQuery.data.refresh_completed_at)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Eligible (long / short)</dt>
-                <dd className="font-medium">
-                  {refreshQuery.data.total_eligible_long ?? 0} /{' '}
-                  {refreshQuery.data.total_eligible_short ?? 0}
-                </dd>
-              </div>
-            </dl>
-          )}
+            );
+          })()}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Latest Universe Cross-Check</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {crossCheckQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : crossCheckQuery.isError ? (
+            <p className="text-sm text-destructive">Failed to load cross-check status.</p>
+          ) : !crossCheckQuery.data ? (
+            <p className="text-sm text-muted-foreground">
+              No <span className="font-mono">universe_cross_check</span> reconciliation event recorded yet.
+            </p>
+          ) : (() => {
+            const cc = crossCheckQuery.data;
+            const clean =
+              cc.outcome === 'false_positive_within_tolerance' ||
+              cc.outcome === 'expected_divergence_handled';
+            return (
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-3">
+                <div>
+                  <dt className="text-muted-foreground">Outcome</dt>
+                  <dd>
+                    <Badge
+                      className={
+                        clean
+                          ? 'bg-success/10 text-success border-success/20 hover:bg-success/10'
+                          : 'bg-warning/10 text-warning border-warning/20 hover:bg-warning/10'
+                      }
+                      variant="outline"
+                    >
+                      {cc.outcome}
+                    </Badge>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">When</dt>
+                  <dd className="font-medium">{formatTs(cc.ts)}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Failure action</dt>
+                  <dd className="font-medium">{cc.failure_action ?? '—'}</dd>
+                </div>
+              </dl>
+            );
+          })()}
         </CardContent>
       </Card>
 
