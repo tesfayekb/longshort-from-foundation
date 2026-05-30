@@ -6,7 +6,10 @@
   "exclude": [
     "**/*.test.ts",
     "node_modules/",
-    "get-profile/index_test.ts"
+    "deactivate-user/index_test.ts",
+    "get-profile/index_test.ts",
+    "query-audit-logs/index_test.ts",
+    "reactivate-user/index_test.ts"
   ],
   "test": {
     "include": ["**/*_test.ts"]
