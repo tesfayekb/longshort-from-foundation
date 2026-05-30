@@ -109,21 +109,38 @@ Deno.serve(createHandler(async (req: Request) => {
     results.push({ call: 'verify_buying_power', outcome: 'infrastructure_failure', error: errMsg });
   }
 
-  // verify_universe_membership — per-symbol; for 6.3d dispatch-path validation, one symbol.
-  try {
-    const ums = await verifyUniverseMembership(
-      {
-        symbol: 'AAPL',
-        operator_id: DEFAULT_OPERATOR_ID,
-        internal_in_universe: true,
-      },
-      LIVE_UNIVERSE_FETCHER,
-      ts,
-    );
-    results.push({ call: 'verify_universe_membership', outcome: ums.outcome, symbol: 'AAPL' });
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    results.push({ call: 'verify_universe_membership', outcome: 'infrastructure_failure', error: errMsg, symbol: 'AAPL' });
+  // verify_universe_membership — per-symbol, per-side. Sub-step 6.3d dispatch-
+  // path validation: AAPL on both sides. FP-008.3 side-awareness contract:
+  // this tick is a generic health probe with no position context driving a
+  // specific side, so it MUST exercise both books explicitly. Position-
+  // driven side selection lives at Phase 5+ order-entry sites where the
+  // per-position `side` is known.
+  for (const side of ['long', 'short'] as const) {
+    try {
+      const ums = await verifyUniverseMembership(
+        {
+          symbol: 'AAPL',
+          side,
+          operator_id: DEFAULT_OPERATOR_ID,
+          internal_in_universe: true,
+        },
+        LIVE_UNIVERSE_FETCHER,
+        ts,
+      );
+      results.push({
+        call: 'verify_universe_membership',
+        outcome: ums.outcome,
+        symbol: `AAPL:${side}`,
+      });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      results.push({
+        call: 'verify_universe_membership',
+        outcome: 'infrastructure_failure',
+        error: errMsg,
+        symbol: `AAPL:${side}`,
+      });
+    }
   }
 
   // verify_position — per-symbol
