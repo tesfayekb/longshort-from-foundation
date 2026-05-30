@@ -35,7 +35,23 @@ Deno.test("deactivate-user: CORS preflight", async () => {
   });
   await res.text();
   assertEquals(res.status, 200);
-  assertEquals(res.headers.get("access-control-allow-origin"), "*");
+  // Refreshed at FP-008.4 Commit 1.5d (INC-29 secondary scope item).
+  // CORS policy for this endpoint is dynamic-origin (admin-only,
+  // authenticated, high-risk per index.ts docstring). Allow-list lives
+  // in `_shared/cors.ts`: ALLOWED_ORIGINS env + Lovable preview hosts.
+  // Wildcard "*" would be a CSRF surface on an admin mutation
+  // endpoint — the prior assertion (== "*") had it backwards and was
+  // the test bug, not a CORS-leakage defect. Structural assertion:
+  //   (i) header is present and non-empty (CORS responsibility wired)
+  //   (ii) header is NOT "*" (positive-absence sentinel; locks the
+  //        dynamic-origin policy against silent regression to wildcard
+  //        — same INC-28 pattern of asserting absence of the wrong
+  //        primitive to prevent silent re-introduction).
+  const origin = res.headers.get("access-control-allow-origin");
+  assertEquals(typeof origin === "string" && origin.length > 0, true,
+    "Access-Control-Allow-Origin must be present and non-empty");
+  assertEquals(origin !== "*", true,
+    "Access-Control-Allow-Origin must NOT be wildcard on admin endpoint — see INC-29 + _shared/cors.ts");
 });
 
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";

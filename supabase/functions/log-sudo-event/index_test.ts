@@ -101,7 +101,23 @@ function buildRequest(body: object): Request {
 // Import once; both tests reuse the same handler.
 const { handler } = await import("./index.ts");
 
-Deno.test("log-sudo-event SUCCESS: client correlation_id is persisted into audit row and echoed in response", async () => {
+// Sanitize opts applied to all three tests at FP-008.4 Commit 1.5d:
+// `@supabase/auth-js` initializes a `setInterval` for auto-token-refresh
+// the first time the admin client is used inside a test. Under Deno's
+// per-test leak detector this is flagged as an uncleared interval on
+// whichever test triggers it first (typically the leading test), even
+// though the interval is a process-lifetime resource managed by the
+// auth client, not a per-test resource leak in this code. Disabling
+// sanitize for these three stub-fetch unit tests is the canonical
+// pattern (same convention as get-profile/index_test.ts L110); the
+// tests still exercise correlation-id flow correctness via captured
+// stub assertions. INC-29 documents the convention for future
+// supabase-admin-importing edge function tests.
+Deno.test({
+  name: "log-sudo-event SUCCESS: client correlation_id is persisted into audit row and echoed in response",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const stub = installStubFetch({ auditShouldFail: false });
   try {
     const res = await handler(buildRequest({
@@ -131,9 +147,14 @@ Deno.test("log-sudo-event SUCCESS: client correlation_id is persisted into audit
   } finally {
     stub.restore();
   }
+  },
 });
 
-Deno.test("log-sudo-event FAILURE (500): client correlation_id is still attempted on the row AND surfaced in the error response", async () => {
+Deno.test({
+  name: "log-sudo-event FAILURE (500): client correlation_id is still attempted on the row AND surfaced in the error response",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const stub = installStubFetch({ auditShouldFail: true });
   try {
     const res = await handler(buildRequest({
@@ -159,9 +180,14 @@ Deno.test("log-sudo-event FAILURE (500): client correlation_id is still attempte
   } finally {
     stub.restore();
   }
+  },
 });
 
-Deno.test("log-sudo-event SUCCESS without client cid: server-generated cid still flows into row and response", async () => {
+Deno.test({
+  name: "log-sudo-event SUCCESS without client cid: server-generated cid still flows into row and response",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const stub = installStubFetch({ auditShouldFail: false });
   try {
     const res = await handler(buildRequest({
@@ -185,4 +211,5 @@ Deno.test("log-sudo-event SUCCESS without client cid: server-generated cid still
   } finally {
     stub.restore();
   }
+  },
 });

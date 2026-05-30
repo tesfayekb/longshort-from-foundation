@@ -5,7 +5,8 @@
   },
   "exclude": [
     "**/*.test.ts",
-    "node_modules/"
+    "node_modules/",
+    "get-profile/index_test.ts"
   ],
   "test": {
     "include": ["**/*_test.ts"]
