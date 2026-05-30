@@ -109,14 +109,20 @@ export class PolygonConstituentFetcher implements ConstituentFetcher {
         resp = await fetchWithTimeoutAndRetry(this.httpFetch, requestUrl, { method: 'GET' });
       } catch (e) {
         const isTimeout = e instanceof Error && e.name === 'AbortError';
-        throw new ConstituentFetchError(
-          'polygon',
-          index,
-          isTimeout
-            ? `request timeout after ${DEFAULT_FETCH_TIMEOUT_MS}ms on page ${page}`
-            : `network error on page ${page}`,
-          e,
-        );
+        // fetchWithTimeoutAndRetry throws a plain Error('HTTP <status> <statusText>')
+        // after exhausting retries on 429/5xx. Without this branch the post-retry
+        // HTTP context is silently collapsed into the generic "network error" label,
+        // losing the status code downstream health-monitoring and test assertions
+        // depend on. See INC-24 (ishares canonical fix) for the sibling replication
+        // rationale; pagination context (`on page N`) is preserved in the message.
+        const isHttpAfterRetries =
+          e instanceof Error && /^HTTP \d{3}/.test(e.message);
+        const message = isTimeout
+          ? `request timeout after ${DEFAULT_FETCH_TIMEOUT_MS}ms on page ${page}`
+          : isHttpAfterRetries
+          ? `${e.message} on page ${page}`
+          : `network error on page ${page}`;
+        throw new ConstituentFetchError('polygon', index, message, e);
       }
 
       if (!resp.ok) {
