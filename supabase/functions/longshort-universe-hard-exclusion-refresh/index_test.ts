@@ -40,11 +40,28 @@ Deno.test("(b) rule param is required and validated via isHardExclusionRuleKey",
 });
 
 Deno.test("(c) handler wires checkPermissionOrThrow with longshort.view", () => {
-  if (!HANDLER_SOURCE.includes("checkPermissionOrThrow")) {
-    throw new Error("Missing checkPermissionOrThrow call");
+  // Refreshed at FP-008.4 Commit 1.5c (INC-28): cron-dispatched
+  // userless handler — pg_cron has no user identity, so permission-
+  // based authz (checkPermissionOrThrow longshort.view) is conceptually
+  // inapplicable. Real auth is cron-secret HMAC verification via
+  // verifyCronSecret. Parity with sub-step 8.4 quarterly-refresh
+  // handler precedent (which underwent the same conversion).
+  // Test name retained for git-blame continuity; assertion converted.
+  if (!HANDLER_SOURCE.includes("verifyCronSecret")) {
+    throw new Error("Missing verifyCronSecret call");
   }
-  if (!HANDLER_SOURCE.includes("'longshort.view'")) {
-    throw new Error("Missing 'longshort.view' permission key");
+  if (!HANDLER_SOURCE.includes("'../_shared/cron-auth.ts'")) {
+    throw new Error("Missing import from _shared/cron-auth.ts");
+  }
+  if (HANDLER_SOURCE.includes("checkPermissionOrThrow")) {
+    throw new Error(
+      "Unexpected checkPermissionOrThrow on cron-only handler — see INC-28",
+    );
+  }
+  if (HANDLER_SOURCE.includes("authenticateRequest")) {
+    throw new Error(
+      "Unexpected authenticateRequest on cron-only handler — see INC-28",
+    );
   }
 });
 

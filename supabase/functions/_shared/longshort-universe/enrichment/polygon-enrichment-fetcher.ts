@@ -142,14 +142,20 @@ export class PolygonEnrichmentFetcher implements UniverseEnrichmentFetcher {
       resp = await fetchWithTimeoutAndRetry(this.httpFetch, url, { method: 'GET' });
     } catch (e) {
       const isTimeout = e instanceof Error && e.name === 'AbortError';
-      throw new ConstituentFetchError(
-        'polygon',
-        'sp500',
-        isTimeout
-          ? `request timeout after ${DEFAULT_FETCH_TIMEOUT_MS}ms on ticker-details for ${ticker}`
-          : `network error on ticker-details for ${ticker}`,
-        e,
-      );
+      // fetchWithTimeoutAndRetry throws Error('HTTP <status> <statusText>') after
+      // exhausting retries on 429/5xx; without this branch the post-retry HTTP
+      // context collapses to "network error", losing status code that downstream
+      // health-monitoring depends on. See INC-24 (ishares canonical, polygon +
+      // wikipedia constituent siblings at Commit 1.5b; this enrichment site at
+      // 1.5b-extension). Per-ticker context (`for ${ticker}`) preserved.
+      const isHttpAfterRetries =
+        e instanceof Error && /^HTTP \d{3}/.test(e.message);
+      const message = isTimeout
+        ? `request timeout after ${DEFAULT_FETCH_TIMEOUT_MS}ms on ticker-details for ${ticker}`
+        : isHttpAfterRetries
+        ? `${e.message} on ticker-details for ${ticker}`
+        : `network error on ticker-details for ${ticker}`;
+      throw new ConstituentFetchError('polygon', 'sp500', message, e);
     }
 
     if (resp.status === 404) {
@@ -201,14 +207,15 @@ export class PolygonEnrichmentFetcher implements UniverseEnrichmentFetcher {
       resp = await fetchWithTimeoutAndRetry(this.httpFetch, url, { method: 'GET' });
     } catch (e) {
       const isTimeout = e instanceof Error && e.name === 'AbortError';
-      throw new ConstituentFetchError(
-        'polygon',
-        'sp500',
-        isTimeout
-          ? `request timeout after ${DEFAULT_FETCH_TIMEOUT_MS}ms on aggregates for ${ticker}`
-          : `network error on aggregates for ${ticker}`,
-        e,
-      );
+      // See ticker-details catch above + INC-24 for rationale.
+      const isHttpAfterRetries =
+        e instanceof Error && /^HTTP \d{3}/.test(e.message);
+      const message = isTimeout
+        ? `request timeout after ${DEFAULT_FETCH_TIMEOUT_MS}ms on aggregates for ${ticker}`
+        : isHttpAfterRetries
+        ? `${e.message} on aggregates for ${ticker}`
+        : `network error on aggregates for ${ticker}`;
+      throw new ConstituentFetchError('polygon', 'sp500', message, e);
     }
 
     if (!resp.ok) {
