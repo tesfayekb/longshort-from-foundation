@@ -50,7 +50,7 @@ export class EarningsCalendarFetchError extends Error {
     public readonly ticker: string,
     public readonly status: number,
     message: string,
-    public readonly cause?: unknown,
+    public override readonly cause?: unknown,
   ) {
     super(`[earnings-calendar:${ticker}] (HTTP ${status}) ${message}`);
     this.name = 'EarningsCalendarFetchError';

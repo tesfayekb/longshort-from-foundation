@@ -9,9 +9,9 @@
  *   (d) Supabase error surfaced as thrown Error (caller decides observability path).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { makeMetricsEmitter } from './metrics-emitter';
-import type { FilterRejectionReason } from '../filters/types';
-import type { HardExclusionReason } from '../hard-exclusions/types';
+import { makeMetricsEmitter } from './metrics-emitter.ts';
+import type { FilterRejectionReason } from '../filters/types.ts';
+import type { HardExclusionReason } from '../hard-exclusions/types.ts';
 
 function makeStubSupabase(updateResult: { error: { message: string } | null } = { error: null }) {
   const eq = vi.fn().mockResolvedValue(updateResult);

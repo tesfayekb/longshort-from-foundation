@@ -47,7 +47,7 @@ export class ShortInterestFetchError extends Error {
   constructor(
     public readonly status: number,
     message: string,
-    public readonly cause?: unknown,
+    public override readonly cause?: unknown,
   ) {
     super(`[short-interest] (HTTP ${status}) ${message}`);
     this.name = 'ShortInterestFetchError';
