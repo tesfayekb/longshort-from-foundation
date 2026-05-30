@@ -210,3 +210,91 @@ PLAN-TRADING-001-LONGSHORT-003 (FP-008) closes 2026-05-26 with:
 - DW register: `docs/08-planning/deferred-work-register.md` § DW-065 through DW-076.
 - Master-plan section: `docs/08-planning/master-plan.md` § PLAN-TRADING-001-LONGSHORT-003.
 - Pre-flight surface document: `FP-008-substep-8-13-pre-flight-surfaces.md` (out-of-tree; supervisor-authored; defect-#42 source per Lock Statement above).
+
+---
+
+## Honest Re-closure Addendum (2026-05-30)
+
+> **Status of this addendum:** Forward-binding honesty surface authored 2026-05-30 against the 2026-05-26 paper closure. The original closure ticked AC-17 / AC-19 / AC-26 / AC-31 on **code-operational evidence + ADR-007 vacuous-quietness deferral**. Between 2026-05-29 and 2026-05-30 a runtime sequence (FP-011 / FP-012 / FP-013 / FP-014 / enrich-and-filter / D-1 / Step C / FP-008.3 / Step A) accrued the genuine runtime evidence those four ACs called for. This addendum records the runtime evidence honestly, names the deferrals that genuinely remain with a specific blocking reason, and locks the eligibility-caveat contract that the original closure did not articulate.
+
+### A. Runtime evidence accrued post-paper-closure
+
+Sequence of commits/events that converted code-operational ACs into runtime-evidenced ACs:
+
+| Step | Commit / artifact | Effect |
+|---|---|---|
+| FP-011 | Edge-function deploy of `longshort-universe-refresh` + `longshort-reconciliation-tick` | Functions reachable at the Supabase edge |
+| FP-012 | Serve endpoint wiring (cron + CORS + auth shim) | Functions invocable from cron + curl |
+| FP-013 | Injected `Clock` removed wall-clock from kernels per DEC-038.1 + Crosswind §2 axiom 3 | Replay-determinism preserved through orchestrator |
+| FP-014 | Auth path resolution (operator JWT for `reconciliation-tick`; service-role for cron-driven `universe-refresh`) | Functions callable under real RBAC |
+| Enrich-and-filter run (`universe_refresh_log.refresh_id = df55cb4f…`, 2026-05-29) | First real §3.2 six-filter execution against seeded raw 903 constituents | `total_constituents_raw=903`, `total_post_filters=839`, `filter_rejection_counts={REIT:57, missing:2, ADV:2, listing:2, cap:1}` |
+| D-1 (seeded-reader path) | Reader resolves from `universe_membership` snapshot, not from live external fetch | Decoupled smoke + production paths from third-party rate limits |
+| Step C (Wikipedia cross-check) | `reconciliation_events.event_id = 7619bf86…`, `call_name='universe_cross_check'`, `outcome='expected_divergence_handled'`, 2026-05-30T07:30:40Z | **AC-18 satisfied with real evidence**; first `universe_cross_check` row written by a real Wikipedia-vs-seed cross-check |
+| FP-008.3 (side-aware verifier) | See `feature-proposals.md` § FP-008.3 + smoke evidence (12 `reconciliation_events` rows: 5 long FP-within-tol + 5 short failure_handled + 2 FAKE123 FP-within-tol) | Chokepoint contract corrected; verifier no longer over-fires on every long lookup |
+| Step A (dashboard UI surface) | `src/features/longshort/components/LongShortDashboard.tsx` four-card read-only surface + `/trading/longshort/reconciliation-events` page | AC-29 ("dashboards populated and reviewable") satisfied with real operator-visible UI surfaces over real data |
+
+### B. Per-AC runtime evidence reconciliation
+
+| AC | Original closure disposition | Updated disposition (2026-05-30) |
+|---|---|---|
+| AC-17 | Code-operational; runtime deferred per ADR-007 + DW-075 | **Runtime-evidenced.** Cross-check has run on a real refresh (`df55cb4f` enrich-and-filter + Step C Wikipedia cross-check on 2026-05-30); `reconciliation_events` row `7619bf86…` is the first production-shape ingestion-time cross-check firing. |
+| AC-19 | Code-operational; runtime deferred per ADR-007 + DW-075 | **Runtime-evidenced.** Metrics jsonb columns populated post-refresh on real data (`df55cb4f` row carries the `{REIT:57, missing:2, ADV:2, listing:2, cap:1}` rejection-counts breakdown + non-empty `hard_exclusion_counts`). |
+| AC-26 | Code-operational; runtime deferred per ADR-007 + DW-075 | **Runtime-evidenced.** Quarterly refresh executed successfully against the seeded constituent path; `universe_refresh_log` carries the `completed` outcome row for `df55cb4f`. Note: this is the seeded-quarterly path per FP-008.2 contract change, not the pre-FP-008.2 phantom "automated Polygon refresh" path. |
+| AC-31 | Code-operational; runtime deferred per ADR-007 + DW-075 | **Runtime-evidenced.** Cross-check produced a `reconciliation_events` row classifiable per §11.0.11: outcome `expected_divergence_handled` is a clean within-tolerance disposition, not a `system_bug` blocker. Spot-check root-causing not required (the §11.0.11 gate is "every firing understood OR fixed as defect", not "zero firings"). |
+
+ADR-007 disposition status: **superseded in part** by this addendum for AC-17 / AC-19 / AC-26 / AC-31 runtime portions. ADR-007's vacuous-quietness framing remains valid as the original disposition shape and remains historically accurate for the 2026-05-26 paper closure; this addendum is the forward-binding runtime evidence record. DW-075 entry remains open as the audit-trail anchor; closure of DW-075 itself is a future bookkeeping action (not blocking this addendum).
+
+### C. NON-NEGOTIABLE eligibility-caveat contract
+
+**Binding contract — not a deferral. Violation = wrong-universe-feeds-orders bug.**
+
+`universe_membership.long_eligible` and `universe_membership.short_eligible` currently reflect **only**:
+
+1. §3.2 six-filter outcomes (avg daily $-volume, share price, market cap, listing age, ADR, REIT), AND
+2. The §3.3d `htb_no_locate` typed-absence default-firing pattern (which sets `short_eligible=false` for every constituent until Phase 5+ broker locate integration, per CROSSWIND §2 axiom 3 — "better refuse blind shorts than enter them").
+
+They do **NOT** reflect:
+
+- §3.3a earnings windows (rule implemented + unit-tested; **no live feed bundled into the eligibility flags at Phase 1**).
+- §3.3b M&A events (rule implemented + unit-tested; no live feed bundled).
+- §3.3c halts (deferred-placeholder per DW-063; no feed at Phase 1).
+- §3.3e short-interest thresholds (rule implemented + unit-tested; no live feed bundled).
+
+**Contract:** before ANY production order-submission code path consumes `universe_membership.{long,short}_eligible` to gate an entry, the §3.3a / §3.3b / §3.3c / §3.3e live feeds MUST be wired AND MUST mutate these flags (or write to a parallel `daily_eligibility` table that the order path consults instead). The wiring is Phase 2+ work; the consumption is Phase 5+ work; this contract is the gate between them. Tests authored under FP-009+ that consume these flags MUST cite this addendum and either (a) demonstrate the live-feed wiring is in place, or (b) explicitly scope the test to the §3.2 + §3.3d subset.
+
+### D. Honest deferrals with specific reasons (replaces "Phase 7 will validate")
+
+| Deferred item | Where it lives now | Specific blocking reason (when it is genuinely needed) |
+|---|---|---|
+| §3.3a earnings live feed | Rule + unit tests landed (8 passing); feed wiring deferred | Needed at Phase 2+ when signal stack can act on earnings-window gating. No affordable Phase-1 source: Polygon doesn't surface earnings calendar with BMO/AMC flag; FMP-free row-truncates; Finnhub-Estimate is forecast-coverage not calendar. Paid path available when needed (FMP Premium ~$49/mo commercial). |
+| §3.3b M&A live feed | Rule + unit tests landed; feed wiring deferred | Needed at Phase 2+ when signal stack can act on M&A-window gating. Polygon Corporate Actions tier-gated above Phase 1 budget; FMP Premium covers; defer purchase until trade flow exists to protect. |
+| §3.3c halts live feed | Deferred-placeholder per DW-063 (pre-existing) | Needed at Phase 2+/Phase 7 per existing DW-063 + DW-058 B2 (Polygon real-time halt feed). Tracker unchanged. |
+| §3.3e short-interest live feed | Rule + unit tests landed; feed wiring deferred | Needed at Phase 2+ when signal stack can act on short-interest threshold. FINRA biweekly publication is free; ingestion-job authoring deferred until trade flow exists. |
+| §3.3d HTB live broker integration | Typed-absence default-firing in place per §2 axiom 3 (correct Phase-1 behavior) | Needed at Phase 5+ when broker order-submission layer lands. Phase-1 default-fire pattern is correct per spec; replacing it with real locate data is Phase 5 work, not Phase 1 work. |
+| Daily continuous-refresh crons (3.3a / 3.3b / 3.3c / 3.3e) | Unscheduled during D-1 transition (seeded-reader path) | Re-activate at Phase 2+ alongside live-feed wiring. No-op today because the rules have no feeds to consume; re-scheduling them empty would fire `reconciliation_events` noise without informational value. |
+
+These deferrals are anchored to **the phase that actually needs them**, not to "Phase 7 will validate." Phase 7's role is paper-trading validation of an already-wired stack; the live feeds above must land in Phase 2-5, not Phase 7.
+
+### E. Known follow-ups catalog (8 items)
+
+Forward-binding tracker of session-surfaced findings. None block this addendum or Phase 1 exit; all are explicit truth-surface entries that the 2026-05-26 paper closure lacked.
+
+1. **Outcome-enum overloading.** `false_positive_within_tolerance` covers three semantically distinct dispositions per §11.0.10: (a) consistent-inclusion match, (b) consistent-exclusion match, (c) in-tolerance numeric divergence. DRIFT-class spec smell; non-blocking; complicates audit reconstruction when reading rows in isolation. Surfaced by FP-008.2 Step C + FP-008.3 smoke.
+2. **Empty `expected_value` / `observed_value` serialization on `universe_cross_check` rows.** Rich data lives in `divergence`; the named `expected_value` and `observed_value` columns serialize empty on this call. Non-blocking but creates a per-call-name audit-reconstruction asymmetry vs `verify_universe_membership` rows.
+3. **Deferred rename gap.** `universe_refresh_log.ishares_cross_check_snapshot` DB column persists even though FP-008.2 changed the cross-check source from iShares to Wikipedia. The column now stores Wikipedia data under a name that lies about provenance — audit-trail naming defect. Rename migration deferred to avoid breaking the 2026-05-29 / 05-30 evidence chain mid-closure.
+4. **Tick auth path asymmetry.** `longshort-reconciliation-tick` uses `authenticate-request.ts` (JWT user-session auth) rather than `verifyCronSecret`. Means the tick can't be curled with the standard cron-secret pattern other longshort functions use. Operationally fine today (it runs from operator session); inconsistent with the broader longshort cron-secret convention.
+5. **CI-coverage gap — Deno edge-function test suite not running end-to-end.** TS2307 "missing .ts extensions" errors originated in FP-008.2 Step C and FP-008.3 commits; tests fail to compile but land anyway because only vitest is enforced at the merge gate. This is how FP-008.3's chokepoint over-fire was able to land in the first place — the verifier suite's compile failure shadowed the contract-shape defect that the smoke later surfaced. **Investigate during Phase 2 setup; fix before any new edge-function contract work.** Cross-references DW-077 (CI gate enforcement gap) and DW-078 (deferred ESLint violations).
+6. **`quarterly-refresh-smoke` filters against already-filtered `universe_membership` state.** Force-run idempotence behavior, not a defect; produces `total_constituents_raw == total_post_filters` and `filter_rejection_counts={}`. Operator-visible symptom mitigated in UI by `LongShortDashboard` selecting the most-recent completed refresh with a non-empty rejection breakdown. Phase 2+ smoke hardening options: (a) reset `universe_membership` to raw pre-filter state before smoke, OR (b) filter from upstream raw constituents source rather than from `universe_membership`. See `feature-proposals.md` § "FP-008.2 Step E follow-up #6".
+7. **Dashboard "Eligible long/short" card semantics.** Card shows `universe_refresh_log.total_eligible_{long,short}` (§3.2 filter-stage outcomes: 839/839) while the per-ticker Universe Membership page correctly shows `Short=No` on every row (§3.2 + §3.3d-applied state). Two correct numbers measuring two different things; visually confusing without inline explanation. UI clarification deferred to Phase 2 — add a tooltip distinguishing "filter-stage" vs "post-hard-exclusion" eligibility surfaces.
+8. **Smoke-test-grade discipline carried forward.** FP-008.2 Step B's tightened assertion (specific clean-match outcome rather than absence-of-destructive-outcomes) is what surfaced FP-008.3's chokepoint defect. Phase 2+ verifier work MUST adopt this assertion grade — loose "no `system_bug` fired" smokes will hide the next over-fire.
+
+### F. §11.4 test-coverage audit (auditable counts, not claim)
+
+Run 2026-05-30 at this addendum's authoring SHA:
+
+- **Vitest (frontend + RW tests):** `bunx vitest run` → **28 test files, 261 tests, all passing.**
+- **Deno tests (edge-function suite):** 30 `_test.ts` / `.test.ts` files discovered under `supabase/functions/`. Suite-wide `deno test` execution is currently blocked by follow-up #5 above (TS2307 missing-`.ts`-extension errors originating in FP-008.2 Step C + FP-008.3); individual verifier suites pass when run in isolation, but the end-to-end suite run is not green. **§11.4 "coverage met" is therefore claimed only for the vitest tier and the in-isolation Deno tiers; suite-wide Deno enforcement is a Phase 2 prerequisite per follow-up #5.**
+
+### G. Lock statement (2026-05-30)
+
+Phase 1 is genuinely complete on this addendum: every §10.5 exit gate is met with real runtime evidence (AC-17 / AC-19 / AC-26 / AC-31 per §B above) OR honestly deferred with a specific blocking reason tied to the phase that actually needs it (§D above), plus the binding eligibility-caveat contract (§C above) and the 8-item known-follow-ups catalog (§E above). The 2026-05-26 paper closure remains the formal closure transaction (ACT-119); this addendum is the runtime-evidence + honesty surface the paper closure lacked. Phase 2 (signal stack / FP-009+) opens against this code base with §C as the non-negotiable gate.
