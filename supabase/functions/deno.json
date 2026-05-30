@@ -1,5 +1,8 @@
 {
   "nodeModulesDir": "auto",
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@^2.105.4"
+  },
   "exclude": [
     "**/*.test.ts",
     "node_modules/"
