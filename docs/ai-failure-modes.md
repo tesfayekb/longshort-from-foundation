@@ -206,3 +206,16 @@ Cross-reference at PR-time: when a catalog #NN pattern fires at PR time AND maps
 ### Entries
 
 *(No entries at creation. Entries appended as PR-time AI-loop failure events are observed during executor / supervisor / operator review cycles; no entry removed — operational history preserved per §12.10 verbatim.)*
+
+#### 2026-05-30 — Deno config silently disables npm autodetection
+
+| Field | Value |
+|---|---|
+| `ts` | 2026-05-30T00:00:00Z |
+| `category` | 7 (Tooling / environment configuration silently changes behavior) |
+| `pr_ref` | FP-008.4 Commit 1 |
+| `ai_tool` | executor (introduced `supabase/functions/deno.json` for vitest-discovery exclusion) |
+| `description` | Any `supabase/functions/deno.json` change must preserve `nodeModulesDir: "auto"` + an `imports` map for npm bare specifiers (`@supabase/supabase-js` and any other npm bare specifiers). Introducing or modifying `deno.json` without these silently disables Deno's implicit npm autodetection and re-breaks bare-specifier resolution on production code. Discovered during vitest-exclusion config introduction when 5× TS2307 on `@supabase/supabase-js` surfaced in production files that previously type-checked clean. |
+| `detection_path` | Gate 11 type-check run (`deno test --no-run _shared/`) after deno.json introduction |
+| `resolution` | Inline fix during Commit 1: added `nodeModulesDir: "auto"` + `imports` map. Rule memorialized here. **Verification after any future `deno.json` edit:** `cd supabase/functions && deno test --no-run --allow-net --allow-env --allow-read _shared/` MUST exit 0. |
+| `pattern_signal` | first occurrence — single firing; if a second config-introduction defect surfaces in 2026, escalate to a Catalog entry with codified pre-flight check. |
