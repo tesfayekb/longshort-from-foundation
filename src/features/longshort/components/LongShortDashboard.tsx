@@ -3,12 +3,16 @@
  *
  * FP-009a: replaces the FP-005 placeholder with a real (read-only) operator
  * view sourced directly from supabase tables — no new edge functions in this
- * commit. Surfaces three cards:
+ * commit. Surfaces four cards:
  *   1. Last successful universe refresh (universe_refresh_log latest
- *      outcome='completed')
- *   2. Universe-job registry status (job_registry rows under the
+ *      outcome='completed') — now also surfaces filter_rejection_counts
+ *      breakdown and an out-of-band indicator on total_post_filters per
+ *      FP-008.2 Step A (computed comparison only, NOT an alert pipeline).
+ *   2. Latest universe cross-check status (reconciliation_events latest row
+ *      where call_name='universe_cross_check') — FP-008.2 Step A.
+ *   3. Universe-job registry status (job_registry rows under the
  *      `longshort.universe.*` namespace)
- *   3. Recent reconciliation events (reconciliation_events last 10 rows)
+ *   4. Recent reconciliation events (reconciliation_events last 10 rows)
  *
  * RBAC: gated upstream at the route layer via `longshort.view`. Queries
  * inherit the caller's RLS; tables the caller cannot see render an empty
