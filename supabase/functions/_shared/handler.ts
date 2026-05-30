@@ -12,6 +12,7 @@ import { apiError } from './api-error.ts'
 import { AuthError, PermissionDeniedError, ValidationError } from './errors.ts'
 import { checkRateLimit, type RateLimitClass } from './rate-limit.ts'
 import { logAuditEvent } from './audit.ts'
+import { corsHeaders as staticCorsHeaders } from './cors.ts'
 
 type HandlerFn = (req: Request) => Promise<Response>
 
@@ -158,10 +159,26 @@ function logDenialAudit(
   })
 }
 
-/** Build a success JSON response with CORS headers */
-export function apiSuccess(data: unknown, status = 200): Response {
+/**
+ * Build a success JSON response with CORS headers.
+ *
+ * Mirrors `apiError`'s defensive CORS contract (`api-error.ts:30,34`):
+ * accepts an optional `_cors` map for dynamic-origin propagation from
+ * `createHandler` (which knows the request `Origin`), and falls back to
+ * the static `corsHeaders` export when called standalone or from a
+ * non-handler context. Without the static fallback, any direct caller
+ * (or any future architecture that bypasses the `createHandler`
+ * post-hoc CORS injection at `handler.ts:62-65`) would emit responses
+ * the browser silently rejects. See INC-27.
+ */
+export function apiSuccess(
+  data: unknown,
+  status = 200,
+  opts?: { _cors?: Record<string, string> },
+): Response {
+  const headers = opts?._cors ?? staticCorsHeaders
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...headers, 'Content-Type': 'application/json' },
   })
 }
