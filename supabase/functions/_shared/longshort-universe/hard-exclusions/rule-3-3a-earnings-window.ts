@@ -43,20 +43,51 @@ import { isoDate, parseIsoDate, tradingDaysBefore } from '../shared/trading-days
  * Compute the earliest `as_of` date at which a position must already be
  * closed for a scheduled-earnings event.
  *
- * For a print scheduled on `scheduled_date` with `time_of_day`:
- *   - AMC: the print happens AFTER the close of `scheduled_date`, so the
- *     position must be closed by the end of the trading day that is
- *     EARNINGS_WINDOW_TRADING_DAYS trading days BEFORE `scheduled_date`.
- *   - BMO: the print happens BEFORE the open of `scheduled_date`, so the
- *     position must be closed by the end of the trading day that is
- *     EARNINGS_WINDOW_TRADING_DAYS trading days BEFORE `scheduled_date`
- *     (same arithmetic — the "session" containing the news is the same
- *     `scheduled_date` session by spec convention).
- *   - intraday: treated as AMC for cutoff purposes (most conservative).
+ * Per CROSSWIND v0.9 §3.3 worked examples (verbatim,
+ * docs/04-modules/longshort/design-source/CROSSWIND_SPEC.md:299-303):
+ *
+ *   (a) "Earnings AMC Friday → close position by end of Wednesday
+ *       (2 trading days before Friday, accounting for Wed/Thu being
+ *       the 2 days)."
+ *   (b) "Earnings BMO Monday → close position by end of Wednesday
+ *       (Friday and Thursday are the 2 trading days before Monday's
+ *       earnings, so the close-by deadline is end of Wednesday)."
+ *   (c) "Earnings Thursday AMC during a week with Wednesday holiday →
+ *       2 trading days before Thursday are Tuesday and Monday. Close
+ *       position by end of Friday of prior week."
+ *
+ * BMO and AMC have DIFFERENT effective "last session at risk":
+ *
+ *   - AMC: the print arrives AFTER the close of `scheduled_date`, so
+ *     `scheduled_date` itself IS the last at-risk session (you cannot
+ *     hold into an AMC print). Effective session = `scheduled_date`.
+ *     Flat-window = `scheduled_date` and the trading day before it.
+ *     Close-by = `tradingDaysBefore(scheduled_date, 2)`.
+ *
+ *   - BMO: the print arrives BEFORE the open of `scheduled_date`, so
+ *     by the time `scheduled_date` opens the news is already public —
+ *     `scheduled_date` itself is NOT in the flat-window; the trading
+ *     day BEFORE `scheduled_date` is the last at-risk session.
+ *     Effective session = `tradingDaysBefore(scheduled_date, 1)`.
+ *     Flat-window = the 2 trading days immediately before BMO open.
+ *     Close-by = `tradingDaysBefore(effective_session, 2)`.
+ *
+ *   - intraday: treated as AMC (most conservative — assume the print
+ *     can land before the close).
+ *
+ * Prior implementation applied AMC arithmetic uniformly to BMO, putting
+ * the BMO cutoff one trading day late vs spec. Surfaced by failing test
+ * `§3.3a worked example (b): BMO Monday cutoff is prior Wednesday` when
+ * the Deno suite was first run end-to-end at FP-008.4 Commit 1.5 #2.
+ * Real rule defect (financial-critical): BMO positions were held one
+ * extra trading day deeper into the danger window than spec mandates.
  */
 function cutoffDate(entry: ScheduledEarnings): Date {
   const scheduled = parseIsoDate(entry.scheduled_date);
-  return tradingDaysBefore(scheduled, EARNINGS_WINDOW_TRADING_DAYS);
+  const effectiveSession = entry.time_of_day === 'BMO'
+    ? tradingDaysBefore(scheduled, 1)
+    : scheduled;
+  return tradingDaysBefore(effectiveSession, EARNINGS_WINDOW_TRADING_DAYS);
 }
 
 export function rule3_3a_EarningsWindow(
