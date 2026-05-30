@@ -207,7 +207,7 @@ async function main(): Promise<void> {
   if (eventIds.length > 0) {
     const { data, error } = await supabaseAdmin
       .from('reconciliation_events')
-      .select('event_id, call_name, symbol, outcome, action_taken, divergence, ts')
+      .select('event_id, call_name, symbol, outcome, failure_action, divergence, ts')
       .in('event_id', eventIds)
       .order('ts', { ascending: true });
     if (error) {
