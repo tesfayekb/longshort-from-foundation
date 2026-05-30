@@ -110,6 +110,15 @@ Revisions to any of these constants require a CROSSWIND spec amendment + DEC-038
 
 Two §3.3 rules apply only to the short book: §3.3d (HTB / borrow-rate) and §3.3e (short-interest ceiling). All other rules apply to both books. `EligibleConstituent` exposes per-book booleans (`long_eligible`, `short_eligible`) so downstream sizing can honor the asymmetry; the `universe_membership` CHECK constraint enforces at least one book stays eligible per row.
 
+### Typed-absence polarity (asymmetric — read before consuming §3.3 inputs)
+
+§3.3 rules split into two polarity classes for missing-data semantics (§2 axiom 3 typed-absence). Confusing the two produces silent over- or under-exclusion. Consumers wiring `ExclusionInput` (orchestrators, replay fixtures, tests, future Phase 2 signal-stack callers) must honor the split:
+
+- **Neutral-absence (no record → no firing):** §3.3a earnings, §3.3b M&A, §3.3c halts, §3.3e short-interest. Missing coverage is a §11.3 health-monitoring signal, not a rule-firing path. An empty input array is safe.
+- **Exclusionary-absence (no record → firing):** §3.3d HTB / locate ONLY. Missing locate record fires `htb_no_locate` per the documented defensive contract (*"better to skip a short than enter one blind"* — `rule-3-3d-htb.ts:15-17`). An empty `locate_data` array means every short candidate is excluded, NOT that no rule fires. Positive evidence of borrow availability is required.
+
+Discoverability hazard tracked at INC-26 (surfaced via `quarterly-refresh-orchestrator_test.ts` happy-path fixture defect at FP-008.4 Commit 1.5 failure #3).
+
 ## Reconciliation Surface
 
 Per DEC-038 clause (1) + DEC-038.1 clauses (2)-(3):
