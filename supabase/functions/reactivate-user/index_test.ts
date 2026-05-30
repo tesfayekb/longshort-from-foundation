@@ -32,7 +32,14 @@ Deno.test("reactivate-user: CORS preflight", async () => {
   });
   await res.text();
   assertEquals(res.status, 200);
-  assertEquals(res.headers.get("access-control-allow-origin"), "*");
+  // See deactivate-user/index_test.ts CORS preflight test for the full
+  // rationale (INC-29 + INC-28 positive-absence pattern). reactivate
+  // is parity-admin to deactivate; same dynamic-origin policy applies.
+  const origin = res.headers.get("access-control-allow-origin");
+  assertEquals(typeof origin === "string" && origin.length > 0, true,
+    "Access-Control-Allow-Origin must be present and non-empty");
+  assertEquals(origin !== "*", true,
+    "Access-Control-Allow-Origin must NOT be wildcard on admin endpoint — see INC-29 + _shared/cors.ts");
 });
 
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
