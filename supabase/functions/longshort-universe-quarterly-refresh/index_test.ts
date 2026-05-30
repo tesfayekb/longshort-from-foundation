@@ -80,25 +80,48 @@ Deno.test("(a) quarter-gating predicate: 2026-05-25 is not first trading day; 20
 });
 
 Deno.test("(b) handler short-circuits on quarter-gating BEFORE authenticateRequest (ordering invariant)", () => {
+  // Refreshed at FP-008.4 Commit 1.5c (INC-28): handler architecture
+  // converted JWT-auth → cron-secret-auth. With cron-secret being a
+  // cheap O(1) header HMAC, auth-first is correct — prevents log
+  // noise + abuse from unauthenticated callers. The prior JWT-path
+  // "gating-first for load-shedding" rationale no longer applies.
+  // Test name retained for git-blame continuity; assertion inverted.
+  const authIdx = HANDLER_SOURCE.indexOf("verifyCronSecret(req)");
   const skipIdx = HANDLER_SOURCE.indexOf("isFirstTradingDayOfQuarter(as_of)");
-  const authIdx = HANDLER_SOURCE.indexOf("authenticateRequest(req)");
-  assertExists(skipIdx >= 0 ? true : undefined);
   assertExists(authIdx >= 0 ? true : undefined);
-  // Skip-branch source MUST appear before auth call — pre-auth gating
-  // is a load-shedding contract for the dominant cron path.
-  if (!(skipIdx > 0 && authIdx > 0 && skipIdx < authIdx)) {
+  assertExists(skipIdx >= 0 ? true : undefined);
+  if (!(authIdx > 0 && skipIdx > 0 && authIdx < skipIdx)) {
     throw new Error(
-      `Ordering invariant violated: skipIdx=${skipIdx} authIdx=${authIdx}`,
+      `Ordering invariant violated (expected verifyCronSecret BEFORE isFirstTradingDayOfQuarter): authIdx=${authIdx} skipIdx=${skipIdx}`,
     );
   }
 });
 
 Deno.test("(c) handler wires checkPermissionOrThrow with longshort.view", () => {
-  if (!HANDLER_SOURCE.includes("checkPermissionOrThrow")) {
-    throw new Error("Missing checkPermissionOrThrow call in handler");
+  // Refreshed at FP-008.4 Commit 1.5c (INC-28): cron-dispatched
+  // userless handler — pg_cron has no user identity, so permission-
+  // based authz (checkPermissionOrThrow longshort.view) is conceptually
+  // inapplicable. Real auth is cron-secret HMAC verification.
+  // Operator-triggered manual refresh runs through a separate edge
+  // function (per handler docstring lines 112-114) that wraps user
+  // authz before proxying the cron secret in.
+  // Test name retained for git-blame continuity; assertion converted
+  // to: verifyCronSecret present + user-identity primitives ABSENT.
+  if (!HANDLER_SOURCE.includes("verifyCronSecret")) {
+    throw new Error("Missing verifyCronSecret call in handler");
   }
-  if (!HANDLER_SOURCE.includes("'longshort.view'")) {
-    throw new Error("Missing 'longshort.view' permission key in handler");
+  if (!HANDLER_SOURCE.includes("'../_shared/cron-auth.ts'")) {
+    throw new Error("Missing import from _shared/cron-auth.ts");
+  }
+  if (HANDLER_SOURCE.includes("checkPermissionOrThrow")) {
+    throw new Error(
+      "Unexpected checkPermissionOrThrow on cron-only handler — see INC-28",
+    );
+  }
+  if (HANDLER_SOURCE.includes("authenticateRequest")) {
+    throw new Error(
+      "Unexpected authenticateRequest on cron-only handler — see INC-28",
+    );
   }
 });
 
