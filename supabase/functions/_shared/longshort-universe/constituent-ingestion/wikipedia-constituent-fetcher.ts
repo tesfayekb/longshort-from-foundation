@@ -98,7 +98,7 @@ export function parseWikipediaConstituents(
     if (ticker.length === 0) continue;
     // Wikipedia uses `.` for class-segregated tickers (e.g. BRK.B); leave as-is.
     // Skip obvious non-ticker noise (footnote markers, etc.).
-    if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) continue;
+    if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker)) continue;
     out.push(ticker);
   }
   return out;
