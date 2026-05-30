@@ -14,7 +14,7 @@ import {
   fetchWithTimeoutAndRetry,
   type MinimalHttpFetch,
   type MinimalHttpResponse,
-} from '../shared/fetch-with-timeout.ts';
+} from '../shared/fetch-with-timeout';
 
 function mkResp(status: number, body: unknown = {}): MinimalHttpResponse {
   return {

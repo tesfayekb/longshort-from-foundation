@@ -15,7 +15,7 @@ import {
   jaccardSimilarity,
   SURFACE_2_THRESHOLDS,
   type CrossCheckDivergence,
-} from './cross-check-spec.ts';
+} from './cross-check-spec';
 
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
