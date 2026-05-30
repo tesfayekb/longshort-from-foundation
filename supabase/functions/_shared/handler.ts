@@ -7,12 +7,11 @@
  * Enforcement rule: ALL denial audit logging occurs here.
  * No endpoint-level denial logging is permitted.
  */
-import { getCorsHeaders } from './cors.ts'
+import { getCorsHeaders, corsHeaders as staticCorsHeaders } from './cors.ts'
 import { apiError } from './api-error.ts'
 import { AuthError, PermissionDeniedError, ValidationError } from './errors.ts'
 import { checkRateLimit, type RateLimitClass } from './rate-limit.ts'
 import { logAuditEvent } from './audit.ts'
-import { corsHeaders as staticCorsHeaders } from './cors.ts'
 
 type HandlerFn = (req: Request) => Promise<Response>
 
