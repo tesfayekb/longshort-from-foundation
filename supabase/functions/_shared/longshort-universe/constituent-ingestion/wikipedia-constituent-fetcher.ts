@@ -152,12 +152,20 @@ export class WikipediaConstituentFetcher implements ConstituentFetcher {
       );
     } catch (e) {
       const isTimeout = e instanceof Error && e.name === 'AbortError';
-      throw new ConstituentFetchError(
-        'wikipedia',
-        index,
-        isTimeout ? `request timeout after ${WIKIPEDIA_FETCH_TIMEOUT_MS}ms` : 'network error',
-        e,
-      );
+      // fetchWithTimeoutAndRetry throws a plain Error('HTTP <status> <statusText>')
+      // after exhausting retries on 429/5xx. Without this branch the post-retry
+      // HTTP context is silently collapsed into the generic "network error" label,
+      // losing the status code downstream health-monitoring and test assertions
+      // depend on. See INC-24 (ishares canonical fix) for the sibling replication
+      // rationale.
+      const isHttpAfterRetries =
+        e instanceof Error && /^HTTP \d{3}/.test(e.message);
+      const message = isTimeout
+        ? `request timeout after ${WIKIPEDIA_FETCH_TIMEOUT_MS}ms`
+        : isHttpAfterRetries
+        ? e.message
+        : 'network error';
+      throw new ConstituentFetchError('wikipedia', index, message, e);
     }
 
     if (!resp.ok) {
