@@ -1071,3 +1071,18 @@ HIGH — inaccurate migration history makes future schema changes dangerous and 
 | Dependency | MIG-052 (`feature_flags` `universe.enabled=false` seed must be present). |
 | Sub-step authority | ACT-119 (FP-008 sub-step 8.13 / PLAN-TRADING-001-LONGSHORT-003 closure) |
 | AC evidence | AC-28 (component disabled via configuration flag without breaking infrastructure — flag-flip confirms the typed-absence chokepoint at universe-service.ts handles both states); AC-34 (module status transition `phase-0b-validated` → `phase-1-validated` requires operational flag flip per DEC-038.1 clause (5)). |
+
+### MIG-056: FP-008.4 Commit 3 — `universe_refresh_log.outcome` CHECK Widening to 4-Value Set (Circuit-Breaker D1 Resolution)
+
+| Field | Value |
+|---|---|
+| Migration version | (operator-applied via Supabase SQL Editor; out-of-band per FP-008.4 Bucket A discipline — `sql/12_universe_refresh_outcome_check_widening.sql`) |
+| File | `sql/12_universe_refresh_outcome_check_widening.sql` |
+| Applied | (pending operator out-of-band apply post-CI-green on Commit 3 SHA; §22.5.1 live-DB evidence required before CLEAN) |
+| Verified | (pending — post-apply verification via `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='universe_refresh_log_outcome_check';` confirming 4-value form, plus `SELECT DISTINCT outcome FROM universe_refresh_log;` unchanged from pre-apply baseline) |
+| Pattern | `ALTER TABLE ... DROP CONSTRAINT IF EXISTS universe_refresh_log_outcome_check; ALTER TABLE ... ADD CONSTRAINT universe_refresh_log_outcome_check CHECK (outcome IN ('completed','failed','partial','circuit_breaker_open'));` — idempotent DROP-then-ADD mirroring the `audit_logs_actor_id_fkey` rebuild migration shape. NULL acceptance preserved (CHECK constraints are tri-valued). |
+| Effect | Widens the `public.universe_refresh_log.outcome` CHECK constraint from MIG-048's 3-value form (`'completed','failed','partial'`) to a 4-value form adding `'circuit_breaker_open'`. Eliminates the latent 23514 CHECK violation that would fire on every real circuit-breaker trip (the orchestrator writes `outcome: 'circuit_breaker_open'` per `quarterly-refresh-orchestrator.ts`). NO data changes (live `SELECT DISTINCT outcome` empty at apply time — no rows to migrate). NO column type/default changes. NO RLS/policy/trigger changes. Single constraint redefinition. |
+| Dependency | MIG-048 (`universe_refresh_log` table + original 3-value CHECK constraint must exist). |
+| Sub-step authority | FP-008.4 Commit 3 (Bucket A item #2 — circuit-breaker CHECK constraint widening; D1 from Commit 3 pre-investigation survey). |
+| AC evidence | Prerequisite to Commit 3.5 D5 streak-detection-race fix — once D5 lands and the breaker can actually trip, the first real trip succeeds at the DB layer instead of throwing 23514. Concern-2 read-only verify folded in: `assert_eligibility_complete(default_operator, NULL)` confirmed FALSE (not NULL, not error) at Commit 3 pre-task via live query — the outer `COALESCE(..., FALSE)` in sql/11 swallows the empty-`universe_refresh_log` edge case cleanly; no sql/11 change required. |
+| Cross-references | INC-31 (D1 surfacing — this migration's resolution target); DW-083 Part A (D4 manual-clear path — prerequisite work for live reliance, gated AFTER Commits 3 + 3.5 + 4 land); Commit 3.5 (D5 self-masking race fix — depends on this migration landing first); Commit 4 (D2 + D3 fail-open + optional-method gap fix); orchestrator writer site `supabase/functions/longshort-universe-quarterly-refresh/quarterly-refresh-orchestrator.ts` (`outcome: 'circuit_breaker_open'`). |
