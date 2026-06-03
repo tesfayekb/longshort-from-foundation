@@ -86,9 +86,8 @@ Deno.serve(createHandler(async (req: Request) => {
     .maybeSingle();
 
   if (latestErr) {
-    return apiError(500, 'universe_membership_read_failed', {
+    return apiError(500, `universe_membership_read_failed: ${latestErr.message}`, {
       correlationId,
-      details: latestErr.message,
     });
   }
 
@@ -121,9 +120,8 @@ Deno.serve(createHandler(async (req: Request) => {
       .order('ticker', { ascending: true })
       .range(offset, offset + PAGE - 1);
     if (error) {
-      return apiError(500, 'universe_membership_page_failed', {
+      return apiError(500, `universe_membership_page_failed: ${error.message}`, {
         correlationId,
-        details: error.message,
       });
     }
     if (!data || data.length === 0) break;
@@ -248,9 +246,8 @@ Deno.serve(createHandler(async (req: Request) => {
   try {
     await deleteIneligible(ineligibleArr);
   } catch (e) {
-    return apiError(500, 'universe_membership_delete_failed', {
+    return apiError(500, `universe_membership_delete_failed: ${(e as Error).message}`, {
       correlationId,
-      details: (e as Error).message,
     });
   }
 
@@ -277,9 +274,8 @@ Deno.serve(createHandler(async (req: Request) => {
     });
 
   if (logErr) {
-    return apiError(500, 'universe_refresh_log_insert_failed', {
+    return apiError(500, `universe_refresh_log_insert_failed: ${logErr.message}`, {
       correlationId,
-      details: logErr.message,
     });
   }
 
