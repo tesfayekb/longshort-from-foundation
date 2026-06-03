@@ -239,7 +239,7 @@ SELECT DISTINCT
   TRUE  AS covers_3_3d,
   FALSE AS covers_3_3e,
   now() AS written_at,
-  NULL  AS written_by
+  NULL::uuid AS written_by
 FROM public.universe_refresh_log url
 WHERE url.outcome IN ('completed', 'partial')
 ON CONFLICT (operator_id, as_of_date) DO NOTHING;
