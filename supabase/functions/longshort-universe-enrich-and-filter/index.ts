@@ -23,6 +23,7 @@ import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { PolygonEnrichmentFetcher } from '../_shared/longshort-universe/enrichment/polygon-enrichment-fetcher.ts';
 import { applyFilters } from '../_shared/longshort-universe/filters/apply-filters.ts';
+import { writeEligibilityCoverage } from '../_shared/longshort-universe/get-eligibility.ts';
 import type { UniverseConstituent } from '../_shared/longshort-universe-interfaces.ts';
 import type { EnrichedConstituent } from '../_shared/longshort-universe/enrichment/types.ts';
 import type { FilterRejectionReason } from '../_shared/longshort-universe/filters/types.ts';
@@ -282,6 +283,31 @@ Deno.serve(createHandler(async (req: Request) => {
     });
   }
 
+  // Step 5.5 — eligibility-caveat coverage write (FP-008.4 Commit 2 / MIG-055).
+  // Decoupled idempotent write: failure does NOT roll back the refresh_log
+  // insert above. Fail-safe semantics — assert_eligibility_complete returns
+  // false for this (operator_id, as_of_date) until a corrective re-run, which
+  // is exactly what downstream getEligibility() consumers must see when
+  // coverage is unknown. Today: only §3.3d (HTB) is wired; §3.3a/b/c/e are
+  // feed-deferred-placeholders per DW-063 + §3.3 v1 disposition.
+  let coverageComplete = false;
+  let coverageWriteError: string | null = null;
+  try {
+    const res = await writeEligibilityCoverage(DEFAULT_OPERATOR_ID, asOfDate, {
+      covers_3_3a: false,
+      covers_3_3b: false,
+      covers_3_3c: false,
+      covers_3_3d: true,
+      covers_3_3e: false,
+    });
+    coverageComplete = res.complete;
+  } catch (e) {
+    coverageWriteError = (e as Error).message;
+    console.warn(
+      `universe_eligibility_coverage_write_failed as_of_date=${asOfDate} err=${coverageWriteError}`,
+    );
+  }
+
   await writeStrategyAuditEvent({
     strategyKey: 'longshort',
     action: 'longshort.universe.enrich_and_filter.completed',
@@ -298,6 +324,8 @@ Deno.serve(createHandler(async (req: Request) => {
       tickers_processed: processed,
       tickers_remaining: timedOut ? constituents.length - processed : 0,
       wall_clock_ms: productionClock.getWallClockTs().getTime() - startMs,
+      eligibility_coverage_complete: coverageComplete,
+      eligibility_coverage_write_error: coverageWriteError,
     },
   });
 
@@ -314,5 +342,7 @@ Deno.serve(createHandler(async (req: Request) => {
     tickers_remaining: timedOut ? constituents.length - processed : 0,
     wall_clock_ms: productionClock.getWallClockTs().getTime() - startMs,
     correlation_id: correlationId,
+    eligibility_coverage_complete: coverageComplete,
+    eligibility_coverage_write_error: coverageWriteError,
   });
 }));
