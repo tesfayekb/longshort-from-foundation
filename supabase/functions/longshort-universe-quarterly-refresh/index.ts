@@ -25,6 +25,8 @@ import type {
   RefreshExecutionContext,
   RefreshLogPersister,
 } from '../_shared/longshort-universe/refresh-jobs/types.ts';
+import { STREAK_FAILURE_OUTCOMES } from '../_shared/longshort-universe/refresh-jobs/types.ts';
+import type { RefreshOutcome } from '../_shared/longshort-universe/refresh-jobs/types.ts';
 import { SeededMembershipFetcher } from '../_shared/longshort-universe/constituent-ingestion/seeded-membership-fetcher.ts';
 import { WikipediaConstituentFetcher } from '../_shared/longshort-universe/constituent-ingestion/wikipedia-constituent-fetcher.ts';
 import { PolygonEnrichmentFetcher } from '../_shared/longshort-universe/enrichment/polygon-enrichment-fetcher.ts';
@@ -82,14 +84,38 @@ function makeSupabasePersister(): RefreshLogPersister {
       // FP-009a circuit breaker — read the tail N rows ordered DESC by
       // refresh_started_at; count contiguous outcome='failed' from the top.
       // A non-failed row (or NULL for in-flight) breaks the streak.
+      //
+      // FP-008.4 Commit 3.5 (D5 fix): the `.in('outcome', [...])` filter excludes
+      // in-flight rows whose `outcome` is still NULL — the orchestrator's own
+      // start-row (insertStart runs BEFORE this read, by design), AND any
+      // orphan-NULL rows left behind by a prior invocation that crashed before
+      // `finalize` patched the terminal outcome. Without this filter, this
+      // orchestrator's NULL self-row sits at the head of the DESC-ordered tail
+      // and breaks the streak count, so the breaker never trips (the D5 race).
+      //
+      // This NULL-as-in-flight convention is now LOAD-BEARING for breaker
+      // correctness. A future refactor that introduces an explicit
+      // `'in_progress'` value (or any other non-NULL in-flight marker) MUST
+      // preserve streak-exclusion of it — add the new value to neither the
+      // `.in(...)` filter here nor `STREAK_FAILURE_OUTCOMES` in types.ts.
+      //
+      // Stay-tripped semantics: `STREAK_FAILURE_OUTCOMES` includes
+      // `'circuit_breaker_open'` so a tripped breaker stays tripped on the
+      // next run (auto-rearm rejected — see types.ts comment + DW-083 Part A
+      // for the manual-clear path, MUST-FIX-BEFORE-LIVE).
       const { data, error } = await supabaseAdmin
         .from('universe_refresh_log')
         .select('outcome')
+        .in('outcome', ['completed', 'failed', 'partial', 'circuit_breaker_open'])
         .order('refresh_started_at', { ascending: false })
         .limit(limit);
       if (error) {
         // Observability defect, not correctness — return 0 so a transient
         // read failure does not falsely trip the breaker.
+        // NOTE: this fail-open-on-read is D2 from the Commit 3 pre-investigation
+        // survey, scoped to Commit 4 (not this commit). After Commit 3.5 the
+        // breaker can actually trip, so D2 becomes more consequential — Commit 4
+        // should follow promptly.
         console.warn(
           `universe_refresh_log_count_failures_read_failed: ${error.message}`,
         );
@@ -97,7 +123,11 @@ function makeSupabasePersister(): RefreshLogPersister {
       }
       let count = 0;
       for (const row of data ?? []) {
-        if (row.outcome === 'failed') count += 1;
+        // `.in(...)` above filters NULL server-side, so `row.outcome` is one
+        // of the 4 CHECK-constraint values. Cast is justified by that filter;
+        // a runtime guard would mask future drift (we want a typecheck/test
+        // failure if the value-set ever diverges).
+        if (STREAK_FAILURE_OUTCOMES.has(row.outcome as RefreshOutcome)) count += 1;
         else break;
       }
       return count;
