@@ -54,6 +54,12 @@ function makePersister() {
     async finalize(refresh_id, patch) {
       calls.push({ kind: 'finalize', payload: { refresh_id, ...patch } });
     },
+    // FP-008.4 Commit 4 / D3 — `countConsecutiveFailures` is now required
+    // on `RefreshLogPersister`. Base stub returns 0 (no prior failures) so
+    // the breaker block is a no-op for all non-breaker test cases.
+    async countConsecutiveFailures(_limit: number) {
+      return 0;
+    },
   };
   return { persister, calls };
 }
@@ -494,4 +500,131 @@ Deno.test('set-vs-union-vs-CHECK pin — STREAK_FAILURE_OUTCOMES is a subset of 
     !STREAK_FAILURE_OUTCOMES.has('partial'),
     "'partial' must NOT extend the streak (partial-success is non-failure)",
   );
+});
+
+// ============================================================================
+// FP-008.4 Commit 4 — D2 fail-closed read + D3 required-method tests.
+//
+// D2 (b-prime): a read failure in `countConsecutiveFailures` finalizes the
+// in-flight start-row as `outcome='failed'` and early-returns. Read errors
+// are streak-eligible (per STREAK_FAILURE_OUTCOMES) so three consecutive
+// read failures converge to a normal breaker trip via the standard streak
+// path — surfacing a persistent observability outage through the breaker's
+// own halt-and-surface rather than a quieter stream of HTTP 500s.
+//
+// D3 (x): `countConsecutiveFailures` is required on `RefreshLogPersister`;
+// the `?` optional marker was removed. A missing implementation is now a
+// compile error, eliminating the silent fail-open footgun.
+// ============================================================================
+
+function makeThrowingCountPersister(errorMessage: string) {
+  const calls: { kind: 'start' | 'finalize'; payload: unknown }[] = [];
+  const persister: RefreshLogPersister = {
+    async insertStart(row) {
+      calls.push({ kind: 'start', payload: row });
+      return { refresh_id: 'refresh-uuid-stub' };
+    },
+    async finalize(refresh_id, patch) {
+      calls.push({ kind: 'finalize', payload: { refresh_id, ...patch } });
+    },
+    async countConsecutiveFailures(_limit) {
+      throw new Error(errorMessage);
+    },
+  };
+  return { persister, calls };
+}
+
+Deno.test('D2 fail-closed — countConsecutiveFailures throws → finalize failed, pipeline skipped, no fetcher called', async () => {
+  const base = makeContext();
+  const { persister, calls } = makeThrowingCountPersister('db_connection_refused');
+  base.ctx.refreshLogPersister = persister;
+
+  // Sentinel: track whether any pipeline fetcher was invoked. A correct D2
+  // fail-closed read MUST early-return before the pipeline runs.
+  let polygonCalled = false;
+  let isharesCalled = false;
+  let enrichCalled = false;
+  base.ctx.polygonConstituents = {
+    async fetchConstituents() { polygonCalled = true; return []; },
+  };
+  base.ctx.iSharesConstituents = {
+    async fetchConstituents() { isharesCalled = true; return []; },
+  };
+  base.ctx.polygonEnrichment = {
+    async enrich() { enrichCalled = true; return []; },
+  };
+
+  const orch = createQuarterlyRefreshOrchestrator(base.ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+
+  assertEquals(result.outcome, 'failed');
+  assertEquals(result.eligible.length, 0);
+  assertEquals(result.total_constituents_raw, 0);
+  assert(result.failure_reason !== null);
+  assert(
+    result.failure_reason!.includes('count_consecutive_failures_read_failed'),
+    `expected failure_reason to contain 'count_consecutive_failures_read_failed', got: ${result.failure_reason}`,
+  );
+  assert(
+    result.failure_reason!.includes('db_connection_refused'),
+    `expected failure_reason to include underlying error message, got: ${result.failure_reason}`,
+  );
+
+  // Pipeline must NOT have run.
+  assertEquals(polygonCalled, false);
+  assertEquals(isharesCalled, false);
+  assertEquals(enrichCalled, false);
+
+  // insertStart + EXACTLY ONE finalize — the read-error path must not
+  // double-finalize against the trip block or the post-try finalize.
+  const finalizeCalls = calls.filter((c) => c.kind === 'finalize');
+  assertEquals(finalizeCalls.length, 1);
+  const finalize = finalizeCalls[0].payload as { refresh_id: string; outcome: string; failure_reason: string | null };
+  assertEquals(finalize.outcome, 'failed');
+  // Finalize targets the same refresh_id returned by insertStart (patches
+  // the in-flight row, does NOT create a second row).
+  assertEquals(finalize.refresh_id, 'refresh-uuid-stub');
+});
+
+Deno.test('D2 single-finalize pin — read-error path invokes finalize exactly once', async () => {
+  // Hardens the four-path control-flow guarantee: read-error / breaker-trip /
+  // pipeline-success / pipeline-failure each terminate via exactly one
+  // finalize. This test pins the read-error branch.
+  const { persister, calls } = makeThrowingCountPersister('read_blip');
+  const base = makeContext();
+  base.ctx.refreshLogPersister = persister;
+  const orch = createQuarterlyRefreshOrchestrator(base.ctx, OPERATOR_ID);
+  await orch.run(AS_OF);
+  const finalizeCalls = calls.filter((c) => c.kind === 'finalize');
+  assertEquals(
+    finalizeCalls.length,
+    1,
+    'read-error path must finalize exactly once (no double-finalize against the trip block or post-try finalize)',
+  );
+});
+
+Deno.test('D2 converges to breaker trip — 3 prior failed rows from read errors → next run trips', async () => {
+  // Substitute shape (per Commit 4 prompt): rather than wiring three
+  // sequential throwing runs against the fake harness, this test asserts
+  // the convergence property directly — that 'failed' rows produced by
+  // read-error finalizes are streak-eligible via STREAK_FAILURE_OUTCOMES
+  // and therefore reach the breaker's >= 3 trip threshold via the same
+  // code path as 'failed' rows produced by pipeline failures.
+  //
+  // (a) Source-level proof: read-error finalize writes outcome:'failed'
+  // (asserted by the D2 fail-closed test above), and STREAK_FAILURE_OUTCOMES
+  // includes 'failed' (asserted by the set-vs-CHECK pin earlier in this file).
+  // (b) Behavioural proof: simulate the post-state after three throwing runs
+  // by handing the breaker fake a tail of three 'failed' outcomes and assert
+  // the breaker trips on the fourth run.
+  const { ctx, calls } = makeBreakerContext(['failed', 'failed', 'failed']);
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'circuit_breaker_open');
+  const finalize = calls[1].payload as { outcome: string; failure_reason: string | null };
+  assertEquals(finalize.outcome, 'circuit_breaker_open');
+  // Convergence guarantee: read-error rows (outcome:'failed') and pipeline-
+  // failure rows (outcome:'failed') are indistinguishable to the streak
+  // counter — both extend the streak, both can trip the breaker.
+  assert(STREAK_FAILURE_OUTCOMES.has('failed'));
 });

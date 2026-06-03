@@ -85,11 +85,53 @@ export function createQuarterlyRefreshOrchestrator(
       // FP-009a circuit breaker — halt if the last 3 attempts all failed.
       // Manual operator intervention is required to clear the streak by
       // updating universe_refresh_log (e.g., mark a prior row 'partial').
-      // Missing `countConsecutiveFailures` on the persister (older test
-      // stubs) is treated as 0 → breaker never trips.
-      const recentFailures = ctx.refreshLogPersister.countConsecutiveFailures
-        ? await ctx.refreshLogPersister.countConsecutiveFailures(3)
-        : 0;
+      //
+      // FP-008.4 Commit 4 / D2 fail-closed read: `countConsecutiveFailures`
+      // is wrapped in a narrow dedicated try. A read failure finalizes the
+      // in-flight start-row as `outcome='failed'` and early-returns; this
+      // makes a read error streak-eligible (per `STREAK_FAILURE_OUTCOMES`),
+      // so three consecutive read failures converge to a normal breaker
+      // trip via the same code path as three real pipeline failures —
+      // surfacing a persistent observability outage through the breaker's
+      // own halt-and-surface mechanism rather than a quieter stream of
+      // HTTP 500s. The previous `return 0` fail-open was the D2 defect
+      // from the Commit 3 pre-investigation survey (INC-35).
+      //
+      // FP-008.4 Commit 4 / D3 required method: `countConsecutiveFailures`
+      // is non-optional on `RefreshLogPersister`; the `? ... : 0` fallback
+      // was removed because a missing implementation now fails at compile
+      // time. The two defects represented the same semantic event ("cannot
+      // assess the streak") and are routed through a single fail-closed
+      // path here.
+      let recentFailures: number;
+      try {
+        recentFailures = await ctx.refreshLogPersister.countConsecutiveFailures(3);
+      } catch (err) {
+        const reason = `count_consecutive_failures_read_failed: ${err instanceof Error ? err.message : String(err)}`;
+        await ctx.refreshLogPersister.finalize(refresh_id, {
+          refresh_completed_at: isoTimestamp(as_of),
+          total_constituents_raw: 0,
+          total_post_filters: 0,
+          total_eligible_long: 0,
+          total_eligible_short: 0,
+          outcome: 'failed',
+          failure_reason: reason,
+          ishares_cross_check_snapshot: { snapshot_at: startedAt, tickers: [] },
+        });
+        return {
+          refresh_id,
+          as_of_date,
+          quarter_label,
+          outcome: 'failed',
+          total_constituents_raw: 0,
+          total_post_filters: 0,
+          total_eligible_long: 0,
+          total_eligible_short: 0,
+          eligible: [],
+          failure_reason: reason,
+          ishares_cross_check: [],
+        };
+      }
       if (recentFailures >= 3) {
         const breaker_reason =
           `Circuit breaker open: ${recentFailures} consecutive failed refreshes. ` +

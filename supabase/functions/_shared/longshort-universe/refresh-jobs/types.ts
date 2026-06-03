@@ -141,11 +141,18 @@ export type CrossCheckFn = (input: {
 export interface RefreshLogPersister {
   insertStart(row: RefreshLogStartRow): Promise<{ refresh_id: string }>;
   finalize(refresh_id: string, patch: RefreshLogFinalizePatch): Promise<void>;
-  /** FP-009a circuit breaker — returns the count of consecutive
-   *  `outcome='failed'` rows at the tail of `universe_refresh_log`, capped
-   *  at `limit`. Optional for backward compatibility with existing test
-   *  stubs; missing implementation is treated as 0 (breaker open never). */
-  countConsecutiveFailures?(limit: number): Promise<number>;
+  /** FP-009a circuit breaker — returns the count of consecutive streak-
+   *  failure rows (per `STREAK_FAILURE_OUTCOMES`) at the tail of
+   *  `universe_refresh_log`, capped at `limit`.
+   *
+   *  REQUIRED (FP-008.4 Commit 4 / D3): the breaker is load-bearing post-
+   *  Commit 3.5. A persister that omits this method would silently disable
+   *  the trade-gate; the optional marker (`?`) was removed so a missing
+   *  implementation becomes a compile error rather than a runtime fail-open
+   *  branch. Read-path failure handling is the orchestrator's responsibility
+   *  (narrow-try fail-closed-as-failed; see quarterly-refresh-orchestrator.ts).
+   */
+  countConsecutiveFailures(limit: number): Promise<number>;
 }
 
 export interface RefreshLogStartRow {
