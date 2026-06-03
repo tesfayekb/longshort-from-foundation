@@ -853,6 +853,42 @@ export type Database = {
         }
         Relationships: []
       }
+      universe_eligibility_coverage: {
+        Row: {
+          as_of_date: string
+          covers_3_3a: boolean
+          covers_3_3b: boolean
+          covers_3_3c: boolean
+          covers_3_3d: boolean
+          covers_3_3e: boolean
+          operator_id: string
+          written_at: string
+          written_by: string | null
+        }
+        Insert: {
+          as_of_date: string
+          covers_3_3a?: boolean
+          covers_3_3b?: boolean
+          covers_3_3c?: boolean
+          covers_3_3d?: boolean
+          covers_3_3e?: boolean
+          operator_id?: string
+          written_at?: string
+          written_by?: string | null
+        }
+        Update: {
+          as_of_date?: string
+          covers_3_3a?: boolean
+          covers_3_3b?: boolean
+          covers_3_3c?: boolean
+          covers_3_3d?: boolean
+          covers_3_3e?: boolean
+          operator_id?: string
+          written_at?: string
+          written_by?: string | null
+        }
+        Relationships: []
+      }
       universe_membership: {
         Row: {
           as_of_date: string
@@ -1014,6 +1050,10 @@ export type Database = {
       }
     }
     Functions: {
+      assert_eligibility_complete: {
+        Args: { _as_of_date: string; _operator_id: string }
+        Returns: boolean
+      }
       compare_reconciliation_baseline: {
         Args: {
           p_baseline_days?: number
@@ -1073,6 +1113,10 @@ export type Database = {
           p_reason: string
           p_strategy_key: string
         }
+        Returns: Json
+      }
+      write_universe_eligibility_coverage: {
+        Args: { _as_of_date: string; _coverage: Json; _operator_id: string }
         Returns: Json
       }
     }
