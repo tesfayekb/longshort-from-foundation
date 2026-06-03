@@ -14,7 +14,8 @@
  */
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { createQuarterlyRefreshOrchestrator } from './quarterly-refresh-orchestrator.ts';
-import type { RefreshExecutionContext, RefreshLogPersister } from './types.ts';
+import type { RefreshExecutionContext, RefreshLogPersister, RefreshOutcome } from './types.ts';
+import { STREAK_FAILURE_OUTCOMES } from './types.ts';
 import type {
   UniverseMembershipPersister,
   HardExclusionsPersister,
@@ -355,4 +356,142 @@ Deno.test('metrics emitter error does NOT fail refresh (observability, not corre
   assertEquals(result.outcome, 'completed');
   assertEquals(result.failure_reason, null);
   assertEquals(metricsCalls!.length, 1);
+});
+
+// ============================================================================
+// FP-008.4 Commit 3.5 — circuit-breaker D5 self-masking race fix +
+// stay-tripped semantics.
+//
+// Tests use a persister whose `countConsecutiveFailures` simulates the
+// production loop semantics (`.in()` filter excludes NULL in-flight rows;
+// `STREAK_FAILURE_OUTCOMES.has(...)` predicate extends streak on
+// 'failed' OR 'circuit_breaker_open'). The `filteredTail` parameter
+// represents what the DB query returns POST-`.in(...)` — NULL rows are
+// not present in the input by construction, matching server-side
+// filtering. This mirrors the contract documented in
+// `longshort-universe-quarterly-refresh/index.ts` countConsecutiveFailures
+// without duplicating the supabase-js query chain in the fake.
+// ============================================================================
+
+function makeBreakerPersister(filteredTail: ReadonlyArray<RefreshOutcome>) {
+  const calls: { kind: 'start' | 'finalize'; payload: unknown }[] = [];
+  const persister: RefreshLogPersister = {
+    async insertStart(row) {
+      calls.push({ kind: 'start', payload: row });
+      return { refresh_id: 'refresh-uuid-stub' };
+    },
+    async finalize(refresh_id, patch) {
+      calls.push({ kind: 'finalize', payload: { refresh_id, ...patch } });
+    },
+    async countConsecutiveFailures(limit) {
+      let count = 0;
+      for (const outcome of filteredTail.slice(0, limit)) {
+        if (STREAK_FAILURE_OUTCOMES.has(outcome)) count += 1;
+        else break;
+      }
+      return count;
+    },
+  };
+  return { persister, calls };
+}
+
+function makeBreakerContext(filteredTail: ReadonlyArray<RefreshOutcome>) {
+  const base = makeContext();
+  const { persister, calls } = makeBreakerPersister(filteredTail);
+  base.ctx.refreshLogPersister = persister;
+  return { ctx: base.ctx, calls, umpPersisted: base.umpPersisted };
+}
+
+Deno.test('D5 fix — 3 prior failed (NULL self-row excluded by .in filter) → breaker trips', async () => {
+  // Production .in('outcome', [...]) filters NULL server-side; the fake's
+  // filteredTail is post-filter, so the in-flight self-row is absent.
+  const { ctx, calls, umpPersisted } = makeBreakerContext(['failed', 'failed', 'failed']);
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'circuit_breaker_open');
+  // insertStart + finalize both called (R3 atomicity preserved on trip path).
+  assertEquals(calls.length, 2);
+  assertEquals(calls[0].kind, 'start');
+  const finalize = calls[1].payload as { outcome: string; failure_reason: string | null };
+  assertEquals(finalize.outcome, 'circuit_breaker_open');
+  assert(finalize.failure_reason !== null);
+  assert(finalize.failure_reason!.includes('Circuit breaker open'));
+  // Pipeline did NOT run → no universe_membership persistence on trip path.
+  assertEquals(umpPersisted.length, 0);
+});
+
+Deno.test('stay-tripped — prior circuit_breaker_open + 2 failed → breaker trips again (auto-rearm rejected)', async () => {
+  // Tail [circuit_breaker_open, failed, failed]: STREAK_FAILURE_OUTCOMES
+  // includes 'circuit_breaker_open' so all 3 count → trips.
+  const { ctx, calls } = makeBreakerContext(['circuit_breaker_open', 'failed', 'failed']);
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'circuit_breaker_open');
+  const finalize = calls[1].payload as { outcome: string };
+  assertEquals(finalize.outcome, 'circuit_breaker_open');
+});
+
+Deno.test('clean break — prior completed breaks the streak → breaker does NOT trip', async () => {
+  // Tail [completed, failed, failed]: 'completed' is not in STREAK_FAILURE_OUTCOMES
+  // → loop breaks at index 0 → count=0 → pipeline proceeds.
+  const { ctx } = makeBreakerContext(['completed', 'failed', 'failed']);
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  // Happy-path pipeline runs to completion (cross-check default = pass).
+  assertEquals(result.outcome, 'completed');
+});
+
+Deno.test('NULL-as-in-flight convention pin — persister source contains the .in() 4-value filter', async () => {
+  // Load-bearing regression sentinel: the .in() filter is what excludes the
+  // NULL self-row (D5). If a future refactor drops it, the breaker silently
+  // reverts to never-tripping. This test pins the filter at source level.
+  const src = await Deno.readTextFile(
+    new URL('../../../longshort-universe-quarterly-refresh/index.ts', import.meta.url),
+  );
+  assert(
+    src.includes(".in('outcome', ['completed', 'failed', 'partial', 'circuit_breaker_open'])"),
+    'D5 fix: countConsecutiveFailures must exclude NULL in-flight rows via .in() filter on the 4 CHECK-constraint values',
+  );
+  assert(
+    src.includes('STREAK_FAILURE_OUTCOMES.has'),
+    'Stay-tripped semantics: streak predicate must use STREAK_FAILURE_OUTCOMES.has(...)',
+  );
+});
+
+Deno.test('set-vs-union-vs-CHECK pin — STREAK_FAILURE_OUTCOMES is a subset of the sql/12 4-value CHECK set', async () => {
+  // Hard-coded sql/12 CHECK values. If sql/12 ever widens/narrows, update
+  // both this array AND the production .in() filter — drift = test failure.
+  const CHECK_CONSTRAINT_VALUES: ReadonlyArray<RefreshOutcome> = [
+    'completed',
+    'failed',
+    'partial',
+    'circuit_breaker_open',
+  ];
+  // Every STREAK_FAILURE_OUTCOMES member must be a valid CHECK value.
+  for (const outcome of STREAK_FAILURE_OUTCOMES) {
+    assert(
+      CHECK_CONSTRAINT_VALUES.includes(outcome),
+      `STREAK_FAILURE_OUTCOMES member '${outcome}' is not in the sql/12 CHECK constraint value set — TS union, predicate set, and DB CHECK have drifted`,
+    );
+  }
+  // Stay-tripped semantics: 'circuit_breaker_open' MUST be in the streak set
+  // (auto-rearm would be a Tier-A safety hazard — see types.ts comment).
+  assert(
+    STREAK_FAILURE_OUTCOMES.has('circuit_breaker_open'),
+    'Stay-tripped semantics regression: circuit_breaker_open must extend the streak so a tripped breaker stays tripped',
+  );
+  assert(
+    STREAK_FAILURE_OUTCOMES.has('failed'),
+    'failed must extend the streak (baseline breaker behavior)',
+  );
+  // 'completed' and 'partial' MUST NOT extend the streak — a successful or
+  // partial-success run breaks the failure run.
+  assert(
+    !STREAK_FAILURE_OUTCOMES.has('completed'),
+    "'completed' must NOT extend the streak (a successful run breaks the failure run)",
+  );
+  assert(
+    !STREAK_FAILURE_OUTCOMES.has('partial'),
+    "'partial' must NOT extend the streak (partial-success is non-failure)",
+  );
 });
