@@ -938,6 +938,20 @@ All previously RESERVED slots for FP-008 sub-steps 8.5 + 8.6 have LANDED. Final 
 | Sub-step authority | ACT-115 (FP-008 sub-step 8.9 closure) |
 | AC evidence | AC-19 (universe-component metrics emission code-operational; runtime portion defers to sub-step 8.13 flag flip per AC-17 pattern from sub-step 8.8). |
 
+### MIG-055: FP-008.4 Commit 2 — `universe_eligibility_coverage` Table + `assert_eligibility_complete` + `write_universe_eligibility_coverage` RPC
+
+| Field | Value |
+|---|---|
+| Migration version | (applied via Supabase SQL Editor — `sql/11_universe_eligibility_coverage.sql`) |
+| File | `sql/11_universe_eligibility_coverage.sql` |
+| Applied | pending operator apply (file in `sql/` directory per external-Supabase convention) |
+| Verified | pending — verify via `SELECT assert_eligibility_complete('00000000-0000-0000-0000-000000000001'::uuid, (SELECT MAX(as_of_date) FROM universe_refresh_log));` returning `true` after backfill |
+| Pattern | `CREATE TABLE IF NOT EXISTS` + `DROP POLICY IF EXISTS` / `CREATE POLICY` + `CREATE OR REPLACE FUNCTION` + idempotent backfill (`ON CONFLICT (operator_id, as_of_date) DO NOTHING`); fully re-runnable per D3. RLS no-direct-write + `longshort.view` (or `is_superadmin`) read mirrors `kill_switches` + `universe_refresh_log` precedent. |
+| Effect | Creates `public.universe_eligibility_coverage(operator_id, as_of_date, covers_3_3a..e, written_at, written_by)` PK `(operator_id, as_of_date)`. Creates `public.assert_eligibility_complete(_operator_id uuid, _as_of_date date) returns boolean` SECURITY DEFINER (true iff every covers_3_3X column is true; absence-of-row returns false — safe-side default). Creates `public.write_universe_eligibility_coverage(_operator_id uuid, _as_of_date date, _coverage jsonb) returns jsonb` SECURITY DEFINER RPC with idempotent ON CONFLICT DO UPDATE (authorization: `longshort.manage` OR `is_superadmin` OR `service_role`). Backfills `covers_3_3d=true` (all other sub-rules `false`) for every distinct `as_of_date` in `universe_refresh_log` with `outcome IN ('completed','partial')` — captures the truth of today (only §3.3d HTB is wired; §3.3a/b/c/e are feed-deferred-placeholders per DW-063 + DEC-038.1 disposition). Structurally enforces the Phase 1 closure addendum's eligibility caveat via the `getEligibility()` TS wrapper which gates reads on `assert_eligibility_complete`; new direct `.long_eligible` / `.short_eligible` reads outside the sanctioned allowlist are blocked at PR time by Gate 12 (`scripts/check-eligibility-bypass.ts`). |
+| Dependency | MIG-050 (`universe_membership` table referenced by the wrapper read path); MIG-048 (`universe_refresh_log` table referenced by the backfill); `is_superadmin` + `has_permission` security-definer helpers from MIG-001 / `sql/02_rbac_security_helpers.sql`. |
+| Sub-step authority | FP-008.4 Commit 2 — eligibility-caveat three-layer enforcement (schema + TS wrapper + CI Gate 12). |
+| AC evidence | Phase 1 closure addendum eligibility-caveat subsection at `docs/08-planning/phase-closures/plan-trading-001-longshort-003-closure.md` § "Honest Re-closure Addendum (2026-05-30)" — Commit 2 is the structural enforcement of the markdown-only contract authored at addendum landing. |
+
 ---
 
 ### Tables (14)
@@ -968,6 +982,7 @@ All previously RESERVED slots for FP-008 sub-steps 8.5 + 8.6 have LANDED. Final 
 | `universe_refresh_log` | MIG-048 | Active |
 | `universe_membership` | MIG-050 | Active |
 | `hard_exclusions` | MIG-051 | Active |
+| `universe_eligibility_coverage` | MIG-055 | Active (pending operator apply) |
 | `universe_refresh_log.filter_rejection_counts` | MIG-053 | Active (jsonb column on existing `universe_refresh_log` table) |
 | `universe_refresh_log.hard_exclusion_counts` | MIG-053 | Active (jsonb column on existing `universe_refresh_log` table) |
 

@@ -82,3 +82,16 @@ jobs:
         # against the Gate-11-territory subset.
         working-directory: supabase/functions
         run: deno test --allow-net --allow-env --allow-read
+
+      - name: Gate 12 — Eligibility-caveat bypass ban (FP-008.4 Commit 2 / MIG-055)
+        # Forbids direct .long_eligible / .short_eligible reads outside the
+        # sanctioned allowlist (wrapper, producer, persister, verifier, engine,
+        # replay fixtures, tests). New Phase 2+ downstream consumers (signals,
+        # sizing, execution) MUST route reads through
+        # _shared/longshort-universe/get-eligibility.ts, which gates on
+        # assert_eligibility_complete(operator_id, as_of_date).
+        #
+        # Per ADR-003 enforcement-as-scripts-not-prose. Sibling shape to
+        # Gate 5 / Gate 6 / Gate 9 banned-pattern checks. Placed AFTER Gate 11
+        # per Commit 2 ordering decision.
+        run: deno run --allow-read scripts/check-eligibility-bypass.ts
