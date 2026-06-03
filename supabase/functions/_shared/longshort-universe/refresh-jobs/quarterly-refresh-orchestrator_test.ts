@@ -54,6 +54,12 @@ function makePersister() {
     async finalize(refresh_id, patch) {
       calls.push({ kind: 'finalize', payload: { refresh_id, ...patch } });
     },
+    // FP-008.4 Commit 4 / D3 — `countConsecutiveFailures` is now required
+    // on `RefreshLogPersister`. Base stub returns 0 (no prior failures) so
+    // the breaker block is a no-op for all non-breaker test cases.
+    async countConsecutiveFailures(_limit: number) {
+      return 0;
+    },
   };
   return { persister, calls };
 }
