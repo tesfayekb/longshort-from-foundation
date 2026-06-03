@@ -26,6 +26,24 @@ import type { MetricsEmitter } from '../health-monitoring/metrics-emitter.ts';
 export type RefreshOutcome = 'completed' | 'failed' | 'partial' | 'circuit_breaker_open';
 
 /**
+ * Outcomes that extend a consecutive-failure streak for circuit-breaker purposes.
+ * Includes `'circuit_breaker_open'` so a tripped breaker STAYS tripped on subsequent
+ * runs until manually cleared (stay-tripped semantics — auto-rearm was rejected as a
+ * Tier-A safety hazard: it would mask a persistent upstream failure as a transient
+ * one-run cooldown, which is worse than the current never-trips state. See FP-008.4
+ * Commit 3.5 closure + DW-083 Part A for the manual-clear path, MUST-FIX-BEFORE-LIVE).
+ *
+ * Co-located with `RefreshOutcome` so the union, this set, and the sql/12 CHECK
+ * constraint (`outcome IN ('completed','failed','partial','circuit_breaker_open')`)
+ * stay visibly in agreement; drift between any two becomes a typecheck or test
+ * failure rather than a silent semantic shift. The orchestrator-test set-vs-union
+ * pin (`STREAK_FAILURE_OUTCOMES is a subset of the 4-value CHECK set`) enforces
+ * this at CI time.
+ */
+export const STREAK_FAILURE_OUTCOMES: ReadonlySet<RefreshOutcome> =
+  new Set<RefreshOutcome>(['failed', 'circuit_breaker_open']);
+
+/**
  * Result of a quarterly refresh execution. Persisted to
  * `public.universe_refresh_log` audit table (MIG-048) and returned to the
  * edge-function caller for §11.3 health-monitoring consumption (sub-step 8.9).
