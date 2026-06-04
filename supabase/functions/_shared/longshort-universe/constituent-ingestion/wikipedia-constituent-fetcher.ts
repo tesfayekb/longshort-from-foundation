@@ -40,6 +40,28 @@ const WIKIPEDIA_URL: Readonly<Record<IndexId, string>> = {
 } as const;
 
 /**
+ * Per-index plausible ticker-count bounds — structural sanity guards for the
+ * Wikipedia HTML parser (FP-008.4 #13 defense-in-depth).
+ *
+ * Intentionally wider than the cross-check's jaccard tolerance: these catch
+ * layout-break / partial-fetch (returned count radically off vs. index size),
+ * NOT composition drift between primary and secondary (that is the cross-
+ * check's job, with its jaccard + safety-floor/ceiling thresholds).
+ *
+ * Margins:
+ *   sp500 nominal ~503 (dual-class tickers: GOOG/GOOGL, FOX/FOXA, etc.) →
+ *     [490, 520] = ±~3% envelope.
+ *   sp400 nominal ~400 (negligible dual-class noise) → [385, 415] = ±~4%.
+ *
+ * Using `Record<IndexId, …>` makes adding a new IndexId without bounds a
+ * compile-time error — a future sp600 (or similar) MUST extend this table.
+ */
+const SANITY_BOUNDS: Readonly<Record<IndexId, { min: number; max: number }>> = {
+  sp500: { min: 490, max: 520 },
+  sp400: { min: 385, max: 415 },
+} as const;
+
+/**
  * Extract S&P constituent symbols from a Wikipedia "List of S&P NNN companies"
  * HTML page. Strategy:
  *   1. Find the first `<table class="wikitable ...">` block.
@@ -48,6 +70,13 @@ const WIKIPEDIA_URL: Readonly<Record<IndexId, string>> = {
  *   3. For each data row, extract the first `<a>...</a>` inside the symbol
  *      cell (Wikipedia wraps tickers in links to the company page). Fall
  *      back to stripped cell text if no link found.
+ *
+ * After the per-row loop, asserts the final ticker count falls within
+ * SANITY_BOUNDS[index]; throws ConstituentFetchError with a skip-breakdown
+ * forensic message otherwise. Fail-fast-at-parse is the point — a short list
+ * silently feeding the cross-check is worse than a thrown fetch error (which
+ * the orchestrator catches and finalizes as a failed refresh, naming the
+ * actual cause: "layout likely changed").
  *
  * Exported for testing.
  */
@@ -87,20 +116,52 @@ export function parseWikipediaConstituents(
   }
 
   const out: string[] = [];
+  // Skip-reason counters — fold into the bounds-throw message for forensics.
+  // Without these, a "40 of 500" mystery has no on-error breadcrumb to the
+  // silent per-row continue path that actually drained the list.
+  let raggedRows = 0;
+  let emptyTickers = 0;
+  let regexRejected = 0;
   for (let i = 1; i < rowChunks.length; i += 1) {
     const cells = extractCells(rowChunks[i], 'td');
-    if (cells.length <= symbolCol) continue;
+    if (cells.length <= symbolCol) {
+      raggedRows += 1;
+      continue;
+    }
     const cell = cells[symbolCol];
     // Prefer the anchor text (Wikipedia wraps tickers in NYSE/Nasdaq links).
     const anchor = cell.match(/<a[^>]*>([\s\S]*?)<\/a>/i);
     const raw = anchor ? stripHtml(anchor[1]) : stripHtml(cell);
     const ticker = raw.trim().toUpperCase().replace(/\s+/g, '');
-    if (ticker.length === 0) continue;
+    if (ticker.length === 0) {
+      emptyTickers += 1;
+      continue;
+    }
     // Wikipedia uses `.` for class-segregated tickers (e.g. BRK.B); leave as-is.
     // Skip obvious non-ticker noise (footnote markers, etc.).
-    if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker)) continue;
+    if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker)) {
+      regexRejected += 1;
+      continue;
+    }
     out.push(ticker);
   }
+
+  // Sanity-bounds assertion — defense-in-depth on top of the downstream
+  // cross-check's sym-diff ceiling. Earlier, more diagnosable failure than
+  // a downstream "system_bug" with a 460-ticker symmetric-difference jsonb.
+  const bounds = SANITY_BOUNDS[index];
+  if (out.length < bounds.min || out.length > bounds.max) {
+    const totalSkipped = raggedRows + emptyTickers + regexRejected;
+    throw new ConstituentFetchError(
+      'wikipedia',
+      index,
+      `wikipedia parse for ${index} returned ${out.length} tickers, ` +
+        `expected ${bounds.min}-${bounds.max} ` +
+        `(skipped ${totalSkipped}: ${raggedRows} ragged, ${emptyTickers} empty, ${regexRejected} regex-rejected); ` +
+        `table layout likely changed`,
+    );
+  }
+
   return out;
 }
 
