@@ -108,3 +108,10 @@ jobs:
         # Phase-5 order-execution code cannot introduce a verify-after-mutation site
         # without explicit operator review. Current HEAD baseline: 0 violations.
         run: deno run --allow-read scripts/check-verify-after-mutation.ts
+
+      - name: Gate 14 — Supabase client specifier unification (FP-008.4 Commit 7.5 / DW-082 A1.b)
+        # Prevents the dual-type-identity class that produced TS2322 between
+        # esm.sh @supabase/supabase-js and the canonical npm/import-map specifier.
+        # Both runtime imports and `import type { SupabaseClient } ...` declarations
+        # under supabase/functions/ must use '@supabase/supabase-js'.
+        run: deno run --allow-read scripts/check-supabase-client-specifier.ts

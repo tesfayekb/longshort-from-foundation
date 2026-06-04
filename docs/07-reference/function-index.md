@@ -1066,6 +1066,28 @@ When changing any indexed function:
 
 ### Data Access Functions
 
+#### `supabaseAdmin`
+
+| Field | Value |
+|-------|-------|
+| **Type** | service |
+| **Classification** | data-access / security-critical service-role client |
+| **Owner module** | api / audit-logging shared edge infrastructure |
+| **Signature** | `SupabaseClient` proxy export; first property access lazily constructs `createClient(url, serviceRoleKey, options)` |
+| **Returns** | Service-role Supabase client for edge-function-only privileged operations. Browser/session/realtime resources disabled (`auth.autoRefreshToken=false`, `auth.persistSession=false`, `realtime.params.eventsPerSecond=0`). |
+| **Purity** | impure |
+| **Side effects** | Reads `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`; privileged DB/auth/network operations when consumers call methods |
+| **Transactional** | No — transactionality owned by caller |
+| **Fail behavior** | fail-fast on first use if required env vars are missing |
+| **Used by** | audit-logging, auth/admin edge functions, jobs, longshort universe/reconciliation edge functions |
+| **Blast radius** | system-wide |
+| **Criticality** | CRITICAL |
+| **Approval required** | Yes — Lead |
+| **Callable from** | edge-function server runtime only |
+| **Related risks** | Service-role misuse, RLS bypass, dual SupabaseClient type identity (DW-082 A1.b) |
+| **Related tests** | Gate 11 `supabase/functions` Deno suite; Gate 14 `scripts/check-supabase-client-specifier.ts` |
+| **Lifecycle** | active |
+
 #### `useUserStats()`
 
 | Field | Value |
