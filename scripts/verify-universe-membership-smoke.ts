@@ -132,6 +132,7 @@ async function main(): Promise<void> {
       { symbol, side: 'long', operator_id: DEFAULT_OPERATOR_ID, internal_in_universe: true },
       fetcher,
       verifyTs,
+      'live',
     );
     reports.push({
       symbol,
@@ -155,6 +156,7 @@ async function main(): Promise<void> {
       { symbol, side: 'short', operator_id: DEFAULT_OPERATOR_ID, internal_in_universe: true },
       fetcher,
       verifyTs,
+      'live',
     );
     reports.push({
       symbol,
@@ -181,6 +183,7 @@ async function main(): Promise<void> {
       },
       fetcher,
       verifyTs,
+      'live',
     );
     reports.push({
       symbol: NOT_IN_UNIVERSE_SENTINEL,
