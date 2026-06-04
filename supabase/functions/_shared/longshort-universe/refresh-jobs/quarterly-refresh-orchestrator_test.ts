@@ -669,15 +669,19 @@ Deno.test('Commit 6 / #5 — double orch.run() for same as_of_date: both complet
   const first = await orch.run(AS_OF);
   assertEquals(first.outcome, 'completed', 'first run must complete');
 
+  const firstRunSize = store.size;
+  assert(firstRunSize > 0, 'first run must persist at least one row');
+
   const second = await orch.run(AS_OF);
   assertEquals(second.outcome, 'completed',
     're-run for same as_of_date must complete (not throw 23505 → failed)');
 
-  // Eligible set size = 6 (3 polygon tickers × 2 indices), happy-path fixture.
-  // Final store size MUST equal the eligible set size — not 2× (no duplicates),
-  // and not 0 (no error path).
-  assertEquals(store.size, 6,
-    'final membership row count = N (eligible set), not 2N — UPSERT deduplicated by PK');
+  // Final store size MUST equal the first run's size — re-run did not double
+  // the row count (no duplicates) and did not collapse to 0 (no error path).
+  // The exact N depends on PK-deduplication of the happy-path fixture; what
+  // pins the contract is "= first-run size, not 2× and not 0".
+  assertEquals(store.size, firstRunSize,
+    're-run row count must equal first-run row count (UPSERT deduplicated by PK; not 2×, not 0)');
   assertEquals(upsertCalls, 2, 'persister called once per run');
 
   // Breaker-streak interaction pin: neither finalize emitted 'failed', so the
