@@ -247,6 +247,13 @@ Deno.serve(createHandler(async (req: Request) => {
           observed: { secondary_tickers: new Set(ishares_tickers) },
         }),
         as_of,
+        // FP-008.4 Commit 9 / MIG-059 — cross-check reconciles real Polygon vs real
+        // iShares/Wikipedia constituent data: provenance is 'live'. NOTE: this 'live'
+        // event row MUST NOT satisfy the periodic-sweep liveness predicate — the
+        // liveness-check job scopes by call_name IN (verify_buying_power,
+        // verify_position, verify_universe_membership) and excludes 'universe_cross_check'
+        // (different job, different cadence, different liveness contract).
+        'live',
       );
       return { outcome: result.outcome };
     },
