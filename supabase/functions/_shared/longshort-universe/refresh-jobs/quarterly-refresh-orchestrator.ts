@@ -215,7 +215,14 @@ export function createQuarterlyRefreshOrchestrator(
         }
 
         // 3. Polygon enrichment (primary path only).
-        const enriched = await ctx.polygonEnrichment.enrich(primary, as_of);
+        // FP-008.4 #23 — `enrich()` now returns { enriched, skipped }; the
+        // orchestrator destructures `enriched` only. The structural skip
+        // attribution (`result.skipped`) is intentionally discarded at this
+        // call site — the orchestrator's refresh-log persistence path does
+        // not yet write `enrichment_skip_counts` (parity with the bootstrap
+        // enrich-and-filter caller's MIG-061 column write is a registered
+        // follow-up; see DW-088 + INC-48 for the named scope boundary).
+        const { enriched } = await ctx.polygonEnrichment.enrich(primary, as_of);
 
         // 4. §3.2 filters.
         const filtered = applyFilters(enriched, as_of);
