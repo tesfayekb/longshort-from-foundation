@@ -657,6 +657,7 @@ export type Database = {
           event_id: string
           expected_value: Json | null
           failure_action: string | null
+          fetcher_source: string
           notes: string | null
           observed_value: Json | null
           operator_id: string
@@ -677,6 +678,7 @@ export type Database = {
           event_id?: string
           expected_value?: Json | null
           failure_action?: string | null
+          fetcher_source: string
           notes?: string | null
           observed_value?: Json | null
           operator_id?: string
@@ -697,6 +699,7 @@ export type Database = {
           event_id?: string
           expected_value?: Json | null
           failure_action?: string | null
+          fetcher_source?: string
           notes?: string | null
           observed_value?: Json | null
           operator_id?: string
