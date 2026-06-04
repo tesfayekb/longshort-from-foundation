@@ -185,6 +185,7 @@ Deno.test("createHandler returns 403 for PermissionDeniedError with correlation_
   assertEquals(res.status, 403);
   const body = await res.json();
   assertExists(body.correlation_id, "403 response should include correlation_id");
+  await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
 Deno.test("createHandler returns 500 for unknown errors without leaking details, with correlation_id", async () => {
