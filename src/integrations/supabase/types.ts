@@ -382,6 +382,7 @@ export type Database = {
           description: string | null
           enabled: boolean
           execution_guarantee: string
+          handler_path: string | null
           id: string
           max_retries: number
           owner_module: string
@@ -403,6 +404,7 @@ export type Database = {
           description?: string | null
           enabled?: boolean
           execution_guarantee?: string
+          handler_path?: string | null
           id: string
           max_retries?: number
           owner_module: string
@@ -424,6 +426,7 @@ export type Database = {
           description?: string | null
           enabled?: boolean
           execution_guarantee?: string
+          handler_path?: string | null
           id?: string
           max_retries?: number
           owner_module?: string
