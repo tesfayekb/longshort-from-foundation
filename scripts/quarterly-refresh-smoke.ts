@@ -123,6 +123,10 @@ async function main(): Promise<void> {
           observed: { secondary_tickers: new Set(ishares_tickers) },
         }),
         as_of,
+        // FP-008.4 Commit 9 / MIG-059 — smoke script reconciles real Polygon vs real
+        // iShares data: 'live'. Liveness predicate scopes by call_name and excludes
+        // 'universe_cross_check', so this row does not confuse the periodic-sweep rule.
+        'live',
       );
       return { outcome: result.outcome };
     },
