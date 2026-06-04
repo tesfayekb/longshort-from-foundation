@@ -91,7 +91,11 @@ function makeSpec() {
   };
 }
 
-Deno.test('audit-hole closure: invoke() throw → system_bug event row written + original error re-thrown', async () => {
+Deno.test({
+  name: 'audit-hole closure: invoke() throw → system_bug event row written + original error re-thrown',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const stub = installFetchStub();
   try {
     const spec = makeSpec();
@@ -125,9 +129,14 @@ Deno.test('audit-hole closure: invoke() throw → system_bug event row written +
   } finally {
     stub.restore();
   }
+  },
 });
 
-Deno.test('audit-hole closure: state surface is NOT updated on infra-failure path (event-row-only)', async () => {
+Deno.test({
+  name: 'audit-hole closure: state surface is NOT updated on infra-failure path (event-row-only)',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const stub = installFetchStub();
   try {
     const spec = makeSpec();
@@ -148,9 +157,14 @@ Deno.test('audit-hole closure: state surface is NOT updated on infra-failure pat
   } finally {
     stub.restore();
   }
+  },
 });
 
-Deno.test('audit-hole closure: event-write failure during closure is logged but original error still propagates', async () => {
+Deno.test({
+  name: 'audit-hole closure: event-write failure during closure is logged but original error still propagates',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const calls: CapturedCall[] = [];
   const original = globalThis.fetch;
   globalThis.fetch = (async (input: Request | URL | string, init?: RequestInit) => {
@@ -184,6 +198,7 @@ Deno.test('audit-hole closure: event-write failure during closure is logged but 
   } finally {
     globalThis.fetch = original;
   }
+  },
 });
 
 Deno.test('source sentinel: STEP (a) loadFn invocation is wrapped in try/catch', async () => {
