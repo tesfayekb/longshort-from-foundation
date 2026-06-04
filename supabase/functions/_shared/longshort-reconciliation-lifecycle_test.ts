@@ -103,7 +103,7 @@ Deno.test({
     const infraError = new Error('alpaca timeout: ECONNRESET');
 
     await assertRejects(
-      () => reconcile(spec, async () => { throw infraError; }, ts),
+      () => reconcile(spec, async () => { throw infraError; }, ts, 'mock'),
       Error,
       'alpaca timeout: ECONNRESET',
     );
@@ -143,7 +143,7 @@ Deno.test({
     const ts = new Date('2026-06-01T14:00:00Z');
 
     await assertRejects(
-      () => reconcile(spec, async () => { throw new Error('boom'); }, ts),
+      () => reconcile(spec, async () => { throw new Error('boom'); }, ts, 'mock'),
     );
 
     const stateCalls = stub.calls.filter((c) =>
@@ -187,7 +187,7 @@ Deno.test({
     const ts = new Date('2026-06-01T14:00:00Z');
     // Original error must still propagate even when audit write fails.
     await assertRejects(
-      () => reconcile(spec, async () => { throw new Error('original-infra-error'); }, ts),
+      () => reconcile(spec, async () => { throw new Error('original-infra-error'); }, ts, 'mock'),
       Error,
       'original-infra-error',
     );
