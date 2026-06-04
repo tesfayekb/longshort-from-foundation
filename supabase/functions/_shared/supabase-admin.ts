@@ -16,8 +16,22 @@
  * The original eager module-load `createClient(...!)` pattern crashed any test runner that
  * imported this module without env vars (e.g., `deno test` of longshort-verifiers). That
  * was a 6.3a-surfaced defect (FOLLOWUP-003); this file IS the remediation.
+ *
+ * SPECIFIER (FP-008.4 Commit 7.5 / DW-082 A1.b): both `createClient` and the
+ * `SupabaseClient` type are imported through the canonical npm specifier
+ * (`@supabase/supabase-js`, mapped in `supabase/functions/deno.json` to
+ * `npm:@supabase/supabase-js@^2.105.4`). Previously this file resolved the
+ * symbols through `https://esm.sh/@supabase/supabase-js@2`, while every
+ * consumer of `supabaseAdmin` imported `SupabaseClient` through the npm
+ * specifier. Because `SupabaseClient` has a protected member, TypeScript
+ * types it nominally — the same class loaded through two specifiers
+ * produced two incompatible types and a latent TS2322 across the tree
+ * (surfaced at the tick handler when Commit 7 brought that file into
+ * Gate-11 typecheck coverage). Unifying the producer onto the canonical
+ * specifier closes the class. Gate 14 (`check-supabase-client-specifier`)
+ * pins this and prevents recurrence.
  */
-import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 let _client: SupabaseClient | null = null;
 
