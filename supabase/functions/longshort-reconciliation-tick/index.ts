@@ -113,6 +113,15 @@ export function classifyTickDisposition(
 // IMPORTANT: this file is the SOLE place where mock fetchers live in production edge
 // function code. Sub-step 6.7 replaces these with real-broker-backed implementations
 // from a new `_shared/longshort-broker-alpaca.ts` module.
+//
+// FP-008.4 Commit 9 / MIG-059 — all three verify dispatches below tag fetcher_source='mock'
+// because this handler uses MOCK_BP_FETCHER + MOCK_POSITION_FETCHER (and is NOT-FOR-LIVE
+// as a unit). These flip to 'live' at sub-step 6.7 when real broker fetchers land. The
+// LIVE_UNIVERSE_FETCHER below is a real fetcher, but it shares this dispatch site's
+// provenance tag because the periodic sweep's liveness predicate is whole-handler scoped:
+// a tick that ONLY exercises universe-membership (no real BP / no real position) is not
+// "live broker observation" by the rule's definition (call_name-scoped to broker calls).
+// At 6.7 the BP + position fetchers go live and all three tags become 'live'.
 
 const MOCK_POSITION_FETCHER: BrokerPositionFetcher = {
   // deno-lint-ignore require-await
@@ -168,6 +177,7 @@ Deno.serve(createHandler(async (req: Request) => {
       },
       MOCK_BP_FETCHER,
       ts,
+      'mock',
     );
     results.push({ call: 'verify_buying_power', outcome: bpResult.outcome });
   } catch (err) {
@@ -192,6 +202,7 @@ Deno.serve(createHandler(async (req: Request) => {
         },
         LIVE_UNIVERSE_FETCHER,
         ts,
+        'mock',
       );
       results.push({
         call: 'verify_universe_membership',
@@ -220,6 +231,7 @@ Deno.serve(createHandler(async (req: Request) => {
       },
       MOCK_POSITION_FETCHER,
       ts,
+      'mock',
     );
     results.push({ call: 'verify_position', outcome: posResult.outcome, symbol: 'AAPL' });
   } catch (err) {
