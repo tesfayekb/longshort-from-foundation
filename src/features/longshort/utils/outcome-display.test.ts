@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   RECONCILIATION_OUTCOME_DISPLAY,
-  REFRESH_OUTCOME_DISPLAY,
   reconciliationOutcomeLabel,
   reconciliationOutcomeSeverity,
   refreshOutcomeLabel,
