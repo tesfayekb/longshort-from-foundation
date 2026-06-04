@@ -54,13 +54,34 @@ export function makeUniverseMembershipPersister(
         return;
       }
 
+      // Re-run idempotency (FP-008.4 Commit 6 / #5): a second refresh for the
+      // same as_of_date (bootstrap re-fire, manual retry, or cron edge)
+      // UPDATEs existing rows in place rather than throwing 23505.
+      // - onConflict targets the PK (operator_id, ticker, as_of_date).
+      // - ignoreDuplicates: false → DO UPDATE: long_eligible / short_eligible /
+      //   quarter_label / refresh_id are overwritten with the latest call's
+      //   values. This makes refresh_id a "last-writer" reference — it points
+      //   to the most recent refresh whose evaluation produced the row's
+      //   current state, not the first refresh that ever wrote it. The FK to
+      //   universe_refresh_log survives (still references a valid refresh).
+      // - Stale-row property: if a ticker is eligible in run 1 but NOT in run 2
+      //   for the same as_of_date, run 1's row remains in the table with
+      //   run 1's refresh_id. Consumers can filter to the latest refresh via
+      //   refresh_id if exact "latest-refresh eligible set" semantics are
+      //   needed. Out-of-scope for #5; flagged in INC entry for Phase 2.
+      // - Without this, a re-run throws 23505, the orchestrator finalizes
+      //   'failed', and Commit 3.5's streak counter feeds a false-failure
+      //   signal toward the breaker (three legitimate re-runs → trip).
       const { error } = await supabaseAdmin
         .from('universe_membership')
-        .insert(rowsToInsert);
+        .upsert(rowsToInsert, {
+          onConflict: 'operator_id,ticker,as_of_date',
+          ignoreDuplicates: false,
+        });
 
       if (error !== null) {
         throw new Error(
-          `universe-membership-persister: bulk INSERT failed for operator ${input.operator_id} @ ${input.as_of_date} (${rowsToInsert.length} rows): ${error.message}`,
+          `universe-membership-persister: bulk UPSERT failed for operator ${input.operator_id} @ ${input.as_of_date} (${rowsToInsert.length} rows): ${error.message}`,
         );
       }
     },
