@@ -43,8 +43,18 @@ import { DEFAULT_ROLLING_WINDOW_MS } from './longshort-reconciliation-state.ts';
  * @param ts Injected timestamp (replay determinism per DEC-035 clause (2))
  *
  * Throws on:
- *   - invoke() rejection: re-thrown (infrastructure failure outside lifecycle classification)
- *   - reconciliation_events INSERT failure: re-thrown (event log is authoritative)
+ *   - invoke() rejection: re-thrown (infrastructure failure). Per FP-008.4 Commit 7
+ *     audit-hole closure, a reconciliation_events row with outcome='system_bug' +
+ *     divergence={infrastructure_failure:true,error} is written BEFORE the re-throw
+ *     so infrastructure failures reach the canonical audit surface like every other
+ *     outcome class (restores the "every verify_* invocation writes one row" invariant).
+ *     If the event-row write itself fails (DB down), both errors are logged and the
+ *     original throw propagates — we do not pretend we recorded what we could not.
+ *     State surface is NOT updated on this path (event-row-only by design — the throw
+ *     halts the caller; rolling-window/escalation arithmetic applies only to completed
+ *     verifies with actionable outcomes).
+ *   - reconciliation_events INSERT failure (on the normal post-classification path):
+ *     re-thrown (event log is authoritative)
  *
  * Does NOT throw on:
  *   - failure_action error: caught and recorded in event row's `notes` field
@@ -56,8 +66,52 @@ export async function reconcile<TExpected, TObserved>(
   invoke: (ts: Date) => Promise<{ expected: TExpected; observed: TObserved }>,
   ts: Date,
 ): Promise<ReconcileResult> {
-  // STEP (a) — invoke broker call
-  const { expected, observed } = await invoke(ts);
+  // STEP (a) — invoke broker call. A loadFn throw is an infrastructure failure
+  // (source unavailable, no comparison possible) — structurally a system_bug.
+  // Per FP-008.4 Commit 7 + the reconciliation_events invariant ("every verify_*
+  // invocation writes one row regardless of outcome"), record the event BEFORE
+  // re-throwing so infrastructure failures reach the canonical audit surface.
+  // Re-throw preserves the caller's existing fail-loud contract.
+  let expected: TExpected;
+  let observed: TObserved;
+  try {
+    ({ expected, observed } = await invoke(ts));
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    try {
+      await writeEventRow({
+        operator_id: spec.operator_id,
+        ts,
+        engine_version: ENGINE_VERSION,
+        call_name: spec.call_name,
+        tier: spec.tier,
+        symbol: spec.symbol,
+        expected_value: null,
+        observed_value: null,
+        divergence: { infrastructure_failure: true, error: errMsg },
+        tolerance: spec.tolerance,
+        outcome: 'system_bug',
+        failure_action: null,
+        phase_0b_run_id: null,
+        pr_evidence_ref: null,
+        notes: `infrastructure_failure: ${errMsg}`,
+      });
+    } catch (writeErr) {
+      // Audit-write failed during hole-closure (DB down). Don't pretend we
+      // recorded what we couldn't — log both errors and let the original throw
+      // propagate. State surface intentionally NOT updated on this path (the
+      // throw halts the caller; rolling-window/escalation apply only to
+      // completed verifies with actionable outcomes).
+      const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+      console.error('[reconcile] infrastructure_failure event write failed', {
+        call_name: spec.call_name,
+        symbol: spec.symbol,
+        original_error: errMsg,
+        write_error: writeMsg,
+      });
+    }
+    throw err; // re-throw original — caller's fail-loud contract preserved
+  }
 
   // STEP (b) — classify outcome (pure functions; deterministic per DEC-035 clause (1))
   const divergence = spec.compute_divergence(expected, observed);

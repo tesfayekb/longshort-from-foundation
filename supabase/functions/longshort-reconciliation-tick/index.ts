@@ -1,6 +1,13 @@
 /**
  * longshort-reconciliation-tick — Periodic-sweep edge function for reconciliation engine.
  *
+ * NOT FOR LIVE INVOCATION until Phase 2 cron-activation work item lands WITH this
+ * fix (FP-008.4 Commit 7). The handler uses mock BP/position fetchers; the live
+ * universe fetcher is wired but the broker fetchers are placeholders pending sub-step
+ * 6.7 Alpaca integration. The Commit 7 disposition-routing fix (this file) MUST be
+ * shipped before any cron schedule activates this function — otherwise infrastructure
+ * failures and escalated outcomes would phantom-succeed to HTTP 200 (the #9 vector).
+ *
  * Purpose: dispatches a subset of verify_*'s in batch per the scheduled job
  * `longshort.reconciliation_periodic_sweep` (activated at sub-step 6.3d via MIG-045).
  *
@@ -39,6 +46,55 @@ import type {
   BrokerPositionFetcher,
   BrokerBuyingPowerFetcher,
 } from '../_shared/longshort-broker-interfaces.ts';
+import type { ReconciliationOutcome } from '../_shared/longshort-reconciliation-types.ts';
+
+/**
+ * Per-verifier tick result — outcome is either a ReconciliationOutcome
+ * (verify completed and reconcile() classified it) or 'infrastructure_failure'
+ * (the verify wrapper / reconcile() loadFn re-threw — FP-008.4 Commit 7 already
+ * wrote a system_bug row to reconciliation_events before the re-throw).
+ */
+export type TickResultOutcome = ReconciliationOutcome | 'infrastructure_failure';
+
+export interface TickResult {
+  call: string;
+  outcome: TickResultOutcome;
+  symbol?: string;
+  error?: string;
+}
+
+/**
+ * #9 fail-loud disposition router (FP-008.4 Commit 7).
+ *
+ * Inputs: per-verifier outcomes from one tick.
+ * Output: HTTP status the handler should return.
+ *
+ * Halt-and-surface (HTTP 500) if ANY result is:
+ *   - 'failure_escalated' (verify completed; rolling-window/severity says halt)
+ *   - 'system_bug'        (verify completed; non-recoverable engine/data invariant break)
+ *   - 'infrastructure_failure' (verify could not run; source unavailable)
+ *
+ * HTTP 200 otherwise — every remaining outcome is either within tolerance,
+ * an expected divergence, or a failure_handled case whose handling already
+ * executed inside reconcile() and is recorded in reconciliation_events.
+ *
+ * No strategy_audit events are emitted — every outcome (including infra
+ * failures, post-Commit 7) is in reconciliation_events via reconcile(). The
+ * HTTP status IS the disposition signal; the audit record already exists
+ * canonically. Emitting a parallel strategy-audit event here would hit the
+ * audit-writer trap the lifecycle docstring explicitly bans.
+ */
+export function classifyTickDisposition(
+  results: ReadonlyArray<Pick<TickResult, 'outcome'>>,
+): { status: 200 | 500; halt: boolean } {
+  const HALT_OUTCOMES: ReadonlySet<TickResultOutcome> = new Set([
+    'failure_escalated',
+    'system_bug',
+    'infrastructure_failure',
+  ]);
+  const halt = results.some((r) => HALT_OUTCOMES.has(r.outcome));
+  return { status: halt ? 500 : 200, halt };
+}
 
 // MOCK FETCHERS for 6.3d. Real broker integration lands at sub-step 6.7. These mocks
 // satisfy the BrokerXxxFetcher contracts with deterministic canned responses so the
@@ -90,7 +146,7 @@ Deno.serve(createHandler(async (req: Request) => {
   // Top-of-call-chain wall-clock read per DEC-034 clause (4) injected-clock discipline.
   const ts = productionClock.getWallClockTs();
 
-  const results: Array<{ call: string; outcome: string; symbol?: string; error?: string }> = [];
+  const results: TickResult[] = [];
 
   // verify_buying_power — once per tick (system-level)
   try {
@@ -161,10 +217,26 @@ Deno.serve(createHandler(async (req: Request) => {
     results.push({ call: 'verify_position', outcome: 'infrastructure_failure', error: errMsg, symbol: 'AAPL' });
   }
 
-  return apiSuccess({
+  // #9 fail-loud disposition (FP-008.4 Commit 7). Escalated / system_bug /
+  // infrastructure_failure → HTTP 500 so cron-level retry + alerting fires.
+  // Every outcome is already in reconciliation_events via reconcile() (the
+  // infrastructure_failure path was the audit hole closed in the same commit).
+  const { status, halt } = classifyTickDisposition(results);
+  const body = {
     tick_ts: ts.toISOString(),
     verifiers_dispatched: results.length,
     results,
     correlation_id: ctx.correlationId,
-  });
+  };
+  if (halt) {
+    // Per-call disposition (escalated / system_bug / infrastructure_failure)
+    // is already in reconciliation_events via reconcile() — operators inspect
+    // that surface, not the HTTP body. apiError's fixed-shape envelope is the
+    // disposition signal; cron-level retry + alerting fires on the 5xx.
+    return apiError(status, 'reconciliation_tick_escalated', {
+      code: 'RECONCILIATION_TICK_ESCALATED',
+      correlationId: ctx.correlationId,
+    });
+  }
+  return apiSuccess(body, status);
 }));
