@@ -116,12 +116,14 @@ function buildLivenessCheckSpec(verdict: Extract<LivenessVerdict, { stop: true }
       details: observed.details,
     }),
     classify_outcome: (): ReconciliationOutcome => 'system_bug',
-    failure_action: async (_ctx) => {
+    failure_action: async (ctx) => {
       // Rung (c) — halt the sweep. Re-enable becomes a deliberate operator action.
       // Mirrors MIG-058 disarm. Idempotent (WHERE enabled=true clause).
+      // updated_at uses the injected ctx.ts (threaded through reconcile() from the
+      // handler's productionClock) — no wall-clock read here per DEC-034 clause (4).
       const { error } = await supabaseAdmin
         .from('job_registry')
-        .update({ enabled: false, updated_at: new Date().toISOString() })
+        .update({ enabled: false, updated_at: ctx.ts.toISOString() })
         .eq('id', PERIODIC_SWEEP_JOB_ID)
         .eq('enabled', true);
       if (error) {
@@ -168,11 +170,23 @@ async function loadRecentExecutionWindows(): Promise<ExecutionWindowSummary[]> {
     if (countErr) {
       throw new Error(`liveness_check: event count failed: ${countErr.message}`);
     }
+    // Fail-closed on null count (INC-33 / Commit-4 fail-direction lesson): a null
+    // count means the infrastructure did not return a definitive number — NOT a
+    // genuine zero. Coercing `count ?? 0` here would invert the safety semantics:
+    // a transient read failure would be silently interpreted as livelessness and
+    // trigger a false STOP. A genuine zero (query succeeded, no rows matched) is
+    // the real signal and arrives as count === 0, not null.
+    if (count === null || count === undefined) {
+      throw new Error(
+        `liveness_check: event count returned null for execution ${e.execution_id} — ` +
+          `infrastructure failure, not a definitive zero`,
+      );
+    }
     out.push({
       execution_id: e.execution_id as string,
       started_at: e.started_at as string,
       completed_at: e.completed_at as string,
-      live_periodic_sweep_event_count: count ?? 0,
+      live_periodic_sweep_event_count: count,
     });
   }
   return out;
@@ -204,6 +218,12 @@ Deno.serve(createHandler(async (req: Request) => {
 
   // STOP path. Rung (a) — event row via reconcile(); rung (c) — disarm in failure_action.
   const spec = buildLivenessCheckSpec(verdict);
+  // gate-13-allow: the .update({enabled:false}) flagged above is rung (c) of the STOP
+  // ladder, executed INSIDE reconcile()'s failure_action (STEP e of the lifecycle).
+  // It is reconcile() taking its own halt action on a job_registry flag — not a
+  // caller mutating financial state and then verifying. CROSSWIND §7.5/§7.6's
+  // pre-mutation-gate invariant protects positions/orders/lots, not the registry
+  // disarm that IS the failure response. Sibling shape to Commit 7's cross-check.
   await reconcile(
     spec,
     // No external invoke — the "observed" is the verdict itself (a real assessment of
