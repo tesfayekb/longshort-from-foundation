@@ -30,6 +30,10 @@
  * Gate-11 typecheck coverage). Unifying the producer onto the canonical
  * specifier closes the class. Gate 14 (`check-supabase-client-specifier`)
  * pins this and prevents recurrence.
+ *
+ * Runtime hygiene: this is a server-side service-role client. It does not
+ * need browser session persistence, auth token auto-refresh, or realtime
+ * subscriptions; those background resources are disabled at construction.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
