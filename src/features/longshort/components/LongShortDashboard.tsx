@@ -34,6 +34,15 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { formatDistanceToNow } from 'date-fns';
+import { StatusBadge } from '@/components/dashboard/StatusBadge';
+import {
+  computeStaleness,
+  stalenessBadgeLabel,
+  stalenessBadgeVariant,
+  stalenessCauseHint,
+  type RefreshOutcome,
+} from '@/features/longshort/utils/universe-staleness';
 
 function formatTs(ts: string | null | undefined): string {
   if (!ts) return '—';
@@ -88,6 +97,24 @@ export function LongShortDashboard() {
         return counts != null && Object.keys(counts).length > 0;
       });
       return meaningful ?? rows[0] ?? null;
+    },
+  });
+
+  // Most-recent ANY-outcome refresh row — distinct from refreshQuery (which
+  // is completed-only). Drives the staleness badge's cross-reference cause
+  // framing (refresh_failing vs no_recent_attempt) per FP-008.4 #16. Same
+  // table, same RLS policy as refreshQuery — no new permission path.
+  const latestAnyOutcomeQuery = useQuery({
+    queryKey: ['longshort', 'latest-universe-refresh-any-outcome'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('universe_refresh_log')
+        .select('refresh_id,outcome,quarter_label,refresh_completed_at,refresh_started_at')
+        .order('refresh_started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
     },
   });
 
@@ -167,7 +194,40 @@ export function LongShortDashboard() {
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-5">
                   <div>
                     <dt className="text-muted-foreground">Quarter</dt>
-                    <dd className="font-medium">{r.quarter_label}</dd>
+                    <dd className="font-medium flex items-center gap-2 flex-wrap">
+                      <span>{r.quarter_label}</span>
+                      {(() => {
+                        const latestAny = latestAnyOutcomeQuery.data;
+                        // Prefer the most-recent-any-outcome quarter_label when
+                        // present (it reflects what the scheduler last attempted,
+                        // which is the right input for "is the universe stale"
+                        // when the last attempt failed). Falls back to the
+                        // completed-refresh quarter_label.
+                        const labelForStaleness =
+                          latestAny?.quarter_label ?? r.quarter_label ?? null;
+                        const outcomeForStaleness =
+                          (latestAny?.outcome ?? null) as RefreshOutcome | null;
+                        const state = computeStaleness({
+                          latestQuarterLabel: labelForStaleness,
+                          latestRefreshOutcome: outcomeForStaleness,
+                          now: new Date(),
+                        });
+                        const variant = stalenessBadgeVariant(state);
+                        if (!variant) return null;
+                        const hint = stalenessCauseHint(state);
+                        const completedTs =
+                          latestAny?.refresh_completed_at ?? r.refresh_completed_at ?? null;
+                        const relative = completedTs
+                          ? `Last completed ${formatDistanceToNow(new Date(completedTs), { addSuffix: true })}.`
+                          : 'No completed refresh on record.';
+                        const title = hint ? `${hint} ${relative}` : relative;
+                        return (
+                          <span title={title}>
+                            <StatusBadge status={variant} label={stalenessBadgeLabel(state)} />
+                          </span>
+                        );
+                      })()}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-muted-foreground">As-of</dt>
