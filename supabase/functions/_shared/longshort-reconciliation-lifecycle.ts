@@ -31,6 +31,7 @@ import type {
   ReconciliationEventRow,
   ReconciliationOutcome,
   VerifyCallName,
+  FetcherSource,
 } from './longshort-reconciliation-types.ts';
 import { ENGINE_VERSION } from './longshort-reconciliation-types.ts';
 import { DEFAULT_ROLLING_WINDOW_MS } from './longshort-reconciliation-state.ts';
@@ -41,6 +42,10 @@ import { DEFAULT_ROLLING_WINDOW_MS } from './longshort-reconciliation-state.ts';
  * @param spec Call specification (call_name, tier, tolerance, classifier, failure_action)
  * @param invoke Caller-provided broker invocation — pure async function returning expected + observed
  * @param ts Injected timestamp (replay determinism per DEC-035 clause (2))
+ * @param fetcher_source Dispatch-site provenance tag (FP-008.4 Commit 9 / MIG-059). Required;
+ *   no default. The same value is threaded to BOTH the normal STEP-(c) writeEventRow AND the
+ *   infrastructure-failure catch-write, since the dispatch identity does not change when the
+ *   loadFn throws — provenance describes which fetcher was wired, not whether it returned data.
  *
  * Throws on:
  *   - invoke() rejection: re-thrown (infrastructure failure). Per FP-008.4 Commit 7
@@ -65,6 +70,7 @@ export async function reconcile<TExpected, TObserved>(
   spec: ReconcileCallSpec<TExpected, TObserved>,
   invoke: (ts: Date) => Promise<{ expected: TExpected; observed: TObserved }>,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   // STEP (a) — invoke broker call. A loadFn throw is an infrastructure failure
   // (source unavailable, no comparison possible) — structurally a system_bug.
@@ -95,6 +101,7 @@ export async function reconcile<TExpected, TObserved>(
         phase_0b_run_id: null,
         pr_evidence_ref: null,
         notes: `infrastructure_failure: ${errMsg}`,
+        fetcher_source,
       });
     } catch (writeErr) {
       // Audit-write failed during hole-closure (DB down). Don't pretend we
@@ -168,6 +175,7 @@ export async function reconcile<TExpected, TObserved>(
     phase_0b_run_id: null, // populated by replay framework in sub-step 6.5
     pr_evidence_ref: null, // populated by evidence tooling in sub-step 6.4
     notes: action_error,
+    fetcher_source,
   });
 
   // STEP (d) — update state surface (does not block return on error per DEC-034.1 clause (2)
@@ -225,6 +233,7 @@ async function writeEventRow(
       phase_0b_run_id: row.phase_0b_run_id,
       pr_evidence_ref: row.pr_evidence_ref,
       notes: row.notes,
+      fetcher_source: row.fetcher_source,
     })
     .select('event_id')
     .single();

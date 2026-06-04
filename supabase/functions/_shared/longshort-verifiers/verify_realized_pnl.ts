@@ -27,6 +27,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerRealizedPnLConfirm,
@@ -103,6 +105,7 @@ export async function verifyRealizedPnL(
   },
   fetcher: BrokerRealizedPnLFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifyRealizedPnLSpec({
     symbol: args.symbol,
@@ -118,5 +121,6 @@ export async function verifyRealizedPnL(
       };
     },
     ts,
+    fetcher_source,
   );
 }

@@ -43,7 +43,30 @@ export type VerifyCallName =
   // See DW-069 for naming-vs-scope discrepancy (type name remains 'VerifyCallName' but
   // scope now includes non-verify_* identifiers; future cleanup at FP-008 closure OR
   // FP-009+ refactor cycle).
-  | 'universe_cross_check';        // FP-008 sub-step 8.8 / §11.0.5 ingestion-time cross-check
+  | 'universe_cross_check'         // FP-008 sub-step 8.8 / §11.0.5 ingestion-time cross-check
+  // FP-008.4 Commit 9 / #11 second part — liveness-check job's own reconcile() call.
+  // Same precedent as 'universe_cross_check': non-verify_* reconcile() identifier
+  // (DW-069 future cleanup). The liveness-check writes its own system_bug event via
+  // reconcile() through this call_name when the two-invocation-empty predicate fires.
+  | 'liveness_check';
+
+/**
+ * Provenance of the fetcher that produced a reconciliation_events row.
+ * Encoded as data so the two-invocation liveness rule (FP-008.4 #11) can evaluate
+ * "did this tick produce a real broker observation?" — which is otherwise indistinguishable
+ * (a real broker with zero positions returns null identically to MOCK_POSITION_FETCHER).
+ *
+ *   'mock'    — mock fetcher; NOT-FOR-LIVE handler path
+ *   'live'    — real broker / data-source fetcher
+ *   'replay'  — replay framework (Phase 0B / sub-step 6.5); engine-live, not broker-live —
+ *               INTENTIONALLY excluded from the liveness predicate
+ *   'unknown' — pre-MIG-059 backfilled rows; provenance untracked at write-time
+ *
+ * Provenance is a property of the dispatch site (which fetcher the handler constructed),
+ * NOT of the verify spec — it lives on reconcile() / verifier-wrapper signatures, not on
+ * ReconcileCallSpec.
+ */
+export type FetcherSource = 'mock' | 'live' | 'replay' | 'unknown';
 
 /** Outcome enum per CROSSWIND §11.0.10 verbatim — must match reconciliation_outcome enum in MIG-043. */
 export type ReconciliationOutcome =
@@ -163,6 +186,8 @@ export interface ReconciliationEventRow {
   notes: string | null;
   resolved_at: Date | null;
   resolution_pr_ref: string | null;
+  /** FP-008.4 Commit 9 / MIG-059 — dispatch-site provenance tag. */
+  fetcher_source: FetcherSource;
 }
 
 /** Engine version for the current build — bumped per CROSSWIND §11.0.10 audit traceability. */

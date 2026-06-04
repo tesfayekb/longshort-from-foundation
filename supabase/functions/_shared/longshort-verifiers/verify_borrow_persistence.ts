@@ -34,6 +34,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerLocatePersistence,
@@ -106,6 +108,7 @@ export async function verifyBorrowPersistence(
   },
   fetcher: BrokerLocatePersistenceFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifyBorrowPersistenceSpec({
     symbol: args.symbol,
@@ -118,5 +121,6 @@ export async function verifyBorrowPersistence(
       return { expected: { locate_id: args.locate_id }, observed };
     },
     ts,
+    fetcher_source,
   );
 }

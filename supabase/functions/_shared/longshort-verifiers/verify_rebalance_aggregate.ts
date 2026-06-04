@@ -17,6 +17,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerRebalanceAggregate,
@@ -91,6 +93,7 @@ export async function verifyRebalanceAggregate(
   args: { operator_id: string },
   fetcher: BrokerRebalanceAggregateFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifyRebalanceAggregateSpec({ operator_id: args.operator_id });
   return reconcile(
@@ -100,5 +103,6 @@ export async function verifyRebalanceAggregate(
       return { expected: {} as InternalRebalanceAggregate, observed };
     },
     ts,
+    fetcher_source,
   );
 }

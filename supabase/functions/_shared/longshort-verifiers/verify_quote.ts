@@ -31,6 +31,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerQuote,
@@ -146,6 +148,7 @@ export async function verifyQuote(
     broker: BrokerQuoteFetcher;
   },
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifyQuoteSpec({
     symbol: args.symbol,
@@ -163,5 +166,6 @@ export async function verifyQuote(
       return { expected: triplet, observed: triplet };
     },
     ts,
+    fetcher_source,
   );
 }

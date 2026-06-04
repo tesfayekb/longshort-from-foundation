@@ -21,6 +21,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerQuote,
@@ -96,6 +98,7 @@ export async function verifyQuoteFreshness(
   },
   fetcher: BrokerQuoteFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const max_age_s = args.max_age_s ?? VERIFY_QUOTE_FRESHNESS_TOLERANCE.max_age_s;
   const spec = buildVerifyQuoteFreshnessSpec({
@@ -114,5 +117,6 @@ export async function verifyQuoteFreshness(
       };
     },
     ts,
+    fetcher_source,
   );
 }

@@ -2097,6 +2097,38 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Activated by job** | `longshort.reconciliation_periodic_sweep` (`enabled=true` via MIG-045) |
 | **Added by** | FP-006 sub-step 6.3d, ACT-081 |
 
+#### Edge function `longshort-reconciliation-liveness-check`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-008.4 Commit 9 / #11 second part) |
+| **Classification** | financial-critical (two-invocation liveness rule — re-enable precondition for `longshort.reconciliation_periodic_sweep`; halts the sweep when the rule fires) |
+| **File** | `supabase/functions/longshort-reconciliation-liveness-check/index.ts` |
+| **Method / Permission** | POST / `longshort.manage` (this job halts the sweep — manage-tier authority, NOT `longshort.view`) |
+| **Exports** | `evaluateLivenessPredicate(windows)` (pure predicate — testable in isolation), `ExecutionWindowSummary` (window shape), `LivenessVerdict` (verdict shape), `PERIODIC_SWEEP_BROKER_CALL_NAMES` (predicate scope: `verify_buying_power`, `verify_position`, `verify_universe_membership`), `PERIODIC_SWEEP_JOB_ID` (target of rung (c) disarm) |
+| **Predicate** | For the last 2 completed `longshort.reconciliation_periodic_sweep` `job_executions` (ordered by `completed_at` DESC, LIMIT 2): count `reconciliation_events` rows in `[started_at, completed_at]` window where `fetcher_source = 'live'` AND `call_name IN PERIODIC_SWEEP_BROKER_CALL_NAMES`. If BOTH counts = 0 → STOP. `<2` completed executions → `insufficient_history` (no-op; the rule requires 2 ticks to fire by design). |
+| **STOP ladder (2-rung)** | (a) `reconciliation_events` row via `reconcile()` with `call_name='liveness_check'`, `outcome='system_bug'`, `fetcher_source='live'` (the rule is a real assessment of real DB state). (c) `UPDATE job_registry SET enabled=false WHERE id=PERIODIC_SWEEP_JOB_ID AND enabled=true` (idempotent; mirrors MIG-058; re-enable becomes a deliberate operator action). Rung (b) alert emission deliberately omitted — see INC-41 + DW-086. |
+| **Provenance scoping (do NOT relax)** | `'replay'` is in the enum but EXCLUDED from the predicate (proves engine-live, not broker-live). `'universe_cross_check'` is EXCLUDED from the predicate via call_name scoping (different job; the quarterly refresh's `'live'` cross-check must NOT satisfy the periodic-sweep liveness contract). `'unknown'` is EXCLUDED (pre-MIG-059 backfill; no evidence of live observation). |
+| **Clock** | `productionClock.getWallClockTs()` at top-of-call-chain (DEC-034 clause (4)) |
+| **Tests** | `supabase/functions/longshort-reconciliation-liveness-check/index_test.ts` — 7 pure-predicate unit tests: insufficient-history (0 / 1 executions), POSITIVE (two consecutive empty windows — mirrors today's all-mock state, exact defect class), NEGATIVE (most-recent has live; prior has live; both have live), rule-scope (only the most-recent 2 windows inspected even if more passed). |
+| **Activated by job** | `longshort.reconciliation_liveness_check` (seeded by MIG-059 with `enabled=false`, `*/10 * * * *`, `class=system_critical`, `concurrency_policy=forbid`). Re-enable is paired atomically with the periodic-sweep re-enable in a future operator-controlled migration (liveness-check FIRST so it's watching at the moment of first dispatch). |
+| **Added by** | FP-008.4 Commit 9 (MIG-059 + this edge function). Forms the data+code defense in depth with DW-084 (Commit 10 Gate-15 cross-artifact CI sentinel + `job_registry.handler_path`). |
+
+#### Shared type `FetcherSource` + lifecycle parameter
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-008.4 Commit 9 / MIG-059) |
+| **Classification** | financial-critical contract change — required parameter on `reconcile()` + every verifier wrapper; missing it is a compile-time error (no default) |
+| **File** | `supabase/functions/_shared/longshort-reconciliation-types.ts` (type + union widening); `supabase/functions/_shared/longshort-reconciliation-lifecycle.ts` (required parameter) |
+| **Exports** | `type FetcherSource = 'mock' \| 'live' \| 'replay' \| 'unknown'` |
+| **Threading** | `reconcile()` accepts `fetcher_source: FetcherSource` (4th positional parameter). Threaded to BOTH the normal STEP-(c) `writeEventRow` AND the Commit-7 infrastructure-failure catch-write as a closed-over local (dispatch identity does not change when `loadFn` throws — provenance describes which fetcher was wired, not whether it returned data). |
+| **VerifyCallName union** | Widened with `'liveness_check'` (DW-069 precedent — non-verify_* reconcile identifier, same shape as `'universe_cross_check'` from FP-008 sub-step 8.8). |
+| **Wrapper signature change** | All 17 verifier wrappers (`verify_*` files in `_shared/longshort-verifiers/`) gain required `fetcher_source: FetcherSource` 4th positional parameter; missing it is a TypeScript compile error at every call site. Phase 5/6 callers will be compiler-forced to supply it. |
+| **Dispatch-site tags (current)** | `longshort-reconciliation-tick`: all three dispatches tagged `'mock'`. `longshort-universe-quarterly-refresh` cross-check: `'live'`. `scripts/quarterly-refresh-smoke.ts` cross-check: `'live'`. `scripts/verify-universe-membership-smoke.ts`: `'live'`. The tick's BP + position dispatches flip to `'live'` at FP-006 sub-step 6.7 when Alpaca paper fetchers replace the mocks. |
+| **Schema correspondence** | `reconciliation_events.fetcher_source` column (MIG-059) — same four values, NOT NULL, no default (forces dispatch-site declaration). |
+| **Added by** | FP-008.4 Commit 9 (MIG-059) |
+
 ### Strong-evidence workflow tooling — sub-step 6.4 (ACT-082)
 
 #### `scripts/check-audit-writer-trap.ts`

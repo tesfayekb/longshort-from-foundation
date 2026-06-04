@@ -17,6 +17,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerWashSaleRecord,
@@ -113,6 +115,7 @@ export async function verifyWashSaleRecord(
   },
   fetcher: BrokerWashSaleRecordFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifyWashSaleRecordSpec({
     symbol: args.expected.symbol,
@@ -125,5 +128,6 @@ export async function verifyWashSaleRecord(
       return { expected: args.expected, observed };
     },
     ts,
+    fetcher_source,
   );
 }

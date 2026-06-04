@@ -20,6 +20,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerLocateFetcher,
@@ -86,6 +88,7 @@ export async function verifyShortAvailability(
   },
   fetcher: BrokerLocateFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifyShortAvailabilitySpec({
     symbol: args.symbol,
@@ -99,5 +102,6 @@ export async function verifyShortAvailability(
       return { expected: { qty_requested: args.qty_requested }, observed };
     },
     ts,
+    fetcher_source,
   );
 }

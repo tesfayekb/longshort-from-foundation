@@ -51,6 +51,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   UniverseMembershipFetcher,
@@ -166,6 +168,7 @@ export async function verifyUniverseMembership(
   },
   fetcher: UniverseMembershipFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifyUniverseMembershipSpec({
     symbol: args.symbol,
@@ -182,5 +185,6 @@ export async function verifyUniverseMembership(
       };
     },
     ts,
+    fetcher_source,
   );
 }
