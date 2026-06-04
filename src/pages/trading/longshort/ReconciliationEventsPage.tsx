@@ -8,6 +8,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import type { ReconciliationOutcome } from '@/features/longshort/services/baseline/baseline-query-helpers';
+import {
+  reconciliationOutcomeLabel,
+  reconciliationOutcomeSeverity,
+  severityToBadgeVariant,
+} from '@/features/longshort/utils/outcome-display';
 
 const sb = supabase as unknown as SupabaseClient;
 
@@ -18,21 +24,18 @@ type ReconciliationEventRow = {
   call_name: string;
   tier: string;
   symbol: string | null;
-  outcome: string;
+  outcome: ReconciliationOutcome;
   failure_action: string | null;
   notes: string | null;
   resolved_at: string | null;
 };
 
-function outcomeBadge(outcome: string) {
-  if (outcome === 'false_positive_within_tolerance' || outcome === 'expected_divergence_handled') {
-    return <Badge>{outcome}</Badge>;
-  }
-  if (outcome === 'failure_handled') return <Badge variant="secondary">{outcome}</Badge>;
-  if (outcome === 'failure_escalated' || outcome === 'system_bug') {
-    return <Badge variant="destructive">{outcome}</Badge>;
-  }
-  return <Badge variant="outline">{outcome}</Badge>;
+function outcomeBadge(outcome: ReconciliationOutcome) {
+  return (
+    <Badge variant={severityToBadgeVariant(reconciliationOutcomeSeverity(outcome))}>
+      {reconciliationOutcomeLabel(outcome)}
+    </Badge>
+  );
 }
 
 function tierBadge(tier: string) {
@@ -104,7 +107,7 @@ export default function ReconciliationEventsPage() {
                   <TableCell>
                     {row.resolved_at ? (
                       <Badge variant="secondary">Resolved</Badge>
-                    ) : row.outcome === 'match' || row.outcome === 'within_tolerance' ? (
+                    ) : reconciliationOutcomeSeverity(row.outcome) === 'clean' ? (
                       <span className="text-xs text-muted-foreground">N/A</span>
                     ) : (
                       <Badge variant="outline">Open</Badge>

@@ -8,6 +8,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import {
+  refreshOutcomeLabel,
+  refreshOutcomeSeverity,
+  severityToBadgeVariant,
+} from '@/features/longshort/utils/outcome-display';
 
 const sb = supabase as unknown as SupabaseClient;
 
@@ -26,11 +31,11 @@ type RefreshLogRow = {
 };
 
 function outcomeBadge(outcome: RefreshLogRow['outcome']) {
-  if (outcome === 'completed') return <Badge>Completed</Badge>;
-  if (outcome === 'failed') return <Badge variant="destructive">Failed</Badge>;
-  if (outcome === 'partial') return <Badge variant="secondary">Partial</Badge>;
-  if (outcome === 'circuit_breaker_open') return <Badge variant="destructive">Circuit Open</Badge>;
-  return <Badge variant="outline">Pending</Badge>;
+  return (
+    <Badge variant={severityToBadgeVariant(refreshOutcomeSeverity(outcome))}>
+      {refreshOutcomeLabel(outcome)}
+    </Badge>
+  );
 }
 
 export default function UniverseRefreshHistoryPage() {

@@ -43,6 +43,12 @@ import {
   stalenessCauseHint,
   type RefreshOutcome,
 } from '@/features/longshort/utils/universe-staleness';
+import {
+  reconciliationOutcomeLabel,
+  reconciliationOutcomeSeverity,
+  severityToStatusBadge,
+  severityToBadgeVariant,
+} from '@/features/longshort/utils/outcome-display';
 
 function formatTs(ts: string | null | undefined): string {
   if (!ts) return '—';
@@ -324,24 +330,15 @@ export function LongShortDashboard() {
             </p>
           ) : (() => {
             const cc = crossCheckQuery.data;
-            const clean =
-              cc.outcome === 'false_positive_within_tolerance' ||
-              cc.outcome === 'expected_divergence_handled';
             return (
               <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-3">
                 <div>
                   <dt className="text-muted-foreground">Outcome</dt>
                   <dd>
-                    <Badge
-                      className={
-                        clean
-                          ? 'bg-success/10 text-success border-success/20 hover:bg-success/10'
-                          : 'bg-warning/10 text-warning border-warning/20 hover:bg-warning/10'
-                      }
-                      variant="outline"
-                    >
-                      {cc.outcome}
-                    </Badge>
+                    <StatusBadge
+                      status={severityToStatusBadge(reconciliationOutcomeSeverity(cc.outcome))}
+                      label={reconciliationOutcomeLabel(cc.outcome)}
+                    />
                   </dd>
                 </div>
                 <div>
@@ -426,17 +423,8 @@ export function LongShortDashboard() {
                     <TableCell className="text-xs">{formatTs(ev.ts)}</TableCell>
                     <TableCell className="font-mono text-xs">{ev.call_name}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant={
-                          ev.outcome === 'false_positive_within_tolerance' ||
-                          ev.outcome === 'expected_divergence_handled'
-                            ? 'default'
-                            : ev.outcome === 'failure_handled'
-                              ? 'secondary'
-                              : 'destructive'
-                        }
-                      >
-                        {ev.outcome}
+                      <Badge variant={severityToBadgeVariant(reconciliationOutcomeSeverity(ev.outcome))}>
+                        {reconciliationOutcomeLabel(ev.outcome)}
                       </Badge>
                     </TableCell>
                     <TableCell>{ev.tier}</TableCell>
