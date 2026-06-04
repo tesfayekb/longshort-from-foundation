@@ -204,7 +204,7 @@ Deno.serve(createHandler(async (req: Request) => {
 
   // STOP path. Rung (a) — event row via reconcile(); rung (c) — disarm in failure_action.
   const spec = buildLivenessCheckSpec(verdict);
-  const result = await reconcile(
+  await reconcile(
     spec,
     // No external invoke — the "observed" is the verdict itself (a real assessment of
     // real DB state). expected=null because there's no internal baseline to diverge from.
