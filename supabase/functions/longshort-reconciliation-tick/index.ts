@@ -1,12 +1,22 @@
 /**
  * longshort-reconciliation-tick — Periodic-sweep edge function for reconciliation engine.
  *
- * NOT FOR LIVE INVOCATION until Phase 2 cron-activation work item lands WITH this
- * fix (FP-008.4 Commit 7). The handler uses mock BP/position fetchers; the live
+ * NOT FOR LIVE INVOCATION. The handler uses mock BP/position fetchers; the live
  * universe fetcher is wired but the broker fetchers are placeholders pending sub-step
  * 6.7 Alpaca integration. The Commit 7 disposition-routing fix (this file) MUST be
  * shipped before any cron schedule activates this function — otherwise infrastructure
  * failures and escalated outcomes would phantom-succeed to HTTP 200 (the #9 vector).
+ *
+ * Registry-level disarm (FP-008.4 Commit 8 / MIG-058): this handler is disarmed at
+ * the registry level — `job_registry.enabled = false` for
+ * `longshort.reconciliation_periodic_sweep` per MIG-058. MIG-045's enablement
+ * conflated registry-readiness (verifier set complete, dispatch function exists)
+ * with handler-readiness (real broker fetchers, fail-loud disposition, liveness
+ * detection). Re-enablement requires ALL THREE of: (1) real broker fetchers
+ * (FP-006 sub-step 6.7 — Alpaca paper) replacing MOCK_BP_FETCHER / MOCK_POSITION_FETCHER;
+ * (2) the two-invocation liveness rule (FP-008.4 #11 second commit) — two consecutive
+ * ticks producing zero real verify rows = DEFECT → STOP; (3) an explicit re-enable
+ * migration citing MIG-058 and confirming (1)+(2) landed.
  *
  * Purpose: dispatches a subset of verify_*'s in batch per the scheduled job
  * `longshort.reconciliation_periodic_sweep` (activated at sub-step 6.3d via MIG-045).
