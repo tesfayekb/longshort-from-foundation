@@ -178,6 +178,11 @@ Deno.test("createHandler returns 400 for ValidationError with correlation_id", a
 });
 
 Deno.test("createHandler returns 403 for PermissionDeniedError with correlation_id", async () => {
+  const priorUrl = Deno.env.get("SUPABASE_URL");
+  const priorKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  Deno.env.set("SUPABASE_URL", "http://stub.local");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-srk");
+
   const originalFetch = globalThis.fetch;
   const auditWrites: unknown[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -204,6 +209,10 @@ Deno.test("createHandler returns 403 for PermissionDeniedError with correlation_
     assertEquals(auditWrites.length, 1);
   } finally {
     globalThis.fetch = originalFetch;
+    if (priorUrl === undefined) Deno.env.delete("SUPABASE_URL");
+    else Deno.env.set("SUPABASE_URL", priorUrl);
+    if (priorKey === undefined) Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+    else Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", priorKey);
   }
 });
 
