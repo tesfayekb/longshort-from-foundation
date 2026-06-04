@@ -628,3 +628,62 @@ Deno.test('D2 converges to breaker trip — 3 prior failed rows from read errors
   // counter — both extend the streak, both can trip the breaker.
   assert(STREAK_FAILURE_OUTCOMES.has('failed'));
 });
+
+// ============================================================================
+// FP-008.4 Commit 6 / #5 — universe_membership re-run idempotency (UPSERT).
+//
+// Test 3: orchestrator-level double-run smoke. Pins the breaker-streak
+// interaction — a legitimate re-run for the same as_of_date must NOT feed a
+// false-failure signal toward Commit 3.5's streak counter. Both runs must
+// outcome='completed'; final membership row count = N (eligible set size),
+// not 2N, not error.
+//
+// Uses a local fake universe-membership persister that emulates UPSERT
+// semantics against a Map keyed by (operator_id,ticker,as_of_date) — same
+// onConflict target as the production persister. Without Commit 6's UPSERT
+// fix, a duplicate-key throw inside .persist() would surface as a
+// pipeline-failure finalize ('failed' outcome) on the second run.
+// ============================================================================
+
+Deno.test('Commit 6 / #5 — double orch.run() for same as_of_date: both complete, no false failure', async () => {
+  const base = makeContext();
+  // Replace the trivial push-only ump fake with one that emulates UPSERT
+  // semantics on the PK key. Production persister calls .upsert() with
+  // onConflict='operator_id,ticker,as_of_date' — same key shape here.
+  const store = new Map<string, unknown>();
+  let upsertCalls = 0;
+  base.ctx.universeMembershipPersister = {
+    async persist(input) {
+      upsertCalls += 1;
+      for (const r of input.rows) {
+        if (r.long_eligible === true || r.short_eligible === true) {
+          const k = `${input.operator_id}|${r.ticker}|${input.as_of_date}`;
+          store.set(k, { ...r, refresh_id: input.refresh_id }); // last-writer-wins
+        }
+      }
+    },
+  };
+
+  const orch = createQuarterlyRefreshOrchestrator(base.ctx, OPERATOR_ID);
+
+  const first = await orch.run(AS_OF);
+  assertEquals(first.outcome, 'completed', 'first run must complete');
+
+  const firstRunSize = store.size;
+  assert(firstRunSize > 0, 'first run must persist at least one row');
+
+  const second = await orch.run(AS_OF);
+  assertEquals(second.outcome, 'completed',
+    're-run for same as_of_date must complete (not throw 23505 → failed)');
+
+  // Final store size MUST equal the first run's size — re-run did not double
+  // the row count (no duplicates) and did not collapse to 0 (no error path).
+  // The exact N depends on PK-deduplication of the happy-path fixture; what
+  // pins the contract is "= first-run size, not 2× and not 0".
+  assertEquals(store.size, firstRunSize,
+    're-run row count must equal first-run row count (UPSERT deduplicated by PK; not 2×, not 0)');
+  assertEquals(upsertCalls, 2, 'persister called once per run');
+
+  // Breaker-streak interaction pin: neither finalize emitted 'failed', so the
+  // streak counter sees no false-failure signal from the re-run path.
+});
