@@ -95,3 +95,16 @@ jobs:
         # Gate 5 / Gate 6 / Gate 9 banned-pattern checks. Placed AFTER Gate 11
         # per Commit 2 ordering decision.
         run: deno run --allow-read scripts/check-eligibility-bypass.ts
+
+      - name: Gate 13 — Verify-after-mutation ban (FP-008.4 Commit 7 / #8 forward-binding sentinel)
+        # Forward-binding sentinel for the CROSSWIND §7.5 pre-mutation-gate invariant.
+        # Flags any in-scope file in which a `.insert(/.update(/.upsert(/.delete()` call
+        # appears BEFORE a verify_* wrapper invocation (or `reconcile(` call). Override
+        # via `// gate-13-allow: post-mutation verify per §7.6 — <reason>` on the verify
+        # line (or in the immediately-preceding comment block) — required for the
+        # sanctioned post-fill verifies (verify_position / verify_lot_record per §7.6).
+        #
+        # File-level lexical heuristic (not control-flow): intentionally over-eager so
+        # Phase-5 order-execution code cannot introduce a verify-after-mutation site
+        # without explicit operator review. Current HEAD baseline: 0 violations.
+        run: deno run --allow-read scripts/check-verify-after-mutation.ts
