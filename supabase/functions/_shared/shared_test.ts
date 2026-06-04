@@ -178,14 +178,33 @@ Deno.test("createHandler returns 400 for ValidationError with correlation_id", a
 });
 
 Deno.test("createHandler returns 403 for PermissionDeniedError with correlation_id", async () => {
+  const originalFetch = globalThis.fetch;
+  const auditWrites: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.includes("/rest/v1/audit_logs")) {
+      auditWrites.push(init?.body);
+      return new Response(JSON.stringify({ id: "audit-row-uuid" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    throw new Error(`Unstubbed fetch in handler 403 test: ${url}`);
+  }) as typeof fetch;
+
   const handler = createHandler(async () => {
     throw new PermissionDeniedError("Denied", "users.view_all");
   });
-  const res = await handler(new Request("http://localhost", { method: "POST" }));
-  assertEquals(res.status, 403);
-  const body = await res.json();
-  assertExists(body.correlation_id, "403 response should include correlation_id");
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    const res = await handler(new Request("http://localhost", { method: "POST" }));
+    assertEquals(res.status, 403);
+    const body = await res.json();
+    assertExists(body.correlation_id, "403 response should include correlation_id");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assertEquals(auditWrites.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 Deno.test("createHandler returns 500 for unknown errors without leaking details, with correlation_id", async () => {
