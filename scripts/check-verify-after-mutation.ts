@@ -166,10 +166,18 @@ export function findViolationsInLines(lines: string[], filePath: string): Violat
   for (let i = 0; i < stripped.length; i++) {
     if (MUTATION_PATTERN.test(stripped[i])) mutationLines.push(i);
     if (VERIFY_PATTERN.test(stripped[i])) {
-      // Annotation on same line OR immediately preceding raw line.
-      const onLine = OVERRIDE_ANNOTATION.test(lines[i]);
-      const onPrev = i > 0 && OVERRIDE_ANNOTATION.test(lines[i - 1]);
-      if (!onLine && !onPrev) verifyLines.push(i);
+      // Annotation accepted: same line, OR anywhere in the consecutive
+      // `//` comment block immediately preceding the verify call line.
+      let annotated = OVERRIDE_ANNOTATION.test(lines[i]);
+      for (let j = i - 1; j >= 0 && !annotated; j--) {
+        const trimmed = lines[j].trim();
+        if (trimmed.startsWith('//')) {
+          if (OVERRIDE_ANNOTATION.test(lines[j])) annotated = true;
+          continue;
+        }
+        break; // non-comment line — stop scanning upward
+      }
+      if (!annotated) verifyLines.push(i);
     }
   }
 
