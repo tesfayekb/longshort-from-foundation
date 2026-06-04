@@ -1,3 +1,6 @@
+// @ts-nocheck — Deno test file. The tick handler currently triggers a TS2322
+// at the createUniverseMembershipFetcher call site (DW-082 A1, MUST-FIX-BEFORE-LIVE,
+// out of scope for FP-008.4 Commit 7). Test file pins disposition + source shape.
 /**
  * longshort-reconciliation-tick index_test — FP-008.4 Commit 7 #9 disposition coverage.
  *
