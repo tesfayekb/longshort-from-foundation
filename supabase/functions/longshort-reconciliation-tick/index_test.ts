@@ -1,6 +1,3 @@
-// @ts-nocheck — Deno test file. The tick handler currently triggers a TS2322
-// at the createUniverseMembershipFetcher call site (DW-082 A1, MUST-FIX-BEFORE-LIVE,
-// out of scope for FP-008.4 Commit 7). Test file pins disposition + source shape.
 /**
  * longshort-reconciliation-tick index_test — FP-008.4 Commit 7 #9 disposition coverage.
  *
@@ -20,9 +17,11 @@
  * wrappers; the pure classifier captures the disposition contract precisely
  * and the source sentinel pins the call site.)
  *
- * Closes the orphan-anchor half of DW-082 A1. The TS2322 fetcher-type half
- * (createUniverseMembershipFetcher kind narrowing) remains open and is
- * MUST-FIX-BEFORE-LIVE — out of scope for Commit 7.
+ * Closes the orphan-anchor half of DW-082 A1. DW-082 A1.b (the underlying
+ * TS2322 at createUniverseMembershipFetcher) was resolved at FP-008.4
+ * Commit 7.5 by unifying SupabaseClient onto the canonical npm specifier;
+ * the `@ts-nocheck` previously at the top of this file has been removed
+ * because the underlying type error no longer exists.
  */
 import {
   assertEquals,
