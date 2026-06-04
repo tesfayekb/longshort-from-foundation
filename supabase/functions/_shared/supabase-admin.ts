@@ -31,9 +31,7 @@
  * specifier closes the class. Gate 14 (`check-supabase-client-specifier`)
  * pins this and prevents recurrence.
  */
-// SPECIFIER-SPLIT (PROBE): try createClient from esm.sh + type from npm to isolate leak source.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 let _client: SupabaseClient | null = null;
 
