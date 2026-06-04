@@ -10,6 +10,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { StatusBadge } from '@/components/dashboard/StatusBadge';
+import { formatDistanceToNow } from 'date-fns';
+import {
+  computeStaleness,
+  stalenessBadgeLabel,
+  stalenessBadgeVariant,
+  stalenessCauseHint,
+  type RefreshOutcome,
+} from '@/features/longshort/utils/universe-staleness';
 
 const sb = supabase as unknown as SupabaseClient;
 
@@ -60,6 +69,28 @@ export default function UniverseMembershipPage() {
     staleTime: 60_000,
   });
 
+  // Most-recent-ANY-outcome refresh row for the staleness cross-reference
+  // (FP-008.4 #16). Same table + RLS policy already in use elsewhere on
+  // this surface — no new permission path.
+  const { data: latestAnyOutcome } = useQuery({
+    queryKey: ['longshort', 'universe-membership', 'latest-refresh-any-outcome'],
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from('universe_refresh_log')
+        .select('outcome, quarter_label, refresh_completed_at')
+        .order('refresh_started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as {
+        outcome: RefreshOutcome | null;
+        quarter_label: string | null;
+        refresh_completed_at: string | null;
+      } | null;
+    },
+    staleTime: 60_000,
+  });
+
   const filteredRows = useMemo(() => {
     if (!rows) return [];
     return rows.filter((row) => {
@@ -74,6 +105,22 @@ export default function UniverseMembershipPage() {
   if (dateLoading || isLoading) return <LoadingSkeleton variant="table" rows={10} />;
   if (error) return <ErrorState message={(error as Error).message} />;
 
+  const latestQuarterLabel = latestAnyOutcome?.quarter_label ?? rows?.[0]?.quarter_label ?? null;
+  const stalenessState = computeStaleness({
+    latestQuarterLabel,
+    latestRefreshOutcome: latestAnyOutcome?.outcome ?? null,
+    now: new Date(),
+  });
+  const stalenessVariant = stalenessBadgeVariant(stalenessState);
+  const stalenessHint = stalenessCauseHint(stalenessState);
+  const completedTs = latestAnyOutcome?.refresh_completed_at ?? null;
+  const stalenessTitle = (() => {
+    const relative = completedTs
+      ? `Last completed ${formatDistanceToNow(new Date(completedTs), { addSuffix: true })}.`
+      : 'No completed refresh on record.';
+    return stalenessHint ? `${stalenessHint} ${relative}` : relative;
+  })();
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -82,6 +129,13 @@ export default function UniverseMembershipPage() {
           latestDate
             ? `${filteredRows.length} of ${rows?.length ?? 0} tickers • as-of ${latestDate}`
             : 'No universe data yet — first quarterly refresh will populate this table'
+        }
+        actions={
+          stalenessVariant ? (
+            <span title={stalenessTitle}>
+              <StatusBadge status={stalenessVariant} label={stalenessBadgeLabel(stalenessState)} />
+            </span>
+          ) : undefined
         }
       />
 
