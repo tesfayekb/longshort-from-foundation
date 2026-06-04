@@ -33,6 +33,9 @@ These patterns are banned in financial-logic paths:
 | 10 | `://api.alpaca.markets` (live URL) in `src/features/longshort/` | DEC-036 (2) | `scripts/check-paper-only-url.ts` | `// allow-live-alpaca-url: <ADR-ID>` |
 | 11 | `try { ... } catch { return 0 }` phantom-success swallow | DEC-034 (2) | `scripts/check-catch-returns-zero.ts` | `// allow-catch-zero: <ADR-ID>` |
 | 12 | Strategy code imports `logAuditEvent` from platform `_shared/audit.ts` | DEC-034 (5) | `scripts/check-audit-writer-trap.ts` | (no override; audit-writer trap is non-negotiable) |
+| 13 | Verify-after-mutation in financial paths | CROSSWIND §7.5 / FP-008.4 Commit 7 | `scripts/check-verify-after-mutation.ts` | `// gate-13-allow: <reason>` |
+| 14 | Dual Supabase-client type identity (esm.sh vs npm) | FP-008.4 Commit 7.5 / DW-082 A1.b | `scripts/check-supabase-client-specifier.ts` | (no override; specifier unification is non-negotiable) |
+| 15 | Enabled+scheduled `job_registry` row pointing at NOT-FOR-LIVE / MOCK_*_FETCHER handler, OR enabled+scheduled with NULL `handler_path` | FP-008.4 Commit 10 / DW-084 / INC-39 | `scripts/check-handler-liveness-markers.ts` | `// gate-15-allow: <ID>` (P1 only; P2 has no override — register the handler in `job_registry.handler_path`) |
 
 ## Sanctioned Exception Locations
 
