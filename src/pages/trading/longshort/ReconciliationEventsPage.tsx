@@ -107,7 +107,7 @@ export default function ReconciliationEventsPage() {
                   <TableCell>
                     {row.resolved_at ? (
                       <Badge variant="secondary">Resolved</Badge>
-                    ) : row.outcome === 'match' || row.outcome === 'within_tolerance' ? (
+                    ) : reconciliationOutcomeSeverity(row.outcome) === 'clean' ? (
                       <span className="text-xs text-muted-foreground">N/A</span>
                     ) : (
                       <Badge variant="outline">Open</Badge>
