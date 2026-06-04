@@ -115,3 +115,18 @@ jobs:
         # Both runtime imports and `import type { SupabaseClient } ...` declarations
         # under supabase/functions/ must use '@supabase/supabase-js'.
         run: deno run --allow-read scripts/check-supabase-client-specifier.ts
+
+      - name: Gate 15 — Handler liveness markers / cross-artifact sentinel (FP-008.4 Commit 10 / DW-084)
+        # Cross-artifact sentinel for the INC-39 seam class. Joins job_registry's
+        # final state (chronologically replayed from supabase/migrations/*.sql) to
+        # the handler source on disk via the MIG-060 handler_path mapping. Flags:
+        #   (P1) enabled=true + trigger_type='scheduled' + handler file marked
+        #        NOT FOR LIVE INVOCATION or backed by MOCK_*_FETCHER, AND
+        #   (P2) enabled=true + trigger_type='scheduled' + handler_path IS NULL
+        #        (registry-completeness: enabled scheduled job dispatching to
+        #        nothing). Override: `// gate-15-allow: <ID>` per docs/banned-patterns.md.
+        # Pairs with the runtime two-invocation liveness rule (MIG-059 / Gate-11
+        # liveness-check tests) as defense-in-depth across data + code dimensions.
+        # Baseline at FP-008.4 Commit 10: CLEAN (the disarmed sweep's enabled=false
+        # excludes it from the predicate).
+        run: deno run --allow-read scripts/check-handler-liveness-markers.ts
