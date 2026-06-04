@@ -72,10 +72,33 @@ const SELF_EXCLUDE = [
 const MUTATION_PATTERN = /\.(insert|update|upsert|delete)\(/;
 
 /**
- * Verify-call tokens — verify_* wrapper invocations OR direct `reconcile(` calls.
- * Both flow through the canonical lifecycle entry point per DEC-034.1 clause (4).
+ * Verify-call tokens — the 17 verify_* wrapper invocations (explicit allowlist
+ * to avoid false positives on unrelated `verifyXxx(` helpers like
+ * `verifyCronSecret(`) OR direct `reconcile(` calls. Both flow through the
+ * canonical lifecycle entry point per DEC-034.1 clause (4).
  */
-const VERIFY_PATTERN = /\b(verify[A-Z][A-Za-z]*\(|verify_[a-z_]+\(|reconcile\()/;
+const VERIFY_WRAPPER_NAMES = [
+  'verifyPosition',
+  'verifyQuote',
+  'verifyQuoteFreshness',
+  'verifyShortAvailability',
+  'verifySSRStatus',
+  'verifyHaltStatus',
+  'verifyBorrowRate',
+  'verifyBorrowPersistence',
+  'verifyBuyingPower',
+  'verifyUniverseMembership',
+  'verifyCorporateActionClean',
+  'verifySettlementStatus',
+  'verifyOrderAcceptance',
+  'verifyRealizedPnL',
+  'verifyLotRecord',
+  'verifyWashSaleRecord',
+  'verifyRebalanceAggregate',
+] as const;
+const VERIFY_PATTERN = new RegExp(
+  `\\b(${VERIFY_WRAPPER_NAMES.join('|')}|reconcile)\\(`,
+);
 
 /**
  * Override annotation: matches `gate-13-allow:` on a line. Annotation on the
