@@ -236,6 +236,10 @@ Deno.serve(createHandler(async (req: Request) => {
       // Inside the spec, these are mapped to the source-agnostic
       // `primary_tickers` / `secondary_tickers` (FP-008.2 Step C).
       const spec = buildUniverseCrossCheckSpec({ operator_id });
+      // gate-13-allow: the .insert() earlier in this file is `insertStart` writing
+      // a bookkeeping row to universe_refresh_log (refresh-lifecycle meta), NOT a
+      // strategy-state mutation in the CROSSWIND §7.5 sense (orders/positions/lots).
+      // The cross-check itself remains pre-mutation w.r.t. universe_membership writes.
       const result = await reconcile(
         spec,
         async () => ({
