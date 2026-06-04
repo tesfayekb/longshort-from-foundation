@@ -229,22 +229,14 @@ Deno.serve(createHandler(async (req: Request) => {
     correlation_id: ctx.correlationId,
   };
   if (halt) {
-    const failing = results.filter((r) =>
-      r.outcome === 'failure_escalated' ||
-      r.outcome === 'system_bug' ||
-      r.outcome === 'infrastructure_failure'
-    );
+    // Per-call disposition (escalated / system_bug / infrastructure_failure)
+    // is already in reconciliation_events via reconcile() — operators inspect
+    // that surface, not the HTTP body. apiError's fixed-shape envelope is the
+    // disposition signal; cron-level retry + alerting fires on the 5xx.
     return apiError(status, 'reconciliation_tick_escalated', {
       code: 'RECONCILIATION_TICK_ESCALATED',
       correlationId: ctx.correlationId,
     });
-    // NB: `body` + `failing` are intentionally not surfaced in the apiError body
-    // (apiError is a fixed-shape envelope). The full per-call disposition is
-    // already in reconciliation_events; clients/operators inspect that surface,
-    // not the HTTP body. `failing` retained as a no-op local for diagnosability
-    // when reading this file.
-    // deno-lint-ignore no-unused-vars
-    void failing;
   }
   return apiSuccess(body, status);
 }));
