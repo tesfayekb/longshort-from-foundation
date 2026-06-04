@@ -44,7 +44,17 @@ function getClient(): SupabaseClient {
       'supabase-admin: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables must be set before first use',
     );
   }
-  _client = createClient(url, key);
+  _client = createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 0,
+      },
+    },
+  });
   return _client;
 }
 
