@@ -47,9 +47,57 @@ export interface EnrichedConstituent extends UniverseConstituent {
 }
 
 /**
+ * Enumerated reasons a fetcher MAY structurally drop a ticker from its
+ * enriched output (FP-008.4 #23). The fetcher contract surfaces these two
+ * causes; thrown errors (HTTP non-404 / parse / timeout / network) propagate
+ * via `ConstituentFetchError` and are classified at the caller's catch as
+ * `'fetch_error'` (the caller-side third reason, NOT in this union because
+ * the fetcher itself never returns it — a throw is not a structural skip).
+ *
+ *   - 'ishares_source'      — Guardrail 2: iShares-sourced rows flow through
+ *                             the cross-check, not the filter pipeline.
+ *   - 'not_in_polygon_404'  — Polygon ticker-details returned HTTP 404;
+ *                             ticker is not present in Polygon reference
+ *                             (typically a delisting between the membership
+ *                             snapshot and the enrichment run).
+ */
+export type EnrichmentSkipReason = 'ishares_source' | 'not_in_polygon_404';
+
+/**
+ * Per-ticker structural-skip attribution returned by the fetcher.
+ * Carries the ticker identity (forensics) and the reason (counting).
+ */
+export interface EnrichmentSkip {
+  ticker: string;
+  reason: EnrichmentSkipReason;
+}
+
+/**
+ * Fetcher return shape per FP-008.4 #23.
+ *
+ * Pre-#23: `enrich()` returned bare `EnrichedConstituent[]` and silently
+ * dropped both structural skip causes — the count of survivors was the only
+ * signal, and `total_constituents_raw - total_post_filters` conflated
+ * enrichment-drops with filter-rejections (catastrophically misleading for
+ * forensics; same defect class as the Wikipedia per-row silent-skip closed
+ * at #13).
+ *
+ * Post-#23: every structural skip is surfaced in `skipped` with reason +
+ * ticker identity. Callers persist the aggregate as
+ * `universe_refresh_log.enrichment_skip_counts` (MIG-061, parallel to
+ * `filter_rejection_counts`); the per-ticker list supports forensics.
+ */
+export interface EnrichmentResult {
+  enriched: EnrichedConstituent[];
+  skipped: EnrichmentSkip[];
+}
+
+/**
  * Enrichment fetcher contract. Takes a membership list (UniverseConstituent[])
- * → security-properties list (EnrichedConstituent[]). One Polygon
- * ticker-details call + one daily-aggregates call per ticker.
+ * → `EnrichmentResult` (enriched survivors + structurally-skipped tickers
+ * with reason, per FP-008.4 #23). One Polygon ticker-details call + one
+ * daily-aggregates call per enriched ticker; skipped tickers issue at most
+ * one ticker-details call (the 404 path).
  *
  * No `reconcile()` coupling at this layer per v0.6.2 §22.3 (c) minimum-coupling
  * — cross-check execution lands at sub-step 8.8 via DEC-038.1 clause (2).
@@ -58,5 +106,5 @@ export interface EnrichedConstituent extends UniverseConstituent {
  * the injected Clock at the quarterly-refresh-job entry point (sub-step 8.4).
  */
 export interface UniverseEnrichmentFetcher {
-  enrich(constituents: UniverseConstituent[], as_of: Date): Promise<EnrichedConstituent[]>;
+  enrich(constituents: UniverseConstituent[], as_of: Date): Promise<EnrichmentResult>;
 }
