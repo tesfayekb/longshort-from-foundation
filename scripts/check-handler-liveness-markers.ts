@@ -127,11 +127,17 @@ function parseBool(cell: string): boolean | null {
  */
 export function applyMigrationSql(state: Map<string, JobState>, sqlRaw: string): void {
   const sql = stripSqlComments(sqlRaw);
+  // Split into top-level statements at ';' that are not inside string literals,
+  // parentheses, or dollar-quoted blocks ($$ ... $$). MIG-044's row descriptions
+  // contain literal ';' inside quoted strings, so naive split breaks parsing.
+  const statements = splitSqlStatements(sql);
 
-  // INSERTs
-  const insertRe = /INSERT\s+INTO\s+public\.job_registry\s*\(([^)]+)\)\s*VALUES\s*([\s\S]*?)(?:ON\s+CONFLICT[\s\S]*?)?;/gi;
+  // INSERTs — match against each statement individually.
+  const insertRe = /^\s*INSERT\s+INTO\s+public\.job_registry\s*\(([^)]+)\)\s*VALUES\s*([\s\S]+?)(?:ON\s+CONFLICT[\s\S]*)?$/i;
   let m: RegExpExecArray | null;
-  while ((m = insertRe.exec(sql)) !== null) {
+  for (const stmt of statements) {
+    m = insertRe.exec(stmt);
+    if (!m) continue;
     const cols = m[1].split(',').map(c => c.trim().toLowerCase());
     const idIdx = cols.indexOf('id');
     const enabledIdx = cols.indexOf('enabled');
@@ -170,8 +176,10 @@ export function applyMigrationSql(state: Map<string, JobState>, sqlRaw: string):
   }
 
   // UPDATEs
-  const updateRe = /UPDATE\s+public\.job_registry\s+SET\s+([\s\S]*?)\s+WHERE\s+([\s\S]*?);/gi;
-  while ((m = updateRe.exec(sql)) !== null) {
+  const updateRe = /^\s*UPDATE\s+public\.job_registry\s+SET\s+([\s\S]+?)\s+WHERE\s+([\s\S]+?)\s*$/i;
+  for (const stmt of statements) {
+    m = updateRe.exec(stmt);
+    if (!m) continue;
     const setClause = m[1];
     const whereClause = m[2];
     const sets: Array<{ col: string; val: string }> = [];
