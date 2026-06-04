@@ -25,6 +25,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerSettlementStatus,
@@ -96,6 +98,7 @@ export async function verifySettlementStatus(
   },
   fetcher: BrokerSettlementStatusFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifySettlementStatusSpec({
     symbol: args.symbol,
@@ -109,5 +112,6 @@ export async function verifySettlementStatus(
       return { expected: null, observed };
     },
     ts,
+    fetcher_source,
   );
 }

@@ -35,6 +35,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerBorrowRate,
@@ -121,6 +123,7 @@ export async function verifyBorrowRate(
   },
   fetcher: BrokerBorrowRateFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifyBorrowRateSpec({
     symbol: args.symbol,
@@ -136,5 +139,6 @@ export async function verifyBorrowRate(
       };
     },
     ts,
+    fetcher_source,
   );
 }

@@ -31,6 +31,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerCorporateActionSnapshot,
@@ -105,6 +107,7 @@ export async function verifyCorporateActionClean(
   },
   fetcher: BrokerCorporateActionFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const lookback = args.lookback_days ?? 5;  // default per §11.0.7 signature
   const spec = buildVerifyCorporateActionCleanSpec({
@@ -118,5 +121,6 @@ export async function verifyCorporateActionClean(
       return { expected: null, observed };
     },
     ts,
+    fetcher_source,
   );
 }

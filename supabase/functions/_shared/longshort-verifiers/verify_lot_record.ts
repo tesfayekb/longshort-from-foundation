@@ -18,6 +18,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerLotRecord,
@@ -106,6 +108,7 @@ export async function verifyLotRecord(
   },
   fetcher: BrokerLotRecordFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifyLotRecordSpec({
     symbol: args.expected.symbol,
@@ -118,5 +121,6 @@ export async function verifyLotRecord(
       return { expected: args.expected, observed };
     },
     ts,
+    fetcher_source,
   );
 }

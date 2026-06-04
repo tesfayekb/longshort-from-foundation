@@ -48,6 +48,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerBuyingPower,
@@ -144,6 +146,7 @@ export async function verifyBuyingPower(
   },
   fetcher: BrokerBuyingPowerFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const spec = buildVerifyBuyingPowerSpec({ operator_id: args.operator_id });
   return reconcile(
@@ -159,5 +162,6 @@ export async function verifyBuyingPower(
       };
     },
     ts,
+    fetcher_source,
   );
 }

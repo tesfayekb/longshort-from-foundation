@@ -36,6 +36,8 @@ import type {
   ReconcileCallSpec,
   ReconcileResult,
   ReconciliationOutcome,
+
+  FetcherSource,
 } from '../longshort-reconciliation-types.ts';
 import type {
   BrokerOrderAcceptanceResult,
@@ -139,6 +141,7 @@ export async function verifyOrderAcceptance(
   },
   fetcher: BrokerOrderAcceptanceFetcher,
   ts: Date,
+  fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
   const timeout = args.timeout_s ?? 10;  // §11.0.7 signature default
   const spec = buildVerifyOrderAcceptanceSpec({
@@ -153,5 +156,6 @@ export async function verifyOrderAcceptance(
       return { expected: null, observed };
     },
     ts,
+    fetcher_source,
   );
 }
