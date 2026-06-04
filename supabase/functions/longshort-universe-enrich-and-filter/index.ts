@@ -25,7 +25,10 @@ import { PolygonEnrichmentFetcher } from '../_shared/longshort-universe/enrichme
 import { applyFilters } from '../_shared/longshort-universe/filters/apply-filters.ts';
 import { writeEligibilityCoverage } from '../_shared/longshort-universe/get-eligibility.ts';
 import type { UniverseConstituent } from '../_shared/longshort-universe-interfaces.ts';
-import type { EnrichedConstituent } from '../_shared/longshort-universe/enrichment/types.ts';
+import type {
+  EnrichedConstituent,
+  EnrichmentSkipReason,
+} from '../_shared/longshort-universe/enrichment/types.ts';
 import type { FilterRejectionReason } from '../_shared/longshort-universe/filters/types.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
@@ -163,9 +166,18 @@ Deno.serve(createHandler(async (req: Request) => {
   // Enrich one ticker at a time inside each worker; if the budget is blown
   // mid-fan-out, return outcome='partial' with processed/remaining counts so
   // a follow-up call can resume on the same as_of_date.
+  //
+  // FP-008.4 #23 — per-ticker enrichment failure attribution. The fetcher
+  // returns { enriched, skipped } with two structural skip reasons; the
+  // caller adds a third (`'fetch_error'`) for any thrown ConstituentFetchError
+  // (HTTP non-404 / parse / timeout / network — INC-24 per-ticker context
+  // now captured structurally, not only in console.warn). Aggregate counts
+  // persist to universe_refresh_log.enrichment_skip_counts (MIG-061),
+  // parallel to filter_rejection_counts.
+  type EnrichSkipReason = EnrichmentSkipReason | 'fetch_error';
   type EnrichOutcome =
     | { kind: 'ok'; row: EnrichedConstituent }
-    | { kind: 'skipped' }
+    | { kind: 'skipped'; skips: Array<{ ticker: string; reason: EnrichSkipReason }> }
     | { kind: 'timed_out' };
 
   let timedOut = false;
@@ -177,22 +189,49 @@ Deno.serve(createHandler(async (req: Request) => {
       return { kind: 'timed_out' };
     }
     try {
-      const out = await fetcher.enrich([c], as_of);
+      const { enriched: enrichedOne, skipped: structuralSkips } = await fetcher.enrich([c], as_of);
       processed += 1;
-      if (out.length === 0) return { kind: 'skipped' };
-      return { kind: 'ok', row: out[0] };
+      if (enrichedOne.length === 0) {
+        // Fetcher dropped this ticker structurally; carry reason+ticker.
+        return {
+          kind: 'skipped',
+          skips: structuralSkips.map((s) => ({ ticker: s.ticker, reason: s.reason })),
+        };
+      }
+      return { kind: 'ok', row: enrichedOne[0] };
     } catch (e) {
       // Per-ticker fetch failure shouldn't sink the batch; treat as skipped.
-      // The §3.2 filter pipeline naturally rejects missing-input rows.
+      // The §3.2 filter pipeline naturally rejects missing-input rows. The
+      // INC-24 per-ticker context (ConstituentFetchError message) is now
+      // captured structurally as a `fetch_error` skip-attribution entry,
+      // not only in console.warn. console.warn preserved for runtime
+      // debuggability; structured attribution is the new primary record.
       processed += 1;
       console.warn(`enrich_ticker_failed ticker=${c.ticker} err=${(e as Error).message}`);
-      return { kind: 'skipped' };
+      return {
+        kind: 'skipped',
+        skips: [{ ticker: c.ticker, reason: 'fetch_error' }],
+      };
     }
   });
 
   const enriched: EnrichedConstituent[] = [];
+  // Aggregate enrichment-skip attribution by reason. Tracked-zero is distinct
+  // from untracked-NULL (MIG-061 comment): this refresh tracked enrichment
+  // skips, so all three reasons appear with explicit 0s when they didn't fire.
+  const enrichmentSkipCounts: Record<EnrichSkipReason, number> = {
+    not_in_polygon_404: 0,
+    fetch_error: 0,
+    ishares_source: 0,
+  };
   for (const s of settled) {
-    if (s.kind === 'ok') enriched.push(s.row);
+    if (s.kind === 'ok') {
+      enriched.push(s.row);
+    } else if (s.kind === 'skipped') {
+      for (const skip of s.skips) {
+        enrichmentSkipCounts[skip.reason] += 1;
+      }
+    }
   }
 
   // Step 4 — §3.2 LOCKED filter pipeline.
@@ -271,6 +310,7 @@ Deno.serve(createHandler(async (req: Request) => {
         ? `wall_clock_budget_exceeded: processed=${processed} remaining=${constituents.length - processed}`
         : null,
       filter_rejection_counts: rejectionCounts,
+      enrichment_skip_counts: enrichmentSkipCounts,
     });
 
   if (logErr) {
@@ -317,6 +357,7 @@ Deno.serve(createHandler(async (req: Request) => {
       total_deleted_ineligible: ineligibleArr.length,
       total_unenrichable: processed - enrichedTickers.size,
       filter_rejection_counts: rejectionCounts,
+      enrichment_skip_counts: enrichmentSkipCounts,
       tickers_processed: processed,
       tickers_remaining: timedOut ? constituents.length - processed : 0,
       wall_clock_ms: productionClock.getWallClockTs().getTime() - startMs,
@@ -334,6 +375,7 @@ Deno.serve(createHandler(async (req: Request) => {
     total_deleted_ineligible: ineligibleArr.length,
     total_unenrichable: processed - enrichedTickers.size,
     filter_rejection_counts: rejectionCounts,
+    enrichment_skip_counts: enrichmentSkipCounts,
     tickers_processed: processed,
     tickers_remaining: timedOut ? constituents.length - processed : 0,
     wall_clock_ms: productionClock.getWallClockTs().getTime() - startMs,

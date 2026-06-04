@@ -940,6 +940,7 @@ export type Database = {
         Row: {
           as_of_date: string
           created_at: string
+          enrichment_skip_counts: Json | null
           failure_reason: string | null
           filter_rejection_counts: Json | null
           hard_exclusion_counts: Json | null
@@ -958,6 +959,7 @@ export type Database = {
         Insert: {
           as_of_date: string
           created_at?: string
+          enrichment_skip_counts?: Json | null
           failure_reason?: string | null
           filter_rejection_counts?: Json | null
           hard_exclusion_counts?: Json | null
@@ -976,6 +978,7 @@ export type Database = {
         Update: {
           as_of_date?: string
           created_at?: string
+          enrichment_skip_counts?: Json | null
           failure_reason?: string | null
           filter_rejection_counts?: Json | null
           hard_exclusion_counts?: Json | null

@@ -131,7 +131,9 @@ function makeContext(opts: {
     polygonEnrichment: {
       async enrich(constituents) {
         if (opts.enrichmentThrows) throw new Error('polygon_enrichment_500');
-        return constituents.map((c) => mkEnriched(c.ticker));
+        // FP-008.4 #23 — enrich() returns { enriched, skipped }; happy-path
+        // mock returns zero structural skips.
+        return { enriched: constituents.map((c) => mkEnriched(c.ticker)), skipped: [] };
       },
     },
     exclusionInput: {
@@ -551,7 +553,7 @@ Deno.test('D2 fail-closed — countConsecutiveFailures throws → finalize faile
     async fetchConstituents() { isharesCalled = true; return []; },
   };
   base.ctx.polygonEnrichment = {
-    async enrich() { enrichCalled = true; return []; },
+    async enrich() { enrichCalled = true; return { enriched: [], skipped: [] }; },
   };
 
   const orch = createQuarterlyRefreshOrchestrator(base.ctx, OPERATOR_ID);
