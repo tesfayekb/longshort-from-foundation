@@ -104,6 +104,43 @@ export function splitSqlRow(row: string): string[] {
   return cells;
 }
 
+/**
+ * Split SQL into top-level statements at unquoted, unparenthesised, non-dollar-quoted ';'.
+ * Conservative — keeps statement text verbatim (sans the trailing ';').
+ */
+export function splitSqlStatements(sql: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  let inString = false;
+  let depth = 0;
+  let inDollar = false;
+  let i = 0;
+  while (i < sql.length) {
+    const c = sql[i];
+    if (inDollar) {
+      if (c === '$' && sql[i + 1] === '$') { inDollar = false; cur += '$$'; i += 2; continue; }
+      cur += c; i++; continue;
+    }
+    if (inString) {
+      if (c === "'" && sql[i + 1] === "'") { cur += "''"; i += 2; continue; }
+      if (c === "'") inString = false;
+      cur += c; i++; continue;
+    }
+    if (c === '$' && sql[i + 1] === '$') { inDollar = true; cur += '$$'; i += 2; continue; }
+    if (c === "'") { inString = true; cur += c; i++; continue; }
+    if (c === '(') { depth++; cur += c; i++; continue; }
+    if (c === ')') { if (depth > 0) depth--; cur += c; i++; continue; }
+    if (c === ';' && depth === 0) {
+      if (cur.trim().length > 0) out.push(cur);
+      cur = '';
+      i++; continue;
+    }
+    cur += c; i++;
+  }
+  if (cur.trim().length > 0) out.push(cur);
+  return out;
+}
+
 function unquote(cell: string): string {
   const t = cell.trim();
   if (t.startsWith("'") && t.endsWith("'")) return t.slice(1, -1).replace(/''/g, "'");
