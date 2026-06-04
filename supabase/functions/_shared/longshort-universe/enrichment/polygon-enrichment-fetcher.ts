@@ -38,7 +38,12 @@ import type {
   UniverseConstituent,
 } from '../../longshort-universe-interfaces.ts';
 import { ConstituentFetchError } from '../../longshort-universe-interfaces.ts';
-import type { EnrichedConstituent, UniverseEnrichmentFetcher } from './types.ts';
+import type {
+  EnrichedConstituent,
+  EnrichmentResult,
+  EnrichmentSkip,
+  UniverseEnrichmentFetcher,
+} from './types.ts';
 import { fetchWithTimeoutAndRetry, DEFAULT_FETCH_TIMEOUT_MS } from '../shared/fetch-with-timeout.ts';
 
 const POLYGON_BASE_URL = 'https://api.polygon.io';
@@ -101,18 +106,30 @@ export class PolygonEnrichmentFetcher implements UniverseEnrichmentFetcher {
   async enrich(
     constituents: UniverseConstituent[],
     as_of: Date,
-  ): Promise<EnrichedConstituent[]> {
+  ): Promise<EnrichmentResult> {
+    // FP-008.4 #23 — both structural skip paths are now attributed in
+    // `skipped`; thrown errors still propagate via ConstituentFetchError
+    // (the caller classifies them as 'fetch_error' in its own
+    // skip-attribution accumulator — see enrich-and-filter/index.ts).
     const out: EnrichedConstituent[] = [];
+    const skipped: EnrichmentSkip[] = [];
     for (const c of constituents) {
       if (c.source === 'ishares') {
         // Guardrail 2: iShares constituents flow through the cross-check at
         // sub-step 8.8, not through the filter pipeline. Defensive skip; not a
         // hard error. `'polygon'` (primary) and `'manual'` (operator-seeded
         // bootstrap) are both enrichable via the Polygon reference path.
+        skipped.push({ ticker: c.ticker, reason: 'ishares_source' });
         continue;
       }
       const details = await this.fetchTickerDetails(c.ticker);
-      if (details === null) continue; // ticker not enrichable (e.g., 404)
+      if (details === null) {
+        // Polygon ticker-details returned HTTP 404 — ticker not present in
+        // Polygon reference (typically a delisting between the membership
+        // snapshot and the enrichment run). Attributed, not silently dropped.
+        skipped.push({ ticker: c.ticker, reason: 'not_in_polygon_404' });
+        continue;
+      }
       const aggs = await this.fetchDailyAggregates(c.ticker, as_of);
       out.push({
         ...c,
@@ -124,7 +141,7 @@ export class PolygonEnrichmentFetcher implements UniverseEnrichmentFetcher {
         is_reit: details.is_reit,
       });
     }
-    return out;
+    return { enriched: out, skipped };
   }
 
   private async fetchTickerDetails(ticker: string): Promise<{
