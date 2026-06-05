@@ -60,16 +60,18 @@ function uniqueTicker(i: number): string {
 
 Deno.test('(1) positive: 500-row valid wikitable parses to 500 sp500 tickers, no throw', () => {
   const html = buildWikitableHtml({ rowCount: 500, tickerFor: uniqueTicker });
-  const tickers = parseWikipediaConstituents(html, 'sp500');
-  assertEquals(tickers.length, 500);
+  const parsed = parseWikipediaConstituents(html, 'sp500');
+  assertEquals(parsed.length, 500);
   // Bounds endpoint sanity: in-bounds tickers are upper-cased ASCII.
-  assert(tickers.every((t) => /^[A-Z][A-Z0-9.-]{0,9}$/.test(t)));
+  assert(parsed.every((p) => /^[A-Z][A-Z0-9.-]{0,9}$/.test(p.ticker)));
+  // FP-009 Bucket 0 — every row carries the synthetic "Tech" sector from the fixture.
+  assert(parsed.every((p) => p.gics_sector === 'Tech'));
 });
 
 Deno.test('(2) positive: 400-row valid wikitable parses to 400 sp400 tickers, no throw', () => {
   const html = buildWikitableHtml({ rowCount: 400, tickerFor: uniqueTicker });
-  const tickers = parseWikipediaConstituents(html, 'sp400');
-  assertEquals(tickers.length, 400);
+  const parsed = parseWikipediaConstituents(html, 'sp400');
+  assertEquals(parsed.length, 400);
 });
 
 Deno.test('(3) positive: bounds boundary — sp500 at min (490) and max (520) accepted', () => {
