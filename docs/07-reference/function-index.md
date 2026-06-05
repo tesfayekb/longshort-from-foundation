@@ -2529,3 +2529,20 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Typed-absence idiom** | `number \| null` per FP-009 survey §1 language-stack mapping; `-999` sentinel is Phase 3 combiner's substitution at the feature-vector layer ONLY — signal-producing functions return `number \| null`. Mirrors `enrichment/types.ts:25-28` discipline (Decimal NOT used per v0.6.2 §22.3(b)). |
 | **Throw-vs-null distinction** | `null` = upstream typed-absence; `SignalComputationError` thrown = network/auth/parse/unexpected failure — orchestrator catches and records as `fetch_error` skip (parallel to FP-008.4 #23 `EnrichmentSkip` pattern). |
 | **Added by** | FP-009 Bucket A Commit A1 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/polygon-price-history-fetcher.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket A Commit A2) |
+| **Classification** | financial-critical (signal-stage Polygon price-history fetcher; sibling to `polygon-enrichment-fetcher.ts`; consumed by Phase 2 signal sub-phases requiring price history) |
+| **Exports** | `class PolygonPriceHistoryFetcher` with `fetchPriceHistory(ticker, as_of, lookbackDays?): Promise<DailyBar[] \| null>`; `interface DailyBar { ts: string; close: number }`; `const DEFAULT_PRICE_HISTORY_LOOKBACK_DAYS = 280`; `const PRICE_HISTORY_OPERATION_ID = 'polygon_price_history'` |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/polygon-price-history-fetcher.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-signals/shared/polygon-price-history-fetcher_test.ts` — 12 Deno unit tests (constructor-validation / happy-path / 404→null / 401→throw / 500→throw-after-retries / timeout→throw / JSON-parse→throw / empty-results→[] / lookbackDays-URL / default-280 / determinism / malformed-bar drop) |
+| **Secret** | `POLYGON_API_KEY` (shared with `PolygonEnrichmentFetcher`; registered at ACT-105 / env-var-index.md) |
+| **API endpoint** | Polygon daily aggregates (`/v2/aggs/ticker/{ticker}/range/1/day/{from}/{to}?adjusted=true&sort=asc&limit=5000`) — 280-day calendar lookback default (covers Signal #6 12-1 momentum: 252 trading days + skip-month buffer + weekend/holiday padding) |
+| **Typed-absence idiom** | HTTP 404 → `null`; empty results array → `[]` (distinct typed-absences — 404 = ticker missing from Polygon reference, `[]` = ticker exists but no bars in window); per-bar malformed entries dropped (not thrown) so a single bad row doesn't fail an entire ticker. |
+| **Throw class** | `SignalComputationError` (NOT `ConstituentFetchError`) — signal-stage analog carries `signal_id` + `ticker` matching `SignalSkip 'fetch_error'` attribution shape. Per-ticker context preserved in every throw per INC-24. |
+| **Banned-pattern compliance** | Zero `Date.now()` outside sanctioned `as_of` chokepoint; zero sentinel fallbacks; zero `logAuditEvent` imports per DEC-033 v4.1. `adjusted=true` server-side adjustment — no client-side split/dividend math. |
+| **Shared infrastructure reuse** | Imports `fetchWithTimeoutAndRetry` + `DEFAULT_FETCH_TIMEOUT_MS` from `_shared/longshort-universe/shared/fetch-with-timeout.ts` (third call site after the three universe fetchers; cross-tree import per shared-utility precedent — no extraction needed). `POLYGON_BASE_URL` duplicated as local 25-char string literal per anti-premature-abstraction discipline; promote on third Polygon consumer (see INC-52). |
+| **Added by** | FP-009 Bucket A Commit A2 |
