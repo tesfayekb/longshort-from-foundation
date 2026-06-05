@@ -68,31 +68,9 @@ import { makeHardExclusionsPersister } from '../_shared/longshort-universe/refre
 import { buildUniverseCrossCheckSpec } from '../_shared/longshort-universe/constituent-ingestion/cross-check-spec.ts';
 import { reconcile } from '../_shared/longshort-reconciliation-lifecycle.ts';
 import { makeMetricsEmitter } from '../_shared/longshort-universe/health-monitoring/metrics-emitter.ts';
+import { parseAsOfDate } from './parse-as-of-date.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
-
-// Strict YYYY-MM-DD parser. Returns the Date (UTC midnight) on success, or
-// `null` on any malformed input (non-string, wrong shape, invalid calendar
-// date). Stricter than `new Date(s)` because that coerces many invalid
-// inputs (e.g. `'2026-13-99'` → silently wrong month/day rollover).
-export function parseAsOfDate(raw: unknown): Date | null {
-  if (typeof raw !== 'string') return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
-  if (!m) return null;
-  const [, ys, ms, ds] = m;
-  const y = Number(ys), mo = Number(ms), d = Number(ds);
-  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
-  const dt = new Date(Date.UTC(y, mo - 1, d));
-  // Round-trip guard for invalid calendar dates (e.g. Feb 30).
-  if (
-    dt.getUTCFullYear() !== y ||
-    dt.getUTCMonth() !== mo - 1 ||
-    dt.getUTCDate() !== d
-  ) {
-    return null;
-  }
-  return dt;
-}
 
 /**
  * Supabase-admin-backed `universe_refresh_log` persister — duplicated
