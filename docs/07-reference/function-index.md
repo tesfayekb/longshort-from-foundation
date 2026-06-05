@@ -2503,3 +2503,29 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Cross-tree consumers** | `scripts/replay-pass.ts` --verifier=verify_universe_membership dispatch path |
 | **Anti-premature-decomposition guard** | Added in-place to existing `replay-pass-runner.ts` per Surface 2 Option p (~80-line addition; extraction not warranted at this size; soft limit ~300 lines per pre-flight calibration) |
 | **Added by** | FP-008 sub-step 8.11, ACT-117 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/z-score-normalize.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket A Commit A1) |
+| **Classification** | shared infrastructure — consumed by all 9 Phase 2 signal sub-phases (within-sector GICS z-score normalization with ±3 clip per §4.4.1 + FP-009 survey §4) |
+| **Exports** | `function zScoreNormalizeWithinSector(inputs: ReadonlyArray<ZScoreInput>, opts?: { clipAt?: number }): ZScoreOutput[]`; `interface ZScoreInput`; `interface ZScoreOutput` |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/z-score-normalize.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-signals/shared/z-score-normalize_test.ts` — 12 Deno unit tests (two-sector hand-computed / zero-mean / clip-lower / clip-upper / custom-clipAt / singleton / all-equal / null-sector / null-value / empty / mixed-sizes / determinism) |
+| **Typed-absence semantics** | `value: null` for: null-sector inputs, null-value inputs (passthrough), singleton sectors (n=1 → std=0), all-equal-values sectors (std=0). No fabricated zeros per anti-phantom-default rule. |
+| **Determinism** | Pure function. No `Date.now()`, no random, no I/O. `Map.entries()` iteration preserves insertion order per ES2015 spec — output ordering stable given stable input ordering. |
+| **Added by** | FP-009 Bucket A Commit A1 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/signal-types.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket A Commit A1) |
+| **Classification** | shared types — Phase 2 signal contracts (consumed by all 9 signal sub-phases) |
+| **Exports** | `interface SignalRow`; `class SignalComputationError extends Error`; `type SignalSkipReason = 'insufficient_history' \| 'missing_sector' \| 'fetch_error' \| 'singleton_sector'`; `interface SignalSkip` |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/signal-types.ts` |
+| **Tests** | Type-only (no runtime behavior beyond the `SignalComputationError` constructor message); exercised indirectly via Bucket A/B signal compute tests. |
+| **Typed-absence idiom** | `number \| null` per FP-009 survey §1 language-stack mapping; `-999` sentinel is Phase 3 combiner's substitution at the feature-vector layer ONLY — signal-producing functions return `number \| null`. Mirrors `enrichment/types.ts:25-28` discipline (Decimal NOT used per v0.6.2 §22.3(b)). |
+| **Throw-vs-null distinction** | `null` = upstream typed-absence; `SignalComputationError` thrown = network/auth/parse/unexpected failure — orchestrator catches and records as `fetch_error` skip (parallel to FP-008.4 #23 `EnrichmentSkip` pattern). |
+| **Added by** | FP-009 Bucket A Commit A1 |

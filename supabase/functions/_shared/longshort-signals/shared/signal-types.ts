@@ -1,0 +1,73 @@
+/**
+ * Phase 2.1 shared signal types.
+ *
+ * Locks the language-stack mapping for all 9 signal sub-phases per FP-009
+ * survey (§1): Optional[Decimal] (spec) → `number | null` (TS); the `-999`
+ * sentinel (§6.5.2) is the Phase 3 combiner's substitution at the
+ * feature-vector layer only — signal-producing functions return
+ * `number | null`. Precision rationale: ratio + z-score-with-±3-clipping
+ * is ~10 orders of magnitude past IEEE-754 limits.
+ *
+ * Mirrors the discipline locked in `_shared/longshort-universe/enrichment/types.ts`:
+ * `Decimal` is NOT used anywhere in this repo per v0.6.2 §22.3(b) idiom-grep.
+ *
+ * Distinction from typed-absence (parallels `enrichment/types.ts:25-28`):
+ *   `null` = upstream source explicitly reports no data (insufficient
+ *            history, ticker missing from data source, computation not
+ *            applicable, e.g. within-sector z-score for a sector with one
+ *            member).
+ *   `SignalComputationError` thrown = network / auth / parse / unexpected
+ *            failure during signal computation; does NOT degrade to `null`;
+ *            orchestrator catches and records per-ticker as `fetch_error`
+ *            (parallel to FP-008.4 #23 enrichment-skip pattern).
+ *
+ * Owner: longshort (FP-009 Bucket A Commit A1)
+ * Classification: shared types — Phase 2 signal contracts.
+ */
+
+/**
+ * Per-ticker per-signal observation written to `signal_observations`
+ * (MIG slot pending Commit A3). The Phase 2 layer is signal-criticality-
+ * agnostic; the critical-vs-non-critical branching lives in Phase 3's
+ * combiner per FP-009 survey §5.
+ */
+export interface SignalRow {
+  operator_id: string;
+  signal_id: string;          // e.g., 'cross_sectional_momentum_12_1'
+  ticker: string;
+  as_of_date: string;         // 'YYYY-MM-DD' (ISO date; daily cadence — not full timestamp)
+  value: number | null;       // null = typed-absence (insufficient history, singleton sector, etc.)
+  is_present: boolean;        // true iff value !== null; redundant but explicit for combiner queries
+  gics_sector: string | null; // captured at compute time for forensic stability
+  computed_at: string;        // ISO timestamp
+}
+
+/**
+ * Throw path for network / auth / parse / unexpected failures during signal
+ * computation. Parallel to `ConstituentFetchError`. Orchestrator catches and
+ * records as a `fetch_error` skip (parallel to FP-008.4 #23 pattern).
+ */
+export class SignalComputationError extends Error {
+  constructor(
+    public readonly signal_id: string,
+    public readonly ticker: string,
+    message: string,
+    public override readonly cause?: unknown,
+  ) {
+    super(`[signal:${signal_id}] ${message} for ${ticker}`);
+    this.name = 'SignalComputationError';
+  }
+}
+
+/** Skip-attribution for orchestrator failure-bookkeeping (parallel to `EnrichmentSkip`). */
+export type SignalSkipReason =
+  | 'insufficient_history'   // < required-window bars; typed-absence
+  | 'missing_sector'         // gics_sector null; within-sector z-score requires sector
+  | 'fetch_error'            // network / auth / parse error caught from fetcher
+  | 'singleton_sector';      // sector has only 1 member; std=0; z-score undefined
+
+export interface SignalSkip {
+  ticker: string;
+  reason: SignalSkipReason;
+  detail?: string;           // optional diagnostic (e.g., "215 bars available, 252 required")
+}
