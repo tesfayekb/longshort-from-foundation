@@ -27,7 +27,7 @@
  * Classification: shared infrastructure — Phase 2 missingness capture.
  */
 
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SignalRow } from './signal-types.ts';
 
 export interface MissingnessCaptureResult {
