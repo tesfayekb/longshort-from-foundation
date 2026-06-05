@@ -110,6 +110,18 @@ function makeContext(opts: {
   crossCheckOutcome?: 'false_positive_within_tolerance' | 'failure_handled' | 'failure_escalated' | 'expected_divergence_handled' | 'system_bug';
   withMetricsEmitter?: boolean;
   metricsEmitterThrows?: boolean;
+  /**
+   * FP-009 Bucket 0.1 — when set, the iShares-slot (Wikipedia-in-disguise per
+   * FP-008.2 Step C legacy field name) mock returns this ticker→sector map.
+   * Unset = no-sector behavior (preserves all pre-Bucket-0.1 tests verbatim).
+   */
+  iSharesSectorMap?: Record<string, string | null>;
+  /**
+   * FP-009 Bucket 0.1 — when true, the iShares-slot mock returns an empty
+   * constituent array (Wikipedia-unavailable / zero-overlap degradation case).
+   * Drives the all-NULL-sector graceful-degradation assertion.
+   */
+  iSharesReturnsEmpty?: boolean;
 } = {}) {
   const { persister, calls } = makePersister();
   const ump = makeUniverseMembershipPersister();
@@ -129,6 +141,7 @@ function makeContext(opts: {
     },
     iSharesConstituents: {
       async fetchConstituents() {
+        if (opts.iSharesReturnsEmpty) return [];
         return sharesTickers.map((t) => mkConstituent(t, 'ishares'));
       },
     },
