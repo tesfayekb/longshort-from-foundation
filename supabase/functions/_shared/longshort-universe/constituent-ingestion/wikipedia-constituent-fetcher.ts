@@ -83,7 +83,7 @@ const SANITY_BOUNDS: Readonly<Record<IndexId, { min: number; max: number }>> = {
 export function parseWikipediaConstituents(
   html: string,
   index: IndexId,
-): string[] {
+): Array<{ ticker: string; gics_sector: string | null }> {
   // Grab the first wikitable. Wikipedia uses class="wikitable" possibly with
   // additional classes (sortable, jquery-tablesorter, etc.).
   const tableMatch = html.match(/<table[^>]*class="[^"]*wikitable[^"]*"[^>]*>([\s\S]*?)<\/table>/i);
@@ -115,7 +115,25 @@ export function parseWikipediaConstituents(
     );
   }
 
-  const out: string[] = [];
+  // FP-009 Bucket 0 — locate the GICS Sector column. Wikipedia's S&P 500 / 400
+  // pages both expose this header verbatim ("GICS Sector"); historical S&P 400
+  // revisions have used "Sector" alone. Defense-in-depth at the parse boundary:
+  // a missing header throws (same shape as the Symbol-column throw) so a
+  // Wikipedia layout change surfaces at the earliest, most diagnosable point
+  // rather than silently producing all-NULL sectors downstream.
+  const sectorCol = headerCells.findIndex((h) => {
+    const t = stripHtml(h).trim().toLowerCase();
+    return t === 'gics sector' || t === 'sector';
+  });
+  if (sectorCol < 0) {
+    throw new ConstituentFetchError(
+      'wikipedia',
+      index,
+      `GICS Sector column not found in header: [${headerCells.map((h) => stripHtml(h).trim()).join(', ')}] — Wikipedia table layout likely changed`,
+    );
+  }
+
+  const out: Array<{ ticker: string; gics_sector: string | null }> = [];
   // Skip-reason counters — fold into the bounds-throw message for forensics.
   // Without these, a "40 of 500" mystery has no on-error breadcrumb to the
   // silent per-row continue path that actually drained the list.
@@ -143,7 +161,17 @@ export function parseWikipediaConstituents(
       regexRejected += 1;
       continue;
     }
-    out.push(ticker);
+    // Sector extraction (typed-absence per §2 axiom 3): row may be ragged on
+    // the sector column (older revisions) — emit null rather than silently
+    // skip the whole row, since the ticker itself is valid and downstream
+    // can decide what to do with a sectorless universe member.
+    let gics_sector: string | null = null;
+    if (cells.length > sectorCol) {
+      const sectorCell = cells[sectorCol];
+      const sectorText = stripHtml(sectorCell).trim();
+      gics_sector = sectorText.length === 0 ? null : sectorText;
+    }
+    out.push({ ticker, gics_sector });
   }
 
   // Sanity-bounds assertion — defense-in-depth on top of the downstream
@@ -244,15 +272,16 @@ export class WikipediaConstituentFetcher implements ConstituentFetcher {
       throw new ConstituentFetchError('wikipedia', index, 'failed to read response body', e);
     }
 
-    const tickers = parseWikipediaConstituents(html, index);
-    if (tickers.length === 0) return null;
+    const parsed = parseWikipediaConstituents(html, index);
+    if (parsed.length === 0) return null;
 
-    return tickers.map((t) => ({
+    return parsed.map((p) => ({
       index,
-      ticker: t,
-      name: t,
+      ticker: p.ticker,
+      name: p.ticker,
       source: 'wikipedia',
       fetched_at: as_of,
+      gics_sector: p.gics_sector,
     }));
   }
 }
