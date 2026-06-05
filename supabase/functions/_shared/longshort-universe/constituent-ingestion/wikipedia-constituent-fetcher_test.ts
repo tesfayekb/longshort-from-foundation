@@ -195,29 +195,29 @@ Deno.test('(13) skip-counting: regex-rejected rows are counted; if survivors sta
   // 500 valid + 10 footnote-marker rows (regex-rejected: lowercase / digits-leading).
   const validRows = Array.from({ length: 500 }, (_, i) => {
     const t = uniqueTicker(i);
-    return `<tr><td><a href="/wiki/${t}">${t}</a></td><td>${t} Corp</td></tr>`;
+    return `<tr><td><a href="/wiki/${t}">${t}</a></td><td>${t} Corp</td><td>Tech</td></tr>`;
   });
   const junkRows = Array.from(
     { length: 10 },
-    () => '<tr><td><a href="/wiki/x">[a]</a></td><td>footnote</td></tr>',
+    () => '<tr><td><a href="/wiki/x">[a]</a></td><td>footnote</td><td>Tech</td></tr>',
   );
-  const html = `<table class="wikitable"><tr><th>Symbol</th><th>Security</th></tr>${validRows.join('')}${junkRows.join('')}</table>`;
-  const tickers = parseWikipediaConstituents(html, 'sp500');
+  const html = `<table class="wikitable"><tr><th>Symbol</th><th>Security</th><th>GICS Sector</th></tr>${validRows.join('')}${junkRows.join('')}</table>`;
+  const parsed = parseWikipediaConstituents(html, 'sp500');
   // 500 valid survive (in-bounds); junk rows silently skipped via regex.
-  assertEquals(tickers.length, 500);
+  assertEquals(parsed.length, 500);
 });
 
 Deno.test('(14) skip-counting: when regex-rejection drops count below bounds, throw message reports the regex count', () => {
   // 40 valid + 100 regex-rejected → 40 survives → below sp500 min.
   const validRows = Array.from({ length: 40 }, (_, i) => {
     const t = uniqueTicker(i);
-    return `<tr><td><a>${t}</a></td><td>x</td></tr>`;
+    return `<tr><td><a>${t}</a></td><td>x</td><td>Tech</td></tr>`;
   });
   const junkRows = Array.from(
     { length: 100 },
-    () => '<tr><td><a>[1]</a></td><td>x</td></tr>',
+    () => '<tr><td><a>[1]</a></td><td>x</td><td>Tech</td></tr>',
   );
-  const html = `<table class="wikitable"><tr><th>Symbol</th><th>Security</th></tr>${validRows.join('')}${junkRows.join('')}</table>`;
+  const html = `<table class="wikitable"><tr><th>Symbol</th><th>Security</th><th>GICS Sector</th></tr>${validRows.join('')}${junkRows.join('')}</table>`;
   const err = assertThrows(
     () => parseWikipediaConstituents(html, 'sp500'),
     ConstituentFetchError,
