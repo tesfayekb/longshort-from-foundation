@@ -224,8 +224,36 @@ export function createQuarterlyRefreshOrchestrator(
         // follow-up; see DW-088 + INC-48 for the named scope boundary).
         const { enriched } = await ctx.polygonEnrichment.enrich(primary, as_of);
 
+        // 3b. GICS sector projection (FP-009 Bucket 0.1).
+        // The Wikipedia-sourced `ishares_cross_check` array (legacy field name
+        // per FP-008.2 Step C — see `ctx.iSharesConstituents = new
+        // WikipediaConstituentFetcher()` at the edge-function wiring in
+        // `longshort-universe-quarterly-refresh/index.ts`) already carries
+        // `gics_sector` per FP-009 Bucket 0 (Wikipedia parser extracts the
+        // "GICS Sector" column). Project sector onto the Polygon-enriched
+        // constituents via ticker join — pure in-memory transformation; no
+        // new I/O, no new failure surface (a cross-check fetch failure at
+        // step 2 already throws before this point).
+        //
+        // Per-ticker miss (ticker in Polygon's index but absent from
+        // Wikipedia's tables — typically delistings or very recent
+        // additions) yields `null` sector (typed-absence per §2 axiom 3 +
+        // INC-36 epistemic-honesty; NOT a sentinel like 'UNKNOWN').
+        //
+        // Latent naming-debt: the `ishares_cross_check` variable name +
+        // `ctx.iSharesConstituents` field name are legacy from pre-FP-008.2
+        // Step C. INC-50 logs the field-rename for a future naming-hygiene
+        // pass; not blocking and not in Bucket 0.1 scope.
+        const sectorMap = new Map<string, string | null>(
+          ishares_cross_check.map((c) => [c.ticker, c.gics_sector]),
+        );
+        const enrichedWithSector = enriched.map((e) => ({
+          ...e,
+          gics_sector: sectorMap.get(e.ticker) ?? null,
+        }));
+
         // 4. §3.2 filters.
-        const filtered = applyFilters(enriched, as_of);
+        const filtered = applyFilters(enrichedWithSector, as_of);
         total_post_filters = filtered.eligible.length;
         filter_rejection_reasons = filtered.rejected.map((r) => r.reason);
 
