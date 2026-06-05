@@ -158,6 +158,12 @@ Deno.serve(createHandler(async (req: Request) => {
     name: r.ticker,
     source: 'manual',
     fetched_at: as_of,
+    // FP-009 Bucket 0: enrich-and-filter rehydrates rows from
+    // universe_membership but selects only ticker (this path doesn't read or
+    // re-write gics_sector). Emit null per the typed-absence idiom; the
+    // column already in the table is preserved on subsequent UPSERTs from
+    // the quarterly orchestrator (which carries source-of-record sector).
+    gics_sector: null,
   }));
 
   const fetcher = new PolygonEnrichmentFetcher(polygonApiKey);
