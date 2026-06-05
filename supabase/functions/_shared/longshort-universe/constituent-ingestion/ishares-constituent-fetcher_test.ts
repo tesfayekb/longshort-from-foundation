@@ -50,6 +50,41 @@ Deno.test('(4) parseISharesCsv extracts equity rows + skips cash/futures/non-equ
   assert(rows.every((r) => r.index === 'sp500'));
   assert(rows.every((r) => r.fetched_at.getTime() === AS_OF.getTime()));
   assertEquals(rows[0].name, 'APPLE INC');
+  // FP-009 Bucket 0: Sector column is surfaced verbatim from the CSV.
+  assertEquals(rows[0].gics_sector, 'Information Technology');
+  assertEquals(rows[1].gics_sector, 'Information Technology');
+  assertEquals(rows[2].gics_sector, 'Communication');
+});
+
+// ─── FP-009 Bucket 0 — GICS sector plumbing ───────────────────────────────
+
+Deno.test('(9) GICS sector: empty/sentinel sector cells yield gics_sector: null (typed-absence)', () => {
+  const csv = [
+    'Some preamble',
+    '"Ticker","Name","Sector","Asset Class"',
+    '"AAA","AAA Co","Health Care","Equity"',
+    '"BBB","BBB Co","","Equity"',
+    '"CCC","CCC Co","-","Equity"',
+    '"DDD","DDD Co","--","Equity"',
+  ].join('\n');
+  const rows = parseISharesCsv(csv, 'sp500', AS_OF);
+  assertEquals(rows.length, 4);
+  assertEquals(rows[0].gics_sector, 'Health Care');
+  assertEquals(rows[1].gics_sector, null);
+  assertEquals(rows[2].gics_sector, null);
+  assertEquals(rows[3].gics_sector, null);
+});
+
+Deno.test('(10) GICS sector: CSV without Sector column yields uniform null (typed-absence, no throw)', () => {
+  const csv = [
+    'Some preamble',
+    '"Ticker","Name","Asset Class"',
+    '"AAA","AAA Co","Equity"',
+    '"BBB","BBB Co","Equity"',
+  ].join('\n');
+  const rows = parseISharesCsv(csv, 'sp500', AS_OF);
+  assertEquals(rows.length, 2);
+  assert(rows.every((r) => r.gics_sector === null));
 });
 
 Deno.test('(5) parseISharesCsv throws ConstituentFetchError when header missing', () => {
