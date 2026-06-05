@@ -28,8 +28,12 @@ import type { EnrichedConstituent } from '../enrichment/types.ts';
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const AS_OF = new Date(Date.UTC(2026, 3, 1)); // Apr 1 2026 — Q2 first trading day
 
-function mkConstituent(ticker: string, source: 'polygon' | 'ishares'): UniverseConstituent {
-  return { index: 'sp500', ticker, name: ticker, source, fetched_at: AS_OF, gics_sector: null };
+function mkConstituent(
+  ticker: string,
+  source: 'polygon' | 'ishares',
+  gics_sector: string | null = null,
+): UniverseConstituent {
+  return { index: 'sp500', ticker, name: ticker, source, fetched_at: AS_OF, gics_sector };
 }
 
 function mkEnriched(ticker: string): EnrichedConstituent {
@@ -106,6 +110,18 @@ function makeContext(opts: {
   crossCheckOutcome?: 'false_positive_within_tolerance' | 'failure_handled' | 'failure_escalated' | 'expected_divergence_handled' | 'system_bug';
   withMetricsEmitter?: boolean;
   metricsEmitterThrows?: boolean;
+  /**
+   * FP-009 Bucket 0.1 — when set, the iShares-slot (Wikipedia-in-disguise per
+   * FP-008.2 Step C legacy field name) mock returns this ticker→sector map.
+   * Unset = no-sector behavior (preserves all pre-Bucket-0.1 tests verbatim).
+   */
+  iSharesSectorMap?: Record<string, string | null>;
+  /**
+   * FP-009 Bucket 0.1 — when true, the iShares-slot mock returns an empty
+   * constituent array (Wikipedia-unavailable / zero-overlap degradation case).
+   * Drives the all-NULL-sector graceful-degradation assertion.
+   */
+  iSharesReturnsEmpty?: boolean;
 } = {}) {
   const { persister, calls } = makePersister();
   const ump = makeUniverseMembershipPersister();
@@ -125,7 +141,10 @@ function makeContext(opts: {
     },
     iSharesConstituents: {
       async fetchConstituents() {
-        return sharesTickers.map((t) => mkConstituent(t, 'ishares'));
+        if (opts.iSharesReturnsEmpty) return [];
+        return sharesTickers.map((t) =>
+          mkConstituent(t, 'ishares', opts.iSharesSectorMap?.[t] ?? null),
+        );
       },
     },
     polygonEnrichment: {
@@ -688,4 +707,100 @@ Deno.test('Commit 6 / #5 — double orch.run() for same as_of_date: both complet
 
   // Breaker-streak interaction pin: neither finalize emitted 'failed', so the
   // streak counter sees no false-failure signal from the re-run path.
+});
+
+// ============================================================================
+// FP-009 Bucket 0.1 — GICS sector projection over the Wikipedia-sourced
+// cross-check secondary array. Pure in-memory projection at step 3b of the
+// pipeline (between Polygon enrichment and §3.2 filters); no new I/O, no new
+// failure surface (cross-check fetch failures throw at step 2 before
+// projection is reached — covered by the existing
+// `cross-check failure_escalated → ABORT` test, which implicitly proves
+// short-circuit semantics).
+//
+// Legacy field-name reminder: `ctx.iSharesConstituents` is wired with
+// `WikipediaConstituentFetcher` per FP-008.2 Step C (storage-layer rename
+// deferred — see INC-50). For these tests, the "iShares mock" IS the
+// Wikipedia mock.
+// ============================================================================
+
+Deno.test('Bucket 0.1 — sector populated for tickers present in BOTH Polygon and Wikipedia', async () => {
+  // Polygon returns AAA + BBB + CCC; Wikipedia mock (iSharesSectorMap) labels
+  // AAA = 'Information Technology'. BBB and CCC are present in Polygon but
+  // absent from Wikipedia's table → per-ticker miss → null sector
+  // (typed-absence). XXX is in Wikipedia's table but not in Polygon →
+  // irrelevant to the persisted rows (filter input is Polygon-enriched).
+  const { ctx, umpPersisted } = makeContext({
+    iSharesSectorMap: { AAA: 'Information Technology' },
+  });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'completed');
+  assertEquals(umpPersisted.length, 1);
+
+  const persisted = umpPersisted[0] as {
+    rows: ReadonlyArray<{ ticker: string; gics_sector: string | null }>;
+  };
+  const byTicker = new Map(persisted.rows.map((r) => [r.ticker, r.gics_sector]));
+  // Polygon×2 indices (sp500+sp400) returns AAA from both → both rows carry
+  // the projected sector; the existing AAA row uniqueness is irrelevant here,
+  // every persisted AAA row must carry the Wikipedia sector.
+  assertEquals(
+    byTicker.get('AAA'),
+    'Information Technology',
+    'ticker present in both Polygon and Wikipedia → sector projected from Wikipedia',
+  );
+  assertEquals(
+    byTicker.get('BBB'),
+    null,
+    'ticker in Polygon but absent from Wikipedia → typed-absence (null), not undefined, not sentinel',
+  );
+  assertEquals(byTicker.get('CCC'), null, 'second per-ticker miss → null');
+});
+
+Deno.test('Bucket 0.1 — per-ticker miss is null (typed-absence), property present on row', async () => {
+  // Pin the typed-absence shape explicitly: the gics_sector property MUST be
+  // present on every persisted row (key-in-row), value `null` on miss — not
+  // undefined, not omitted, not 'UNKNOWN'. The anti-pattern guard is that a
+  // sentinel string would silently mislead Phase 2.1's within-sector z-score
+  // (every UNKNOWN-ticker would land in one synthetic sector group).
+  const { ctx, umpPersisted } = makeContext({ iSharesSectorMap: {} });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  await orch.run(AS_OF);
+  const persisted = umpPersisted[0] as {
+    rows: ReadonlyArray<{ ticker: string; gics_sector: string | null }>;
+  };
+  assert(persisted.rows.length > 0, 'fixture must persist at least one row');
+  for (const r of persisted.rows) {
+    assert(
+      'gics_sector' in r,
+      `row for ${r.ticker} must carry gics_sector key (typed-absence, not omitted)`,
+    );
+    assertEquals(
+      r.gics_sector,
+      null,
+      `row for ${r.ticker} must be null on per-ticker miss (no sentinel)`,
+    );
+  }
+});
+
+Deno.test('Bucket 0.1 — Wikipedia returns empty → graceful degradation; refresh completes; all sectors null', async () => {
+  // Wikipedia-unavailable / zero-overlap edge case: the cross-check secondary
+  // returns an empty array. The cross-check itself does NOT abort (the mock
+  // crossCheck returns false_positive_within_tolerance regardless of input);
+  // the orchestrator proceeds, the sector projection produces a zero-entry
+  // Map, and every enriched ticker resolves to null sector. The refresh
+  // outcome stays 'completed' — sector enrichment is a secondary signal that
+  // degrades to typed-absence, not a refresh-aborting failure.
+  const { ctx, umpPersisted } = makeContext({ iSharesReturnsEmpty: true });
+  const orch = createQuarterlyRefreshOrchestrator(ctx, OPERATOR_ID);
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'completed', 'empty Wikipedia is not a refresh failure');
+  assertEquals(result.failure_reason, null);
+  const persisted = umpPersisted[0] as {
+    rows: ReadonlyArray<{ ticker: string; gics_sector: string | null }>;
+  };
+  for (const r of persisted.rows) {
+    assertEquals(r.gics_sector, null, `${r.ticker}: empty Wikipedia → null sector`);
+  }
 });
