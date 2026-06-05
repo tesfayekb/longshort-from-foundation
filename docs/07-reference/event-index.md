@@ -1679,6 +1679,54 @@ Key event chains showing upstream triggers and downstream effects:
 | **Added by** | FP-008 sub-step 8.4, ACT-108 |
 | **Lifecycle** | active |
 
+#### `longshort.universe.refresh.manual_triggered` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.universe.refresh.manual_triggered` |
+| **Module** | longshort/universe |
+| **Version** | 1 |
+| **Classification** | audit-critical (operator-trigger envelope marker) |
+| **Description** | Emitted by the manual-trigger edge function BEFORE invoking the orchestrator. Provides a trigger trail even if the orchestrator crashes before its own `.started` event fires. Pairs with `.manual_completed` or `.manual_failed` on the same `correlation_id`. |
+| **Emitted by** | `supabase/functions/longshort-universe-manual-quarterly-refresh/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `action`, `correlation_id`, `metadata` = `{ operator_id, as_of, trigger:'manual' }` |
+| **Added by** | FP-009 Bucket 0.2 |
+| **Lifecycle** | active |
+
+#### `longshort.universe.refresh.manual_completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.universe.refresh.manual_completed` |
+| **Module** | longshort/universe |
+| **Version** | 1 |
+| **Classification** | audit-critical (operator-trigger envelope marker; paired with the orchestrator's inner `.completed` / `.failed`) |
+| **Description** | Emitted by the manual-trigger edge function AFTER `orch.run(as_of)` returns successfully. The orchestrator's own `.completed` or `.failed` inner event also fires under the same `correlation_id`; this manual envelope event records the trigger context (`operator_id`, manual `trigger`) alongside the refresh outcome. |
+| **Emitted by** | `supabase/functions/longshort-universe-manual-quarterly-refresh/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `action`, `correlation_id`, `metadata` = `{ operator_id, as_of, refresh_id, outcome, trigger:'manual' }` |
+| **Added by** | FP-009 Bucket 0.2 |
+| **Lifecycle** | active |
+
+#### `longshort.universe.refresh.manual_failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.universe.refresh.manual_failed` |
+| **Module** | longshort/universe |
+| **Version** | 1 |
+| **Classification** | audit-critical (operator-trigger envelope failure marker) |
+| **Description** | Emitted from the manual-trigger edge function's `try/catch` around `orch.run(as_of)` when the orchestrator throws before completion. The orchestrator's own `.failed` inner event may or may not have fired depending on where the throw originated; this manual envelope event guarantees a trigger-failure record under the same `correlation_id` regardless. |
+| **Emitted by** | `supabase/functions/longshort-universe-manual-quarterly-refresh/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `action`, `correlation_id`, `metadata` = `{ operator_id, as_of, error, trigger:'manual' }` |
+| **Added by** | FP-009 Bucket 0.2 |
+| **Lifecycle** | active |
+
 ---
 
 ## Long-Short Universe Continuous Hard-Exclusion Refresh Events (FP-008 Sub-Step 8.5)

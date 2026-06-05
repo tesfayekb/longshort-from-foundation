@@ -216,6 +216,13 @@ Per `job_registry` seeds (all shipped `enabled=false`; activation gated by `univ
 - `longshort.universe.hard_exclusion_refresh_3_3c` — MIG-049; deferred-placeholder per DW-063 (halts; v1).
 - `longshort.universe.hard_exclusion_refresh_3_3e` — MIG-049; twice-monthly cadence (§3.3e short interest).
 
+### Quarterly refresh trigger paths
+
+The quarterly refresh orchestrator (`_shared/longshort-universe/refresh-jobs/quarterly-refresh-orchestrator.ts`) is invoked from two edge functions — one cron-scheduled, one operator-triggered. Both invoke the same orchestrator with the same correctness gates (cross-check + reconciliation `failure_escalated → ABORT`); only the calendar gate differs.
+
+- **Cron path** — `longshort-universe-quarterly-refresh` edge function. Auth: cron-secret HMAC (`verifyCronSecret`). Gates on `isFirstTradingDayOfQuarter(as_of)` with `as_of = productionClock.getWallClockTs()`. Skipped on non-quarter-start days (post-bootstrap). This is the production refresh cadence.
+- **Manual path** — `longshort-universe-manual-quarterly-refresh` edge function (FP-009 Bucket 0.2). Auth: operator JWT (`authenticateRequest`) + `longshort.manage` permission. Accepts `POST { as_of: "YYYY-MM-DD" }`; rejects invalid format / future dates. Bypasses ONLY the calendar gate. Emits `longshort.universe.refresh.manual_triggered` / `.manual_completed` / `.manual_failed` audit envelope; the orchestrator's inner `.started` / `.completed` / `.failed` events also fire under the same `correlation_id` for dual-trail forensic clarity. Use cases: observational-gate verification (e.g. FP-009 Bucket 0.1 `gics_sector` population check without waiting four months for the natural quarterly refresh), replay-test fixture generation, post-incident re-validation, ad-hoc audit refreshes. Not registered in `job_registry` — operator-invoked, not scheduled.
+
 ## Failure Modes
 
 Failure modes documented in the deferred-work register and the ACT-103-115 narrative. Speculative future modes are explicitly labeled as such.

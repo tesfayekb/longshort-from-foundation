@@ -2366,6 +2366,22 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Persister** | `makeSupabasePersister()` → `RefreshLogPersister` backed by `supabaseAdmin`; targets `public.universe_refresh_log` (MIG-048) |
 | **Added by** | FP-008 sub-step 8.4, ACT-108 |
 
+#### `longshort-universe-manual-quarterly-refresh` edge function handler
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-009 Bucket 0.2) |
+| **Classification** | api-critical + operator-triggered (DEC-023 envelope per T7; permission gate `longshort.manage`) |
+| **File** | `supabase/functions/longshort-universe-manual-quarterly-refresh/index.ts` |
+| **Sibling files** | `parse-as-of-date.ts` (strict `YYYY-MM-DD` parser, extracted so the test harness can import it without triggering top-level `Deno.serve`); `index_test.ts` (9 Deno regression sentinels) |
+| **Auth** | Operator JWT via `authenticateRequest` + `checkPermissionOrThrow(ctx.user.id, 'longshort.manage')`. NOT cron-secret (that is the cron path's auth). `longshort.admin` does not exist in the live schema; `longshort.manage` is the existing write-class peer also gating `longshort-reconciliation-liveness-check` sweep-halt operations. |
+| **Request** | `POST { as_of: "YYYY-MM-DD" }`. `parseAsOfDate` strict parser rejects non-string, wrong shape, invalid calendar (Feb 30, month 13). Handler rejects future `as_of` (compared against `productionClock.getWallClockTs()`). |
+| **Behavior** | Invokes the same `createQuarterlyRefreshOrchestrator` the cron path uses with operator-supplied `as_of`, bypassing ONLY the `isFirstTradingDayOfQuarter` calendar gate. ALL correctness gates preserved (cross-check + `reconcile` + `buildUniverseCrossCheckSpec` wiring identical to cron; `failure_escalated → ABORT` path intact). Participates in the same `universe_refresh_log` circuit-breaker streak as cron runs. |
+| **Audit** | Dual-trail. Manual envelope: `longshort.universe.refresh.manual_triggered` (before invoke) + `.manual_completed` / `.manual_failed` (after). Orchestrator inner: `.started` / `.completed` / `.failed`. All five events share the operator's `correlation_id` derived from `authenticateRequest`. T4 closure: writes via `writeStrategyAuditEvent`, never `logAuditEvent`. |
+| **Context construction** | `makeSupabasePersister` + `RefreshExecutionContext` builder duplicated from cron handler lines 47-265 with explicit "KEEP IN SYNC" annotation; future hygiene pass extracts both into `_shared/longshort-universe/refresh-jobs/build-orchestrator-context.ts` (INC-51). |
+| **job_registry** | NOT registered — operator-invoked, not scheduled. Gate-15 sentinel scopes only to `enabled=true AND trigger_type='scheduled'`, so no entry is required or expected. |
+| **Added by** | FP-009 Bucket 0.2 (operator-triggered manual refresh path; satisfies the cron handler's `index.ts:142-144` architectural-separation comment) |
+
 #### `RefreshLogPersister`, `RefreshExecutionContext`, `QuarterlyRefreshResult`
 
 | Field | Value |
