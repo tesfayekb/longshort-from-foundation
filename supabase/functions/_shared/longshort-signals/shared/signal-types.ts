@@ -52,7 +52,7 @@ export class SignalComputationError extends Error {
     public readonly signal_id: string,
     public readonly ticker: string,
     message: string,
-    public readonly cause?: unknown,
+    public override readonly cause?: unknown,
   ) {
     super(`[signal:${signal_id}] ${message} for ${ticker}`);
     this.name = 'SignalComputationError';
