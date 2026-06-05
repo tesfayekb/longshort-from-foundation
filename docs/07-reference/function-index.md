@@ -2560,3 +2560,17 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Error contract** | Errors returned in `MissingnessCaptureResult.error`, never thrown — orchestrators decide whether a capture failure is pipeline-fatal or telemetry-only (Bucket C wires the policy). Error message wraps the upstream PostgREST error string for forensic traceability. |
 | **DB target** | `signal_observations` (MIG-064). CHECK constraint at the DB layer enforces `value`/`is_present` consistency so any mis-shaped row is rejected at write time rather than silently persisted. |
 | **Added by** | FP-009 Bucket A Commit A3 |
+
+#### `supabase/functions/_shared/longshort-signals/cross-sectional-momentum/compute-momentum.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket B Commit B1) |
+| **Classification** | signal-specific math — Phase 2.1 Signal #6 cross-sectional momentum per CROSSWIND §4.4.1; pure function over `DailyBar[]`, consumed by the daily-cadence orchestrator landing at Bucket B2 |
+| **Exports** | `function computeMomentum(bars: ReadonlyArray<DailyBar>): number \| null`; `const MOMENTUM_MIN_BARS = 253` |
+| **File** | `supabase/functions/_shared/longshort-signals/cross-sectional-momentum/compute-momentum.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-signals/cross-sectional-momentum/compute-momentum_test.ts` — 13 Deno unit tests (MIN_BARS=253 pin / 252→null / 253→value / empty→null / 1%-growth analytic / flat→0 / 0.5%-decline analytic / div-by-zero→null / hand-computed mixed / determinism / ReadonlyArray non-mutation / off-by-one sentinel locking bars[231]+bars[0] for T=252 / skip-21 contamination property) |
+| **Formula** | `(P[T-21] / P[T-252]) - 1` spec-literal per §4.4.1 — a 231-day return whose tail ends 21 trading days before T. NOT the academic "12-1 momentum" 273-bar interpretation; INC-54 records the gotcha and the off-by-one sentinel that locks the spec indexing. |
+| **Typed-absence** | Returns `null` on `bars.length < 253` (insufficient history per §4.3.5 critical-signal exclusion) or on degenerate denominator `P[T-252] === 0`. Orchestrator (B2) translates `null` into `SignalSkip { reason: 'insufficient_history' }` for the missingness-capture writer. Never fabricates zero per anti-phantom-default rule. |
+| **Purity** | No I/O, no `Date.now()`, no random — deterministic for replay. Trusts A2 `PolygonPriceHistoryFetcher` ascending-sort guarantee on input. |
+| **Added by** | FP-009 Bucket B Commit B1 |
