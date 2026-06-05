@@ -98,7 +98,10 @@ Deno.test("(c3) handler emits the four request-validation 400s + a future-as_of 
 });
 
 Deno.test("(d) bypasses ONLY calendar gate; orchestrator + cross-check preserved", () => {
-  if (HANDLER_SOURCE.includes("isFirstTradingDayOfQuarter")) {
+  // Look for any *call* to isFirstTradingDayOfQuarter (open-paren) — the
+  // header comment legitimately mentions the symbol by name to explain the
+  // architectural separation, so a bare substring match would false-positive.
+  if (/isFirstTradingDayOfQuarter\s*\(/.test(HANDLER_SOURCE)) {
     throw new Error(
       "Manual handler must NOT gate on isFirstTradingDayOfQuarter (whole point of the path)",
     );
