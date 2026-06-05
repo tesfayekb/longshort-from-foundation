@@ -29,7 +29,7 @@ const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const AS_OF = new Date(Date.UTC(2026, 3, 1)); // Apr 1 2026 — Q2 first trading day
 
 function mkConstituent(ticker: string, source: 'polygon' | 'ishares'): UniverseConstituent {
-  return { index: 'sp500', ticker, name: ticker, source, fetched_at: AS_OF };
+  return { index: 'sp500', ticker, name: ticker, source, fetched_at: AS_OF, gics_sector: null };
 }
 
 function mkEnriched(ticker: string): EnrichedConstituent {
