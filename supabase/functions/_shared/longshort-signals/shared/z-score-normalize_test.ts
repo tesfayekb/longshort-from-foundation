@@ -91,16 +91,19 @@ Deno.test('singleton sector → value=null (z-score undefined)', () => {
   const out = byTicker(zScoreNormalizeWithinSector(inputs));
   assertEquals(out.get('SOLO')!.value, null);
   assertEquals(out.get('SOLO')!.gics_sector, 'Niche');
-  // Big sector still produces valid z-scores
-  assertAlmostEquals(out.get('A')!.value as number, -Math.SQRT1_2 * Math.SQRT2, 1e-12); // -1
-  assertAlmostEquals(out.get('B')!.value as number, 1, 1e-12);
+  // Big sector still produces valid z-scores. With n=2 values [1,2]:
+  // mean=1.5, sample-std=√0.5 → z = ±1/√2 ≈ ±0.7071.
+  assertAlmostEquals(out.get('A')!.value as number, -Math.SQRT1_2, 1e-12);
+  assertAlmostEquals(out.get('B')!.value as number, Math.SQRT1_2, 1e-12);
 });
 
 Deno.test('all-equal values within sector (std=0) → value=null for all members', () => {
+  // Integer values avoid floating-point residue that would yield a tiny-nonzero std
+  // and crazy z-scores. The exact-zero std path is what we want to exercise.
   const inputs: ZScoreInput[] = [
-    { ticker: 'X', value: 0.1, gics_sector: 'Flat' },
-    { ticker: 'Y', value: 0.1, gics_sector: 'Flat' },
-    { ticker: 'Z', value: 0.1, gics_sector: 'Flat' },
+    { ticker: 'X', value: 5, gics_sector: 'Flat' },
+    { ticker: 'Y', value: 5, gics_sector: 'Flat' },
+    { ticker: 'Z', value: 5, gics_sector: 'Flat' },
   ];
   const out = byTicker(zScoreNormalizeWithinSector(inputs));
   assertEquals(out.get('X')!.value, null);
@@ -128,9 +131,9 @@ Deno.test('null value passthrough (insufficient history upstream) → value=null
   const out = byTicker(zScoreNormalizeWithinSector(inputs));
   assertEquals(out.get('NEW')!.value, null);
   assertEquals(out.get('NEW')!.gics_sector, 'S');
-  // The non-null members compute against themselves only (n=2)
-  assertAlmostEquals(out.get('A')!.value as number, -Math.SQRT1_2 * Math.SQRT2, 1e-12);
-  assertAlmostEquals(out.get('B')!.value as number, 1, 1e-12);
+  // The non-null members compute against themselves only (n=2 → z = ±1/√2).
+  assertAlmostEquals(out.get('A')!.value as number, -Math.SQRT1_2, 1e-12);
+  assertAlmostEquals(out.get('B')!.value as number, Math.SQRT1_2, 1e-12);
 });
 
 Deno.test('empty input → empty output', () => {
