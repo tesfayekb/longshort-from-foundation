@@ -37,6 +37,8 @@ type Row = {
   short_eligible: boolean;
   quarter_label: string;
   refresh_id: string;
+  // FP-009 Bucket 0 / MIG-063: persisted alongside eligibility flags.
+  gics_sector: string | null;
 };
 
 /**
