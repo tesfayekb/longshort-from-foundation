@@ -787,6 +787,39 @@ export type Database = {
         }
         Relationships: []
       }
+      signal_observations: {
+        Row: {
+          as_of_date: string
+          computed_at: string
+          gics_sector: string | null
+          is_present: boolean
+          operator_id: string
+          signal_id: string
+          ticker: string
+          value: number | null
+        }
+        Insert: {
+          as_of_date: string
+          computed_at?: string
+          gics_sector?: string | null
+          is_present: boolean
+          operator_id: string
+          signal_id: string
+          ticker: string
+          value?: number | null
+        }
+        Update: {
+          as_of_date?: string
+          computed_at?: string
+          gics_sector?: string | null
+          is_present?: boolean
+          operator_id?: string
+          signal_id?: string
+          ticker?: string
+          value?: number | null
+        }
+        Relationships: []
+      }
       system_config: {
         Row: {
           description: string | null

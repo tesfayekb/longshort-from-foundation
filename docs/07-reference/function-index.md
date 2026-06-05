@@ -2546,3 +2546,17 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Banned-pattern compliance** | Zero `Date.now()` outside sanctioned `as_of` chokepoint; zero sentinel fallbacks; zero `logAuditEvent` imports per DEC-033 v4.1. `adjusted=true` server-side adjustment — no client-side split/dividend math. |
 | **Shared infrastructure reuse** | Imports `fetchWithTimeoutAndRetry` + `DEFAULT_FETCH_TIMEOUT_MS` from `_shared/longshort-universe/shared/fetch-with-timeout.ts` (third call site after the three universe fetchers; cross-tree import per shared-utility precedent — no extraction needed). `POLYGON_BASE_URL` duplicated as local 25-char string literal per anti-premature-abstraction discipline; promote on third Polygon consumer (see INC-52). |
 | **Added by** | FP-009 Bucket A Commit A2 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/missingness-capture.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket A Commit A3) |
+| **Classification** | shared infrastructure — Phase 2 missingness capture; UPSERT writer to `signal_observations` (MIG-064) consumed by all 9 signal sub-phase orchestrators at end-of-tick |
+| **Exports** | `function captureSignalObservations(supabase: SupabaseClient, rows: ReadonlyArray<SignalRow>): Promise<MissingnessCaptureResult>`; `interface MissingnessCaptureResult { inserted: number; error: Error \| null }` |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/missingness-capture.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-signals/shared/missingness-capture_test.ts` — 8 Deno unit tests via mock SupabaseClient (empty-array short-circuit / single-row UPSERT shape / multi-row batched / typed-absence threading / in-batch duplicate pass-through / DB error returned-not-thrown / null-count fallback / type-level consistency documentation) |
+| **Idempotency** | `onConflict: 'operator_id,signal_id,as_of_date,ticker'` matches MIG-064 composite PK verbatim — re-runs for the same key tuple overwrite (last-writer-wins, same convention as MIG-052 universe_membership). Empty-array short-circuit avoids a no-op DB round-trip. |
+| **Error contract** | Errors returned in `MissingnessCaptureResult.error`, never thrown — orchestrators decide whether a capture failure is pipeline-fatal or telemetry-only (Bucket C wires the policy). Error message wraps the upstream PostgREST error string for forensic traceability. |
+| **DB target** | `signal_observations` (MIG-064). CHECK constraint at the DB layer enforces `value`/`is_present` consistency so any mis-shaped row is rejected at write time rather than silently persisted. |
+| **Added by** | FP-009 Bucket A Commit A3 |
