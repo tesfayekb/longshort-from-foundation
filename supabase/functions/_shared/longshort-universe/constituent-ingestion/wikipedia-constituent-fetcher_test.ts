@@ -60,16 +60,18 @@ function uniqueTicker(i: number): string {
 
 Deno.test('(1) positive: 500-row valid wikitable parses to 500 sp500 tickers, no throw', () => {
   const html = buildWikitableHtml({ rowCount: 500, tickerFor: uniqueTicker });
-  const tickers = parseWikipediaConstituents(html, 'sp500');
-  assertEquals(tickers.length, 500);
+  const parsed = parseWikipediaConstituents(html, 'sp500');
+  assertEquals(parsed.length, 500);
   // Bounds endpoint sanity: in-bounds tickers are upper-cased ASCII.
-  assert(tickers.every((t) => /^[A-Z][A-Z0-9.-]{0,9}$/.test(t)));
+  assert(parsed.every((p) => /^[A-Z][A-Z0-9.-]{0,9}$/.test(p.ticker)));
+  // FP-009 Bucket 0 — every row carries the synthetic "Tech" sector from the fixture.
+  assert(parsed.every((p) => p.gics_sector === 'Tech'));
 });
 
 Deno.test('(2) positive: 400-row valid wikitable parses to 400 sp400 tickers, no throw', () => {
   const html = buildWikitableHtml({ rowCount: 400, tickerFor: uniqueTicker });
-  const tickers = parseWikipediaConstituents(html, 'sp400');
-  assertEquals(tickers.length, 400);
+  const parsed = parseWikipediaConstituents(html, 'sp400');
+  assertEquals(parsed.length, 400);
 });
 
 Deno.test('(3) positive: bounds boundary — sp500 at min (490) and max (520) accepted', () => {
@@ -193,29 +195,29 @@ Deno.test('(13) skip-counting: regex-rejected rows are counted; if survivors sta
   // 500 valid + 10 footnote-marker rows (regex-rejected: lowercase / digits-leading).
   const validRows = Array.from({ length: 500 }, (_, i) => {
     const t = uniqueTicker(i);
-    return `<tr><td><a href="/wiki/${t}">${t}</a></td><td>${t} Corp</td></tr>`;
+    return `<tr><td><a href="/wiki/${t}">${t}</a></td><td>${t} Corp</td><td>Tech</td></tr>`;
   });
   const junkRows = Array.from(
     { length: 10 },
-    () => '<tr><td><a href="/wiki/x">[a]</a></td><td>footnote</td></tr>',
+    () => '<tr><td><a href="/wiki/x">[a]</a></td><td>footnote</td><td>Tech</td></tr>',
   );
-  const html = `<table class="wikitable"><tr><th>Symbol</th><th>Security</th></tr>${validRows.join('')}${junkRows.join('')}</table>`;
-  const tickers = parseWikipediaConstituents(html, 'sp500');
+  const html = `<table class="wikitable"><tr><th>Symbol</th><th>Security</th><th>GICS Sector</th></tr>${validRows.join('')}${junkRows.join('')}</table>`;
+  const parsed = parseWikipediaConstituents(html, 'sp500');
   // 500 valid survive (in-bounds); junk rows silently skipped via regex.
-  assertEquals(tickers.length, 500);
+  assertEquals(parsed.length, 500);
 });
 
 Deno.test('(14) skip-counting: when regex-rejection drops count below bounds, throw message reports the regex count', () => {
   // 40 valid + 100 regex-rejected → 40 survives → below sp500 min.
   const validRows = Array.from({ length: 40 }, (_, i) => {
     const t = uniqueTicker(i);
-    return `<tr><td><a>${t}</a></td><td>x</td></tr>`;
+    return `<tr><td><a>${t}</a></td><td>x</td><td>Tech</td></tr>`;
   });
   const junkRows = Array.from(
     { length: 100 },
-    () => '<tr><td><a>[1]</a></td><td>x</td></tr>',
+    () => '<tr><td><a>[1]</a></td><td>x</td><td>Tech</td></tr>',
   );
-  const html = `<table class="wikitable"><tr><th>Symbol</th><th>Security</th></tr>${validRows.join('')}${junkRows.join('')}</table>`;
+  const html = `<table class="wikitable"><tr><th>Symbol</th><th>Security</th><th>GICS Sector</th></tr>${validRows.join('')}${junkRows.join('')}</table>`;
   const err = assertThrows(
     () => parseWikipediaConstituents(html, 'sp500'),
     ConstituentFetchError,
@@ -288,4 +290,79 @@ Deno.test('(17) fetcher wrapper: valid 500-row HTML returns UniverseConstituent[
   assert(rows!.every((r) => r.source === 'wikipedia'));
   assert(rows!.every((r) => r.index === 'sp500'));
   assert(rows!.every((r) => r.fetched_at.getTime() === AS_OF.getTime()));
+  // FP-009 Bucket 0: sector populated from the fixture's "Tech" cells.
+  assert(rows!.every((r) => r.gics_sector === 'Tech'));
+});
+
+// ─── FP-009 Bucket 0 — GICS sector plumbing ───────────────────────────────
+
+Deno.test('(18) GICS sector: missing GICS Sector header throws ConstituentFetchError', () => {
+  // Header has Symbol + Security but no GICS Sector column.
+  const validRows = Array.from({ length: 500 }, (_, i) => {
+    const t = uniqueTicker(i);
+    return `<tr><td><a>${t}</a></td><td>${t} Corp</td></tr>`;
+  });
+  const html = `<table class="wikitable"><tr><th>Symbol</th><th>Security</th></tr>${validRows.join('')}</table>`;
+  const err = assertThrows(
+    () => parseWikipediaConstituents(html, 'sp500'),
+    ConstituentFetchError,
+  );
+  assert(
+    err.message.includes('GICS Sector column not found'),
+    `expected GICS-Sector-column-not-found diagnostic: ${err.message}`,
+  );
+  assert(
+    err.message.includes('layout likely changed'),
+    `expected layout-changed hint: ${err.message}`,
+  );
+});
+
+Deno.test('(19) GICS sector: row with empty sector cell yields gics_sector: null (typed-absence)', () => {
+  // 500 valid + 1 row with empty sector cell. Both kept; empty one is typed-absent.
+  const validRows = Array.from({ length: 499 }, (_, i) => {
+    const t = uniqueTicker(i);
+    return `<tr><td><a>${t}</a></td><td>${t} Corp</td><td>Tech</td></tr>`;
+  });
+  const blankSectorRow = '<tr><td><a>ZZZ</a></td><td>ZZZ Corp</td><td>   </td></tr>';
+  const html =
+    `<table class="wikitable"><tr><th>Symbol</th><th>Security</th><th>GICS Sector</th></tr>` +
+    `${validRows.join('')}${blankSectorRow}</table>`;
+  const parsed = parseWikipediaConstituents(html, 'sp500');
+  assertEquals(parsed.length, 500);
+  const zzz = parsed.find((p) => p.ticker === 'ZZZ');
+  assert(zzz, 'ZZZ row should be present');
+  assertEquals(zzz!.gics_sector, null);
+  // Sanity: the 499 valid rows still carry their sector.
+  const populated = parsed.filter((p) => p.gics_sector !== null);
+  assertEquals(populated.length, 499);
+});
+
+Deno.test('(20) GICS sector: mixed-batch — multiple sectors propagate verbatim per row', () => {
+  const sectors = ['Information Technology', 'Health Care', 'Financials', 'Energy'];
+  const rows = Array.from({ length: 500 }, (_, i) => {
+    const t = uniqueTicker(i);
+    return `<tr><td><a>${t}</a></td><td>${t} Corp</td><td>${sectors[i % 4]}</td></tr>`;
+  });
+  const html =
+    `<table class="wikitable"><tr><th>Symbol</th><th>Security</th><th>GICS Sector</th></tr>${rows.join('')}</table>`;
+  const parsed = parseWikipediaConstituents(html, 'sp500');
+  assertEquals(parsed.length, 500);
+  // Each sector should appear exactly 125 times (500/4) verbatim.
+  for (const s of sectors) {
+    const count = parsed.filter((p) => p.gics_sector === s).length;
+    assertEquals(count, 125, `expected 125 rows with sector "${s}", got ${count}`);
+  }
+});
+
+Deno.test('(21) GICS sector: "Sector" alone (older S&P 400 revision header) is accepted', () => {
+  const rows = Array.from({ length: 400 }, (_, i) => {
+    const t = uniqueTicker(i);
+    return `<tr><td><a>${t}</a></td><td>${t} Corp</td><td>Industrials</td></tr>`;
+  });
+  // Header uses "Sector" alone (no "GICS" prefix) — historical Wikipedia layout.
+  const html =
+    `<table class="wikitable"><tr><th>Symbol</th><th>Security</th><th>Sector</th></tr>${rows.join('')}</table>`;
+  const parsed = parseWikipediaConstituents(html, 'sp400');
+  assertEquals(parsed.length, 400);
+  assert(parsed.every((p) => p.gics_sector === 'Industrials'));
 });

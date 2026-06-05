@@ -250,6 +250,13 @@ export function createQuarterlyRefreshOrchestrator(
             ticker: e.ticker,
             long_eligible: e.long_eligible,
             short_eligible: e.short_eligible,
+            // FP-009 Bucket 0 / MIG-063: threads through from
+            // UniverseConstituent → EnrichedConstituent → EligibleConstituent
+            // via the spread chain. Polygon-sourced rows propagate null
+            // (Polygon does not carry GICS); a future bucket wiring
+            // Wikipedia as a sector enrichment step on the primary path
+            // is what populates this column with non-null values in prod.
+            gics_sector: e.gics_sector,
           })),
         });
 

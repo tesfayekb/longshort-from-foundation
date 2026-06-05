@@ -73,6 +73,12 @@ export interface UniverseMembershipPersisterInput {
     readonly ticker: string;
     readonly long_eligible: boolean;
     readonly short_eligible: boolean;
+    /**
+     * GICS sector per FP-009 Bucket 0 / MIG-063. `null` when the upstream
+     * source did not carry sector (typed-absence per §2 axiom 3 + MIG-061 /
+     * INC-36 epistemic-honesty).
+     */
+    readonly gics_sector: string | null;
   }>;
 }
 

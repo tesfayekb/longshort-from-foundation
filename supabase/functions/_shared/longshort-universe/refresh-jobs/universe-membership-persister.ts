@@ -48,6 +48,12 @@ export function makeUniverseMembershipPersister(
           short_eligible: r.short_eligible,
           quarter_label: input.quarter_label,
           refresh_id: input.refresh_id,
+          // FP-009 Bucket 0 / MIG-063: written on every UPSERT so the column
+          // reflects the most-recent refresh's source-of-record sector. On
+          // re-runs (#5 idempotency path) the conflict-update overwrites
+          // gics_sector along with the eligibility flags — the column is
+          // last-writer just like refresh_id, NOT first-write-wins.
+          gics_sector: r.gics_sector,
         }));
 
       if (rowsToInsert.length === 0) {

@@ -55,6 +55,23 @@ export interface UniverseConstituent {
   source: 'polygon' | 'ishares' | 'manual' | 'wikipedia';
   /** Caller-injected timestamp; stamped on every row from the same fetch invocation. */
   fetched_at: Date;
+  /**
+   * GICS sector label as reported by the source.
+   *
+   * Semantics (per FP-009 Bucket 0 / MIG-063):
+   *   - `null` means the source did not carry sector for this row (Polygon has
+   *     no GICS in its taxonomy → uniformly null; Wikipedia / iShares may emit
+   *     null when the per-row cell is empty). Typed-absence per §2 axiom 3 +
+   *     MIG-061 / INC-36 epistemic-honesty.
+   *   - A populated string is the source's verbatim GICS sector label
+   *     (Wikipedia is canonical; iShares' "Sector" column is treated as
+   *     GICS-equivalent for v1 — taxonomic cross-check between sources is a
+   *     future enhancement).
+   *   - Consumed by Phase 2.1 template element 2 (within-sector z-score
+   *     normalization, shared by all 9 signal sub-phases) via the
+   *     `universe_membership.gics_sector` column.
+   */
+  gics_sector: string | null;
 }
 
 /**

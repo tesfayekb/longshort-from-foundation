@@ -98,6 +98,13 @@ export class SeededMembershipFetcher implements ConstituentFetcher {
       // include 'operator_seed' and migrates this site in the same commit.
       source: 'manual',
       fetched_at: as_of,
+      // FP-009 Bucket 0: seeded fetcher reads only `ticker` from
+      // universe_membership (it is a ticker-list rehydrator, not a sector
+      // enricher). Emit null per the typed-absence idiom; the sector for
+      // operator-seeded rows is populated by the source whose enrichment
+      // step downstream of this fetcher carries it (Wikipedia, in the
+      // bucket that wires it onto the primary path).
+      gics_sector: null,
     }));
   }
 }

@@ -20,7 +20,7 @@ function constituent(
   ticker: string,
   source: 'polygon' | 'ishares' | 'manual' = 'polygon',
 ): UniverseConstituent {
-  return { index: 'sp500', ticker, name: ticker, source, fetched_at: AS_OF };
+  return { index: 'sp500', ticker, name: ticker, source, fetched_at: AS_OF, gics_sector: null };
 }
 
 function aggBars(count: number, close: number, volume: number) {

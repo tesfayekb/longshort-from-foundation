@@ -49,6 +49,10 @@ Deno.test('(2) follows next_url across multiple pages and aggregates rows', asyn
   assert(calls[0].includes('index=I%3ASPX'));
   assert(rows!.every((r) => r.source === 'polygon'));
   assert(rows!.every((r) => r.fetched_at.getTime() === AS_OF.getTime()));
+  // FP-009 Bucket 0: Polygon reference data does NOT carry GICS sector;
+  // every row must emit gics_sector: null (honest typed-absence, NOT a
+  // silent default that would mislead z-score consumers downstream).
+  assert(rows!.every((r) => r.gics_sector === null));
 });
 
 Deno.test('(3) sp400 maps to I:MID', async () => {

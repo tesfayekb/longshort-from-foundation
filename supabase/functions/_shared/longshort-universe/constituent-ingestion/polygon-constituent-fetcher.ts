@@ -150,6 +150,10 @@ export class PolygonConstituentFetcher implements ConstituentFetcher {
           name: typeof row.name === 'string' ? row.name : '',
           source: 'polygon',
           fetched_at: as_of,
+          // Polygon reference data does NOT carry GICS sector (the reference
+          // API exposes SIC codes only). Uniformly null per FP-009 Bucket 0 +
+          // §2 axiom 3 typed-absence; Wikipedia is the canonical sector source.
+          gics_sector: null,
         });
       }
 

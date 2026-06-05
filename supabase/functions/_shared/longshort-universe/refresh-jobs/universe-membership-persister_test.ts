@@ -37,6 +37,8 @@ type Row = {
   short_eligible: boolean;
   quarter_label: string;
   refresh_id: string;
+  // FP-009 Bucket 0 / MIG-063: persisted alongside eligibility flags.
+  gics_sector: string | null;
 };
 
 /**
@@ -90,9 +92,9 @@ Deno.test('Test 1 — re-run with mutated payload: DO UPDATE fires (last-writer-
     quarter_label: 'Q2_2026',
     refresh_id: 'R1',
     rows: [
-      { ticker: 'AAA', long_eligible: true, short_eligible: false },
-      { ticker: 'BBB', long_eligible: true, short_eligible: false },
-      { ticker: 'CCC', long_eligible: true, short_eligible: false },
+      { ticker: 'AAA', long_eligible: true, short_eligible: false, gics_sector: null },
+      { ticker: 'BBB', long_eligible: true, short_eligible: false, gics_sector: null },
+      { ticker: 'CCC', long_eligible: true, short_eligible: false, gics_sector: null },
     ],
   });
 
@@ -103,9 +105,9 @@ Deno.test('Test 1 — re-run with mutated payload: DO UPDATE fires (last-writer-
     quarter_label: 'Q2_2026',
     refresh_id: 'R2',
     rows: [
-      { ticker: 'AAA', long_eligible: true, short_eligible: true },
-      { ticker: 'BBB', long_eligible: false, short_eligible: true },
-      { ticker: 'CCC', long_eligible: true, short_eligible: true },
+      { ticker: 'AAA', long_eligible: true, short_eligible: true, gics_sector: null },
+      { ticker: 'BBB', long_eligible: false, short_eligible: true, gics_sector: null },
+      { ticker: 'CCC', long_eligible: true, short_eligible: true, gics_sector: null },
     ],
   });
 
@@ -138,9 +140,9 @@ Deno.test('Test 2 — partial overlap: stale-row property (A from run 1 remains 
     quarter_label: 'Q2_2026',
     refresh_id: 'R1',
     rows: [
-      { ticker: 'AAA', long_eligible: true, short_eligible: false },
-      { ticker: 'BBB', long_eligible: true, short_eligible: false },
-      { ticker: 'CCC', long_eligible: true, short_eligible: false },
+      { ticker: 'AAA', long_eligible: true, short_eligible: false, gics_sector: null },
+      { ticker: 'BBB', long_eligible: true, short_eligible: false, gics_sector: null },
+      { ticker: 'CCC', long_eligible: true, short_eligible: false, gics_sector: null },
     ],
   });
 
@@ -151,9 +153,9 @@ Deno.test('Test 2 — partial overlap: stale-row property (A from run 1 remains 
     quarter_label: 'Q2_2026',
     refresh_id: 'R2',
     rows: [
-      { ticker: 'BBB', long_eligible: true, short_eligible: true },
-      { ticker: 'CCC', long_eligible: true, short_eligible: true },
-      { ticker: 'DDD', long_eligible: true, short_eligible: false },
+      { ticker: 'BBB', long_eligible: true, short_eligible: true, gics_sector: null },
+      { ticker: 'CCC', long_eligible: true, short_eligible: true, gics_sector: null },
+      { ticker: 'DDD', long_eligible: true, short_eligible: false, gics_sector: null },
     ],
   });
 

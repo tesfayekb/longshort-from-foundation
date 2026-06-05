@@ -136,6 +136,13 @@ export function parseISharesCsv(
   const tickerCol = header.indexOf('ticker');
   const nameCol = header.indexOf('name');
   const assetClassCol = header.indexOf('asset class');
+  // FP-009 Bucket 0 — iShares CSV exposes a "Sector" column whose values are
+  // GICS-equivalent in practice (Information Technology, Health Care, etc.).
+  // For v1 we map straight to gics_sector; taxonomic cross-check between
+  // Wikipedia GICS and iShares Sector is a future enhancement (DW-able if
+  // and when needed). Column may be absent in older CSV layouts — typed-
+  // absence (null) if so, mirroring the Polygon-emits-null convention.
+  const sectorCol = header.indexOf('sector');
   if (tickerCol < 0) {
     throw new ConstituentFetchError('ishares', index, 'Ticker column missing from header');
   }
@@ -155,12 +162,20 @@ export function parseISharesCsv(
     }
 
     const name = nameCol >= 0 && row.length > nameCol ? row[nameCol] : '';
+    let gics_sector: string | null = null;
+    if (sectorCol >= 0 && row.length > sectorCol) {
+      const sectorText = (row[sectorCol] ?? '').trim();
+      if (sectorText.length > 0 && sectorText !== '-' && sectorText !== '--') {
+        gics_sector = sectorText;
+      }
+    }
     out.push({
       index,
       ticker,
       name,
       source: 'ishares',
       fetched_at: as_of,
+      gics_sector,
     });
   }
   return out;

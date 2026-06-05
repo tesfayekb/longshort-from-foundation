@@ -899,6 +899,7 @@ export type Database = {
         Row: {
           as_of_date: string
           created_at: string
+          gics_sector: string | null
           long_eligible: boolean
           operator_id: string
           quarter_label: string
@@ -909,6 +910,7 @@ export type Database = {
         Insert: {
           as_of_date: string
           created_at?: string
+          gics_sector?: string | null
           long_eligible: boolean
           operator_id: string
           quarter_label: string
@@ -919,6 +921,7 @@ export type Database = {
         Update: {
           as_of_date?: string
           created_at?: string
+          gics_sector?: string | null
           long_eligible?: boolean
           operator_id?: string
           quarter_label?: string
