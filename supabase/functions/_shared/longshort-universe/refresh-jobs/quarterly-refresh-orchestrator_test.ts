@@ -142,7 +142,9 @@ function makeContext(opts: {
     iSharesConstituents: {
       async fetchConstituents() {
         if (opts.iSharesReturnsEmpty) return [];
-        return sharesTickers.map((t) => mkConstituent(t, 'ishares'));
+        return sharesTickers.map((t) =>
+          mkConstituent(t, 'ishares', opts.iSharesSectorMap?.[t] ?? null),
+        );
       },
     },
     polygonEnrichment: {
