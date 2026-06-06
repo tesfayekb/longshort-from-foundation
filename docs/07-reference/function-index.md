@@ -2574,3 +2574,39 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Typed-absence** | Returns `null` on `bars.length < 253` (insufficient history per §4.3.5 critical-signal exclusion) or on degenerate denominator `P[T-252] === 0`. Orchestrator (B2) translates `null` into `SignalSkip { reason: 'insufficient_history' }` for the missingness-capture writer. Never fabricates zero per anti-phantom-default rule. |
 | **Purity** | No I/O, no `Date.now()`, no random — deterministic for replay. Trusts A2 `PolygonPriceHistoryFetcher` ascending-sort guarantee on input. |
 | **Added by** | FP-009 Bucket B Commit B1 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/p-limited-map.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket B Commit B2) |
+| **Classification** | shared leaf utility — bounded-concurrency map; extracted from `longshort-universe-enrich-and-filter/index.ts:48` (FP-008.4 #23 vintage) on the second-consumer threshold. Consumed by universe enrichment + momentum orchestrator. |
+| **Exports** | `function pLimitedMap<T, R>(items: ReadonlyArray<T>, limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]>` |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/p-limited-map.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-signals/shared/p-limited-map_test.ts` — 7 Deno unit tests (limit=1 sequential equivalence / order-preserved-despite-varying-latency / limit>items clamped to items.length / limit≤0 clamped to 1 / empty input / determinism / peak-concurrency cap honored) |
+| **Purity** | No I/O, no clock, no randomness. Workers clamped to `[1, items.length]`. Results returned in input order regardless of completion order. |
+| **Added by** | FP-009 Bucket B Commit B2 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/signal-orchestrator-types.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket B Commit B2) |
+| **Classification** | shared types — Phase 2 signal-orchestrator contracts; locks DI ctx + structured-result shapes reused unchanged across signals 2.1-2.9 |
+| **Exports** | `interface SignalOrchestratorContext { supabase, priceHistory, operator_id, concurrency? }`; `type SignalOrchestratorOutcome = 'completed' \| 'failed'`; `interface SignalOrchestratorResult { outcome, signal_id, as_of_date, universe_size, persisted_count, skipped, failure_reason?, started_at, completed_at }` |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/signal-orchestrator-types.ts` |
+| **Tests** | n/a (types-only; exercised via `momentum-orchestrator_test.ts` consumers) |
+| **Added by** | FP-009 Bucket B Commit B2 |
+
+#### `supabase/functions/_shared/longshort-signals/cross-sectional-momentum/momentum-orchestrator.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket B Commit B2) |
+| **Classification** | signal orchestrator — first runnable end-to-end Phase 2 signal pipeline; architectural parallel to `quarterly-refresh-orchestrator.ts` (DI ctx, numbered steps, structured result, per-ticker skip attribution mirroring FP-008.4 #23). |
+| **Exports** | `function createMomentumOrchestrator(ctx: SignalOrchestratorContext): { run(as_of: Date): Promise<SignalOrchestratorResult> }`; `const SIGNAL_ID = 'cross_sectional_momentum_12_1'` (locked string for Phase 3 combiner consumption — do not rename) |
+| **File** | `supabase/functions/_shared/longshort-signals/cross-sectional-momentum/momentum-orchestrator.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-signals/cross-sectional-momentum/momentum-orchestrator_test.ts` — 12 Deno unit tests via DI mocks (happy-path 5 tickers / insufficient-history skip / Polygon 404 → fetch_error / non-404 throw → fetch_error with ticker context / singleton_sector / missing_sector / empty universe → failed+empty_universe / universe-read error → throws / persistence error → failed+reason / mixed skip+success exercising all 4 reasons / concurrency cap=5 / determinism) |
+| **Pipeline** | (1) two-step universe-membership query for current snapshot (latest as_of_date then rows at that date) — empty universe hard-fails; (2) bounded-concurrency `pLimitedMap` price-history fetch + `computeMomentum` per ticker — per-ticker errors become typed `SignalSkip`s, not throws; (3) `zScoreNormalizeWithinSector`; (4) attribute z-score nulls as `missing_sector` (gics_sector null) or `singleton_sector` (std=0); (5) `captureSignalObservations` UPSERT — persistence error → `outcome='failed'` (no partial-success state). |
+| **Wall-clock** | Signal `value` uses `as_of` parameter only (kernel pure). `started_at` / `completed_at` / `computed_at` are presentation-layer telemetry reads per FP-008.4 §22 kernel/telemetry split. |
+| **Added by** | FP-009 Bucket B Commit B2 |
