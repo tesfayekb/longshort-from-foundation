@@ -386,4 +386,18 @@ Deno.test('(12) determinism — same inputs produce identical persisted values',
       .map((r) => ({ ticker: r.ticker, value: r.value }));
   assertEquals(vals(a.calls), vals(b.calls));
   assertEquals(ra.persisted_count, rb.persisted_count);
+  // DEC-034(4): telemetry timestamps derive from as_of, so two runs with
+  // the same as_of produce byte-identical started_at/completed_at and
+  // byte-identical computed_at on every persisted row.
+  const expectedTs = AS_OF.toISOString();
+  assertEquals(ra.started_at, expectedTs);
+  assertEquals(ra.completed_at, expectedTs);
+  assertEquals(rb.started_at, expectedTs);
+  assertEquals(rb.completed_at, expectedTs);
+  for (const row of a.calls.upsertPayloads[0]) {
+    assertEquals(row.computed_at, expectedTs);
+  }
+  for (const row of b.calls.upsertPayloads[0]) {
+    assertEquals(row.computed_at, expectedTs);
+  }
 });
