@@ -47,7 +47,13 @@ import { captureSignalObservations } from '../shared/missingness-capture.ts';
 export const SIGNAL_ID = 'cross_sectional_momentum_12_1';
 
 const DEFAULT_CONCURRENCY = 20;
-const PRICE_HISTORY_LOOKBACK_DAYS = 280;
+/** Lookback in CALENDAR days. Must span MOMENTUM_MIN_BARS=253 TRADING days
+ *  + headroom for holiday clusters. Trading/calendar ratio is ~252/365 ≈ 0.69;
+ *  400 calendar days → ~276 trading days; 23-day headroom absorbs holiday
+ *  variation. Diagnosed at FP-009 C2a observational gate fire 2026-06-05
+ *  (run_id f8e10475-711f-4a8f-9cf8-b9a172b10f01): original 280 yielded
+ *  ~193 trading days < 253; all 839 tickers tripped insufficient_history. */
+const PRICE_HISTORY_LOOKBACK_DAYS = 400;
 
 interface UniverseRow {
   ticker: string;

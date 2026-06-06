@@ -170,16 +170,16 @@ Deno.test('(9) lookbackDays parameter is reflected in URL date range', async () 
   assertStringIncludes(capturedUrl, 'sort=asc');
 });
 
-Deno.test('(10) default lookbackDays is 280', async () => {
+Deno.test('(10) default lookbackDays is 400', async () => {
   let capturedUrl = '';
   const fetcher = new PolygonPriceHistoryFetcher('test-key', async (url) => {
     capturedUrl = url;
-    return jsonResp({ results: bars(280, 100) });
+    return jsonResp({ results: bars(400, 100) });
   });
   await fetcher.fetchPriceHistory('AAPL', AS_OF);
-  // 280 calendar days back from 2026-05-25 → 2025-08-18
-  assertStringIncludes(capturedUrl, '/range/1/day/2025-08-18/2026-05-25');
-  assertEquals(DEFAULT_PRICE_HISTORY_LOOKBACK_DAYS, 280);
+  // 400 calendar days back from 2026-05-25 → 2025-04-20
+  assertStringIncludes(capturedUrl, '/range/1/day/2025-04-20/2026-05-25');
+  assertEquals(DEFAULT_PRICE_HISTORY_LOOKBACK_DAYS, 400);
 });
 
 Deno.test('(11) determinism: same fixed-response fetch returns identical results across calls', async () => {
