@@ -46,6 +46,24 @@ Deno.test('applyMigrationSql — multi-row INSERT with extra cols', () => {
   assertEquals(state.get('b')?.trigger_type, 'manual');
 });
 
+Deno.test('applyMigrationSql — INSERT with handler_path in VALUES populates handler_path (regression: was hardcoded null pre-fix)', () => {
+  // Regression pin for the FP-009 Bucket C C2b tail-hotfix: INSERT path was dropping
+  // handler_path even when present in VALUES; only UPDATE path read it. Bug latent while
+  // affected job enabled=false; surfaced at MIG-067 enable-flip as a P2-null-handler
+  // false positive against longshort.momentum.compute (live DB had handler_path correctly
+  // populated; only offline replay diverged). See INC-59.
+  const state = new Map<string, JobState>();
+  const sql = `
+    INSERT INTO public.job_registry (id, owner_module, description, trigger_type, schedule, enabled, handler_path)
+    VALUES ('test.job', 'test', 'desc', 'scheduled', '0 * * * *', false, 'supabase/functions/test-handler/index.ts');
+  `;
+  applyMigrationSql(state, sql);
+  const job = state.get('test.job');
+  assertEquals(job?.handler_path, 'supabase/functions/test-handler/index.ts');
+  assertEquals(job?.enabled, false);
+  assertEquals(job?.trigger_type, 'scheduled');
+});
+
 Deno.test('applyMigrationSql — chronological overlay (MIG-044 insert false → MIG-045 set true → MIG-058 set false)', () => {
   const state = new Map<string, JobState>();
   // MIG-044 (seed enabled=false)
