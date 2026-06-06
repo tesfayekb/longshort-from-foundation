@@ -83,6 +83,7 @@ Deno.serve(createHandler(async (req: Request) => {
     const result = await orch.run(as_of);
 
     const { run_id, persist_error } = await persistSignalComputeLog(
+      supabaseAdmin,
       result,
       DEFAULT_OPERATOR_ID,
     );
