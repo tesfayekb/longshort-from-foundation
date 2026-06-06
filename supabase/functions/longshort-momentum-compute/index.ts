@@ -40,7 +40,7 @@ import {
 import type {
   SignalOrchestratorContext,
 } from '../_shared/longshort-signals/shared/signal-orchestrator-types.ts';
-import { aggregateSkipCounts, persistSignalComputeLog } from './persist-signal-compute-log.ts';
+import { aggregateSkipCounts, persistSignalComputeLog } from '../_shared/persist-signal-compute-log.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const DEFAULT_CONCURRENCY = 20;

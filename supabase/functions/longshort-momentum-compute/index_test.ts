@@ -72,7 +72,7 @@ Deno.test('(4) createMomentumOrchestrator invoked with 4-field SignalOrchestrato
 Deno.test('(5) persistSignalComputeLog writes to signal_compute_log', () => {
   assert(HANDLER_SOURCE.includes('persistSignalComputeLog('),
     'missing persistSignalComputeLog call');
-  assert(HANDLER_SOURCE.includes("'./persist-signal-compute-log.ts'"),
+  assert(HANDLER_SOURCE.includes("'../_shared/persist-signal-compute-log.ts'"),
     'missing persist-signal-compute-log import');
 });
 
