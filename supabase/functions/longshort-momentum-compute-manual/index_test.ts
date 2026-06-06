@@ -79,9 +79,13 @@ Deno.test('(e) dual audit envelope: manual_triggered BEFORE + manual_completed/m
 Deno.test('(f) wall-clock discipline: productionClock only — no new Date() leak', () => {
   assert(HANDLER_SOURCE.includes('productionClock.getWallClockTs()'),
     'missing productionClock.getWallClockTs() for future-as_of check');
-  assert(!/new\s+Date\s*\(\s*\)/.test(HANDLER_SOURCE),
+  const codeOnly = HANDLER_SOURCE
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\*.*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+  assert(!/new\s+Date\s*\(\s*\)/.test(codeOnly),
     'wall-clock leak: new Date() found in manual handler');
-  assert(!/Date\.now\s*\(/.test(HANDLER_SOURCE),
+  assert(!/Date\.now\s*\(/.test(codeOnly),
     'wall-clock leak: Date.now() found in manual handler');
 });
 
