@@ -2610,3 +2610,39 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Pipeline** | (1) two-step universe-membership query for current snapshot (latest as_of_date then rows at that date) — empty universe hard-fails; (2) bounded-concurrency `pLimitedMap` price-history fetch + `computeMomentum` per ticker — per-ticker errors become typed `SignalSkip`s, not throws; (3) `zScoreNormalizeWithinSector`; (4) attribute z-score nulls as `missing_sector` (gics_sector null) or `singleton_sector` (std=0); (5) `captureSignalObservations` UPSERT — persistence error → `outcome='failed'` (no partial-success state). |
 | **Wall-clock** | Signal `value` uses `as_of` parameter only (kernel pure). `started_at` / `completed_at` / `computed_at` are presentation-layer telemetry reads per FP-008.4 §22 kernel/telemetry split. |
 | **Added by** | FP-009 Bucket B Commit B2 |
+
+#### `supabase/functions/longshort-momentum-compute/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket C Commit C1) |
+| **Classification** | edge function — daily-cadence cron handler for cross-sectional momentum (Signal #6). Disarmed-at-creation; flipped to `enabled=true` at C2 after observational gate. |
+| **Trigger** | `verifyCronSecret` (X-Cron-Secret header); registered in `job_registry` as `longshort.momentum.compute` via MIG-066 (`enabled=false` at C1). |
+| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `POLYGON_API_KEY` check → build `SignalOrchestratorContext` → `createMomentumOrchestrator(ctx).run(as_of)` → `persistSignalComputeLog(supabaseAdmin, result, operator_id)` → `.started`/`.completed`/`.failed` audit events. |
+| **File** | `supabase/functions/longshort-momentum-compute/index.ts` |
+| **Tests** | `supabase/functions/longshort-momentum-compute/index_test.ts` (7 source-sentinel tests) + `supabase/functions/longshort-momentum-compute/persist-signal-compute-log_test.ts` (7 behavioral tests on the extracted persistence helper) |
+| **Wall-clock** | `productionClock.getWallClockTs()` is the sole wall-clock chokepoint; all telemetry timestamps derive from `as_of` (DEC-034 clause 4). |
+| **Added by** | FP-009 Bucket C Commit C1 |
+
+#### `supabase/functions/longshort-momentum-compute-manual/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket C Commit C1) |
+| **Classification** | edge function — operator-trigger sibling of `longshort-momentum-compute`. Invokes the same orchestrator with an operator-supplied `as_of`. |
+| **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST with `{ "as_of": "YYYY-MM-DD" }` body. Does NOT register in `job_registry`. |
+| **Pipeline** | auth → perm → body validation (`parseAsOfDate` reused from `longshort-universe-manual-quarterly-refresh/parse-as-of-date.ts`) → future-`as_of` rejection via `productionClock` comparison → `POLYGON_API_KEY` check → `.manual_triggered` audit BEFORE → orchestrator → `persistSignalComputeLog` → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
+| **File** | `supabase/functions/longshort-momentum-compute-manual/index.ts` |
+| **Tests** | `supabase/functions/longshort-momentum-compute-manual/index_test.ts` (9 source-sentinel tests) |
+| **Added by** | FP-009 Bucket C Commit C1 |
+
+#### `supabase/functions/longshort-momentum-compute/persist-signal-compute-log.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket C Commit C1) |
+| **Classification** | shared helper module (extracted from `index.ts` so the manual-trigger sibling + test harness can import without triggering top-level `Deno.serve`; same pattern as `parse-as-of-date.ts`). |
+| **Exports** | `function aggregateSkipCounts(skips): Record<SignalSkipReason, number>` (all four enum keys seeded to 0 for stable JSON shape); `function persistSignalComputeLog(supabase, result, operator_id): Promise<{run_id, persist_error}>` (writes one `signal_compute_log` row; takes `supabase` as a parameter for unit-testability). |
+| **File** | `supabase/functions/longshort-momentum-compute/persist-signal-compute-log.ts` |
+| **Tests** | `supabase/functions/longshort-momentum-compute/persist-signal-compute-log_test.ts` — 7 Deno unit tests (3 aggregation + 4 persistence). |
+| **Added by** | FP-009 Bucket C Commit C1 |
