@@ -1,11 +1,13 @@
 /**
- * PolygonPriceHistoryFetcher — 280-day adjusted daily-bar fetch for the Phase 2
+ * PolygonPriceHistoryFetcher — 400-calendar-day adjusted daily-bar fetch for the Phase 2
  * signal stack (FP-009 Bucket A Commit A2).
  *
  * Sibling to `_shared/longshort-universe/enrichment/polygon-enrichment-fetcher.ts`
  * (60-day window for filter-input enrichment). This fetcher serves the signal
- * stage: the default 280-day window covers Signal #6 (cross-sectional momentum
- * 12-1: 252 trading days + skip-month buffer) and Phase 2.2–2.9 windows.
+ * stage: the default 400-calendar-day window covers Signal #6 (cross-sectional
+ * momentum 12-1: requires 253 TRADING bars) and Phase 2.2–2.9 windows. See the
+ * `DEFAULT_PRICE_HISTORY_LOOKBACK_DAYS` docstring below for the calendar-vs-
+ * trading-day units arithmetic.
  *
  * Hardening pattern mirrors the enrichment fetcher verbatim:
  *   - `fetchWithTimeoutAndRetry` (timeout + exponential backoff on 429/5xx)
@@ -50,10 +52,15 @@ import { SignalComputationError } from './signal-types.ts';
 const POLYGON_BASE_URL = 'https://api.polygon.io';
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** Default lookback in calendar days. 280 covers 252 trading days (Signal #6
- *  12-1 momentum window) + 28-day buffer for weekends/holidays + 1-month skip.
- *  Callers can override via `lookbackDays`. */
-export const DEFAULT_PRICE_HISTORY_LOOKBACK_DAYS = 280;
+/** Default lookback in CALENDAR days. 400 covers ~276 TRADING days
+ *  (calendar/trading ratio ≈ 252/365 ≈ 0.69; 400 × 0.69 ≈ 276) — comfortably
+ *  above MOMENTUM_MIN_BARS=253, with 23-day headroom for holiday clusters
+ *  (e.g. Thanksgiving + Black Friday, Christmas/New Year, July 4). Callers
+ *  can override via `lookbackDays`. Diagnosed at FP-009 C2a observational
+ *  gate fire 2026-06-05 (run_id f8e10475-711f-4a8f-9cf8-b9a172b10f01): the
+ *  original 280 yielded only ~193 trading days < 253, tripping
+ *  insufficient_history for all 839 tickers. */
+export const DEFAULT_PRICE_HISTORY_LOOKBACK_DAYS = 400;
 
 /** Operation identifier surfaced in `SignalComputationError.signal_id` when this
  *  fetcher throws. Callers that want a signal-specific attribution can re-wrap.
