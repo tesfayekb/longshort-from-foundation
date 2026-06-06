@@ -1838,3 +1838,91 @@ Same as soft_pause; `state_after='liquidating'`; CRITICAL severity. State transi
 #### `kill_switch.resume` — v1
 
 Same as soft_pause; `state_after='active'`. Only valid from `soft_paused`.
+
+---
+
+## Long-Short Momentum Signal Events (FP-009 Bucket C Commit C1)
+
+#### `longshort.momentum.compute.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the `longshort-momentum-compute` cron handler before the orchestrator runs. |
+| **Emitted by** | `supabase/functions/longshort-momentum-compute/index.ts` via `writeStrategyAuditEvent` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { as_of, signal_id: 'cross_sectional_momentum_12_1', trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-009 Bucket C Commit C1 |
+
+#### `longshort.momentum.compute.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler when the orchestrator returns `outcome='completed'` and the `signal_compute_log` row is persisted. |
+| **Emitted by** | `supabase/functions/longshort-momentum-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-009 Bucket C Commit C1 |
+
+#### `longshort.momentum.compute.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler on orchestrator-throw, `outcome='failed'` structured result, or persistence error. `metadata.stage` discriminates: `orchestrator_throw` / `signal_compute_log_persist` / (absent for `outcome='failed'`). |
+| **Emitted by** | `supabase/functions/longshort-momentum-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, error?, failure_reason?, stage?, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-009 Bucket C Commit C1 |
+
+#### `longshort.momentum.compute.manual_triggered` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler BEFORE orchestrator invocation. Establishes a forensic trigger trail even when the orchestrator crashes. |
+| **Emitted by** | `supabase/functions/longshort-momentum-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-009 Bucket C Commit C1 |
+
+#### `longshort.momentum.compute.manual_completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler after orchestrator returns `outcome='completed'` and the `signal_compute_log` row is persisted. |
+| **Emitted by** | `supabase/functions/longshort-momentum-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-009 Bucket C Commit C1 |
+
+#### `longshort.momentum.compute.manual_failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler on orchestrator-throw, `outcome='failed'` structured result, or persistence error. Dual-trail discipline: a 200 response with `outcome='failed'` body still emits this event because the underlying compute did not succeed even though the handler completed. `metadata.stage` discriminates as in the cron `.failed` event. |
+| **Emitted by** | `supabase/functions/longshort-momentum-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, error?, failure_reason?, stage?, run_id?, outcome?, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-009 Bucket C Commit C1 |
