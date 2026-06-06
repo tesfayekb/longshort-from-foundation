@@ -1,0 +1,74 @@
+/**
+ * Helpers for writing the `signal_compute_log` telemetry row from a
+ * `SignalOrchestratorResult`. Extracted from `index.ts` into a sibling
+ * module so that:
+ *   - the manual-trigger sibling (`longshort-momentum-compute-manual`)
+ *     can import them without triggering the top-level `Deno.serve(...)`
+ *     call in `index.ts`;
+ *   - the Deno test harness for both handlers can import them in isolation
+ *     for unit assertions on the aggregation shape.
+ *
+ * Same extraction rationale as
+ * `longshort-universe-manual-quarterly-refresh/parse-as-of-date.ts`.
+ *
+ * Owner: longshort (FP-009 Bucket C Commit C1)
+ */
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { SignalOrchestratorResult } from '../_shared/longshort-signals/shared/signal-orchestrator-types.ts';
+import type { SignalSkip, SignalSkipReason } from '../_shared/longshort-signals/shared/signal-types.ts';
+
+/**
+ * Aggregate per-ticker SignalSkip[] into a { reason: count } shape for the
+ * signal_compute_log.skip_counts column. All four enum values are seeded to
+ * 0 so the JSON shape is stable across runs.
+ */
+export function aggregateSkipCounts(
+  skips: ReadonlyArray<SignalSkip>,
+): Record<SignalSkipReason, number> {
+  const counts: Record<SignalSkipReason, number> = {
+    insufficient_history: 0,
+    missing_sector: 0,
+    fetch_error: 0,
+    singleton_sector: 0,
+  };
+  for (const s of skips) counts[s.reason] += 1;
+  return counts;
+}
+
+/**
+ * Persist one `signal_compute_log` row for the orchestrator result. The
+ * caller decides whether to propagate `persist_error` to the response
+ * (cron path: log + return 500; manual path: log + return 500).
+ */
+export async function persistSignalComputeLog(
+  supabase: SupabaseClient,
+  result: SignalOrchestratorResult,
+  operator_id: string,
+): Promise<{ run_id: string | null; persist_error: Error | null }> {
+  const skip_counts = aggregateSkipCounts(result.skipped);
+  const { data, error } = await supabase
+    .from('signal_compute_log')
+    .insert({
+      signal_id: result.signal_id,
+      as_of_date: result.as_of_date,
+      outcome: result.outcome,
+      universe_size: result.universe_size,
+      persisted_count: result.persisted_count,
+      skip_counts,
+      failure_reason: result.failure_reason ?? null,
+      started_at: result.started_at,
+      completed_at: result.completed_at,
+      operator_id,
+    })
+    .select('run_id')
+    .single();
+  if (error || !data) {
+    return {
+      run_id: null,
+      persist_error: new Error(
+        `signal_compute_log insert failed: ${error?.message ?? 'no data'}`,
+      ),
+    };
+  }
+  return { run_id: data.run_id as string, persist_error: null };
+}
