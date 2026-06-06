@@ -11,6 +11,20 @@ import {
 } from './momentum-orchestrator.ts';
 import { MOMENTUM_MIN_BARS } from './compute-momentum.ts';
 import { SignalComputationError } from '../shared/signal-types.ts';
+import type { SignalRow } from '../shared/signal-types.ts';
+
+// Minimal types for test mocks. The file uses @ts-nocheck (top) so structural
+// soundness against the real Supabase client / fetcher isn't required;
+// these aliases exist solely to satisfy ESLint @typescript-eslint/no-explicit-any.
+type DailyBarLite = { ts: string; close: number };
+type Behavior =
+  | { kind: 'bars'; bars: DailyBarLite[] }
+  | { kind: 'null' }
+  | { kind: 'throw'; err: unknown };
+type MockCalls = {
+  upsertPayloads: SignalRow[][];
+  fromTables: string[];
+};
 
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const AS_OF = new Date('2026-05-25T20:00:00Z');
@@ -43,9 +57,9 @@ function makeSupabase(opts: {
   upsertError?: { message: string } | null;
 }) {
   const calls = {
-    upsertPayloads: [] as any[],
+    upsertPayloads: [] as SignalRow[][],
     fromTables: [] as string[],
-  };
+  } satisfies MockCalls;
   const universe = opts.universe ?? [];
   const latestDate = universe.length > 0 ? LATEST_SNAPSHOT : null;
 
@@ -55,7 +69,7 @@ function makeSupabase(opts: {
       if (table === 'universe_membership') {
         // Two distinct queries — distinguish by .select() arg.
         let mode: 'latest' | 'rows' = 'rows';
-        const builder: any = {
+        const builder: Record<string, unknown> = {
           select(cols: string) {
             mode = cols === 'as_of_date' ? 'latest' : 'rows';
             return builder;
@@ -63,7 +77,7 @@ function makeSupabase(opts: {
           eq() { return builder; },
           order() { return builder; },
           limit() { return resolve(); },
-          then(onFul: any, onRej: any) { return resolve().then(onFul, onRej); },
+          then(onFul: unknown, onRej: unknown) { return resolve().then(onFul, onRej); },
         };
         const resolve = () => {
           if (mode === 'latest') {
@@ -80,7 +94,7 @@ function makeSupabase(opts: {
       }
       if (table === 'signal_observations') {
         return {
-          upsert(payload: any) {
+          upsert(payload: SignalRow[]) {
             calls.upsertPayloads.push(payload);
             return Promise.resolve({
               error: opts.upsertError ?? null,
@@ -101,7 +115,7 @@ function makeSupabase(opts: {
  *   { kind: 'null' }            → returns null (Polygon 404)
  *   { kind: 'throw', err }      → throws err
  */
-function makePriceHistory(behaviors: Record<string, any>) {
+function makePriceHistory(behaviors: Record<string, Behavior>) {
   const callOrder: string[] = [];
   let inFlight = 0;
   let peakInFlight = 0;
@@ -119,13 +133,13 @@ function makePriceHistory(behaviors: Record<string, any>) {
         if (b.kind === 'throw') throw b.err;
         return b.bars;
       },
-    } as any,
+    } as unknown as import('../shared/polygon-price-history-fetcher.ts').PolygonPriceHistoryFetcher,
     callOrder,
     peak: () => peakInFlight,
   };
 }
 
-function ctx(supabase: any, fetcher: any, concurrency?: number) {
+function ctx(supabase: unknown, fetcher: unknown, concurrency?: number) {
   return {
     supabase,
     priceHistory: fetcher,
@@ -352,7 +366,7 @@ Deno.test('(11) concurrency cap honored', async () => {
     gics_sector: 'IT',
   }));
   const { supabase } = makeSupabase({ universe });
-  const behaviors: Record<string, any> = {};
+  const behaviors: Record<string, Behavior> = {};
   for (let i = 0; i < 20; i++) {
     behaviors[`T${i}`] = { kind: 'bars', bars: fullHistory(1.0 + i * 0.01, 100) };
   }
@@ -380,7 +394,7 @@ Deno.test('(12) determinism — same inputs produce identical persisted values',
   const fb = makePriceHistory(behaviors);
   const ra = await createMomentumOrchestrator(ctx(a.supabase, fa.fetcher)).run(AS_OF);
   const rb = await createMomentumOrchestrator(ctx(b.supabase, fb.fetcher)).run(AS_OF);
-  const vals = (calls: any) =>
+  const vals = (calls: MockCalls) =>
     [...calls.upsertPayloads[0]]
       .sort((x, y) => x.ticker.localeCompare(y.ticker))
       .map((r) => ({ ticker: r.ticker, value: r.value }));
