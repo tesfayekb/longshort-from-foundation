@@ -13,7 +13,7 @@
  *
  * Owner: longshort (FP-009 Bucket C Commit C1)
  */
-import { supabaseAdmin } from '../_shared/supabase-admin.ts';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SignalOrchestratorResult } from '../_shared/longshort-signals/shared/signal-orchestrator-types.ts';
 import type { SignalSkip, SignalSkipReason } from '../_shared/longshort-signals/shared/signal-types.ts';
 
@@ -41,11 +41,12 @@ export function aggregateSkipCounts(
  * (cron path: log + return 500; manual path: log + return 500).
  */
 export async function persistSignalComputeLog(
+  supabase: SupabaseClient,
   result: SignalOrchestratorResult,
   operator_id: string,
 ): Promise<{ run_id: string | null; persist_error: Error | null }> {
   const skip_counts = aggregateSkipCounts(result.skipped);
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from('signal_compute_log')
     .insert({
       signal_id: result.signal_id,
