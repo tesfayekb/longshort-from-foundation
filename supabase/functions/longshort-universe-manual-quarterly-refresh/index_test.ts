@@ -34,7 +34,7 @@ import {
   assertEquals,
   assertExists,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { parseAsOfDate } from "./parse-as-of-date.ts";
+import { parseAsOfDate } from "../_shared/parse-as-of-date.ts";
 
 const HANDLER_SOURCE = await Deno.readTextFile(
   new URL("./index.ts", import.meta.url),

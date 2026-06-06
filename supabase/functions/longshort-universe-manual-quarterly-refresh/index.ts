@@ -68,7 +68,7 @@ import { makeHardExclusionsPersister } from '../_shared/longshort-universe/refre
 import { buildUniverseCrossCheckSpec } from '../_shared/longshort-universe/constituent-ingestion/cross-check-spec.ts';
 import { reconcile } from '../_shared/longshort-reconciliation-lifecycle.ts';
 import { makeMetricsEmitter } from '../_shared/longshort-universe/health-monitoring/metrics-emitter.ts';
-import { parseAsOfDate } from './parse-as-of-date.ts';
+import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 

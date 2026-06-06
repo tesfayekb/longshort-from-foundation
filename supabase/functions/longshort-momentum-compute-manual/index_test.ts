@@ -8,7 +8,7 @@
  * `../longshort-momentum-compute/persist-signal-compute-log_test.ts`.
  */
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { parseAsOfDate } from '../longshort-universe-manual-quarterly-refresh/parse-as-of-date.ts';
+import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 
 const HANDLER_SOURCE = await Deno.readTextFile(
   new URL('./index.ts', import.meta.url),

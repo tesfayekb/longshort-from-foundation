@@ -28,11 +28,11 @@ import {
   SIGNAL_ID,
 } from '../_shared/longshort-signals/cross-sectional-momentum/momentum-orchestrator.ts';
 import type { SignalOrchestratorContext } from '../_shared/longshort-signals/shared/signal-orchestrator-types.ts';
-import { parseAsOfDate } from '../longshort-universe-manual-quarterly-refresh/parse-as-of-date.ts';
+import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 import {
   aggregateSkipCounts,
   persistSignalComputeLog,
-} from '../longshort-momentum-compute/persist-signal-compute-log.ts';
+} from '../_shared/persist-signal-compute-log.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const DEFAULT_CONCURRENCY = 20;
