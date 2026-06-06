@@ -37,12 +37,18 @@ Deno.test('(1) cron auth wired via verifyCronSecret (NOT operator JWT)', () => {
 Deno.test('(2) productionClock is the sole wall-clock source — no new Date() in handler', () => {
   assert(HANDLER_SOURCE.includes('productionClock.getWallClockTs()'),
     'missing productionClock.getWallClockTs() call');
-  // Reject any wall-clock leak — DEC-034 clause 4 ban.
-  assert(!/new\s+Date\s*\(\s*\)/.test(HANDLER_SOURCE),
+  // Reject any wall-clock leak — DEC-034 clause 4 ban. Strip comments first
+  // (block comments + line comments) so doc-commentary about "no new Date()"
+  // is not flagged as a leak.
+  const codeOnly = HANDLER_SOURCE
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\*.*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+  assert(!/new\s+Date\s*\(\s*\)/.test(codeOnly),
     'wall-clock leak: new Date() found in cron handler (DEC-034 clause 4 ban)');
-  assert(!/Date\.now\s*\(/.test(HANDLER_SOURCE),
+  assert(!/Date\.now\s*\(/.test(codeOnly),
     'wall-clock leak: Date.now() found in cron handler');
-  assert(!/performance\.now\s*\(/.test(HANDLER_SOURCE),
+  assert(!/performance\.now\s*\(/.test(codeOnly),
     'wall-clock leak: performance.now() found in cron handler');
 });
 
