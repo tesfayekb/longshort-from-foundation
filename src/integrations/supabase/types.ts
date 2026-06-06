@@ -787,6 +787,48 @@ export type Database = {
         }
         Relationships: []
       }
+      signal_compute_log: {
+        Row: {
+          as_of_date: string
+          completed_at: string
+          failure_reason: string | null
+          operator_id: string
+          outcome: string
+          persisted_count: number
+          run_id: string
+          signal_id: string
+          skip_counts: Json | null
+          started_at: string
+          universe_size: number
+        }
+        Insert: {
+          as_of_date: string
+          completed_at: string
+          failure_reason?: string | null
+          operator_id: string
+          outcome: string
+          persisted_count: number
+          run_id?: string
+          signal_id: string
+          skip_counts?: Json | null
+          started_at: string
+          universe_size: number
+        }
+        Update: {
+          as_of_date?: string
+          completed_at?: string
+          failure_reason?: string | null
+          operator_id?: string
+          outcome?: string
+          persisted_count?: number
+          run_id?: string
+          signal_id?: string
+          skip_counts?: Json | null
+          started_at?: string
+          universe_size?: number
+        }
+        Relationships: []
+      }
       signal_observations: {
         Row: {
           as_of_date: string
