@@ -22,11 +22,12 @@
  *     (reconciliation hook deferred per FP-009 B1 Option A → B3 / Bucket D).
  *   - Single-table persistence (signal_observations).
  *
- * Wall-clock discipline: signal `value` comes from the `as_of`-derived
- * window only (no Date.now() in the math path). `started_at`/`completed_at`/
- * `computed_at` are presentation-layer telemetry; orchestrator wall-clock
- * read is acceptable per the FP-008.4 §22 split (kernel pure; telemetry
- * may read the clock).
+ * Wall-clock discipline (DEC-034 clause 4): NO wall-clock reads anywhere
+ * in supabase/functions/ — telemetry included. All timestamps
+ * (`started_at`/`completed_at`/`computed_at`) derive from the `as_of`
+ * parameter, mirroring the universe-orchestrator precedent. This makes
+ * replay byte-deterministic: two runs with the same `as_of` produce
+ * identical telemetry timestamps.
  *
  * Owner: longshort (FP-009 Bucket B Commit B2)
  */
@@ -60,8 +61,11 @@ type PerTickerResult =
 export function createMomentumOrchestrator(ctx: SignalOrchestratorContext) {
   return {
     async run(as_of: Date): Promise<SignalOrchestratorResult> {
-      const started_at = new Date().toISOString();
-      const as_of_date = as_of.toISOString().slice(0, 10);
+      // Single as_of-derived timestamp reused for all telemetry sites.
+      // Per DEC-034(4): no wall-clock reads in supabase/functions/.
+      const ts = as_of.toISOString();
+      const started_at = ts;
+      const as_of_date = ts.slice(0, 10);
 
       // ── Step 1: load current universe ─────────────────────────────────
       // Two-step query: (a) find the latest as_of_date for this operator,
@@ -95,7 +99,7 @@ export function createMomentumOrchestrator(ctx: SignalOrchestratorContext) {
           skipped: [],
           failure_reason: 'empty_universe',
           started_at,
-          completed_at: new Date().toISOString(),
+          completed_at: ts,
         };
       }
 
@@ -122,7 +126,7 @@ export function createMomentumOrchestrator(ctx: SignalOrchestratorContext) {
           skipped: [],
           failure_reason: 'empty_universe',
           started_at,
-          completed_at: new Date().toISOString(),
+          completed_at: ts,
         };
       }
 
@@ -186,7 +190,7 @@ export function createMomentumOrchestrator(ctx: SignalOrchestratorContext) {
       const zScored = zScoreNormalizeWithinSector(values);
 
       // ── Step 4: rows + attributed sector-related skips ───────────────
-      const computed_at = new Date().toISOString();
+      const computed_at = ts;
       const rows: SignalRow[] = [];
       for (const z of zScored) {
         if (z.value === null) {
@@ -225,7 +229,7 @@ export function createMomentumOrchestrator(ctx: SignalOrchestratorContext) {
           skipped: skips,
           failure_reason: `signal_observations persistence failed: ${persistErr.message}`,
           started_at,
-          completed_at: new Date().toISOString(),
+          completed_at: ts,
         };
       }
 
@@ -237,7 +241,7 @@ export function createMomentumOrchestrator(ctx: SignalOrchestratorContext) {
         persisted_count: inserted,
         skipped: skips,
         started_at,
-        completed_at: new Date().toISOString(),
+        completed_at: ts,
       };
     },
   };
