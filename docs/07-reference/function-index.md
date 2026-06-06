@@ -2373,9 +2373,9 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **Module** | longshort (FP-009 Bucket 0.2) |
 | **Classification** | api-critical + operator-triggered (DEC-023 envelope per T7; permission gate `longshort.manage`) |
 | **File** | `supabase/functions/longshort-universe-manual-quarterly-refresh/index.ts` |
-| **Sibling files** | `parse-as-of-date.ts` (strict `YYYY-MM-DD` parser, extracted so the test harness can import it without triggering top-level `Deno.serve`); `index_test.ts` (9 Deno regression sentinels) |
+| **Sibling files** | `_shared/parse-as-of-date.ts` (strict `YYYY-MM-DD` parser; relocated to `_shared/` at FP-009 Bucket C C1 deploy hygiene because the Supabase Edge Functions deploy bundler does not support cross-function imports — the helper is shared with `longshort-momentum-compute-manual`; extraction also keeps the test harness importable without triggering top-level `Deno.serve`); `index_test.ts` (9 Deno regression sentinels) |
 | **Auth** | Operator JWT via `authenticateRequest` + `checkPermissionOrThrow(ctx.user.id, 'longshort.manage')`. NOT cron-secret (that is the cron path's auth). `longshort.admin` does not exist in the live schema; `longshort.manage` is the existing write-class peer also gating `longshort-reconciliation-liveness-check` sweep-halt operations. |
-| **Request** | `POST { as_of: "YYYY-MM-DD" }`. `parseAsOfDate` strict parser rejects non-string, wrong shape, invalid calendar (Feb 30, month 13). Handler rejects future `as_of` (compared against `productionClock.getWallClockTs()`). |
+| **Request** | `POST { as_of: "YYYY-MM-DD" }`. `parseAsOfDate` strict parser (now at `supabase/functions/_shared/parse-as-of-date.ts`) rejects non-string, wrong shape, invalid calendar (Feb 30, month 13). Handler rejects future `as_of` (compared against `productionClock.getWallClockTs()`). |
 | **Behavior** | Invokes the same `createQuarterlyRefreshOrchestrator` the cron path uses with operator-supplied `as_of`, bypassing ONLY the `isFirstTradingDayOfQuarter` calendar gate. ALL correctness gates preserved (cross-check + `reconcile` + `buildUniverseCrossCheckSpec` wiring identical to cron; `failure_escalated → ABORT` path intact). Participates in the same `universe_refresh_log` circuit-breaker streak as cron runs. |
 | **Audit** | Dual-trail. Manual envelope: `longshort.universe.refresh.manual_triggered` (before invoke) + `.manual_completed` / `.manual_failed` (after). Orchestrator inner: `.started` / `.completed` / `.failed`. All five events share the operator's `correlation_id` derived from `authenticateRequest`. T4 closure: writes via `writeStrategyAuditEvent`, never `logAuditEvent`. |
 | **Context construction** | `makeSupabasePersister` + `RefreshExecutionContext` builder duplicated from cron handler lines 47-265 with explicit "KEEP IN SYNC" annotation; future hygiene pass extracts both into `_shared/longshort-universe/refresh-jobs/build-orchestrator-context.ts` (INC-51). |
@@ -2618,9 +2618,9 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Module** | longshort (FP-009 Bucket C Commit C1) |
 | **Classification** | edge function — daily-cadence cron handler for cross-sectional momentum (Signal #6). Disarmed-at-creation; flipped to `enabled=true` at C2 after observational gate. |
 | **Trigger** | `verifyCronSecret` (X-Cron-Secret header); registered in `job_registry` as `longshort.momentum.compute` via MIG-066 (`enabled=false` at C1). |
-| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `POLYGON_API_KEY` check → build `SignalOrchestratorContext` → `createMomentumOrchestrator(ctx).run(as_of)` → `persistSignalComputeLog(supabaseAdmin, result, operator_id)` → `.started`/`.completed`/`.failed` audit events. |
+| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `POLYGON_API_KEY` check → build `SignalOrchestratorContext` → `createMomentumOrchestrator(ctx).run(as_of)` → `persistSignalComputeLog(supabaseAdmin, result, operator_id)` (imported from `supabase/functions/_shared/persist-signal-compute-log.ts`) → `.started`/`.completed`/`.failed` audit events. |
 | **File** | `supabase/functions/longshort-momentum-compute/index.ts` |
-| **Tests** | `supabase/functions/longshort-momentum-compute/index_test.ts` (7 source-sentinel tests) + `supabase/functions/longshort-momentum-compute/persist-signal-compute-log_test.ts` (7 behavioral tests on the extracted persistence helper) |
+| **Tests** | `supabase/functions/longshort-momentum-compute/index_test.ts` (7 source-sentinel tests) + `supabase/functions/_shared/persist-signal-compute-log_test.ts` (7 behavioral tests on the extracted persistence helper) |
 | **Wall-clock** | `productionClock.getWallClockTs()` is the sole wall-clock chokepoint; all telemetry timestamps derive from `as_of` (DEC-034 clause 4). |
 | **Added by** | FP-009 Bucket C Commit C1 |
 
@@ -2631,18 +2631,28 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Module** | longshort (FP-009 Bucket C Commit C1) |
 | **Classification** | edge function — operator-trigger sibling of `longshort-momentum-compute`. Invokes the same orchestrator with an operator-supplied `as_of`. |
 | **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST with `{ "as_of": "YYYY-MM-DD" }` body. Does NOT register in `job_registry`. |
-| **Pipeline** | auth → perm → body validation (`parseAsOfDate` reused from `longshort-universe-manual-quarterly-refresh/parse-as-of-date.ts`) → future-`as_of` rejection via `productionClock` comparison → `POLYGON_API_KEY` check → `.manual_triggered` audit BEFORE → orchestrator → `persistSignalComputeLog` → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
+| **Pipeline** | auth → perm → body validation (`parseAsOfDate` imported from `supabase/functions/_shared/parse-as-of-date.ts` — single cross-handler source of truth; relocated to `_shared/` at C1 deploy hygiene) → future-`as_of` rejection via `productionClock` comparison → `POLYGON_API_KEY` check → `.manual_triggered` audit BEFORE → orchestrator → `persistSignalComputeLog` (from `supabase/functions/_shared/persist-signal-compute-log.ts`) → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
 | **File** | `supabase/functions/longshort-momentum-compute-manual/index.ts` |
 | **Tests** | `supabase/functions/longshort-momentum-compute-manual/index_test.ts` (9 source-sentinel tests) |
 | **Added by** | FP-009 Bucket C Commit C1 |
 
-#### `supabase/functions/longshort-momentum-compute/persist-signal-compute-log.ts`
+#### `supabase/functions/_shared/persist-signal-compute-log.ts`
 
 | Field | Value |
 |---|---|
 | **Module** | longshort (FP-009 Bucket C Commit C1) |
-| **Classification** | shared helper module (extracted from `index.ts` so the manual-trigger sibling + test harness can import without triggering top-level `Deno.serve`; same pattern as `parse-as-of-date.ts`). |
+| **Classification** | shared helper module (extracted from `index.ts` so the manual-trigger sibling + test harness can import without triggering top-level `Deno.serve`; same pattern as `parse-as-of-date.ts`). Relocated from `longshort-momentum-compute/persist-signal-compute-log.ts` to `_shared/persist-signal-compute-log.ts` at C1 deploy hygiene because the Supabase Edge Functions deploy bundler does not support cross-function imports — the helper is shared with `longshort-momentum-compute-manual`. |
 | **Exports** | `function aggregateSkipCounts(skips): Record<SignalSkipReason, number>` (all four enum keys seeded to 0 for stable JSON shape); `function persistSignalComputeLog(supabase, result, operator_id): Promise<{run_id, persist_error}>` (writes one `signal_compute_log` row; takes `supabase` as a parameter for unit-testability). |
-| **File** | `supabase/functions/longshort-momentum-compute/persist-signal-compute-log.ts` |
-| **Tests** | `supabase/functions/longshort-momentum-compute/persist-signal-compute-log_test.ts` — 7 Deno unit tests (3 aggregation + 4 persistence). |
-| **Added by** | FP-009 Bucket C Commit C1 |
+| **File** | `supabase/functions/_shared/persist-signal-compute-log.ts` |
+| **Tests** | `supabase/functions/_shared/persist-signal-compute-log_test.ts` — 7 Deno unit tests (3 aggregation + 4 persistence). |
+| **Added by** | FP-009 Bucket C Commit C1; relocated to `_shared/` at C1 deploy hygiene; doc-path correction at C2a. |
+
+#### `parseAsOfDate` (relocated shared helper)
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-009 Bucket 0.2; relocated at Bucket C C1 deploy hygiene) |
+| **Classification** | shared helper module — strict `YYYY-MM-DD` parser used by both `longshort-universe-manual-quarterly-refresh` and `longshort-momentum-compute-manual`. Rejects non-string, wrong shape, invalid calendar (Feb 30, month 13). Returns UTC-midnight `Date` or `null`. |
+| **File** | `supabase/functions/_shared/parse-as-of-date.ts` |
+| **Consumers** | `supabase/functions/longshort-universe-manual-quarterly-refresh/index.ts`, `supabase/functions/longshort-momentum-compute-manual/index.ts` |
+| **Added by** | FP-009 Bucket 0.2 (original location: `longshort-universe-manual-quarterly-refresh/parse-as-of-date.ts`); relocated to `_shared/` at FP-009 Bucket C C1 deploy hygiene because the Supabase Edge Functions deploy bundler does not support cross-function imports; doc-path correction at C2a. |
