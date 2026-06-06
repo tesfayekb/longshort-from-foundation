@@ -30,6 +30,7 @@ import type {
   EnrichmentSkipReason,
 } from '../_shared/longshort-universe/enrichment/types.ts';
 import type { FilterRejectionReason } from '../_shared/longshort-universe/filters/types.ts';
+import { pLimitedMap } from '../_shared/longshort-signals/shared/p-limited-map.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -40,32 +41,6 @@ const WALL_CLOCK_BUDGET_MS = 135_000;
 // Concurrency cap for the Polygon enrichment fan-out. 903 tickers × 2 requests
 // at 20-way concurrency and ~250ms/request ≈ 22s sequential-equivalent budget.
 const ENRICHMENT_CONCURRENCY = 20;
-
-/**
- * Native async limiter — bounded-parallelism map over `items`. Preserves
- * input order in the result array. No external dependencies.
- */
-async function pLimitedMap<T, R>(
-  items: ReadonlyArray<T>,
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-  const workers: Promise<void>[] = [];
-  const workerCount = Math.min(Math.max(limit, 1), items.length);
-  for (let w = 0; w < workerCount; w++) {
-    workers.push((async () => {
-      while (true) {
-        const i = cursor++;
-        if (i >= items.length) return;
-        results[i] = await fn(items[i], i);
-      }
-    })());
-  }
-  await Promise.all(workers);
-  return results;
-}
 
 Deno.serve(createHandler(async (req: Request) => {
   const as_of = productionClock.getWallClockTs();
