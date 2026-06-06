@@ -179,6 +179,7 @@ export function applyMigrationSql(state: Map<string, JobState>, sqlRaw: string):
     const idIdx = cols.indexOf('id');
     const enabledIdx = cols.indexOf('enabled');
     const triggerIdx = cols.indexOf('trigger_type');
+    const handlerPathIdx = cols.indexOf('handler_path');
     if (idIdx < 0) continue;
     const valuesBlock = m[2];
     // Split top-level rows: "(...), (...), (...)"
@@ -206,9 +207,15 @@ export function applyMigrationSql(state: Map<string, JobState>, sqlRaw: string):
       const existing = state.get(id);
       const enabled = enabledIdx >= 0 ? parseBool(cells[enabledIdx]) : existing?.enabled ?? null;
       const trigger = triggerIdx >= 0 ? unquote(cells[triggerIdx]) : existing?.trigger_type ?? null;
+      // Honour handler_path when present in INSERT VALUES (MIG-066/FP-008.4 #8 pattern).
+      // Pre-fix this was hardcoded null, which left handler_path-in-INSERT rows latently
+      // null-handler in the offline-replay sentinel state; the gap was harmless while
+      // enabled=false but surfaced as a P2-null-handler violation at MIG-067's enable-flip.
+      // See INC-59 / FP-009 Bucket C C2b tail-hotfix.
+      const handlerPath = handlerPathIdx >= 0 ? unquote(cells[handlerPathIdx]) : existing?.handler_path ?? null;
       // INSERT ... ON CONFLICT DO NOTHING: keep existing if already present.
       if (existing) continue;
-      state.set(id, { id, enabled, trigger_type: trigger, handler_path: null });
+      state.set(id, { id, enabled, trigger_type: trigger, handler_path: handlerPath });
     }
   }
 
