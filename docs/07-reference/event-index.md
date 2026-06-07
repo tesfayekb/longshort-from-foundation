@@ -1926,3 +1926,59 @@ Same as soft_pause; `state_after='active'`. Only valid from `soft_paused`.
 | **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, error?, failure_reason?, stage?, run_id?, outcome?, trigger: 'manual', correlation_id }` |
 | **Lifecycle** | active |
 | **Added by** | FP-009 Bucket C Commit C1 |
+
+#### `longshort.signal_monitor.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the `longshort-signal-monitor` cron handler BEFORE any DB read. Lifecycle bracket — establishes a forensic crumb even if a downstream throw aborts the run. |
+| **Emitted by** | `supabase/functions/longshort-signal-monitor/index.ts` via `writeStrategyAuditEvent` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { as_of, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-010 Bucket A Commit A3 |
+
+#### `longshort.signal_monitor.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler on clean completion (alert emission or not — `alerts_emitted=[]` is a valid completion). Carries the scan summary: signals monitored (derived from `job_registry` enabled scheduled `longshort.%.compute` set + `JOB_ID_TO_SIGNAL_ID` mapping), rows scanned in the 96h outer window, weekday-aware staleness applied, and the per-alert-type summary of any alerts emitted with `alert_history_id` for cross-reference. |
+| **Emitted by** | `supabase/functions/longshort-signal-monitor/index.ts` via `writeStrategyAuditEvent` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { as_of, trigger: 'cron', signals_monitored, unmapped_job_ids, signal_compute_log_rows_scanned, day_of_week_utc, stale_hours_applied, alerts_emitted: [{ alert_type, signal_count, alert_history_id }], correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-010 Bucket A Commit A3 |
+
+#### `longshort.signal_monitor.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler when the scan throws (job_registry read failure, signal_compute_log read failure, alert_history insert failure, or any other exception path). `metadata.stage='signal_monitor_throw'` discriminator pinned at the catch-site for future stage refinement. |
+| **Emitted by** | `supabase/functions/longshort-signal-monitor/index.ts` via `writeStrategyAuditEvent` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { as_of, trigger: 'cron', error, stage: 'signal_monitor_throw', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-010 Bucket A Commit A3 |
+
+#### `longshort.signal_monitor.alert` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler ONCE PER detected signal across all three predicate types (`signal_compute_failed` / `signal_compute_low_water_mark` / `signal_compute_stale`). Carries the full A1 `SignalMonitorAlertPayload` plus `alert_history_id` for single-hop cross-reference from the aggregate operator-glance `alert_history` row to per-signal forensic detail. Per FP-010 Locked Decision (d): aggregate `alert_history` row per alert_type per detection window (cooldown_seconds=300 dispositive) but per-signal audit event for triage detail. For `signal_compute_stale` alerts, `run_id`/`as_of_date`/`populated_pct`/`universe_size`/`persisted_count`/`failure_reason` are all `null` (A1 absence-of-evidence branch shape). |
+| **Emitted by** | `supabase/functions/longshort-signal-monitor/index.ts` via `writeStrategyAuditEvent` (inside `emitAggregateAlert` helper) |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { alert_history_id, alert_type: 'signal_compute_failed' \| 'signal_compute_low_water_mark' \| 'signal_compute_stale', severity, signal_id, run_id, as_of_date, populated_pct, universe_size, persisted_count, failure_reason, detected_at, monitor_source: 'dedicated', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-010 Bucket A Commit A3 |
