@@ -483,6 +483,21 @@ For each phase, only **one** authoritative closure document may exist in the rep
 
 ---
 
+### ART-024: Longshort Momentum Cron-Wiring SQL Artifact (sql/14)
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-024 |
+| **Type** | reference (operator-applied SQL artifact, non-migration) |
+| **Title** | `sql/14_longshort_signal_cron_schedule.sql` — wires `longshort-momentum-compute` to `pg_cron` (jobid:51); FP-018 Bucket B instance fix for INC-62 |
+| **Source Path** | `sql/14_longshort_signal_cron_schedule.sql` |
+| **Created Date** | 2026-06-07 |
+| **Owning Phase** | Phase 2.1 corrective (FP-018) |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-006 |
+| **Status** | `active` (operator-applied 2026-06-07; re-applied after placeholder-substitution correction; scheduler-level verification complete; Bucket C freshness gate pending Monday 2026-06-08) |
+| **Related Actions** | ACT-129 |
+| **Related Decisions** | DEC-040 |
+| **Notes** | Operator-applied out-of-band per MIG-031 precedent (file in `sql/` not `supabase/migrations/` because it carries operator-replaced secrets — `PROJECT_REF` / anon key / CRON_SECRET — never committed to VC). Canonical template = `sql/09_longshort_universe_cron_schedule.sql` (jobid:48). Schedule `0 20 * * 1-5` byte-matches `job_registry.schedule` for `longshort.momentum.compute`. Carries plaintext `X-Cron-Secret` in live `cron.job.command` post-apply (pg_cron design constraint — INC-63 class). Idempotent via `cron.schedule(jobname, ...)` upsert. Pointed to from `docs/07-reference/database-migration-ledger.md` under "Operator-applied cron schedules (non-migration)". |
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
