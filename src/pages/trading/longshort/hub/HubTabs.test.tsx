@@ -11,7 +11,7 @@
  * MemoryRouter so `useSearchParams` is real.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { HubTabs } from './HubTabs';
 
@@ -61,16 +61,26 @@ describe('HubTabs (FP-023.1)', () => {
     expect(screen.getByText('alpha-body')).toBeVisible();
   });
 
-  it('writes ?tab= to the URL when a non-default tab is activated', () => {
+  it('writes ?tab= to the URL when a non-default tab is activated', async () => {
     renderAt('/x');
-    fireEvent.click(screen.getByRole('tab', { name: 'Gamma' }));
-    expect(screen.getByTestId('loc').textContent).toBe('/x?tab=c');
+    const trigger = screen.getByRole('tab', { name: 'Gamma' });
+    fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' });
+    fireEvent.mouseDown(trigger, { button: 0 });
+    fireEvent.click(trigger);
+    await waitFor(() =>
+      expect(screen.getByTestId('loc').textContent).toBe('/x?tab=c'),
+    );
     expect(screen.getByText('gamma-body')).toBeVisible();
   });
 
-  it('strips ?tab= when returning to the default tab', () => {
+  it('strips ?tab= when returning to the default tab', async () => {
     renderAt('/x?tab=b');
-    fireEvent.click(screen.getByRole('tab', { name: 'Alpha' }));
-    expect(screen.getByTestId('loc').textContent).toBe('/x');
+    const trigger = screen.getByRole('tab', { name: 'Alpha' });
+    fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' });
+    fireEvent.mouseDown(trigger, { button: 0 });
+    fireEvent.click(trigger);
+    await waitFor(() =>
+      expect(screen.getByTestId('loc').textContent).toBe('/x'),
+    );
   });
 });
