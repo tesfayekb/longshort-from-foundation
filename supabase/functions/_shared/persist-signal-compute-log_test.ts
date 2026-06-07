@@ -163,3 +163,27 @@ Deno.test('persistSignalComputeLog: skip_counts JSON shape is stable when no ski
     singleton_sector: 0,
   });
 });
+
+// ── FP-022 / C-F4: skipped_detail per-ticker round-trip ────────────────────
+
+Deno.test('persistSignalComputeLog: skipped_detail round-trips the SignalSkip[] verbatim', async () => {
+  const { supabase, calls } = makeSupabase({});
+  const skipped = [
+    { ticker: 'AAPL', reason: 'insufficient_history' as const, detail: '215 bars, 252 required' },
+    { ticker: 'TSLA', reason: 'fetch_error' as const },
+    { ticker: 'ZZZZ', reason: 'missing_sector' as const },
+  ];
+  await persistSignalComputeLog(supabase, baseResult({ skipped }), OPERATOR_ID);
+  // skipped_detail carries the raw array, distinct from the aggregate skip_counts.
+  assertEquals(calls[0].payload.skipped_detail, skipped);
+  // Aggregate still present and correct (both coexist).
+  assertEquals((calls[0].payload.skip_counts as Record<string, number>).insufficient_history, 1);
+  assertEquals((calls[0].payload.skip_counts as Record<string, number>).fetch_error, 1);
+  assertEquals((calls[0].payload.skip_counts as Record<string, number>).missing_sector, 1);
+});
+
+Deno.test('persistSignalComputeLog: skipped_detail is [] when no skips (clean fire)', async () => {
+  const { supabase, calls } = makeSupabase({});
+  await persistSignalComputeLog(supabase, baseResult({ skipped: [] }), OPERATOR_ID);
+  assertEquals(calls[0].payload.skipped_detail, []);
+});
