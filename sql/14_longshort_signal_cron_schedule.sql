@@ -110,7 +110,7 @@ SELECT cron.schedule(
 --
 --   SELECT run_id, signal_id, as_of_date, completed_at, outcome, persisted_count
 --   FROM signal_compute_log
---   WHERE signal_id = 'longshort.cross_sectional_momentum'
+--   WHERE signal_id = 'cross_sectional_momentum_12_1'
 --   ORDER BY completed_at DESC
 --   LIMIT 1;
 --
