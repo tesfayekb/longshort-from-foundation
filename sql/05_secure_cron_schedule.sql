@@ -11,7 +11,15 @@
 -- MANUAL STEP: Before running, replace the two placeholders:
 --   - YOUR_CRON_SECRET_VALUE → the actual CRON_SECRET value
 --   - YOUR_ANON_KEY          → the Supabase anon/publishable key
---   - PROJECT_REF            → the Supabase project ref (e.g. wbmbsclrgcnqaxmdsgfc)
+--   - PROJECT_REF            → the Supabase project ref for THIS project
+--                              (decodable from the `ref` claim of the anon JWT, or
+--                              readable from the Supabase project URL / dashboard).
+--                              DO NOT copy a ref from another project's docs or
+--                              from a prior example — the wrong ref produces a
+--                              valid-looking but DNS-failing host (see INC-64 /
+--                              FP-019, where an earlier apply landed an unreplaced
+--                              `PROJECT_REF` literal and the four platform jobs
+--                              DNS-failed silently for ~2 months).
 --
 -- This file is in sql/ (not supabase/migrations/) because it contains
 -- environment-specific secrets that must not be committed to version control.
