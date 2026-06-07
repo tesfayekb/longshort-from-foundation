@@ -489,6 +489,72 @@ Every config must define:
 | **Related jobs** | Health check job |
 | **Lifecycle** | active |
 
+#### `alert_configs.signal_compute_failed` (alert_configs row — MIG-068)
+
+| Field | Value |
+|-------|-------|
+| **Type** | `alert_config row` |
+| **Module** | longshort (signals monitoring) |
+| **Classification** | operational |
+| **Row ID** | `f0100068-0001-4000-8000-000000000001` |
+| **metric_key** | `signal_compute_failed` |
+| **Severity** | `critical` |
+| **Predicate** | `count(signal_compute_log rows with outcome='failed' AND completed_at > now()-24h) > 0` (encoded as `threshold_value=0` + `comparison=gt`) |
+| **Cooldown seconds** | `300` |
+| **Source** | `alert_configs` table seed (MIG-068) |
+| **Mutability** | runtime (UPDATE via privileged SQL — no schema change required) |
+| **Reload behavior** | next-monitor-fire |
+| **Blast radius** | small (single alert type; consumed only by `longshort-signal-monitor`) |
+| **Approval required** | Yes (severity change or threshold tuning requires operator sign-off) |
+| **Audit required** | Yes |
+| **Used by** | `longshort-signal-monitor` handler (FP-010 A3 — not yet shipped); referenced by `alert_history.alert_config_id` FK |
+| **Lifecycle** | active |
+| **Cross-references** | FP-010 Locked Decisions (a)+(b); MIG-068; `_shared/longshort-signals/shared/signal-monitor-types.ts` |
+
+#### `alert_configs.signal_compute_low_water_mark` (alert_configs row — MIG-068)
+
+| Field | Value |
+|-------|-------|
+| **Type** | `alert_config row` |
+| **Module** | longshort (signals monitoring) |
+| **Classification** | operational |
+| **Row ID** | `f0100068-0002-4000-8000-000000000002` |
+| **metric_key** | `signal_compute_low_water_mark` |
+| **Severity** | `warning` |
+| **Predicate** | `min(persisted_count/universe_size) over signal_compute_log rows in last 24h < 0.80` (encoded as `threshold_value=0.80` + `comparison=lt`). Anchored to Phase 2.1 first clean fire 99.4% populated + ~0.5% steady-state `insufficient_history` headroom. |
+| **Cooldown seconds** | `300` |
+| **Source** | `alert_configs` table seed (MIG-068) |
+| **Mutability** | runtime |
+| **Reload behavior** | next-monitor-fire |
+| **Blast radius** | small |
+| **Approval required** | Yes |
+| **Audit required** | Yes |
+| **Used by** | `longshort-signal-monitor` handler (FP-010 A3 — not yet shipped) |
+| **Lifecycle** | active |
+| **Cross-references** | FP-010 Locked Decisions (a)+(b)+(c); MIG-068 |
+
+#### `alert_configs.signal_compute_stale` (alert_configs row — MIG-068)
+
+| Field | Value |
+|-------|-------|
+| **Type** | `alert_config row` |
+| **Module** | longshort (signals monitoring) |
+| **Classification** | operational |
+| **Row ID** | `f0100068-0003-4000-8000-000000000003` |
+| **metric_key** | `signal_compute_stale` |
+| **Severity** | `critical` |
+| **Predicate** | `hours_since_last_completed_at > 36 for any enabled signal on a weekday` (encoded as `threshold_value=36` + `comparison=gt`). 36h = 1.5× daily cadence absorbing delivery-latency variance; weekday-only schedule semantics handle weekend without holiday-calendar logic. |
+| **Cooldown seconds** | `300` |
+| **Source** | `alert_configs` table seed (MIG-068) |
+| **Mutability** | runtime |
+| **Reload behavior** | next-monitor-fire |
+| **Blast radius** | small |
+| **Approval required** | Yes |
+| **Audit required** | Yes |
+| **Used by** | `longshort-signal-monitor` handler (FP-010 A3 — not yet shipped) |
+| **Lifecycle** | active |
+| **Cross-references** | FP-010 Locked Decisions (a)+(b)+(c); MIG-068 |
+
 ### Job Configs
 
 #### `jobs.max_retries`
