@@ -2656,3 +2656,31 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/parse-as-of-date.ts` |
 | **Consumers** | `supabase/functions/longshort-universe-manual-quarterly-refresh/index.ts`, `supabase/functions/longshort-momentum-compute-manual/index.ts` |
 | **Added by** | FP-009 Bucket 0.2 (original location: `longshort-universe-manual-quarterly-refresh/parse-as-of-date.ts`); relocated to `_shared/` at FP-009 Bucket C C1 deploy hygiene because the Supabase Edge Functions deploy bundler does not support cross-function imports; doc-path correction at C2a. |
+
+#### `supabase/functions/_shared/longshort-signals/shared/signal-monitor-types.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-010 Bucket A Commit A1) |
+| **Classification** | shared types — Phase 2 monitoring contracts (consumed by A3 `longshort-signal-monitor/index.ts`, A2 MIG-068 `alert_configs` seed rows, and the FP-010 D1 runbook). |
+| **Exports** | `interface SignalMonitorAlertPayload`; `type SignalMonitorAlertType = 'signal_compute_failed' \| 'signal_compute_low_water_mark' \| 'signal_compute_stale'`; `type SignalMonitorSeverity = 'critical' \| 'warning' \| 'info'` |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/signal-monitor-types.ts` |
+| **Tests** | Type-only (no runtime behavior); exercised indirectly via `check-signal-compute-failures_test.ts` payload-shape assertions and via A3's handler tests when they land. |
+| **Field-availability matrix** | `signal_compute_failed` + `signal_compute_low_water_mark` → run_id/as_of_date/failure_reason/persisted_count/universe_size/populated_pct ALL populated. `signal_compute_stale` → all six fields NULL (no row to inspect; absence-of-evidence is the signal). |
+| **monitor_source union** | `'dedicated'` is the only value A1 emitters use; `'sweep'` reserved in the contract for a possible future sweep-extension path (FP-010 Q1 locked dedicated-only; preserving the union avoids a breaking change later). |
+| **Added by** | FP-010 Bucket A Commit A1 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/check-signal-compute-failures.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-010 Bucket A Commit A1) |
+| **Classification** | shared infrastructure — Phase 2 monitoring predicates; three pure functions over `signal_compute_log` row arrays (MIG-065 shape). Consumed by A3 `longshort-signal-monitor/index.ts` handler. |
+| **Exports** | `interface SignalComputeLogRow`; `function checkSignalComputeFailed(rows, asOf, windowHours=24): SignalMonitorAlertPayload[]`; `function checkSignalComputeLowWaterMark(rows, asOf, windowHours=24, threshold=0.80): SignalMonitorAlertPayload[]`; `function checkSignalComputeStale(rows, asOf, staleHours=36, signalIds): SignalMonitorAlertPayload[]` |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/check-signal-compute-failures.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-signals/shared/check-signal-compute-failures_test.ts` — 23 Deno unit tests (failed: 8 / low-water-mark: 7 / stale: 7 / cross-predicate determinism: 1) covering happy-path + boundary (off-by-one on 24h/36h window edges and threshold edge) + universe_size=0 div-by-zero guard + payload field-availability + sort-order determinism. |
+| **Window semantics (LOCKED at A1)** | Failed / LowWaterMark in-window iff `completed_at > (asOf - windowHours) AND completed_at <= asOf` (strict-greater lower, inclusive upper). Stale iff `latest_completed_at <= (asOf - staleHours)` OR no row exists. LowWaterMark threshold is strict `<` (a row at exactly threshold does NOT alert). 36h stale default absorbs weekday-only cron cadence per FP-010 Locked Decision (c). |
+| **Purity** | No `Date.now()`, no `new Date()` reading wall-clock — `asOf: Date` is the injected clock chokepoint per DEC-034 clause (4). No I/O. ReadonlyArray inputs not mutated. Deterministic emit order (sort by signal_id then as_of_date). |
+| **Documented exception** | `crypto.randomUUID()` populates `alert_id` (single non-pure source; same idiom as `_shared/authenticate-request.ts:81` and `_shared/handler.ts:50`). Orchestrator-level idempotency enforced at A3's `alert_history` UPSERT layer, not here. |
+| **Anti-phantom-default** | `universe_size === 0` → `populated_pct = null`, NEVER NaN. Mirrors `compute-momentum.ts` degenerate-denominator handling. |
+| **Added by** | FP-010 Bucket A Commit A1 |
