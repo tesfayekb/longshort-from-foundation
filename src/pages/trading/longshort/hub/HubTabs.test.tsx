@@ -11,8 +11,7 @@
  * MemoryRouter so `useSearchParams` is real.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { HubTabs } from './HubTabs';
 
@@ -62,18 +61,16 @@ describe('HubTabs (FP-023.1)', () => {
     expect(screen.getByText('alpha-body')).toBeVisible();
   });
 
-  it('writes ?tab= to the URL when a non-default tab is activated', async () => {
-    const user = userEvent.setup();
+  it('writes ?tab= to the URL when a non-default tab is activated', () => {
     renderAt('/x');
-    await user.click(screen.getByRole('tab', { name: 'Gamma' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Gamma' }));
     expect(screen.getByTestId('loc').textContent).toBe('/x?tab=c');
     expect(screen.getByText('gamma-body')).toBeVisible();
   });
 
-  it('strips ?tab= when returning to the default tab', async () => {
-    const user = userEvent.setup();
+  it('strips ?tab= when returning to the default tab', () => {
     renderAt('/x?tab=b');
-    await user.click(screen.getByRole('tab', { name: 'Alpha' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Alpha' }));
     expect(screen.getByTestId('loc').textContent).toBe('/x');
   });
 });
