@@ -69,6 +69,22 @@ Governed registry of all shared Phase 4 components. Pages must assemble from thi
 | Admin nav config | `src/config/admin-navigation.ts` | Admin sidebar navigation structure | AdminLayout |
 | User nav config | `src/config/user-navigation.ts` | User sidebar navigation structure | UserLayout |
 
+## Trading / Long-Short Hub Components
+
+Conformance: every component below conforms to [UI Design System](ui-design-system.md) (Enforcement Rule line 14). Hub pages are page-level compositions of governed shell + data-display components — they introduce no page-local table/badge/dialog variants.
+
+| Component | Path | Purpose | Used By |
+|-----------|------|---------|---------|
+| `HubTabs` | `src/pages/trading/longshort/hub/HubTabs.tsx` | URL-`?tab=`-synced shadcn Tabs container with default-tab fallback. Configurable query-param key (defaults to `tab`). The shared in-page tab contract for every Long-Short hub. | `SignalsHubPage`, `UniverseHubPage`, `ReconciliationHubPage`, `PortfolioHubPage` |
+| `HubEmptyState` | `src/pages/trading/longshort/hub/HubTabs.tsx` | Honest empty-state for hub tabs whose data pages land in later FPs (title + description + optional `note` like "Built in FP-024"). | All Long-Short hub pages with deferred tabs |
+| `LongShortDashboardPage` | `src/pages/trading/longshort/LongShortDashboardPage.tsx` | Long-Short Overview hub page (existing dashboard surface; serves the `/trading/longshort` root). | App route `/trading/longshort` |
+| `SignalsHubPage` | `src/pages/trading/longshort/SignalsHubPage.tsx` | Signals hub — composes `PageHeader` + `HubTabs` over Rankings / Compute Runs / Coverage tabs (all empty-state shells at FP-023; Rankings data lands in FP-024). | App route `/trading/longshort/signals` |
+| `UniverseHubPage` | `src/pages/trading/longshort/UniverseHubPage.tsx` | Universe hub — composes `PageHeader` + `HubTabs` over Constituents (`UniverseMembershipPage`) / Refresh History (`UniverseRefreshHistoryPage`) / Exclusions (empty-state). | App route `/trading/longshort/universe` |
+| `ReconciliationHubPage` | `src/pages/trading/longshort/ReconciliationHubPage.tsx` | Reconciliation hub — composes `PageHeader` + `HubTabs` over Events (`ReconciliationEventsPage`) / Alerts / Breaker (empty-states). | App route `/trading/longshort/reconciliation` |
+| `PortfolioHubPage` | `src/pages/trading/longshort/PortfolioHubPage.tsx` | Portfolio hub — empty-state shell at FP-023; data lands in later FPs per master-plan portfolio sequence. | App route `/trading/longshort/portfolio` |
+
+> **Registered by:** FP-023 (ACT-134) shipped the components; FP-023.1 (ACT-135) registered them here per Constitution Rule 6.
+
 ---
 
 ## Component Rules

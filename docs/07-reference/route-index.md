@@ -683,7 +683,7 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 
 | Field | Value |
 |-------|-------|
-| **Page** | Long-Short Dashboard (placeholder at FP-005 bootstrap; full UI lands in FP-006) |
+| **Page** | Long-Short Dashboard / Overview hub (FP-023 hub IA: this route is the Overview hub; sibling hubs at `/trading/longshort/{signals,universe,reconciliation,portfolio}`) |
 | **Module** | longshort |
 | **Classification** | authenticated, privileged |
 | **Auth required** | Yes |
@@ -696,6 +696,91 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | **Related risks** | FP-005 G2 (bootstrap scope discipline), G3 (façade ossification — mitigated by Rule T1a in `.cursorrules`) |
 | **Lifecycle** | active |
 | **Added by** | PLAN-TRADING-001-LONGSHORT-001 (FP-005 Step 5.5) |
+
+#### `/trading/longshort/signals` — Long-Short Signals Hub
+
+| Field | Value |
+|-------|-------|
+| **Page** | `SignalsHubPage` (FP-023). Tabbed via `?tab=` (`HubTabs`): `rankings` (default, empty-state — FP-024), `runs` (empty-state — post-FP-024), `coverage` (empty-state — deferred). |
+| **Module** | longshort |
+| **Classification** | authenticated, privileged |
+| **Auth required** | Yes |
+| **Permission required** | `longshort.view` (inner gate; outer gate `trading.access`) |
+| **Scope** | system-wide |
+| **Panel** | trading-panel |
+| **Related tests** | `src/pages/trading/longshort/hub/HubTabs.test.tsx` (FP-023.1 — `?tab=` round-trip + default-tab fallback) |
+| **Related functions** | `SignalsHubPage`, `HubTabs`, `HubEmptyState` |
+| **Implementation** | **IMPLEMENTED (shell)** — `<Route path="longshort/signals" element={<PermissionGate permission="longshort.view"><SignalsHubPage /></PermissionGate>}>` in `src/App.tsx`. Data tabs land in FP-024+. |
+| **Lifecycle** | active |
+| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). |
+
+#### `/trading/longshort/universe` — Long-Short Universe Hub
+
+| Field | Value |
+|-------|-------|
+| **Page** | `UniverseHubPage` (FP-023). Tabbed via `?tab=`: `constituents` (default — `UniverseMembershipPage` with `gics_sector` column, sector filter, ticker filter, eligibility filter, 50-row pagination), `refresh-history` (`UniverseRefreshHistoryPage`), `exclusions` (empty-state — deferred). |
+| **Module** | longshort |
+| **Classification** | authenticated, privileged |
+| **Auth required** | Yes |
+| **Permission required** | `longshort.view` (inner gate; outer gate `trading.access`) |
+| **Scope** | system-wide |
+| **Panel** | trading-panel |
+| **Related tests** | `src/pages/trading/longshort/__tests__/UniverseMembershipPage.test.tsx` (FP-023.1 — filter + pagination + page-reset-on-filter), `src/pages/trading/longshort/hub/HubTabs.test.tsx` (URL-sync contract) |
+| **Related functions** | `UniverseHubPage`, `UniverseMembershipPage`, `UniverseRefreshHistoryPage`, `HubTabs` |
+| **Implementation** | **IMPLEMENTED** — `<Route path="longshort/universe" element={<PermissionGate permission="longshort.view"><UniverseHubPage /></PermissionGate>}>` in `src/App.tsx`. |
+| **Lifecycle** | active |
+| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). |
+
+#### `/trading/longshort/refresh-history` — Legacy Refresh-History Redirect
+
+| Field | Value |
+|-------|-------|
+| **Page** | None (route is a `<Navigate replace>` to `/trading/longshort/universe?tab=refresh-history`). |
+| **Module** | longshort |
+| **Classification** | authenticated (inherits outer `trading.access`; target inherits `longshort.view`) |
+| **Auth required** | Yes (target gate; redirect itself is permission-transparent) |
+| **Permission required** | `longshort.view` (enforced at the redirect target) |
+| **Scope** | system-wide |
+| **Panel** | trading-panel |
+| **Purpose** | Preserve bookmarks predating the FP-023 hub IA refactor. The original page (`UniverseRefreshHistoryPage`) lived at this path and is now embedded as the `refresh-history` tab of the Universe hub. |
+| **Related tests** | `src/pages/trading/longshort/__tests__/legacyRedirect.test.tsx` (FP-023.1 — asserts `/refresh-history` resolves to the Universe hub with `?tab=refresh-history`). |
+| **Implementation** | **IMPLEMENTED** — `<Route path="longshort/refresh-history" element={<Navigate to="/trading/longshort/universe?tab=refresh-history" replace />} />` in `src/App.tsx`. |
+| **Lifecycle** | active (redirect) |
+| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). |
+
+#### `/trading/longshort/reconciliation` — Long-Short Reconciliation Hub
+
+| Field | Value |
+|-------|-------|
+| **Page** | `ReconciliationHubPage` (FP-023). Tabbed via `?tab=`: `events` (default — `ReconciliationEventsPage`), `alerts` (empty-state — deferred), `breaker` (empty-state — deferred). |
+| **Module** | longshort |
+| **Classification** | authenticated, privileged |
+| **Auth required** | Yes |
+| **Permission required** | `longshort.view` (inner gate; outer gate `trading.access`) |
+| **Scope** | system-wide |
+| **Panel** | trading-panel |
+| **Related tests** | `src/pages/trading/longshort/hub/HubTabs.test.tsx` (URL-sync contract used by every hub) |
+| **Related functions** | `ReconciliationHubPage`, `ReconciliationEventsPage`, `HubTabs` |
+| **Implementation** | **IMPLEMENTED** — `<Route path="longshort/reconciliation" element={<PermissionGate permission="longshort.view"><ReconciliationHubPage /></PermissionGate>}>` in `src/App.tsx`. |
+| **Lifecycle** | active |
+| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). |
+
+#### `/trading/longshort/portfolio` — Long-Short Portfolio Hub
+
+| Field | Value |
+|-------|-------|
+| **Page** | `PortfolioHubPage` (FP-023). Empty-state shell (data lands in a later FP per the master plan portfolio sequence). |
+| **Module** | longshort |
+| **Classification** | authenticated, privileged |
+| **Auth required** | Yes |
+| **Permission required** | `longshort.view` (inner gate; outer gate `trading.access`) |
+| **Scope** | system-wide |
+| **Panel** | trading-panel |
+| **Related tests** | `src/pages/trading/longshort/hub/HubTabs.test.tsx` (URL-sync contract used by every hub) |
+| **Related functions** | `PortfolioHubPage`, `HubTabs`, `HubEmptyState` |
+| **Implementation** | **IMPLEMENTED (shell)** — `<Route path="longshort/portfolio" element={<PermissionGate permission="longshort.view"><PortfolioHubPage /></PermissionGate>}>` in `src/App.tsx`. |
+| **Lifecycle** | active |
+| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). |
 
 ---
 
