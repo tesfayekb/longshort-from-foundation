@@ -38,6 +38,7 @@ If ANY checklist item is not satisfied:
 - [ ] `artifact-index.md` updated if new migrations, closure docs, or durable artifacts created
 - [ ] `database-migration-ledger.md` updated if any SQL migration applied
 - [ ] Phase closure file created/updated if a phase gate status changed
+- [ ] **If artifact schedules a job: `cron.job` row verified post-apply** (DEC-040) — closure docs attesting to "scheduled execution wired" / "daily auto-fire verified" MUST cite a `SELECT jobid, jobname, schedule, active, command FROM cron.job WHERE jobname=...` query output verbatim. `job_registry.enabled=true` alone is NOT sufficient evidence. See `docs/04-modules/longshort/runbooks/signal-cron-wiring.md`.
 - [ ] No Constitution rule violated
 
 ## Quality Checklist (ALL must be satisfied for implementation tasks)
