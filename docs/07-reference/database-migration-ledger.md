@@ -1274,7 +1274,7 @@ HIGH — inaccurate migration history makes future schema changes dangerous and 
 | Field | Value |
 |---|---|
 | Migration version | Applied via Supabase migration tool 2026-06-07 during FP-010 Bucket B Commit B1 execution. |
-| File | `supabase/migrations/20260607060000_6c8e9a2b-1d4f-4e8a-b9c3-7f2a8e5d1c3f.sql`. |
+| File | `supabase/migrations/20260607055744_f5f1270a-5756-45c4-b804-1796901db247.sql`. |
 | Applied | 2026-06-07. |
 | Verified | Post-apply §22.5.1: `SELECT id, owner_module, trigger_type, schedule, enabled, handler_path, class, priority, execution_guarantee, timeout_seconds, max_retries, retry_policy, concurrency_policy, replay_safe, version, status FROM job_registry WHERE id = 'longshort.signal_monitor.daily_check'` returns 1 row with `enabled=false`, `schedule='0 21 * * 1-5'`, `handler_path='supabase/functions/longshort-signal-monitor/index.ts'`, `trigger_type='scheduled'`, `owner_module='longshort'`, `timeout_seconds=120`, `max_retries=1`, `replay_safe=true`, all other fields matching MIG-066 canonical shape. |
 | Pattern | Data-seed `INSERT INTO public.job_registry (...) VALUES (...) ON CONFLICT (id) DO NOTHING`. Idempotent re-apply is a no-op (PK conflict on the deterministic `id` text value). Mirrors MIG-066's exact 17-column INSERT shape (verified via repo-grep of `supabase/migrations/20260606051839_*.sql` — the canonical precedent for disarmed-at-creation job_registry seeds). `handler_path` column confirmed present via `supabase/migrations/20260604101626_*.sql` (ALTER TABLE ADD COLUMN IF NOT EXISTS). |
