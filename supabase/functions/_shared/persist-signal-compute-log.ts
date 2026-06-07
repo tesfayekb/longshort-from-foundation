@@ -55,6 +55,11 @@ export async function persistSignalComputeLog(
       universe_size: result.universe_size,
       persisted_count: result.persisted_count,
       skip_counts,
+      // FP-022 / C-F4: persist raw per-ticker SignalSkip[] alongside the
+      // aggregate skip_counts. Both coexist — aggregate for stable-shape
+      // monitoring queries, detail for per-ticker diagnosability of
+      // degraded fires (which tickers failed, not just how many).
+      skipped_detail: result.skipped,
       failure_reason: result.failure_reason ?? null,
       started_at: result.started_at,
       completed_at: result.completed_at,

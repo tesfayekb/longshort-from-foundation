@@ -798,6 +798,7 @@ export type Database = {
           run_id: string
           signal_id: string
           skip_counts: Json | null
+          skipped_detail: Json
           started_at: string
           universe_size: number
         }
@@ -811,6 +812,7 @@ export type Database = {
           run_id?: string
           signal_id: string
           skip_counts?: Json | null
+          skipped_detail?: Json
           started_at: string
           universe_size: number
         }
@@ -824,6 +826,7 @@ export type Database = {
           run_id?: string
           signal_id?: string
           skip_counts?: Json | null
+          skipped_detail?: Json
           started_at?: string
           universe_size?: number
         }
