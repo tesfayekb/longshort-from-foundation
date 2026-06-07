@@ -22,6 +22,25 @@ Phase 2.1 EXITS on this closure. Phase 2.2 entry is now mechanical: one new per-
 
 ---
 
+## Addendum — FP-018 / INC-62 Forward-Pointer (2026-06-07)
+
+> **Addendum-not-edit notice (Constitution Rule 8):** The Summary above and the §1 Exit-Gate Attestation below are PRESERVED verbatim from the original closure. This addendum is the correction surface; the original attestation text is NOT edited. Per the FP-018 deliverable: closure-doc attestations are protected from silent supersession even when factually wrong; the correction lands as a forward-pointer, not an in-place rewrite.
+
+**Correction:** The Summary's "daily 16:00 ET auto-fire via MIG-067" assertion and §1's "Cron enabled with observational evidence baked in — MET" gate attestation are correct at the `job_registry.enabled=true` registry-flag level and INCORRECT at the `pg_cron` scheduler level. MIG-067 flipped the registry flag but did NOT add a corresponding `cron.schedule(...)` entry — `longshort-momentum-compute` has no `cron.job` row and has never auto-fired since MIG-067. All 3 production `signal_compute_log` rows (`as_of=2026-06-05`) are manual-trigger fires from FP-009 C2a / C2a-hotfix / C2b observational gates.
+
+**Class observation:** The verification discipline at MIG-067 apply was registry-flag-level (`SELECT ... FROM job_registry`) without a corresponding scheduler-level check (`SELECT ... FROM cron.job`). DEC-040 (allocated at FP-018) locks the verification discipline going forward: any closure attestation claiming scheduled execution requires `cron.job` evidence verbatim, not registry-flag evidence.
+
+**Pointers:**
+- INC-62 (full root-cause + class observation) — `docs/06-tracking/incidental-findings.md`
+- FP-018 entry + scope + observational-gate plan — `docs/08-planning/feature-proposals.md`
+- DEC-040 (verification-discipline governance amendment) — `docs/08-planning/approved-decisions.md`
+- `signal-cron-wiring.md` (reusable runbook preventing class recurrence) — `docs/04-modules/longshort/runbooks/signal-cron-wiring.md`
+- Master-plan FP-009 "daily auto-fire verified" phase-gate checkbox reverted at FP-018 Bucket A; re-check pending FP-018 Bucket C observational-gate close.
+
+**Status of Phase 2.1's other attestations:** All other §1 gates remain MET as originally attested. The signal-computation correctness, orchestrator structure, observational gate over manual fires, and disarm-then-fire-then-enable cycle discipline are intact; only the scheduler-wiring evidence layer was insufficient. FP-018 corrects that single layer; the rest of Phase 2.1 stands.
+
+---
+
 ## 1. Exit-Gate Attestation
 
 **Gate — Shared infrastructure built and tested — MET.** Bucket A: 40 Deno unit tests across `signal-types.ts`, `z-score-normalize.ts` (12), `polygon-price-history-fetcher.ts` (8 + Gate-14 hotfix coverage), `missingness-capture.ts` (8). MIG-064 (`signal_observations` table) live-DB verified: 8 columns + 4 RLS policies (1 PERMISSIVE SELECT + 3 RESTRICTIVE deny per MIG-057 discipline) + 0 rows immediately post-apply. Function-index + reference indexes updated SAME PR per Constitution Rule 2.
