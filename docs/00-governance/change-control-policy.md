@@ -79,6 +79,32 @@ For MEDIUM/HIGH impact OR shared component changes:
 2. Verify affected flows are not broken
 3. If new risk discovered → MUST add to `regression-watchlist.md`
 
+### Disposition Lifecycle Discipline (DEC-041)
+
+A disposition of `Resolved — pending [operator apply / CI green / §22.5.1 evidence / live-DB confirmation / other deferred-evidence terminator]` is **NOT terminal**. It is an interim state with a load-bearing follow-up obligation.
+
+On every phase boundary (at minimum quarterly when no phase boundary is imminent), a reconciliation sweep MUST iterate every `Resolved — pending …` disposition across:
+
+- `docs/06-tracking/incidental-findings.md`
+- `docs/08-planning/feature-proposals.md`
+- `docs/08-planning/deferred-work-register.md`
+- every phase-closure document under `docs/08-planning/phase-closures/`
+
+…and convert each entry to one of two terminal states:
+
+1. `Resolved — [verbatim evidence cited: query results / SHA / CI run / live-DB snapshot]`, OR
+2. `Reopened — [confirmed gap with evidence + new corrective FP / DW reference]`.
+
+The conversion MUST be an **addendum row** appended below the original `Disposition` and `Status` rows (e.g. `Resolution Confirmed (FP-NNN, YYYY-MM-DD)`). The original rows are PRESERVED VERBATIM per Constitution Rule 8 — silent edit of the original disposition is forbidden because it falsifies the historical record of when the team thought the work was done vs when evidence confirmed it.
+
+Each reconciliation sweep is logged as its own `ACT-NNN` entry citing every disposition reconciled with its new terminal state and evidence. Failure to perform the sweep at a phase boundary is a Constitution Rule 6 / Rule 8 governance violation subject to retroactive correction.
+
+**Rationale.** The 2026-06-07 deep-review found INC-31 (sql/12 outcome-CHECK widening) and INC-36 (sql/13 RLS deny — `longshort_audit_logs` forgery vector, the most security-critical finding in the FP-008.4 Bucket A pass) both marked "Resolved pending operator apply / §22.5.1 evidence binding" for migrations that had been applied **months earlier**. The disposition text actively misled the audit — the independent review's initial classification of the forgery vector as still-open was caused directly by the stale text. "Pending" dispositions accumulate as false-resolved state.
+
+**Pairing.** This subsection is the disposition-layer complement to DEC-040's runtime-evidence-discipline layer. DEC-040 prevents "this gate fired" from being attested without `cron.job` evidence; DEC-041 (this subsection) prevents "this defect is resolved" from being attested without live-state confirmation.
+
+Cross-references: DEC-041 (the authority), DEC-040 (runtime-layer sibling), INC-62 (sibling cron-scheduler drift), INC-65 (third-instance registry-vs-scheduler defect surfaced during the 2026-06-07 sweep), FP-020 (the FP authoring DEC-041 + the first sweep against this discipline).
+
 ## Plan Change Rules
 
 Plan revisions MUST:
