@@ -1284,3 +1284,23 @@ HIGH — inaccurate migration history makes future schema changes dangerous and 
 | AC evidence | (a) Live-DB §22.5.1 verification: 1 row present with `enabled=false` and all expected field tuples matching MIG-066 canonical shape. (b) Idempotency: `ON CONFLICT (id) DO NOTHING` ensures re-apply touches zero rows. (c) Disarm discipline: `enabled=false` literal verified in migration body — no accidental `enabled=true` that would skip the observational gate. (d) Schedule validity: `'0 21 * * 1-5'` format matches MIG-066 `'0 20 * * 1-5'` (pg_cron cron syntax, 21:00 UTC Mon–Fri). |
 | Cross-references | FP-010 Bucket B Commit B1; MIG-066 (canonical precedent — same INSERT shape, different job); FP-010 Locked Decision (f) (disarm-fire-enable cycle); `supabase/functions/longshort-signal-monitor/index.ts` (A3 — handler file that `handler_path` references); MIG-068 (alert_configs rows the handler consumes); MIG-070 (C2 — future enable-flip). |
 
+---
+
+## Operator-applied cron schedules (non-migration)
+
+This subsection records `sql/NN_*_cron_schedule.sql` artifacts that are applied to the live DB via the Supabase SQL Editor with operator-resolved placeholders (`PROJECT_REF`, anon key, CRON_SECRET) and therefore do NOT belong on the monotonic MIG-NNN sequence (which is reserved for committed migration files under `sql/` or `supabase/migrations/` whose contents are byte-identical to what runs in production). Each entry here points at the corresponding `artifact-index.md` ART entry — the artifact-index carries the authoritative metadata; this subsection exists so anyone scanning the ledger sees the cron-wiring history alongside the schema migration history.
+
+### sql/14 — `longshort-momentum-compute` cron schedule (FP-018 Bucket B / ART-024)
+
+| Field | Value |
+|-------|-------|
+| File | `sql/14_longshort_signal_cron_schedule.sql` |
+| Source Dir | `sql/` (per MIG-031 precedent — operator-replaced secrets must not be committed) |
+| Applied | 2026-06-07 (operator out-of-band via Supabase SQL Editor; re-applied same day after first apply landed all three placeholders literally — `cron.schedule` idempotent upsert on `(jobname, username)` corrected `jobid:51` in place) |
+| Purpose | Wires `longshort-momentum-compute` to `pg_cron` as `jobid:51` (`schedule='0 20 * * 1-5'`, `active=true`); the INC-62 instance fix (FP-018 Bucket B). MIG-067 flipped `job_registry.enabled=true` but no corresponding `cron.job` row was ever created — sql/14 closes that gap. |
+| Pattern | Mirrors `sql/09_longshort_universe_cron_schedule.sql` (jobid:48) canonical template verbatim: dual-header authentication (`Authorization: Bearer` + `X-Cron-Secret`), MANUAL-STEP placeholder discipline, three post-apply verification queries embedded as SQL comments (DEC-040 clauses 1–3). Idempotent re-apply is a `(jobname, username)` upsert. Momentum-only scope; `signal-monitor` cron is intentionally NOT wired here (lands with FP-010 C2 / MIG-070 enable-flip per disarm-fire-enable). |
+| Verification | Post-re-apply `SELECT jobid, jobname, schedule, active, command FROM cron.job WHERE jobname='longshort-momentum-compute'` returned exactly 1 row: `jobid=51`, `schedule='0 20 * * 1-5'`, `active=true`, `command` URL resolved to `https://sftatlxatbdrotivxcip.supabase.co/functions/v1/longshort-momentum-compute` (NO `PROJECT_REF` literal), `Authorization: Bearer` + `X-Cron-Secret` headers present. PROJECT_REF-literal sweep `SELECT jobid, jobname FROM cron.job WHERE command LIKE '%PROJECT_REF%'` returned `jobids 34, 35, 36, 37` only (INC-64 platform-scope jobs); `jobid:51` NOT present → momentum wiring clean. Freshness gate (DEC-040 clause 3) pending Monday 2026-06-08 post-20:00-UTC tick. |
+| Notes | Carries plaintext `X-Cron-Secret` in live `cron.job.command` post-apply (INC-63 — pg_cron design constraint; rotation queued as separate platform hygiene). DEC-040 codifies that `cron.job` evidence (not `job_registry.enabled=true` alone) is required for "scheduled execution" attestations — sql/14 is the first artifact landed under that discipline. See `docs/04-modules/longshort/runbooks/signal-cron-wiring.md` for the reusable 5-step pattern. Authoritative metadata: `docs/07-reference/artifact-index.md` ART-024. |
+| Linked Actions | ACT-129 |
+| Linked Decisions | DEC-040 |
+
