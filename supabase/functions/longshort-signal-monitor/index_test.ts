@@ -73,12 +73,15 @@ Deno.test('(A1) writeStrategyAuditEvent imported from _shared/strategy-audit.ts 
 Deno.test('(A2) logAuditEvent NEVER imported (T4 audit-writer trap protection)', () => {
   // logAuditEvent in _shared/audit.ts is hardcoded to platform audit_logs.
   // Strategy code MUST NOT use it (DEC-033 v4.1 clause 4 + T4 trap).
+  // Check against code-only (comments stripped) so doc-commentary that
+  // NAMES the forbidden symbol doesn't false-positive — the trap is about
+  // import/invocation, not mention.
   assert(
-    !HANDLER_SOURCE.includes('logAuditEvent'),
+    !CODE.includes('logAuditEvent'),
     'T4 VIOLATION: logAuditEvent appears in strategy handler — use writeStrategyAuditEvent',
   );
   assert(
-    !HANDLER_SOURCE.includes("_shared/audit.ts"),
+    !CODE.includes("_shared/audit.ts"),
     'T4 VIOLATION: _shared/audit.ts imported (platform audit-writer) — use _shared/strategy-audit.ts',
   );
 });
