@@ -2684,3 +2684,33 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Documented exception** | `crypto.randomUUID()` populates `alert_id` (single non-pure source; same idiom as `_shared/authenticate-request.ts:81` and `_shared/handler.ts:50`). Orchestrator-level idempotency enforced at A3's `alert_history` UPSERT layer, not here. |
 | **Anti-phantom-default** | `universe_size === 0` → `populated_pct = null`, NEVER NaN. Mirrors `compute-momentum.ts` degenerate-denominator handling. |
 | **Added by** | FP-010 Bucket A Commit A1 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-010 Bucket A Commit A3) |
+| **Classification** | shared infrastructure — Phase 2 monitoring registry; `Readonly<Record<string,string>>` mapping `job_registry.id` to the `signal_id` value that job writes to `signal_compute_log`. Consumed by `longshort-signal-monitor/index.ts` to derive the "should-be-firing" universe from `job_registry` enabled scheduled rows (vs from observed `signal_compute_log` evidence, which cannot detect the never-fired case). |
+| **Exports** | `const JOB_ID_TO_SIGNAL_ID: Readonly<Record<string,string>>` (as-const, single-entry at A3: `'longshort.momentum.compute' → 'cross_sectional_momentum_12_1'`); `function resolveSignalIdForJob(jobId): string \| undefined` (convenience accessor; future chokepoint for unknown-id logging). |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping.ts` |
+| **Tests** | `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping_test.ts` — 6 Deno tests (entry presence + cross-reference vs `momentum-orchestrator.SIGNAL_ID` + accessor known/unknown branches + single-entry guard against pre-wiring + immutability documentation). |
+| **Extension point** | Phases 2.2–2.9 (FP-011..FP-017): each new signal's execution prompt adds ONE entry in the same PR that registers its compute job. The signal becomes monitored automatically — no change to `longshort-signal-monitor/index.ts` is required. |
+| **Drift sentinel** | Cross-reference test (`(2)`) fails LOUDLY if `momentum-orchestrator.ts` `SIGNAL_ID` export ever decouples from the mapping value. |
+| **Added by** | FP-010 Bucket A Commit A3 |
+
+#### `supabase/functions/longshort-signal-monitor/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-010 Bucket A Commit A3) |
+| **Classification** | edge function — daily signal pipeline health observer cron handler. Consumes A1 predicates (`check-signal-compute-failures.ts`) + A2 seeded `alert_configs` rows (MIG-068 deterministic UUIDs) + A3 `JOB_ID_TO_SIGNAL_ID` mapping. Reads `job_registry` + `signal_compute_log`; writes one aggregate `alert_history` row per alert_type per detection window + one `longshort.signal_monitor.alert` audit event per detected signal. Lifecycle audits (`.started` / `.completed` / `.failed`) bracket every invocation. |
+| **Trigger** | `verifyCronSecret` (X-Cron-Secret header); will register in `job_registry` as `longshort.signal_monitor.daily_check` via MIG-069 at B1 (`enabled=false` disarmed-at-creation). Schedule: `0 21 * * 1-5` (21:00 UTC Mon-Fri; 1h after momentum's 20:00 UTC fire window). |
+| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `.started` audit → `job_registry` read (`enabled=true AND trigger_type='scheduled' AND id LIKE 'longshort.%.compute'`) + `JOB_ID_TO_SIGNAL_ID` lookup → `signal_compute_log` read (96h outer scan window) → weekday-aware staleHours selection (`getUTCDay()===1 ? 72 : 36`) → 3 A1 predicates evaluated → per-alert-type aggregate `alert_history` INSERT + per-signal `.alert` audit events via `emitAggregateAlert` helper → `.completed` audit with scan summary → `apiSuccess` response. |
+| **File** | `supabase/functions/longshort-signal-monitor/index.ts` |
+| **Tests** | `supabase/functions/longshort-signal-monitor/index_test.ts` — 19 source-sentinel tests: (A) 5 canonical-pattern conformance (`writeStrategyAuditEvent` + no `logAuditEvent` + `createHandler` + `apiError`/`apiSuccess` + `supabaseAdmin` singleton); (B) 3 cron-auth + wall-clock + `JOB_ID_TO_SIGNAL_ID` import; (C) 4 constants (4 audit actions + 3 alert_config UUIDs + 2 staleness constants + 3 metric_keys); (D) 3 weekday-aware logic; (E) 3 alert-flow (aggregate-helper + alert_history_id threading + metric_value semantics); (F) 1 handler-path pinning. |
+| **Wall-clock** | `productionClock.getWallClockTs()` is the sole wall-clock chokepoint (DEC-034 clause 4); `new Date(asOf.getTime() - X)` is the idiomatic boundary derivation for the 96h outer scan span. No no-arg `new Date()` in code. |
+| **Audit-writer compliance (T4)** | Uses `writeStrategyAuditEvent({ strategyKey: 'longshort', ... })` → `longshort_audit_logs` (NOT platform `audit_logs`). Closes the T4 trap per DEC-033 v4.1 clause 4. |
+| **Aggregate-row semantic** | One `alert_history` row per alert_type per detection window (cooldown_seconds=300 dispositive); per-signal forensic detail flows through `.alert` audit events with `alert_history_id` cross-reference. Metric_value semantics per type: failed=count; low_water_mark=min populated_pct; stale=applied staleHours threshold (option A per FP-010 Locked Decision Point 4 — see INC-61 for future-enhancement path). |
+| **Future-Inheritance** | Phase 2.2-2.9 signals are monitored automatically once their compute job is registered + their entry is added to `JOB_ID_TO_SIGNAL_ID`. Zero changes to this handler required per new signal. |
+| **Disarmed** | Handler exists and is deployable at A3, but `job_registry` row is not yet inserted (B1 scope) and MIG-070 enable-flip is C2 scope. Cron will not fire until C2. |
+| **Added by** | FP-010 Bucket A Commit A3 |
