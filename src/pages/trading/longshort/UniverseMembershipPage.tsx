@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -30,13 +30,18 @@ type UniverseMembershipRow = {
   quarter_label: string;
   refresh_id: string;
   created_at: string;
+  gics_sector: string | null;
 };
 
 type EligibilityFilter = 'all' | 'long_only' | 'short_only' | 'both';
 
+const PAGE_SIZE = 50;
+
 export default function UniverseMembershipPage() {
   const [tickerFilter, setTickerFilter] = useState('');
   const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>('all');
+  const [sectorFilter, setSectorFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
 
   const { data: latestDate, isLoading: dateLoading } = useQuery({
     queryKey: ['longshort', 'universe-membership', 'latest-date'],
@@ -59,7 +64,7 @@ export default function UniverseMembershipPage() {
       if (!latestDate) return [];
       const { data, error } = await sb
         .from('universe_membership')
-        .select('ticker, as_of_date, long_eligible, short_eligible, quarter_label, refresh_id, created_at')
+        .select('ticker, as_of_date, long_eligible, short_eligible, quarter_label, refresh_id, created_at, gics_sector')
         .eq('as_of_date', latestDate)
         .order('ticker', { ascending: true });
       if (error) throw error;
@@ -98,9 +103,23 @@ export default function UniverseMembershipPage() {
       if (eligibilityFilter === 'long_only' && !row.long_eligible) return false;
       if (eligibilityFilter === 'short_only' && !row.short_eligible) return false;
       if (eligibilityFilter === 'both' && (!row.long_eligible || !row.short_eligible)) return false;
+      if (sectorFilter !== 'all' && (row.gics_sector ?? '—') !== sectorFilter) return false;
       return true;
     });
-  }, [rows, tickerFilter, eligibilityFilter]);
+  }, [rows, tickerFilter, eligibilityFilter, sectorFilter]);
+
+  const sectors = useMemo(() => {
+    const set = new Set<string>();
+    (rows ?? []).forEach((r) => set.add(r.gics_sector ?? '—'));
+    return Array.from(set).sort();
+  }, [rows]);
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => { setPage(1); }, [tickerFilter, eligibilityFilter, sectorFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   if (dateLoading || isLoading) return <LoadingSkeleton variant="table" rows={10} />;
   if (error) return <ErrorState message={(error as Error).message} />;
@@ -144,7 +163,7 @@ export default function UniverseMembershipPage() {
           <CardHeader>
             <CardTitle className="text-base">Filters</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3 sm:flex-row">
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Input
               placeholder="Filter by ticker…"
               value={tickerFilter}
@@ -162,6 +181,17 @@ export default function UniverseMembershipPage() {
                 <SelectItem value="both">Long + Short</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={sectorFilter} onValueChange={setSectorFilter}>
+              <SelectTrigger className="sm:max-w-xs">
+                <SelectValue placeholder="Sector" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All sectors</SelectItem>
+                {sectors.map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardContent>
         </Card>
       )}
@@ -173,6 +203,7 @@ export default function UniverseMembershipPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Ticker</TableHead>
+                  <TableHead>Sector</TableHead>
                   <TableHead>Long</TableHead>
                   <TableHead>Short</TableHead>
                   <TableHead>Quarter</TableHead>
@@ -180,9 +211,10 @@ export default function UniverseMembershipPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRows.map((row) => (
+                {pageRows.map((row) => (
                   <TableRow key={row.ticker}>
                     <TableCell className="font-mono font-medium">{row.ticker}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{row.gics_sector ?? '—'}</TableCell>
                     <TableCell>
                       {row.long_eligible ? <Badge>Yes</Badge> : <Badge variant="outline">No</Badge>}
                     </TableCell>
@@ -195,15 +227,41 @@ export default function UniverseMembershipPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {filteredRows.length === 0 && (
+                {pageRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
                       No rows match the current filters.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
+            {filteredRows.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between border-t px-4 py-3">
+                <p className="text-xs text-muted-foreground">
+                  {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, filteredRows.length)} of {filteredRows.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="text-xs underline disabled:opacity-40 disabled:no-underline"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs text-muted-foreground">Page {currentPage} of {totalPages}</span>
+                  <button
+                    type="button"
+                    className="text-xs underline disabled:opacity-40 disabled:no-underline"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

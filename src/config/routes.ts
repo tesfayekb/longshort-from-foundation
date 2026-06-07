@@ -33,7 +33,9 @@ export const ROUTES = {
   // Trading
   TRADING: '/trading',
   TRADING_LONGSHORT: '/trading/longshort',
+  TRADING_LONGSHORT_SIGNALS: '/trading/longshort/signals',
   TRADING_LONGSHORT_UNIVERSE: '/trading/longshort/universe',
   TRADING_LONGSHORT_REFRESH_HISTORY: '/trading/longshort/refresh-history',
   TRADING_LONGSHORT_RECONCILIATION: '/trading/longshort/reconciliation',
+  TRADING_LONGSHORT_PORTFOLIO: '/trading/longshort/portfolio',
 } as const;

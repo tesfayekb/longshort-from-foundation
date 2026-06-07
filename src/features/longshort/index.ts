@@ -20,7 +20,7 @@
  * Step 5.5 status (after this commit): all three exports populated; façade
  * discipline complete. AC-16 closed.
  */
-import { TrendingUp, Database, History, GitCompare } from 'lucide-react';
+import { LayoutDashboard, Activity, Database, GitCompare, Briefcase } from 'lucide-react';
 import type { NavSection } from '@/config/navigation.types';
 
 /**
@@ -51,9 +51,15 @@ export const longshortNav: NavSection = {
   label: 'Long-Short Strategy',
   items: [
     {
-      title: 'Dashboard',
+      title: 'Overview',
       url: '/trading/longshort',
-      icon: TrendingUp,
+      icon: LayoutDashboard,
+      permission: 'longshort.view',
+    },
+    {
+      title: 'Signals',
+      url: '/trading/longshort/signals',
+      icon: Activity,
       permission: 'longshort.view',
     },
     {
@@ -63,15 +69,15 @@ export const longshortNav: NavSection = {
       permission: 'longshort.view',
     },
     {
-      title: 'Refresh History',
-      url: '/trading/longshort/refresh-history',
-      icon: History,
-      permission: 'longshort.view',
-    },
-    {
       title: 'Reconciliation',
       url: '/trading/longshort/reconciliation',
       icon: GitCompare,
+      permission: 'longshort.view',
+    },
+    {
+      title: 'Portfolio',
+      url: '/trading/longshort/portfolio',
+      icon: Briefcase,
       permission: 'longshort.view',
     },
   ],

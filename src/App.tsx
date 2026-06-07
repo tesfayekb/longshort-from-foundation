@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-query";
 import * as Sentry from "@sentry/react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -48,9 +48,10 @@ const RoleDetailPage = lazy(() => import("./pages/admin/RoleDetailPage"));
 const UserDashboard = lazy(() => import("./pages/user/UserDashboard"));
 const TradingDashboard = lazy(() => import("./pages/trading/TradingDashboard"));
 const LongShortDashboardPage = lazy(() => import("./pages/trading/longshort/LongShortDashboardPage"));
-const UniverseMembershipPage = lazy(() => import("./pages/trading/longshort/UniverseMembershipPage"));
-const UniverseRefreshHistoryPage = lazy(() => import("./pages/trading/longshort/UniverseRefreshHistoryPage"));
-const ReconciliationEventsPage = lazy(() => import("./pages/trading/longshort/ReconciliationEventsPage"));
+const SignalsHubPage = lazy(() => import("./pages/trading/longshort/SignalsHubPage"));
+const UniverseHubPage = lazy(() => import("./pages/trading/longshort/UniverseHubPage"));
+const ReconciliationHubPage = lazy(() => import("./pages/trading/longshort/ReconciliationHubPage"));
+const PortfolioHubPage = lazy(() => import("./pages/trading/longshort/PortfolioHubPage"));
 const ProfilePage = lazy(() => import("./pages/user/ProfilePage"));
 const SecurityPage = lazy(() => import("./pages/user/SecurityPage"));
 
@@ -208,19 +209,29 @@ const App = () => (
                     <LongShortDashboardPage />
                   </PermissionGate>
                 } />
+                <Route path="longshort/signals" element={
+                  <PermissionGate permission="longshort.view">
+                    <SignalsHubPage />
+                  </PermissionGate>
+                } />
                 <Route path="longshort/universe" element={
                   <PermissionGate permission="longshort.view">
-                    <UniverseMembershipPage />
+                    <UniverseHubPage />
                   </PermissionGate>
                 } />
-                <Route path="longshort/refresh-history" element={
-                  <PermissionGate permission="longshort.view">
-                    <UniverseRefreshHistoryPage />
-                  </PermissionGate>
-                } />
+                {/* Legacy route — redirect to Universe hub / Refresh History tab */}
+                <Route
+                  path="longshort/refresh-history"
+                  element={<Navigate to="/trading/longshort/universe?tab=refresh-history" replace />}
+                />
                 <Route path="longshort/reconciliation" element={
                   <PermissionGate permission="longshort.view">
-                    <ReconciliationEventsPage />
+                    <ReconciliationHubPage />
+                  </PermissionGate>
+                } />
+                <Route path="longshort/portfolio" element={
+                  <PermissionGate permission="longshort.view">
+                    <PortfolioHubPage />
                   </PermissionGate>
                 } />
               </Route>
