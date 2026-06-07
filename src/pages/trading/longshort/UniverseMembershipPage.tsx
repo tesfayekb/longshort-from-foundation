@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -115,7 +115,7 @@ export default function UniverseMembershipPage() {
   }, [rows]);
 
   // Reset to page 1 whenever filters change
-  useMemo(() => { setPage(1); }, [tickerFilter, eligibilityFilter, sectorFilter]);
+  useEffect(() => { setPage(1); }, [tickerFilter, eligibilityFilter, sectorFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
