@@ -615,7 +615,7 @@ Pre-investigation survey completed 2026-06-05 against the 10 architectural decis
 | Field | Value |
 |-------|-------|
 | **ID** | FP-010 |
-| **Status** | proposed (awaiting operator approval; no implementation until approved per Enforcement Rule) |
+| **Status** | approved (DEC-039); A1 closed at `3e4f842` (shared types + 3 predicates + 23 tests); A2 closed at `ff24cf6` (MIG-068 — 3 `alert_configs` rows seeded with deterministic UUIDs, live-DB §22.5.1 verified); A3 closed at `<SHA-pending>` (longshort-signal-monitor cron handler + JOB_ID_TO_SIGNAL_ID shared mapping + 25 source-sentinel + mapping tests green). Bucket B + Bucket C + Bucket D pending. |
 | **Date Proposed** | 2026-06-07 |
 | **Proposed By** | Operator (drafted with supervisor/Lovable framing); load-bearing gap surfaced post-FP-009 Bucket D closure |
 | **Title** | Signal Pipeline Monitoring Lock — daily `signal_compute_log` observer with `alert_history` + audit-event emission |
