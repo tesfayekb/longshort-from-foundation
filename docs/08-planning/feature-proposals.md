@@ -650,7 +650,6 @@ Pre-investigation survey completed 2026-06-05 against the 10 architectural decis
 | Field | Value |
 |-------|-------|
 | **ID** | FP-018 (allocated; next-free verified — FP-011..FP-014 are burned historical step labels in FP-008.2 documentation, FP-011..FP-017 is the published forward-binding signal reservation range in FP-010 entry line 622 / 631, FP-015/016/017 zero-ref but inside the reservation; FP-018 is first clean number outside both burned blocks). |
-| **Status** | proposed (DEC-040 pending operator approval) |
 | **Date Proposed** | 2026-06-07 |
 | **Proposed By** | Operator (drafted with supervisor framing); load-bearing wiring gap surfaced during FP-010 C1 observational-gate preparation when querying `cron.job` for ground-truth on momentum's auto-fire history |
 | **Title** | Momentum Cron-Wiring Corrective — fix the missing `cron.schedule` entry for `longshort-momentum-compute` AND establish the reusable signal-cron-wiring pattern that prevents class recurrence |
