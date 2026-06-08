@@ -18,6 +18,7 @@ import {
 import { SIGNAL_ID as MOMENTUM_SIGNAL_ID } from '../cross-sectional-momentum/momentum-orchestrator.ts';
 import { SIGNAL_ID as REVERSAL_SIGNAL_ID } from '../short-term-reversal/reversal-orchestrator.ts';
 import { SIGNAL_ID as SHORT_INTEREST_SIGNAL_ID } from '../short-interest-change/short-interest-orchestrator.ts';
+import { SIGNAL_ID as INSIDER_SIGNAL_ID } from '../insider-transactions/insider-orchestrator.ts';
 
 Deno.test('(1) JOB_ID_TO_SIGNAL_ID contains the momentum entry verbatim', () => {
   assertEquals(
@@ -59,6 +60,16 @@ Deno.test('(2c) mapping value matches short-interest-orchestrator SIGNAL_ID expo
   assertEquals(SHORT_INTEREST_SIGNAL_ID, 'short_interest_change_30d');
 });
 
+Deno.test('(2d) mapping value matches insider-orchestrator SIGNAL_ID export (cross-reference)', () => {
+  // Drift sentinel for Signal #4 (FP-042).
+  assertEquals(
+    JOB_ID_TO_SIGNAL_ID['longshort.insider.compute'],
+    INSIDER_SIGNAL_ID,
+    'JOB_ID_TO_SIGNAL_ID insider entry decoupled from insider-orchestrator SIGNAL_ID',
+  );
+  assertEquals(INSIDER_SIGNAL_ID, 'insider_transactions_90d');
+});
+
 Deno.test('(3) resolveSignalIdForJob returns the value for known job_ids', () => {
   assertEquals(
     resolveSignalIdForJob('longshort.momentum.compute'),
@@ -74,11 +85,13 @@ Deno.test('(4) resolveSignalIdForJob returns undefined for unknown job_ids', () 
 Deno.test('(5) JOB_ID_TO_SIGNAL_ID has exactly the FP-010 A3 set (single entry)', () => {
   // FP-010 A3 shipped v1 with one entry (momentum). FP-040 added the
   // second (short-term reversal / Signal #7). FP-041 adds the third
-  // (short-interest changes / Signal #5). Each subsequent signal
-  // execution prompt adds exactly one entry in the same PR that
-  // registers its compute job.
+  // (short-interest changes / Signal #5). FP-042 adds the fourth
+  // (insider transactions / Signal #4). Each subsequent signal execution
+  // prompt adds exactly one entry in the same PR that registers its
+  // compute job.
   const keys = Object.keys(JOB_ID_TO_SIGNAL_ID).sort();
   assertEquals(keys, [
+    'longshort.insider.compute',
     'longshort.momentum.compute',
     'longshort.reversal.compute',
     'longshort.short_interest.compute',
