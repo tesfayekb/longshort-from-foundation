@@ -39,6 +39,7 @@ If ANY checklist item is not satisfied:
 - [ ] `database-migration-ledger.md` updated if any SQL migration applied
 - [ ] Phase closure file created/updated if a phase gate status changed
 - [ ] **If artifact schedules a job: `cron.job` row verified post-apply** (DEC-040) — closure docs attesting to "scheduled execution wired" / "daily auto-fire verified" MUST cite a `SELECT jobid, jobname, schedule, active, command FROM cron.job WHERE jobname=...` query output verbatim. `job_registry.enabled=true` alone is NOT sufficient evidence. See `docs/04-modules/longshort/runbooks/signal-cron-wiring.md`.
+- [ ] **If artifact attests a job as "live" / "working" / "firing": end-to-end evidence cited** (DEC-043) — closure docs MUST cite (1) a 200 response in `net._http_response` for that job's dispatch, AND (2) a real artifact row in the job's output table (e.g. `signal_compute_log`, `universe_refresh_log`) with a wall-clock (non-midnight) `completed_at` attributable to the scheduled fire. `cron.job_run_details.status='succeeded'` is NOT sufficient (it proves dispatch, not 2xx response — scheduled ≠ authenticated; see INC-69 / FP-039). DEC-040 (config-evidence) and DEC-043 (execution-evidence) are BOTH required for full attestation; neither alone is sufficient.
 - [ ] No Constitution rule violated
 
 ## Quality Checklist (ALL must be satisfied for implementation tasks)
