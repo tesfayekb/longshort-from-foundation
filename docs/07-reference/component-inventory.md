@@ -335,3 +335,60 @@ Updated surfaces:
 - `RankingsTab` (signal / as-of-date / sector / ticker)
 - `UniverseMembershipPage` (ticker / eligibility / sector)
 - `ComputeRunsTab` (signal + freshness indicator)
+
+---
+
+## FP-036 — Universe → Exclusions Tab
+
+### `ExclusionsTab`
+
+Path: `src/pages/trading/longshort/universe/ExclusionsTab.tsx`. Wired
+into `UniverseHubPage` as the `exclusions` sub-tab (replaces the prior
+`HubEmptyState` shell). Read-only against `hard_exclusions` (MIG-051);
+RLS already permission-scoped (`hard_exclusions_longshort_view_read`)
+— no FP-025-style fix needed.
+
+Composition:
+- `PhaseContextNote` (FP-035 collapsible) framing flags as **screening
+  coverage, not a failure list** — an HTB flag restricts the short book
+  but does not necessarily remove a name from trading.
+- **Breadth stat** (`exclusions-breadth-stat`) — unburied per-date
+  §3.3d coverage as `info`-toned banner: `<htbCount> of <universeSize>
+  tickers (<pct>%) flagged hard-to-borrow`. When coverage exceeds 50%
+  of the universe, appends `— unusually broad; verify against the
+  borrow feed`. Keeps the "unusual breadth" data signal visible
+  without dressing rows in alarming red.
+- §3.3 rule legend card mirroring the Coverage tab's pattern, typed
+  against the on-disk rule codes (`3.3a..3.3e`).
+- Filter toolbar (as-of-date / rule / ticker prefix) using the FP-035
+  shrink-to-fit pattern.
+- Server-paginated table (DEFAULT_PAGE_SIZE = 25, FP-030).
+- Per-row `ExpandableCell` (FP-032) revealing the `firing_reasons`
+  jsonb detail.
+
+### Badge vocabulary (FP-033) — exclusions tab
+
+- **Rule badges** (`rule-badge-<code>`): `variant="info"` (neutral,
+  blue) — these are screening classifications, **never** destructive.
+- **Classification badge**:
+  - `flag_only` → `variant="secondary"` (muted, neutral) — restricts
+    one book only (e.g. HTB short-side).
+  - `material` → `variant="warning"` (amber) — materially excluding
+    (rule code in `{3.3b, 3.3c}` OR any firing detail with
+    `applies_to === 'both'`). Caution tone, not destructive — these
+    are correct-by-design exclusions, not errors.
+
+### Hook trio — `useHardExclusions`
+
+Path: `src/features/longshort/hooks/useHardExclusions.ts`. Three
+server-paginated queries against `hard_exclusions` + one
+cross-reference to `universe_membership` for the breadth denominator:
+- `useHardExclusionDates()` — distinct `as_of_date` list, newest first.
+- `usePaginatedHardExclusions({ asOfDate, tickerPrefix, rule, page,
+  pageSize })` — filtered + paginated rows.
+- `useHardExclusionBreadth(asOfDate)` — `{ htbCount, totalExcluded,
+  universeSize }` for the per-date §3.3d coverage stat.
+
+Plus the pure helper `classifyExclusion(row)` returning `'flag_only'`
+/ `'material'` (used by the row classification badge and unit-tested
+directly).

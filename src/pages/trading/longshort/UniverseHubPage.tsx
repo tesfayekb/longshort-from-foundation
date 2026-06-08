@@ -1,7 +1,8 @@
 import { PageHeader } from '@/components/dashboard/PageHeader';
-import { HubTabs, HubEmptyState } from './hub/HubTabs';
+import { HubTabs } from './hub/HubTabs';
 import UniverseMembershipPage from './UniverseMembershipPage';
 import UniverseRefreshHistoryPage from './UniverseRefreshHistoryPage';
+import ExclusionsTab from './universe/ExclusionsTab';
 
 /**
  * Universe hub — wraps the existing Constituents and Refresh-History pages
@@ -19,17 +20,7 @@ export default function UniverseHubPage() {
         tabs={[
           { value: 'constituents', label: 'Constituents', content: <UniverseMembershipPage /> },
           { value: 'refresh-history', label: 'Refresh History', content: <UniverseRefreshHistoryPage /> },
-          {
-            value: 'exclusions',
-            label: 'Exclusions',
-            content: (
-              <HubEmptyState
-                title="Hard exclusions"
-                description="Tickers excluded by hard-exclusion rules (halt, SSR, borrow, listing-status) with firing rules and reasons from hard_exclusions."
-                note="Deferred"
-              />
-            ),
-          },
+          { value: 'exclusions', label: 'Exclusions', content: <ExclusionsTab /> },
         ]}
       />
     </div>
