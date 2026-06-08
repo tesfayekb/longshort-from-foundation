@@ -54,9 +54,18 @@ function makeRows(): Row[] {
 
 const fixtureRows = makeRows();
 
+interface ChainNode {
+  select: () => ChainNode;
+  eq: () => ChainNode;
+  order: () => ChainNode;
+  limit: () => ChainNode;
+  maybeSingle: () => Promise<{ data: unknown; error: null }>;
+  then: (onF: (value: unknown) => unknown, onR: (reason: unknown) => unknown) => Promise<unknown>;
+}
+
 function chainable(payload: { data: unknown; error: null }) {
-  const node: any = {};
-  const ret = () => node;
+  const node = {} as ChainNode;
+  const ret = (): ChainNode => node;
   node.select = ret;
   node.eq = ret;
   node.order = ret;
@@ -66,7 +75,7 @@ function chainable(payload: { data: unknown; error: null }) {
       data: Array.isArray(payload.data) ? (payload.data as unknown[])[0] ?? null : payload.data,
       error: null,
     });
-  node.then = (onF: any, onR: any) => Promise.resolve(payload).then(onF, onR);
+  node.then = (onF, onR) => Promise.resolve(payload).then(onF, onR);
   return node;
 }
 
