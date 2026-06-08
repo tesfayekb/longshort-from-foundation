@@ -9,7 +9,7 @@ export default function PortfolioHubPage() {
     <div className="space-y-6">
       <PageHeader
         title="Portfolio"
-        subtitle="Target weights, sizing, and execution snapshots"
+        subtitle="Position construction and execution — Phase 4-5. No positions yet."
       />
       <HubEmptyState
         title="Portfolio construction"

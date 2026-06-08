@@ -11,7 +11,7 @@ export default function ReconciliationHubPage() {
     <div className="space-y-6">
       <PageHeader
         title="Reconciliation"
-        subtitle="Cross-check events, alert history, and circuit-breaker state"
+        subtitle="Data-integrity cross-checks (verify_* envelopes) — not trade/position reconciliation, which arrives with execution (Phase 5+)."
       />
       <HubTabs
         defaultTab="events"

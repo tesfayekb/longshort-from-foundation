@@ -12,7 +12,7 @@ export default function UniverseHubPage() {
     <div className="space-y-6">
       <PageHeader
         title="Universe"
-        subtitle="Quarterly S&P 500 constituents, refresh history, and hard exclusions"
+        subtitle="The eligible long/short universe — the input set signals rank. Not held positions."
       />
       <HubTabs
         defaultTab="constituents"
