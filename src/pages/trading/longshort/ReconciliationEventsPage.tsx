@@ -1,13 +1,14 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ErrorState } from '@/components/dashboard/ErrorState';
-import { Card, CardContent } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { DataTable, type DataTableColumn } from '@/components/dashboard/DataTable';
+import { DEFAULT_PAGE_SIZE } from '@/lib/table-constants';
 import type { ReconciliationOutcome } from '@/features/longshort/services/baseline/baseline-query-helpers';
 import {
   reconciliationOutcomeLabel,
@@ -46,86 +47,98 @@ function tierBadge(tier: string) {
 }
 
 export default function ReconciliationEventsPage() {
-  const { data: rows, isLoading, error } = useQuery({
-    queryKey: ['longshort', 'reconciliation-events'],
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['longshort', 'reconciliation-events', 'paginated', page, pageSize],
     queryFn: async () => {
-      const { data, error } = await sb
+      const offset = (page - 1) * pageSize;
+      const { data, error, count } = await sb
         .from('reconciliation_events')
-        .select('event_id, ts, engine_version, call_name, tier, symbol, outcome, failure_action, notes, resolved_at')
+        .select(
+          'event_id, ts, engine_version, call_name, tier, symbol, outcome, failure_action, notes, resolved_at',
+          { count: 'exact' },
+        )
         .order('ts', { ascending: false })
-        .limit(100);
+        .range(offset, offset + pageSize - 1);
       if (error) throw error;
-      return (data ?? []) as ReconciliationEventRow[];
+      return {
+        rows: (data ?? []) as ReconciliationEventRow[],
+        total: count ?? 0,
+      };
     },
     staleTime: 30_000,
   });
 
+  const rows = data?.rows ?? [];
+  const total = data?.total ?? 0;
+
   if (isLoading) return <LoadingSkeleton variant="table" rows={10} />;
   if (error) return <ErrorState message={(error as Error).message} />;
 
-  const unresolvedCount = (rows ?? []).filter(
+  const unresolvedCount = rows.filter(
     (r) =>
       !r.resolved_at &&
       r.outcome !== 'false_positive_within_tolerance' &&
       r.outcome !== 'expected_divergence_handled',
   ).length;
 
+  const columns: DataTableColumn<ReconciliationEventRow>[] = [
+    {
+      key: 'time',
+      header: 'Time',
+      cell: (r) => <span className="text-sm">{format(new Date(r.ts), 'PPp')}</span>,
+    },
+    { key: 'call', header: 'Call', cell: (r) => <span className="font-mono text-xs">{r.call_name}</span> },
+    { key: 'tier', header: 'Tier', cell: (r) => tierBadge(r.tier) },
+    { key: 'symbol', header: 'Symbol', numeric: true, cell: (r) => r.symbol ?? '—' },
+    { key: 'outcome', header: 'Outcome', cell: (r) => outcomeBadge(r.outcome) },
+    {
+      key: 'engine',
+      header: 'Engine',
+      cell: (r) => <span className="font-mono text-xs text-muted-foreground">{r.engine_version}</span>,
+    },
+    {
+      key: 'resolved',
+      header: 'Resolved',
+      cell: (r) =>
+        r.resolved_at ? (
+          <Badge variant="secondary">Resolved</Badge>
+        ) : reconciliationOutcomeSeverity(r.outcome) === 'clean' ? (
+          <span className="text-xs text-muted-foreground">N/A</span>
+        ) : (
+          <Badge variant="outline">Open</Badge>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Reconciliation Events"
         subtitle={
-          rows && rows.length > 0
-            ? `${rows.length} recent events • ${unresolvedCount} unresolved`
+          total > 0
+            ? `${total} event${total === 1 ? '' : 's'} on record • ${unresolvedCount} unresolved on this page`
             : 'No reconciliation events yet — first cross-check will populate this table'
         }
       />
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Time</TableHead>
-                <TableHead>Call</TableHead>
-                <TableHead>Tier</TableHead>
-                <TableHead>Symbol</TableHead>
-                <TableHead>Outcome</TableHead>
-                <TableHead>Engine</TableHead>
-                <TableHead>Resolved</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(rows ?? []).map((row) => (
-                <TableRow key={row.event_id}>
-                  <TableCell className="text-sm">{format(new Date(row.ts), 'PPp')}</TableCell>
-                  <TableCell className="font-mono text-xs">{row.call_name}</TableCell>
-                  <TableCell>{tierBadge(row.tier)}</TableCell>
-                  <TableCell className="font-mono">{row.symbol ?? '—'}</TableCell>
-                  <TableCell>{outcomeBadge(row.outcome)}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{row.engine_version}</TableCell>
-                  <TableCell>
-                    {row.resolved_at ? (
-                      <Badge variant="secondary">Resolved</Badge>
-                    ) : reconciliationOutcomeSeverity(row.outcome) === 'clean' ? (
-                      <span className="text-xs text-muted-foreground">N/A</span>
-                    ) : (
-                      <Badge variant="outline">Open</Badge>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {(!rows || rows.length === 0) && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
-                    No reconciliation events yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={rows}
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
+        density="compact"
+        emptyTitle="No reconciliation events yet"
+        emptyDescription="First cross-check will populate this table."
+      />
     </div>
   );
 }
