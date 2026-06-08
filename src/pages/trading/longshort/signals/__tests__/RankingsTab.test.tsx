@@ -124,6 +124,19 @@ describe('RankingsTab (FP-024)', () => {
     expect(screen.getAllByText('T059').length).toBeGreaterThan(0);
   });
 
+  it('top-N selector changes cutoff to 50 and updates titles', async () => {
+    await renderTab();
+    expect(await screen.findByText(/Top 20 — long candidates/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('combobox', { name: /Top \/ bottom count/i }));
+    fireEvent.click(await screen.findByRole('option', { name: '50' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Top 50 — long candidates/)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Bottom 50 — short candidates/)).toBeInTheDocument();
+  });
+
   it('surfaces the absent-count annotation from the band (epistemic-honesty contract)', async () => {
     await renderTab();
     const annotation = await screen.findByTestId('signal-band-absent');
