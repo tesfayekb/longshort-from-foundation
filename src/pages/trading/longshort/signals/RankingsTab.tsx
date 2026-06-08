@@ -81,6 +81,7 @@ export default function RankingsTab() {
   const [sectorFilter, setSectorFilter] = useState<string>('all');
   const [tickerFilter, setTickerFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [topN, setTopN] = useState<number>(20);
 
   useEffect(() => {
     setPage(1);
@@ -95,11 +96,11 @@ export default function RankingsTab() {
     pageSize: PAGE_SIZE,
   });
 
-  const topRows = useMemo(() => (present.data ?? []).slice(0, TOP_N), [present.data]);
+  const topRows = useMemo(() => (present.data ?? []).slice(0, topN), [present.data, topN]);
   const bottomRows = useMemo(() => {
     const all = present.data ?? [];
-    return all.slice(Math.max(0, all.length - BOTTOM_N)).slice().reverse();
-  }, [present.data]);
+    return all.slice(Math.max(0, all.length - topN)).slice().reverse();
+  }, [present.data, topN]);
 
   if (signalsLoading) return <LoadingSkeleton variant="table" rows={6} />;
 
@@ -168,6 +169,18 @@ export default function RankingsTab() {
           onChange={(e) => setTickerFilter(e.target.value)}
           className="min-w-0 flex-1 sm:max-w-[14rem]"
         />
+        <Select value={String(topN)} onValueChange={(v) => setTopN(Number(v))}>
+          <SelectTrigger className="min-w-0 flex-1 sm:max-w-[8rem]" aria-label="Top / bottom count">
+            <SelectValue placeholder="Count" />
+          </SelectTrigger>
+          <SelectContent>
+            {TOP_N_OPTIONS.map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <PhaseContextNote title="Single-signal view — not the final trading list">
@@ -193,8 +206,8 @@ export default function RankingsTab() {
           ) : (
             <SignalDistributionBand
               rows={present.data ?? []}
-              topN={TOP_N}
-              bottomN={BOTTOM_N}
+              topN={topN}
+              bottomN={topN}
               absentCount={absent.data ?? 0}
             />
           )}
@@ -203,18 +216,18 @@ export default function RankingsTab() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <RankingTable
-          title={`Top ${TOP_N} — long candidates`}
+          title={`Top ${topN} — long candidates`}
           tone="long"
           rows={topRows}
           loading={present.isLoading}
           startingRank={1}
         />
         <RankingTable
-          title={`Bottom ${BOTTOM_N} — short candidates`}
+          title={`Bottom ${topN} — short candidates`}
           tone="short"
           rows={bottomRows}
           loading={present.isLoading}
-          startingRank={Math.max(1, (present.data?.length ?? 0) - BOTTOM_N + 1)}
+          startingRank={Math.max(1, (present.data?.length ?? 0) - topN + 1)}
           rankAscending={false}
         />
       </div>
