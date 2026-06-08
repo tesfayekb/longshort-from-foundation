@@ -85,33 +85,33 @@ export default function ComputeRunsTab() {
         </p>
       </PhaseContextNote>
 
-      {/* FP-032 — compact filter toolbar (replaces the prior Controls Card). */}
+      {/* FP-035 — single-row shrink-to-fit toolbar; stacks only at mobile widths. */}
       <div
-        className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+        className="flex flex-col gap-2 sm:flex-row sm:items-center"
         data-testid="compute-runs-filter-toolbar"
       >
         <Select value={signalId ?? ''} onValueChange={(v) => setSignalId(v)}>
-            <SelectTrigger className="sm:max-w-xs" aria-label="Signal">
-              <SelectValue placeholder="Signal" />
-            </SelectTrigger>
-            <SelectContent>
-              {signals.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {latest && (
-            <div
-              className="flex items-center gap-2 text-xs text-muted-foreground sm:ml-auto"
-              data-testid="freshness-indicator"
-            >
-              <span>Latest fire:</span>
-              <span className="font-mono">{formatTimestamp(latest.completed_at)}</span>
-              <FireSourceBadge source={classifyFireSource(latest.completed_at)} />
-            </div>
-          )}
+          <SelectTrigger className="min-w-0 flex-1 sm:max-w-[14rem]" aria-label="Signal">
+            <SelectValue placeholder="Signal" />
+          </SelectTrigger>
+          <SelectContent>
+            {signals.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {latest && (
+          <div
+            className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground sm:ml-auto"
+            data-testid="freshness-indicator"
+          >
+            <span className="shrink-0">Latest fire:</span>
+            <span className="truncate font-mono">{formatTimestamp(latest.completed_at)}</span>
+            <FireSourceBadge source={classifyFireSource(latest.completed_at)} />
+          </div>
+        )}
       </div>
 
       <Card>
