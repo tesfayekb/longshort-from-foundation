@@ -1019,3 +1019,23 @@ Authority: ACT-146.
 **Closure** — Landed at execution commit (HEAD pending). `PhaseContextNote` renders collapsed one-line by default with chevron, expands on click (verified at Rankings, Coverage, Compute Runs); every `TradingStatusStrip` indicator carries an explanatory tooltip (incl. `stale`, `N open`); RankingsTab + UniverseMembershipPage + ComputeRunsTab filter toolbars render single-row shrink-to-fit on desktop (no `flex-wrap`), stacking only at mobile widths. Gate-4 full green: `bunx vitest run` returned `Test Files 48 passed (48) / Tests 375 passed (375)` (+5 vs FP-034 baseline); `bunx eslint .` returned `0 errors / 15 warnings` (all 15 pre-existing). Zero `any`. Zero content/logic/data change. Zero Monday/edge/migration touch.
 
 Authority: ACT-147.
+
+### FP-036: Universe → Exclusions Tab (§3.3 hard exclusions, neutral-toned screening view)
+
+| Field | Value |
+|---|---|
+| **ID** | FP-036 (next-free verified by grep at HEAD — 0 prior references). |
+| **Status** | Implemented. |
+| **Authored** | 2026-06-08. |
+| **Authority** | Operator-approved direct execution (post-diagnostic; see ACT-148). |
+| **Scope** | NEW: `src/pages/trading/longshort/universe/ExclusionsTab.tsx` (read-only `hard_exclusions` reader). NEW: `src/features/longshort/hooks/useHardExclusions.ts` (`useHardExclusionDates`, `usePaginatedHardExclusions`, `useHardExclusionBreadth`, pure `classifyExclusion`, `EXCLUSION_RULES`). EDIT: `src/pages/trading/longshort/UniverseHubPage.tsx` (replace `HubEmptyState` shell with `<ExclusionsTab />`). NEW tests: `src/pages/trading/longshort/universe/__tests__/ExclusionsTab.test.tsx` (+7 tests — collapsed PhaseContextNote, breadth stat with verify-borrow-feed cue, neutral rule-badge tone, flag-only/material classifier, ExpandableCell expand, server-pagination, shrink-to-fit toolbar). Docs same-PR per Constitution Rule 6: `docs/07-reference/component-inventory.md` (FP-036 section), `docs/07-reference/route-index.md` (`/trading/longshort/universe` entry updated), this entry, `docs/06-tracking/action-tracker.md` ACT-148. |
+| **Reference Impact** | component-inventory.md: +1 section (FP-036 — ExclusionsTab, badge vocabulary, hook trio). route-index.md: edit `/trading/longshort/universe` (Exclusions sub-tab promoted from empty-state to `ExclusionsTab`). feature-proposals.md: this entry. action-tracker.md: ACT-148. No new permissions, events, configs, env-vars, migrations, routes, edge functions, or shared helpers. No new npm dependency. |
+| **Out of Scope** | Any write to `hard_exclusions` (read-only). Any change to §3.3 firing LOGIC or data semantics (display only). Any new RLS / permission path (`hard_exclusions_longshort_view_read` is already permission-scoped). Any destructive-tone rendering of screening flags. Any edge function, migration, cron, sql/14, signal-math, FP-018 Bucket C surface touch. ACT-130 (still reserved for FP-018 Bucket C). |
+| **Reviewed By** | Operator |
+| **Review Date** | 2026-06-08 |
+
+**Diagnostic context** — FP-036 was authored after the "15 open reconciliation" diagnostic confirmed that §3.3d (HTB) currently flags 839 of 839 universe tickers (100%) and that the reconciliation layer classifies HTB-flag-alone as `failure_handled` (NOT materially excluding). The tab is therefore designed around an **expected-vs-actionable** visual language baked in from the start: neutral/info-toned rule badges (not destructive red); a `flag_only` vs `material` classification per row; AND — critically — an unburied per-date §3.3d coverage stat that keeps the "unusual breadth — verify against the borrow feed" data signal visible without normalizing it. Without the diagnostic, the tab would have rendered 839 alarming red rows; with it, the tab tells the truth in both directions.
+
+**Closure** — Landed at execution commit (HEAD pending). Exclusions tab renders the real `hard_exclusions` rows; §3.3 rule badges in `variant="info"` (neutral, NOT destructive); per-row expand shows `firing_reasons` jsonb detail via `ExpandableCell` (FP-032); rule + date + ticker filters work; server-paginated at `DEFAULT_PAGE_SIZE = 25` (FP-030); collapsible `PhaseContextNote` (FP-035) frames flags as screening coverage; unburied per-date §3.3d coverage stat with `verify against the borrow feed` cue when coverage exceeds 50% of the universe. Gate-4 full green: `bunx vitest run` returned `Test Files 49 passed (49) / Tests 382 passed (382)` (+7 vs FP-035 baseline 375); `bunx eslint .` returned `0 errors / 15 warnings` (all 15 pre-existing — same set as ACT-147). Zero `any`. Zero writes. Zero data-semantics change. Zero migration/RLS/Monday-surface touch.
+
+Authority: ACT-148.
