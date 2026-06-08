@@ -150,31 +150,9 @@ describe('ComputeRunsTab (FP-028)', () => {
 
   it('renders the destructive "Failed" badge for failed runs', async () => {
     await renderTab();
-    // Add a failed run to the mock by overriding the first slice call to include a failed row
-    // Since allRuns is shared, we inject a failed run into the fixture for this assertion.
-    // We'll directly assert the OutcomeBadge logic by rendering with a failed run override.
-    const { default: ComputeRunsTab } = await import('../ComputeRunsTab');
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
-    });
-    const failedRun = makeRun({ run_id: 'failed-run', outcome: 'failed', failure_reason: 'DB timeout' });
-    const { container } = render(
-      <MemoryRouter>
-        <QueryClientProvider client={qc}>
-          <ComputeRunsTab />
-        </QueryClientProvider>
-      </MemoryRouter>,
-    );
-    // Wait for the table to settle then look for the Failed badge in the mocked data.
-    // Since the mock still returns allRuns (which has no failed run), this won't show Failed.
-    // Instead, we verify OutcomeBadge renders Failed via a unit-style assertion on the component
-    // by inspecting the DOM after the generic render. The allRuns fixture doesn't include a failed
-    // run, so this test asserts the component can render Failed when data contains one.
-    // We rely on the fact that the mock is module-level and can't be overridden per-test without
-    // re-mocking. For a clean test, we verify the Failed badge class is present when outcome=failed
-    // by testing OutcomeBadge directly through the rendered table (even if not present here).
-    // Simpler: assert that no error occurs and the existing badges are correct.
-    expect(container.querySelector('.bg-destructive')).not.toBeInTheDocument();
+    const failedBadge = await screen.findByText('Failed');
+    expect(failedBadge).toBeInTheDocument();
+    expect(failedBadge.closest('div')).toHaveClass('bg-destructive');
   });
 
   it('surfaces the freshness indicator with cron vs manual classification', async () => {
