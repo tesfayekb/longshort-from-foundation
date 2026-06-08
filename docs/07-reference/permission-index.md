@@ -668,7 +668,7 @@ Permissions classified as `destructive`, `system-wide`, or `security-critical` r
 | **Classification** | operational |
 | **Scope** | system-wide |
 | **Default roles** | — (none seeded; superadmin inherits all permissions; admin and user roles do NOT receive `longshort.view` by default per DEC-031 sub-point 10 / initial-seed-grants rule) |
-| **Used by** | `LongShortDashboardPage` (Step 5.5), `/trading/longshort/*` routes (inner gate; outer gate is `trading.access`); RLS read policies on `public.universe_membership`, `public.hard_exclusions`, `public.longshort_audit_logs`, and (post-MIG-072 / FP-025) `public.signal_observations` — viewer must hold `longshort.view` to read any rows from these system-computed shared tables |
+| **Used by** | `LongShortDashboardPage` (Step 5.5), `/trading/longshort/*` routes (inner gate; outer gate is `trading.access`); RLS read policies on `public.universe_membership`, `public.hard_exclusions`, `public.longshort_audit_logs`, `public.signal_observations` (post-MIG-072 / FP-025), and `public.signal_compute_log` (post-MIG-073 / FP-027) — viewer must hold `longshort.view` to read any rows from these system-computed shared tables |
 | **Blast radius** | small — gates a single strategy sub-tree within the trading panel |
 | **Approval required** | Yes — granting requires admin with `permissions.assign`; revoking requires admin with `permissions.revoke` |
 | **Audit required** | Yes — grant/revoke audited via `rbac.permission_assigned` / `rbac.permission_revoked` |

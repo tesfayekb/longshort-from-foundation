@@ -89,6 +89,32 @@ Every long-short page that shows a partial or in-progress capability MUST carry 
 
 This discipline is enforced via the reusable `PhaseContextNote` component (`src/components/dashboard/PhaseContextNote.tsx`, info-variant Alert using the `--info` design-system token). Pages that are complete (e.g., Universe Constituents at FP-008 closure) need no note; pages with partial data (e.g., Rankings showing a single signal pre-combiner), empty-state shells for future FPs, or dashboards during the pre-trade paper/build phase must carry one. Future signal pages, the combiner page, portfolio construction, and execution surfaces each declare their phase honestly on-page.
 
+## System-Written Tables: Permission-Scoped Reads Only
+
+Any long-short table written by the system actor (rows carrying
+`operator_id = '00000000-0000-0000-0000-000000000001'`, the
+`DEFAULT_OPERATOR_ID` constant, which is NOT a row in `auth.users`)
+MUST use a permission-scoped read RLS policy of the shape
+`USING (public.has_permission(auth.uid(), 'longshort.view'))` — never
+`USING (operator_id = auth.uid())`. The operator-scoped form is
+structurally blank for human viewers because the system operator has no
+corresponding `auth.users` row, so no `auth.uid()` can ever satisfy the
+predicate.
+
+This pattern was twice violated by template-copy at table creation and
+twice reconciled retroactively (`signal_observations` via MIG-072 /
+FP-025; `signal_compute_log` via MIG-073 / FP-027). The reconciled set
+— `universe_membership`, `hard_exclusions`, `longshort_audit_logs`,
+`signal_observations`, `signal_compute_log` — is now the canonical
+pattern. New system-written long-short tables MUST follow it at
+creation; new operator-scoped read policies on system-written tables
+MUST be treated as a CI-class regression.
+
+(The vestigial `*_operator_read` PERMISSIVE policies still present on
+`universe_membership` and `hard_exclusions` are dead under permissive
+OR-combination — harmless additive, scoped for someday-cleanup; not in
+the path of any current FP.)
+
 ## Cross-references
 
 - Binding architectural pattern: `docs/04-modules/strategy-module-pattern.md` (T1–T9 contract)
