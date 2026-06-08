@@ -12,11 +12,17 @@
  *       GET /stocks/v1/short-interest?ticker=<T>&limit=<N>&sort=settlement_date.desc
  *     The exact path may have evolved since this fetcher was written; the
  *     `url` field is the single chokepoint to update if Polygon revises the
- *     scheme. Server returns rows including `settlement_date` (SEC report
- *     publication date) and a short-interest measure that can be combined
- *     with shares-outstanding to derive `si_pct_float`. The exact field
- *     plumbing is captured in the response-parsing helper below; revise
- *     there alone if Polygon's field names drift.
+ *     scheme. The endpoint returns `settlement_date`, `short_interest`
+ *     (RAW share count of shorted shares), `avg_daily_volume`, and
+ *     `days_to_cover` — it does NOT return any %-of-float field (this was
+ *     confirmed against live Polygon docs during the FP-041 revision-fix;
+ *     an earlier version of this fetcher assumed a `short_percent_of_float`
+ *     field that never existed, which caused 839/839 tickers to skip with
+ *     `insufficient_history` because every row failed normalization). This
+ *     fetcher therefore returns the RAW `short_interest` count; the
+ *     orchestrator derives `si_pct_float` by dividing by
+ *     `share_class_shares_outstanding` from the sibling
+ *     `PolygonSharesOutstandingFetcher`.
  *
  *   - Backup source (documented, NOT implemented in this FP): FINRA's
  *     bi-weekly equity short interest file + EDGAR forms. A future
