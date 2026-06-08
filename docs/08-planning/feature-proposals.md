@@ -1,5 +1,24 @@
 
 
+### FP-040: Signal #7 — Short-Term Reversal (1-week)
+
+| Field | Value |
+|---|---|
+| **ID** | FP-040 (next-free after FP-039 at HEAD; FP-038 reserved for signal-registry spec — NOT consumed; FP-011..FP-017 burned/reserved per established numbering). |
+| **Status** | implemented (code + tests + MIG-074 disarmed seed); cron-wiring + enable-flip pending separate operator-run DEC-043 attestation. |
+| **Problem** | Phase 2.2 deliverable: Signal #7 (short-term reversal, 1-week) per CROSSWIND §4.4.2 is the second of nine signals and the first one that deliberately disagrees with momentum (it FADES recent moves; momentum CHASES). Implementing it now provides a momentum/reversal pair in Rankings before the Phase 3 combiner. |
+| **Resolution** | Mirror the proven Signal #6 architecture: (a) pure compute `computeReversal` returning `-1 × ((P[T-1]/P[T-6]) - 1)` (the `-1 ×` negation is load-bearing — without it this signal becomes a short-window momentum duplicate); (b) `createReversalOrchestrator` factory matching `createMomentumOrchestrator`'s 5-step pipeline and re-using the shared infra (`pLimitedMap`, `zScoreNormalizeWithinSector`, `PolygonPriceHistoryFetcher`, `captureSignalObservations`, `persistSignalComputeLog`); (c) cron handler `longshort-reversal-compute` (verifyCronSecret + productionClock + POLYGON_API_KEY + orchestrator + 3 audit events); (d) manual sibling `longshort-reversal-compute-manual` (POST + JWT + `longshort.manage` + dual audit envelope); (e) MIG-074 disarmed `job_registry` seed (`enabled=false`). signal_id locked: `'short_term_reversal_1w'`. Bar requirement REVERSAL_MIN_BARS=7; price-history lookback PRICE_HISTORY_LOOKBACK_DAYS=20 calendar days (~14 trading bars, 2× the floor). `job-signal-mapping` extended with `'longshort.reversal.compute' → 'short_term_reversal_1w'` so the existing signal monitor picks the new signal up automatically. |
+| **Scope** | NEW: `supabase/functions/_shared/longshort-signals/short-term-reversal/{compute-reversal.ts, compute-reversal_test.ts, reversal-orchestrator.ts, reversal-orchestrator_test.ts}`. NEW: `supabase/functions/longshort-reversal-compute/{index.ts, index_test.ts}`. NEW: `supabase/functions/longshort-reversal-compute-manual/{index.ts, index_test.ts}`. NEW migration MIG-074 (single `INSERT … ON CONFLICT DO NOTHING` into `public.job_registry` — `enabled=false`). EDIT: `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping.ts` (+1 entry) and its `_test.ts` (cross-reference test for reversal SIGNAL_ID + update single-entry guard to two-entry guard). Docs same-PR: this entry, ACT-151, function-index.md (4 new entries + monitor extension-point note), event-index.md (6 new reversal events), database-migration-ledger.md (MIG-074 entry), NEW `docs/04-modules/longshort/signals/short-term-reversal.md`. |
+| **Out of Scope** | Cron wiring + enable-flip + cron-attributable attestation (separate operator-run step per DEC-040 + DEC-043). Any change to Signal #6 (momentum), the combiner, the universe, RBAC, audit primitives, façade, trading-navigation, App.tsx routing, or any UI surface. Any fork of shared signal infra. ACT-130 (still reserved for FP-018 Bucket C, already consumed). |
+| **Reference Impact** | function-index.md: 4 new entries (compute, orchestrator, cron handler, manual handler) + `job-signal-mapping` extension-point note. event-index.md: 6 new events (`longshort.reversal.compute.{started,completed,failed,manual_triggered,manual_completed,manual_failed}`). database-migration-ledger.md: MIG-074. `docs/04-modules/longshort/signals/short-term-reversal.md` created. No new permissions, configs, env-vars, routes, npm dependencies. No new shared helper (extends an existing one). |
+| **Decision ID** | None — the sign-flip negation is documented in-code (compute header) + this FP entry; no DEC needed because §4.4.2 is verbatim spec. |
+| **Reviewed By** | Operator |
+| **Review Date** | 2026-06-08 |
+
+**Closure** — Landed at execution commit (HEAD pending). Compute math, orchestrator, cron + manual handlers, disarmed registry row (MIG-074), and 6 new audit events ship together; cron path remains explicitly UNATTESTED until the separate operator-run wire-and-attest step produces a 200 + cron-attributable `signal_compute_log` row per DEC-043. The manual handler is the immediate verification path.
+
+Authority: ACT-151.
+
 ### FP-037: Top-N Selector (20/30/50) on Rankings
 
 | Field | Value |

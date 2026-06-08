@@ -2694,8 +2694,8 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Exports** | `const JOB_ID_TO_SIGNAL_ID: Readonly<Record<string,string>>` (as-const, single-entry at A3: `'longshort.momentum.compute' → 'cross_sectional_momentum_12_1'`); `function resolveSignalIdForJob(jobId): string \| undefined` (convenience accessor; future chokepoint for unknown-id logging). |
 | **File** | `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping.ts` |
 | **Tests** | `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping_test.ts` — 6 Deno tests (entry presence + cross-reference vs `momentum-orchestrator.SIGNAL_ID` + accessor known/unknown branches + single-entry guard against pre-wiring + immutability documentation). |
-| **Extension point** | Phases 2.2–2.9 (FP-011..FP-017): each new signal's execution prompt adds ONE entry in the same PR that registers its compute job. The signal becomes monitored automatically — no change to `longshort-signal-monitor/index.ts` is required. |
-| **Drift sentinel** | Cross-reference test (`(2)`) fails LOUDLY if `momentum-orchestrator.ts` `SIGNAL_ID` export ever decouples from the mapping value. |
+| **Extension point** | Each new signal's execution prompt adds ONE entry in the same PR that registers its compute job. The signal becomes monitored automatically — no change to `longshort-signal-monitor/index.ts` is required. **Current entries (2):** `longshort.momentum.compute → cross_sectional_momentum_12_1` (FP-010 A3); `longshort.reversal.compute → short_term_reversal_1w` (FP-040). |
+| **Drift sentinels** | Cross-reference tests (`(2)` momentum + `(2b)` reversal) fail LOUDLY if either orchestrator's `SIGNAL_ID` export decouples from the mapping value. |
 | **Added by** | FP-010 Bucket A Commit A3 |
 
 #### `supabase/functions/longshort-signal-monitor/index.ts`
@@ -2714,3 +2714,57 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Future-Inheritance** | Phase 2.2-2.9 signals are monitored automatically once their compute job is registered + their entry is added to `JOB_ID_TO_SIGNAL_ID`. Zero changes to this handler required per new signal. |
 | **Disarmed** | Handler exists and is deployable at A3, but `job_registry` row is not yet inserted (B1 scope) and MIG-070 enable-flip is C2 scope. Cron will not fire until C2. |
 | **Added by** | FP-010 Bucket A Commit A3 |
+
+---
+
+## Short-Term Reversal Signal (FP-040 / Phase 2.2 / Signal #7)
+
+#### `supabase/functions/_shared/longshort-signals/short-term-reversal/compute-reversal.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-040) |
+| **Classification** | pure compute function — Signal #7 raw value per CROSSWIND §4.4.2 (`-1 × ((P[T-1] / P[T-6]) - 1)`). Mirrors `compute-momentum.ts`. |
+| **Exports** | `function computeReversal(bars): number \| null`; `const REVERSAL_MIN_BARS = 7` |
+| **File** | `supabase/functions/_shared/longshort-signals/short-term-reversal/compute-reversal.ts` |
+| **Tests** | `compute-reversal_test.ts` — 11 Deno unit tests including the LOAD-BEARING sign-flip pair (positive 5-day return → negative signal; negative 5-day return → positive signal), MIN_BARS pin, off-by-one sentinel (bars[5]/bars[0]), div-by-zero, determinism, ReadonlyArray non-mutation, momentum-duplicate guard. |
+| **Purity** | No I/O, no clock, no randomness. Deterministic for replay. |
+| **Added by** | FP-040 |
+
+#### `supabase/functions/_shared/longshort-signals/short-term-reversal/reversal-orchestrator.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-040) |
+| **Classification** | shared orchestrator factory — 5-step pipeline mirror of `momentum-orchestrator.ts`, re-using the same shared infra (`pLimitedMap`, `zScoreNormalizeWithinSector`, `captureSignalObservations`, `PolygonPriceHistoryFetcher`). |
+| **Exports** | `function createReversalOrchestrator(ctx): { run(as_of): Promise<SignalOrchestratorResult> }`; `const SIGNAL_ID = 'short_term_reversal_1w'`. |
+| **File** | `supabase/functions/_shared/longshort-signals/short-term-reversal/reversal-orchestrator.ts` |
+| **Tests** | `reversal-orchestrator_test.ts` — 12 Deno tests via DI mocks (happy-path 5 tickers / insufficient-history skip / Polygon 404 → fetch_error / non-404 throw / singleton_sector / missing_sector / empty universe → failed+empty_universe / universe-read error → throws / persistence error → failed+reason / concurrency cap=5 / determinism + as_of-derived timestamps / SIGNAL_ID lock). |
+| **Lookback** | `PRICE_HISTORY_LOOKBACK_DAYS = 20` (calendar days). ~14 trading bars expected; 2× the 7-bar requirement, comfortable headroom for holiday clusters. Mirrors momentum's calendar→trading-bar reasoning discipline (INC-57 lineage). |
+| **Wall-clock** | All timestamps derive from the injected `as_of` parameter (DEC-034 clause 4). No `Date.now()`/`new Date()`. |
+| **Added by** | FP-040 |
+
+#### `supabase/functions/longshort-reversal-compute/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-040) |
+| **Classification** | edge function — daily-cadence cron handler for Signal #7. Mirror of `longshort-momentum-compute/index.ts`. DISARMED-at-creation per MIG-074 (`enabled=false`); enable-flip is a separate operator-run step gated on DEC-043 attestation. |
+| **Trigger** | `verifyCronSecret` (X-Cron-Secret header); registered in `job_registry` as `longshort.reversal.compute` via MIG-074 (`enabled=false`). |
+| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `POLYGON_API_KEY` check → build `SignalOrchestratorContext` → `createReversalOrchestrator(ctx).run(as_of)` → `persistSignalComputeLog` → `.started`/`.completed`/`.failed` audit events. |
+| **File** | `supabase/functions/longshort-reversal-compute/index.ts` |
+| **Tests** | `supabase/functions/longshort-reversal-compute/index_test.ts` — 9 source-sentinel tests (cron-auth wired + auth-first ordering + wall-clock discipline + POLYGON_API_KEY + orchestrator wiring + persist-helper + 3 audit events + handler-path pin + signal-id-import provenance). |
+| **Wall-clock** | `productionClock.getWallClockTs()` is the sole chokepoint; all telemetry timestamps derive from `as_of` (DEC-034 clause 4). |
+| **Added by** | FP-040 |
+
+#### `supabase/functions/longshort-reversal-compute-manual/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-040) |
+| **Classification** | edge function — operator-trigger sibling of `longshort-reversal-compute`. Invokes the same orchestrator with an operator-supplied `as_of`. Mirror of `longshort-momentum-compute-manual/index.ts`. Recommended path for validating Signal #7 math + persistence before any cron wiring (per DEC-043 prudent-sequencing). |
+| **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST with `{ "as_of": "YYYY-MM-DD" }` body. Does NOT register in `job_registry`. 405 on non-POST. |
+| **Pipeline** | auth → perm → body validation (`parseAsOfDate`) → future-`as_of` rejection via `productionClock` comparison → `POLYGON_API_KEY` check → `.manual_triggered` audit BEFORE → orchestrator → `persistSignalComputeLog` → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
+| **File** | `supabase/functions/longshort-reversal-compute-manual/index.ts` |
+| **Tests** | `supabase/functions/longshort-reversal-compute-manual/index_test.ts` — 10 source-sentinel tests (auth + permission + POST-only + body validation + parser + POLYGON_API_KEY + dual audit envelope ordering + wall-clock + orchestrator wiring + no momentum-orchestrator-import drift). |
+| **Added by** | FP-040 |

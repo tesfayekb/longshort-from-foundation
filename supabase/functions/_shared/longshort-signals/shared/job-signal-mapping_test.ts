@@ -16,6 +16,7 @@ import {
   resolveSignalIdForJob,
 } from './job-signal-mapping.ts';
 import { SIGNAL_ID as MOMENTUM_SIGNAL_ID } from '../cross-sectional-momentum/momentum-orchestrator.ts';
+import { SIGNAL_ID as REVERSAL_SIGNAL_ID } from '../short-term-reversal/reversal-orchestrator.ts';
 
 Deno.test('(1) JOB_ID_TO_SIGNAL_ID contains the momentum entry verbatim', () => {
   assertEquals(
@@ -37,6 +38,16 @@ Deno.test('(2) mapping value matches momentum-orchestrator SIGNAL_ID export (cro
   );
 });
 
+Deno.test('(2b) mapping value matches reversal-orchestrator SIGNAL_ID export (cross-reference)', () => {
+  // Drift sentinel for Signal #7 — same discipline as test (2) for #6.
+  assertEquals(
+    JOB_ID_TO_SIGNAL_ID['longshort.reversal.compute'],
+    REVERSAL_SIGNAL_ID,
+    'JOB_ID_TO_SIGNAL_ID reversal entry decoupled from reversal-orchestrator SIGNAL_ID',
+  );
+  assertEquals(REVERSAL_SIGNAL_ID, 'short_term_reversal_1w');
+});
+
 Deno.test('(3) resolveSignalIdForJob returns the value for known job_ids', () => {
   assertEquals(
     resolveSignalIdForJob('longshort.momentum.compute'),
@@ -50,13 +61,12 @@ Deno.test('(4) resolveSignalIdForJob returns undefined for unknown job_ids', () 
 });
 
 Deno.test('(5) JOB_ID_TO_SIGNAL_ID has exactly the FP-010 A3 set (single entry)', () => {
-  // FP-010 ships v1 with exactly one entry. Phase 2.2 (FP-011) adds the
-  // second; until then this test prevents accidental pre-wiring of
-  // unshipped signals (which would cause the monitor to alert "stale" on
-  // signals whose compute job doesn't yet exist).
-  const keys = Object.keys(JOB_ID_TO_SIGNAL_ID);
-  assertEquals(keys.length, 1, `expected 1 mapping entry at A3; got ${keys.length}: ${keys.join(',')}`);
-  assertEquals(keys[0], 'longshort.momentum.compute');
+  // FP-010 A3 shipped v1 with one entry (momentum). FP-040 adds the
+  // second (short-term reversal / Signal #7). Each subsequent signal
+  // execution prompt adds exactly one entry in the same PR that
+  // registers its compute job.
+  const keys = Object.keys(JOB_ID_TO_SIGNAL_ID).sort();
+  assertEquals(keys, ['longshort.momentum.compute', 'longshort.reversal.compute']);
 });
 
 Deno.test('(6) JOB_ID_TO_SIGNAL_ID resists runtime mutation (TS as-const guarantee)', () => {
