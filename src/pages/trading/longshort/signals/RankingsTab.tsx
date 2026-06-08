@@ -117,57 +117,57 @@ export default function RankingsTab() {
 
   return (
     <div className="space-y-6">
-      {/* FP-032 — compact filter toolbar (replaces the prior Controls Card). */}
+      {/* FP-035 — single-row shrink-to-fit toolbar; stacks only at mobile widths. */}
       <div
-        className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+        className="flex flex-col gap-2 sm:flex-row sm:items-center"
         data-testid="rankings-filter-toolbar"
       >
         <Select value={signalId ?? ''} onValueChange={(v) => setSignalId(v)}>
-            <SelectTrigger className="sm:max-w-xs" aria-label="Signal">
-              <SelectValue placeholder="Signal" />
-            </SelectTrigger>
-            <SelectContent>
-              {signals.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={asOfDate ?? ''}
-            onValueChange={(v) => setAsOfDate(v)}
-            disabled={datesLoading || !dates || dates.length === 0}
-          >
-            <SelectTrigger className="sm:max-w-xs" aria-label="As-of date">
-              <SelectValue placeholder="As-of date" />
-            </SelectTrigger>
-            <SelectContent>
-              {(dates ?? []).map((d) => (
-                <SelectItem key={d} value={d}>
-                  {d}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={sectorFilter} onValueChange={setSectorFilter}>
-            <SelectTrigger className="sm:max-w-xs" aria-label="Sector">
-              <SelectValue placeholder="Sector" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All sectors</SelectItem>
-              {sectors.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SelectTrigger className="min-w-0 flex-1 sm:max-w-[14rem]" aria-label="Signal">
+            <SelectValue placeholder="Signal" />
+          </SelectTrigger>
+          <SelectContent>
+            {signals.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={asOfDate ?? ''}
+          onValueChange={(v) => setAsOfDate(v)}
+          disabled={datesLoading || !dates || dates.length === 0}
+        >
+          <SelectTrigger className="min-w-0 flex-1 sm:max-w-[12rem]" aria-label="As-of date">
+            <SelectValue placeholder="As-of date" />
+          </SelectTrigger>
+          <SelectContent>
+            {(dates ?? []).map((d) => (
+              <SelectItem key={d} value={d}>
+                {d}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={sectorFilter} onValueChange={setSectorFilter}>
+          <SelectTrigger className="min-w-0 flex-1 sm:max-w-[14rem]" aria-label="Sector">
+            <SelectValue placeholder="Sector" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sectors</SelectItem>
+            {sectors.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Input
           placeholder="Filter by ticker…"
           value={tickerFilter}
           onChange={(e) => setTickerFilter(e.target.value)}
-          className="sm:max-w-xs"
+          className="min-w-0 flex-1 sm:max-w-[14rem]"
         />
       </div>
 
