@@ -170,4 +170,11 @@ describe('UniverseMembershipPage (FP-023.1)', () => {
       expect(screen.queryByText(/Page 2 of/)).not.toBeInTheDocument();
     });
   });
+
+  it('renders the filter toolbar as a single shrink-to-fit row (no flex-wrap) — FP-035', async () => {
+    await renderPage();
+    const toolbar = await screen.findByTestId('universe-filter-toolbar');
+    expect(toolbar.className).not.toContain('flex-wrap');
+    expect(toolbar.className).toContain('sm:flex-row');
+  });
 });
