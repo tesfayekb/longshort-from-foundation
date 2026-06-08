@@ -943,3 +943,22 @@ Authority: ACT-142.
 **Closure** — Landed at execution commit (HEAD pending). Top-level Trading page is titled "Strategies" (no longer "Overview"); the two Overview-named entries are disambiguated. Long-Short Overview sections are tabbed via HubTabs with `?tab=` URL-sync, same content as before. Full Gate-4 green. Zero route-path/data-query/RBAC change. Zero Monday/edge/migration touch.
 
 Authority: ACT-143.
+
+### FP-032: Compact Filter Toolbars + One-Line-With-Expand Cells
+
+| Field | Value |
+|---|---|
+| **ID** | FP-032 (next-free verified by grep at HEAD — 0 prior references). |
+| **Status** | approved (operator-directed forward 2026-06-08 — Tier C; frontend presentation/interaction, read-only). |
+| **Problem** | (a) The filter Cards above tables (Rankings "Controls", Universe Membership "Filters", Compute Runs "Controls") consume ~100–120px of vertical space and add a redundant card title above each table. (b) Verbose multi-line cells (Reconciliation Events `notes`, the Compute Runs `skipped_detail` block) render full text inline by default, making the tables hard to scan. |
+| **Resolution** | Part 1 — replace filter Cards with thin horizontal toolbars (`flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center` `div`s) directly above each table; no filter dropped, no filter logic touched. Part 2 — introduce a shared `ExpandableCell` primitive built on the existing `Collapsible` UI primitive (no new dependency); apply to the Reconciliation `notes` column so verbose free-text renders as a one-line preview + chevron-expand. Compute Runs keeps its existing per-row expand (already a tight one-line summary in each numeric column + chevron in its own column — the verbose `skipped_detail` is in the expanded panel, as intended). |
+| **Scope** | NEW: `src/components/dashboard/ExpandableCell.tsx`, `src/components/dashboard/__tests__/ExpandableCell.test.tsx`. EDIT: `src/pages/trading/longshort/signals/RankingsTab.tsx` (filter Card → toolbar), `src/pages/trading/longshort/UniverseMembershipPage.tsx` (filter Card → toolbar; drop unused `CardHeader`/`CardTitle` imports), `src/pages/trading/longshort/signals/ComputeRunsTab.tsx` (filter Card → toolbar; freshness indicator preserved), `src/pages/trading/longshort/ReconciliationEventsPage.tsx` (add `notes` column rendered via `ExpandableCell`), `src/pages/trading/longshort/__tests__/UniverseMembershipPage.test.tsx` (wait anchor `'Filters'` → `findByPlaceholderText(/Filter by ticker/i)` since the Card title is gone), `src/pages/trading/longshort/__tests__/ReconciliationEventsPage.test.tsx` (first fixture row carries a multi-line note + new test asserting preview/expand contract). Docs same-PR per Constitution Rule 6: `component-inventory.md` (ExpandableCell + compact toolbar pattern), this entry, `action-tracker.md` ACT-144. |
+| **Out of Scope** | Any filter-logic / data-query change. Dropping any filter (compact, not drop). Other UX FPs (033 status strip / 034 zero-persist badge). Any edge function, migration, cron, sql/14, signal-math, FP-018 Bucket C surface touch. ACT-130 (still reserved for FP-018 Bucket C). |
+| **Reference Impact** | component-inventory.md: +1 section (ExpandableCell + compact-filter-toolbar pattern with consumer list). feature-proposals.md: this entry. action-tracker.md: ACT-144. No new permissions, events, configs, env-vars, migrations, routes, edge functions, or shared edge-function helpers. No new npm dependency (Collapsible already in repo). |
+| **Decision ID** | None — within existing UI-design-system discipline; presentation/interaction only. |
+| **Reviewed By** | Operator |
+| **Review Date** | 2026-06-08 |
+
+**Closure** — Landed at execution commit (HEAD pending). Filter Cards replaced by thin toolbars on Rankings / Universe Membership / Compute Runs (no filter dropped). Reconciliation `notes` render as one-line preview + chevron-expand via the new shared `ExpandableCell`. Gate-4 full green: `bunx vitest run` returned `Test Files 46 passed (46) / Tests 360 passed (360)` (+3 vs FP-031 baseline: ExpandableCell unit tests +2, Reconciliation notes-expand test +1); `bunx eslint .` returned `0 errors / 15 warnings` (all 15 pre-existing). Zero `any`. Zero filter-logic / data-query change. Zero Monday/edge/migration touch.
+
+Authority: ACT-144.

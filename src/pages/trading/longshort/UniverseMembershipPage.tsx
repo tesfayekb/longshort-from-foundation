@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ErrorState } from '@/components/dashboard/ErrorState';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -160,12 +160,11 @@ export default function UniverseMembershipPage() {
       />
 
       {latestDate && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Filters</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <Input
+        <div
+          className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+          data-testid="universe-filter-toolbar"
+        >
+          <Input
               placeholder="Filter by ticker…"
               value={tickerFilter}
               onChange={(e) => setTickerFilter(e.target.value)}
@@ -193,8 +192,7 @@ export default function UniverseMembershipPage() {
                 ))}
               </SelectContent>
             </Select>
-          </CardContent>
-        </Card>
+        </div>
       )}
 
       {latestDate && (

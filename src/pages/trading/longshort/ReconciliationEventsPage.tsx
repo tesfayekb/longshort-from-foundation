@@ -8,6 +8,7 @@ import { ErrorState } from '@/components/dashboard/ErrorState';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/DataTable';
+import { ExpandableCell } from '@/components/dashboard/ExpandableCell';
 import { DEFAULT_PAGE_SIZE } from '@/lib/table-constants';
 import type { ReconciliationOutcome } from '@/features/longshort/services/baseline/baseline-query-helpers';
 import {
@@ -109,6 +110,21 @@ export default function ReconciliationEventsPage() {
           <span className="text-xs text-muted-foreground">N/A</span>
         ) : (
           <Badge variant="outline">Open</Badge>
+        ),
+    },
+    {
+      key: 'notes',
+      header: 'Notes',
+      cell: (r) =>
+        r.notes ? (
+          <ExpandableCell
+            ariaLabel="Toggle notes"
+            preview={<span className="text-xs text-muted-foreground">{r.notes.split('\n')[0]}</span>}
+          >
+            <span className="text-xs">{r.notes}</span>
+          </ExpandableCell>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
         ),
     },
   ];

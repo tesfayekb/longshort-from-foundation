@@ -197,3 +197,37 @@ All Phase 4 page implementation.
 ## Related Documents
 
 - [Stage 4 Plan](../08-planning/stage-4-plan.md)
+
+---
+
+## FP-032 — Compact Filter Toolbars + One-Line-With-Expand Cells
+
+### ExpandableCell (`src/components/dashboard/ExpandableCell.tsx`)
+
+Shared one-line-with-expand disclosure primitive built on the existing
+`Collapsible` UI primitive (no new dependency). Standardizes the pattern
+used previously per-page (e.g. ComputeRunsTab row expander) so verbose
+tabular cells render as a tight single-line preview + chevron, with the
+full content revealed on demand.
+
+Props:
+- `preview: ReactNode` — single-line summary, truncated.
+- `children: ReactNode` — full content shown when expanded (may wrap).
+- `ariaLabel?: string` — accessible label for the toggle button.
+- `className?: string` — optional className passthrough to the root.
+
+Consumers (FP-032 wave):
+- `ReconciliationEventsPage` — `notes` column.
+
+### Compact Filter Toolbar Pattern
+
+Filter Cards (`Card > CardHeader "Controls"/"Filters" > CardContent` with
+inline Selects + Input) are replaced by a thin horizontal toolbar `div`
+directly above the table. The container is `flex flex-col gap-2
+sm:flex-row sm:flex-wrap sm:items-center`. No filter is dropped —
+presentation only.
+
+Adopted by:
+- `RankingsTab` (signal / as-of-date / sector / ticker)
+- `UniverseMembershipPage` (ticker / eligibility / sector)
+- `ComputeRunsTab` (signal + freshness indicator)
