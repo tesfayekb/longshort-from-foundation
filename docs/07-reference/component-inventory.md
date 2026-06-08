@@ -85,6 +85,18 @@ Conformance: every component below conforms to [UI Design System](ui-design-syst
 
 > **Registered by:** FP-023 (ACT-134) shipped the components; FP-023.1 (ACT-135) registered them here per Constitution Rule 6.
 
+## Trading / Long-Short Signals — Rankings (FP-024)
+
+Conformance: every component below conforms to [UI Design System](ui-design-system.md). The Rankings tab is assembled from governed shell + data-display primitives (Card, Select, Input, Table, Button) plus two new strategy-internal components and one read-only hook module. No new visual tokens — long/short accents reuse `--success` / `--destructive`; the band uses `--muted-foreground` for the middle bulk per the design-system semantic palette.
+
+| Component | Path | Purpose | Used By |
+|-----------|------|---------|---------|
+| `RankingsTab` | `src/pages/trading/longshort/signals/RankingsTab.tsx` | Signals → Rankings tab content. Composes controls (signal / as-of-date / sector / ticker), the distribution-band hero, side-by-side top-20 long + bottom-20 short candidate tables, and a server-side-paginated full rankings table. Strictly read-only against `signal_observations`. | `SignalsHubPage` (Rankings tab) |
+| `SignalDistributionBand` | `src/pages/trading/longshort/signals/SignalDistributionBand.tsx` | Hand-rolled SVG z-score band. Plots every present-value ticker by z-score, accenting the top-N as `--success` and bottom-N as `--destructive`. Absent (`is_present=false`) tickers are NEVER plotted at 0 — they surface only as an out-of-band "N tickers absent" annotation, preserving the DB CHECK invariant `value IS NULL ↔ is_present=false` (INC-36 / §2-axiom-3 epistemic honesty). | `RankingsTab` |
+| `useSignalRankings` (hook module) | `src/features/longshort/hooks/useSignalRankings.ts` | Five read-only React Query hooks for the Rankings surface: `useAvailableSignals`, `useSignalDates`, `usePresentObservations`, `useAbsentCount`, `usePaginatedRankings`. The paginated hook uses Supabase `.range()` + `{ count: 'exact' }` server-side pagination per the FP-023.1 forward-binding (`signal_observations` grows unboundedly across trading days × signals; client-side `useMemo` filter pattern is explicitly forbidden). | `RankingsTab` |
+
+> **Registered by:** FP-024 (ACT-136) — same-PR per Constitution Rule 6.
+
 ---
 
 ## Component Rules
