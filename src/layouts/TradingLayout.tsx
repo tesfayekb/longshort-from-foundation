@@ -12,6 +12,7 @@ import { USER_ROLES_KEY } from '@/hooks/useUserRoles';
 import { MFA_POLICY_KEY, mfaPolicyQueryFn, useMfaPolicy } from '@/hooks/useMfaPolicy';
 import { supabase } from '@/integrations/supabase/client';
 import * as Sentry from '@sentry/react';
+import { TradingStatusStrip } from '@/features/longshort/components/TradingStatusStrip';
 
 /**
  * TradingLayout renders the shell unconditionally (sidebar + header),
@@ -89,6 +90,10 @@ export function TradingLayout() {
               <AccessDenied message="You need trading panel access to view this page." />
             }
           >
+            {/* FP-033 — persistent status strip above every trading-console page. */}
+            <div className="-mx-4 -mt-4 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8 mb-4 sm:mb-6 lg:mb-8">
+              <TradingStatusStrip />
+            </div>
             <Outlet />
           </RequirePermission>
         </DashboardLayout>

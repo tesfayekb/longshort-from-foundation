@@ -210,6 +210,29 @@ One dialog style:
 | Pending | `bg-warning/10` | `text-warning` |
 | Info/Default | `bg-muted` | `text-muted-foreground` |
 
+#### FP-033 — Locked Badge Vocabulary
+
+The `<Badge />` primitive exposes a fixed vocabulary. **Consumers MUST
+use a variant — never raw color overrides.** New variants added in
+FP-033: `success`, `warning`, `info`. Pre-existing variants
+(`default`, `secondary`, `destructive`, `outline`) are unchanged.
+
+| Vocabulary | `<Badge variant>` | When to use |
+|---|---|---|
+| **success** | `success` | Positive terminal state (refresh completed, breaker armed, zero open). |
+| **warning** | `warning` | Recoverable / attention (stale freshness, soft pause, low open count). |
+| **error**   | `destructive` | Failed terminal state, tripped breaker, severe outcome. |
+| **deferred / muted** | `secondary` | Documented "not done yet, not failed" (Coverage tab booleans, manual fire). **Never red.** |
+| **info**    | `info` | Neutral metadata accents. |
+| **neutral / placeholder** | `outline` | Graceful `—` fallback when a status read returns nothing. |
+
+Severity mapping for outcome enums goes through
+`src/features/longshort/utils/outcome-display.ts` → `severityToBadgeVariant`
+(`clean → outline`, `handled → secondary`, `severe → destructive`,
+`neutral → outline`). All four operator surfaces — LongShortDashboard,
+ReconciliationEventsPage, UniverseRefreshHistoryPage, and the FP-033
+TradingStatusStrip — route through this helper. **No raw-color one-offs.**
+
 ### Async States
 
 **Loading:** Skeleton with `bg-muted animate-pulse`, matching the shape of the content it replaces.

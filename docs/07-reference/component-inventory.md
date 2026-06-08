@@ -231,3 +231,40 @@ Adopted by:
 - `RankingsTab` (signal / as-of-date / sector / ticker)
 - `UniverseMembershipPage` (ticker / eligibility / sector)
 - `ComputeRunsTab` (signal + freshness indicator)
+
+---
+
+## FP-033 — Persistent Status Strip + Badge Vocabulary Lock
+
+### TradingStatusStrip (`src/features/longshort/components/TradingStatusStrip.tsx`)
+
+Persistent, thin, read-only health strip rendered below the dashboard
+header on every trading-console page (mounted by `TradingLayout`). Four
+compact indicators backed by the shared `useTradingStatus` hook:
+
+| Indicator | Source table(s) | Variant mapping |
+|---|---|---|
+| Last signal fire | `signal_compute_log` | `outline` (cron) / `secondary` (manual) |
+| Universe freshness | `universe_refresh_log` | `success` (< 36h) / `warning` (≥ 36h) |
+| Breaker | `kill_switches` (strategy_key=longshort) | `success` (active) / `warning` (soft_paused) / `destructive` (hard_paused, liquidating) |
+| Open reconciliation | `reconciliation_events` (count head) | `success` (0) / `warning` (1–4) / `destructive` (≥5) |
+
+Each indicator degrades to a `—` placeholder badge when its underlying
+read returns nothing or RLS blocks the row — **no new permission path
+is added**. Strictly read-only.
+
+### useTradingStatus (`src/features/longshort/hooks/useTradingStatus.ts`)
+
+Aggregates the four reads above into a single `TradingStatusSnapshot`.
+Reads run via `Promise.all` with per-read `.catch(() => null)` so any
+individual failure does not break the strip. 60s `staleTime` + 5min
+`refetchInterval`. Query key: `['longshort', 'trading-status']`
+(exported as `TRADING_STATUS_QUERY_KEY`).
+
+### Badge — locked vocabulary (`src/components/ui/badge.tsx`)
+
+FP-033 extended `badgeVariants` with first-class `success`, `warning`,
+`info` variants on top of the pre-existing `default` / `secondary` /
+`destructive` / `outline`. See `ui-design-system.md` for the full
+vocabulary and the routing rule (consumers MUST use a variant — no
+raw-color className overrides).
