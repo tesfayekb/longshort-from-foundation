@@ -171,6 +171,17 @@ export default function RankingsTab() {
         </CardContent>
       </Card>
 
+      <PhaseContextNote title="Single-signal view — not the final trading list">
+        <p>
+          This ranks the universe by one signal (12-1 month momentum), so it surfaces stocks that
+          have already risen (long candidates) or fallen (short candidates). The tradeable ranking
+          is the composite of all signals, produced by the combiner (Phase 3). As more signals come
+          online — starting with short-term reversal — several will counterweight momentum, and
+          this list will change. Use the signal selector to inspect each signal; a "Composite" option
+          appears once the combiner is built.
+        </p>
+      </PhaseContextNote>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Distribution</CardTitle>
