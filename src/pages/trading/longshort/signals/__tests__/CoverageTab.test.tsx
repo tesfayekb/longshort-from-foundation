@@ -89,11 +89,15 @@ describe('CoverageTab (FP-029)', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the phase-context note citing DW-063 / DEC-038.1', async () => {
+  it('renders the phase-context note citing DW-063 / DEC-038.1 (FP-035 — collapsed by default)', async () => {
     await renderTab();
-    expect(
-      await screen.findByText(/Per-date §3.3 eligibility screening coverage/i),
-    ).toBeInTheDocument();
+    const trigger = await screen.findByRole('button', {
+      name: /Per-date §3.3 eligibility screening coverage/i,
+    });
+    // Collapsed: body (with the DW-063 citation) is hidden.
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText(/DW-063 \/ DEC-038\.1/i)).not.toBeInTheDocument();
+    fireEvent.click(trigger);
     expect(screen.getByText(/DW-063 \/ DEC-038\.1/i)).toBeInTheDocument();
   });
 
