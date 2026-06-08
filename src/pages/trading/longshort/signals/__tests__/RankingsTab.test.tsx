@@ -158,11 +158,17 @@ describe('RankingsTab (FP-024)', () => {
     expect(paginatedCalls.some((c) => c.tickerFilter === 'T00' && c.page === 1)).toBe(true);
   });
 
-  it('surfaces the single-signal phase-context note above the band', async () => {
+  it('surfaces the single-signal phase-context note above the band (FP-035 — collapsed by default, expands on click)', async () => {
     await renderTab();
+    const trigger = screen.getByRole('button', {
+      name: /Single-signal view — not the final trading list/i,
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    // Body hidden while collapsed.
     expect(
-      screen.getByText(/Single-signal view — not the final trading list/i),
-    ).toBeInTheDocument();
+      screen.queryByText(/The tradeable ranking is the composite of all signals/i),
+    ).not.toBeInTheDocument();
+    fireEvent.click(trigger);
     expect(
       screen.getByText(/The tradeable ranking is the composite of all signals/i),
     ).toBeInTheDocument();
