@@ -109,6 +109,17 @@ Conformance: every component below conforms to [UI Design System](ui-design-syst
 
 > **Registered by:** FP-028 (ACT-140) — same-PR per Constitution Rule 6.
 
+## Trading / Long-Short Signals — Coverage (FP-029)
+
+Conformance: every component below conforms to [UI Design System](ui-design-system.md). The Coverage tab is assembled from governed shell + data-display primitives (Card, Table, Badge, Button, Tooltip) plus one new strategy-internal page component and one read-only hook module. Wired sub-rule badges reuse `--success` (outline); deferred sub-rule badges use the bare `Badge` `secondary` variant (muted, **NOT** destructive — feed-deferral per DW-063 / DEC-038.1 is intentional, not a failure). No new visual tokens.
+
+| Component | Path | Purpose | Used By |
+|-----------|------|---------|---------|
+| `CoverageTab` | `src/pages/trading/longshort/signals/CoverageTab.tsx` | Signals → Coverage tab content. Composes a §3.3 sub-rule legend, a server-side paginated coverage table (per `(operator_id, as_of_date)` row: five §3.3a–e wired/deferred badges + derived `complete` badge + `written_at`), and the FP-026 `PhaseContextNote` explicitly stating that today only §3.3d is wired (a/b/c/e feed-deferred per DW-063 / DEC-038.1) so `complete` reads `incomplete` by design. Strictly read-only against `universe_eligibility_coverage` (MIG-055 — RLS already permission-scoped, no fix needed). | `SignalsHubPage` (Coverage tab) |
+| `useEligibilityCoverage` (hook module) | `src/features/longshort/hooks/useEligibilityCoverage.ts` | One read-only React Query hook (`usePaginatedEligibilityCoverage`) + one pure helper (`isCoverageComplete`) + the `SUB_RULES` constant mapping §3.3a–e codes to display labels. The paginated hook uses Supabase `.range()` + `{ count: 'exact' }` per the FP-023.1 forward-binding (`universe_eligibility_coverage` grows daily with the universe cron). `isCoverageComplete` mirrors the DB `assert_eligibility_complete` RPC client-side to avoid N+1 RPC fan-out on the listing page. | `CoverageTab` |
+
+> **Registered by:** FP-029 (ACT-141) — same-PR per Constitution Rule 6.
+
 ---
 
 ## Component Rules
