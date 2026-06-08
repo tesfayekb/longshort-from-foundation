@@ -786,3 +786,15 @@ INC-20 transitions to **Resolved (full)** at this SHA.
 | **Cross-references** | FP-022 verification (the surfacing surface); FP-020 (the sweep that logged this finding); DW-082 (the orphan / Gate-11 cluster INC-66 folds into); DW-078 (the deferred-`any` cluster the implicit-any slice belongs to); FP-011 / ACT-126 (the universe-tree relocation whose drift the missing-module slice surfaces); DEC-041 (the disposition-discipline DEC INC-66 pairs with structurally); Gate-11 of `.github/workflows/strong-evidence.yml` (the existing coverage gate); `supabase--test_edge_functions` harness (the verification tool that surfaced this); the three affected test files enumerated under Observation (1). |
 | **Disposition** | Open — tracked under the DW-082 / Gate-11 cluster for fix. Not blocking any current FP. Cross-referenced from FP-020 ACT-133. |
 | **Status** | Open. |
+
+## INC-68 — `signal_compute_log` carried the identical operator-scoped RLS trap that `signal_observations` carried pre-FP-025 (surfaced during FP-028 Compute Runs scoping; resolved at FP-027/MIG-073)
+
+| Field | Value |
+|---|---|
+| **Surfaced** | 2026-06-08 during FP-028 (Compute Runs page) pre-task inventory. A live-DB `pg_policy` scan against every longshort table confirmed `signal_compute_log` was the ONLY remaining longshort read-surface still on the operator-scoped template (`signal_compute_log_select_own USING (operator_id = auth.uid())`) — every other system-written longshort table (`universe_membership`, `hard_exclusions`, `reconciliation_events`, `universe_refresh_log`, `longshort_audit_logs`, `alert_history`, `alert_configs`, `signal_observations` post-FP-025) already used the permission-scoped pattern. |
+| **Provenance** | Same root cause as the FP-025 finding on `signal_observations`: template-copy at table creation (MIG-065 `signal_compute_log` CREATE inherited the operator-scoped read policy from a now-superseded template, despite all sibling system-written tables having moved to permission-scoped reads). |
+| **Class** | Structural RLS template drift on system-written tables — twice surfaced (FP-025 / FP-027), now structurally addressed by the pattern note added to `docs/04-modules/longshort/longshort.md` ("System-Written Tables: Permission-Scoped Reads Only"). |
+| **Resolution (FP-027, 2026-06-08)** | MIG-073 swapped the operator-scoped policy for `has_permission(auth.uid(),'longshort.view')` — byte-equivalent to MIG-072. §22.5.1 Evidence 1/2/3 all green (see MIG-073 ledger entry). The longshort module doc now binds future system-written tables to the permission-scoped pattern at creation; recurrence is a CI-class regression. |
+| **Cross-references** | FP-027 (the corrective FP); MIG-073 (the migration); FP-025 / MIG-072 (the matched-pair precedent); DEC-042 (the access-model decision applied); INC-67 (re-cited — same harness-gap manifests during Evidence 3); FP-028 (the surfacing FP — Compute Runs page would have rendered blank without FP-027). |
+| **Disposition** | Resolved (FP-027 / MIG-073). |
+| **Status** | Resolved. |
