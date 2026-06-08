@@ -87,8 +87,9 @@ function SignalRow({ row, now }: { row: SignalRegistryRowWithFire; now: Date }) 
   const nameCell =
     row.status === 'live' ? (
       <Link
-        to={`/trading/longshort/signals?tab=rankings&signal=${row.signal_id}`}
+        to="/trading/longshort/signals?tab=rankings"
         className="font-medium hover:underline"
+        title={`Open Rankings (select ${row.signal_id})`}
       >
         {row.display_name}
       </Link>
