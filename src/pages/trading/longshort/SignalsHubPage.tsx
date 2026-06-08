@@ -1,5 +1,6 @@
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { HubTabs, HubEmptyState } from './hub/HubTabs';
+import RankingsTab from './signals/RankingsTab';
 
 /**
  * Signals hub — FP-023 ships the shell + tab frame with honest empty
@@ -18,13 +19,7 @@ export default function SignalsHubPage() {
           {
             value: 'rankings',
             label: 'Rankings',
-            content: (
-              <HubEmptyState
-                title="Signal rankings"
-                description="The ranked z-scores from signal_observations — top-20 longs, bottom-20 shorts, and the full universe distribution band."
-                note="Built in FP-024"
-              />
-            ),
+            content: <RankingsTab />,
           },
           {
             value: 'runs',
