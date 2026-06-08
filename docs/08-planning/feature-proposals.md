@@ -2,6 +2,26 @@
 
 ### FP-040: Signal #7 — Short-Term Reversal (1-week)
 
+### FP-038: Signal Registry + "All Signals" Overview
+
+| Field | Value |
+|---|---|
+| **ID** | FP-038 (the reserved-but-not-yet-consumed signal-registry slot called out by FP-039/FP-040 headers; consumed here per operator approval). |
+| **Status** | implemented (MIG-075 + `useSignalRegistry` + `AllSignalsTab` + tab wiring + Gate-4 tests + live-DB §22.5.1 evidence). |
+| **Problem** | The Signals hub had per-page surfaces (Rankings, Compute Runs, Coverage) but no single multi-signal overview. Operator-side question "how many of the 9 are live? what's planned next? is anything stale?" required cross-referencing the spec + job_registry + signal_compute_log by hand. No single page told the truth across all signals + the combiner composite. |
+| **Resolution** | (1) New index table `public.signal_registry` (MIG-075) with 10 rows: 2 live (`cross_sectional_momentum_12_1` #6, `short_term_reversal_1w` #7) + 7 planned (#1–#5, #8, #9 — `planned_phase` mapped to §4.4 spec ordering Phase 2.3–2.9) + 1 planned composite (Phase 3). §4.4 field values (`display_name`, `spec_ref`, `cadence`, `criticality`) are seeded verbatim from CROSSWIND §4.4.1–§4.4.9. RLS is permission-scoped (`longshort.view`) + 3 RESTRICTIVE deny-writes (per DEC-042 precedent — writes are migration/governance-only). Status is STATIC-seeded — each future signal's FP flips its own row planned → live (no auto-detection in v1). (2) New read-only hook `useSignalRegistry` fetches the registry ordered by `display_order` then joins last-fire + `distinctDates` from `signal_compute_log` for the (bounded) live set; exports `deriveStaleness` (mirrors `longshort-signal-monitor` weekday=36h / Monday=72h thresholds) and `DRIFT_MIN_HISTORY = 30`. (3) New `AllSignalsTab` page: one row per signal + composite, columns `# / signal / spec / cadence / status / last-fire (UTC) / coverage / staleness / drift`. Live rows link to the Rankings tab (the per-signal DETAIL page); planned rows show "—" + a planned-phase badge; composite row shows "Arrives with the combiner (Phase 3)." Drift is a COLUMN with honest states ("Insufficient history" until N ≥ 30 distinct `as_of_date`s), NOT a separate page. (4) `SignalsHubPage` adds the All-Signals tab as the new DEFAULT (the multi-signal index naturally precedes per-signal detail). |
+| **Scope** | NEW migration MIG-075 (`signal_registry` + RLS + 10-row seed). NEW `src/features/longshort/hooks/useSignalRegistry.ts`. NEW `src/pages/trading/longshort/signals/AllSignalsTab.tsx`. NEW `src/pages/trading/longshort/signals/__tests__/AllSignalsTab.test.tsx` (5 tests). EDIT `src/pages/trading/longshort/SignalsHubPage.tsx` (register tab + default). Docs same-PR: this entry; ACT-152; `database-migration-ledger.md` MIG-075; `permission-index.md` `longshort.view` "Used by" (+ `signal_registry`); `route-index.md` `/trading/longshort/signals` (page + related tests + functions + implementation + added-by); `component-inventory.md` (new "All-Signals Overview" section). |
+| **Out of Scope** | Any change to `RankingsTab` / `ComputeRunsTab` / `CoverageTab` / `SignalDistributionBand`. Any change to compute / orchestrators / crons / `job_registry`. Any new RBAC permission. Any new edge function. Any drift-monitoring page (drift is a column, not a page — explicitly rejected). Any per-signal page (Rankings is signal-generic; registry is the index — explicitly rejected). Any combiner page (composite is one `planned` row until the combiner exists — explicitly rejected). Auto-status-detection (YAGNI; each signal's FP flips its own row). |
+| **Reference Impact** | database-migration-ledger.md: MIG-075. permission-index.md: `longshort.view` "Used by" extended with `public.signal_registry`. route-index.md: `/trading/longshort/signals` Page/Related tests/Related functions/Implementation/Added by updated for the All-Signals tab. component-inventory.md: new "Trading / Long-Short Signals — All-Signals Overview (FP-038)" section listing `AllSignalsTab` + `useSignalRegistry` hook module. No new env-vars, configs, npm dependencies, edge functions, audit events, or permissions. |
+| **Decision ID** | None — status taxonomy (`live` / `planned` / `deprecated`) is enforced by a DB `CHECK`; permission-scoped RLS rides on DEC-042 precedent; no new contested decision. |
+| **Reviewed By** | Operator |
+| **Review Date** | 2026-06-08 |
+
+**Closure** — Landed at execution commit (HEAD pending). The All-Signals overview is live and is the default Signals-hub tab. Today: 2 of 9 signals live (#6 momentum, #7 reversal) + 7 planned + 1 planned composite. As each future signal lands, its FP flips its registry row `planned → live` in the same migration that arms its compute job, and it appears here + in Rankings automatically. Drift cells will transition from "Insufficient history" to "Available" once a signal accumulates ≥ 30 distinct `as_of_date`s in `signal_compute_log`.
+
+Authority: ACT-152.
+
+
 | Field | Value |
 |---|---|
 | **ID** | FP-040 (next-free after FP-039 at HEAD; FP-038 reserved for signal-registry spec — NOT consumed; FP-011..FP-017 burned/reserved per established numbering). |

@@ -2,6 +2,22 @@
 
 ### ACT-151: FP-040 — Signal #7 (Short-Term Reversal) implementation
 
+### ACT-152: FP-038 — Signal Registry + "All Signals" Overview
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-152 (next-free after ACT-151; ACT-130 explicitly NOT consumed). |
+| **Mode** | execution. |
+| **Tier** | B (small backend table + a frontend overview page; no money-path touch). |
+| **Branch** | feature/FP-038-signal-registry-all-signals. |
+| **HEAD before / after** | before: post-FP-040 (ACT-151) baseline / after: pending at execution commit. |
+| **Authority** | FP-038 (approved 2026-06-08); CROSSWIND §4.4.1–§4.4.9 (signal spec values seeded verbatim); DEC-042 (permission-scoped reads on system-written tables). |
+| **Scope** | NEW migration MIG-075 (`signal_registry` table + permission-scoped RLS + 3 RESTRICTIVE deny-writes + 10-row seed). NEW `src/features/longshort/hooks/useSignalRegistry.ts` (1 hook + `deriveStaleness` helper + `DRIFT_MIN_HISTORY` constant). NEW `src/pages/trading/longshort/signals/AllSignalsTab.tsx`. NEW `src/pages/trading/longshort/signals/__tests__/AllSignalsTab.test.tsx` (5 tests, fully typed — no `any`). EDIT `src/pages/trading/longshort/SignalsHubPage.tsx` (register All-Signals tab + make default). Docs same-PR: FP-038; this register entry; database-migration-ledger.md (MIG-075); permission-index.md (`longshort.view` "Used by" extended); route-index.md (`/trading/longshort/signals` updated); component-inventory.md (new All-Signals Overview section). |
+| **Related Tests** | `src/pages/trading/longshort/signals/__tests__/AllSignalsTab.test.tsx` (5 tests, all green): (1) registry renders 10 rows; (2) live signals show real last-fire + coverage from `signal_compute_log`; (3) planned signals show "—" + planned-phase badge; (4) composite row present + planned + "Arrives with the combiner (Phase 3)" annotation; (5) drift cell shows "Insufficient history" for live signals below the N ≥ 30 distinct-date threshold. |
+| **Evidence** | (a) **Live-DB §22.5.1 migration verification** — `SELECT signal_id, signal_num, status, criticality, planned_phase, job_registry_id FROM public.signal_registry ORDER BY display_order` returned exactly 10 rows: 2 live (#6 momentum → `longshort.momentum.compute`; #7 reversal → `longshort.reversal.compute`) + 7 planned (#1–#5, #8, #9 with `planned_phase` Phase 2.3–2.9) + 1 planned composite (Phase 3). Both live rows carry `criticality='critical'`; all 7 non-composite planned rows carry `criticality='non_critical'`; composite carries `criticality=null`. (b) **Test green** — `bunx vitest run AllSignalsTab.test.tsx` → 5 passed / 0 failed. (c) **RLS shape** — permission-scoped permissive read (`has_permission(auth.uid(), 'longshort.view')`) + 3 RESTRICTIVE deny-write policies (INSERT/UPDATE/DELETE → `false`), matching MIG-072 / MIG-073 sibling templates. (d) **Honest states** — planned rows render `—` for last-fire / coverage (NOT fabricated zeros); composite renders "Arrives with the combiner (Phase 3)" (NOT a fake empty shell page); drift renders "Insufficient history" with `title` attribute exposing the gate (`Need ≥ 30 distinct as-of dates; have 1.`). (e) **Anti-pattern guards** — permission-scoped RLS (NOT operator-scoped per DEC-042); status is static-seeded (no auto-detection magic); RankingsTab / orchestrators / crons / `job_registry` UNTOUCHED. (f) **ID discipline** — FP-038 / ACT-152 / MIG-075 all next-free at HEAD; ACT-130 untouched. (g) **Rule 6 same-PR** — code + migration + 5 doc updates (FP-038, ACT-152, MIG-075, route-index, permission-index, component-inventory) all in the same diff. |
+| **ROI Impact** | **Neutral on prediction stack** — no signal added, removed, weighted, thresholded, or modified; no compute or persistence path touched. **Positive on operator observability** — single-page visibility of all 9 signals + composite makes "what's live, what's planned, what's stale" answerable in one glance, replacing manual cross-referencing of spec / `job_registry` / `signal_compute_log`. **Zero ROI reduction** — no monitoring removed, no signal weakened, no threshold tightened. **No money-path execution change** — Phase 2 surface only; no sizing / orders / P&L. |
+| **Status** | Implementation + MIG-075 live-DB-verified + 5 new tab tests green. Full Gate-4 (vitest + eslint + typecheck + build) pending CI run at PR. |
+
 | Field | Value |
 |---|---|
 | **ID** | ACT-151 (next-free after ACT-150; ACT-130 explicitly NOT consumed — reserved for FP-018 Bucket C closure, already consumed there). |
