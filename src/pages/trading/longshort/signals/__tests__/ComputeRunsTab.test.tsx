@@ -140,8 +140,10 @@ describe('ComputeRunsTab (FP-028)', () => {
 
   it('renders a normal success "Completed" badge when outcome is completed and persisted_count > 0', async () => {
     await renderTab();
-    const completedBadges = screen.getAllByText('Completed');
-    // At least one non-empty completed badge should have the border-success class
+    // screen.getAllByText('Completed') would also match 'Completed (empty)'.
+    // Filter for the exact text node.
+    const completedBadges = screen.getAllByText((_, node) => node?.textContent === 'Completed');
+    expect(completedBadges.length).toBeGreaterThan(0);
     const hasSuccess = completedBadges.some((b) =>
       b.closest('div')?.classList.contains('border-success'),
     );
