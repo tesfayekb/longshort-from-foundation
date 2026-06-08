@@ -47,9 +47,9 @@ export function SignalDistributionBand({
   }, [sorted, topN, bottomN]);
 
   const width = 960;
-  const height = 140;
+  const height = 80;
   const padX = 24;
-  const trackY = 80;
+  const trackY = 36;
   const trackHeight = 1;
 
   if (!stats) {
