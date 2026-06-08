@@ -661,7 +661,7 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 
 ### Trading Panel Routes (Privileged)
 
-#### `/trading` — Trading Dashboard
+#### `/trading` — Trading Strategies (panel index)
 
 | Field | Value |
 |-------|-------|
