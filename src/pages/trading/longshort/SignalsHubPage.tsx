@@ -1,7 +1,8 @@
 import { PageHeader } from '@/components/dashboard/PageHeader';
-import { HubTabs, HubEmptyState } from './hub/HubTabs';
+import { HubTabs } from './hub/HubTabs';
 import RankingsTab from './signals/RankingsTab';
 import ComputeRunsTab from './signals/ComputeRunsTab';
+import CoverageTab from './signals/CoverageTab';
 
 /**
  * Signals hub — FP-023 ships the shell + tab frame with honest empty
@@ -30,13 +31,7 @@ export default function SignalsHubPage() {
           {
             value: 'coverage',
             label: 'Coverage',
-            content: (
-              <HubEmptyState
-                title="Universe eligibility coverage"
-                description="Per-rule coverage flags from universe_eligibility_coverage — which §3.3 filters were applied on each as-of date."
-                note="Deferred — lands after Compute Runs"
-              />
-            ),
+            content: <CoverageTab />,
           },
         ]}
       />
