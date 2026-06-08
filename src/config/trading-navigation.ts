@@ -16,10 +16,10 @@ import { longshortNav } from '@/features/longshort';
  */
 export const tradingNavigation: NavSection[] = [
   {
-    label: 'Overview',
+    label: 'Strategies',
     items: [
       {
-        title: 'Overview',
+        title: 'Strategies',
         url: ROUTES.TRADING,
         icon: LayoutDashboard,
         permission: 'trading.access',

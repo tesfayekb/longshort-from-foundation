@@ -8,7 +8,7 @@ import {
 import { Activity } from 'lucide-react';
 
 /**
- * TradingDashboard — placeholder home page for the trading panel.
+ * TradingDashboard — strategy index page for the trading panel.
  *
  * At Step 4 there are no strategies enabled. This page renders an empty-state
  * card directing users to wait for strategy module activation. When strategies
@@ -20,7 +20,7 @@ export default function TradingDashboard() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Trading</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Strategies</h1>
         <p className="text-muted-foreground">
           Trading strategies and positions.
         </p>
