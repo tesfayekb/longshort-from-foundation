@@ -2523,7 +2523,7 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 |---|---|
 | **Module** | longshort (FP-009 Bucket A Commit A1) |
 | **Classification** | shared types — Phase 2 signal contracts (consumed by all 9 signal sub-phases) |
-| **Exports** | `interface SignalRow`; `class SignalComputationError extends Error`; `type SignalSkipReason = 'insufficient_history' \| 'missing_sector' \| 'fetch_error' \| 'singleton_sector'`; `interface SignalSkip` |
+| **Exports** | `interface SignalRow`; `class SignalComputationError extends Error`; `type SignalSkipReason = 'insufficient_history' \| 'missing_sector' \| 'fetch_error' \| 'singleton_sector' \| 'data_unavailable' \| 'subscription_gated' \| 'missing_shares_outstanding'`; `interface SignalSkip` |
 | **File** | `supabase/functions/_shared/longshort-signals/shared/signal-types.ts` |
 | **Tests** | Type-only (no runtime behavior beyond the `SignalComputationError` constructor message); exercised indirectly via Bucket A/B signal compute tests. |
 | **Typed-absence idiom** | `number \| null` per FP-009 survey §1 language-stack mapping; `-999` sentinel is Phase 3 combiner's substitution at the feature-vector layer ONLY — signal-producing functions return `number \| null`. Mirrors `enrichment/types.ts:25-28` discipline (Decimal NOT used per v0.6.2 §22.3(b)). |
@@ -2642,7 +2642,7 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 |---|---|
 | **Module** | longshort (FP-009 Bucket C Commit C1) |
 | **Classification** | shared helper module (extracted from `index.ts` so the manual-trigger sibling + test harness can import without triggering top-level `Deno.serve`; same pattern as `parse-as-of-date.ts`). Relocated from `longshort-momentum-compute/persist-signal-compute-log.ts` to `_shared/persist-signal-compute-log.ts` at C1 deploy hygiene because the Supabase Edge Functions deploy bundler does not support cross-function imports — the helper is shared with `longshort-momentum-compute-manual`. |
-| **Exports** | `function aggregateSkipCounts(skips): Record<SignalSkipReason, number>` (all four enum keys seeded to 0 for stable JSON shape); `function persistSignalComputeLog(supabase, result, operator_id): Promise<{run_id, persist_error}>` (writes one `signal_compute_log` row; takes `supabase` as a parameter for unit-testability). |
+| **Exports** | `function aggregateSkipCounts(skips): Record<SignalSkipReason, number>` (all SEVEN enum keys seeded to 0 for stable JSON shape — `insufficient_history`, `missing_sector`, `fetch_error`, `singleton_sector`, `data_unavailable`, `subscription_gated`, `missing_shares_outstanding`); `function persistSignalComputeLog(supabase, result, operator_id): Promise<{run_id, persist_error}>` (writes one `signal_compute_log` row; takes `supabase` as a parameter for unit-testability). |
 | **File** | `supabase/functions/_shared/persist-signal-compute-log.ts` |
 | **Tests** | `supabase/functions/_shared/persist-signal-compute-log_test.ts` — 7 Deno unit tests (3 aggregation + 4 persistence). |
 | **Added by** | FP-009 Bucket C Commit C1; relocated to `_shared/` at C1 deploy hygiene; doc-path correction at C2a. |
