@@ -98,6 +98,17 @@ Conformance: every component below conforms to [UI Design System](ui-design-syst
 
 > **Registered by:** FP-024 (ACT-136) — same-PR per Constitution Rule 6.
 
+## Trading / Long-Short Signals — Compute Runs (FP-028)
+
+Conformance: every component below conforms to [UI Design System](ui-design-system.md). The Compute Runs tab is assembled from governed shell + data-display primitives (Card, Select, Table, Badge, Button) plus one new strategy-internal page component and one read-only hook module. Outcome badges reuse `--success` (outline) / `--destructive` (filled) tokens; the fire-source badge uses the bare `Badge` `outline` / `secondary` variants. No new visual tokens.
+
+| Component | Path | Purpose | Used By |
+|-----------|------|---------|---------|
+| `ComputeRunsTab` | `src/pages/trading/longshort/signals/ComputeRunsTab.tsx` | Signals → Compute Runs tab content. Composes a signal selector, a server-side paginated runs table (outcome badge + universe / persisted / skip aggregates + fire-source indicator), per-row expansion of `signal_compute_log.skipped_detail` (FP-022 per-ticker diagnostics), and the Monday-glance "latest fire — auto (cron) / manual" freshness affordance. Strictly read-only against `signal_compute_log` (post-MIG-073/FP-027 permission-scoped read). | `SignalsHubPage` (Runs tab) |
+| `useSignalComputeRuns` (hook module) | `src/features/longshort/hooks/useSignalComputeRuns.ts` | Two read-only React Query hooks (`useAvailableComputeSignals`, `usePaginatedComputeRuns`) plus two pure helpers (`classifyFireSource`, `totalSkips`). `usePaginatedComputeRuns` uses Supabase `.range()` + `{ count: 'exact' }` server-side pagination per the FP-023.1 forward-binding (`signal_compute_log` grows unboundedly across cron fires; client-side filter is forbidden). `classifyFireSource` is the UI affordance only — manual fires carry a midnight-UTC `completed_at` signature, cron fires carry wall-clock seconds. | `ComputeRunsTab` |
+
+> **Registered by:** FP-028 (ACT-140) — same-PR per Constitution Rule 6.
+
 ---
 
 ## Component Rules

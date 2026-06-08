@@ -701,18 +701,18 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 
 | Field | Value |
 |-------|-------|
-| **Page** | `SignalsHubPage` (FP-023). Tabbed via `?tab=` (`HubTabs`): `rankings` (default — **IMPLEMENTED at FP-024** as `RankingsTab`: signal/date/sector/ticker controls + `SignalDistributionBand` SVG hero + top-20 / bottom-20 candidate tables + server-side paginated full rankings, read-only against `signal_observations`), `runs` (empty-state — post-FP-024), `coverage` (empty-state — deferred). |
+| **Page** | `SignalsHubPage` (FP-023). Tabbed via `?tab=` (`HubTabs`): `rankings` (default — **IMPLEMENTED at FP-024** as `RankingsTab`: signal/date/sector/ticker controls + `SignalDistributionBand` SVG hero + top-20 / bottom-20 candidate tables + server-side paginated full rankings, read-only against `signal_observations`), `runs` (**IMPLEMENTED at FP-028** as `ComputeRunsTab`: signal selector + server-side paginated runs table with cron/manual freshness indicator + outcome badges + per-row expansion of `skipped_detail` for FP-022 diagnostics; read-only against `signal_compute_log` post-MIG-073/FP-027), `coverage` (empty-state — deferred). |
 | **Module** | longshort |
 | **Classification** | authenticated, privileged |
 | **Auth required** | Yes |
 | **Permission required** | `longshort.view` (inner gate; outer gate `trading.access`) |
 | **Scope** | system-wide |
 | **Panel** | trading-panel |
-| **Related tests** | `src/pages/trading/longshort/hub/HubTabs.test.tsx` (FP-023.1 — `?tab=` round-trip + default-tab fallback); `src/pages/trading/longshort/signals/__tests__/SignalDistributionBand.test.tsx` (FP-024 — top/bottom accent assignment + absent-not-plotted invariant + empty-state); `src/pages/trading/longshort/signals/__tests__/RankingsTab.test.tsx` (FP-024 — top-20 / bottom-20 tables + absent-count annotation + server-pagination + filter-resets-page) |
-| **Related functions** | `SignalsHubPage`, `HubTabs`, `HubEmptyState`, `RankingsTab`, `SignalDistributionBand`, `useAvailableSignals`, `useSignalDates`, `usePresentObservations`, `useAbsentCount`, `usePaginatedRankings` |
-| **Implementation** | **IMPLEMENTED** — `<Route path="longshort/signals" element={<PermissionGate permission="longshort.view"><SignalsHubPage /></PermissionGate>}>` in `src/App.tsx`. Rankings tab now wired to `RankingsTab` (FP-024); Runs / Coverage remain empty-state shells. |
+| **Related tests** | `src/pages/trading/longshort/hub/HubTabs.test.tsx` (FP-023.1 — `?tab=` round-trip + default-tab fallback); `src/pages/trading/longshort/signals/__tests__/SignalDistributionBand.test.tsx` (FP-024 — top/bottom accent assignment + absent-not-plotted invariant + empty-state); `src/pages/trading/longshort/signals/__tests__/RankingsTab.test.tsx` (FP-024 — top-20 / bottom-20 tables + absent-count annotation + server-pagination + filter-resets-page); `src/pages/trading/longshort/signals/__tests__/ComputeRunsTab.test.tsx` (FP-028 — phase-context note + outcome badge + freshness indicator + server-pagination + skipped_detail expansion); `src/features/longshort/hooks/__tests__/useSignalComputeRuns.test.ts` (FP-028 — `classifyFireSource` + `totalSkips` pure helpers) |
+| **Related functions** | `SignalsHubPage`, `HubTabs`, `HubEmptyState`, `RankingsTab`, `SignalDistributionBand`, `ComputeRunsTab`, `useAvailableSignals`, `useSignalDates`, `usePresentObservations`, `useAbsentCount`, `usePaginatedRankings`, `useAvailableComputeSignals`, `usePaginatedComputeRuns`, `classifyFireSource`, `totalSkips` |
+| **Implementation** | **IMPLEMENTED** — `<Route path="longshort/signals" element={<PermissionGate permission="longshort.view"><SignalsHubPage /></PermissionGate>}>` in `src/App.tsx`. Rankings tab wired to `RankingsTab` (FP-024); Runs tab wired to `ComputeRunsTab` (FP-028); Coverage remains empty-state shell. |
 | **Lifecycle** | active |
-| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). Rankings tab promoted to IMPLEMENTED by FP-024 (ACT-136). |
+| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). Rankings tab promoted to IMPLEMENTED by FP-024 (ACT-136). Runs tab promoted to IMPLEMENTED by FP-028 (ACT-140) post-FP-027 (ACT-139 / MIG-073) RLS unblock. |
 
 #### `/trading/longshort/universe` — Long-Short Universe Hub
 
