@@ -3,7 +3,7 @@
  *
  * Covers the FP-023 enhancements that converted the 839-row unpaginated
  * scroll into a paged, filterable table:
- *   - Page 1 renders only PAGE_SIZE (50) rows from a fixture larger than one page.
+ *   - Page 1 renders only PAGE_SIZE (25 post-FP-030) rows from a fixture larger than one page.
  *   - Sector filter narrows the row count.
  *   - Ticker filter narrows the row count.
  *   - Eligibility = long_only excludes short-only rows.
@@ -34,7 +34,8 @@ type Row = {
 };
 
 function makeRows(): Row[] {
-  // 75 rows so we have >1 page (PAGE_SIZE = 50). Two sectors, varied eligibility.
+  // 75 rows so we have >1 page (PAGE_SIZE = 25 post-FP-030 → 3 pages).
+  // Two sectors, varied eligibility.
   const rows: Row[] = [];
   for (let i = 0; i < 75; i++) {
     const sector = i % 2 === 0 ? 'Technology' : 'Energy';
@@ -134,18 +135,18 @@ describe('UniverseMembershipPage (FP-023.1)', () => {
     vi.clearAllMocks();
   });
 
-  it('paginates to PAGE_SIZE (50) rows on page 1 when the fixture has more than one page', async () => {
+  it('paginates to PAGE_SIZE (25) rows on page 1 when the fixture has more than one page', async () => {
     await renderPage();
-    await waitFor(() => expect(dataRows().length).toBe(50));
-    expect(screen.getByText(/Page 1 of 2/)).toBeInTheDocument();
+    await waitFor(() => expect(dataRows().length).toBe(25));
+    expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument();
   });
 
-  it('advances to page 2 and shows the remaining rows', async () => {
+  it('advances to page 2 and shows another full page of rows', async () => {
     await renderPage();
-    await waitFor(() => expect(dataRows().length).toBe(50));
+    await waitFor(() => expect(dataRows().length).toBe(25));
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));
     await waitFor(() => expect(dataRows().length).toBe(25));
-    expect(screen.getByText(/Page 2 of 2/)).toBeInTheDocument();
+    expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument();
   });
 
   it('narrows rows when the ticker filter is applied', async () => {
@@ -160,7 +161,7 @@ describe('UniverseMembershipPage (FP-023.1)', () => {
   it('resets to page 1 when a filter changes after navigating to page 2', async () => {
     await renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));
-    await waitFor(() => expect(screen.getByText(/Page 2 of 2/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument());
     fireEvent.change(screen.getByPlaceholderText(/Filter by ticker/i), {
       target: { value: 'T' },
     });

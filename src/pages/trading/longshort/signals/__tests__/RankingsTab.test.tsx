@@ -37,7 +37,10 @@ function makePresent(n: number): SignalObservationRow[] {
   }));
 }
 
-const presentRows = makePresent(60); // > PAGE_SIZE (50)
+// FP-030 — PAGE_SIZE standardized to 25. Fixture sized to give 3 pages
+// (Math.ceil(60 / 25) = 3) so the "advance to page 2" test still has
+// somewhere to advance to AND the bottom-20 / top-20 assertions hold.
+const presentRows = makePresent(60); // > PAGE_SIZE (25) → 3 pages
 
 // --- Mock the hook module -------------------------------------------------
 
@@ -129,20 +132,20 @@ describe('RankingsTab (FP-024)', () => {
 
   it('advances the full-rankings page and re-invokes the paginated hook with page=2', async () => {
     await renderTab();
-    // Initial render — page 1.
-    await screen.findByText(/Page 1 of 2/);
+    // Initial render — page 1 of 3 (60 rows / page-size 25).
+    await screen.findByText(/Page 1 of 3/);
     const initialPage1Calls = paginatedCalls.filter((c) => c.page === 1).length;
     expect(initialPage1Calls).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: /Next page/i }));
-    await waitFor(() => expect(screen.getByText(/Page 2 of 2/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument());
     expect(paginatedCalls.some((c) => c.page === 2)).toBe(true);
   });
 
   it('resets the full-rankings page to 1 when the ticker filter changes', async () => {
     await renderTab();
     fireEvent.click(screen.getByRole('button', { name: /Next page/i }));
-    await waitFor(() => expect(screen.getByText(/Page 2 of 2/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument());
 
     fireEvent.change(screen.getByPlaceholderText(/Filter by ticker/i), {
       target: { value: 'T00' },
