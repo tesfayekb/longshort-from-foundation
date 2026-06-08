@@ -38,9 +38,9 @@ Deno.test('(2) happy-path: returns ASC-sorted reports (Polygon DESC reversed)', 
   const fetcher = new PolygonShortInterestFetcher('test-key', async () =>
     jsonResp({
       results: [
-        { settlement_date: '2026-05-31', short_percent_of_float: 0.08 },
-        { settlement_date: '2026-05-15', short_percent_of_float: 0.09 },
-        { settlement_date: '2026-04-30', short_percent_of_float: 0.10 },
+        { settlement_date: '2026-05-31', short_interest: 80_000_000 },
+        { settlement_date: '2026-05-15', short_interest: 90_000_000 },
+        { settlement_date: '2026-04-30', short_interest: 100_000_000 },
       ],
     }),
   );
@@ -54,7 +54,7 @@ Deno.test('(2) happy-path: returns ASC-sorted reports (Polygon DESC reversed)', 
   }
   assertEquals(out.reports[0].report_date, '2026-04-30');
   assertEquals(out.reports[2].report_date, '2026-05-31');
-  assertEquals(out.reports[2].si_pct_float, 0.08);
+  assertEquals(out.reports[2].short_interest, 80_000_000);
 });
 
 Deno.test('(3) HTTP 403 → typed unavailable (subscription_gated), NOT a throw', async () => {
@@ -86,14 +86,14 @@ Deno.test('(5) HTTP 401 throws SignalComputationError with ticker context', asyn
   assertStringIncludes((err as Error).message, 'AAPL');
 });
 
-Deno.test('(6) rows without short_percent_of_float are dropped (anti-phantom — no fabricated zero)', async () => {
+Deno.test('(6) rows without short_interest are dropped (anti-phantom — no fabricated zero)', async () => {
   const fetcher = new PolygonShortInterestFetcher('test-key', async () =>
     jsonResp({
       results: [
-        { settlement_date: '2026-05-31', short_percent_of_float: 0.08 },
-        // No short_percent_of_float → must be dropped, NOT defaulted to 0.
-        { settlement_date: '2026-05-15', short_interest: 1_234_567 },
-        { settlement_date: '2026-04-30', short_percent_of_float: 0.10 },
+        { settlement_date: '2026-05-31', short_interest: 80_000_000 },
+        // No short_interest → must be dropped, NOT defaulted to 0.
+        { settlement_date: '2026-05-15', avg_daily_volume: 1_234_567 },
+        { settlement_date: '2026-04-30', short_interest: 100_000_000 },
       ],
     }),
   );
@@ -101,9 +101,42 @@ Deno.test('(6) rows without short_percent_of_float are dropped (anti-phantom —
   assertEquals(out.kind, 'reports');
   if (out.kind !== 'reports') throw new Error('unreachable');
   assertEquals(out.reports.length, 2);
+  // None of the surviving rows should be the dropped one.
   for (const rep of out.reports) {
-    assert(rep.si_pct_float !== 0, 'fabricated-zero leak');
+    assert(rep.short_interest > 0, 'fabricated-zero leak');
   }
+});
+
+Deno.test('(6a) negative short_interest is dropped (anti-phantom — no fabricated value)', async () => {
+  const fetcher = new PolygonShortInterestFetcher('test-key', async () =>
+    jsonResp({
+      results: [
+        { settlement_date: '2026-05-31', short_interest: 80_000_000 },
+        { settlement_date: '2026-05-15', short_interest: -5 },
+        { settlement_date: '2026-04-30', short_interest: 100_000_000 },
+      ],
+    }),
+  );
+  const out = await fetcher.fetchShortInterest('AAPL', AS_OF);
+  assertEquals(out.kind, 'reports');
+  if (out.kind !== 'reports') throw new Error('unreachable');
+  assertEquals(out.reports.length, 2);
+});
+
+Deno.test('(6b) zero short_interest is VALID (genuinely no shorts) — kept, not dropped', async () => {
+  const fetcher = new PolygonShortInterestFetcher('test-key', async () =>
+    jsonResp({
+      results: [
+        { settlement_date: '2026-05-31', short_interest: 0 },
+        { settlement_date: '2026-05-15', short_interest: 5_000_000 },
+        { settlement_date: '2026-04-30', short_interest: 10_000_000 },
+      ],
+    }),
+  );
+  const out = await fetcher.fetchShortInterest('AAPL', AS_OF);
+  assertEquals(out.kind, 'reports');
+  if (out.kind !== 'reports') throw new Error('unreachable');
+  assertEquals(out.reports.length, 3);
 });
 
 Deno.test('(7) empty results returns kind=reports with empty array', async () => {

@@ -68,11 +68,18 @@ export type SignalSkipReason =
   | 'data_unavailable'       // source returned no data for ticker (e.g., short-interest
                              // endpoint returned 404 or an empty report set); non-critical
                              // signals degrade with is_present=0; ticker still ranked
-  | 'subscription_gated';    // source returned 403 / not-entitled; the data product is
+  | 'subscription_gated'     // source returned 403 / not-entitled; the data product is
                              // not part of the current Polygon subscription tier. Same
                              // graceful-degradation semantics as data_unavailable; the
                              // distinction is observability only (operator-actionable:
                              // "upgrade tier" vs "wait for next report").
+  | 'missing_shares_outstanding'; // shares-outstanding side input (Polygon reference
+                             // endpoint) returned null/zero/non-finite for this ticker.
+                             // Surfaced specifically for the short-interest signal
+                             // (FP-041 revision-fix) where si_pct_float is derived as
+                             // short_interest / share_class_shares_outstanding — without
+                             // a usable denominator we cannot compute the percentage.
+                             // Typed-absence; ticker is still ranked by other signals.
 
 export interface SignalSkip {
   ticker: string;

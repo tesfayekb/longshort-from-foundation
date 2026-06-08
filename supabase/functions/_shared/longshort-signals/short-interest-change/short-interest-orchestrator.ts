@@ -4,7 +4,7 @@
  * Mirrors `short-term-reversal/reversal-orchestrator.ts` structurally
  * (same 5-step pipeline: load universe → bounded-concurrency fetch + per-
  * ticker compute → within-sector GICS z-score → SignalRow build → persist),
- * with three DIFFERENCES tied to §4.4.3 / §4.3.5:
+ * with FOUR DIFFERENCES tied to §4.4.3 / §4.3.5:
  *
  *   1. NON-CRITICAL signal: missing data on a ticker is NOT a hard skip
  *      that excludes the ticker from ranking. It contributes a typed
@@ -27,12 +27,50 @@
  *      cadence; re-running on the same data is idempotent (signal_observations
  *      composite-PK upsert is last-writer-wins).
  *
+ *   4. DERIVED si_pct_float (FP-041 revision-fix): Polygon's
+ *      `/stocks/v1/short-interest` endpoint returns the RAW `short_interest`
+ *      share count, NOT a %-of-float field. This orchestrator therefore
+ *      coordinates TWO fetchers per ticker:
+ *
+ *        - `PolygonShortInterestFetcher`     → recent SI reports (raw counts)
+ *        - `PolygonSharesOutstandingFetcher` → share_class_shares_outstanding
+ *
+ *      and derives `si_pct_float = short_interest / shares_outstanding` for
+ *      each report before invoking the pure compute. See the
+ *      "CONSCIOUS APPROXIMATION" block below for the
+ *      current-shares-for-historical-SI discussion.
+ *
+ * ─── CONSCIOUS APPROXIMATION (§2 axiom 4 — surface, don't hide) ────────
+ * The signal compares short_interest at TWO historical report dates
+ * (T and T-2 ≈ 30 calendar days). The Polygon reference endpoint
+ * (`/v3/reference/tickers/{ticker}`) provides ONLY current
+ * `share_class_shares_outstanding`, not point-in-time. We therefore use
+ * the CURRENT shares-outstanding to denominate BOTH historical SI counts.
+ * This is a deliberate, documented approximation:
+ *
+ *   - Shares-outstanding is slow-moving (corporate actions on the order of
+ *     quarters/years) relative to short-interest (twice-monthly swings of
+ *     entire orders of magnitude).
+ *   - The signal is `-(SI%[T] - SI%[T-2])`; with a common denominator the
+ *     percentage change is dominated by the SI numerator change.
+ *   - A point-in-time shares-outstanding history would be more precise
+ *     (split/buyback dates do shift the denominator) but is not exposed
+ *     by this Polygon endpoint; a FINRA + EDGAR cross-source would be
+ *     needed and is intentionally deferred (§4.4.3 backup; outside FP-041
+ *     scope).
+ *
+ * This approximation is NOT a silent assumption — it is documented here in
+ * code, in `docs/04-modules/longshort/signals/short-interest-change.md`,
+ * and pinned by the orchestrator tests. Per §2 anti-phantom discipline:
+ * approximations are acceptable, hidden approximations are not.
+ *
  * Wall-clock discipline (DEC-034 clause 4): NO wall-clock reads anywhere
  * in supabase/functions/ — telemetry included. All timestamps
  * (`started_at`/`completed_at`/`computed_at`) derive from the `as_of`
  * parameter, mirroring the momentum/reversal precedent.
  *
- * Owner: longshort (FP-041 — Signal #5 / Phase 2.3)
+ * Owner: longshort (FP-041 — Signal #5 / Phase 2.3; revision-fix:
+ * Option A si_pct_float derivation)
  */
 
 import { SignalComputationError } from '../shared/signal-types.ts';
@@ -45,10 +83,12 @@ import { pLimitedMap } from '../shared/p-limited-map.ts';
 import {
   computeShortInterestChange,
   SHORT_INTEREST_MIN_REPORTS,
+  type ShortInterestReport,
 } from './compute-short-interest.ts';
 import { zScoreNormalizeWithinSector } from '../shared/z-score-normalize.ts';
 import { captureSignalObservations } from '../shared/missingness-capture.ts';
 import type { PolygonShortInterestFetcher } from '../shared/polygon-short-interest-fetcher.ts';
+import type { PolygonSharesOutstandingFetcher } from '../shared/polygon-shares-outstanding-fetcher.ts';
 
 /** Locked signal-id for Phase 3 combiner consumption. Do not rename. */
 export const SIGNAL_ID = 'short_interest_change_30d';
@@ -70,14 +110,15 @@ type PerTickerResult =
 
 /**
  * Context for the short-interest orchestrator. Strict extension of
- * SignalOrchestratorContext to add the (new, non-price) fetcher. Keeping
- * `priceHistory` optional — it's part of the shared context shape but not
- * consumed by this signal — avoids forcing callers to construct an
- * unrelated dependency.
+ * SignalOrchestratorContext to add the TWO non-price fetchers Signal #5
+ * requires (FP-041 revision-fix). Keeping `priceHistory` out via `Omit` —
+ * it's part of the shared context shape but not consumed by this signal —
+ * avoids forcing callers to construct an unrelated dependency.
  */
 export interface ShortInterestOrchestratorContext
   extends Omit<SignalOrchestratorContext, 'priceHistory'> {
   shortInterest: PolygonShortInterestFetcher;
+  sharesOutstanding: PolygonSharesOutstandingFetcher;
 }
 
 export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorContext) {
@@ -154,18 +195,25 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
         async (row) => {
           const { ticker, gics_sector } = row;
           try {
-            const result = await ctx.shortInterest.fetchShortInterest(
-              ticker,
-              as_of,
-              SHORT_INTEREST_FETCH_LIMIT,
-            );
-            if (result.kind === 'unavailable') {
-              // Per §4.3.5 non-critical: graceful degradation, NOT a fake
-              // zero. The reason discriminates operator-actionable
-              // ("subscription_gated" → upgrade tier) from transient
-              // ("data_unavailable" → next report cycle).
+            // Parallel fetch: SI reports + shares-outstanding. Two
+            // independent Polygon endpoints; no point serializing them.
+            // `Promise.all` rejects on the first throw — both fetchers
+            // wrap network/HTTP-non-403/404 failures in
+            // SignalComputationError, which the outer catch converts to
+            // `fetch_error` with ticker context.
+            const [siResult, shResult] = await Promise.all([
+              ctx.shortInterest.fetchShortInterest(ticker, as_of, SHORT_INTEREST_FETCH_LIMIT),
+              ctx.sharesOutstanding.fetchShares(ticker),
+            ]);
+
+            // SI fetcher entitlement / data-availability skips. Per §4.3.5
+            // non-critical: graceful degradation, NOT a fake zero. The
+            // reason discriminates operator-actionable ("subscription_gated"
+            // → upgrade tier) from transient ("data_unavailable" → next
+            // report cycle).
+            if (siResult.kind === 'unavailable') {
               const reason: SignalSkipReason =
-                result.reason === 'subscription_gated'
+                siResult.reason === 'subscription_gated'
                   ? 'subscription_gated'
                   : 'data_unavailable';
               return {
@@ -173,20 +221,62 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
                 skip: {
                   ticker,
                   reason,
-                  detail: result.reason === 'subscription_gated'
+                  detail: siResult.reason === 'subscription_gated'
                     ? 'polygon 403: short-interest endpoint not entitled on current subscription tier'
                     : 'polygon 404: ticker has no short-interest record',
                 },
               };
             }
-            const raw_signal = computeShortInterestChange(result.reports);
+
+            // Shares-outstanding side input. Treated as a distinct,
+            // diagnosable failure mode (`missing_shares_outstanding`) so
+            // the operator can tell "no SI data" from "no denominator"
+            // when reading skip_counts — they're different remediation
+            // paths. NEVER falls back to a fabricated denominator.
+            if (shResult.kind === 'unavailable') {
+              return {
+                kind: 'skip',
+                skip: {
+                  ticker,
+                  reason: 'missing_shares_outstanding',
+                  detail: shResult.reason === 'subscription_gated'
+                    ? 'polygon 403: reference endpoint not entitled (shares-outstanding unavailable)'
+                    : 'polygon reference endpoint returned no usable share_class_shares_outstanding',
+                },
+              };
+            }
+
+            // ─── Derive si_pct_float per report ─────────────────────────
+            // CONSCIOUS APPROXIMATION: `shResult.shares` is CURRENT
+            // shares-outstanding, used to denominate BOTH historical SI
+            // counts (see file-level comment for the full rationale).
+            // Defensive `> 0` is already enforced by the fetcher's
+            // typed-absence guard, but we re-check here so this site is
+            // the explicit place a divide-by-zero would be caught if a
+            // future refactor weakens the fetcher's guard.
+            const shares = shResult.shares;
+            if (!Number.isFinite(shares) || shares <= 0) {
+              return {
+                kind: 'skip',
+                skip: {
+                  ticker,
+                  reason: 'missing_shares_outstanding',
+                  detail: `defensive: shares=${shares} is not a positive finite number`,
+                },
+              };
+            }
+            const reports: ShortInterestReport[] = siResult.reports.map((r) => ({
+              report_date: r.report_date,
+              si_pct_float: r.short_interest / shares,
+            }));
+            const raw_signal = computeShortInterestChange(reports);
             if (raw_signal === null) {
               return {
                 kind: 'skip',
                 skip: {
                   ticker,
                   reason: 'insufficient_history',
-                  detail: `${result.reports.length} reports < ${SHORT_INTEREST_MIN_REPORTS} required`,
+                  detail: `${reports.length} reports < ${SHORT_INTEREST_MIN_REPORTS} required`,
                 },
               };
             }

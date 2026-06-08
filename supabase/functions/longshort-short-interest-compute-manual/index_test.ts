@@ -70,6 +70,10 @@ Deno.test('(f) wall-clock discipline: productionClock only — no new Date() lea
 Deno.test('(g) orchestrator wiring: createShortInterestOrchestrator + new fetcher + persistSignalComputeLog', () => {
   assert(HANDLER_SOURCE.includes('createShortInterestOrchestrator(ctx)'));
   assert(HANDLER_SOURCE.includes('PolygonShortInterestFetcher'));
+  assert(HANDLER_SOURCE.includes('PolygonSharesOutstandingFetcher'),
+    'missing PolygonSharesOutstandingFetcher wiring (FP-041 revision-fix)');
+  assert(HANDLER_SOURCE.includes('sharesOutstanding: new PolygonSharesOutstandingFetcher'),
+    'missing sharesOutstanding context field');
   assert(HANDLER_SOURCE.includes('persistSignalComputeLog('));
   assert(!HANDLER_SOURCE.includes('cross-sectional-momentum/'));
   assert(!HANDLER_SOURCE.includes('short-term-reversal/'));

@@ -12,11 +12,17 @@
  *       GET /stocks/v1/short-interest?ticker=<T>&limit=<N>&sort=settlement_date.desc
  *     The exact path may have evolved since this fetcher was written; the
  *     `url` field is the single chokepoint to update if Polygon revises the
- *     scheme. Server returns rows including `settlement_date` (SEC report
- *     publication date) and a short-interest measure that can be combined
- *     with shares-outstanding to derive `si_pct_float`. The exact field
- *     plumbing is captured in the response-parsing helper below; revise
- *     there alone if Polygon's field names drift.
+ *     scheme. The endpoint returns `settlement_date`, `short_interest`
+ *     (RAW share count of shorted shares), `avg_daily_volume`, and
+ *     `days_to_cover` — it does NOT return any %-of-float field (this was
+ *     confirmed against live Polygon docs during the FP-041 revision-fix;
+ *     an earlier version of this fetcher assumed a `short_percent_of_float`
+ *     field that never existed, which caused 839/839 tickers to skip with
+ *     `insufficient_history` because every row failed normalization). This
+ *     fetcher therefore returns the RAW `short_interest` count; the
+ *     orchestrator derives `si_pct_float` by dividing by
+ *     `share_class_shares_outstanding` from the sibling
+ *     `PolygonSharesOutstandingFetcher`.
  *
  *   - Backup source (documented, NOT implemented in this FP): FINRA's
  *     bi-weekly equity short interest file + EDGAR forms. A future
@@ -51,7 +57,6 @@ import {
   fetchWithTimeoutAndRetry,
 } from '../../longshort-universe/shared/fetch-with-timeout.ts';
 import { SignalComputationError } from './signal-types.ts';
-import type { ShortInterestReport } from '../short-interest-change/compute-short-interest.ts';
 
 const POLYGON_BASE_URL = 'https://api.polygon.io';
 
@@ -70,21 +75,43 @@ export const SHORT_INTEREST_OPERATION_ID = 'polygon_short_interest';
  */
 export const DEFAULT_SHORT_INTEREST_LIMIT = 6;
 
+/**
+ * A single SEC short-interest report point as returned by Polygon's
+ * `/stocks/v1/short-interest` endpoint, normalized to the two fields the
+ * orchestrator needs to derive `si_pct_float`. We carry the RAW
+ * `short_interest` share count here — NOT a percentage — because the
+ * endpoint does not return a float-percentage (verified against the live
+ * Polygon response schema during FP-041 revision-fix investigation). The
+ * percentage is derived downstream as
+ *   `si_pct_float = short_interest / share_class_shares_outstanding`
+ * with the shares-outstanding side input coming from the sibling
+ * `PolygonSharesOutstandingFetcher`. Keeping the derivation in the
+ * orchestrator (rather than secretly inside this fetcher) avoids hiding
+ * the conscious approximation that current shares-outstanding is being
+ * used to denominate historical short-interest counts.
+ */
+export interface RawShortInterestReport {
+  /** SEC settlement date, ISO YYYY-MM-DD. */
+  report_date: string;
+  /** Raw share-count of shorted shares (NOT a percentage). */
+  short_interest: number;
+}
+
 export type ShortInterestFetchResult =
-  | { kind: 'reports'; reports: ShortInterestReport[] }
+  | { kind: 'reports'; reports: RawShortInterestReport[] }
   | { kind: 'unavailable'; reason: 'subscription_gated' | 'data_unavailable' };
 
 interface PolygonShortInterestRow {
   settlement_date?: string;
   ticker?: string;
   short_interest?: number;
-  // Polygon (or future schema revisions) may expose the float-percentage
-  // directly. When present we prefer it verbatim — it sidesteps the
-  // shares-outstanding join entirely. Field name is best-effort: revise
-  // here if Polygon names drift.
-  short_percent_of_float?: number;
-  // Some Polygon variants ship "days_to_cover" + "avg_daily_volume"; we do
-  // NOT derive si_pct_float from those because that's a different metric.
+  // The endpoint also returns `avg_daily_volume` + `days_to_cover` — both
+  // are ignored on purpose. `days_to_cover` is a different financial
+  // quantity (SI / ADV) and is NOT a substitute for SI-as-%-of-float
+  // (§4.4.3 spec); using it would silently change the signal's economics.
+  // The derivation of `si_pct_float` from `short_interest` is performed
+  // in the orchestrator using shares-outstanding from the reference
+  // endpoint.
 }
 
 interface PolygonShortInterestResponse {
@@ -92,18 +119,20 @@ interface PolygonShortInterestResponse {
   status?: string;
 }
 
-function normalizeRow(row: PolygonShortInterestRow): ShortInterestReport | null {
+function normalizeRow(row: PolygonShortInterestRow): RawShortInterestReport | null {
   const dateRaw = row.settlement_date;
   if (typeof dateRaw !== 'string' || dateRaw.length < 10) return null;
   const report_date = dateRaw.slice(0, 10);
-  // Prefer the explicit float-percentage when present.
-  if (typeof row.short_percent_of_float === 'number' && Number.isFinite(row.short_percent_of_float)) {
-    return { report_date, si_pct_float: row.short_percent_of_float };
+  // Require a finite, positive `short_interest` share count. Per anti-
+  // phantom discipline: a missing / non-finite / negative value is dropped
+  // (typed-absence), NOT defaulted to 0 — a fake-zero would silently turn
+  // into "0 % of float" and pollute the z-score sector. Zero IS allowed
+  // (a ticker genuinely having zero shorted shares is a valid, rare data
+  // point); it is NOT a divide-by-zero concern here because the denominator
+  // is shares-outstanding, set in the sibling fetcher.
+  if (typeof row.short_interest === 'number' && Number.isFinite(row.short_interest) && row.short_interest >= 0) {
+    return { report_date, short_interest: row.short_interest };
   }
-  // Otherwise we cannot derive si_pct_float from this row alone (would
-  // require a shares-outstanding join). Per anti-phantom discipline: do
-  // NOT fabricate. Drop the row — the compute layer will treat the
-  // resulting shortfall as insufficient_history rather than a fake zero.
   return null;
 }
 
@@ -203,7 +232,7 @@ export class PolygonShortInterestFetcher {
     }
 
     const raw = body.results ?? [];
-    const reports: ShortInterestReport[] = [];
+    const reports: RawShortInterestReport[] = [];
     for (const row of raw) {
       const norm = normalizeRow(row);
       if (norm !== null) reports.push(norm);

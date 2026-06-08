@@ -32,6 +32,7 @@ import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { PolygonShortInterestFetcher } from '../_shared/longshort-signals/shared/polygon-short-interest-fetcher.ts';
+import { PolygonSharesOutstandingFetcher } from '../_shared/longshort-signals/shared/polygon-shares-outstanding-fetcher.ts';
 import {
   createShortInterestOrchestrator,
   SIGNAL_ID,
@@ -61,6 +62,7 @@ Deno.serve(createHandler(async (req: Request) => {
   const ctx: ShortInterestOrchestratorContext = {
     supabase: supabaseAdmin,
     shortInterest: new PolygonShortInterestFetcher(polygonApiKey),
+    sharesOutstanding: new PolygonSharesOutstandingFetcher(polygonApiKey),
     operator_id: DEFAULT_OPERATOR_ID,
     concurrency: DEFAULT_CONCURRENCY,
   };
