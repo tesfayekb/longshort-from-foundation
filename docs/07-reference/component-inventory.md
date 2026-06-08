@@ -35,6 +35,27 @@ Governed registry of all shared Phase 4 components. Pages must assemble from thi
 | Component | Path | Purpose | Used By |
 |-----------|------|---------|---------|
 | `DataTable` | `src/components/dashboard/DataTable.tsx` | Sortable, filterable table with pagination | Users, Roles, Permissions, Audit |
+
+### FP-030 — DataTable extensions (Long-Short table foundation)
+
+`DataTable` ships three additive, backward-compatible capabilities at FP-030:
+
+- **`density?: 'comfortable' \| 'compact'`** — defaults to `'comfortable'` (existing admin tables unaffected). `'compact'` reduces row + header vertical padding (`py-3` → `py-1.5`) for dense Long-Short surfaces.
+- **`DataTableColumn.numeric?: boolean`** — when true, header + cell get `text-right font-mono tabular-nums` so digit columns align as columns.
+- **`onPageSizeChange?: (n: number) => void` + `pageSizeOptions?: readonly number[]`** — when `onPageSizeChange` is supplied, the pagination footer renders a 25 / 50 / 100 page-size selector. Consumers that omit the prop (e.g. admin `InvitationsTable`) get the pre-FP-030 footer unchanged.
+
+Shared `DEFAULT_PAGE_SIZE` constant (`src/lib/table-constants.ts` = 25) is the canonical Long-Short page size. Every Long-Short table imports it rather than hardcoding a magic number. `PAGE_SIZE_OPTIONS = [25, 50, 100] as const` is the matching selector default.
+
+Long-Short consumers wired to these capabilities at FP-030:
+
+| Page | Density | Numeric columns | Notes |
+|------|---------|-----------------|-------|
+| `RankingsTab` | (bespoke `<Table>` — `py-2` cells, `font-mono tabular-nums` on z-score) | z-score, rank | PAGE_SIZE 50 → 25 via `DEFAULT_PAGE_SIZE` |
+| `ComputeRunsTab` | (bespoke `<Table>` — `py-2` cells, `font-mono tabular-nums` on numeric cells) | Universe, Persisted, Skipped | Already 25; now via shared constant |
+| `CoverageTab` | (bespoke `<Table>` — `py-2` cells, `tabular-nums` on as-of / written-at) | as-of, written-at | Already 25; now via shared constant |
+| `UniverseMembershipPage` | (bespoke `<Table>` — `py-2` cells) | — | PAGE_SIZE 50 → 25 via `DEFAULT_PAGE_SIZE` |
+| `UniverseRefreshHistoryPage` | `DataTable` `density="compact"` | Raw, Post-Filter, Long, Short | Pre-FP-030 hard-`.limit(50)`; now `.range()` + `count='exact'` + page-size selector |
+| `ReconciliationEventsPage` | `DataTable` `density="compact"` | Symbol | Pre-FP-030 hard-`.limit(100)`; now `.range()` + `count='exact'` + page-size selector |
 | `StatCard` | `src/components/dashboard/StatCard.tsx` | Metric card: icon + label + value + trend | Dashboards |
 | `StatusBadge` | `src/components/dashboard/StatusBadge.tsx` | Color-coded status indicator (active/deactivated/pending) | Users, Roles |
 | `AuditActionBadge` | `src/components/admin/AuditActionBadge.tsx` | Color-coded audit action label | Audit log |
