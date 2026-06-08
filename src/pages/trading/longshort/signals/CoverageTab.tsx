@@ -27,8 +27,9 @@ import {
   usePaginatedEligibilityCoverage,
   type EligibilityCoverageRow,
 } from '@/features/longshort/hooks/useEligibilityCoverage';
+import { DEFAULT_PAGE_SIZE } from '@/lib/table-constants';
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 /**
  * FP-029 — Signals → Coverage tab.
@@ -174,16 +175,16 @@ function CoverageRow({ row }: { row: EligibilityCoverageRow }) {
   const complete = isCoverageComplete(row);
   return (
     <TableRow data-testid={`coverage-row-${row.as_of_date}`}>
-      <TableCell className="font-mono text-xs">{row.as_of_date}</TableCell>
+      <TableCell className="py-2 font-mono text-xs tabular-nums">{row.as_of_date}</TableCell>
       {SUB_RULES.map((rule) => (
-        <TableCell key={rule.key} className="text-center">
+        <TableCell key={rule.key} className="py-2 text-center">
           <SubRuleBadge wired={row[rule.key]} label={rule.label} />
         </TableCell>
       ))}
-      <TableCell>
+      <TableCell className="py-2">
         <CompleteBadge complete={complete} />
       </TableCell>
-      <TableCell className="font-mono text-xs">{formatTimestamp(row.written_at)}</TableCell>
+      <TableCell className="py-2 font-mono text-xs tabular-nums">{formatTimestamp(row.written_at)}</TableCell>
     </TableRow>
   );
 }

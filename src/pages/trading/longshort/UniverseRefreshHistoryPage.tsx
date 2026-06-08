@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -5,9 +6,10 @@ import { PageHeader } from '@/components/dashboard/PageHeader';
 import { LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ErrorState } from '@/components/dashboard/ErrorState';
 import { Card, CardContent } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { DataTable, type DataTableColumn } from '@/components/dashboard/DataTable';
+import { DEFAULT_PAGE_SIZE } from '@/lib/table-constants';
 import {
   refreshOutcomeLabel,
   refreshOutcomeSeverity,
@@ -39,80 +41,84 @@ function outcomeBadge(outcome: RefreshLogRow['outcome']) {
 }
 
 export default function UniverseRefreshHistoryPage() {
-  const { data: rows, isLoading, error } = useQuery({
-    queryKey: ['longshort', 'universe-refresh-log'],
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['longshort', 'universe-refresh-log', 'paginated', page, pageSize],
     queryFn: async () => {
-      const { data, error } = await sb
+      const offset = (page - 1) * pageSize;
+      const { data, error, count } = await sb
         .from('universe_refresh_log')
         .select(
           'refresh_id, refresh_started_at, refresh_completed_at, as_of_date, quarter_label, total_constituents_raw, total_post_filters, total_eligible_long, total_eligible_short, outcome, failure_reason',
+          { count: 'exact' },
         )
         .order('refresh_started_at', { ascending: false })
-        .limit(50);
+        .range(offset, offset + pageSize - 1);
       if (error) throw error;
-      return (data ?? []) as RefreshLogRow[];
+      return {
+        rows: (data ?? []) as RefreshLogRow[],
+        total: count ?? 0,
+      };
     },
     staleTime: 30_000,
   });
 
+  const rows = data?.rows ?? [];
+  const total = data?.total ?? 0;
+
   if (isLoading) return <LoadingSkeleton variant="table" rows={10} />;
   if (error) return <ErrorState message={(error as Error).message} />;
+
+  const columns: DataTableColumn<RefreshLogRow>[] = [
+    {
+      key: 'started',
+      header: 'Started',
+      cell: (r) => (
+        <span className="text-sm">{format(new Date(r.refresh_started_at), 'PPp')}</span>
+      ),
+    },
+    { key: 'as_of', header: 'As-of Date', cell: (r) => r.as_of_date },
+    { key: 'quarter', header: 'Quarter', cell: (r) => r.quarter_label },
+    { key: 'outcome', header: 'Outcome', cell: (r) => outcomeBadge(r.outcome) },
+    { key: 'raw', header: 'Raw', numeric: true, cell: (r) => r.total_constituents_raw ?? '—' },
+    { key: 'post', header: 'Post-Filter', numeric: true, cell: (r) => r.total_post_filters ?? '—' },
+    { key: 'long', header: 'Long', numeric: true, cell: (r) => r.total_eligible_long ?? '—' },
+    { key: 'short', header: 'Short', numeric: true, cell: (r) => r.total_eligible_short ?? '—' },
+  ];
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Refresh History"
         subtitle={
-          rows && rows.length > 0
-            ? `${rows.length} most recent refreshes`
+          total > 0
+            ? `${total} refresh${total === 1 ? '' : 'es'} on record`
             : 'No refresh history yet — first cron firing will populate this table'
         }
       />
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Started</TableHead>
-                <TableHead>As-of Date</TableHead>
-                <TableHead>Quarter</TableHead>
-                <TableHead>Outcome</TableHead>
-                <TableHead className="text-right">Raw</TableHead>
-                <TableHead className="text-right">Post-Filter</TableHead>
-                <TableHead className="text-right">Long</TableHead>
-                <TableHead className="text-right">Short</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(rows ?? []).map((row) => (
-                <TableRow key={row.refresh_id}>
-                  <TableCell className="text-sm">{format(new Date(row.refresh_started_at), 'PPp')}</TableCell>
-                  <TableCell>{row.as_of_date}</TableCell>
-                  <TableCell>{row.quarter_label}</TableCell>
-                  <TableCell>{outcomeBadge(row.outcome)}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{row.total_constituents_raw ?? '—'}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{row.total_post_filters ?? '—'}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{row.total_eligible_long ?? '—'}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{row.total_eligible_short ?? '—'}</TableCell>
-                </TableRow>
-              ))}
-              {(!rows || rows.length === 0) && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
-                    No refresh history yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={rows}
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
+        density="compact"
+        emptyTitle="No refresh history yet"
+        emptyDescription="First cron firing will populate this table."
+      />
 
-      {rows?.some((r) => r.failure_reason) && (
+      {rows.some((r) => r.failure_reason) && (
         <Card>
           <CardContent className="pt-6 space-y-2">
-            <h3 className="font-semibold text-sm">Recent failures</h3>
+            <h3 className="font-semibold text-sm">Failures on this page</h3>
             {rows
               .filter((r) => r.failure_reason)
               .slice(0, 5)

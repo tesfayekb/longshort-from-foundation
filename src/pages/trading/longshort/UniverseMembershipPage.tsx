@@ -19,6 +19,7 @@ import {
   stalenessCauseHint,
   type RefreshOutcome,
 } from '@/features/longshort/utils/universe-staleness';
+import { DEFAULT_PAGE_SIZE } from '@/lib/table-constants';
 
 const sb = supabase as unknown as SupabaseClient;
 
@@ -35,7 +36,7 @@ type UniverseMembershipRow = {
 
 type EligibilityFilter = 'all' | 'long_only' | 'short_only' | 'both';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export default function UniverseMembershipPage() {
   const [tickerFilter, setTickerFilter] = useState('');
@@ -213,16 +214,16 @@ export default function UniverseMembershipPage() {
               <TableBody>
                 {pageRows.map((row) => (
                   <TableRow key={row.ticker}>
-                    <TableCell className="font-mono font-medium">{row.ticker}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{row.gics_sector ?? '—'}</TableCell>
-                    <TableCell>
+                    <TableCell className="py-2 font-mono font-medium">{row.ticker}</TableCell>
+                    <TableCell className="py-2 text-sm text-muted-foreground">{row.gics_sector ?? '—'}</TableCell>
+                    <TableCell className="py-2">
                       {row.long_eligible ? <Badge>Yes</Badge> : <Badge variant="outline">No</Badge>}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-2">
                       {row.short_eligible ? <Badge>Yes</Badge> : <Badge variant="outline">No</Badge>}
                     </TableCell>
-                    <TableCell>{row.quarter_label}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
+                    <TableCell className="py-2">{row.quarter_label}</TableCell>
+                    <TableCell className="py-2 font-mono text-xs text-muted-foreground">
                       {row.refresh_id.slice(0, 8)}…
                     </TableCell>
                   </TableRow>

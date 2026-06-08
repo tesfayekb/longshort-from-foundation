@@ -29,8 +29,9 @@ import {
   totalSkips,
   type SignalComputeRunRow,
 } from '@/features/longshort/hooks/useSignalComputeRuns';
+import { DEFAULT_PAGE_SIZE } from '@/lib/table-constants';
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 /**
  * FP-028 — Signals → Compute Runs tab.
@@ -134,9 +135,9 @@ export default function ComputeRunsTab() {
                   <TableHead>Signal</TableHead>
                   <TableHead>As-of</TableHead>
                   <TableHead>Outcome</TableHead>
-                  <TableHead className="text-right">Universe</TableHead>
-                  <TableHead className="text-right">Persisted</TableHead>
-                  <TableHead className="text-right">Skipped</TableHead>
+                  <TableHead className="text-right font-mono tabular-nums">Universe</TableHead>
+                  <TableHead className="text-right font-mono tabular-nums">Persisted</TableHead>
+                  <TableHead className="text-right font-mono tabular-nums">Skipped</TableHead>
                   <TableHead>Source</TableHead>
                 </TableRow>
               </TableHeader>
@@ -232,16 +233,16 @@ function RunRow({ row, expanded, onToggle }: RunRowProps) {
             )}
           </Button>
         </TableCell>
-        <TableCell className="font-mono text-xs">{formatTimestamp(row.completed_at)}</TableCell>
-        <TableCell className="text-sm">{row.signal_id}</TableCell>
-        <TableCell className="font-mono text-xs">{row.as_of_date}</TableCell>
-        <TableCell>
+        <TableCell className="py-2 font-mono text-xs">{formatTimestamp(row.completed_at)}</TableCell>
+        <TableCell className="py-2 text-sm">{row.signal_id}</TableCell>
+        <TableCell className="py-2 font-mono text-xs">{row.as_of_date}</TableCell>
+        <TableCell className="py-2">
           <OutcomeBadge outcome={row.outcome} />
         </TableCell>
-        <TableCell className="text-right font-mono text-xs">{row.universe_size}</TableCell>
-        <TableCell className="text-right font-mono text-xs">{row.persisted_count}</TableCell>
-        <TableCell className="text-right font-mono text-xs">{skipped}</TableCell>
-        <TableCell>
+        <TableCell className="py-2 text-right font-mono text-xs tabular-nums">{row.universe_size}</TableCell>
+        <TableCell className="py-2 text-right font-mono text-xs tabular-nums">{row.persisted_count}</TableCell>
+        <TableCell className="py-2 text-right font-mono text-xs tabular-nums">{skipped}</TableCell>
+        <TableCell className="py-2">
           <FireSourceBadge source={source} />
         </TableCell>
       </TableRow>
