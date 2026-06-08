@@ -24,7 +24,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
   return {
     ...actual,
-    useQuery: vi.fn(({ queryKey }) => {
+    useQuery: vi.fn(() => {
       // Return loading state for all queries — enough to render tab structure
       return {
         isLoading: true,

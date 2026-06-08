@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import TradingDashboard from './TradingDashboard';
+import TradingDashboard from '../TradingDashboard';
 
 describe('TradingDashboard (FP-031)', () => {
   it('renders "Strategies" as the page heading', () => {
