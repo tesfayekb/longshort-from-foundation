@@ -12,6 +12,14 @@ const badgeVariants = cva(
         secondary: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-foreground",
+        // FP-033 — locked badge vocabulary. The success/warning/info tokens
+        // already exist in `index.css` + tailwind.config.ts; this just gives
+        // them first-class variant names so consumers never need raw-color
+        // className overrides. `secondary` doubles as the documented
+        // "deferred" muted style — see docs/07-reference/ui-design-system.md.
+        success: "border-transparent bg-success text-success-foreground hover:bg-success/80",
+        warning: "border-transparent bg-warning text-warning-foreground hover:bg-warning/80",
+        info: "border-transparent bg-info text-info-foreground hover:bg-info/80",
       },
     },
     defaultVariants: {
