@@ -701,18 +701,18 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 
 | Field | Value |
 |-------|-------|
-| **Page** | `SignalsHubPage` (FP-023). Tabbed via `?tab=` (`HubTabs`): `rankings` (default, empty-state — FP-024), `runs` (empty-state — post-FP-024), `coverage` (empty-state — deferred). |
+| **Page** | `SignalsHubPage` (FP-023). Tabbed via `?tab=` (`HubTabs`): `rankings` (default — **IMPLEMENTED at FP-024** as `RankingsTab`: signal/date/sector/ticker controls + `SignalDistributionBand` SVG hero + top-20 / bottom-20 candidate tables + server-side paginated full rankings, read-only against `signal_observations`), `runs` (empty-state — post-FP-024), `coverage` (empty-state — deferred). |
 | **Module** | longshort |
 | **Classification** | authenticated, privileged |
 | **Auth required** | Yes |
 | **Permission required** | `longshort.view` (inner gate; outer gate `trading.access`) |
 | **Scope** | system-wide |
 | **Panel** | trading-panel |
-| **Related tests** | `src/pages/trading/longshort/hub/HubTabs.test.tsx` (FP-023.1 — `?tab=` round-trip + default-tab fallback) |
-| **Related functions** | `SignalsHubPage`, `HubTabs`, `HubEmptyState` |
-| **Implementation** | **IMPLEMENTED (shell)** — `<Route path="longshort/signals" element={<PermissionGate permission="longshort.view"><SignalsHubPage /></PermissionGate>}>` in `src/App.tsx`. Data tabs land in FP-024+. |
+| **Related tests** | `src/pages/trading/longshort/hub/HubTabs.test.tsx` (FP-023.1 — `?tab=` round-trip + default-tab fallback); `src/pages/trading/longshort/signals/__tests__/SignalDistributionBand.test.tsx` (FP-024 — top/bottom accent assignment + absent-not-plotted invariant + empty-state); `src/pages/trading/longshort/signals/__tests__/RankingsTab.test.tsx` (FP-024 — top-20 / bottom-20 tables + absent-count annotation + server-pagination + filter-resets-page) |
+| **Related functions** | `SignalsHubPage`, `HubTabs`, `HubEmptyState`, `RankingsTab`, `SignalDistributionBand`, `useAvailableSignals`, `useSignalDates`, `usePresentObservations`, `useAbsentCount`, `usePaginatedRankings` |
+| **Implementation** | **IMPLEMENTED** — `<Route path="longshort/signals" element={<PermissionGate permission="longshort.view"><SignalsHubPage /></PermissionGate>}>` in `src/App.tsx`. Rankings tab now wired to `RankingsTab` (FP-024); Runs / Coverage remain empty-state shells. |
 | **Lifecycle** | active |
-| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). |
+| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). Rankings tab promoted to IMPLEMENTED by FP-024 (ACT-136). |
 
 #### `/trading/longshort/universe` — Long-Short Universe Hub
 
