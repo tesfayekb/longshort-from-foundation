@@ -105,8 +105,9 @@ This pattern was twice violated by template-copy at table creation and
 twice reconciled retroactively (`signal_observations` via MIG-072 /
 FP-025; `signal_compute_log` via MIG-073 / FP-027). The reconciled set
 — `universe_membership`, `hard_exclusions`, `longshort_audit_logs`,
-`signal_observations`, `signal_compute_log` — is now the canonical
-pattern. New system-written long-short tables MUST follow it at
+`signal_observations`, `signal_compute_log`, and `signal_registry`
+(MIG-075 / FP-038, created clean) — is now the canonical pattern.
+New system-written long-short tables MUST follow it at
 creation; new operator-scoped read policies on system-written tables
 MUST be treated as a CI-class regression.
 
@@ -123,4 +124,5 @@ the path of any current FP.)
 - Per-strategy folder index: `docs/04-modules/longshort/README.md`
 - Governing decisions: DEC-030 (scope expansion), DEC-031 (architectural pattern + sub-point 3/6 clarifications), DEC-032 (FP-005 bootstrap surface), DEC-033 v4.1 (shared audit-writer contract)
 - Feature proposal: FP-005 (this bootstrap); FP-006 (CROSSWIND v0.9 implementation, future)
+- Signal registry + multi-signal overview: FP-038 (`signal_registry` table + `AllSignalsTab` — the index page; per-signal detail lives in `RankingsTab` (FP-024))
 - Plan section: PLAN-TRADING-001 (foundation, complete) and PLAN-TRADING-001-LONGSHORT-001 (this module)

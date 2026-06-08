@@ -3,6 +3,7 @@ import { HubTabs } from './hub/HubTabs';
 import RankingsTab from './signals/RankingsTab';
 import ComputeRunsTab from './signals/ComputeRunsTab';
 import CoverageTab from './signals/CoverageTab';
+import AllSignalsTab from './signals/AllSignalsTab';
 
 /**
  * Signals hub — FP-023 ships the shell + tab frame with honest empty
@@ -16,8 +17,13 @@ export default function SignalsHubPage() {
         subtitle="Per-signal rankings, compute health, and coverage. Rankings show individual signals — the tradeable composite arrives with the combiner (Phase 3)."
       />
       <HubTabs
-        defaultTab="rankings"
+        defaultTab="all"
         tabs={[
+          {
+            value: 'all',
+            label: 'All Signals',
+            content: <AllSignalsTab />,
+          },
           {
             value: 'rankings',
             label: 'Rankings',
