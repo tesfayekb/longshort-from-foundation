@@ -84,8 +84,14 @@ export function classifyRoleWeight(row: Form4Row): number | null {
   // 0.7 tier would force a deflation of the spec-named CEO match. Word-
   // boundary regex so "CEO" matches inside compound titles like
   // "CEO AND PRESIDENT" but not inside random substrings.
+  // `(?<!vice\s)\bpresident\b` keeps "President" / "Chief Executive
+  // Officer and President" at tier 1 but PREVENTS "Vice President" /
+  // "Executive Vice President" / "Senior Vice President" from accidentally
+  // matching here (those belong at tier 2 NEO-proxy 0.7, not at tier 1
+  // C-suite 1.0). Lookbehind catches both `vice president` and
+  // `vice\u00a0president` (literal nbsp); we normalize via \s.
   const tier1 =
-    /\bceo\b|\bcfo\b|chief executive officer|chief financial officer|\bpresident\b/i.test(title);
+    /\bceo\b|\bcfo\b|chief executive officer|chief financial officer|(?<!vice\s)\bpresident\b/i.test(title);
   if (tier1) return 1.0;
 
   // Tier 2: named-exec proxy (the §4.4.4 0.7 NEO tier, approximated).

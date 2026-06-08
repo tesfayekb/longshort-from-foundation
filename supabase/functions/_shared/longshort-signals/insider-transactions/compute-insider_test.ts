@@ -191,7 +191,12 @@ Deno.test('compute: 10b5-1 sale EXCLUDED (would-be negative is suppressed)', () 
   assertEquals(res, null, 'all rows filtered out → null (no qualifying)');
 });
 
-Deno.test('compute: 14-day half-life decay (age=14 → half weight)', () => {
+Deno.test('compute: spec-literal decay exp(-age/14) — age=14 → factor=exp(-1)≈0.368', () => {
+  // The §4.4.4 formula `exp(-age_days / 14)` uses 14 as a time constant,
+  // not a literal half-life. exp(-14/14) = exp(-1) ≈ 0.3679 (true half-
+  // life of this curve is 14·ln(2) ≈ 9.7 days). Spec is explicit on the
+  // formula; we implement it verbatim and lock the numerical decay
+  // factor here.
   const rowsToday = [
     row({ transaction_date: '2026-06-08', transaction_shares: 1000, transaction_price_per_share: 100 }),
   ];
@@ -201,9 +206,8 @@ Deno.test('compute: 14-day half-life decay (age=14 → half weight)', () => {
   const resToday = computeInsiderSignal(rowsToday, AS_OF, ONE_BILLION);
   const res14d = computeInsiderSignal(rows14d, AS_OF, ONE_BILLION);
   assert(resToday && res14d);
-  // Half-life property: 14-day-old contribution is ~0.5x same-day contribution.
   const ratio = res14d!.raw_signal / resToday!.raw_signal;
-  assertAlmostEquals(ratio, 0.5, 0.01);
+  assertAlmostEquals(ratio, Math.exp(-1), 1e-6);
 });
 
 Deno.test('compute: role weight applied (CEO contribution > generic-officer contribution)', () => {
