@@ -117,12 +117,12 @@ export default function RankingsTab() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Controls</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <Select value={signalId ?? ''} onValueChange={(v) => setSignalId(v)}>
+      {/* FP-032 — compact filter toolbar (replaces the prior Controls Card). */}
+      <div
+        className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+        data-testid="rankings-filter-toolbar"
+      >
+        <Select value={signalId ?? ''} onValueChange={(v) => setSignalId(v)}>
             <SelectTrigger className="sm:max-w-xs" aria-label="Signal">
               <SelectValue placeholder="Signal" />
             </SelectTrigger>
@@ -163,14 +163,13 @@ export default function RankingsTab() {
               ))}
             </SelectContent>
           </Select>
-          <Input
-            placeholder="Filter by ticker…"
-            value={tickerFilter}
-            onChange={(e) => setTickerFilter(e.target.value)}
-            className="sm:max-w-xs"
-          />
-        </CardContent>
-      </Card>
+        <Input
+          placeholder="Filter by ticker…"
+          value={tickerFilter}
+          onChange={(e) => setTickerFilter(e.target.value)}
+          className="sm:max-w-xs"
+        />
+      </div>
 
       <PhaseContextNote title="Single-signal view — not the final trading list">
         <p>
