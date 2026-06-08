@@ -44,6 +44,7 @@ export const JOB_ID_TO_SIGNAL_ID: Readonly<Record<string, string>> = {
   'longshort.momentum.compute': 'cross_sectional_momentum_12_1',
   'longshort.reversal.compute': 'short_term_reversal_1w',
   'longshort.short_interest.compute': 'short_interest_change_30d',
+  'longshort.insider.compute': 'insider_transactions_90d',
 } as const;
 
 /**

@@ -8,6 +8,17 @@
 
 ### ACT-153a: FP-041 revision-fix — `si_pct_float` derivation (Option A)
 
+### ACT-154: FP-042 — Signal #4 — Insider Transactions (90-day, 14-day decay)
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-154 (next-free after ACT-153a; grep-verified at HEAD). |
+| **Branch** | feature/FP-042-signal-4-insider-transactions |
+| **Mode** | EXECUTION (Tier A — financial-critical signal compute + new external fetcher + new weighted-decay aggregator + new role classifier). |
+| **Scope** | See FP-042 "Scope" row. Code: 5 new TS files + 5 new test files; 4 edits to shared types / persist / mapping (with same-commit test updates per FP-041 stale-test lesson). Data: MIG-077 (`job_registry` INSERT disarmed + `signal_registry` planned→live flip). Docs: FP-042, ACT-154 (this), DEC-044, DW-093, MIG-077, function-index (5 new), event-index (6 new), `docs/04-modules/longshort/signals/insider-transactions.md`. |
+| **Pre-build gate** | Operator-run live probe of `/stocks/filings/vX/form-4` against production POLYGON key confirmed 200 + documented field shape (incl. live "CEO AND PRESIDENT" compound title that drove the regex word-boundary discipline + `aff_10b5_one=true` validated on a real 10b5-1 sale). Per the Signal #5 retro: build proceeds only after probe confirmation. |
+| **Evidence** | (a) Deno tests scoped to FP-042 new files: **66 passed / 0 failed** (polygon-form4-fetcher 10/10, compute-insider 26/26, insider-orchestrator 12/12, cron handler 7/7, manual handler 9/9, plus job-signal-mapping extension + persist-signal-compute-log regression). (b) Full signal-stack regression: **218 passed / 0 failed** (all of `_shared/longshort-signals/`). (c) Live-DB §22.5.1: `SELECT id, enabled, schedule, status FROM public.job_registry WHERE id='longshort.insider.compute'` returned `enabled=false`, `schedule='0 19 * * 1-5'`, `status='registered'`; `SELECT signal_id, status, job_registry_id, stale_after_hours, cadence FROM public.signal_registry WHERE signal_id='insider_transactions_90d'` returned `status='live'`, `job_registry_id='longshort.insider.compute'`, `stale_after_hours=48`, `cadence='daily (after-close; intraday polling deferred)'`. (d) Anti-pattern guards: fetcher tests prove 403/404 do NOT throw / do NOT fabricate; sign convention pinned (buy→+, sale→−); 10b5-1 load-bearing test (S+aff_10b5_one=true EXCLUDED); load-bearing classifier test for compound "CEO AND PRESIDENT" + tier-1/tier-2 boundary ("Executive Vice President" must be 0.7 not 1.0 — drove the `(?<!vice\s)\bpresident\b` guard); divide-by-zero guard on market_cap; future-dated row clamps age to 0 (decay ≤ 1); `role_tier_source='title_heuristic'` visibility tag pinned. (e) Wall-clock discipline: no `new Date()` / `Date.now()` / `performance.now()` in either handler (source-sentinel tests). (f) ID discipline: FP-042 / ACT-154 / MIG-077 / DEC-044 / DW-093 all next-free at HEAD. (g) Rule 6 same-PR: code + migration + 6 doc updates in single diff. |
+| **Out-of-scope verified** | Zero touch to momentum / reversal / short-interest compute paths; zero touch to combiner / universe / Rankings / AllSignalsTab / SignalsHubPage; zero touch to RBAC tables; zero touch to platform `audit_logs`; zero touch to `sql/14` cron schedule; zero new env vars / configs / npm deps / permissions / routes. |
 | Field | Value |
 |---|---|
 | **ID** | ACT-153a (revision-fix addendum to ACT-153; Constitution Rule 8 — supersession via addendum, not replacement). |

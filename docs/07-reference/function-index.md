@@ -2848,3 +2848,66 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/longshort-reversal-compute-manual/index.ts` |
 | **Tests** | `supabase/functions/longshort-reversal-compute-manual/index_test.ts` — 10 source-sentinel tests (auth + permission + POST-only + body validation + parser + POLYGON_API_KEY + dual audit envelope ordering + wall-clock + orchestrator wiring + no momentum-orchestrator-import drift). |
 | **Added by** | FP-040 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/polygon-form4-fetcher.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-042) |
+| **Classification** | shared infrastructure — Polygon Form 4 (insider transaction) fetcher. ENTITLEMENT-AWARE — 403 → `{ kind: 'unavailable', reason: 'subscription_gated' }`, 404 → `{ kind: 'unavailable', reason: 'data_unavailable' }` (neither throws; both degrade gracefully per §4.3.5 non-critical-signal rule). 401 / 5xx after retries / parse / timeout throw `SignalComputationError` with ticker context. Returns BOTH `record_type='transaction'` AND `record_type='holding'` rows untouched — the compute layer (`compute-insider.ts`) is the single filter authority; the fetcher does NOT pre-filter on `record_type` / `transaction_code` so filter discipline lives in one tested place. |
+| **Exports** | `class PolygonForm4Fetcher { fetchForm4(ticker, as_of, windowDays?, limit?): Promise<Form4FetchResult> }`; `const FORM4_OPERATION_ID = 'polygon_form4'`; `const FORM4_WINDOW_DAYS = 90`; `const DEFAULT_FORM4_LIMIT = 500`; `interface Form4Row { record_type, transaction_code?, aff_10b5_one?, transaction_acquired_disposed?, transaction_shares?, transaction_price_per_share?, transaction_date?, is_director?, is_officer?, is_ten_percent_owner?, not_subject_to_section_16?, officer_title?, security_type? }`; `type Form4FetchResult = { kind: 'rows'; rows: Form4Row[] } \| { kind: 'unavailable'; reason: 'subscription_gated' \| 'data_unavailable' }`. |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/polygon-form4-fetcher.ts` |
+| **Tests** | `polygon-form4-fetcher_test.ts` — 10 Deno tests (constructor-throws-on-missing-apiKey + happy path normalizes all needed fields including holding rows + 403 → subscription_gated + 404 → data_unavailable + 401 throws with ticker context + 200/empty results → kind=rows/[] + URL carries 90-day window + apiKey + ticker + date filters + FORM4_WINDOW_DAYS=90 spec lock + malformed rows dropped + fetcher discipline — does NOT pre-filter holding/M/C/A/G). |
+| **Secret** | POLYGON_API_KEY. |
+| **Live-probe evidence** | 2026-06-08 against production POLYGON key on AAPL/RBRK/NTRA/DELL — 200 status, documented field set verified incl. compound `officer_title='CEO AND PRESIDENT'`, real `aff_10b5_one=true` on a 10b5-1 sale, both `record_type='transaction'` and `record_type='holding'` rows present in responses. |
+| **Added by** | FP-042 |
+
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/compute-insider.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-042) |
+| **Classification** | shared pure-compute module for Signal #4. Three exports: (1) `filterQualifyingTransactions` — §4.4.4 include/exclude filter; (2) `classifyRoleWeight` — DEC-044 3-tier title-heuristic NEO proxy with highest-applicable-weight tie-break and `(?<!vice\s)\bpresident\b` lookbehind preventing "Vice President" from leaking into tier 1; (3) `computeInsiderSignal` — `Σ shares × price × sign × role_weight × exp(-age/14) / market_cap`. Returns `null` (typed-absence) on zero qualifying transactions OR non-positive market_cap (divide-by-zero defensive guard). Pure: no I/O, no clock, no randomness; replay-deterministic via injected `as_of`. Future-dated rows are clamped to age=0 so decay can never exceed 1 (defensive — the 90-day fetcher window should already exclude them). |
+| **Exports** | `function filterQualifyingTransactions(rows): Form4Row[]`; `function classifyRoleWeight(row): number \| null`; `function computeInsiderSignal(rows, as_of, market_cap): InsiderSignalResult \| null`; `const ROLE_TIER_SOURCE = 'title_heuristic'`; `type RoleTierSource = 'title_heuristic'`; `interface InsiderSignalResult { raw_signal, qualifying_count, role_tier_source }`; `interface ClassifiedRow { row, role_weight, role_tier_source }`. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/compute-insider.ts` |
+| **Tests** | `compute-insider_test.ts` — 26 Deno tests: classifier table (CEO/CFO/President/compound "CEO AND PRESIDENT"/COO+CTO+EVP+SVP/Executive Vice President/generic Section-16/independent director/pure-10%-owner/officer-AND-owner tie-break/no-tier-applies → null); filter (drops holdings + keeps all P + keeps S only when `aff_10b5_one===false` + drops M/C/A/G); compute (sign load-bearing buy→+/sale→− + 10b5-1 excluded + spec-literal `exp(-age/14)` decay locked to `exp(-1)≈0.368` at age=14 + role weight applied + market_cap scaling + empty rows → null + holdings only → null + market_cap=0 → null + future-date clamp + role_tier_source persisted + determinism). |
+| **Spec ref** | CROSSWIND §4.4.4 (formula + filter); DEC-044 (title-heuristic NEO proxy decision); DW-093 (deferred DEF-14A upgrade). |
+| **Conscious approximation** | NEO ("Named Executive Officer") is a DEF-14A proxy-statement concept and is NOT a Form 4 field. The 3-tier `officer_title` heuristic is a VISIBLE approximation — every observation carries `role_tier_source='title_heuristic'`. Authoritative DEF-14A enrichment is deferred to DW-093. |
+| **Added by** | FP-042 |
+
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/insider-orchestrator.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-042) |
+| **Classification** | shared orchestrator factory — 5-step pipeline mirror of `short-interest-orchestrator.ts` with THREE parallel side-input fetchers per ticker (form-4 + shares-outstanding + price for `market_cap = shares × close`). NON-CRITICAL signal with SPARSE expected profile: most names yield `no_qualifying_transactions` skip → `is_present=0` — that is the NORMAL state, not failure. |
+| **Exports** | `function createInsiderOrchestrator(ctx): { run(as_of): Promise<SignalOrchestratorResult> }`; `const SIGNAL_ID = 'insider_transactions_90d'`; `interface InsiderOrchestratorContext` (extends `SignalOrchestratorContext` with `form4: PolygonForm4Fetcher` + `sharesOutstanding: PolygonSharesOutstandingFetcher`; `priceHistory` inherited). |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/insider-orchestrator.ts` |
+| **Tests** | `insider-orchestrator_test.ts` — 12 Deno tests via DI mocks (signal_id lock + happy-path 3-tickers with 1 sparse skip + subscription_gated typed skip + missing_shares_outstanding skip + missing-price → data_unavailable skip + fetcher-throw → fetch_error + sign-convention ordering (buy>sell) + 10b5-1 sales all excluded → all `no_qualifying_transactions` + empty universe → failed/empty_universe + persistence error → failed + determinism + as_of_date slice). |
+| **Wall-clock** | All timestamps derive from injected `as_of` (DEC-034 clause 4). The decay arithmetic in the underlying compute is also `as_of`-parameterized — no `Date.now()` anywhere. |
+| **Cadence** | Daily after-close via cron schedule `0 19 * * 1-5` (MIG-077). 30-min intraday polling noted in §4.4.4 is deferred future refinement. |
+| **Added by** | FP-042 |
+
+#### `supabase/functions/longshort-insider-compute/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-042) |
+| **Classification** | edge function — daily-cadence cron handler for Signal #4. Mirror of `longshort-short-interest-compute/index.ts`. DISARMED-at-creation per MIG-077 (`enabled=false`); enable-flip + cron-wiring are a separate operator-run step gated on DEC-043 attestation. |
+| **Trigger** | `verifyCronSecret` (X-Cron-Secret header); registered in `job_registry` as `longshort.insider.compute` via MIG-077 (`enabled=false`, schedule `'0 19 * * 1-5'`). |
+| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `POLYGON_API_KEY` check → build `InsiderOrchestratorContext` (3 fetchers) → `createInsiderOrchestrator(ctx).run(as_of)` → `persistSignalComputeLog` → `.started`/`.completed`/`.failed` audit events. |
+| **File** | `supabase/functions/longshort-insider-compute/index.ts` |
+| **Tests** | `index_test.ts` — 7 source-sentinel tests (cron auth wired + auth-first ordering + wall-clock discipline + POLYGON_API_KEY + 3-fetcher orchestrator wiring + no-short-interest-fetcher leak + persist-helper + 3 audit events). |
+| **Added by** | FP-042 |
+
+#### `supabase/functions/longshort-insider-compute-manual/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-042) |
+| **Classification** | edge function — operator-trigger sibling of `longshort-insider-compute`. Recommended path for validating Signal #4 math + persistence + the sparse-expected profile before any cron wiring (per DEC-043 prudent-sequencing). |
+| **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST with `{ "as_of": "YYYY-MM-DD" }` body. Does NOT register in `job_registry`. 405 on non-POST. |
+| **Pipeline** | auth → perm → body validation (`parseAsOfDate`) → future-`as_of` rejection via `productionClock` comparison → `POLYGON_API_KEY` check → `.manual_triggered` audit BEFORE → orchestrator → `persistSignalComputeLog` → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
+| **File** | `supabase/functions/longshort-insider-compute-manual/index.ts` |
+| **Tests** | `index_test.ts` — 9 source-sentinel tests (auth + permission + POST-only + body validation + parser + POLYGON_API_KEY + dual audit envelope ordering + wall-clock + 3-fetcher orchestrator wiring + no-short-interest-fetcher leak). |
+| **Added by** | FP-042 |
