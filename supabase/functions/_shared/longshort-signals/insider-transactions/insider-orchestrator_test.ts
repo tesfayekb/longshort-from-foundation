@@ -7,7 +7,11 @@ import {
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { createInsiderOrchestrator, SIGNAL_ID } from './insider-orchestrator.ts';
 import { SignalComputationError } from '../shared/signal-types.ts';
+import type { SignalRow } from '../shared/signal-types.ts';
 import type { Form4Row } from '../shared/polygon-form4-fetcher.ts';
+import type { PolygonForm4Fetcher } from '../shared/polygon-form4-fetcher.ts';
+import type { PolygonSharesOutstandingFetcher } from '../shared/polygon-shares-outstanding-fetcher.ts';
+import type { PolygonPriceHistoryFetcher } from '../shared/polygon-price-history-fetcher.ts';
 
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const AS_OF = new Date('2026-06-08T21:00:00Z');
@@ -32,7 +36,7 @@ function makeSupabase(opts: {
   universe?: Array<{ ticker: string; gics_sector: string | null }>;
   upsertError?: { message: string } | null;
 }) {
-  const upsertPayloads: any[] = [];
+  const upsertPayloads: SignalRow[][] = [];
   const universe = opts.universe ?? [];
   const latestDate = universe.length > 0 ? LATEST_SNAPSHOT : null;
   const supabase = {
@@ -59,7 +63,7 @@ function makeSupabase(opts: {
       }
       if (table === 'signal_observations') {
         return {
-          upsert(payload: any) {
+          upsert(payload: SignalRow[]) {
             upsertPayloads.push(payload);
             return Promise.resolve({
               error: opts.upsertError ?? null,
@@ -83,7 +87,7 @@ function makeForm4(behaviors: Record<string, Form4Behavior>) {
       if (b.kind === 'unavailable') return { kind: 'unavailable', reason: b.reason };
       return { kind: 'rows', rows: b.rows };
     },
-  } as any;
+  } as unknown as PolygonForm4Fetcher;
 }
 function makeShares(behaviors: Record<string, SharesBehavior> = {}) {
   return {
@@ -93,7 +97,7 @@ function makeShares(behaviors: Record<string, SharesBehavior> = {}) {
       if (b.kind === 'unavailable') return { kind: 'unavailable', reason: b.reason };
       return { kind: 'shares', shares: b.shares };
     },
-  } as any;
+  } as unknown as PolygonSharesOutstandingFetcher;
 }
 function makePrice(behaviors: Record<string, PriceBehavior> = {}) {
   return {
@@ -104,7 +108,7 @@ function makePrice(behaviors: Record<string, PriceBehavior> = {}) {
       if (b.kind === 'empty') return [];
       return [{ ts: '2026-06-08', close: b.close }];
     },
-  } as any;
+  } as unknown as PolygonPriceHistoryFetcher;
 }
 
 function buyRow(over: Partial<Form4Row> = {}): Form4Row {
@@ -257,8 +261,8 @@ Deno.test('(7) sign convention — buy → positive raw, sale → negative raw (
   const res = await createInsiderOrchestrator(ctx(supabase, form4)).run(AS_OF);
   assertEquals(res.persisted_count, 2);
   const payload = upsertPayloads[0];
-  const buy = payload.find((r: any) => r.ticker === 'BUY')!;
-  const sell = payload.find((r: any) => r.ticker === 'SELL')!;
+  const buy = payload.find((r: SignalRow) => r.ticker === 'BUY')!;
+  const sell = payload.find((r: SignalRow) => r.ticker === 'SELL')!;
   // BUY raw > SELL raw → within-IT-sector z-score: BUY > SELL.
   assert(buy.value > sell.value, `expected BUY z > SELL z, got buy=${buy.value} sell=${sell.value}`);
 });
@@ -324,7 +328,9 @@ Deno.test('(11) determinism — same inputs → same persisted values + as_of-de
   const rb = await createInsiderOrchestrator(ctx(b.supabase, makeForm4({
     A: { kind: 'rows', rows: rows.A }, B: { kind: 'rows', rows: rows.B }, C: { kind: 'rows', rows: rows.C },
   }))).run(AS_OF);
-  const sortVals = (p: any[]) => p[0].slice().sort((x: any, y: any) => x.ticker.localeCompare(y.ticker)).map((r: any) => ({ ticker: r.ticker, value: r.value }));
+  const sortVals = (p: SignalRow[][]) =>
+    p[0].slice().sort((x: SignalRow, y: SignalRow) => x.ticker.localeCompare(y.ticker))
+      .map((r: SignalRow) => ({ ticker: r.ticker, value: r.value }));
   assertEquals(sortVals(a.upsertPayloads), sortVals(b.upsertPayloads));
   const expectedTs = AS_OF.toISOString();
   assertEquals(ra.started_at, expectedTs);
