@@ -73,13 +73,21 @@ export type SignalSkipReason =
                              // graceful-degradation semantics as data_unavailable; the
                              // distinction is observability only (operator-actionable:
                              // "upgrade tier" vs "wait for next report").
-  | 'missing_shares_outstanding'; // shares-outstanding side input (Polygon reference
+  | 'missing_shares_outstanding' // shares-outstanding side input (Polygon reference
                              // endpoint) returned null/zero/non-finite for this ticker.
                              // Surfaced specifically for the short-interest signal
                              // (FP-041 revision-fix) where si_pct_float is derived as
                              // short_interest / share_class_shares_outstanding — without
                              // a usable denominator we cannot compute the percentage.
                              // Typed-absence; ticker is still ranked by other signals.
+  | 'no_qualifying_transactions'; // Source returned data, but zero rows passed the
+                             // signal-specific filter (e.g., Form 4 fetcher returned
+                             // results, but no row was a record_type='transaction' with
+                             // an included transaction_code after the 10b5-1 sale
+                             // exclusion). FP-042 / Signal #4 (insider transactions):
+                             // the EXPECTED case for most names — most stocks have no
+                             // qualifying insider trades in any given 90-day window.
+                             // Non-critical; ticker is still ranked by other signals.
 
 export interface SignalSkip {
   ticker: string;
