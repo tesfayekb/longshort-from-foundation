@@ -1,6 +1,7 @@
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { HubTabs, HubEmptyState } from './hub/HubTabs';
 import RankingsTab from './signals/RankingsTab';
+import ComputeRunsTab from './signals/ComputeRunsTab';
 
 /**
  * Signals hub — FP-023 ships the shell + tab frame with honest empty
@@ -24,13 +25,7 @@ export default function SignalsHubPage() {
           {
             value: 'runs',
             label: 'Compute Runs',
-            content: (
-              <HubEmptyState
-                title="Signal compute runs"
-                description="Every fire of the signal cron — outcome, universe size, persisted count, and per-ticker skip attribution from signal_compute_log."
-                note="Deferred — lands in a future Compute-Runs FP"
-              />
-            ),
+            content: <ComputeRunsTab />,
           },
           {
             value: 'coverage',
