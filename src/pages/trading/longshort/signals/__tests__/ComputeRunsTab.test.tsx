@@ -38,7 +38,8 @@ function makeRun(overrides: Partial<SignalComputeRunRow> & { run_id: string }): 
   };
 }
 
-// 30 runs > PAGE_SIZE(25): row 0 is a cron fire (non-midnight), rest are manual.
+// 31 runs > PAGE_SIZE(25): row 0 is a cron fire (non-midnight), row 1 is a zero-persist run,
+// row 2 is a failed run, rest are manual.
 const allRuns: SignalComputeRunRow[] = [
   makeRun({
     run_id: 'cron-run',
@@ -53,6 +54,13 @@ const allRuns: SignalComputeRunRow[] = [
       ticker: `TICK${i}`,
       reason: 'insufficient_history',
     })),
+  }),
+  makeRun({
+    run_id: 'failed-run',
+    outcome: 'failed',
+    failure_reason: 'DB timeout',
+    skip_counts: null,
+    skipped_detail: null,
   }),
   ...Array.from({ length: 28 }, (_, i) =>
     makeRun({ run_id: `manual-${i}`, as_of_date: '2026-06-05' }),
