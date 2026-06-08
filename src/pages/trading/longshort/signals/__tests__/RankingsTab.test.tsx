@@ -173,4 +173,11 @@ describe('RankingsTab (FP-024)', () => {
       screen.getByText(/The tradeable ranking is the composite of all signals/i),
     ).toBeInTheDocument();
   });
+
+  it('renders the filter toolbar as a single shrink-to-fit row (no flex-wrap) — FP-035', async () => {
+    await renderTab();
+    const toolbar = await screen.findByTestId('rankings-filter-toolbar');
+    expect(toolbar.className).not.toContain('flex-wrap');
+    expect(toolbar.className).toContain('sm:flex-row');
+  });
 });
