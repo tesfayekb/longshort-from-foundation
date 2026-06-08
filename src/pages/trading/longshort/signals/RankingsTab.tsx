@@ -22,6 +22,7 @@ import { LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ErrorState } from '@/components/dashboard/ErrorState';
 import { EmptyState } from '@/components/dashboard/EmptyState';
 import { HubEmptyState } from '../hub/HubTabs';
+import { PhaseContextNote } from '@/components/dashboard/PhaseContextNote';
 import { SignalDistributionBand } from './SignalDistributionBand';
 import {
   useAvailableSignals,
