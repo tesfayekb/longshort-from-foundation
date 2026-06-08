@@ -865,6 +865,54 @@ export type Database = {
         }
         Relationships: []
       }
+      signal_registry: {
+        Row: {
+          cadence: string | null
+          created_at: string
+          criticality: string | null
+          display_name: string
+          display_order: number
+          job_registry_id: string | null
+          planned_phase: string | null
+          signal_id: string
+          signal_num: number | null
+          spec_ref: string | null
+          stale_after_hours: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cadence?: string | null
+          created_at?: string
+          criticality?: string | null
+          display_name: string
+          display_order: number
+          job_registry_id?: string | null
+          planned_phase?: string | null
+          signal_id: string
+          signal_num?: number | null
+          spec_ref?: string | null
+          stale_after_hours?: number | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          cadence?: string | null
+          created_at?: string
+          criticality?: string | null
+          display_name?: string
+          display_order?: number
+          job_registry_id?: string | null
+          planned_phase?: string | null
+          signal_id?: string
+          signal_num?: number | null
+          spec_ref?: string | null
+          stale_after_hours?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       system_config: {
         Row: {
           description: string | null
