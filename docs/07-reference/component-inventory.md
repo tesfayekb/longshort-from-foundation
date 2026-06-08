@@ -48,6 +48,7 @@ Governed registry of all shared Phase 4 components. Pages must assemble from thi
 | `EmptyState` | `src/components/dashboard/EmptyState.tsx` | Icon + heading + description + optional action | All empty lists/tables |
 | `ErrorState` | `src/components/dashboard/ErrorState.tsx` | Error icon + message + retry button | All failed operations |
 | `AccessDenied` | `src/components/dashboard/AccessDenied.tsx` | Permission-denied page: lock icon + message + back/home link, rendered within shell | Permission-denied routes |
+| `PhaseContextNote` | `src/components/dashboard/PhaseContextNote.tsx` | Info-alert wrapper for phase-context explainers: what a page shows, what it does NOT yet show, and which phase/FP completes it. Uses `--info` token. | All longshort pages with partial/in-progress capability |
 
 ## Dialog Components
 

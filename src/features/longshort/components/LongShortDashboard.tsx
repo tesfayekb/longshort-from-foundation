@@ -170,7 +170,7 @@ export function LongShortDashboard() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Long-Short Strategy</h1>
         <p className="text-sm text-muted-foreground">
-          Operator dashboard — universe refresh status, scheduled jobs, and recent reconciliation events.
+          Strategy health and observability — pre-trade (paper/build phase). Nothing here represents live capital.
         </p>
       </header>
 

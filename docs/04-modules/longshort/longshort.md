@@ -79,6 +79,16 @@ This table maps every CROSSWIND v0.9 design-source part and key section anchor t
 
 See `docs/04-modules/longshort/universe/universe.md` for full component documentation (Architecture + Data Model + Sub-modules + Reconciliation Surface + Health Monitoring + Feature-Flag Wrapping + Events + Jobs + Failure Modes + Dependencies).
 
+## UI Phase-Context Discipline
+
+Every long-short page that shows a partial or in-progress capability MUST carry a phase-context note stating:
+
+1. **What the page shows** — the current capability, honestly described.
+2. **What it does NOT yet show** — the gap that could be misread as present.
+3. **Which phase/FP completes it** — the accountable future deliverable.
+
+This discipline is enforced via the reusable `PhaseContextNote` component (`src/components/dashboard/PhaseContextNote.tsx`, info-variant Alert using the `--info` design-system token). Pages that are complete (e.g., Universe Constituents at FP-008 closure) need no note; pages with partial data (e.g., Rankings showing a single signal pre-combiner), empty-state shells for future FPs, or dashboards during the pre-trade paper/build phase must carry one. Future signal pages, the combiner page, portfolio construction, and execution surfaces each declare their phase honestly on-page.
+
 ## Cross-references
 
 - Binding architectural pattern: `docs/04-modules/strategy-module-pattern.md` (T1–T9 contract)

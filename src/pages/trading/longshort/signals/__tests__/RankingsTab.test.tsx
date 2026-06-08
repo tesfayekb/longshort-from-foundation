@@ -154,4 +154,14 @@ describe('RankingsTab (FP-024)', () => {
     });
     expect(paginatedCalls.some((c) => c.tickerFilter === 'T00' && c.page === 1)).toBe(true);
   });
+
+  it('surfaces the single-signal phase-context note above the band', async () => {
+    await renderTab();
+    expect(
+      screen.getByText(/Single-signal view — not the final trading list/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/The tradeable ranking is the composite of all signals/i),
+    ).toBeInTheDocument();
+  });
 });

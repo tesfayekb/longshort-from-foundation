@@ -11,7 +11,7 @@ export default function SignalsHubPage() {
     <div className="space-y-6">
       <PageHeader
         title="Signals"
-        subtitle="Cross-sectional signal rankings, compute health, and coverage"
+        subtitle="Per-signal rankings, compute health, and coverage. Rankings show individual signals — the tradeable composite arrives with the combiner (Phase 3)."
       />
       <HubTabs
         defaultTab="rankings"
@@ -28,7 +28,7 @@ export default function SignalsHubPage() {
               <HubEmptyState
                 title="Signal compute runs"
                 description="Every fire of the signal cron — outcome, universe size, persisted count, and per-ticker skip attribution from signal_compute_log."
-                note="Built after FP-024"
+                note="Deferred — lands in a future Compute-Runs FP"
               />
             ),
           },
@@ -39,7 +39,7 @@ export default function SignalsHubPage() {
               <HubEmptyState
                 title="Universe eligibility coverage"
                 description="Per-rule coverage flags from universe_eligibility_coverage — which §3.3 filters were applied on each as-of date."
-                note="Deferred"
+                note="Deferred — lands after Compute Runs"
               />
             ),
           },
