@@ -9,11 +9,22 @@
 --
 -- AUTHORITY:
 --   - DEC-040 (scheduled-execution attestations require cron.job evidence)
+--   - DEC-043 (scheduled-job attestations require end-to-end evidence: 200 in
+--     net._http_response + real wall-clock artifact row; INC-69 / FP-039)
 --   - Runbook: docs/04-modules/longshort/runbooks/signal-cron-wiring.md
---   - Template: sql/09_longshort_universe_cron_schedule.sql (the canonical,
---     live-verified pattern — jobid:48 active, fires daily, no DNS-fail).
---     Do NOT pattern from sql/05 (INC-64: PROJECT_REF placeholder never
---     replaced, four platform jobs DNS-failing since April).
+--   - Template: sql/09_longshort_universe_cron_schedule.sql (the canonical
+--     placeholder-and-shape pattern). The prior "jobid:48 active, fires daily,
+--     no DNS-fail" canonical-live-verified claim in this header was FALSE
+--     (see INC-69 / FP-009 Addendum 2026-06-08): jobid:48's cron auth path
+--     had never returned a 200 prior to FP-039 — all universe_refresh_log
+--     rows were MANUAL signatures, never cron-attributable. The canonical
+--     end-to-end-live-verified pattern is now THIS file's jobid:51
+--     (longshort-momentum-compute), proven 2026-06-08 11:52:00 + 11:54:00 UTC
+--     with cron-attributable signal_compute_log rows (real wall-clock,
+--     persisted_count=834) after the FP-039 unified secret remediation.
+--     Do NOT pattern from sql/05 pre-FP-019 (INC-64: PROJECT_REF placeholder
+--     never replaced, four platform jobs DNS-failing since April; resolved
+--     at FP-019, auth-fixed at FP-039).
 --
 -- SCOPE (single signal): ONLY `longshort-momentum-compute` is wired here.
 --   - `longshort-signal-monitor` (FP-010 MIG-070) is intentionally NOT wired
