@@ -143,6 +143,19 @@ Conformance: every component below conforms to [UI Design System](ui-design-syst
 
 > **Registered by:** FP-029 (ACT-141) — same-PR per Constitution Rule 6.
 
+## Trading / Long-Short Signals — All-Signals Overview (FP-038)
+
+Conformance: every component below conforms to [UI Design System](ui-design-system.md). The All-Signals tab is assembled from governed shell + data-display primitives (Card, Table, Badge, Link) + `PhaseContextNote` (FP-035 collapsible info-callout). The status / staleness / drift cells use the locked badge vocabulary (`success` / `secondary` / `warning` / `info` per FP-033). No new visual tokens.
+
+| Component | Path | Purpose | Used By |
+|-----------|------|---------|---------|
+| `AllSignalsTab` | `src/pages/trading/longshort/signals/AllSignalsTab.tsx` | Signals → All Signals tab content (default tab post-FP-038). One row per signal (#1–#9) + a composite row. Live signals show real last-fire (UTC) and coverage (`persisted_count / universe_size`) from `signal_compute_log`; planned signals show "—" + a planned-phase badge. Composite is one planned row (NOT a separate page). Drift is a column with honest states ("Insufficient history" until N ≥ 30 distinct `as_of_date`s; NOT a separate page). Live rows deep-link to the Rankings tab. Strictly read-only. | `SignalsHubPage` (All Signals tab) |
+| `useSignalRegistry` (hook module) | `src/features/longshort/hooks/useSignalRegistry.ts` | One read-only React Query hook (`useSignalRegistry`) + one pure helper (`deriveStaleness`) + the `DRIFT_MIN_HISTORY = 30` constant. The hook fetches `signal_registry` ordered by `display_order`, then joins last-fire telemetry from `signal_compute_log` for the (small, bounded) set of live signals — counting `totalRuns` and `distinctDates` for the drift gate. `deriveStaleness` mirrors the `longshort-signal-monitor` STALE_HOURS_WEEKDAY (36) / STALE_HOURS_MONDAY (72) logic against the registry's per-signal `stale_after_hours` value. | `AllSignalsTab` |
+
+> **Registered by:** FP-038 (ACT-152) — same-PR per Constitution Rule 6.
+>
+> **Explicitly rejected alternatives (do not re-propose):** (1) 9 separate per-signal pages — Rankings is already signal-generic; the registry is the multi-signal INDEX, Rankings is the per-signal DETAIL. (2) A combiner page now — the combiner is Phase 3 with no output table; it is one `planned` registry row until it exists. (3) A drift-monitoring page now — drift needs N ≥ 30 observations per signal, which doesn't exist yet; it is a registry COLUMN with honest "insufficient history" state.
+
 ---
 
 ## Component Rules
