@@ -17,8 +17,22 @@ const AS_OF = new Date('2026-06-08T21:00:00Z');
 const AS_OF_DATE = '2026-06-08';
 const LATEST_SNAPSHOT = '2026-06-05';
 
+/**
+ * Default shares-outstanding for the universe — chosen as 1.0 so that the
+ * derived `si_pct_float = short_interest / shares` equals the raw
+ * `short_interest` numeric, which keeps the historical test fixtures
+ * (`reportsAround(0.08, -0.02)` etc.) numerically equivalent under the
+ * FP-041 revision-fix derivation path.
+ */
+const DEFAULT_SHARES = 1.0;
+
 type Behavior =
-  | { kind: 'reports'; reports: Array<{ report_date: string; si_pct_float: number }> }
+  | { kind: 'reports'; reports: Array<{ report_date: string; short_interest: number }> }
+  | { kind: 'unavailable'; reason: 'subscription_gated' | 'data_unavailable' }
+  | { kind: 'throw'; err: unknown };
+
+type SharesBehavior =
+  | { kind: 'shares'; shares: number }
   | { kind: 'unavailable'; reason: 'subscription_gated' | 'data_unavailable' }
   | { kind: 'throw'; err: unknown };
 
@@ -28,11 +42,13 @@ type MockCalls = {
 };
 
 function reportsAround(base: number, delta: number) {
-  // 3 reports: [T-2]=base, [T-1]=base+delta/2, [T]=base+delta
+  // 3 reports — `short_interest` raw counts (orchestrator derives si_pct_float
+  // via short_interest / shares; with DEFAULT_SHARES=1 the numerical values
+  // pass through unchanged so the test math still reads as si-percentage).
   return [
-    { report_date: '2026-04-30', si_pct_float: base },
-    { report_date: '2026-05-15', si_pct_float: base + delta / 2 },
-    { report_date: '2026-05-31', si_pct_float: base + delta },
+    { report_date: '2026-04-30', short_interest: base },
+    { report_date: '2026-05-15', short_interest: base + delta / 2 },
+    { report_date: '2026-05-31', short_interest: base + delta },
   ];
 }
 
@@ -118,10 +134,33 @@ function makeFetcher(behaviors: Record<string, Behavior>) {
   };
 }
 
-function ctx(supabase: unknown, fetcher: unknown, concurrency?: number) {
+function makeSharesFetcher(behaviors: Record<string, SharesBehavior> = {}) {
+  return {
+    fetcher: {
+      async fetchShares(ticker: string) {
+        const b = behaviors[ticker];
+        if (!b) {
+          // Default: return DEFAULT_SHARES so derivation is a pass-through.
+          return { kind: 'shares', shares: DEFAULT_SHARES };
+        }
+        if (b.kind === 'throw') throw b.err;
+        if (b.kind === 'unavailable') return { kind: 'unavailable', reason: b.reason };
+        return { kind: 'shares', shares: b.shares };
+      },
+    } as unknown as import('../shared/polygon-shares-outstanding-fetcher.ts').PolygonSharesOutstandingFetcher,
+  };
+}
+
+function ctx(
+  supabase: unknown,
+  fetcher: unknown,
+  concurrency?: number,
+  sharesFetcher?: unknown,
+) {
   return {
     supabase,
     shortInterest: fetcher,
+    sharesOutstanding: sharesFetcher ?? makeSharesFetcher().fetcher,
     operator_id: OPERATOR_ID,
     ...(concurrency !== undefined ? { concurrency } : {}),
   };
@@ -347,4 +386,146 @@ Deno.test('(11) determinism — same inputs produce identical persisted values +
 
 Deno.test('(12) signal_id locked = short_interest_change_30d', () => {
   assertEquals(SIGNAL_ID, 'short_interest_change_30d');
+});
+
+// ── FP-041 revision-fix: shares-outstanding derivation path ────────────
+
+Deno.test('(13) si_pct_float is DERIVED from short_interest / shares (not read verbatim)', async () => {
+  // Two tickers, identical raw `short_interest` arrays, DIFFERENT shares
+  // → derived si_pct_float differs → z-scores within the same sector
+  // differ. Locks the derivation: if the orchestrator regressed to
+  // reading si_pct_float directly, both tickers would have identical
+  // raw_signal and z-score to a tie (0,0).
+  const universe = [
+    { ticker: 'BIG', gics_sector: 'IT' }, // shares=1_000_000_000
+    { ticker: 'SML', gics_sector: 'IT' }, // shares=10_000_000
+  ];
+  const { supabase, calls } = makeSupabase({ universe });
+  const { fetcher } = makeFetcher({
+    BIG: { kind: 'reports', reports: [
+      { report_date: '2026-04-30', short_interest: 100_000_000 },
+      { report_date: '2026-05-15', short_interest: 105_000_000 },
+      { report_date: '2026-05-31', short_interest:  80_000_000 },
+    ]},
+    SML: { kind: 'reports', reports: [
+      { report_date: '2026-04-30', short_interest: 1_000_000 },
+      { report_date: '2026-05-15', short_interest: 1_500_000 },
+      { report_date: '2026-05-31', short_interest: 3_000_000 },
+    ]},
+  });
+  const { fetcher: sharesFetcher } = makeSharesFetcher({
+    BIG: { kind: 'shares', shares: 1_000_000_000 },
+    SML: { kind: 'shares', shares:    10_000_000 },
+  });
+  const res = await createShortInterestOrchestrator(
+    ctx(supabase, fetcher, undefined, sharesFetcher),
+  ).run(AS_OF);
+  assertEquals(res.outcome, 'completed');
+  assertEquals(res.persisted_count, 2);
+  const payload = calls.upsertPayloads[0];
+  const big = payload.find((r) => r.ticker === 'BIG')!;
+  const sml = payload.find((r) => r.ticker === 'SML')!;
+  // BIG: -(0.08 - 0.10) = +0.02 (bullish, shorts covered)
+  // SML: -(0.30 - 0.10) = -0.20 (bearish, shorts piled on)
+  // → BIG raw > SML raw → BIG z > SML z (within IT, 2 members: ±1)
+  assert(big.value! > sml.value!, 'derivation regressed: BIG vs SML ordering wrong');
+});
+
+Deno.test('(14) missing shares (404/null) → missing_shares_outstanding skip, ticker dropped from observations', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+    { ticker: 'NOSHARES', gics_sector: 'IT' },
+  ];
+  const { supabase, calls } = makeSupabase({ universe });
+  const { fetcher } = makeFetcher({
+    AAPL: { kind: 'reports', reports: reportsAround(0.08, -0.02) },
+    MSFT: { kind: 'reports', reports: reportsAround(0.05,  0.01) },
+    NOSHARES: { kind: 'reports', reports: reportsAround(0.06, -0.01) },
+  });
+  const { fetcher: sharesFetcher } = makeSharesFetcher({
+    NOSHARES: { kind: 'unavailable', reason: 'data_unavailable' },
+  });
+  const res = await createShortInterestOrchestrator(
+    ctx(supabase, fetcher, undefined, sharesFetcher),
+  ).run(AS_OF);
+  assertEquals(res.outcome, 'completed');
+  assertEquals(res.persisted_count, 2);
+  const noshares = res.skipped.find((s) => s.ticker === 'NOSHARES');
+  assert(noshares, 'expected NOSHARES skip');
+  assertEquals(noshares!.reason, 'missing_shares_outstanding');
+  const persistedTickers = calls.upsertPayloads[0].map((r) => r.ticker);
+  assert(!persistedTickers.includes('NOSHARES'), 'NOSHARES leaked into observations (anti-phantom)');
+});
+
+Deno.test('(15) shares subscription_gated (403) → missing_shares_outstanding skip with diagnostic detail', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+    { ticker: 'GATED', gics_sector: 'IT' },
+  ];
+  const { supabase } = makeSupabase({ universe });
+  const { fetcher } = makeFetcher({
+    AAPL: { kind: 'reports', reports: reportsAround(0.08, -0.02) },
+    MSFT: { kind: 'reports', reports: reportsAround(0.05,  0.01) },
+    GATED: { kind: 'reports', reports: reportsAround(0.06, -0.01) },
+  });
+  const { fetcher: sharesFetcher } = makeSharesFetcher({
+    GATED: { kind: 'unavailable', reason: 'subscription_gated' },
+  });
+  const res = await createShortInterestOrchestrator(
+    ctx(supabase, fetcher, undefined, sharesFetcher),
+  ).run(AS_OF);
+  const gated = res.skipped.find((s) => s.ticker === 'GATED')!;
+  assertEquals(gated.reason, 'missing_shares_outstanding');
+  assertStringIncludes(gated.detail!, '403');
+});
+
+Deno.test('(16) shares fetcher throw (non-403/404) → fetch_error skip, NOT missing_shares_outstanding', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+    { ticker: 'BOOM', gics_sector: 'IT' },
+  ];
+  const { supabase } = makeSupabase({ universe });
+  const { fetcher } = makeFetcher({
+    AAPL: { kind: 'reports', reports: reportsAround(0.08, -0.02) },
+    MSFT: { kind: 'reports', reports: reportsAround(0.05,  0.01) },
+    BOOM: { kind: 'reports', reports: reportsAround(0.06, -0.01) },
+  });
+  const { fetcher: sharesFetcher } = makeSharesFetcher({
+    BOOM: { kind: 'throw', err: new SignalComputationError('polygon_shares_outstanding', 'BOOM', 'HTTP 500 boom') },
+  });
+  const res = await createShortInterestOrchestrator(
+    ctx(supabase, fetcher, undefined, sharesFetcher),
+  ).run(AS_OF);
+  const boom = res.skipped.find((s) => s.ticker === 'BOOM')!;
+  assertEquals(boom.reason, 'fetch_error');
+  assertStringIncludes(boom.detail!, 'BOOM');
+});
+
+Deno.test('(17) divide-by-zero defense — zero shares cannot reach divider even via mock', async () => {
+  // Even if a future fetcher refactor weakens its `shares > 0` guard,
+  // the orchestrator MUST not produce Infinity / NaN. The orchestrator
+  // has a defensive re-check that maps zero shares to a typed skip.
+  const universe = [{ ticker: 'ZERO', gics_sector: 'IT' }];
+  const { supabase } = makeSupabase({ universe });
+  const { fetcher } = makeFetcher({
+    ZERO: { kind: 'reports', reports: reportsAround(0.06, -0.01) },
+  });
+  // Mock a fetcher that LIES and returns shares=0 (bypassing its own guard).
+  const lyingFetcher = {
+    async fetchShares(_ticker: string) {
+      return { kind: 'shares', shares: 0 };
+    },
+  } as unknown as import('../shared/polygon-shares-outstanding-fetcher.ts').PolygonSharesOutstandingFetcher;
+  const res = await createShortInterestOrchestrator(
+    ctx(supabase, fetcher, undefined, lyingFetcher),
+  ).run(AS_OF);
+  // empty_universe path requires >=1 row; with the single ZERO ticker
+  // skipped, the z-score step has nothing to produce → 0 persisted.
+  assertEquals(res.persisted_count, 0);
+  const zero = res.skipped.find((s) => s.ticker === 'ZERO')!;
+  assertEquals(zero.reason, 'missing_shares_outstanding');
+  assertStringIncludes(zero.detail!, 'defensive');
 });
