@@ -71,6 +71,7 @@ Deno.test('aggregateSkipCounts: empty array yields all-zero stable shape', () =>
     data_unavailable: 0,
     subscription_gated: 0,
     missing_shares_outstanding: 0,
+    no_qualifying_transactions: 0,
   });
 });
 
@@ -92,6 +93,7 @@ Deno.test('aggregateSkipCounts: per-reason counts aggregate correctly', () => {
     data_unavailable: 0,
     subscription_gated: 0,
     missing_shares_outstanding: 0,
+    no_qualifying_transactions: 0,
   });
 });
 
@@ -170,6 +172,7 @@ Deno.test('persistSignalComputeLog: skip_counts JSON shape is stable when no ski
     data_unavailable: 0,
     subscription_gated: 0,
     missing_shares_outstanding: 0,
+    no_qualifying_transactions: 0,
   });
 });
 
