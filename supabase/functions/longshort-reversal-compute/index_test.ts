@@ -24,7 +24,7 @@ Deno.test('(1) cron auth wired via verifyCronSecret (NOT operator JWT)', () => {
 Deno.test('(1a) cron auth-first ordering: verifyCronSecret returns before any other side-effect', () => {
   const cronIdx = HANDLER_SOURCE.indexOf('verifyCronSecret(req)');
   const productionClockIdx = HANDLER_SOURCE.indexOf('productionClock.getWallClockTs()');
-  const auditIdx = HANDLER_SOURCE.indexOf('writeStrategyAuditEvent');
+  const auditIdx = HANDLER_SOURCE.indexOf('writeStrategyAuditEvent({');
   assert(cronIdx > 0 && cronIdx < productionClockIdx,
     'verifyCronSecret must precede productionClock read');
   assert(cronIdx < auditIdx, 'verifyCronSecret must precede any audit-event write');
