@@ -2694,8 +2694,8 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Exports** | `const JOB_ID_TO_SIGNAL_ID: Readonly<Record<string,string>>` (as-const, single-entry at A3: `'longshort.momentum.compute' → 'cross_sectional_momentum_12_1'`); `function resolveSignalIdForJob(jobId): string \| undefined` (convenience accessor; future chokepoint for unknown-id logging). |
 | **File** | `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping.ts` |
 | **Tests** | `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping_test.ts` — 6 Deno tests (entry presence + cross-reference vs `momentum-orchestrator.SIGNAL_ID` + accessor known/unknown branches + single-entry guard against pre-wiring + immutability documentation). |
-| **Extension point** | Each new signal's execution prompt adds ONE entry in the same PR that registers its compute job. The signal becomes monitored automatically — no change to `longshort-signal-monitor/index.ts` is required. **Current entries (2):** `longshort.momentum.compute → cross_sectional_momentum_12_1` (FP-010 A3); `longshort.reversal.compute → short_term_reversal_1w` (FP-040). |
-| **Drift sentinels** | Cross-reference tests (`(2)` momentum + `(2b)` reversal) fail LOUDLY if either orchestrator's `SIGNAL_ID` export decouples from the mapping value. |
+| **Extension point** | Each new signal's execution prompt adds ONE entry in the same PR that registers its compute job. The signal becomes monitored automatically — no change to `longshort-signal-monitor/index.ts` is required. **Current entries (3):** `longshort.momentum.compute → cross_sectional_momentum_12_1` (FP-010 A3); `longshort.reversal.compute → short_term_reversal_1w` (FP-040); `longshort.short_interest.compute → short_interest_change_30d` (FP-041). |
+| **Drift sentinels** | Cross-reference tests (`(2)` momentum + `(2b)` reversal + `(2c)` short-interest) fail LOUDLY if any orchestrator's `SIGNAL_ID` export decouples from the mapping value. |
 | **Added by** | FP-010 Bucket A Commit A3 |
 
 #### `supabase/functions/longshort-signal-monitor/index.ts`
@@ -2730,6 +2730,73 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Tests** | `compute-reversal_test.ts` — 11 Deno unit tests including the LOAD-BEARING sign-flip pair (positive 5-day return → negative signal; negative 5-day return → positive signal), MIN_BARS pin, off-by-one sentinel (bars[5]/bars[0]), div-by-zero, determinism, ReadonlyArray non-mutation, momentum-duplicate guard. |
 | **Purity** | No I/O, no clock, no randomness. Deterministic for replay. |
 | **Added by** | FP-040 |
+
+---
+
+## Short-Interest Change Signal (FP-041 / Phase 2.3 / Signal #5)
+
+#### `supabase/functions/_shared/longshort-signals/short-interest-change/compute-short-interest.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-041) |
+| **Classification** | pure compute function — Signal #5 raw value per CROSSWIND §4.4.3 (`-1 × (SI_pct_float[T] - SI_pct_float[T-2_reports])`). NON-CRITICAL signal — typed `null` on insufficient reports / NaN guard; never a fabricated zero (a real SI change of 0 is distinct from "no data"). |
+| **Exports** | `function computeShortInterestChange(reports): number \| null`; `const SHORT_INTEREST_MIN_REPORTS = 3`; `interface ShortInterestReport { report_date; si_pct_float }`. |
+| **File** | `supabase/functions/_shared/longshort-signals/short-interest-change/compute-short-interest.ts` |
+| **Tests** | `compute-short-interest_test.ts` — 13 Deno unit tests including the LOAD-BEARING sign-flip pair (FALLING SI → POSITIVE bullish signal; RISING SI → NEGATIVE bearish signal), MIN_REPORTS pin, off-by-one sentinel (reports[2] / reports[0], middle slot ignored), NaN guard, determinism, ReadonlyArray non-mutation, ≥3-reports uses LATEST and LATEST-2 only, follow-the-shorts-duplicate guard. |
+| **Purity** | No I/O, no clock, no randomness. Deterministic for replay. |
+| **Added by** | FP-041 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/polygon-short-interest-fetcher.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-041) |
+| **Classification** | shared infrastructure — first non-price external Polygon fetcher in the signal stack. Sibling to `polygon-price-history-fetcher.ts` (signal stage) and `polygon-enrichment-fetcher.ts` (universe stage). ENTITLEMENT-AWARE — 403 → `{ kind: 'unavailable', reason: 'subscription_gated' }`, 404 → `{ kind: 'unavailable', reason: 'data_unavailable' }` (neither throws — both degrade gracefully per §4.3.5 non-critical-signal rule). 401 / 5xx after retries / parse / timeout throw `SignalComputationError` with ticker context (INC-24 discipline). |
+| **Exports** | `class PolygonShortInterestFetcher { fetchShortInterest(ticker, as_of, limit?): Promise<ShortInterestFetchResult> }`; `const SHORT_INTEREST_OPERATION_ID = 'polygon_short_interest'`; `const DEFAULT_SHORT_INTEREST_LIMIT = 6`; `type ShortInterestFetchResult = { kind: 'reports'; reports: ShortInterestReport[] } \| { kind: 'unavailable'; reason: 'subscription_gated' \| 'data_unavailable' }`. |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/polygon-short-interest-fetcher.ts` |
+| **Tests** | `polygon-short-interest-fetcher_test.ts` — 8 Deno tests (constructor-throws-on-missing-apiKey + happy-path ASC sort + 403 → subscription_gated typed unavailable + 404 → data_unavailable typed unavailable + 401 throws SignalComputationError with ticker context + anti-phantom row dropping when `short_percent_of_float` absent + empty results → kind=reports/[] + URL shape carries `ticker`/`settlement_date.lte=as_of`/`limit`/`apiKey`). |
+| **Secret** | POLYGON_API_KEY (shared with price + enrichment fetchers; constructor throws on absence). |
+| **Backup source (documented, NOT implemented)** | FINRA equity short interest file + EDGAR forms — future hardening item to call through when Polygon returns `subscription_gated` / `data_unavailable`. Out of FP-041 scope; noted in header comment. |
+| **Added by** | FP-041 |
+
+#### `supabase/functions/_shared/longshort-signals/short-interest-change/short-interest-orchestrator.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-041) |
+| **Classification** | shared orchestrator factory — 5-step pipeline structurally mirroring `reversal-orchestrator.ts` (load universe → bounded-concurrency fetch + per-ticker compute → within-sector GICS z-score → SignalRow build → persist). Differences vs reversal: NEW `PolygonShortInterestFetcher` instead of price fetcher; NON-CRITICAL semantics — `subscription_gated` / `data_unavailable` → typed skip with matching reason (NOT a hard ticker exclusion, NOT a fake zero); `ShortInterestOrchestratorContext` extends `SignalOrchestratorContext` with `shortInterest` field (replaces unused `priceHistory`). |
+| **Exports** | `function createShortInterestOrchestrator(ctx): { run(as_of): Promise<SignalOrchestratorResult> }`; `const SIGNAL_ID = 'short_interest_change_30d'`; `interface ShortInterestOrchestratorContext`. |
+| **File** | `supabase/functions/_shared/longshort-signals/short-interest-change/short-interest-orchestrator.ts` |
+| **Tests** | `short-interest-orchestrator_test.ts` — 12 Deno tests via DI mocks (happy-path 5 tickers / insufficient-reports skip / 403 subscription_gated typed skip + no-fake-zero check / 404 data_unavailable typed skip / ALL-MISSING entitlement-gated universe → completed+0 persisted (degraded, NON-critical proof) / non-403/404 throw → fetch_error / empty universe → failed+empty_universe / universe-read error → throws / persistence error → failed+reason / concurrency cap=5 / determinism + as_of-derived timestamps / SIGNAL_ID lock). |
+| **Wall-clock** | All timestamps derive from injected `as_of` parameter (DEC-034 clause 4). No `Date.now()`/`new Date()`. |
+| **Cadence** | Twice-monthly via cron schedule `0 21 1,15 * *` (MIG-076). No additional orchestrator-side "new report?" gate in v1 — the schedule itself enforces cadence; re-runs on unchanged data are idempotent (`signal_observations` composite-PK upsert is last-writer-wins). |
+| **Added by** | FP-041 |
+
+#### `supabase/functions/longshort-short-interest-compute/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-041) |
+| **Classification** | edge function — twice-monthly-cadence cron handler for Signal #5. Mirror of `longshort-reversal-compute/index.ts`. DISARMED-at-creation per MIG-076 (`enabled=false`); enable-flip + cron-wiring are a separate operator-run step gated on DEC-043 attestation. |
+| **Trigger** | `verifyCronSecret` (X-Cron-Secret header); registered in `job_registry` as `longshort.short_interest.compute` via MIG-076 (`enabled=false`, schedule `'0 21 1,15 * *'`). |
+| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `POLYGON_API_KEY` check → build `ShortInterestOrchestratorContext` (new fetcher) → `createShortInterestOrchestrator(ctx).run(as_of)` → `persistSignalComputeLog` → `.started`/`.completed`/`.failed` audit events. |
+| **File** | `supabase/functions/longshort-short-interest-compute/index.ts` |
+| **Tests** | `supabase/functions/longshort-short-interest-compute/index_test.ts` — 9 source-sentinel tests (cron-auth wired + auth-first ordering + wall-clock discipline + POLYGON_API_KEY + new-fetcher orchestrator wiring + no-price-fetcher leak + persist-helper + 3 audit events + handler-path pin + no momentum/reversal import drift). |
+| **Wall-clock** | `productionClock.getWallClockTs()` is the sole chokepoint; all telemetry timestamps derive from `as_of` (DEC-034 clause 4). |
+| **Added by** | FP-041 |
+
+#### `supabase/functions/longshort-short-interest-compute-manual/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-041) |
+| **Classification** | edge function — operator-trigger sibling of `longshort-short-interest-compute`. Invokes the same orchestrator with an operator-supplied `as_of`. Mirror of `longshort-reversal-compute-manual/index.ts`. Recommended path for validating Signal #5 math + persistence + entitlement-degradation before any cron wiring (per DEC-043 prudent-sequencing). Either of the two outcomes is informative: (a) real SI-change z-scores persist → Stocks Advanced subscription includes short interest; (b) all-missing degraded outcome with `subscription_gated` skips → the FINRA/EDGAR backup needs scheduling (out of FP-041 scope). |
+| **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST with `{ "as_of": "YYYY-MM-DD" }` body. Does NOT register in `job_registry`. 405 on non-POST. |
+| **Pipeline** | auth → perm → body validation (`parseAsOfDate`) → future-`as_of` rejection via `productionClock` comparison → `POLYGON_API_KEY` check → `.manual_triggered` audit BEFORE → orchestrator → `persistSignalComputeLog` → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
+| **File** | `supabase/functions/longshort-short-interest-compute-manual/index.ts` |
+| **Tests** | `supabase/functions/longshort-short-interest-compute-manual/index_test.ts` — 9 source-sentinel tests (auth + permission + POST-only + body validation + parser + POLYGON_API_KEY + dual audit envelope ordering + wall-clock + new-fetcher orchestrator wiring + no momentum/reversal/price-fetcher import drift). |
+| **Added by** | FP-041 |
 
 #### `supabase/functions/_shared/longshort-signals/short-term-reversal/reversal-orchestrator.ts`
 

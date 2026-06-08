@@ -64,7 +64,15 @@ export type SignalSkipReason =
   | 'insufficient_history'   // < required-window bars; typed-absence
   | 'missing_sector'         // gics_sector null; within-sector z-score requires sector
   | 'fetch_error'            // network / auth / parse error caught from fetcher
-  | 'singleton_sector';      // sector has only 1 member; std=0; z-score undefined
+  | 'singleton_sector'       // sector has only 1 member; std=0; z-score undefined
+  | 'data_unavailable'       // source returned no data for ticker (e.g., short-interest
+                             // endpoint returned 404 or an empty report set); non-critical
+                             // signals degrade with is_present=0; ticker still ranked
+  | 'subscription_gated';    // source returned 403 / not-entitled; the data product is
+                             // not part of the current Polygon subscription tier. Same
+                             // graceful-degradation semantics as data_unavailable; the
+                             // distinction is observability only (operator-actionable:
+                             // "upgrade tier" vs "wait for next report").
 
 export interface SignalSkip {
   ticker: string;
