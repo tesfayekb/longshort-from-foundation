@@ -85,12 +85,12 @@ export default function ComputeRunsTab() {
         </p>
       </PhaseContextNote>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Controls</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <Select value={signalId ?? ''} onValueChange={(v) => setSignalId(v)}>
+      {/* FP-032 — compact filter toolbar (replaces the prior Controls Card). */}
+      <div
+        className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+        data-testid="compute-runs-filter-toolbar"
+      >
+        <Select value={signalId ?? ''} onValueChange={(v) => setSignalId(v)}>
             <SelectTrigger className="sm:max-w-xs" aria-label="Signal">
               <SelectValue placeholder="Signal" />
             </SelectTrigger>
@@ -112,8 +112,7 @@ export default function ComputeRunsTab() {
               <FireSourceBadge source={classifyFireSource(latest.completed_at)} />
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       <Card>
         <CardHeader>
