@@ -161,37 +161,37 @@ export default function UniverseMembershipPage() {
 
       {latestDate && (
         <div
-          className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+          className="flex flex-col gap-2 sm:flex-row sm:items-center"
           data-testid="universe-filter-toolbar"
         >
           <Input
-              placeholder="Filter by ticker…"
-              value={tickerFilter}
-              onChange={(e) => setTickerFilter(e.target.value)}
-              className="sm:max-w-xs"
-            />
-            <Select value={eligibilityFilter} onValueChange={(v) => setEligibilityFilter(v as EligibilityFilter)}>
-              <SelectTrigger className="sm:max-w-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All eligible</SelectItem>
-                <SelectItem value="long_only">Long-only</SelectItem>
-                <SelectItem value="short_only">Short-only</SelectItem>
-                <SelectItem value="both">Long + Short</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={sectorFilter} onValueChange={setSectorFilter}>
-              <SelectTrigger className="sm:max-w-xs">
-                <SelectValue placeholder="Sector" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All sectors</SelectItem>
-                {sectors.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            placeholder="Filter by ticker…"
+            value={tickerFilter}
+            onChange={(e) => setTickerFilter(e.target.value)}
+            className="min-w-0 flex-1 sm:max-w-[14rem]"
+          />
+          <Select value={eligibilityFilter} onValueChange={(v) => setEligibilityFilter(v as EligibilityFilter)}>
+            <SelectTrigger className="min-w-0 flex-1 sm:max-w-[14rem]" aria-label="Eligibility">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All eligible</SelectItem>
+              <SelectItem value="long_only">Long-only</SelectItem>
+              <SelectItem value="short_only">Short-only</SelectItem>
+              <SelectItem value="both">Long + Short</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sectorFilter} onValueChange={setSectorFilter}>
+            <SelectTrigger className="min-w-0 flex-1 sm:max-w-[14rem]" aria-label="Sector">
+              <SelectValue placeholder="Sector" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All sectors</SelectItem>
+              {sectors.map((s) => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 

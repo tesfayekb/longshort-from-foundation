@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { TradingStatusSnapshot } from '@/features/longshort/hooks/useTradingStatus';
 
 let mockSnapshot: TradingStatusSnapshot | null = null;
@@ -31,7 +32,11 @@ vi.mock('@/features/longshort/hooks/useTradingStatus', async () => {
 
 async function renderStrip() {
   const { TradingStatusStrip } = await import('../TradingStatusStrip');
-  return render(<TradingStatusStrip />);
+  return render(
+    <TooltipProvider>
+      <TradingStatusStrip />
+    </TooltipProvider>,
+  );
 }
 
 describe('TradingStatusStrip (FP-033)', () => {
@@ -80,5 +85,26 @@ describe('TradingStatusStrip (FP-033)', () => {
     expect(within(screen.getByTestId('status-universe')).getByText('stale')).toBeInTheDocument();
     expect(within(screen.getByTestId('status-breaker')).getByText('tripped')).toBeInTheDocument();
     expect(within(screen.getByTestId('status-open-reconciliation')).getByText('7 open')).toBeInTheDocument();
+  });
+
+  it('exposes accessible tooltip triggers on every indicator (FP-035)', async () => {
+    mockSnapshot = {
+      lastFire: { completed_at: '2026-06-08T20:05:13Z' },
+      universe: { completed_at: new Date().toISOString(), outcome: 'completed' },
+      breaker: { state: 'active' },
+      reconciliation: { openCount: 3 },
+    };
+    await renderStrip();
+    for (const id of [
+      'status-last-fire',
+      'status-universe',
+      'status-breaker',
+      'status-open-reconciliation',
+    ]) {
+      const el = screen.getByTestId(id);
+      // Radix Tooltip's asChild trigger forwards the data-state attr to the child.
+      expect(el).toHaveAttribute('data-state');
+      expect(el.className).toContain('cursor-help');
+    }
   });
 });

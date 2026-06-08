@@ -17,6 +17,7 @@
  */
 import { formatDistanceToNow } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { classifyFireSource } from '@/features/longshort/hooks/useSignalComputeRuns';
 import {
   useTradingStatus,
@@ -35,28 +36,50 @@ interface IndicatorProps {
   label: string;
   children: React.ReactNode;
   testId: string;
+  tooltip: React.ReactNode;
 }
 
-function Indicator({ label, children, testId }: IndicatorProps) {
+function Indicator({ label, children, testId, tooltip }: IndicatorProps) {
   return (
-    <div className="flex items-center gap-1.5" data-testid={testId}>
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      {children}
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className="flex cursor-help items-center gap-1.5"
+          data-testid={testId}
+          tabIndex={0}
+        >
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            {label}
+          </span>
+          {children}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="max-w-xs text-xs leading-snug">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
 function LastFireIndicator({ lastFire }: { lastFire: TradingStatusSnapshot['lastFire'] }) {
   if (!lastFire) {
     return (
-      <Indicator label="Last fire" testId="status-last-fire">
+      <Indicator
+        label="Last fire"
+        testId="status-last-fire"
+        tooltip="Most recent signal compute. No fires recorded yet — the indicator will populate once the daily cron fires (or you trigger a manual compute)."
+      >
         <Badge variant="outline" className="text-[10px]">—</Badge>
       </Indicator>
     );
   }
   const source = classifyFireSource(lastFire.completed_at);
   return (
-    <Indicator label="Last fire" testId="status-last-fire">
+    <Indicator
+      label="Last fire"
+      testId="status-last-fire"
+      tooltip="Most recent signal compute. ‘auto’ = scheduled cron; ‘manual’ = operator-triggered. Updates each time a run completes."
+    >
       <span className="font-mono text-xs text-muted-foreground">{relative(lastFire.completed_at)}</span>
       <Badge variant={source === 'cron' ? 'outline' : 'secondary'} className="text-[10px]">
         {source === 'cron' ? 'auto' : 'manual'}
@@ -68,7 +91,11 @@ function LastFireIndicator({ lastFire }: { lastFire: TradingStatusSnapshot['last
 function UniverseIndicator({ universe }: { universe: TradingStatusSnapshot['universe'] }) {
   if (!universe || !universe.completed_at) {
     return (
-      <Indicator label="Universe" testId="status-universe">
+      <Indicator
+        label="Universe"
+        testId="status-universe"
+        tooltip="Tradeable universe refresh status. No completed refresh on record yet — the first quarterly refresh will populate this indicator."
+      >
         <Badge variant="outline" className="text-[10px]">—</Badge>
       </Indicator>
     );
@@ -78,7 +105,15 @@ function UniverseIndicator({ universe }: { universe: TradingStatusSnapshot['univ
   const ageMs = Date.now() - new Date(universe.completed_at).getTime();
   const stale = ageMs > 36 * 60 * 60 * 1000;
   return (
-    <Indicator label="Universe" testId="status-universe">
+    <Indicator
+      label="Universe"
+      testId="status-universe"
+      tooltip={
+        stale
+          ? 'Tradeable universe last refreshed more than 36h ago — older than the expected daily-cron cadence. Investigate the refresh cron if this persists.'
+          : 'Tradeable universe refreshed within the expected 36h cadence.'
+      }
+    >
       <span className="font-mono text-xs text-muted-foreground">{relative(universe.completed_at)}</span>
       <Badge variant={stale ? 'warning' : 'success'} className="text-[10px]">
         {stale ? 'stale' : 'fresh'}
@@ -108,13 +143,21 @@ function breakerLabel(state: KillSwitchState): string {
 function BreakerIndicator({ breaker }: { breaker: TradingStatusSnapshot['breaker'] }) {
   if (!breaker) {
     return (
-      <Indicator label="Breaker" testId="status-breaker">
+      <Indicator
+        label="Breaker"
+        testId="status-breaker"
+        tooltip="Trading circuit-breaker state. ‘—’ = clear/unknown; ‘armed’ = ready to trade; ‘soft pause’ = new entries blocked; ‘tripped’ = trading halted by a kill-switch."
+      >
         <Badge variant="outline" className="text-[10px]">—</Badge>
       </Indicator>
     );
   }
   return (
-    <Indicator label="Breaker" testId="status-breaker">
+    <Indicator
+      label="Breaker"
+      testId="status-breaker"
+      tooltip="Trading circuit-breaker state. ‘armed’ = ready to trade; ‘soft pause’ = new entries blocked; ‘tripped’ = trading halted by a kill-switch; ‘liquidating’ = open positions winding down."
+    >
       <Badge variant={breakerVariant(breaker.state)} className="text-[10px]">
         {breakerLabel(breaker.state)}
       </Badge>
@@ -129,7 +172,11 @@ function ReconciliationIndicator({
 }) {
   if (!reconciliation) {
     return (
-      <Indicator label="Open" testId="status-open-reconciliation">
+      <Indicator
+        label="Open"
+        testId="status-open-reconciliation"
+        tooltip="Unresolved reconciliation events (data-integrity cross-checks awaiting resolution). No data available — the Reconciliation page will populate this once events are recorded."
+      >
         <Badge variant="outline" className="text-[10px]">—</Badge>
       </Indicator>
     );
@@ -137,7 +184,15 @@ function ReconciliationIndicator({
   const n = reconciliation.openCount;
   const variant = n === 0 ? 'success' : n < 5 ? 'warning' : 'destructive';
   return (
-    <Indicator label="Open" testId="status-open-reconciliation">
+    <Indicator
+      label="Open"
+      testId="status-open-reconciliation"
+      tooltip={
+        n === 0
+          ? 'No unresolved reconciliation events. All data-integrity cross-checks have been resolved.'
+          : `${n} unresolved reconciliation events (resolved_at IS NULL). These are data-integrity cross-checks awaiting resolution — not necessarily errors; expected divergences count here too. Open Reconciliation to review.`
+      }
+    >
       <Badge variant={variant} className="text-[10px]">
         {n === 0 ? 'none' : `${n} open`}
       </Badge>

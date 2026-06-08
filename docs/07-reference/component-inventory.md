@@ -287,3 +287,51 @@ third visual state beyond `completed` / `failed`:
 
 This is a **presentation-only** derivation from existing row fields
 (`outcome` + `persisted_count`). No query, table, or migration change.
+
+---
+
+## FP-035 — UX Corrective: Collapsible Notes + Status-Strip Tooltips + Shrink-to-Fit Filters
+
+### PhaseContextNote — collapsible one-line mode
+
+`PhaseContextNote` (`src/components/dashboard/PhaseContextNote.tsx`) is
+now a single-line collapsed disclosure by default, composed on the
+existing `Collapsible` primitive (no new dependency). The title (with
+the Lightbulb glyph + chevron) is always visible and acts as the
+trigger; the body (children) is hidden until clicked.
+
+New prop:
+- `defaultOpen?: boolean` — defaults to `false` (collapsed). Set to
+  `true` to force the body open on mount.
+
+Applies everywhere `PhaseContextNote` is used (Rankings, Coverage,
+Compute Runs) — content unchanged, only the disclosure pattern.
+
+### TradingStatusStrip — per-indicator tooltips
+
+Every indicator in `TradingStatusStrip` is now wrapped in the existing
+`Tooltip` primitive. Hovering (or keyboard-focusing) any of the four
+indicators reveals a 1–2 sentence explanation:
+- Last fire — what 'auto' vs 'manual' means; what updates this.
+- Universe `[stale/fresh]` — the 36h cadence threshold + remediation
+  hint.
+- Breaker — what 'armed' / 'soft pause' / 'tripped' / 'liquidating'
+  mean.
+- Open `[N open]` — definition of an unresolved reconciliation event
+  + that expected divergences also count.
+
+The app-level `TooltipProvider` (mounted in `App.tsx`) is reused — no
+new provider needed.
+
+### Filter Toolbar — single-row shrink-to-fit
+
+The FP-032 filter toolbar pattern is updated so controls **shrink to
+fit** within one row on desktop widths, instead of wrapping to multiple
+lines. The container drops `sm:flex-wrap`; each control is `min-w-0
+flex-1` with a per-control `sm:max-w-[…]` cap. Stacking still occurs at
+mobile widths (the outer `flex-col` → `sm:flex-row`).
+
+Updated surfaces:
+- `RankingsTab` (signal / as-of-date / sector / ticker)
+- `UniverseMembershipPage` (ticker / eligibility / sector)
+- `ComputeRunsTab` (signal + freshness indicator)
