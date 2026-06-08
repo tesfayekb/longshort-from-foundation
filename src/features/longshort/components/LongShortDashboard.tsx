@@ -14,6 +14,9 @@
  *      `longshort.universe.*` namespace)
  *   4. Recent reconciliation events (reconciliation_events last 10 rows)
  *
+ * FP-031: cards reorganized into HubTabs (Universe / Reconciliation) with
+ * ?tab= URL-sync. Same queries, same content — only presentation changed.
+ *
  * RBAC: gated upstream at the route layer via `longshort.view`. Queries
  * inherit the caller's RLS; tables the caller cannot see render an empty
  * state rather than throwing.
@@ -44,12 +47,12 @@ import {
   type RefreshOutcome,
 } from '@/features/longshort/utils/universe-staleness';
 import {
-import { HubTabs } from '@/pages/trading/longshort/hub/HubTabs';
   reconciliationOutcomeLabel,
   reconciliationOutcomeSeverity,
   severityToStatusBadge,
   severityToBadgeVariant,
 } from '@/features/longshort/utils/outcome-display';
+import { HubTabs } from '@/pages/trading/longshort/hub/HubTabs';
 
 function formatTs(ts: string | null | undefined): string {
   if (!ts) return '—';
@@ -326,46 +329,6 @@ export function LongShortDashboard() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Latest Universe Cross-Check</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {crossCheckQuery.isLoading ? (
-                      <p className="text-sm text-muted-foreground">Loading…</p>
-                    ) : crossCheckQuery.isError ? (
-                      <p className="text-sm text-destructive">Failed to load cross-check status.</p>
-                    ) : !crossCheckQuery.data ? (
-                      <p className="text-sm text-muted-foreground">
-                        No <span className="font-mono">universe_cross_check</span> reconciliation event recorded yet.
-                      </p>
-                    ) : (() => {
-                      const cc = crossCheckQuery.data;
-                      return (
-                        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-3">
-                          <div>
-                            <dt className="text-muted-foreground">Outcome</dt>
-                            <dd>
-                              <StatusBadge
-                                status={severityToStatusBadge(reconciliationOutcomeSeverity(cc.outcome))}
-                                label={reconciliationOutcomeLabel(cc.outcome)}
-                              />
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">When</dt>
-                            <dd className="font-medium">{formatTs(cc.ts)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Failure action</dt>
-                            <dd className="font-medium">{cc.failure_action ?? '—'}</dd>
-                          </div>
-                        </dl>
-                      );
-                    })()}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
                     <CardTitle>Universe Jobs</CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -403,135 +366,6 @@ export function LongShortDashboard() {
                     )}
                   </CardContent>
                 </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Recent Reconciliation Events</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {reconQuery.isLoading ? (
-                      <p className="text-sm text-muted-foreground">Loading…</p>
-                    ) : reconQuery.isError ? (
-                      <p className="text-sm text-destructive">Failed to load reconciliation events.</p>
-                    ) : (reconQuery.data ?? []).length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No events recorded.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>When</TableHead>
-                            <TableHead>Call</TableHead>
-                            <TableHead>Outcome</TableHead>
-                            <TableHead>Tier</TableHead>
-                            <TableHead>Symbol</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {reconQuery.data!.map((ev) => (
-                            <TableRow key={ev.event_id}>
-                              <TableCell className="text-xs">{formatTs(ev.ts)}</TableCell>
-                              <TableCell className="font-mono text-xs">{ev.call_name}</TableCell>
-                              <TableCell>
-                                <Badge variant={severityToBadgeVariant(reconciliationOutcomeSeverity(ev.outcome))}>
-                                  {reconciliationOutcomeLabel(ev.outcome)}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>{ev.tier}</TableCell>
-                              <TableCell className="font-mono text-xs">{ev.symbol ?? '—'}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    )}
-                  </CardContent>
-                </Card>
-    </div>
-  );
-}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Universe Jobs</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {jobsQuery.isLoading ? (
-                      <p className="text-sm text-muted-foreground">Loading…</p>
-                    ) : jobsQuery.isError ? (
-                      <p className="text-sm text-destructive">Failed to load job registry.</p>
-                    ) : (jobsQuery.data ?? []).length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No universe jobs registered.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Job</TableHead>
-                            <TableHead>Enabled</TableHead>
-                            <TableHead>Schedule</TableHead>
-                            <TableHead>Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {jobsQuery.data!.map((job) => (
-                            <TableRow key={job.id}>
-                              <TableCell className="font-mono text-xs">{job.id}</TableCell>
-                              <TableCell>
-                                <Badge variant={job.enabled ? 'default' : 'secondary'}>
-                                  {job.enabled ? 'enabled' : 'disabled'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-mono text-xs">{job.schedule}</TableCell>
-                              <TableCell>{job.status}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Recent Reconciliation Events</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {reconQuery.isLoading ? (
-                      <p className="text-sm text-muted-foreground">Loading…</p>
-                    ) : reconQuery.isError ? (
-                      <p className="text-sm text-destructive">Failed to load reconciliation events.</p>
-                    ) : (reconQuery.data ?? []).length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No events recorded.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>When</TableHead>
-                            <TableHead>Call</TableHead>
-                            <TableHead>Outcome</TableHead>
-                            <TableHead>Tier</TableHead>
-                            <TableHead>Symbol</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {reconQuery.data!.map((ev) => (
-                            <TableRow key={ev.event_id}>
-                              <TableCell className="text-xs">{formatTs(ev.ts)}</TableCell>
-                              <TableCell className="font-mono text-xs">{ev.call_name}</TableCell>
-                              <TableCell>
-                                <Badge variant={severityToBadgeVariant(reconciliationOutcomeSeverity(ev.outcome))}>
-                                  {reconciliationOutcomeLabel(ev.outcome)}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>{ev.tier}</TableCell>
-                              <TableCell className="font-mono text-xs">{ev.symbol ?? '—'}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    )}
-                  </CardContent>
-                </Card>
-    </div>
-  );
-}
               </div>
             ),
           },
@@ -582,46 +416,6 @@ export function LongShortDashboard() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Universe Jobs</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {jobsQuery.isLoading ? (
-                      <p className="text-sm text-muted-foreground">Loading…</p>
-                    ) : jobsQuery.isError ? (
-                      <p className="text-sm text-destructive">Failed to load job registry.</p>
-                    ) : (jobsQuery.data ?? []).length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No universe jobs registered.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Job</TableHead>
-                            <TableHead>Enabled</TableHead>
-                            <TableHead>Schedule</TableHead>
-                            <TableHead>Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {jobsQuery.data!.map((job) => (
-                            <TableRow key={job.id}>
-                              <TableCell className="font-mono text-xs">{job.id}</TableCell>
-                              <TableCell>
-                                <Badge variant={job.enabled ? 'default' : 'secondary'}>
-                                  {job.enabled ? 'enabled' : 'disabled'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-mono text-xs">{job.schedule}</TableCell>
-                              <TableCell>{job.status}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
                     <CardTitle>Recent Reconciliation Events</CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -661,55 +455,11 @@ export function LongShortDashboard() {
                     )}
                   </CardContent>
                 </Card>
-    </div>
-  );
-}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Recent Reconciliation Events</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {reconQuery.isLoading ? (
-                      <p className="text-sm text-muted-foreground">Loading…</p>
-                    ) : reconQuery.isError ? (
-                      <p className="text-sm text-destructive">Failed to load reconciliation events.</p>
-                    ) : (reconQuery.data ?? []).length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No events recorded.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>When</TableHead>
-                            <TableHead>Call</TableHead>
-                            <TableHead>Outcome</TableHead>
-                            <TableHead>Tier</TableHead>
-                            <TableHead>Symbol</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {reconQuery.data!.map((ev) => (
-                            <TableRow key={ev.event_id}>
-                              <TableCell className="text-xs">{formatTs(ev.ts)}</TableCell>
-                              <TableCell className="font-mono text-xs">{ev.call_name}</TableCell>
-                              <TableCell>
-                                <Badge variant={severityToBadgeVariant(reconciliationOutcomeSeverity(ev.outcome))}>
-                                  {reconciliationOutcomeLabel(ev.outcome)}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>{ev.tier}</TableCell>
-                              <TableCell className="font-mono text-xs">{ev.symbol ?? '—'}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    )}
-                  </CardContent>
-                </Card>
-    </div>
-  );
-}
               </div>
             ),
           },
         ]}
       />
+    </div>
+  );
+}
