@@ -111,6 +111,7 @@ describe('RankingsTab (FP-024)', () => {
   beforeEach(() => {
     paginatedCalls.length = 0;
     vi.clearAllMocks();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
   it('renders the top-20 and bottom-20 candidate tables with accented z-scores', async () => {
@@ -122,6 +123,19 @@ describe('RankingsTab (FP-024)', () => {
     // (T059, value = -29.5) appears in the bottom-20 table.
     expect(screen.getAllByText('T000').length).toBeGreaterThan(0);
     expect(screen.getAllByText('T059').length).toBeGreaterThan(0);
+  });
+
+  it('top-N selector changes cutoff to 50 and updates titles', async () => {
+    await renderTab();
+    expect(await screen.findByText(/Top 20 — long candidates/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('combobox', { name: /Top \/ bottom count/i }));
+    fireEvent.click(await screen.findByRole('option', { name: '50' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Top 50 — long candidates/)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Bottom 50 — short candidates/)).toBeInTheDocument();
   });
 
   it('surfaces the absent-count annotation from the band (epistemic-honesty contract)', async () => {
