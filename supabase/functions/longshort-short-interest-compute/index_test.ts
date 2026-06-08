@@ -53,6 +53,8 @@ Deno.test('(4) createShortInterestOrchestrator invoked with new fetcher', () => 
     'missing createShortInterestOrchestrator(ctx) call');
   assert(HANDLER_SOURCE.includes('shortInterest: new PolygonShortInterestFetcher'),
     'missing shortInterest field with PolygonShortInterestFetcher');
+  assert(HANDLER_SOURCE.includes('sharesOutstanding: new PolygonSharesOutstandingFetcher'),
+    'missing sharesOutstanding field with PolygonSharesOutstandingFetcher (FP-041 revision-fix)');
   assert(HANDLER_SOURCE.includes('supabase: supabaseAdmin'), 'missing supabase field');
   assert(HANDLER_SOURCE.includes('operator_id: DEFAULT_OPERATOR_ID'), 'missing operator_id field');
   assert(HANDLER_SOURCE.includes('concurrency: DEFAULT_CONCURRENCY'), 'missing concurrency field');
