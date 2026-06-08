@@ -33,8 +33,7 @@ import {
 } from '@/features/longshort/hooks/useSignalRankings';
 import { DEFAULT_PAGE_SIZE } from '@/lib/table-constants';
 
-const TOP_N = 20;
-const BOTTOM_N = 20;
+const TOP_N_OPTIONS = [20, 30, 50] as const;
 const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 /**
