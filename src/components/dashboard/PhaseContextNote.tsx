@@ -1,35 +1,70 @@
-import { ReactNode } from 'react';
-import { Lightbulb } from 'lucide-react';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronRight, Lightbulb } from 'lucide-react';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 
 interface PhaseContextNoteProps {
   title: string;
   children: ReactNode;
   className?: string;
+  /**
+   * FP-035 — collapsed-by-default (one line) is the institutional default.
+   * Callers MAY force-open via `defaultOpen` if the body must always show.
+   */
+  defaultOpen?: boolean;
 }
 
 /**
- * Reusable info-alert wrapper for phase-context explainers.
+ * Reusable info-callout for phase-context explainers.
  *
- * Every longshort page that shows a partial/in-progress capability must carry
- * a phase-context note stating (a) what the page shows, (b) what it does NOT
- * yet show, (c) which phase/FP completes it.
+ * FP-035 — renders as a single-line collapsed header by default. The title
+ * alone conveys the headline; the body (children) is revealed on click.
  *
- * Uses the design-system `--info` token (blue, informational). Registered in
- * component-inventory.md per Constitution Rule 6.
+ * Uses the design-system `--info` token (blue, informational) and the
+ * Lightbulb glyph. Composed on the existing `Collapsible` primitive — no
+ * new dependency. Registered in component-inventory.md per Constitution
+ * Rule 6.
  */
-export function PhaseContextNote({ title, children, className }: PhaseContextNoteProps) {
+export function PhaseContextNote({
+  title,
+  children,
+  className,
+  defaultOpen = false,
+}: PhaseContextNoteProps) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <Alert
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
       className={cn(
-        'border-info/50 text-info bg-info/5 dark:border-info dark:bg-info/10 [&>svg]:text-info',
+        'rounded-lg border border-info/50 bg-info/5 text-info dark:border-info dark:bg-info/10',
         className,
       )}
+      data-testid="phase-context-note"
     >
-      <Lightbulb className="h-4 w-4" />
-      <AlertTitle>{title}</AlertTitle>
-      <AlertDescription>{children}</AlertDescription>
-    </Alert>
+      <CollapsibleTrigger
+        type="button"
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-medium leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2"
+      >
+        <Lightbulb className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{title}</span>
+        {open ? (
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 opacity-70" />
+        )}
+      </CollapsibleTrigger>
+      <CollapsibleContent
+        className="px-4 pb-3 pl-10 text-sm [&_p]:leading-relaxed"
+        data-testid="phase-context-body"
+      >
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
