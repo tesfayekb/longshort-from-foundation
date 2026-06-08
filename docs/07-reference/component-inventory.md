@@ -268,3 +268,22 @@ FP-033 extended `badgeVariants` with first-class `success`, `warning`,
 `destructive` / `outline`. See `ui-design-system.md` for the full
 vocabulary and the routing rule (consumers MUST use a variant — no
 raw-color className overrides).
+
+---
+
+## FP-034 — Compute Runs Zero-Persist Badge
+
+### OutcomeBadge zero-persist state (`ComputeRunsTab.tsx`)
+
+The inline `OutcomeBadge` component in `ComputeRunsTab` derives a
+third visual state beyond `completed` / `failed`:
+
+| Condition | Badge text | Variant | Rationale |
+|---|---|---|---|
+| `outcome === 'completed' && persistedCount > 0` | Completed | `outline` + `border-success/50 text-success` | Healthy fire — data persisted |
+| `outcome === 'completed' && persistedCount === 0` | Completed (empty) | `warning` | Fire completed but nothing written — operator attention needed |
+| `outcome === 'failed'` | Failed | `destructive` | Hard failure |
+| other | raw outcome | `secondary` | Fallback |
+
+This is a **presentation-only** derivation from existing row fields
+(`outcome` + `persisted_count`). No query, table, or migration change.
