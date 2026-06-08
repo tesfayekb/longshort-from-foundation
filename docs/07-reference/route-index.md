@@ -718,18 +718,18 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 
 | Field | Value |
 |-------|-------|
-| **Page** | `UniverseHubPage` (FP-023). Tabbed via `?tab=`: `constituents` (default — `UniverseMembershipPage` with `gics_sector` column, sector filter, ticker filter, eligibility filter, 50-row pagination), `refresh-history` (`UniverseRefreshHistoryPage`), `exclusions` (empty-state — deferred). |
+| **Page** | `UniverseHubPage` (FP-023). Tabbed via `?tab=`: `constituents` (default — `UniverseMembershipPage` with `gics_sector` column, sector filter, ticker filter, eligibility filter, 50-row pagination), `refresh-history` (`UniverseRefreshHistoryPage`), `exclusions` (`ExclusionsTab` — FP-036: server-paginated `hard_exclusions` reader with as-of-date / rule / ticker filters, neutral-toned §3.3 rule badges, per-row `ExpandableCell` for `firing_reasons`, and an unburied per-date §3.3d coverage stat). |
 | **Module** | longshort |
 | **Classification** | authenticated, privileged |
 | **Auth required** | Yes |
 | **Permission required** | `longshort.view` (inner gate; outer gate `trading.access`) |
 | **Scope** | system-wide |
 | **Panel** | trading-panel |
-| **Related tests** | `src/pages/trading/longshort/__tests__/UniverseMembershipPage.test.tsx` (FP-023.1 — filter + pagination + page-reset-on-filter), `src/pages/trading/longshort/hub/HubTabs.test.tsx` (URL-sync contract) |
-| **Related functions** | `UniverseHubPage`, `UniverseMembershipPage`, `UniverseRefreshHistoryPage`, `HubTabs` |
-| **Implementation** | **IMPLEMENTED** — `<Route path="longshort/universe" element={<PermissionGate permission="longshort.view"><UniverseHubPage /></PermissionGate>}>` in `src/App.tsx`. |
+| **Related tests** | `src/pages/trading/longshort/__tests__/UniverseMembershipPage.test.tsx` (FP-023.1), `src/pages/trading/longshort/hub/HubTabs.test.tsx` (URL-sync contract), `src/pages/trading/longshort/universe/__tests__/ExclusionsTab.test.tsx` (FP-036 — phase-context note + breadth stat + neutral rule-badge tone + flag-only/material classification + ExpandableCell + server-pagination + shrink-to-fit toolbar) |
+| **Related functions** | `UniverseHubPage`, `UniverseMembershipPage`, `UniverseRefreshHistoryPage`, `HubTabs`, `ExclusionsTab`, `useHardExclusionDates`, `usePaginatedHardExclusions`, `useHardExclusionBreadth`, `classifyExclusion`, `EXCLUSION_RULES` |
+| **Implementation** | **IMPLEMENTED** — `<Route path="longshort/universe" element={<PermissionGate permission="longshort.view"><UniverseHubPage /></PermissionGate>}>` in `src/App.tsx`. Exclusions sub-tab promoted from empty-state shell to `ExclusionsTab` by FP-036 (ACT-148). |
 | **Lifecycle** | active |
-| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). |
+| **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). Exclusions tab added by FP-036 (ACT-148). |
 
 #### `/trading/longshort/refresh-history` — Legacy Refresh-History Redirect
 
