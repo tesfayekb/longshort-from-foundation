@@ -117,8 +117,8 @@ async function renderPage() {
       </QueryClientProvider>
     </MemoryRouter>,
   );
-  // Wait for the data-driven Filters card to mount (proxy for both queries having resolved).
-  await screen.findByText('Filters');
+  // FP-032 — filter Card replaced by thin toolbar; wait on the ticker input instead.
+  await screen.findByPlaceholderText(/Filter by ticker/i);
   return utils;
 }
 
