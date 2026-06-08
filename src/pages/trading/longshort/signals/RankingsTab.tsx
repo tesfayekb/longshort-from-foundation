@@ -31,10 +31,11 @@ import {
   useAbsentCount,
   usePaginatedRankings,
 } from '@/features/longshort/hooks/useSignalRankings';
+import { DEFAULT_PAGE_SIZE } from '@/lib/table-constants';
 
 const TOP_N = 20;
 const BOTTOM_N = 20;
-const PAGE_SIZE = 50;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 /**
  * FP-024 — Signals → Rankings tab.
@@ -231,7 +232,7 @@ export default function RankingsTab() {
                 <TableHead className="w-16">Rank</TableHead>
                 <TableHead>Ticker</TableHead>
                 <TableHead>Sector</TableHead>
-                <TableHead className="text-right">z-score</TableHead>
+                <TableHead className="text-right font-mono tabular-nums">z-score</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -252,12 +253,12 @@ export default function RankingsTab() {
               {!paginated.isLoading &&
                 paginated.data?.rows.map((r) => (
                   <TableRow key={`${r.rank}-${r.ticker}`}>
-                    <TableCell className="text-xs text-muted-foreground">{r.rank}</TableCell>
-                    <TableCell className="font-mono font-medium">{r.ticker}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="py-2 text-xs text-muted-foreground tabular-nums">{r.rank}</TableCell>
+                    <TableCell className="py-2 font-mono font-medium">{r.ticker}</TableCell>
+                    <TableCell className="py-2 text-sm text-muted-foreground">
                       {r.gics_sector ?? '—'}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="py-2 text-right font-mono tabular-nums">
                       {r.value !== null ? r.value.toFixed(4) : '—'}
                     </TableCell>
                   </TableRow>
@@ -333,7 +334,7 @@ function RankingTable({
               <TableHead className="w-16">Rank</TableHead>
               <TableHead>Ticker</TableHead>
               <TableHead>Sector</TableHead>
-              <TableHead className="text-right">z-score</TableHead>
+                <TableHead className="text-right font-mono tabular-nums">z-score</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -355,13 +356,13 @@ function RankingTable({
               rows.map((r, i) => {
                 const rank = rankAscending ? startingRank + i : startingRank + (rows.length - 1 - i);
                 return (
-                  <TableRow key={r.ticker}>
-                    <TableCell className="text-xs text-muted-foreground">{rank}</TableCell>
-                    <TableCell className="font-mono font-medium">{r.ticker}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableRow key={r.ticker}>
+                      <TableCell className="py-2 text-xs text-muted-foreground tabular-nums">{rank}</TableCell>
+                      <TableCell className="py-2 font-mono font-medium">{r.ticker}</TableCell>
+                      <TableCell className="py-2 text-sm text-muted-foreground">
                       {r.gics_sector ?? '—'}
                     </TableCell>
-                    <TableCell className={`text-right font-mono ${accent}`}>
+                      <TableCell className={`py-2 text-right font-mono tabular-nums ${accent}`}>
                       {r.value !== null ? r.value.toFixed(4) : '—'}
                     </TableCell>
                   </TableRow>
