@@ -2156,3 +2156,63 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Payload schema** | `metadata: { alert_history_id, alert_type: 'signal_compute_failed' \| 'signal_compute_low_water_mark' \| 'signal_compute_stale', severity, signal_id, run_id, as_of_date, populated_pct, universe_size, persisted_count, failure_reason, detected_at, monitor_source: 'dedicated', correlation_id }` |
 | **Lifecycle** | active |
 | **Added by** | FP-010 Bucket A Commit A3 |
+
+### `longshort.insider.compute.started`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-insider-compute/index.ts` via `writeStrategyAuditEvent` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { as_of: ISO timestamp, signal_id: 'insider_transactions_90d', trigger: 'cron' }`; `correlation_id` UUID generated per fire |
+| **Lifecycle** | active |
+| **Added by** | FP-042 |
+
+### `longshort.insider.compute.completed`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-insider-compute/index.ts` after orchestrator returns `outcome='completed'` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, run_id, outcome: 'completed', universe_size, persisted_count, skip_counts: Record<SignalSkipReason, number>, trigger: 'cron' }` |
+| **Lifecycle** | active |
+| **Added by** | FP-042 |
+
+### `longshort.insider.compute.failed`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-insider-compute/index.ts` on persist-error / orchestrator-throw / `outcome='failed'` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, error?, stage?: 'orchestrator_throw' \| 'signal_compute_log_persist', failure_reason?, trigger: 'cron' }` |
+| **Lifecycle** | active |
+| **Added by** | FP-042 |
+
+### `longshort.insider.compute.manual_triggered`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-insider-compute-manual/index.ts` BEFORE orchestrator invocation (dual-trail discipline) |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, signal_id, as_of, trigger: 'manual' }`; `actor_id` = `auth.uid()`; carries `ip_address` + `user_agent` |
+| **Lifecycle** | active |
+| **Added by** | FP-042 |
+
+### `longshort.insider.compute.manual_completed`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-insider-compute-manual/index.ts` AFTER orchestrator + persist succeed |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, trigger: 'manual' }` |
+| **Lifecycle** | active |
+| **Added by** | FP-042 |
+
+### `longshort.insider.compute.manual_failed`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-insider-compute-manual/index.ts` on persist-error / orchestrator-throw / `outcome='failed'` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, signal_id, as_of, error?, stage?, failure_reason?, trigger: 'manual' }` |
+| **Lifecycle** | active |
+| **Added by** | FP-042 |
