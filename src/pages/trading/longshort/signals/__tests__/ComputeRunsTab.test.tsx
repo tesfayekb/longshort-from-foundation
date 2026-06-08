@@ -144,8 +144,9 @@ describe('ComputeRunsTab (FP-028)', () => {
     // Filter for the exact text node.
     const completedBadges = screen.getAllByText((_, node) => node?.textContent === 'Completed');
     expect(completedBadges.length).toBeGreaterThan(0);
+    // The normal completed badge carries the text-success class (outline variant + className override).
     const hasSuccess = completedBadges.some((b) =>
-      b.closest('div')?.classList.contains('border-success'),
+      b.closest('div')?.classList.contains('text-success'),
     );
     expect(hasSuccess).toBe(true);
   });
