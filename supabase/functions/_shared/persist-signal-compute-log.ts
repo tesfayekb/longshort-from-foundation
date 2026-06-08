@@ -30,6 +30,8 @@ export function aggregateSkipCounts(
     missing_sector: 0,
     fetch_error: 0,
     singleton_sector: 0,
+    data_unavailable: 0,
+    subscription_gated: 0,
   };
   for (const s of skips) counts[s.reason] += 1;
   return counts;
