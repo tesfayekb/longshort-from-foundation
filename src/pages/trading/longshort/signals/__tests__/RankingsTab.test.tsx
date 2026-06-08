@@ -111,6 +111,7 @@ describe('RankingsTab (FP-024)', () => {
   beforeEach(() => {
     paginatedCalls.length = 0;
     vi.clearAllMocks();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
   it('renders the top-20 and bottom-20 candidate tables with accented z-scores', async () => {
