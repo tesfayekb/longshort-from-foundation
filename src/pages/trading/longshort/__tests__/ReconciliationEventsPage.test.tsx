@@ -34,7 +34,8 @@ function makeRows(n: number): Row[] {
     symbol: 'AAPL',
     outcome: 'false_positive_within_tolerance',
     failure_action: null,
-    notes: null,
+    // First row has a verbose multi-line note so FP-032 expand can be exercised.
+    notes: i === 0 ? 'One-line preview\nHidden second line of detail' : null,
     resolved_at: null,
   }));
 }
@@ -110,5 +111,17 @@ describe('ReconciliationEventsPage (FP-030 — paginated)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Next page/i }));
     await waitFor(() => expect(dataRowCount()).toBe(5));
     expect(rangeCalls.some((c) => c.from === 25 && c.to === 49)).toBe(true);
+  });
+
+  it('FP-032 — verbose notes render as a one-line preview and expand on click', async () => {
+    await renderPage();
+    await waitFor(() => expect(dataRowCount()).toBe(25));
+    // Preview line visible; hidden line not yet in DOM.
+    expect(screen.getByText('One-line preview')).toBeInTheDocument();
+    expect(screen.queryByText(/Hidden second line of detail/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Toggle notes/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/Hidden second line of detail/)).toBeInTheDocument(),
+    );
   });
 });
