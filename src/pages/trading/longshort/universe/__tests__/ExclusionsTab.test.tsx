@@ -216,7 +216,6 @@ describe('ExclusionsTab (FP-036)', () => {
       expect(t000Content!.textContent).toMatch(/htb_no_locate/);
     });
   });
-  });
 
   it('paginates server-side: clicking next re-invokes the hook with page=2', async () => {
     await renderTab();
