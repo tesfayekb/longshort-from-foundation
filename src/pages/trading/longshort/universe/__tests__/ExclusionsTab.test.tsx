@@ -20,7 +20,6 @@ import type {
 // mount when an item is selected. Stub it so the unrelated Radix Select
 // behavior doesn't crash our composition tests.
 if (!Element.prototype.scrollIntoView) {
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
   Element.prototype.scrollIntoView = function () {};
 }
 
