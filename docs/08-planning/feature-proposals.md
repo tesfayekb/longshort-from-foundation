@@ -981,3 +981,22 @@ Authority: ACT-144.
 **Closure** — Landed at execution commit (HEAD pending). Thin status strip shows on every trading-console page with 4 read-only indicators (last fire + auto/manual, universe freshness, breaker, open reconciliation count) reading real data + degrading gracefully to `—`. Badge vocabulary locked + documented; `success/warning/info` variants real in `badge.tsx`. Gate-4 full green: `bunx vitest run` returned `Test Files 48 passed (48) / Tests 367 passed (367)` (+7 vs FP-032 baseline: 3 strip tests + 4 badge variant tests); `bunx eslint .` returned `0 errors / 15 warnings` (all 15 pre-existing). Zero `any`. Zero writes. Zero new permissions. Zero Monday/edge/migration touch.
 
 Authority: ACT-145.
+
+### FP-034: Compute Runs Zero-Persist Badge (Polish)
+
+| Field | Value |
+|---|---|
+| **ID** | FP-034 (next-free verified by grep at HEAD — 0 prior references). |
+| **Status** | approved (operator-directed forward 2026-06-08 — Tier C; frontend, single-file presentational polish, read-only). |
+| **Problem** | A run that persisted ZERO rows currently shows `outcome=Completed` next to `persisted 0 / skipped 839` — technically true (the run completed; it persisted nothing) but reads as a contradiction at a glance. The two pre-hotfix momentum failures on the live page are the example. Zero-persist runs need a distinct visual state so they're not mistaken for healthy fires. |
+| **Resolution** | In `ComputeRunsTab.tsx`, extend the inline `OutcomeBadge` component to accept an optional `persistedCount` prop. When `outcome === 'completed' && persistedCount === 0`, render a `warning` variant badge with the text "Completed (empty)". Healthy completed runs (`persistedCount > 0`) keep the existing `outline` + `border-success/50 text-success` "Completed" badge. Failed runs keep the existing `destructive` "Failed" badge. This is strictly a presentation derivation from existing row fields — no data or query change. |
+| **Scope** | EDIT: `src/pages/trading/longshort/signals/ComputeRunsTab.tsx` (`OutcomeBadge` props + call site). EDIT: `src/pages/trading/longshort/signals/__tests__/ComputeRunsTab.test.tsx` (+3 tests: warning empty badge, success normal badge, destructive failed badge). Docs same-PR per Constitution Rule 6: `docs/07-reference/component-inventory.md` (FP-034 OutcomeBadge zero-persist state subsection), this entry, `docs/06-tracking/action-tracker.md` ACT-146. |
+| **Out of Scope** | Any data-query change (derive from existing `outcome` + `persisted_count`). Any other tab or page. Any edge function, migration, cron, sql/14, signal-math, FP-018 Bucket C surface touch. ACT-130 (still reserved for FP-018 Bucket C). |
+| **Reference Impact** | component-inventory.md: +1 subsection (FP-034 OutcomeBadge zero-persist state). feature-proposals.md: this entry. action-tracker.md: ACT-146. No new permissions, events, configs, env-vars, migrations, routes, edge functions, or shared edge-function helpers. No new npm dependency. |
+| **Decision ID** | None — within existing UI-design-system discipline (consumes the FP-033 `warning` badge variant). |
+| **Reviewed By** | Operator |
+| **Review Date** | 2026-06-08 |
+
+**Closure** — Landed at execution commit (HEAD pending). Zero-persist runs render a distinct `warning` "Completed (empty)" badge; healthy completed runs keep the normal success badge; failed runs unchanged. Gate-4 full green: `bunx vitest run` returned `Test Files 48 passed (48) / Tests 370 passed (370)` (+3 vs FP-033 baseline: zero-persist warning badge test, normal success badge test, failed destructive badge test); `bunx eslint .` returned `0 errors / 15 warnings` (all 15 pre-existing). Zero `any`. Zero data-query change. Zero Monday/edge/migration touch.
+
+Authority: ACT-146.

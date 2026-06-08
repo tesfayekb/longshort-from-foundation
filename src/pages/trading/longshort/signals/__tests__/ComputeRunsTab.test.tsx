@@ -38,14 +38,31 @@ function makeRun(overrides: Partial<SignalComputeRunRow> & { run_id: string }): 
   };
 }
 
-// 30 runs > PAGE_SIZE(25): row 0 is a cron fire (non-midnight), rest are manual.
+// 31 runs > PAGE_SIZE(25): row 0 is a cron fire (non-midnight), row 1 is a zero-persist run,
+// row 2 is a failed run, rest are manual.
 const allRuns: SignalComputeRunRow[] = [
   makeRun({
     run_id: 'cron-run',
     completed_at: '2026-06-08T20:05:13Z',
     started_at: '2026-06-08T20:05:00Z',
   }),
-  ...Array.from({ length: 29 }, (_, i) =>
+  makeRun({
+    run_id: 'empty-run',
+    persisted_count: 0,
+    skip_counts: { insufficient_history: 839, missing_sector: 0 },
+    skipped_detail: Array.from({ length: 5 }, (_, i) => ({
+      ticker: `TICK${i}`,
+      reason: 'insufficient_history',
+    })),
+  }),
+  makeRun({
+    run_id: 'failed-run',
+    outcome: 'failed',
+    failure_reason: 'DB timeout',
+    skip_counts: null,
+    skipped_detail: null,
+  }),
+  ...Array.from({ length: 28 }, (_, i) =>
     makeRun({ run_id: `manual-${i}`, as_of_date: '2026-06-05' }),
   ),
 ];
@@ -111,6 +128,34 @@ describe('ComputeRunsTab (FP-028)', () => {
     await renderTab();
     const badges = await screen.findAllByText('Completed');
     expect(badges.length).toBeGreaterThan(0);
+  });
+
+  it('renders a warning "Completed (empty)" badge when outcome is completed but persisted_count is 0 (FP-034)', async () => {
+    await renderTab();
+    const emptyBadge = await screen.findByText('Completed (empty)');
+    expect(emptyBadge).toBeInTheDocument();
+    // The warning variant maps to the bg-warning class.
+    expect(emptyBadge.closest('div')).toHaveClass('bg-warning');
+  });
+
+  it('renders a normal success "Completed" badge when outcome is completed and persisted_count > 0', async () => {
+    await renderTab();
+    // screen.getAllByText('Completed') would also match 'Completed (empty)'.
+    // Filter for the exact text node.
+    const completedBadges = screen.getAllByText((_, node) => node?.textContent === 'Completed');
+    expect(completedBadges.length).toBeGreaterThan(0);
+    // The normal completed badge carries the text-success class (outline variant + className override).
+    const hasSuccess = completedBadges.some((b) =>
+      b.closest('div')?.classList.contains('text-success'),
+    );
+    expect(hasSuccess).toBe(true);
+  });
+
+  it('renders the destructive "Failed" badge for failed runs', async () => {
+    await renderTab();
+    const failedBadge = await screen.findByText('Failed');
+    expect(failedBadge).toBeInTheDocument();
+    expect(failedBadge.closest('div')).toHaveClass('bg-destructive');
   });
 
   it('surfaces the freshness indicator with cron vs manual classification', async () => {

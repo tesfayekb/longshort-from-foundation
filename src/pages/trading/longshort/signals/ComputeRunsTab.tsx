@@ -236,7 +236,7 @@ function RunRow({ row, expanded, onToggle }: RunRowProps) {
         <TableCell className="py-2 text-sm">{row.signal_id}</TableCell>
         <TableCell className="py-2 font-mono text-xs">{row.as_of_date}</TableCell>
         <TableCell className="py-2">
-          <OutcomeBadge outcome={row.outcome} />
+          <OutcomeBadge outcome={row.outcome} persistedCount={row.persisted_count} />
         </TableCell>
         <TableCell className="py-2 text-right font-mono text-xs tabular-nums">{row.universe_size}</TableCell>
         <TableCell className="py-2 text-right font-mono text-xs tabular-nums">{row.persisted_count}</TableCell>
@@ -337,7 +337,10 @@ function DetailField({ label, value }: { label: string; value: React.ReactNode }
   );
 }
 
-function OutcomeBadge({ outcome }: { outcome: string }) {
+function OutcomeBadge({ outcome, persistedCount }: { outcome: string; persistedCount?: number }) {
+  if (outcome === 'completed' && persistedCount === 0) {
+    return <Badge variant="warning">Completed (empty)</Badge>;
+  }
   if (outcome === 'completed') {
     return (
       <Badge variant="outline" className="border-success/50 text-success">
