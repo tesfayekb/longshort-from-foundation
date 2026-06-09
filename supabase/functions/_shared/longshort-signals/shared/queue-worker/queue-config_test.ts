@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-import-prefix -- std assert import
+// deno-lint-ignore-file no-import-prefix require-await -- std assert import + typed mock factory
 // @ts-nocheck — Deno test file.
 import { assert, assertEquals, assertThrows } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
