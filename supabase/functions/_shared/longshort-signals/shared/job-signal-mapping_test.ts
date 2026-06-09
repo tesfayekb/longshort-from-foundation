@@ -19,6 +19,7 @@ import { SIGNAL_ID as MOMENTUM_SIGNAL_ID } from '../cross-sectional-momentum/mom
 import { SIGNAL_ID as REVERSAL_SIGNAL_ID } from '../short-term-reversal/reversal-orchestrator.ts';
 import { SIGNAL_ID as SHORT_INTEREST_SIGNAL_ID } from '../short-interest-change/short-interest-orchestrator.ts';
 import { SIGNAL_ID as INSIDER_SIGNAL_ID } from '../insider-transactions/insider-orchestrator.ts';
+import { SIGNAL_ID as OPTIONS_FLOW_SIGNAL_ID } from '../options-flow/options-flow-orchestrator.ts';
 
 Deno.test('(1) JOB_ID_TO_SIGNAL_ID contains the momentum entry verbatim', () => {
   assertEquals(
@@ -70,6 +71,16 @@ Deno.test('(2d) mapping value matches insider-orchestrator SIGNAL_ID export (cro
   assertEquals(INSIDER_SIGNAL_ID, 'insider_transactions_90d');
 });
 
+Deno.test('(2e) mapping value matches options-flow-orchestrator SIGNAL_ID export (cross-reference)', () => {
+  // Drift sentinel for Signal #3 (FP-043).
+  assertEquals(
+    JOB_ID_TO_SIGNAL_ID['longshort.options_flow.compute'],
+    OPTIONS_FLOW_SIGNAL_ID,
+    'JOB_ID_TO_SIGNAL_ID options-flow entry decoupled from options-flow-orchestrator SIGNAL_ID',
+  );
+  assertEquals(OPTIONS_FLOW_SIGNAL_ID, 'options_flow_imbalance_5d');
+});
+
 Deno.test('(3) resolveSignalIdForJob returns the value for known job_ids', () => {
   assertEquals(
     resolveSignalIdForJob('longshort.momentum.compute'),
@@ -93,6 +104,7 @@ Deno.test('(5) JOB_ID_TO_SIGNAL_ID has exactly the FP-010 A3 set (single entry)'
   assertEquals(keys, [
     'longshort.insider.compute',
     'longshort.momentum.compute',
+    'longshort.options_flow.compute',
     'longshort.reversal.compute',
     'longshort.short_interest.compute',
   ]);
