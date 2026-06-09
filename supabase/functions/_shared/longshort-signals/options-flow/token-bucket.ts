@@ -67,6 +67,7 @@ export class TokenBucket {
  * `TradierOptionsChainFetcher`'s `HttpFetch` constructor parameter.
  */
 import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
+import { productionClock } from '../../longshort-clock.ts';
 
 export function pacedHttpFetch(bucket: TokenBucket, underlying: HttpFetch): HttpFetch {
   return async (input, init) => {
