@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-explicit-unknown no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 3 sentinel pattern
+// deno-lint-ignore-file no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 3 sentinel pattern
 // @ts-nocheck — Deno test file.
 /**
  * Unit tests for the PEAD queue-worker adapter (FP-045 Phase 3).
