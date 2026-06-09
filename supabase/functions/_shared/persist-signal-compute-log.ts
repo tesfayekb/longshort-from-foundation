@@ -35,6 +35,9 @@ export function aggregateSkipCounts(
     missing_shares_outstanding: 0,
     no_qualifying_transactions: 0,
     no_qualifying_flow: 0,
+    no_recent_earnings: 0,
+    pead_panel_below_floor: 0,
+    zero_dispersion: 0,
   };
   for (const s of skips) counts[s.reason] += 1;
   return counts;
