@@ -80,7 +80,7 @@ export type SignalSkipReason =
                              // short_interest / share_class_shares_outstanding — without
                              // a usable denominator we cannot compute the percentage.
                              // Typed-absence; ticker is still ranked by other signals.
-  | 'no_qualifying_transactions'; // Source returned data, but zero rows passed the
+  | 'no_qualifying_transactions' // Source returned data, but zero rows passed the
                              // signal-specific filter (e.g., Form 4 fetcher returned
                              // results, but no row was a record_type='transaction' with
                              // an included transaction_code after the 10b5-1 sale
@@ -88,6 +88,15 @@ export type SignalSkipReason =
                              // the EXPECTED case for most names — most stocks have no
                              // qualifying insider trades in any given 90-day window.
                              // Non-critical; ticker is still ranked by other signals.
+  | 'no_qualifying_flow';    // FP-043 / Signal #3 (options flow imbalance) — chain
+                             // snapshot returned contracts but ZERO survived the
+                             // smart-money filter (≥100 contracts, 7+ DTE, OTM/ATM)
+                             // AND-classifier (last at-or-thru bid/ask). Spec §4.4.7
+                             // missing-data clause: "fewer than 5 qualifying smart-
+                             // money prints" → returns None. EXPECTED for the long
+                             // tail of low-options-activity names. Non-critical;
+                             // ticker is still ranked by other signals (combiner
+                             // imputes (-999, 0) in Phase 3).
 
 export interface SignalSkip {
   ticker: string;
