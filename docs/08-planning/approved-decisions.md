@@ -717,8 +717,8 @@ If any field is missing → the decision is **INVALID**.
 - **Plan Section:** longshort signal-stack — Signals #1 and #2 (precedes their FP series).
 - **Date Approved:** 2026-06-09
 - **Decision Type:** vendor-selection / data-source governance (Tier A — locks the vendor surface for two feed-signals).
-- **Status:** active
-- **Superseded By:** —
+- **Status:** superseded
+- **Superseded By:** DEC-053 (2026-06-09 — the FMP-only framing and the cancel-Finnhub condition were both invalidated by the ACT-160 reconciliation probe; see DEC-053 for the corrected split-vendor lock).
 - **Decision:**
 
   **Vendor lock.** Signals #1 (`analyst_revisions`) and #2 (`pead_sue`) source ALL data from FMP Premium ($69/mo monthly billing; within operator's $150/mo external-data ceiling). Specific endpoints:
@@ -790,6 +790,32 @@ If any field is missing → the decision is **INVALID**.
 
 - **What this DEC does NOT decide.** It does not specify the skip-reason enum strings (FP-level); it does not bind the imputation behavior at the combiner (§6.5 governs); it does not change the staleness window (§4.4.6 governs); it does not exclude names from the universe (the universe component and Signal #2 are decoupled — N<2 names remain in `universe_membership` and remain scoreable on every other signal).
 - **Affected Modules / Systems:** future `_shared/longshort-signals/pead/compute-pead.ts` (enforces the N≥2 gate before computing the denominator); future `_shared/longshort-signals/pead/pead-orchestrator.ts` (emits typed skips for sub-floor names); future `docs/04-modules/longshort/signals/pead.md` (records the eligibility rule); `SignalSkipReason` enum (extended at Signal #2 FP); `function-index.md` (PEAD compute row references DEC-052); Signal #2 future FP (test surface MUST include the N=1 → typed-absence assertion AND the N=2 → strict-SUE assertion). Pairs with DEC-051 (the denominator whose floor this gates).
+
+### DEC-053: Split-Vendor Lock — FMP Premium for Signal #1, Finnhub Estimate-1 for Signal #2 (Both Retained, $144/mo Within $150 Ceiling)
+
+- **ID:** DEC-053
+- **Title:** Signal #1 sources from FMP Premium; Signal #2 sources from Finnhub Estimate-1. Both subscriptions are retained because each is the SOLE point-in-time-safe source for its required field set. Total external-data spend: $144/mo ($69 FMP + $75 Finnhub), within the operator's $150/mo ceiling.
+- **Plan Section:** longshort signal-stack — Signals #1 and #2 (vendor surface; supersedes DEC-049).
+- **Date Approved:** 2026-06-09
+- **Decision Type:** vendor-selection / data-source governance (Tier A — replaces DEC-049's single-vendor framing with a complementary split).
+- **Status:** active
+- **Superseded By:** —
+- **Supersedes:** DEC-049 (FMP-only framing and the cancel-Finnhub condition were both invalidated by the ACT-160 reconciliation probe; see "Why this DEC supersedes DEC-049" below).
+- **Decision:**
+
+  **Vendor lock (split, complementary).**
+  - **Signal #1 (`analyst_revisions`):** FMP Premium, endpoint `/stable/price-target-news?symbol={t}` — per-event analyst, firm, prior/new target $, publication timestamp (the magnitude-term capability that motivates DEC-050; Finnhub does not expose per-event target-$ at any tier).
+  - **Signal #2 (`pead_sue`):** Finnhub Estimate-1, endpoints `/stock/eps-estimate?symbol={t}&freq=quarterly` (`epsAvg`, `epsHigh`, `epsLow`, `numberAnalysts` — DEC-051 σ_proxy inputs + DEC-052 N≥2 floor input, retained for ALL historical quarters including reported ones, point-in-time CLEAN per the ACT-160 LOOK-AHEAD GATE) + `/stock/earnings?symbol={t}` (`actual`, `estimate` at-report snapshot, `period` for SUE-decay anchor). FMP's `/stable/analyst-estimates?period=quarter` does NOT carry historical reported-quarter rows (returns ONLY future quarters), and FMP's `/stable/earnings` carries `epsEstimated` but no `epsHigh` / `epsLow` / `numAnalystsEps` — both DEC-051 and DEC-052 are unimplementable on FMP alone.
+
+  **Why this DEC supersedes DEC-049 (evidence chain).**
+  - DEC-049 stated FMP `/stable/analyst-estimates?period=quarter` would supply `epsAvg` / `epsHigh` / `epsLow` / `numAnalystsEps` for SUE on the just-reported quarter. The ACT-160 reconciliation probe (chat-labeled "ACT-164" — recorded as next-free-numeric per the ACT-159 precedent) verified live against `FMP_API_KEY`: AAPL `/stable/analyst-estimates?period=quarter` returned 10 rows dated `2026-06-28` through `2028-09-28` — every row in the FUTURE; zero rows for reported quarters. Same shape across all 10 LOOK-AHEAD names. FMP cannot satisfy DEC-051 or DEC-052 for the reported-quarter SUE.
+  - The probe then verified Finnhub `/stock/eps-estimate?freq=quarterly`: all four required numeric fields present on EVERY historical quarter; `epsAvg` frozen at the at-report consensus snapshot (matches `/stock/earnings.estimate` to 4 decimal places across every reported quarter in the operational 90-calendar-day SUE-decay window for AAPL/MSFT/NVDA/AMZN/GOOGL/META/TSLA/JPM/WMT/COST — 13 quarters, 0 drifted toward `actual`). Point-in-time CLEAN within the operational window. (A separate finding: ~13 of 392 deep-history quarters dated 2017–2021 show >$0.01 drift toward `actual` — most are large divergences likely from Finnhub backfill / split-adjustment artifacts in archive rebuilds, NOT from rolling-revision contamination. All such quarters are >4 years old, OUTSIDE the §4.4.6 60-trading-day stale-earnings cutoff, so they cannot reach production SUE compute. Recorded for observability.)
+  - **Conscious approximation (CORRECTED framing, 3-place discipline).** §4.4.6 verbatim calls for `consensus_estimate_EPS_at_T-5_days`. The Finnhub at-report snapshot is the consensus AS OF T-0 (the report date), not T-5. The residual deviation is the pre-earnings-week estimate revisions ("walk-down" effect — analysts often nudge estimates downward in the final days before report). This means measured SUE may be slightly DAMPENED versus a true T-5 consensus (some of the surprise has already been "absorbed" into the consensus by T-0). The deviation is NOT avoided; it is INHERITED. The 3-place documentation discipline: file-header comment on `FinnhubEpsEstimateFetcher` + this DEC-053 paragraph + the Signal #2 module doc (created at Phase 3). Flagged for Phase-7 scrutiny — if measured alpha materially depends on T-5-vs-T-0 timing precision, a successor DEC adds `/calendar/earnings` (Finnhub) for the report-date anchor and back-walks the eps-estimate revision history. v1 ships with the T-0 anchor; v2 may refine.
+
+  **Cost.** $69/mo FMP Premium + $75/mo Finnhub Estimate-1 = **$144/mo, within the $150/mo external-data ceiling.** Both subscriptions already paid; no new spend. The DEC-049 "cancel Finnhub before 2026-06-25 renewal" condition is **RESCINDED**: Finnhub is retained indefinitely because it is the sole point-in-time-safe source for the Signal #2 dispersion + floor inputs.
+
+- **What this DEC does NOT decide.** It does not bind Signal #8 vendor selection (DW-095 gate). It does not amend DEC-051 / DEC-052 (the formulas and floor are unchanged — only the vendor that supplies the inputs moves from FMP to Finnhub). It does not amend DEC-050 (FMP `/stable/price-target-news` remains the Signal #1 source). It does not amend cadence (DEC-048 governs). It does not introduce a new env-var (`FINNHUB_API_KEY` already in Supabase secrets).
+- **Affected Modules / Systems:** NEW `_shared/longshort-signals/shared/finnhub-eps-estimate-fetcher.ts` (the historical-consensus + dispersion fetcher; first Finnhub-sourced fetcher in the signal stack). NEW `_shared/longshort-signals/shared/finnhub-earnings-fetcher.ts` (the at-report-snapshot corroborator + report-date anchor). Future `_shared/longshort-signals/pead/*` (Signal #2 compute + orchestrator consume both Finnhub fetchers). FMP fetchers for Signal #2 are NOT built and not in scope. `docs/07-reference/env-var-index.md` `FINNHUB_API_KEY` row binding extended to Signal #2 (already covers Signal #1 in the legacy registration; Signal #1 itself moves to `FMP_API_KEY`). `docs/04-modules/longshort/signals/_pattern-vendor-fetcher-filter-honesty.md` (Finnhub `/stock/eps-estimate` + `/stock/earnings` added to the registered-fetcher pre-flight list at FP-044 Phase 1). DEC-049 entry status flipped to `superseded`. Pairs with DEC-051 (the formula whose inputs Finnhub supplies) and DEC-052 (the floor whose input Finnhub supplies).
 
 ## Decision Integrity Rules
 
