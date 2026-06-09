@@ -26,6 +26,9 @@
  * Owner: longshort (FP-043 — Signal #3 / Phase 3)
  */
 
+import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
+import { productionClock } from '../../longshort-clock.ts';
+
 export interface TokenBucketOptions {
   ratePerSec: number;
   /** Injectable monotonic-ish clock; defaults to Date.now. */
@@ -72,9 +75,6 @@ export class TokenBucket {
  * bucket `acquire()` before delegation. Compatible with
  * `TradierOptionsChainFetcher`'s `HttpFetch` constructor parameter.
  */
-import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
-import { productionClock } from '../../longshort-clock.ts';
-
 export function pacedHttpFetch(bucket: TokenBucket, underlying: HttpFetch): HttpFetch {
   return async (input, init) => {
     await bucket.acquire();
