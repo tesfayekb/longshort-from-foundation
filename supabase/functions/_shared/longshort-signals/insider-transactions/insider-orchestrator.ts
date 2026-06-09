@@ -157,27 +157,38 @@ export function createInsiderOrchestrator(ctx: InsiderOrchestratorContext) {
       const perTicker: PerTickerResult[] = [];
 
       // ── Step 2a: ONE market-wide Form4 fetch (paginated, by date) ──
+      // INC-70 / ACT-156: a throw on the market-wide call means we have
+      // ZERO data from the sole Form 4 source — the run has nothing to
+      // ranknd MUST surface as `outcome='failed'` with a single
+      // `failure_reason` carrying the thrown message. We do NOT push
+      // per-ticker `fetch_error` skips and do NOT fall through into the
+      // qualifying-filter loop (the original FP-042 catch block did both
+      // — producing the 1678-skips-for-839-tickers double-tally bug
+      // documented at INC-70 / signal_compute_log run_id 1021808b).
+      // The kind:'unavailable' branch (typed entitlement state — 403 /
+      // 404 — neither a throw nor a fetcher error) remains unchanged and
+      // legitimately stays `outcome='completed'` with single-class
+      // per-ticker skips.
       let marketWide: Awaited<ReturnType<typeof ctx.form4.fetchForm4MarketWide>>;
       try {
         marketWide = await ctx.form4.fetchForm4MarketWide(as_of);
       } catch (err) {
-        // A throw on the market-wide fetch fails the WHOLE universe
-        // (it's the only Form4 source). Translate to a per-ticker
-        // fetch_error skip rather than aborting the run — this keeps
-        // the run "completed with all-skipped" rather than "failed",
-        // matching the per-ticker entitlement-aware behavior.
         const message = err instanceof SignalComputationError
           ? err.message
           : err instanceof Error
             ? err.message
             : String(err);
-        for (const row of universe) {
-          perTicker.push({
-            kind: 'skip',
-            skip: { ticker: row.ticker, reason: 'fetch_error', detail: message },
-          });
-        }
-        marketWide = { kind: 'rows', rowsByTicker: new Map<string, Form4Row[]>() };
+        return {
+          outcome: 'failed',
+          signal_id: SIGNAL_ID,
+          as_of_date,
+          universe_size: universe.length,
+          persisted_count: 0,
+          skipped: [],
+          failure_reason: `form4 market-wide fetch failed: ${message}`,
+          started_at,
+          completed_at: ts,
+        };
       }
 
       // ── Step 2b: entitlement / availability gate (whole-universe) ──
@@ -206,10 +217,9 @@ export function createInsiderOrchestrator(ctx: InsiderOrchestratorContext) {
         };
         const qualifying: QualifyingTicker[] = [];
         for (const row of universe) {
-          // Already-attributed errors from a market-wide throw above —
-          // skip so we don't double-record.
-          // (perTicker is empty here unless the catch ran, in which
-          // case we returned via the empty-map path; safe to proceed.)
+          // INC-70 / ACT-156: this loop is reached ONLY on a successful
+          // market-wide fetch (kind:'rows'). The throw path returns
+          // before getting here, so there is no double-tally risk.
           const tickerRows = rowsByTicker.get(row.ticker) ?? [];
           const filtered = filterQualifyingTransactions(tickerRows);
           if (filtered.length === 0) {
