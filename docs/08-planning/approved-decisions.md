@@ -625,6 +625,30 @@ If any field is missing → the decision is **INVALID**.
 
 - **Affected Modules / Systems:** `_shared/longshort-signals/insider-transactions/compute-insider.ts` (classifier authority); `_shared/longshort-signals/insider-transactions/insider-orchestrator.ts` (carries `role_tier_source` through the pipeline); `docs/04-modules/longshort/signals/insider-transactions.md` (approximation note + classifier table); DW-093 (upgrade path); FP-042 (the implementing FP); ACT-154.
 
+### DEC-045: Signal #3 Vendor Lock — Tradier Production Options Chains
+
+- **ID:** DEC-045
+- **Title:** Signal #3 (Options Flow Imbalance) sources options chains exclusively from Tradier production (`api.tradier.com/v1`); Polygon Options Developer is disqualified per INC-71
+- **Plan Section:** FP-043 (CROSSWIND §4.4.7 implementation)
+- **Date Approved:** 2026-06-09
+- **Decision Type:** vendor-selection / data-source governance
+- **Status:** active
+- **Superseded By:** —
+- **Decision:** Signal #3 fetches options chains and per-contract greeks/quotes from Tradier production exclusively. The decision is bound by the 4-axis vendor vetting in ACT-157: (a) reachability — production endpoints `expirations` + `chains` return 200 against `TRADIER_API_KEY` after the operator regenerated the production token (the prior sandbox-only token 401'd on `api.tradier.com`); (b) entitlement — a 92-strike SPY probe returned bid/ask/last/volume/open_interest populated 92/92 and greeks populated 92/92; (c) filter honesty — `symbol=` and `expiration=` are honoured (probed with impossible-symbol → 0 rows); (d) rate cap — 120 req/min confirmed (the coordinator runs ~100 req/min total = 6 workers × 0.28 req/sec with 15% headroom). Polygon Options Developer was vetted in parallel and **disqualified per INC-71**: well-formed payloads but `bid`, `ask`, `last`, and `greeks` were all null at the Developer tier — real-time NBBO is a separate paid entitlement at Polygon and not in scope to procure. Re-vendoring (e.g. CBOE LiveVol, ORATS) requires a superseding DEC and a fresh 4-axis vetting.
+- **Affected Modules / Systems:** `_shared/longshort-signals/shared/tradier-options-chain-fetcher.ts` (the locked fetcher); `_shared/longshort-signals/options-flow/*` (compute / orchestrator / coordinator / worker / token-bucket); `docs/04-modules/longshort/signals/options-flow.md` (records the vendor lock); `docs/07-reference/env-var-index.md` `TRADIER_API_KEY` row (production-scope binding); INC-71 (the Polygon disqualification evidence); ACT-157 (vetting authority); FP-043 (the implementing FP). Pairs with DEC-046 (which records the v1 chain-snapshot conscious approximation made on top of this vendor).
+
+### DEC-046: Signal #3 v1 Conscious Approximation — Chain-Snapshot in Lieu of Full 5-Day Timesales
+
+- **ID:** DEC-046
+- **Title:** Signal #3 v1 collapses the §4.4.7 rolling 5-day per-trade timesales reconstruction to nearest-DTE same-day chain snapshots with a 48-hour decay half-life; v2 timesales-true rebuild deferred
+- **Plan Section:** FP-043 (CROSSWIND §4.4.7 implementation)
+- **Date Approved:** 2026-06-09
+- **Decision Type:** signal-design / conscious-approximation governance
+- **Status:** active
+- **Superseded By:** —
+- **Decision:** The canonical §4.4.7 signal is a rolling 5-day per-trade timesales reconstruction (`/markets/timesales` per option contract across the trailing 5 sessions). Per ACT-157, the chunked coordinator/worker architecture under the 120 req/min Tradier cap can complete the 5-day timesales build for the S&P 900 universe inside the ~30–50% daily compute budget envelope only after a non-trivial second build (≥ 5 days × N contracts/ticker × universe = millions of requests under cap). FP-043 v1 therefore consciously approximates the signal by: (1) fetching the nearest-DTE same-day chain snapshot per ticker; (2) classifying each contract's `last` against `bid`/`ask` for direction (+1 / −1); (3) qualifying smart-money prints via `volume >= 100`, `DTE >= 7`, `|delta| <= 0.65`; (4) applying a 48-hour half-life exponential decay keyed off the contract's `trade_date` relative to `as_of` (NOT wall-clock). The approximation is **explicitly documented in file headers** (`compute-options-flow.ts`, `options-flow-orchestrator.ts`) and in `docs/04-modules/longshort/signals/options-flow.md` "DEC-046 approximation" section. Trade-offs accepted: (a) flow that built up earlier in the week is undercounted; (b) flow concentrated on a now-expired DTE is invisible. **v2 (timesales-true) is deferred work** — registered in `docs/08-planning/deferred-work-register.md` with the FP-043 disarmed-cron live observation as the unblocking trigger.
+- **Affected Modules / Systems:** `_shared/longshort-signals/options-flow/compute-options-flow.ts` (the formula host); `_shared/longshort-signals/options-flow/options-flow-orchestrator.ts` (carries `as_of` through the pipeline); `docs/04-modules/longshort/signals/options-flow.md` (records the approximation); FP-043 (the implementing FP); DEC-045 (the paired vendor lock); the v2 timesales-true rebuild as a deferred-work entry.
+
 ## Decision Integrity Rules
 
 - Every approved plan section MUST have a corresponding `DEC-NNN` entry

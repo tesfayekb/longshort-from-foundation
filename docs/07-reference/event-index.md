@@ -2216,3 +2216,63 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Payload schema** | `metadata: { operator_id, signal_id, as_of, error?, stage?, failure_reason?, trigger: 'manual' }` |
 | **Lifecycle** | active |
 | **Added by** | FP-042 |
+
+### `longshort.options_flow.compute.started`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-options-flow-compute/index.ts` via `writeStrategyAuditEvent` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { as_of, signal_id: 'options_flow_imbalance_5d', trigger: 'cron' }`; `correlation_id` UUID generated per fire |
+| **Lifecycle** | active |
+| **Added by** | FP-043 |
+
+### `longshort.options_flow.compute.completed`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-options-flow-compute/index.ts` after coordinator returns `outcome='completed'` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, run_id, outcome: 'completed', universe_size, persisted_count, skip_counts: Record<SignalSkipReason, number>, trigger: 'cron' }` |
+| **Lifecycle** | active |
+| **Added by** | FP-043 |
+
+### `longshort.options_flow.compute.failed`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-options-flow-compute/index.ts` on persist-error / coordinator-throw / `outcome='failed'` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, error?, stage?: 'coordinator_throw' \| 'signal_compute_log_persist', failure_reason?, trigger: 'cron' }` |
+| **Lifecycle** | active |
+| **Added by** | FP-043 |
+
+### `longshort.options_flow.compute.manual_triggered`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-options-flow-compute-manual/index.ts` BEFORE coordinator invocation (dual-trail discipline) |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, signal_id, as_of, trigger: 'manual' }`; `actor_id` = `auth.uid()`; carries `ip_address` + `user_agent` |
+| **Lifecycle** | active |
+| **Added by** | FP-043 |
+
+### `longshort.options_flow.compute.manual_completed`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-options-flow-compute-manual/index.ts` AFTER coordinator + persist succeed |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, trigger: 'manual' }` |
+| **Lifecycle** | active |
+| **Added by** | FP-043 |
+
+### `longshort.options_flow.compute.manual_failed`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-options-flow-compute-manual/index.ts` on persist-error / coordinator-throw / `outcome='failed'` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, signal_id, as_of, error?, stage?, failure_reason?, trigger: 'manual' }` |
+| **Lifecycle** | active |
+| **Added by** | FP-043 |
