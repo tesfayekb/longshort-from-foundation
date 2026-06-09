@@ -144,3 +144,13 @@ Names follow the established `longshort.<domain>.<sub>.<verb>` convention (verif
 | `fetchAndCompute` | `createPeadAdapter(...)` | Wraps `computePead` + dual-Finnhub fetch; orchestrator unchanged |
 
 The PEAD adapter (`pead-queue-adapter.ts`) imports `computePead` verbatim from `compute-pead.ts` — the FP-044 per-ticker compute arm is NOT edited. Skip semantics (DEC-052 `pead_panel_below_floor`, DEC-051/053 `zero_dispersion`, `no_recent_earnings`, `subscription_gated`, `data_unavailable`, `fetch_error`) are owned by the adapter + `computePead` — addendum §7 invariant (engine carries no divisor or floor policy) is preserved.
+
+## Gate-4 discipline (forward-binding, from FP-045 Phase-2 revision)
+
+Gate 4 for any PR touching this module is the CI workflow's ESLint command verbatim:
+
+```
+npx eslint .
+```
+
+(source: `.github/workflows/strong-evidence.yml`, "Gate 4" step). `deno lint` is supplementary diagnostic only — it does NOT enforce `@typescript-eslint/no-explicit-any` and is NEVER acceptable as Gate-4 evidence. Every PR's Gate-4 evidence block MUST state the exact command line above its output. The Phase 2 commits b4f4941 / 5396165 produced false-green Gate 4 by substituting `deno lint`; revision commit (this PR) restores the discipline by re-running the CI command and quoting it verbatim. `@ts-nocheck` does NOT silence ESLint — typed mocks (`unknown` in place of `any`, narrow interface stubs) are the only acceptable convention for Deno test files in this tree.
