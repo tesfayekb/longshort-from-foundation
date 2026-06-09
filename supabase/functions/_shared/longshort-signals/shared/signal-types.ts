@@ -88,7 +88,7 @@ export type SignalSkipReason =
                              // the EXPECTED case for most names — most stocks have no
                              // qualifying insider trades in any given 90-day window.
                              // Non-critical; ticker is still ranked by other signals.
-  | 'no_qualifying_flow';    // FP-043 / Signal #3 (options flow imbalance) — chain
+  | 'no_qualifying_flow'     // FP-043 / Signal #3 (options flow imbalance) — chain
                              // snapshot returned contracts but ZERO survived the
                              // smart-money filter (≥100 contracts, 7+ DTE, OTM/ATM)
                              // AND-classifier (last at-or-thru bid/ask). Spec §4.4.7
@@ -97,6 +97,35 @@ export type SignalSkipReason =
                              // tail of low-options-activity names. Non-critical;
                              // ticker is still ranked by other signals (combiner
                              // imputes (-999, 0) in Phase 3).
+  | 'no_recent_earnings'     // FP-044 / Signal #2 (PEAD §4.4.6) — ticker has NO
+                             // reported earnings inside the trailing 60-trading-day
+                             // staleness window (DEC-048 + §4.4.6 missing-data
+                             // clause). Returned when (a) the Finnhub earnings feed
+                             // yields no reported quarters at all (after dropping
+                             // future / actual=null rows), or (b) the most-recent
+                             // reported `period` is > 60 trading days behind `as_of`.
+                             // EXPECTED for most names on most days — earnings are
+                             // a quarterly event; only ~1/60 of trading days carry
+                             // an in-window report per name. Non-critical; ticker
+                             // is still ranked by other signals (combiner imputes
+                             // (-999, 0) in Phase 3).
+  | 'pead_panel_below_floor' // FP-044 / Signal #2 — the event-quarter analyst-
+                             // estimate row has `numberAnalysts < 2`. Per DEC-052:
+                             // a one-estimate panel has zero meaningful dispersion;
+                             // fabricating a denominator to dodge the divide-by-zero
+                             // would manufacture a phantom signal (the exact failure
+                             // mode CROSSWIND §2 axiom 3 + DEC-034 sentinel-fallback
+                             // discipline forbid). Non-critical; ticker is still
+                             // ranked by other signals.
+  | 'zero_dispersion';       // FP-044 / Signal #2 — the panel has N≥2 analysts but
+                             // `epsHigh === epsLow` so the DEC-051 range-proxy
+                             // `σ = (epsHigh − epsLow) / (2 × 1.349)` evaluates to
+                             // exactly 0. Per DEC-051 + DEC-053: this is typed
+                             // absence, NEVER a fabricated ε-fallback. A non-zero
+                             // ε would produce a SUE of arbitrary magnitude
+                             // determined entirely by the fabricated ε — a phantom
+                             // signal. Non-critical; ticker still ranked by other
+                             // signals.
 
 export interface SignalSkip {
   ticker: string;
