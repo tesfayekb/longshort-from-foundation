@@ -10,6 +10,7 @@
  * refactor" does not silently regress to the in-process orchestrator
  * path (which 504'd at the 150s wall — INC-72).
  */
+// deno-lint-ignore-file no-import-prefix -- std assert import, matches sibling source-sentinel files
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 
 const HANDLER_SOURCE = await Deno.readTextFile(
@@ -64,8 +65,13 @@ Deno.test('(5) signal_id sourced from pead-orchestrator export (no drift)', () =
   assert(HANDLER_SOURCE.includes(
     "import { SIGNAL_ID } from '../_shared/longshort-signals/pead/pead-orchestrator.ts'",
   ), 'SIGNAL_ID must be imported from pead-orchestrator (single source of truth)');
-  assert(!/['"]pead_sue_20d['"]/.test(HANDLER_SOURCE),
-    'literal signal_id leak — must import SIGNAL_ID instead');
+  // Comments may reference the literal id for documentation; the CODE must not.
+  const codeOnly = HANDLER_SOURCE
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\*.*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+  assert(!/['"]pead_sue_20d['"]/.test(codeOnly),
+    'literal signal_id leak in code — must import SIGNAL_ID instead');
 });
 
 Deno.test('(6) handler-name preserved per addendum §5 (DEC-043 attestation surface)', () => {
