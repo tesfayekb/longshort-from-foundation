@@ -71,6 +71,14 @@ export const DEFAULT_FORM4_LIMIT = 500;
 export interface Form4Row {
   /** 'transaction' or 'holding'. Compute layer drops 'holding'. */
   record_type: 'transaction' | 'holding' | string;
+  /** Issuer ticker(s) the filing pertains to. Present on the market-wide
+   *  (no `ticker=` query) variant, where it is the ONLY way to attribute
+   *  a row to a ticker (the URL didn't carry one). When the fetcher's
+   *  per-ticker variant is used, this is omitted — attribution is the
+   *  call's `ticker` argument. Per the FP-042 market-wide addendum, the
+   *  orchestrator attributes each row to `tickers[0]` (the primary
+   *  issuer ticker as ordered by Polygon). */
+  tickers?: string[];
   /** SEC transaction code (P/S/M/C/A/G/...). Undefined for holding rows. */
   transaction_code?: string;
   /** True if the transaction was made under a 10b5-1 plan. Per §4.4.4
@@ -99,11 +107,34 @@ export type Form4FetchResult =
   | { kind: 'rows'; rows: Form4Row[] }
   | { kind: 'unavailable'; reason: 'subscription_gated' | 'data_unavailable' };
 
+/**
+ * Result of the market-wide (no-ticker) Form 4 fetch — used by the
+ * insider orchestrator to collapse 839 per-ticker HTTPS calls into a
+ * handful of paginated calls (FP-042 CPU-limit fix / ACT-155).
+ *
+ * `rowsByTicker` is keyed by the issuer ticker chosen as `tickers[0]`
+ * for each row. Rows whose `tickers` array is missing/empty are
+ * silently dropped (they cannot be attributed without fabrication).
+ */
+export type Form4MarketWideResult =
+  | { kind: 'rows'; rowsByTicker: Map<string, Form4Row[]> }
+  | { kind: 'unavailable'; reason: 'subscription_gated' | 'data_unavailable' };
+
 interface PolygonForm4Response {
   results?: unknown[];
   status?: string;
   next_url?: string;
 }
+
+/** Per-page hard cap when paging without `ticker=`. Polygon's documented
+ *  page max; the orchestrator's market-wide call typically completes in
+ *  1–5 pages on a 90-day window across the full S&P 900 universe. */
+const MARKET_WIDE_PAGE_LIMIT = 1000;
+/** Hard pagination follow cap. The 90-day cross-issuer volume is
+ *  bounded; 50 pages × 1000 rows = 50k rows is far above any realistic
+ *  90-day envelope (S&P 900 ~ 5k-15k rows). Refuses to follow further
+ *  to bound runaway. Mirrors `polygon-constituent-fetcher.ts`. */
+const MARKET_WIDE_MAX_PAGES = 50;
 
 function isoDate(d: Date): string {
   const yyyy = d.getUTCFullYear().toString().padStart(4, '0');
@@ -125,6 +156,13 @@ function normalizeRow(raw: unknown): Form4Row | null {
   const out: Form4Row = {
     record_type: typeof r.record_type === 'string' ? r.record_type : 'unknown',
   };
+  if (Array.isArray(r.tickers)) {
+    const ts: string[] = [];
+    for (const t of r.tickers) {
+      if (typeof t === 'string' && t.length > 0) ts.push(t.toUpperCase());
+    }
+    if (ts.length > 0) out.tickers = ts;
+  }
   if (typeof r.transaction_code === 'string') out.transaction_code = r.transaction_code;
   if (typeof r.aff_10b5_one === 'boolean') out.aff_10b5_one = r.aff_10b5_one;
   if (typeof r.transaction_acquired_disposed === 'string') {
