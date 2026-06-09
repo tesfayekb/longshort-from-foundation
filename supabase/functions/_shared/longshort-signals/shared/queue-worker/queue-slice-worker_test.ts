@@ -185,3 +185,18 @@ Deno.test('slice: token-bucket acquire is called once per claimed ticker', async
   });
   assertEquals(acquireCalls, 4);
 });
+
+Deno.test('slice: callsPerName=2 acquires 2 tokens per ticker (FP-045 Phase 3 pacing fix)', async () => {
+  const claimed = Array.from({ length: 3 }, (_, i) => ({ ticker: `T${i}`, gics_sector: 'X' }));
+  const { supabase } = makeMock({ claimed, casWon: false });
+  let acquireCalls = 0;
+  const factory = (_r: number) => ({
+    acquire: async () => { acquireCalls += 1; },
+  } as unknown as TokenBucket);
+  await runQueueSlice({
+    supabase, config: cfg({ callsPerName: 2 }), as_of: new Date(),
+    run_id: 'r-1', bucketFactory: factory,
+  });
+  // 3 tickers × 2 calls-per-name = 6 acquisitions.
+  assertEquals(acquireCalls, 6);
+});
