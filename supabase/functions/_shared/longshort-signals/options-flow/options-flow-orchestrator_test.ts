@@ -252,7 +252,13 @@ Deno.test('orchestrator: persistence error → failed/persist_reason', async () 
   ];
   const tradier = makeTradier({
     AAPL: { kind: 'ok', expirations: ['2026-06-17'], chain: manyBuys('A', 6) },
-    MSFT: { kind: 'ok', expirations: ['2026-06-17'], chain: manyBuys('M', 6) },
+    MSFT: {
+      kind: 'ok', expirations: ['2026-06-17'],
+      chain: Array.from({ length: 6 }, (_, i) => buyContract(`M${i}`, {
+        option_type: 'put',
+        greeks: { ...buyContract('x').greeks!, delta: -0.45 },
+      })),
+    },
   });
   const { supabase } = makeSupabase({ universe, upsertError: { message: 'permission denied' } });
   const orch = createOptionsFlowOrchestrator({
