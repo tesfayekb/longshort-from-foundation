@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any -- typed mocks per FP-045 Phase 2 addendum
 // @ts-nocheck — Deno test file.
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { runQueueSlice } from './queue-slice-worker.ts';
