@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-explicit-any no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 2 addendum
+// deno-lint-ignore-file no-explicit-unknown no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 2 addendum
 // @ts-nocheck — Deno test file.
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { runQueueFinalizer } from './queue-finalizer.ts';
@@ -21,11 +21,11 @@ function makeMock(opts: {
   casCount?: number;
   observationsError?: string;
 }) {
-  const writes: Record<string, any[]> = {};
-  const updates: Array<{ table: string; payload: any; filters: Record<string, unknown> }> = [];
-  const supabase: any = {
+  const writes: Record<string, unknown[]> = {};
+  const updates: Array<{ table: string; payload: unknown; filters: Record<string, unknown> }> = [];
+  const supabase: unknown = {
     from(table: string) {
-      const b: any = {
+      const b: unknown = {
         _filters: {} as Record<string, unknown>,
         select(_c?: string) { return b; },
         eq(c: string, v: unknown) { b._filters[c] = v; return b; },
@@ -43,22 +43,22 @@ function makeMock(opts: {
           }
           return { data: null, error: null };
         },
-        upsert(payload: any) {
+        upsert(payload: unknown) {
           (writes[table] ??= []).push(payload);
           if (table === 'signal_observations' && opts.observationsError) {
             return Promise.resolve({ error: { message: opts.observationsError }, count: 0 });
           }
           return Promise.resolve({ error: null, count: Array.isArray(payload) ? payload.length : 1 });
         },
-        insert(payload: any) {
+        insert(payload: unknown) {
           (writes[table] ??= []).push(payload);
           if (table === 'signal_compute_log') {
             return { select: () => ({ single: async () => ({ data: { run_id: 'log-1' }, error: null }) }) };
           }
           return { select: () => ({ single: async () => ({ data: null, error: null }) }) };
         },
-        update(payload: any) { b._update = payload; return b; },
-        then(resolve: any) {
+        update(payload: unknown) { b._update = payload; return b; },
+        then(resolve: unknown) {
           if (b._update) {
             updates.push({ table, payload: b._update, filters: { ...b._filters } });
             return resolve({ error: null, count: opts.casCount ?? 1 });
@@ -115,7 +115,7 @@ Deno.test('finalizer: happy path — z-score + observations + log + terminal CAS
   const cas = updates.find((u) => u.table === 'signal_queue_runs');
   assert(cas);
   assertEquals(cas!.filters.status, 'finalizing');
-  assertEquals((cas!.payload as any).status, 'completed');
+  assertEquals((cas!.payload as unknown).status, 'completed');
 });
 
 Deno.test('finalizer: singleton sector → typed singleton_sector skip', async () => {
@@ -184,9 +184,9 @@ Deno.test('finalizer: observations-persist failure → transition to failed', as
   });
   assertEquals(out.kind, 'finalized');
   if (out.kind === 'finalized') assertEquals(out.outcome, 'failed');
-  const cas = updates.find((u) => (u.payload as any).status === 'failed');
+  const cas = updates.find((u) => (u.payload as unknown).status === 'failed');
   assert(cas);
-  assert(String((cas!.payload as any).failure_reason).includes('PostgREST 500'));
+  assert(String((cas!.payload as unknown).failure_reason).includes('PostgREST 500'));
   assert(writes['signal_compute_log']);
 });
 

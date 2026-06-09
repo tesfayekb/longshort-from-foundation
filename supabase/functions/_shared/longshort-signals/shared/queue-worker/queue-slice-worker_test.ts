@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-explicit-any no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 2 addendum
+// deno-lint-ignore-file no-explicit-unknown no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 2 addendum
 // @ts-nocheck — Deno test file.
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { runQueueSlice } from './queue-slice-worker.ts';
@@ -28,31 +28,31 @@ function makeMock(opts: {
   claimed: Array<{ ticker: string; gics_sector: string | null }>;
   casWon: boolean;
 }) {
-  const writes: Record<string, any[]> = {};
-  const rpcCalls: Array<{ fn: string; args: any }> = [];
-  const updates: Array<{ table: string; payload: any; filters: Record<string, unknown> }> = [];
+  const writes: Record<string, unknown[]> = {};
+  const rpcCalls: Array<{ fn: string; args: unknown }> = [];
+  const updates: Array<{ table: string; payload: unknown; filters: Record<string, unknown> }> = [];
   const deletes: Array<{ table: string; filters: Record<string, unknown>; inVals?: unknown[] }> = [];
 
-  const supabase: any = {
-    async rpc(fn: string, args: any) {
+  const supabase: unknown = {
+    async rpc(fn: string, args: unknown) {
       rpcCalls.push({ fn, args });
       if (fn === 'signal_queue_claim_slice') return { data: opts.claimed, error: null };
       if (fn === 'signal_queue_cas_finalizing') return { data: opts.casWon, error: null };
       return { data: null, error: null };
     },
     from(table: string) {
-      const builder: any = {
+      const builder: unknown = {
         _filters: {} as Record<string, unknown>,
         _inVals: undefined as unknown[] | undefined,
-        upsert: (payload: any) => {
+        upsert: (payload: unknown) => {
           (writes[table] ??= []).push(payload);
           return Promise.resolve({ error: null });
         },
-        update(payload: any) { builder._update = payload; return builder; },
+        update(payload: unknown) { builder._update = payload; return builder; },
         delete() { builder._delete = true; return builder; },
         eq(c: string, v: unknown) { builder._filters[c] = v; return builder; },
         in(_c: string, vs: unknown[]) { builder._inVals = vs; return builder; },
-        then(resolve: any) {
+        then(resolve: unknown) {
           if (builder._update) {
             updates.push({ table, payload: builder._update, filters: { ...builder._filters } });
           } else if (builder._delete) {
@@ -165,7 +165,7 @@ Deno.test('slice: heartbeat bumped (status=running guard) before compute', async
     run_id: 'r-1', bucketFactory: fakeBucketFactory,
   });
   const heartbeat = updates.find((u) =>
-    u.table === 'signal_queue_runs' && (u.payload as any).heartbeat_at
+    u.table === 'signal_queue_runs' && (u.payload as unknown).heartbeat_at
   );
   assert(heartbeat);
   assertEquals(heartbeat!.filters.run_id, 'r-1');

@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-explicit-any no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 2 addendum
+// deno-lint-ignore-file no-explicit-unknown no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 2 addendum
 // @ts-nocheck — Deno test file.
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { initQueueRun } from './queue-init.ts';
@@ -22,9 +22,9 @@ function makeMock(opts: {
 }) {
   const calls: Array<{ table: string; op: string; payload?: unknown }> = [];
   const insertedRunId = '11111111-1111-1111-1111-111111111111';
-  const supabase: any = {
+  const supabase: unknown = {
     from(table: string) {
-      const builder: any = {
+      const builder: unknown = {
         _filters: {} as Record<string, unknown>,
         select(_c?: string) { return builder; },
         eq(c: string, v: unknown) { builder._filters[c] = v; return builder; },
@@ -32,7 +32,7 @@ function makeMock(opts: {
         order() { return builder; },
         limit() { return builder; },
         async single() { return { data: null, error: null }; },
-        insert(payload: any) {
+        insert(payload: unknown) {
           calls.push({ table, op: 'insert', payload });
           if (table === 'signal_queue_runs') {
             if (opts.insertRunFails) {
@@ -42,7 +42,7 @@ function makeMock(opts: {
           }
           return Promise.resolve({ data: null, error: null });
         },
-        upsert(payload: any) {
+        upsert(payload: unknown) {
           calls.push({ table, op: 'upsert', payload });
           if (table === 'signal_queue_cursor' && opts.insertCursorFails) {
             return Promise.resolve({ error: { message: opts.insertCursorFails } });
@@ -54,7 +54,7 @@ function makeMock(opts: {
           builder._delete = true;
           return builder;
         },
-        then(resolve: any) {
+        then(resolve: unknown) {
           if (table === 'signal_queue_runs') {
             return resolve({ data: opts.openRuns ?? [], error: null });
           }
@@ -132,7 +132,7 @@ Deno.test('init: started — seeds run row + cursor rows for each ticker', async
   const cursorUpsert = calls.find((c) => c.table === 'signal_queue_cursor' && c.op === 'upsert');
   assert(runInsert);
   assert(cursorUpsert);
-  assertEquals((cursorUpsert!.payload as any[]).length, 3);
+  assertEquals((cursorUpsert!.payload as unknown[]).length, 3);
 });
 
 Deno.test('init: cursor insert failure attempts rollback of the run row', async () => {

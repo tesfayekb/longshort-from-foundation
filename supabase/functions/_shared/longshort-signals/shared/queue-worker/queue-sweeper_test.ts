@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-explicit-any no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 2 addendum
+// deno-lint-ignore-file no-explicit-unknown no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 2 addendum
 // @ts-nocheck — Deno test file.
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { runQueueSweeper, pickOldestRunningRun } from './queue-sweeper.ts';
@@ -20,12 +20,12 @@ function makeMock(opts: {
   failCasCount?: number;
   oldestRun?: { run_id: string; signal_id: string; created_at: string } | null;
 }) {
-  const updates: Array<{ table: string; payload: any; filters: Record<string, unknown> }> = [];
+  const updates: Array<{ table: string; payload: unknown; filters: Record<string, unknown> }> = [];
   const deletes: Array<{ table: string; filters: Record<string, unknown> }> = [];
 
-  const supabase: any = {
+  const supabase: unknown = {
     from(table: string) {
-      const b: any = {
+      const b: unknown = {
         _filters: {} as Record<string, unknown>,
         select(_c?: string) { return b; },
         eq(c: string, v: unknown) { b._filters[c] = v; return b; },
@@ -34,9 +34,9 @@ function makeMock(opts: {
         not(_c: string, _op: string, _v: unknown) { return b; },
         order() { return b; },
         limit() { return b; },
-        update(payload: any) { b._update = payload; return b; },
-        delete(_arg?: any) { b._delete = true; return b; },
-        then(resolve: any) {
+        update(payload: unknown) { b._update = payload; return b; },
+        delete(_arg?: unknown) { b._delete = true; return b; },
+        then(resolve: unknown) {
           if (b._update && table === 'signal_queue_runs') {
             updates.push({ table, payload: b._update, filters: { ...b._filters } });
             return resolve({ error: null, count: opts.failCasCount ?? 1 });

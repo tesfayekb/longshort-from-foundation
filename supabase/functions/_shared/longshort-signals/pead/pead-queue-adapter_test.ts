@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-explicit-any no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 3 sentinel pattern
+// deno-lint-ignore-file no-explicit-unknown no-import-prefix require-await -- typed mocks + std import per FP-045 Phase 3 sentinel pattern
 // @ts-nocheck — Deno test file.
 /**
  * Unit tests for the PEAD queue-worker adapter (FP-045 Phase 3).
@@ -14,11 +14,11 @@ import { createPeadAdapter } from './pead-queue-adapter.ts';
 
 const AS_OF = new Date('2026-06-09T20:00:00Z');
 
-function epsFetcher(rows: any) {
-  return { async fetchEpsEstimates(_t: string) { return rows; } } as any;
+function epsFetcher(rows: unknown) {
+  return { async fetchEpsEstimates(_t: string) { return rows; } } as unknown;
 }
-function earnFetcher(rows: any) {
-  return { async fetchEarnings(_t: string) { return rows; } } as any;
+function earnFetcher(rows: unknown) {
+  return { async fetchEarnings(_t: string) { return rows; } } as unknown;
 }
 
 Deno.test('adapter: unavailable eps-estimate (subscription_gated) → typed skip', async () => {
@@ -28,7 +28,7 @@ Deno.test('adapter: unavailable eps-estimate (subscription_gated) → typed skip
   });
   const r = await adapter({ ticker: 'AAPL', gicsSector: 'Tech', asOf: AS_OF });
   assertEquals(r.kind, 'skip');
-  assertEquals((r as any).reason, 'subscription_gated');
+  assertEquals((r as unknown).reason, 'subscription_gated');
 });
 
 Deno.test('adapter: unavailable eps-estimate (data_unavailable) → data_unavailable skip', async () => {
@@ -37,7 +37,7 @@ Deno.test('adapter: unavailable eps-estimate (data_unavailable) → data_unavail
     earnings: earnFetcher({ kind: 'ok', rows: [] }),
   });
   const r = await adapter({ ticker: 'AAPL', gicsSector: 'Tech', asOf: AS_OF });
-  assertEquals((r as any).reason, 'data_unavailable');
+  assertEquals((r as unknown).reason, 'data_unavailable');
 });
 
 Deno.test('adapter: unavailable earnings (data_unavailable) → no_recent_earnings skip', async () => {
@@ -46,18 +46,18 @@ Deno.test('adapter: unavailable earnings (data_unavailable) → no_recent_earnin
     earnings: earnFetcher({ kind: 'unavailable', reason: 'data_unavailable' }),
   });
   const r = await adapter({ ticker: 'AAPL', gicsSector: 'Tech', asOf: AS_OF });
-  assertEquals((r as any).reason, 'no_recent_earnings');
+  assertEquals((r as unknown).reason, 'no_recent_earnings');
 });
 
 Deno.test('adapter: fetcher throw → typed fetch_error skip (never throws to engine)', async () => {
   const adapter = createPeadAdapter({
-    epsEstimate: { async fetchEpsEstimates() { throw new Error('vendor 503'); } } as any,
+    epsEstimate: { async fetchEpsEstimates() { throw new Error('vendor 503'); } } as unknown,
     earnings: earnFetcher({ kind: 'ok', rows: [] }),
   });
   const r = await adapter({ ticker: 'AAPL', gicsSector: 'Tech', asOf: AS_OF });
   assertEquals(r.kind, 'skip');
-  assertEquals((r as any).reason, 'fetch_error');
-  assert(String((r as any).detail).includes('vendor 503'));
+  assertEquals((r as unknown).reason, 'fetch_error');
+  assert(String((r as unknown).detail).includes('vendor 503'));
 });
 
 Deno.test('adapter: no matching period → no_recent_earnings', async () => {
@@ -71,7 +71,7 @@ Deno.test('adapter: no matching period → no_recent_earnings', async () => {
     ] }),
   });
   const r = await adapter({ ticker: 'AAPL', gicsSector: 'Tech', asOf: AS_OF });
-  assertEquals((r as any).reason, 'no_recent_earnings');
+  assertEquals((r as unknown).reason, 'no_recent_earnings');
 });
 
 Deno.test('adapter: panel below floor (N=1) → pead_panel_below_floor', async () => {
@@ -84,7 +84,7 @@ Deno.test('adapter: panel below floor (N=1) → pead_panel_below_floor', async (
     ] }),
   });
   const r = await adapter({ ticker: 'AAPL', gicsSector: 'Tech', asOf: AS_OF });
-  assertEquals((r as any).reason, 'pead_panel_below_floor');
+  assertEquals((r as unknown).reason, 'pead_panel_below_floor');
 });
 
 Deno.test('adapter: zero dispersion (high==low) → zero_dispersion', async () => {
@@ -97,7 +97,7 @@ Deno.test('adapter: zero dispersion (high==low) → zero_dispersion', async () =
     ] }),
   });
   const r = await adapter({ ticker: 'AAPL', gicsSector: 'Tech', asOf: AS_OF });
-  assertEquals((r as any).reason, 'zero_dispersion');
+  assertEquals((r as unknown).reason, 'zero_dispersion');
 });
 
 Deno.test('adapter: happy path returns kind=value with finite raw', async () => {
@@ -111,5 +111,5 @@ Deno.test('adapter: happy path returns kind=value with finite raw', async () => 
   });
   const r = await adapter({ ticker: 'AAPL', gicsSector: 'Tech', asOf: AS_OF });
   assertEquals(r.kind, 'value');
-  assert(Number.isFinite((r as any).raw));
+  assert(Number.isFinite((r as unknown).raw));
 });
