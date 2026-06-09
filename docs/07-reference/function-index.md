@@ -2953,3 +2953,74 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Purpose** | Operator-triggered backfill / debug run. Parses + validates body (`as_of` ISO date with future-date guard), invokes the coordinator, emits dual-trail audit events (`manual_triggered` BEFORE, `manual_completed`/`manual_failed` AFTER). |
 | **File** | `supabase/functions/longshort-options-flow-compute-manual/index.ts` |
 | **Added by** | FP-043 |
+
+## PEAD Signal (FP-044 / Phase 2.6 / Signal #2)
+
+#### `supabase/functions/_shared/longshort-signals/pead/compute-pead.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-044) |
+| **Classification** | shared infrastructure — pure SUE compute with `exp(-trading_days / 20)` decay weighting; sigma_proxy via DEC-051 `(epsHigh − epsLow) / 2.698`; DEC-052 N≥2 floor enforced; zero-dispersion typed-absence (NO ε-fallback) per DEC-053. |
+| **Exports** | `function computePead(input, as_of)`; `type PeadSkipReason = 'no_recent_earnings' \| 'pead_panel_below_floor' \| 'zero_dispersion'`; constants `PEAD_HALFLIFE_TRADING_DAYS = 20`, `PEAD_MAX_STALENESS_TRADING_DAYS = 60`, `PEAD_MIN_ANALYSTS = 2`, `PEAD_SIGMA_RANGE_DIVISOR = 2.698`. |
+| **File** | `supabase/functions/_shared/longshort-signals/pead/compute-pead.ts` |
+| **Tests** | `compute-pead_test.ts` — Deno unit tests covering DEC-052 N=1 → `pead_panel_below_floor`, N=2 boundary keeps, DEC-051 `epsHigh==epsLow` → `zero_dispersion` (NO epsilon fallback), 60-trading-day staleness gate, decay arithmetic, determinism. |
+| **Added by** | FP-044 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/finnhub-eps-estimate-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-044) |
+| **Classification** | shared infrastructure — entitlement-aware Finnhub `/stock/eps-estimate?freq=quarterly` fetcher. Per DEC-053, the consensus + dispersion + analyst-count source for Signal #2. Anti-phantom: rows missing required fields or with `numberAnalysts <= 0` are dropped. Look-ahead clean: ACT-160 probe confirmed `epsAvg` for reported quarters is FROZEN at report (matches `/stock/earnings` snapshot to 4dp; never drifts toward `epsActual`). |
+| **Exports** | `class FinnhubEpsEstimateFetcher { constructor(apiKey); fetchEpsEstimates(ticker): Promise<EpsEstimateFetchResult> }`; `interface RawEpsEstimateRow { period; year; quarter; epsAvg; epsHigh; epsLow; numberAnalysts }`; `type EpsEstimateFetchResult = { kind: 'rows'; rows: RawEpsEstimateRow[] } \| { kind: 'unavailable'; reason: 'subscription_gated' \| 'data_unavailable' }`. |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/finnhub-eps-estimate-fetcher.ts` |
+| **Tests** | `finnhub-eps-estimate-fetcher_test.ts` — Deno tests covering 401/403 → `subscription_gated`, 404 → `data_unavailable`, 5xx throws, missing-field drops, `numberAnalysts <= 0` drops, period sorting, URL shape. |
+| **Added by** | FP-044 |
+
+#### `supabase/functions/_shared/longshort-signals/shared/finnhub-earnings-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-044) |
+| **Classification** | shared infrastructure — entitlement-aware Finnhub `/stock/earnings` fetcher. Per DEC-053, supplies the reported-quarter `actual` + at-report `estimate` snapshot + report `date` for Signal #2. The `estimate` field is the **T-0 consensus snapshot** (NOT T-5 per §4.4.6 verbatim) — the conscious approximation flagged in DEC-053 / `pead.md`. |
+| **Exports** | `class FinnhubEarningsFetcher { constructor(apiKey); fetchEarnings(ticker): Promise<EarningsFetchResult> }`; `interface RawEarningsRow { period; year; quarter; actual; estimate; date }`; same entitlement-aware discriminated union as the estimate fetcher. |
+| **File** | `supabase/functions/_shared/longshort-signals/shared/finnhub-earnings-fetcher.ts` |
+| **Tests** | `finnhub-earnings-fetcher_test.ts` — Deno tests for entitlement mapping, missing-field drops, sort order, URL shape. |
+| **Added by** | FP-044 |
+
+#### `supabase/functions/_shared/longshort-signals/pead/pead-orchestrator.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-044) |
+| **Classification** | shared infrastructure — five-step pipeline (universe load → dual Finnhub fetch via `Promise.all` → join on `(year, quarter)` → within-sector z-score (±3 clip) → persist). |
+| **Exports** | `function createPeadOrchestrator(ctx)`; `const SIGNAL_ID = 'pead_sue_20d'`; `interface PeadOrchestratorContext extends Omit<SignalOrchestratorContext, 'priceHistory'> { epsEstimate: FinnhubEpsEstimateFetcher; earnings: FinnhubEarningsFetcher }`. |
+| **File** | `supabase/functions/_shared/longshort-signals/pead/pead-orchestrator.ts` |
+| **Tests** | `pead-orchestrator_test.ts` — Deno tests via DI mocks (happy-path, entitlement-gated typed skip, below-floor skip mapping, zero-dispersion skip mapping, staleness gate, SIGNAL_ID lock, determinism + as_of-derived timestamps). |
+| **Conscious approximation** | T-0 consensus anchor (vs §4.4.6 T-5). Documented in DEC-053 + handler header + `docs/04-modules/longshort/signals/pead.md` per the three-place discipline. Phase-7 scrutiny item. |
+| **Added by** | FP-044 |
+
+#### `supabase/functions/longshort-pead-compute/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-044) |
+| **Classification** | edge function — daily PEAD production cron handler. NON-CRITICAL signal. |
+| **Trigger** | `verifyCronSecret` (X-Cron-Secret header); registered in `job_registry` as `longshort.pead.compute` via MIG-081 (`enabled=false`, schedule `'0 23 * * 1-5'` — INTERIM per DEC-048). |
+| **Purpose** | Wraps the Finnhub fetcher pair + `createPeadOrchestrator` in the DEC-023 envelope; emits `.started` / `.completed` / `.failed` audit events; persists telemetry via `persistSignalComputeLog`. |
+| **File** | `supabase/functions/longshort-pead-compute/index.ts` |
+| **Tests** | `supabase/functions/longshort-pead-compute/index_test.ts` — 9 source-sentinel tests (cron-auth wired + auth-first ordering + wall-clock discipline + FINNHUB_API_KEY check + no-FMP-no-Polygon-leak + dual-fetcher orchestrator wiring + persist-helper + 3 audit events + handler-path pin + no sibling-orchestrator import drift + DEC-048 interim-cadence header acknowledgement). |
+| **Added by** | FP-044 |
+
+#### `supabase/functions/longshort-pead-compute-manual/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-044) |
+| **Classification** | edge function — operator-trigger sibling of `longshort-pead-compute`. Invokes the same orchestrator with an operator-supplied `as_of`. Recommended path for validating Signal #2 math + persistence + entitlement-degradation before any cron wiring (per DEC-043 prudent-sequencing). |
+| **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST-only. |
+| **Purpose** | Operator-driven backfill / first-fire validation. Dual audit envelope (`.manual_triggered` BEFORE; `.manual_completed` / `.manual_failed` AFTER). |
+| **File** | `supabase/functions/longshort-pead-compute-manual/index.ts` |
+| **Tests** | `supabase/functions/longshort-pead-compute-manual/index_test.ts` — source-sentinel tests covering operator-JWT wiring, `longshort.manage` permission, POST-only 405, body validation, FINNHUB_API_KEY, dual audit envelope ordering, wall-clock discipline, orchestrator wiring. |
+| **Added by** | FP-044 |
