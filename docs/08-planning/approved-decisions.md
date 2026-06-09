@@ -688,6 +688,109 @@ If any field is missing → the decision is **INVALID**.
 
 - **Affected Modules / Systems:** `_shared/longshort-signals/options-flow/options-flow-coordinator.ts` (the orchestration shell to be replaced by the DW-095 rebuild — the `runOptionsFlowCoordinator` function in particular); `supabase/functions/longshort-options-flow-compute/index.ts` (becomes the `coordinator-init` handler in the rebuild); `supabase/functions/longshort-options-flow-worker/index.ts` (becomes the `slice-worker` handler in the rebuild); future `longshort-options-flow-finalizer` + `longshort-options-flow-orphan-sweeper` edge functions (DW-095); future `signal_options_flow_runs` / `signal_options_flow_cursor` / `signal_options_flow_staging` / `signal_options_flow_skips` tables (DW-095 migration); `sql/14_longshort_signal_cron_schedule.sql` (future slice-worker + sweeper cron rows); `docs/04-modules/longshort/signals/options-flow.md` (deferred-header note); DW-095 (the rebuild work item); ACT-158 (the park action); ACT-157 (the investigation evidence); DEC-045 / DEC-046 (vendor lock + v1 approximation — both preserved unchanged); `_shared/longshort-signals/shared/tradier-options-chain-fetcher.ts`, `compute-options-flow.ts`, `token-bucket.ts`, the per-worker `options-flow-chunk-runner.ts`, and the within-sector z-score (`shared/z-score-normalize.ts`) all reused unchanged by the rebuild.
 
+### DEC-048: Signal-Compute & Rebalance Cadence Is a Tunable Configuration Parameter — Daily-EOD Is Interim, Not End-State
+
+- **ID:** DEC-048
+- **Title:** No layer (signal compute, rebalance, combiner, ranker) hardcodes daily OR intraday cadence; rebalance/compute frequency is a per-signal / per-pipeline configuration parameter resolved at runtime; the empirically-optimal cadence is determined at Phase 7 paper validation (transaction-cost-vs-freshness tradeoff MEASURED, not assumed) and LOCKED before Phase 8 live.
+- **Plan Section:** longshort signal-stack architecture (cross-cutting; precedes the FP series for Signals #1/#2/#8).
+- **Date Approved:** 2026-06-09
+- **Decision Type:** architecture / cadence governance (Tier A — gates the design of every remaining feed-signal build).
+- **Status:** active
+- **Superseded By:** —
+- **Decision:**
+
+  **Principle.** Cadence is a CONFIG, not a CODE CONSTANT. The current `sql/14_longshort_signal_cron_schedule.sql` daily-EOD cron rows (`0 19/20/21/22 * * 1-5`) are an **INTERIM compute cadence**, explicitly NOT a ratified end-state. CROSSWIND §4.4 names intraday cadences for several signals; the spec's rebalance model is event-driven / list-change-driven (spec lines 77/87). Locking daily-EOD prematurely would foreclose the intraday option without ever measuring whether it dominates on a transaction-cost-adjusted basis.
+
+  **Binding rules.**
+  1. New signal handlers (Signals #1 / #2 / #8 and any subsequent feed-signal) MUST source cadence from a `signal_registry.cadence_config` resolution (or equivalent parameterized config table read), NOT from a hardcoded `setInterval` / hardcoded `pg_cron` literal embedded in handler code. The cron row in `sql/14_*` remains the SCHEDULING layer; the handler's expected-cadence assertion (for `verify_quote_freshness`-style staleness gates, `stale_after_hours` thresholds, replay-determinism assertions) MUST read from config.
+  2. Cadence changes (daily-EOD → intraday-N-minute, or vice versa) are config-flip + cron-reschedule operations — they do NOT require code-edits to the signal compute kernel. This is the test: if changing Signal #1 from daily-EOD to 15-minute-intraday requires editing `compute-*.ts` rather than flipping a row, the cadence is hardcoded and the design violates DEC-048.
+  3. The Phase 7 paper-validation gate (per CROSSWIND §10 phase-plan) MUST include an explicit cadence-tuning sub-step that measures per-signal transaction-cost-adjusted alpha at ≥2 cadence regimes (e.g. daily-EOD vs intraday-30-minute) on the same paper book, and produces an evidence-backed cadence-lock recommendation before Phase 8 live cutover.
+  4. Vendor-feasibility recorded (informative — not binding on this DEC): Finnhub 300 rpm + FMP 750 rpm + Polygon ~100 rps all support intraday cadence at 839-name universe scale if Phase 7 selects it (839 names / 100 rps = ~8 s of API wall-time per intraday tick — well inside any reasonable intraday window). DW-095's queue-worker pattern remains the rate-cap escape hatch should any vendor's per-pipeline aggregate cap force a fan-out shape.
+
+- **What this DEC does NOT decide.** It does not select a cadence (Phase 7 does); it does not amend any existing `sql/14_*` cron row (those stay daily-EOD until a cadence-tuning DEC supersedes); it does not require a retrofit of #6/#7 cadence reads (their current daily-EOD shape is preserved as the documented interim baseline, NOT relocked); it does not introduce a new permission / event / migration in this DEC entry.
+- **Affected Modules / Systems:** `signal_registry` (gains a `cadence_config` resolution path at first new-signal build — Signal #2's FP); `_shared/longshort-signals/*` (handler scaffolds for Signals #1/#2/#8 source cadence from config, not constants); `sql/14_longshort_signal_cron_schedule.sql` (scheduling layer — cron rows remain authoritative for WHEN compute fires; cadence value in config + cron row stay reconciled); Phase 7 plan (gains the cadence-tuning sub-step as a gate item); CROSSWIND §4.4 (interpretation note — named intraday cadences are CANDIDATE values, Phase 7 picks); `docs/04-modules/longshort/signals/_pattern-vendor-fetcher-filter-honesty.md` (consumers MUST verify cadence-config wiring at fetcher-spec time, per the dual-axis pre-flight discipline). Pairs with DEC-049 (vendor lock for #1/#2 supplies the per-signal rate-cap math that informs Phase 7 cadence-tuning).
+
+### DEC-049: FMP Premium as Sole Vendor for Signals #1 (Analyst Revisions) and #2 (PEAD) — Finnhub Estimate-1 Cancellation Pending Build Validation
+
+- **ID:** DEC-049
+- **Title:** Signals #1 and #2 source all data from Financial Modeling Prep (FMP) Premium tier; Finnhub Estimate-1 is a strict subset and is queued for cancellation contingent on successful production builds of Signals #1 + #2 before the 2026-06-25 renewal.
+- **Plan Section:** longshort signal-stack — Signals #1 and #2 (precedes their FP series).
+- **Date Approved:** 2026-06-09
+- **Decision Type:** vendor-selection / data-source governance (Tier A — locks the vendor surface for two feed-signals).
+- **Status:** active
+- **Superseded By:** —
+- **Decision:**
+
+  **Vendor lock.** Signals #1 (`analyst_revisions`) and #2 (`pead_sue`) source ALL data from FMP Premium ($69/mo monthly billing; within operator's $150/mo external-data ceiling). Specific endpoints:
+  - Signal #1: `/stable/price-target-news?symbol={t}` (per-event analyst, firm, prior/new target $, publication timestamp — supplies the magnitude term per DEC-050).
+  - Signal #2: `/stable/analyst-estimates?symbol={t}&period=quarter` (epsAvg, epsHigh, epsLow, numAnalystsEps for SUE denominator per DEC-051) + `/stable/earnings?symbol={t}` (epsActual + reportedDate for SUE numerator and the §4.4.6 60-trading-day staleness gate).
+
+  **Evidence chain (per the live-key probe series; see ACT-159 evidence section).**
+  - **Field-shape evidence (probe set 1):** confirmed FMP `/stable/price-target-news` returns per-event `priceTarget`, `adjPriceTarget`, `priceWhenPosted`, `analystName`, `analystCompany`, `publishedDate`. Confirmed FMP `/stable/analyst-estimates` returns `numAnalystsEps`. Confirmed neither FMP nor Finnhub Estimate-1 ships true `epsEstimateStdDev` (governed by DEC-051).
+  - **Window-density evidence (probe set 2 — the reconciled coverage number for signal purposes):** for each stratum on the same 60-name sample, FMP and Finnhub in-window 90d coverage is statistically equivalent (mega 93.3 / 93.3; large 100 / 100; mid 93.3 / 93.3; small 80.0 / 80.0). Zero names in the sample had in-window Finnhub events with zero in-window FMP events. **Finnhub is a strict subset of FMP on the coverage axis** AND lacks the per-event magnitude field FMP provides — there is no complementarity argument for keeping both.
+
+  **Finnhub cancellation condition (binding — explicit operator condition, not a completed action).** `FINNHUB_API_KEY` is RETAINED in Supabase secrets until BOTH Signal #1 and Signal #2 production builds reach `signal_registry.status='live'` with their attestation evidence per DEC-043 (200 + real artifact row from cron-fired execution). On that condition reaching CLEAN, the operator cancels Finnhub Estimate-1 BEFORE the 2026-06-25 renewal. If either build fails validation before 2026-06-25, the operator may roll forward Finnhub for one renewal cycle while remediation proceeds. The cancellation is NOT executed by Lovable — it is an operator-side billing action.
+
+- **What this DEC does NOT decide.** It does not bind Signal #8 vendor selection (news sentiment vendor TBD by its own pre-build vendor-shape audit per DW-095's gate); it does not bind Signal #3's vendor (DEC-045 / Tradier remains locked); it does not introduce a new env-var (`FMP_API_KEY` already registered in Supabase secrets); it does not amend cadence (DEC-048 governs that, and Phase 7 picks).
+- **Affected Modules / Systems:** future `_shared/longshort-signals/analyst-revisions/*` (Signal #1 build); future `_shared/longshort-signals/pead/*` (Signal #2 build); `docs/07-reference/env-var-index.md` `FMP_API_KEY` row (production-scope binding); `docs/04-modules/longshort/signals/_pattern-vendor-fetcher-filter-honesty.md` (FMP `/stable/` paths added to the registered-fetcher pre-flight list at first build); Signals #1 and #2 future FP entries (vendor row references DEC-049); Finnhub Estimate-1 billing (operator-side action, conditional on build attestation). Pairs with DEC-050 (#1 magnitude un-defer — buildable BECAUSE of FMP's per-event field shape), DEC-051 (SUE range-proxy — necessary BECAUSE neither vendor ships stdDev), DEC-052 (PEAD N≥2 floor — gates the subset of names that get a strict SUE).
+
+### DEC-050: Signal #1 Magnitude Term Un-Deferred — `/stable/price-target-news` Supplies Per-Event Target-$
+
+- **ID:** DEC-050
+- **Title:** Signal #1 (`analyst_revisions`) builds to FULL §4.4.5 spec including the target-$ magnitude term; the direction-only deferral proposed in the ACT-160-era investigation memos is superseded BEFORE ever being recorded as an active deferral.
+- **Plan Section:** longshort signal-stack — Signal #1 (precedes its FP).
+- **Date Approved:** 2026-06-09
+- **Decision Type:** signal-design / scope-restoration governance.
+- **Status:** active
+- **Superseded By:** —
+- **Decision:** CROSSWIND §4.4.5 specifies Signal #1 with a direction term (upgrade/downgrade count) AND a magnitude term (target-$ change). The magnitude term was provisionally proposed for deferral in the pre-FP investigation memos on the assumption that vendor support was limited to direction-only. The live-key field-shape probe against `FMP_API_KEY` (probe set 1, see ACT-159) confirms `/stable/price-target-news` returns per-event `priceTarget` AND `adjPriceTarget` AND `priceWhenPosted` AND `analystCompany` — i.e. the magnitude term is directly computable from per-event data without any conscious-approximation or backfill step. The provisional direction-only deferral is therefore SUPERSEDED BEFORE BEING RECORDED. Signal #1's FP MUST build to full §4.4.5 spec on first ship (direction term + magnitude term + per-firm tier weighting if specified by §4.4.5). No deferred-work entry is created for the magnitude term because no DEC ever recorded the deferral.
+- **What this DEC does NOT decide.** It does not specify the magnitude-term arithmetic shape (the implementing FP fixes the (newTarget − priorTarget) / priorTarget vs absolute-$ vs % choice with §4.4.5 as the authority); it does not specify the staleness gate for revisions (the FP-level cadence-config from DEC-048 governs); it does not bind the per-firm tier-weighting source.
+- **Affected Modules / Systems:** Signal #1 future FP (mandatory full-spec scope including magnitude); future `_shared/longshort-signals/analyst-revisions/compute-*.ts` (gains target-$ term in v1, not a v2); CROSSWIND §4.4.5 interpretation (full spec is the v1 target, not a phased target); deferred-work-register (NO entry created — supersession is pre-deferral); ACT-159 (the evidence chain). Pairs with DEC-049 (the vendor that supplies the data).
+
+### DEC-051: Signal #2 SUE Denominator — Range-Based Dispersion Proxy `(epsHigh − epsLow) / (2 × 1.349)`
+
+- **ID:** DEC-051
+- **Title:** Signal #2 (`pead_sue`) uses a documented range-to-σ proxy in the SUE denominator because neither FMP nor Finnhub ships a true per-quarter `epsEstimateStdDev` — conscious approximation per CROSSWIND §2 axiom 4, flagged for Phase-7 scrutiny.
+- **Plan Section:** longshort signal-stack — Signal #2 (precedes its FP).
+- **Date Approved:** 2026-06-09
+- **Decision Type:** signal-design / conscious-approximation governance.
+- **Status:** active
+- **Superseded By:** —
+- **Decision:**
+
+  **The denominator.** SUE = (epsActual − epsAvg) / σ_estimate. Since neither vendor ships true `epsEstimateStdDev`, σ_estimate is approximated as:
+
+  `σ_proxy = (epsHigh − epsLow) / (2 × 1.349)`
+
+  **Statistical basis of the chosen constant `k = 2 × 1.349 ≈ 2.698`.** For a normally-distributed estimator population, the interquartile range satisfies IQR ≈ 1.349σ; the full range (max − min) over a small analyst panel is, under the same normality assumption, approximately `2 × IQR` for panel sizes in the 5–25 range that dominate this signal — yielding range ≈ 2 × 1.349σ ≈ 2.698σ, so σ ≈ range / 2.698. This is the "IQR-anchored two-times convention" — chosen over d2-based range estimators (which require panel-size tables and per-quarter sample-size lookups) for implementation simplicity AND because the d2-vs-IQR-anchor numeric gap on panels of N=5–25 is small relative to other SUE noise sources. The constant is pinned at `2 × 1.349 = 2.698` in code and is NOT a per-quarter / per-panel-size variable.
+
+  **Conscious approximation flags.**
+  1. Files implementing this computation MUST carry a file-header comment naming DEC-051 and the proxy formula verbatim.
+  2. `function-index.md` row for the SUE compute function MUST cross-reference DEC-051.
+  3. `docs/04-modules/longshort/signals/pead.md` (created at Signal #2's FP) MUST contain a "DEC-051 conscious approximation" section preserving the formula + statistical basis verbatim.
+  4. Phase 7 paper-validation MUST include an explicit SUE-sensitivity sub-step measuring signal alpha under: (a) the range-proxy denominator (this DEC); (b) a d2-corrected variant; (c) an absolute-surprise alternative ignoring dispersion. If (b) or (c) materially dominates, this DEC is superseded by a successor.
+
+- **What this DEC does NOT decide.** It does not specify the numerator's stale-data window (DEC-048 + §4.4.6 60-trading-day gate); it does not specify the cross-sectional normalization shape (the FP picks within-sector z-score per the existing signal-stack pattern); it does not gate names with N<2 estimates (DEC-052 governs that).
+- **Affected Modules / Systems:** future `_shared/longshort-signals/pead/compute-pead.ts` (the formula host); future `docs/04-modules/longshort/signals/pead.md` (the approximation declaration); `function-index.md` (SUE row); Signal #2 future FP (vendor-call shape consumes `epsHigh` / `epsLow` from `/stable/analyst-estimates`); Phase 7 paper-validation plan (gains the SUE-sensitivity sub-step). Pairs with DEC-049 (vendor lock supplying the high/low fields) and DEC-052 (eligibility floor).
+
+### DEC-052: PEAD Eligibility Floor — Names With `numAnalystsEps < 2` Contribute Typed Absence, Never a Fabricated Dispersion
+
+- **ID:** DEC-052
+- **Title:** Signal #2 (`pead_sue`) scores only names whose event-quarter analyst-estimate row has `numAnalystsEps ≥ 2`; names with N<2 contribute `is_present=0` per CROSSWIND §2 axiom 3 (typed absence), NEVER a synthetic dispersion derived from a single-estimate panel.
+- **Plan Section:** longshort signal-stack — Signal #2 (precedes its FP).
+- **Date Approved:** 2026-06-09
+- **Decision Type:** signal-eligibility / anti-phantom governance.
+- **Status:** active
+- **Superseded By:** —
+- **Decision:**
+
+  **Eligibility rule.** A name is PEAD-eligible for an `as_of` iff (a) it has an earnings report inside the §4.4.6 trailing-60-trading-day staleness window, AND (b) the corresponding event-quarter analyst-estimate row has `numAnalystsEps ≥ 2` (the strict floor — the minimum panel size at which the range-proxy denominator from DEC-051 has any dispersion signal at all). Names failing either condition write a typed-absence observation (`is_present=0`, `value=NULL`, `skip_reason='pead_panel_below_floor'` or `'no_recent_earnings'` — exact reason enum extended at the FP). A name with N=1 estimate produces `epsHigh = epsLow` → σ_proxy = 0 → SUE divide-by-zero — fabricating any non-zero σ to dodge the divide-by-zero would manufacture a phantom signal, which is the exact failure mode CROSSWIND §2 axiom 3 + DEC-034 clause (2) sentinel-fallback discipline forbid.
+
+  **Small-cap consequence (recorded for transparency per the Part A floor-clearance table in ACT-159).** Window-density measurement on the 60-name stratified sample shows the strict floor (N≥2) qualifies ~93% of mega + 100% of large + ~87% of mid + **only ~60% of small** of the names that have a recent earnings event. The small-cap stratum is materially under-covered by Signal #2 under the strict floor. This is an ACCEPTED design property: typed absence on small-caps preserves combiner honesty (the §6.5 imputation handles it) and prevents phantom signals from polluting the calibration set. Phase 7 evaluation may revisit the floor (a future DEC could supersede to N≥3 for tighter dispersion fidelity, or to N≥1 with a degenerate-case skip — both are evidence-required successor decisions).
+
+- **What this DEC does NOT decide.** It does not specify the skip-reason enum strings (FP-level); it does not bind the imputation behavior at the combiner (§6.5 governs); it does not change the staleness window (§4.4.6 governs); it does not exclude names from the universe (the universe component and Signal #2 are decoupled — N<2 names remain in `universe_membership` and remain scoreable on every other signal).
+- **Affected Modules / Systems:** future `_shared/longshort-signals/pead/compute-pead.ts` (enforces the N≥2 gate before computing the denominator); future `_shared/longshort-signals/pead/pead-orchestrator.ts` (emits typed skips for sub-floor names); future `docs/04-modules/longshort/signals/pead.md` (records the eligibility rule); `SignalSkipReason` enum (extended at Signal #2 FP); `function-index.md` (PEAD compute row references DEC-052); Signal #2 future FP (test surface MUST include the N=1 → typed-absence assertion AND the N=2 → strict-SUE assertion). Pairs with DEC-051 (the denominator whose floor this gates).
+
 ## Decision Integrity Rules
 
 - Every approved plan section MUST have a corresponding `DEC-NNN` entry
