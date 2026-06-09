@@ -1406,6 +1406,17 @@ export type Database = {
         }
         Returns: Json
       }
+      signal_queue_cas_finalizing: {
+        Args: { p_now: string; p_run_id: string }
+        Returns: boolean
+      }
+      signal_queue_claim_slice: {
+        Args: { p_limit: number; p_run_id: string }
+        Returns: {
+          gics_sector: string
+          ticker: string
+        }[]
+      }
       write_universe_eligibility_coverage: {
         Args: { _as_of_date: string; _coverage: Json; _operator_id: string }
         Returns: Json

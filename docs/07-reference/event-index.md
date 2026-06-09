@@ -2364,3 +2364,73 @@ The six events below mirror the short-interest signal's event family exactly, wi
 | **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, error?, failure_reason?, stage?, run_id?, outcome?, trigger: 'manual', correlation_id }` |
 | **Lifecycle** | active |
 | **Added by** | FP-044 |
+
+#### `longshort.signal_queue.run.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | LOW |
+| **Owner module** | longshort (FP-045 Phase 2) |
+| **Description** | Emitted by `longshort-queue-init` / `longshort-queue-init-manual` when a new queue run is successfully seeded (`signal_queue_runs` row + per-ticker `signal_queue_cursor` rows). NOT emitted on `already_open` (idempotency no-op) or `empty_universe` (no work to do). Pairs with one of `longshort.signal_queue.run.completed` / `longshort.signal_queue.run.failed` on the same `run_id`. |
+| **Emitted by** | `supabase/functions/longshort-queue-init/index.ts`, `supabase/functions/longshort-queue-init-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, run_id, as_of, as_of_date, universe_size, trigger: 'cron' \| 'manual' }`; manual variant also carries `actor_id`, `ip_address`, `user_agent`. |
+| **Lifecycle** | active |
+| **Added by** | FP-045 |
+
+#### `longshort.signal_queue.slice.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | LOW |
+| **Owner module** | longshort (FP-045 Phase 2) |
+| **Description** | Emitted by `longshort-queue-slice` on every completed slice — INCLUDING empty-claim slices (the INC-72 instrumentation fix: silent slices are never invisible). Per-slice counts (`claimed`/`succeeded`/`skipped`/`cas_won`/`empty`) enable timeline reconstruction without diffing the staging table. |
+| **Emitted by** | `supabase/functions/longshort-queue-slice/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, run_id, as_of, claimed, succeeded, skipped, cas_won, empty }` |
+| **Lifecycle** | active |
+| **Added by** | FP-045 |
+
+#### `longshort.signal_queue.slice.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort (FP-045 Phase 2) |
+| **Description** | Emitted by `longshort-queue-slice` on slice-worker throw (claim RPC failure, staging persist failure, etc.). Does NOT emit on per-ticker compute errors — those are converted to typed `fetch_error` `signal_queue_skips` rows and surfaced via the slice's `skipped` count instead. |
+| **Emitted by** | `supabase/functions/longshort-queue-slice/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, run_id, as_of, error, stage: 'slice_worker' }` |
+| **Lifecycle** | active |
+| **Added by** | FP-045 |
+
+#### `longshort.signal_queue.run.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | LOW |
+| **Owner module** | longshort (FP-045 Phase 2) |
+| **Description** | Emitted by `longshort-queue-slice` when the in-process finalizer call (post CAS-to-finalizing) completes with `outcome='completed'`. One per `run_id`; idempotency in `runQueueFinalizer` guarantees at-most-one terminal CAS win. |
+| **Emitted by** | `supabase/functions/longshort-queue-slice/index.ts` (via `runQueueFinalizer`) |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, run_id, as_of, finalizer_kind, persisted_count, outcome: 'completed' }` |
+| **Lifecycle** | active |
+| **Added by** | FP-045 |
+
+#### `longshort.signal_queue.run.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort (FP-045 Phase 2) |
+| **Description** | Emitted by three sources on the SAME event-key (discriminate by `metadata.stage`): (a) `longshort-queue-init` / `longshort-queue-init-manual` on init throw (`stage: 'queue_init'`); (b) `longshort-queue-slice` when the in-process finalizer throws or returns `outcome='failed'` (`stage: 'finalizer'`); (c) `longshort-queue-sweeper` per signal with stale-heartbeat fail-outs (`stage: 'sweeper'`, `failure_reason: 'stale_heartbeat'`, `failed_out: N`). |
+| **Emitted by** | `supabase/functions/longshort-queue-init/index.ts`, `supabase/functions/longshort-queue-init-manual/index.ts`, `supabase/functions/longshort-queue-slice/index.ts`, `supabase/functions/longshort-queue-sweeper/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, run_id?, as_of, stage, error?, failure_reason?, failed_out? }` |
+| **Lifecycle** | active |
+| **Added by** | FP-045 |
