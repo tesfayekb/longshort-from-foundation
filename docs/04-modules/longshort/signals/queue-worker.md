@@ -1,7 +1,7 @@
 # Generalized Cursor-Drain Queue-Worker Engine
 
 **Owner:** longshort • **Plan:** FP-045 • **Decisions:** DEC-047, DEC-048, DEC-051, DEC-053
-**Schema:** MIG-082 (tables) + MIG-083 (RPCs) • **Phase 2 — Engine. Empty production registry.**
+**Schema:** MIG-082 (tables) + MIG-083 (RPCs) + MIG-084 (slice/sweeper job_registry rows, disarmed) • **Phase 3 — PEAD consumer registered. Disarmed pending DEC-043 attestation.**
 
 ## Why this engine exists
 
@@ -74,8 +74,14 @@ vs the 150s HTTP wall. The slice wall budget is intentionally generous — the c
 | Consumer | sliceSize | callsPerName | ratePerSec | per-slice | vs 150s wall | Status |
 |---|---:|---:|---:|---:|---|---|
 | Synthetic test (Phase 2) | 10 | 1 | 1000 | 0.01s | Safe | engine self-test |
-| PEAD (Phase 3, planned) | 100 | 2 | 4.25 | ~47s | Safe (31%) | not yet registered |
+| PEAD (Phase 3) | 100 | 2 | 4.25 | ~47.1s | Safe (≈69% headroom) | **registered (Phase 3), disarmed (DEC-048)** |
 | Options-flow (Phase 4, planned) | 80 | 1 | 1.7 | ~47s | Safe (31%) | not yet registered |
+
+Full-run estimate for PEAD on a ≈840-name universe: 1,680 calls / 4.25 rps ≈ 395s of compute, spread across ⌈840/100⌉ = 9 slices at one-per-minute cadence ≈ 9 minutes wall-time. No single isolate ever crosses the 150s HTTP wall or the ~400s background-task budget — this is the FP-045 / INC-72 fix in one line.
+
+### Pacing contract (Phase 3 — slice-worker × `callsPerName`)
+
+The slice-worker acquires `config.callsPerName` tokens from the bucket BEFORE invoking the adapter (per ticker), so the runtime rate matches the per-slice arithmetic above. PEAD adapter fires two Finnhub endpoints per ticker in parallel (`Promise.all` — eps-estimate + earnings); the bucket has already throttled entry by 2/rate so the burst-of-2 is rate-honest. Backward-compatible with Phase 2 synthetic config (`callsPerName=1`).
 
 ## σ=0, floors, and divisor policy (addendum §7)
 
@@ -112,10 +118,29 @@ Names follow the established `longshort.<domain>.<sub>.<verb>` convention (verif
 | `longshort-queue-init-manual` | JWT + `longshort.manage` | None — operator-triggered test path. |
 | `longshort-queue-slice` | `verifyCronSecret` | Every minute (single shared cron — picks oldest across ALL signals). |
 | `longshort-queue-sweeper` | `verifyCronSecret` | Every 5 minutes. |
+| `longshort-pead-compute` | `verifyCronSecret` | **Phase 3 PEAD init shim** — name preserved per addendum §5; body delegates to `initQueueRun(productionQueueRegistry.get('pead_sue_20d'))`. Existing MIG-081 cron row (`0 23 * * 1-5`, DISARMED) is the per-signal init trigger. |
 
-**No cron rows wired in Phase 2.** Phase 3 (PEAD) and Phase 4 (options-flow) ship the registrations + cron schedules. The existing `longshort-pead-compute` cron entry will be converted in Phase 3 to a thin enqueue shim (handler-name preserved; body gutted to delegation) — preserves the `job_registry.handler_path` and the DEC-043 attestation surface.
+**Phase 3 cron wiring:** MIG-084 registers `longshort.queue.slice` (every minute) and `longshort.queue.sweeper` (every 5 min) as DISARMED rows. The `longshort.pead.compute` init row remains DISARMED (MIG-081). Operator-run step (per DEC-040 + DEC-043) wires the three crons + flips `enabled=true` after end-to-end attestation against a real PEAD test-fire (200 response + queue-attributable `signal_compute_log` row written by the finalizer).
 
 ## Migration ledger
 
 - **MIG-082** — Four tables (`signal_queue_runs`, `signal_queue_cursor`, `signal_queue_staging`, `signal_queue_skips`) with RLS deny-write to authenticated, read via `longshort.view`.
 - **MIG-083** — Two RPCs (`signal_queue_claim_slice`, `signal_queue_cas_finalizing`) — service-role only, `SECURITY DEFINER`, `SET search_path=public`.
+- **MIG-084** — `job_registry` rows for `longshort.queue.slice` (every minute, disarmed) and `longshort.queue.sweeper` (every 5 minutes, disarmed). The existing `longshort.pead.compute` row (MIG-081) is preserved as the per-signal init trigger; name + handler_path unchanged, body gutted to enqueue shim.
+
+## Phase 3 consumer registration — PEAD (Signal #2 / FP-044)
+
+`_shared/longshort-signals/pead/pead-queue-registration.ts` registers PEAD into the production registry via side-effect import from `production-registrations.ts`. All four queue handlers + the gutted `longshort-pead-compute` shim import the aggregator so the registry is populated at every isolate boot.
+
+| Field | Value | Source |
+|---|---|---|
+| `signalId` | `pead_sue_20d` | `pead-orchestrator.ts` export `SIGNAL_ID` |
+| `jobId` | `longshort.pead.compute` | MIG-081 `job_registry` row (preserved) |
+| `ratePerSec` | 4.25 | Finnhub Estimate-1 cap (300/min = 5/s) × 0.85 DEC-047 safety |
+| `callsPerName` | 2 | eps-estimate + earnings endpoints per ticker |
+| `sliceSize` | 100 | Yields ≈47.1s per slice (≈69% headroom vs 150s wall) |
+| `heartbeatTimeoutSec` | 600 | 12× nominal slice budget before sweeper preempts |
+| `stagingTtlSec` | 86 400 | 24h diagnostic retention post-finalize |
+| `fetchAndCompute` | `createPeadAdapter(...)` | Wraps `computePead` + dual-Finnhub fetch; orchestrator unchanged |
+
+The PEAD adapter (`pead-queue-adapter.ts`) imports `computePead` verbatim from `compute-pead.ts` — the FP-044 per-ticker compute arm is NOT edited. Skip semantics (DEC-052 `pead_panel_below_floor`, DEC-051/053 `zero_dispersion`, `no_recent_earnings`, `subscription_gated`, `data_unavailable`, `fetch_error`) are owned by the adapter + `computePead` — addendum §7 invariant (engine carries no divisor or floor policy) is preserved.
