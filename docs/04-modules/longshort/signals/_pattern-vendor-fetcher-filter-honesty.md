@@ -79,3 +79,76 @@ Each fetcher's PR MUST include `verifyFilterHonored()` test evidence. Without it
 - ACT-156 (the disarm + pattern-codification PR).
 - `_shared/longshort-signals/shared/polygon-form4-fetcher.ts` (the broken-fetcher exhibit — retained in code only as a debug-path artifact; not used by the (now-disarmed) orchestrator).
 - `signal_compute_log.run_id='1021808b-4b1c-4b04-bb45-d989d56b5193'` (the diagnostic exhibit — 1678 skips for 839 tickers, the "impossible telemetry" tell that surfaced the upstream phantom).
+
+## FP-043 extension — `verifyFieldsPresent()` companion (dual-axis discipline)
+
+> **Added:** FP-043 / Signal #3 / ACT-157 (2026-06-09) | **Authority:** INC-71 + FP-043 | **Binding on:** Signals #1 / #2 / #8 (every remaining vendor-endpoint fetcher).
+
+### The second axis: filter-honored is necessary, not sufficient
+
+FP-043's Tradier vetting added a second class of phantom: **filter-honored but key-fields-absent**. INC-71 captured the precedent — the Polygon Options Developer tier honored `underlying_ticker=` and `expiration_date=` correctly, but every quote in the response returned `bid=null`, `ask=null`, `last=null`, and `greeks=null` because real-time NBBO is a separate (paid) entitlement. A naive consumer that only ran `verifyFilterHonored()` would have happily ingested 100% well-shaped, 100% structurally-empty payloads — and the downstream compute would silently classify every contract as `no_qualifying_flow` (the smart-money filter trips on `volume>=100` against `volume=null`). Same phantom-signal class as INC-70, different surface.
+
+The discipline therefore has **two axes** and both are mandatory:
+
+1. **Axis 1 — `verifyFilterHonored()` (INC-70 origin).** Documented filters are actually honored. Probe with impossible-key + far-future-date; assert zero rows.
+2. **Axis 2 — `verifyFieldsPresent()` (INC-71 origin).** Required numeric / object fields are actually populated on a known-good probe. Probe with a high-liquidity symbol that MUST return live values (e.g. SPY options for an options endpoint, AAPL daily bar for an equities endpoint); assert the fields the signal compute consumes are non-null on ≥ a threshold fraction of returned rows (FP-043 used `>= 90/118` numeric bid+ask on a 118-strike SPY chain probe).
+
+Axis 1 catches "the endpoint returned a firehose under the guise of a filter." Axis 2 catches "the filter worked, but the fields the formula needs are gated behind a different entitlement." Either alone leaves a phantom-signal path open.
+
+### Reference shape (informative)
+
+```ts
+export async function verifyFieldsPresent(
+  baseUrl: string,
+  apiKey: string,
+  requiredNumericFields: string[],   // e.g. ['bid', 'ask', 'last', 'volume']
+  requiredObjectFields: string[],    // e.g. ['greeks']
+  knownGoodQuery: string,            // e.g. 'symbol=SPY&expiration=YYYY-MM-DD'
+  minNumericFraction = 0.9,
+): Promise<void> {
+  const resp = await fetch(`${baseUrl}?${knownGoodQuery}`, {
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+  });
+  if (!resp.ok) throw new Error(`verifyFieldsPresent: HTTP ${resp.status}`);
+  const rows = extractRows(await resp.json());           // endpoint-specific
+  if (rows.length === 0) {
+    throw new Error('verifyFieldsPresent: known-good probe returned zero rows');
+  }
+  for (const field of requiredNumericFields) {
+    const populated = rows.filter((r) => Number.isFinite(r[field])).length;
+    if (populated / rows.length < minNumericFraction) {
+      throw new Error(
+        `verifyFieldsPresent: field '${field}' populated on ` +
+          `${populated}/${rows.length} rows (< ${minNumericFraction * 100}%) — ` +
+          `entitlement gated. Refusing to construct fetcher.`,
+      );
+    }
+  }
+  for (const field of requiredObjectFields) {
+    const populated = rows.filter((r) => r[field] && typeof r[field] === 'object').length;
+    if (populated < rows.length) {
+      throw new Error(
+        `verifyFieldsPresent: field '${field}' populated on ` +
+          `${populated}/${rows.length} rows (expected all) — entitlement gated.`,
+      );
+    }
+  }
+}
+```
+
+### Per-signal field requirements (forward-binding)
+
+| Signal | Endpoint | Axis-2 required fields | Known-good probe |
+|---|---|---|---|
+| #1 Analyst revisions | analyst-ratings vendor | numeric: `target_price`, `prior_target` | dense-coverage mega-cap (AAPL) |
+| #2 PEAD | earnings + price | numeric: `eps_actual`, `eps_estimate`, `report_date` | last full earnings season window |
+| #3 Options flow (FP-043) | Tradier `/v1/markets/options/chains` | numeric: `bid`, `ask`, `last`, `volume`, `open_interest`; object: `greeks` | SPY nearest-expiration |
+| #8 News sentiment | news vendor + NLP | numeric: `sentiment_score`; object: `tickers[]` | trailing-24h window on liquid name |
+
+Without Axis-2 evidence in the PR, the fetcher is presumed phantom-prone.
+
+## Cross-references (added FP-043)
+
+- INC-71 — Polygon Options Developer tier returns well-shaped but NBBO-absent payloads (the second-axis exhibit).
+- FP-043 / ACT-157 — Tradier vetting that produced this axis (4-axis vendor probe: reachability + entitlement + filter-honored + fields-present).
+- `_shared/longshort-signals/shared/tradier-options-chain-fetcher.ts` — first fetcher to embed both verifyFilterHonored and verifyFieldsPresent self-checks.
