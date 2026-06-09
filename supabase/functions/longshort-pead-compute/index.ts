@@ -1,33 +1,37 @@
 /**
- * longshort-pead-compute — daily PEAD (post-earnings drift) production
- * cron handler. FP-044 / Signal #2 / Phase 3.
+ * longshort-pead-compute — daily PEAD enqueue shim (FP-045 Phase 3).
  *
- * Mirror of `longshort-short-interest-compute/index.ts` (closest daily-feed
- * sibling). Differences:
- *   - Vendor: Finnhub Estimate-1 (per DEC-053 split-vendor lock) — TWO
- *     fetchers wired (`FinnhubEpsEstimateFetcher` for consensus + dispersion;
- *     `FinnhubEarningsFetcher` for reported actuals + report date).
- *   - Cadence: daily after-close, `0 23 * * 1-5`. INTERIM per DEC-048 — the
- *     §4.4.6 spec target is event-triggered; Phase 7 picks the final cadence.
- *     Treat this schedule as a config knob, never an end-state.
- *   - Audit event family: `longshort.pead.compute.{started,completed,failed}`.
- *   - NON-CRITICAL signal (§4.3.5): all-missing / below-floor / no-recent-
- *     earnings outcomes still yield `outcome=completed` (degraded) — the
- *     orchestrator handles that; the handler treats it as normal completion.
+ * NAME PRESERVED per FP-045 Phase 2 addendum §5: the existing
+ * `job_registry.id='longshort.pead.compute'` row + `handler_path` are
+ * KEPT so the DEC-043 attestation surface and signal-monitor mapping
+ * (`JOB_ID_TO_SIGNAL_ID['longshort.pead.compute'] = 'pead_sue_20d'`)
+ * stay intact across the architecture migration.
  *
- * Auth: cron-only path — `verifyCronSecret` against `X-Cron-Secret` header.
- * The operator-triggered sibling is `longshort-pead-compute-manual`.
+ * BODY GUTTED: this handler no longer runs the in-process orchestrator
+ * (which 504'd at the 150s wall on 2026-06-09 — INC-72). It now seeds a
+ * `signal_queue_runs` + `signal_queue_cursor` set via the generalized
+ * queue-worker engine (DEC-047) and returns 202. The actual compute
+ * runs across N subsequent `longshort-queue-slice` cron ticks, finalized
+ * by `longshort-queue-finalizer` (in-process inside the slice handler).
+ *
+ * Per-slice arithmetic (addendum §6, full row in
+ * `_shared/longshort-signals/pead/pead-queue-registration.ts`):
+ *   100 tickers/slice × 2 Finnhub calls/name / 4.25 rps ≈ 47.1s
+ *   vs 150s HTTP wall → ≈68% headroom — SAFE.
+ *
+ * The operator-triggered single-process path (`longshort-pead-compute-
+ * manual`) is UNCHANGED — it still runs the in-process orchestrator for
+ * deterministic ad-hoc compute (small universes, replay diagnostics).
  *
  * Wall-clock discipline (DEC-034 clause 4): `as_of` derives from the
- * sanctioned `productionClock.getWallClockTs()` chokepoint; all subsequent
- * timestamps derive from `as_of` via `as_of.toISOString()` — no
+ * sanctioned `productionClock.getWallClockTs()` chokepoint only — no
  * `new Date()` in this file.
  *
- * Disarmed at creation: MIG-081 ships this job_registry row with
- * `enabled=false`. A follow-on operator-run step enables + wires the cron
- * only after end-to-end DEC-043 attestation (200 + real artifact row).
+ * DISARMED per DEC-048 (interim cadence): MIG-081 keeps `enabled=false`
+ * on the `longshort.pead.compute` row. Operator-run step enables it +
+ * wires the cron after DEC-043 attestation against the queue path.
  *
- * Owner: longshort (FP-044 — Signal #2)
+ * Owner: longshort (FP-045 — Phase 3 / Signal #2 queue shim)
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
@@ -35,118 +39,71 @@ import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
-import { FinnhubEpsEstimateFetcher } from '../_shared/longshort-signals/shared/finnhub-eps-estimate-fetcher.ts';
-import { FinnhubEarningsFetcher } from '../_shared/longshort-signals/shared/finnhub-earnings-fetcher.ts';
-import {
-  createPeadOrchestrator,
-  SIGNAL_ID,
-  type PeadOrchestratorContext,
-} from '../_shared/longshort-signals/pead/pead-orchestrator.ts';
-import { aggregateSkipCounts, persistSignalComputeLog } from '../_shared/persist-signal-compute-log.ts';
+import { productionQueueRegistry } from '../_shared/longshort-signals/shared/queue-worker/queue-config.ts';
+import { initQueueRun } from '../_shared/longshort-signals/shared/queue-worker/queue-init.ts';
+import { QUEUE_AUDIT_EVENTS } from '../_shared/longshort-signals/shared/queue-worker/queue-audit-events.ts';
+import { SIGNAL_ID } from '../_shared/longshort-signals/pead/pead-orchestrator.ts';
+// Side-effect: registers PEAD (and any other live consumers) into the
+// production registry at isolate boot.
+import '../_shared/longshort-signals/shared/queue-worker/production-registrations.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
-const DEFAULT_CONCURRENCY = 5;
 
 Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
 
   // Cron-only system path — operator-triggered manual path is the sibling
-  // function `longshort-pead-compute-manual`.
+  // function `longshort-pead-compute-manual` (unchanged in-process flow).
   const cronAuthError = verifyCronSecret(req);
   if (cronAuthError) return cronAuthError;
 
   const as_of = productionClock.getWallClockTs();
 
-  const finnhubApiKey = Deno.env.get('FINNHUB_API_KEY');
-  if (!finnhubApiKey) {
-    return apiError(500, 'finnhub_api_key_unset', { correlationId });
+  // Drift sentinel — if the registration aggregator ever fails to import
+  // PEAD, surface as a fail-loud 500 rather than a silent no-op.
+  if (!productionQueueRegistry.has(SIGNAL_ID)) {
+    return apiError(500, 'pead_queue_consumer_unregistered', { correlationId });
   }
-
-  // KEEP IN SYNC with longshort-pead-compute-manual/index.ts.
-  const ctx: PeadOrchestratorContext = {
-    supabase: supabaseAdmin,
-    epsEstimate: new FinnhubEpsEstimateFetcher(finnhubApiKey),
-    earnings: new FinnhubEarningsFetcher(finnhubApiKey),
-    operator_id: DEFAULT_OPERATOR_ID,
-    concurrency: DEFAULT_CONCURRENCY,
-  };
-
-  await writeStrategyAuditEvent({
-    strategyKey: 'longshort',
-    action: 'longshort.pead.compute.started',
-    correlationId,
-    metadata: { as_of: as_of.toISOString(), signal_id: SIGNAL_ID, trigger: 'cron' },
-  });
+  const config = productionQueueRegistry.get(SIGNAL_ID);
 
   try {
-    const orch = createPeadOrchestrator(ctx);
-    const result = await orch.run(as_of);
-
-    const { run_id, persist_error } = await persistSignalComputeLog(
-      supabaseAdmin,
-      result,
-      DEFAULT_OPERATOR_ID,
-    );
-    if (persist_error) {
+    const result = await initQueueRun({
+      supabase: supabaseAdmin,
+      operator_id: DEFAULT_OPERATOR_ID,
+      config,
+      as_of,
+    });
+    if (result.kind === 'started') {
       await writeStrategyAuditEvent({
         strategyKey: 'longshort',
-        action: 'longshort.pead.compute.failed',
+        action: QUEUE_AUDIT_EVENTS.RUN_STARTED,
         correlationId,
         metadata: {
-          signal_id: SIGNAL_ID,
+          signal_id: result.signal_id,
+          run_id: result.run_id,
           as_of: as_of.toISOString(),
-          error: persist_error.message,
-          stage: 'signal_compute_log_persist',
+          as_of_date: result.as_of_date,
+          universe_size: result.universe_size,
           trigger: 'cron',
+          handler: 'longshort-pead-compute',
         },
       });
-      return apiError(500, 'signal_compute_log_persist_failed', { correlationId });
     }
-
-    await writeStrategyAuditEvent({
-      strategyKey: 'longshort',
-      action:
-        result.outcome === 'completed'
-          ? 'longshort.pead.compute.completed'
-          : 'longshort.pead.compute.failed',
-      correlationId,
-      metadata: {
-        signal_id: SIGNAL_ID,
-        as_of: as_of.toISOString(),
-        run_id,
-        outcome: result.outcome,
-        universe_size: result.universe_size,
-        persisted_count: result.persisted_count,
-        skip_counts: aggregateSkipCounts(result.skipped),
-        failure_reason: result.failure_reason,
-        trigger: 'cron',
-      },
-    });
-
-    return apiSuccess({
-      status: 'ok',
-      run_id,
-      signal_id: SIGNAL_ID,
-      as_of_date: result.as_of_date,
-      outcome: result.outcome,
-      universe_size: result.universe_size,
-      persisted_count: result.persisted_count,
-      skip_counts: aggregateSkipCounts(result.skipped),
-      correlation_id: correlationId,
-    });
+    return apiSuccess({ ...result, correlation_id: correlationId }, 202);
   } catch (e) {
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
-      action: 'longshort.pead.compute.failed',
+      action: QUEUE_AUDIT_EVENTS.RUN_FAILED,
       correlationId,
       metadata: {
         signal_id: SIGNAL_ID,
         as_of: as_of.toISOString(),
         error: e instanceof Error ? e.message : String(e),
-        stage: 'orchestrator_throw',
+        stage: 'queue_init',
         trigger: 'cron',
+        handler: 'longshort-pead-compute',
       },
     });
-    return apiError(500, 'pead_compute_failed', { correlationId });
+    return apiError(500, 'queue_init_failed', { correlationId });
   }
 }));
