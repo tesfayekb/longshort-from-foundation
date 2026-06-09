@@ -86,7 +86,8 @@ Deno.test('classifier: zero/null bid blocks sell-side classification', () => {
 // ─── daysToExpiration / contractAgeHours / passesSmartMoneyFilter ─────────
 
 Deno.test('daysToExpiration: positive forward, negative past', () => {
-  assertAlmostEquals(daysToExpiration('2026-06-19', AS_OF), 9.833, 0.05);
+  // AS_OF is 2026-06-09T20:00Z; 2026-06-19T00:00Z is 9d4h away = 9.167d.
+  assertAlmostEquals(daysToExpiration('2026-06-19', AS_OF), 9.167, 0.01);
   assert(daysToExpiration('2026-06-01', AS_OF) < 0);
 });
 
@@ -116,9 +117,11 @@ Deno.test('filter: boundary — 99 contracts excluded, 100 included', () => {
 });
 
 Deno.test('filter: boundary — 6 DTE excluded, 7+ DTE included', () => {
-  // AS_OF = 2026-06-09 → +6d = 2026-06-15 (excluded), +7d = 2026-06-16 (included).
-  assertEquals(passesSmartMoneyFilter(contract({ expiration_date: '2026-06-15' }), AS_OF), false);
-  assertEquals(passesSmartMoneyFilter(contract({ expiration_date: '2026-06-16' }), AS_OF), true);
+  // AS_OF = 2026-06-09T20:00Z. Exp midnight UTC:
+  //   2026-06-16 → 6.167d (< 7, excluded)
+  //   2026-06-17 → 7.167d (≥ 7, included)
+  assertEquals(passesSmartMoneyFilter(contract({ expiration_date: '2026-06-16' }), AS_OF), false);
+  assertEquals(passesSmartMoneyFilter(contract({ expiration_date: '2026-06-17' }), AS_OF), true);
   assertEquals(MIN_DTE_DAYS, 7);
 });
 
