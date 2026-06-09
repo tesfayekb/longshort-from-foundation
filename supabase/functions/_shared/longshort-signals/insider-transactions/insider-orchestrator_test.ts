@@ -79,7 +79,23 @@ function makeSupabase(opts: {
 }
 
 function makeForm4(behaviors: Record<string, Form4Behavior>) {
+  // Build a Map<ticker, Form4Row[]> from the per-ticker behaviors. If
+  // ANY behavior is 'unavailable', the whole market-wide call returns
+  // that (mirrors real-world entitlement gate behavior). If ANY is
+  // 'throw', the market-wide call throws.
   return {
+    async fetchForm4MarketWide() {
+      const rowsByTicker = new Map<string, Form4Row[]>();
+      for (const [t, b] of Object.entries(behaviors)) {
+        if (b.kind === 'throw') throw b.err;
+        if (b.kind === 'unavailable') {
+          return { kind: 'unavailable', reason: b.reason };
+        }
+        if (b.rows.length > 0) rowsByTicker.set(t, b.rows);
+      }
+      return { kind: 'rows', rowsByTicker };
+    },
+    // Per-ticker variant retained for debug paths; unused by orchestrator.
     async fetchForm4(ticker: string) {
       const b = behaviors[ticker];
       if (!b) return { kind: 'rows', rows: [] };
