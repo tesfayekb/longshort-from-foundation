@@ -174,6 +174,21 @@ Authority: ACT-151.
 
 Authority: ACT-149.
 
+---
+
+### FP-045 Phase 2 + Phase 3 Revision Addendum (Rule 8 — Forward-Pointer, Original Preserved)
+
+| Field | Value |
+|---|---|
+| **Addendum Date** | 2026-06-09 |
+| **Authority** | Operator REVISION-FIX directive (CI ESLint red post-merge at `b4f4941` and `5396165`); Gate-4 substitution failure logged in `docs/ai-failure-modes.md`. |
+| **Phase 2 Disposition** | `closed-with-revision` — Phase 2 commit `b4f4941` shipped 47 `@typescript-eslint/no-explicit-any` errors across 5 new Deno test files (`queue-finalizer_test.ts` 11, `queue-init_test.ts` 6, `queue-slice-worker_test.ts` 10, `queue-sweeper_test.ts` 6, `pead-queue-adapter_test.ts` 14). False-green Gate 4 was produced by running `deno lint` instead of the CI workflow's `npx eslint .`. Production-code surfaces (engine + RPCs + handlers) are untouched by the revision; types-only change in test files. Revision commit (this PR) restores CI green: `npx eslint . → 0 errors / 15 baseline warnings`; `deno test` queue + PEAD suites → 103 passed / 0 failed. |
+| **Phase 3 Status (§22.3(e) update)** | Phase 3 commit `5396165` inherited the same Gate-4 substitution and the same 14 errors in `pead-queue-adapter_test.ts`. Status amended to: PEAD registration is functionally complete (registry entry + adapter + enqueue shim + MIG-084 disarmed rows + drift sentinels all green on CI post-revision); the disposition lineage is `landed-with-revision` (Phase 2 + Phase 3 both green at revision SHA below). Operator test-fire of the full queue path remains the validation gate before Phase 4. |
+| **Forward-binding Gate-4 discipline** | Gate 4 for this FP and the queue-worker module going forward is the CI workflow's ESLint command verbatim: `npx eslint .` (source: `.github/workflows/strong-evidence.yml`). `deno lint` is supplementary only and is NEVER acceptable as Gate-4 evidence. Every PR's Gate-4 evidence block MUST state the exact command line above its output. Codified in `docs/04-modules/longshort/signals/queue-worker.md` ("Gate-4 discipline" section). `@ts-nocheck` does NOT silence ESLint — typed-mock convention (`unknown` + narrow stubs) is the only acceptable pattern for Deno test files. |
+| **Scope (this revision)** | EDIT only: 5 test files (literal `any` → `unknown`; removed obsolete `no-explicit-any` from `deno-lint-ignore-file` directive). Docs same-PR: this addendum; `docs/ai-failure-modes.md` tool-substitution entry; `docs/04-modules/longshort/signals/queue-worker.md` Gate-4 discipline section. ZERO production-code change; ZERO test-behavior change. |
+| **Original preserved** | FP-045 entry text remains VERBATIM per Constitution Rule 8; this addendum forward-points only. |
+| **Forward-pointer** | `docs/ai-failure-modes.md` (tool-substitution entry, this PR date); revision commit SHA pasted into the PR evidence block. |
+
 ### FP-039: Cron-Auth Outage Remediation (atomic env-rotate + redeploy + command-reconcile across 6 consumers)
 
 | Field | Value |
