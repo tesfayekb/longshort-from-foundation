@@ -80,7 +80,7 @@ export type SignalSkipReason =
                              // short_interest / share_class_shares_outstanding — without
                              // a usable denominator we cannot compute the percentage.
                              // Typed-absence; ticker is still ranked by other signals.
-  | 'no_qualifying_transactions'; // Source returned data, but zero rows passed the
+  | 'no_qualifying_transactions' // Source returned data, but zero rows passed the
                              // signal-specific filter (e.g., Form 4 fetcher returned
                              // results, but no row was a record_type='transaction' with
                              // an included transaction_code after the 10b5-1 sale
