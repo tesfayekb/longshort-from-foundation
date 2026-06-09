@@ -284,4 +284,120 @@ export class PolygonForm4Fetcher {
     }
     return { kind: 'rows', rows };
   }
+
+  /**
+   * Market-wide Form 4 fetch — paginates `/stocks/filings/vX/form-4`
+   * with `transaction_date.gte/lte` set from `as_of` and NO `ticker=`
+   * filter. Groups returned rows by ticker locally (attributed to
+   * `tickers[0]`, the primary issuer ticker per Polygon's ordering).
+   *
+   * This is the FP-042 CPU-limit fix (ACT-155). Replaces ~839
+   * per-ticker HTTPS calls + per-call JSON parses with a handful of
+   * paginated calls — the per-ticker fetch was blowing the ~2s edge
+   * isolate CPU budget at full-universe scale (HTTP 546
+   * WORKER_RESOURCE_LIMIT). Same entitlement-aware contract as the
+   * per-ticker variant.
+   *
+   * Wall-clock discipline (DEC-034 clause 4): the [from, to] window is
+   * derived from `as_of` only — NO `Date.now()`.
+   */
+  async fetchForm4MarketWide(
+    as_of: Date,
+    windowDays: number = FORM4_WINDOW_DAYS,
+    pageLimit: number = MARKET_WIDE_PAGE_LIMIT,
+  ): Promise<Form4MarketWideResult> {
+    const to = isoDate(as_of);
+    const from = isoDate(new Date(as_of.getTime() - windowDays * MS_PER_DAY));
+    const initialUrl =
+      `${POLYGON_BASE_URL}/stocks/filings/vX/form-4` +
+      `?transaction_date.gte=${from}` +
+      `&transaction_date.lte=${to}` +
+      `&limit=${pageLimit}`;
+
+    const rowsByTicker = new Map<string, Form4Row[]>();
+    let url: string | null = initialUrl;
+    let page = 0;
+
+    while (url !== null) {
+      if (page >= MARKET_WIDE_MAX_PAGES) {
+        throw new SignalComputationError(
+          FORM4_OPERATION_ID,
+          'MARKET_WIDE',
+          `pagination cap exceeded (${MARKET_WIDE_MAX_PAGES} pages); refusing to follow further`,
+        );
+      }
+      page += 1;
+
+      const sep = url.includes('?') ? '&' : '?';
+      const requestUrl = url.includes('apiKey=')
+        ? url
+        : `${url}${sep}apiKey=${encodeURIComponent(this.apiKey)}`;
+
+      let resp: Awaited<ReturnType<HttpFetch>>;
+      try {
+        resp = await fetchWithTimeoutAndRetry(
+          this.httpFetch,
+          requestUrl,
+          { method: 'GET' },
+          { timeoutMs: this.timeoutMs },
+        );
+      } catch (e) {
+        const isTimeout = e instanceof Error && e.name === 'AbortError';
+        const isHttpAfterRetries =
+          e instanceof Error && /^HTTP \d{3}/.test(e.message);
+        const message = isTimeout
+          ? `request timeout after ${this.timeoutMs}ms on market-wide form-4 page ${page}`
+          : isHttpAfterRetries
+          ? `${(e as Error).message} on market-wide form-4 page ${page}`
+          : `network error on market-wide form-4 page ${page}`;
+        throw new SignalComputationError(FORM4_OPERATION_ID, 'MARKET_WIDE', message, e);
+      }
+
+      if (resp.status === 403) {
+        return { kind: 'unavailable', reason: 'subscription_gated' };
+      }
+      if (resp.status === 404) {
+        return { kind: 'unavailable', reason: 'data_unavailable' };
+      }
+      if (!resp.ok) {
+        throw new SignalComputationError(
+          FORM4_OPERATION_ID,
+          'MARKET_WIDE',
+          `HTTP ${resp.status} ${resp.statusText} on market-wide form-4 page ${page}`,
+        );
+      }
+
+      let body: PolygonForm4Response;
+      try {
+        body = (await resp.json()) as PolygonForm4Response;
+      } catch (e) {
+        throw new SignalComputationError(
+          FORM4_OPERATION_ID,
+          'MARKET_WIDE',
+          `JSON parse error on market-wide form-4 page ${page}`,
+          e,
+        );
+      }
+
+      const raw = body.results ?? [];
+      for (const r of raw) {
+        const norm = normalizeRow(r);
+        if (norm === null) continue;
+        // Attribution: primary issuer = tickers[0]. Rows without a
+        // ticker array cannot be attributed without fabrication; drop.
+        const primary = norm.tickers && norm.tickers.length > 0 ? norm.tickers[0] : null;
+        if (primary === null) continue;
+        const bucket = rowsByTicker.get(primary);
+        if (bucket === undefined) {
+          rowsByTicker.set(primary, [norm]);
+        } else {
+          bucket.push(norm);
+        }
+      }
+
+      url = typeof body.next_url === 'string' && body.next_url.length > 0 ? body.next_url : null;
+    }
+
+    return { kind: 'rows', rowsByTicker };
+  }
 }
