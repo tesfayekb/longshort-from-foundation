@@ -5,9 +5,11 @@
  * Contract:
  *   - `acquire()` resolves immediately on first call, then spaces every
  *     subsequent call at exactly `1000 / ratePerSec` ms apart.
- *   - Time advances via injectable `now()` (defaults to `Date.now()`) and
- *     `sleep()` (defaults to `setTimeout`-based), so tests can run
- *     deterministically without consuming real wall-clock.
+ *   - Time advances via injectable `now()` (defaults to the sanctioned
+ *     `productionClock` from `_shared/longshort-clock.ts`, which is the
+ *     SOLE wall-clock read location per DEC-034 (4)) and `sleep()`
+ *     (defaults to `setTimeout`-based), so tests can run deterministically
+ *     without consuming real wall-clock.
  *   - This is operational rate-limiting infrastructure, NOT a strategy-
  *     decision kernel: per docs/00-governance/constitution.md the wall-
  *     clock ban applies to reconciliation / replay / strategy-decision
@@ -23,6 +25,9 @@
  *
  * Owner: longshort (FP-043 — Signal #3 / Phase 3)
  */
+
+import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
+import { productionClock } from '../../longshort-clock.ts';
 
 export interface TokenBucketOptions {
   ratePerSec: number;
@@ -46,7 +51,11 @@ export class TokenBucket {
       throw new Error(`TokenBucket: ratePerSec must be > 0, got ${opts.ratePerSec}`);
     }
     this.intervalMs = 1000 / opts.ratePerSec;
-    this.now = opts.now ?? (() => Date.now());
+    // Default clock routes through the sanctioned `productionClock` so this
+    // file contains NO direct wall-clock read. The pacer is operational
+    // rate-limiting (not a signal-value path); the signal value is derived
+    // entirely from `as_of` math in compute-options-flow.ts.
+    this.now = opts.now ?? (() => productionClock.getWallClockTs().getTime());
     this.sleep = opts.sleep ?? defaultSleep;
     this.nextAvailableMs = this.now();
   }
@@ -66,8 +75,6 @@ export class TokenBucket {
  * bucket `acquire()` before delegation. Compatible with
  * `TradierOptionsChainFetcher`'s `HttpFetch` constructor parameter.
  */
-import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
-
 export function pacedHttpFetch(bucket: TokenBucket, underlying: HttpFetch): HttpFetch {
   return async (input, init) => {
     await bucket.acquire();
