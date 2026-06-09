@@ -156,7 +156,7 @@ export function passesSmartMoneyFilter(
   if (!Number.isFinite(dte) || dte < MIN_DTE_DAYS) return false;
   if (c.greeks === null) return false;
   const delta = c.greeks.delta;
-  if (!Number.isFinite(delta)) return false;
+  if (delta === null || !Number.isFinite(delta)) return false;
   if (Math.abs(delta) > OTM_ATM_DELTA_CAP) return false;
   return true;
 }
