@@ -158,3 +158,118 @@ Deno.test('(10) fetcher does NOT pre-filter on record_type/transaction_code (com
   if (out.kind !== 'rows') throw new Error('unreachable');
   assertEquals(out.rows.length, 5, 'fetcher dropped a row it should have preserved');
 });
+
+// ── Market-wide fetch (FP-042 / ACT-155 CPU-limit fix) ─────────────────
+
+Deno.test('(11) market-wide: single page → grouped Map<ticker, rows[]>', async () => {
+  let capturedUrl = '';
+  const fetcher = new PolygonForm4Fetcher('test-key', async (input) => {
+    capturedUrl = input;
+    return jsonResp({
+      results: [
+        { record_type: 'transaction', tickers: ['AAPL'], transaction_code: 'P' },
+        { record_type: 'transaction', tickers: ['AAPL'], transaction_code: 'S', aff_10b5_one: false },
+        { record_type: 'transaction', tickers: ['MSFT'], transaction_code: 'P' },
+        { record_type: 'holding', tickers: ['NVDA'] },
+      ],
+    });
+  });
+  const out = await fetcher.fetchForm4MarketWide(AS_OF);
+  assertEquals(out.kind, 'rows');
+  if (out.kind !== 'rows') throw new Error('unreachable');
+  // URL: NO ticker= filter, but DOES carry date window + apiKey
+  assert(!capturedUrl.includes('ticker='));
+  assertStringIncludes(capturedUrl, 'transaction_date.gte=2026-03-10');
+  assertStringIncludes(capturedUrl, 'transaction_date.lte=2026-06-08');
+  assertStringIncludes(capturedUrl, 'apiKey=test-key');
+  assertEquals(out.rowsByTicker.get('AAPL')?.length, 2);
+  assertEquals(out.rowsByTicker.get('MSFT')?.length, 1);
+  assertEquals(out.rowsByTicker.get('NVDA')?.length, 1);
+});
+
+Deno.test('(12) market-wide: paginates via next_url and merges rows across pages', async () => {
+  const pages = [
+    {
+      results: [
+        { record_type: 'transaction', tickers: ['AAPL'], transaction_code: 'P' },
+      ],
+      next_url: 'https://api.polygon.io/stocks/filings/vX/form-4?cursor=PAGE2',
+    },
+    {
+      results: [
+        { record_type: 'transaction', tickers: ['AAPL'], transaction_code: 'S', aff_10b5_one: false },
+        { record_type: 'transaction', tickers: ['MSFT'], transaction_code: 'P' },
+      ],
+      next_url: 'https://api.polygon.io/stocks/filings/vX/form-4?cursor=PAGE3',
+    },
+    {
+      results: [
+        { record_type: 'transaction', tickers: ['NVDA'], transaction_code: 'P' },
+      ],
+      // no next_url → end
+    },
+  ];
+  let i = 0;
+  const urls: string[] = [];
+  const fetcher = new PolygonForm4Fetcher('test-key', async (input) => {
+    urls.push(input);
+    return jsonResp(pages[i++]);
+  });
+  const out = await fetcher.fetchForm4MarketWide(AS_OF);
+  assertEquals(out.kind, 'rows');
+  if (out.kind !== 'rows') throw new Error('unreachable');
+  assertEquals(urls.length, 3);
+  // Pages 2 + 3 follow the next_url cursor (apiKey appended)
+  assertStringIncludes(urls[1], 'cursor=PAGE2');
+  assertStringIncludes(urls[1], 'apiKey=test-key');
+  assertEquals(out.rowsByTicker.get('AAPL')?.length, 2);
+  assertEquals(out.rowsByTicker.get('MSFT')?.length, 1);
+  assertEquals(out.rowsByTicker.get('NVDA')?.length, 1);
+});
+
+Deno.test('(13) market-wide HTTP 403 → subscription_gated (not a throw)', async () => {
+  const fetcher = new PolygonForm4Fetcher('test-key', async () =>
+    jsonResp({}, false, 403, 'Forbidden'),
+  );
+  const out = await fetcher.fetchForm4MarketWide(AS_OF);
+  assertEquals(out, { kind: 'unavailable', reason: 'subscription_gated' });
+});
+
+Deno.test('(14) market-wide HTTP 404 → data_unavailable (not a throw)', async () => {
+  const fetcher = new PolygonForm4Fetcher('test-key', async () =>
+    jsonResp({}, false, 404, 'Not Found'),
+  );
+  const out = await fetcher.fetchForm4MarketWide(AS_OF);
+  assertEquals(out, { kind: 'unavailable', reason: 'data_unavailable' });
+});
+
+Deno.test('(15) market-wide: rows without tickers[] are dropped (no fabricated attribution)', async () => {
+  const fetcher = new PolygonForm4Fetcher('test-key', async () =>
+    jsonResp({
+      results: [
+        { record_type: 'transaction', transaction_code: 'P' /* no tickers */ },
+        { record_type: 'transaction', tickers: [], transaction_code: 'P' },
+        { record_type: 'transaction', tickers: ['AAPL'], transaction_code: 'P' },
+      ],
+    }),
+  );
+  const out = await fetcher.fetchForm4MarketWide(AS_OF);
+  assertEquals(out.kind, 'rows');
+  if (out.kind !== 'rows') throw new Error('unreachable');
+  assertEquals(out.rowsByTicker.size, 1);
+  assertEquals(out.rowsByTicker.get('AAPL')?.length, 1);
+});
+
+Deno.test('(16) market-wide: attributes to tickers[0] (primary issuer) on multi-ticker rows', async () => {
+  const fetcher = new PolygonForm4Fetcher('test-key', async () =>
+    jsonResp({
+      results: [
+        { record_type: 'transaction', tickers: ['GOOG', 'GOOGL'], transaction_code: 'P' },
+      ],
+    }),
+  );
+  const out = await fetcher.fetchForm4MarketWide(AS_OF);
+  if (out.kind !== 'rows') throw new Error('unreachable');
+  assertEquals(out.rowsByTicker.get('GOOG')?.length, 1);
+  assertEquals(out.rowsByTicker.get('GOOGL'), undefined);
+});

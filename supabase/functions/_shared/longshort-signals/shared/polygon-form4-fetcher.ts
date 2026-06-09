@@ -71,6 +71,14 @@ export const DEFAULT_FORM4_LIMIT = 500;
 export interface Form4Row {
   /** 'transaction' or 'holding'. Compute layer drops 'holding'. */
   record_type: 'transaction' | 'holding' | string;
+  /** Issuer ticker(s) the filing pertains to. Present on the market-wide
+   *  (no `ticker=` query) variant, where it is the ONLY way to attribute
+   *  a row to a ticker (the URL didn't carry one). When the fetcher's
+   *  per-ticker variant is used, this is omitted — attribution is the
+   *  call's `ticker` argument. Per the FP-042 market-wide addendum, the
+   *  orchestrator attributes each row to `tickers[0]` (the primary
+   *  issuer ticker as ordered by Polygon). */
+  tickers?: string[];
   /** SEC transaction code (P/S/M/C/A/G/...). Undefined for holding rows. */
   transaction_code?: string;
   /** True if the transaction was made under a 10b5-1 plan. Per §4.4.4
@@ -99,11 +107,34 @@ export type Form4FetchResult =
   | { kind: 'rows'; rows: Form4Row[] }
   | { kind: 'unavailable'; reason: 'subscription_gated' | 'data_unavailable' };
 
+/**
+ * Result of the market-wide (no-ticker) Form 4 fetch — used by the
+ * insider orchestrator to collapse 839 per-ticker HTTPS calls into a
+ * handful of paginated calls (FP-042 CPU-limit fix / ACT-155).
+ *
+ * `rowsByTicker` is keyed by the issuer ticker chosen as `tickers[0]`
+ * for each row. Rows whose `tickers` array is missing/empty are
+ * silently dropped (they cannot be attributed without fabrication).
+ */
+export type Form4MarketWideResult =
+  | { kind: 'rows'; rowsByTicker: Map<string, Form4Row[]> }
+  | { kind: 'unavailable'; reason: 'subscription_gated' | 'data_unavailable' };
+
 interface PolygonForm4Response {
   results?: unknown[];
   status?: string;
   next_url?: string;
 }
+
+/** Per-page hard cap when paging without `ticker=`. Polygon's documented
+ *  page max; the orchestrator's market-wide call typically completes in
+ *  1–5 pages on a 90-day window across the full S&P 900 universe. */
+const MARKET_WIDE_PAGE_LIMIT = 1000;
+/** Hard pagination follow cap. The 90-day cross-issuer volume is
+ *  bounded; 50 pages × 1000 rows = 50k rows is far above any realistic
+ *  90-day envelope (S&P 900 ~ 5k-15k rows). Refuses to follow further
+ *  to bound runaway. Mirrors `polygon-constituent-fetcher.ts`. */
+const MARKET_WIDE_MAX_PAGES = 50;
 
 function isoDate(d: Date): string {
   const yyyy = d.getUTCFullYear().toString().padStart(4, '0');
@@ -125,6 +156,13 @@ function normalizeRow(raw: unknown): Form4Row | null {
   const out: Form4Row = {
     record_type: typeof r.record_type === 'string' ? r.record_type : 'unknown',
   };
+  if (Array.isArray(r.tickers)) {
+    const ts: string[] = [];
+    for (const t of r.tickers) {
+      if (typeof t === 'string' && t.length > 0) ts.push(t.toUpperCase());
+    }
+    if (ts.length > 0) out.tickers = ts;
+  }
   if (typeof r.transaction_code === 'string') out.transaction_code = r.transaction_code;
   if (typeof r.aff_10b5_one === 'boolean') out.aff_10b5_one = r.aff_10b5_one;
   if (typeof r.transaction_acquired_disposed === 'string') {
@@ -245,5 +283,121 @@ export class PolygonForm4Fetcher {
       if (norm !== null) rows.push(norm);
     }
     return { kind: 'rows', rows };
+  }
+
+  /**
+   * Market-wide Form 4 fetch — paginates `/stocks/filings/vX/form-4`
+   * with `transaction_date.gte/lte` set from `as_of` and NO `ticker=`
+   * filter. Groups returned rows by ticker locally (attributed to
+   * `tickers[0]`, the primary issuer ticker per Polygon's ordering).
+   *
+   * This is the FP-042 CPU-limit fix (ACT-155). Replaces ~839
+   * per-ticker HTTPS calls + per-call JSON parses with a handful of
+   * paginated calls — the per-ticker fetch was blowing the ~2s edge
+   * isolate CPU budget at full-universe scale (HTTP 546
+   * WORKER_RESOURCE_LIMIT). Same entitlement-aware contract as the
+   * per-ticker variant.
+   *
+   * Wall-clock discipline (DEC-034 clause 4): the [from, to] window is
+   * derived from `as_of` only — NO `Date.now()`.
+   */
+  async fetchForm4MarketWide(
+    as_of: Date,
+    windowDays: number = FORM4_WINDOW_DAYS,
+    pageLimit: number = MARKET_WIDE_PAGE_LIMIT,
+  ): Promise<Form4MarketWideResult> {
+    const to = isoDate(as_of);
+    const from = isoDate(new Date(as_of.getTime() - windowDays * MS_PER_DAY));
+    const initialUrl =
+      `${POLYGON_BASE_URL}/stocks/filings/vX/form-4` +
+      `?transaction_date.gte=${from}` +
+      `&transaction_date.lte=${to}` +
+      `&limit=${pageLimit}`;
+
+    const rowsByTicker = new Map<string, Form4Row[]>();
+    let url: string | null = initialUrl;
+    let page = 0;
+
+    while (url !== null) {
+      if (page >= MARKET_WIDE_MAX_PAGES) {
+        throw new SignalComputationError(
+          FORM4_OPERATION_ID,
+          'MARKET_WIDE',
+          `pagination cap exceeded (${MARKET_WIDE_MAX_PAGES} pages); refusing to follow further`,
+        );
+      }
+      page += 1;
+
+      const sep = url.includes('?') ? '&' : '?';
+      const requestUrl = url.includes('apiKey=')
+        ? url
+        : `${url}${sep}apiKey=${encodeURIComponent(this.apiKey)}`;
+
+      let resp: Awaited<ReturnType<HttpFetch>>;
+      try {
+        resp = await fetchWithTimeoutAndRetry(
+          this.httpFetch,
+          requestUrl,
+          { method: 'GET' },
+          { timeoutMs: this.timeoutMs },
+        );
+      } catch (e) {
+        const isTimeout = e instanceof Error && e.name === 'AbortError';
+        const isHttpAfterRetries =
+          e instanceof Error && /^HTTP \d{3}/.test(e.message);
+        const message = isTimeout
+          ? `request timeout after ${this.timeoutMs}ms on market-wide form-4 page ${page}`
+          : isHttpAfterRetries
+          ? `${(e as Error).message} on market-wide form-4 page ${page}`
+          : `network error on market-wide form-4 page ${page}`;
+        throw new SignalComputationError(FORM4_OPERATION_ID, 'MARKET_WIDE', message, e);
+      }
+
+      if (resp.status === 403) {
+        return { kind: 'unavailable', reason: 'subscription_gated' };
+      }
+      if (resp.status === 404) {
+        return { kind: 'unavailable', reason: 'data_unavailable' };
+      }
+      if (!resp.ok) {
+        throw new SignalComputationError(
+          FORM4_OPERATION_ID,
+          'MARKET_WIDE',
+          `HTTP ${resp.status} ${resp.statusText} on market-wide form-4 page ${page}`,
+        );
+      }
+
+      let body: PolygonForm4Response;
+      try {
+        body = (await resp.json()) as PolygonForm4Response;
+      } catch (e) {
+        throw new SignalComputationError(
+          FORM4_OPERATION_ID,
+          'MARKET_WIDE',
+          `JSON parse error on market-wide form-4 page ${page}`,
+          e,
+        );
+      }
+
+      const raw = body.results ?? [];
+      for (const r of raw) {
+        const norm = normalizeRow(r);
+        if (norm === null) continue;
+        // Attribution: primary issuer = tickers[0]. Rows without a
+        // ticker array cannot be attributed without fabrication; drop.
+        const primary = norm.tickers && norm.tickers.length > 0 ? norm.tickers[0] : null;
+        if (primary === null) continue;
+        const bucket = rowsByTicker.get(primary);
+        if (bucket === undefined) {
+          rowsByTicker.set(primary, [norm]);
+        } else {
+          bucket.push(norm);
+        }
+      }
+
+      url = typeof body.next_url === 'string' && body.next_url.length > 0 ? body.next_url : null;
+    }
+
+    return { kind: 'rows', rowsByTicker };
   }
 }

@@ -42,10 +42,11 @@ import type {
 } from '../shared/signal-orchestrator-types.ts';
 import type { SignalRow, SignalSkip, SignalSkipReason } from '../shared/signal-types.ts';
 import { pLimitedMap } from '../shared/p-limited-map.ts';
-import { computeInsiderSignal } from './compute-insider.ts';
+import { computeInsiderSignal, filterQualifyingTransactions } from './compute-insider.ts';
 import { zScoreNormalizeWithinSector } from '../shared/z-score-normalize.ts';
 import { captureSignalObservations } from '../shared/missingness-capture.ts';
 import type { PolygonForm4Fetcher } from '../shared/polygon-form4-fetcher.ts';
+import type { Form4Row } from '../shared/polygon-form4-fetcher.ts';
 import type { PolygonSharesOutstandingFetcher } from '../shared/polygon-shares-outstanding-fetcher.ts';
 import type { PolygonPriceHistoryFetcher } from '../shared/polygon-price-history-fetcher.ts';
 
@@ -146,125 +147,177 @@ export function createInsiderOrchestrator(ctx: InsiderOrchestratorContext) {
       }
 
       // ── Step 2: per-ticker parallel fetch + compute ──────────────────
+      // FP-042 CPU-limit fix (ACT-155): replace ~839 per-ticker Form4
+      // HTTPS calls with a SINGLE market-wide paginated fetch, then
+      // fetch shares+price ONLY for the (typically small) subset of
+      // tickers that actually have qualifying transactions in the
+      // 90-day window. Compute, filter, classifier, z-score, persist
+      // are byte-unchanged — only data acquisition order is reshaped.
       const concurrency = ctx.concurrency ?? DEFAULT_CONCURRENCY;
-      const perTicker = await pLimitedMap<UniverseRow, PerTickerResult>(
-        universe,
-        concurrency,
-        async (row) => {
-          const { ticker, gics_sector } = row;
-          try {
-            const [form4Result, sharesResult, priceResult] = await Promise.all([
-              ctx.form4.fetchForm4(ticker, as_of),
-              ctx.sharesOutstanding.fetchShares(ticker),
-              ctx.priceHistory.fetchPriceHistory(ticker, as_of, PRICE_LOOKBACK_DAYS),
-            ]);
+      const perTicker: PerTickerResult[] = [];
 
-            // Form-4 entitlement / data-availability skips. Non-critical
-            // degradation: typed skip, NEVER a fabricated zero-flow.
-            if (form4Result.kind === 'unavailable') {
-              const reason: SignalSkipReason =
-                form4Result.reason === 'subscription_gated'
-                  ? 'subscription_gated'
-                  : 'data_unavailable';
-              return {
-                kind: 'skip',
-                skip: {
-                  ticker,
-                  reason,
-                  detail:
-                    form4Result.reason === 'subscription_gated'
-                      ? 'polygon 403: form-4 endpoint not entitled on current subscription tier'
-                      : 'polygon 404: ticker has no form-4 records',
-                },
-              };
-            }
+      // ── Step 2a: ONE market-wide Form4 fetch (paginated, by date) ──
+      let marketWide: Awaited<ReturnType<typeof ctx.form4.fetchForm4MarketWide>>;
+      try {
+        marketWide = await ctx.form4.fetchForm4MarketWide(as_of);
+      } catch (err) {
+        // A throw on the market-wide fetch fails the WHOLE universe
+        // (it's the only Form4 source). Translate to a per-ticker
+        // fetch_error skip rather than aborting the run — this keeps
+        // the run "completed with all-skipped" rather than "failed",
+        // matching the per-ticker entitlement-aware behavior.
+        const message = err instanceof SignalComputationError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err);
+        for (const row of universe) {
+          perTicker.push({
+            kind: 'skip',
+            skip: { ticker: row.ticker, reason: 'fetch_error', detail: message },
+          });
+        }
+        marketWide = { kind: 'rows', rowsByTicker: new Map<string, Form4Row[]>() };
+      }
 
-            // Shares-outstanding side input. Diagnosable distinct skip.
-            if (sharesResult.kind === 'unavailable') {
-              return {
-                kind: 'skip',
-                skip: {
-                  ticker,
-                  reason: 'missing_shares_outstanding',
-                  detail:
-                    sharesResult.reason === 'subscription_gated'
-                      ? 'polygon 403: reference endpoint not entitled (shares-outstanding unavailable)'
-                      : 'polygon reference endpoint returned no usable share_class_shares_outstanding',
-                },
-              };
-            }
-
-            // Price side input. `null` = 404 (ticker not in Polygon
-            // reference, typically delisting). `[]` = no bars in window
-            // — also unusable for market_cap.
-            if (priceResult === null || priceResult.length === 0) {
-              return {
-                kind: 'skip',
-                skip: {
-                  ticker,
-                  reason: 'data_unavailable',
-                  detail: priceResult === null
-                    ? 'polygon 404: ticker missing from reference (likely delisted)'
-                    : `no price bars in trailing ${PRICE_LOOKBACK_DAYS}d window`,
-                },
-              };
-            }
-
-            // Defensive denominator validation — even though both fetchers
-            // guard internally, this is the EXPLICIT divide-by-zero
-            // chokepoint and the place that survives a future weakening
-            // of either fetcher's guard.
-            const shares = sharesResult.shares;
-            const lastClose = priceResult[priceResult.length - 1].close;
-            if (
-              !Number.isFinite(shares) || shares <= 0 ||
-              !Number.isFinite(lastClose) || lastClose <= 0
-            ) {
-              return {
-                kind: 'skip',
-                skip: {
-                  ticker,
-                  reason: 'missing_shares_outstanding',
-                  detail: `defensive: shares=${shares} close=${lastClose} not positive-finite`,
-                },
-              };
-            }
-            const market_cap = shares * lastClose;
-
-            const res = computeInsiderSignal(form4Result.rows, as_of, market_cap);
-            if (res === null) {
-              // EXPECTED case for most names — no qualifying transactions
-              // in the 90-day window. Non-critical: typed skip; ticker
-              // still ranked by other signals.
-              return {
-                kind: 'skip',
-                skip: {
-                  ticker,
-                  reason: 'no_qualifying_transactions',
-                  detail: `0 qualifying transactions in trailing 90d (${form4Result.rows.length} raw rows pre-filter)`,
-                },
-              };
-            }
-
-            return {
-              kind: 'value',
-              ticker,
-              raw_signal: res.raw_signal,
-              gics_sector,
-            };
-          } catch (err) {
-            const message = err instanceof SignalComputationError
-              ? err.message
-              : err instanceof Error
-                ? err.message
-                : String(err);
-            return {
+      // ── Step 2b: entitlement / availability gate (whole-universe) ──
+      if (marketWide.kind === 'unavailable') {
+        const reason: SignalSkipReason =
+          marketWide.reason === 'subscription_gated'
+            ? 'subscription_gated'
+            : 'data_unavailable';
+        const detail =
+          marketWide.reason === 'subscription_gated'
+            ? 'polygon 403: form-4 endpoint not entitled on current subscription tier (market-wide)'
+            : 'polygon 404: market-wide form-4 query returned no records';
+        for (const row of universe) {
+          perTicker.push({
+            kind: 'skip',
+            skip: { ticker: row.ticker, reason, detail },
+          });
+        }
+      } else {
+        // ── Step 2c: filter to tickers that have qualifying transactions ──
+        const rowsByTicker = marketWide.rowsByTicker;
+        type QualifyingTicker = {
+          row: UniverseRow;
+          rows: Form4Row[];
+          rawRowCount: number;
+        };
+        const qualifying: QualifyingTicker[] = [];
+        for (const row of universe) {
+          // Already-attributed errors from a market-wide throw above —
+          // skip so we don't double-record.
+          // (perTicker is empty here unless the catch ran, in which
+          // case we returned via the empty-map path; safe to proceed.)
+          const tickerRows = rowsByTicker.get(row.ticker) ?? [];
+          const filtered = filterQualifyingTransactions(tickerRows);
+          if (filtered.length === 0) {
+            // EXPECTED for most names. Typed-absence skip; NO
+            // shares/price fetch needed → massive CPU saving.
+            perTicker.push({
               kind: 'skip',
-              skip: { ticker, reason: 'fetch_error', detail: message },
-            };
+              skip: {
+                ticker: row.ticker,
+                reason: 'no_qualifying_transactions',
+                detail: `0 qualifying transactions in trailing 90d (${tickerRows.length} raw rows pre-filter)`,
+              },
+            });
+            continue;
           }
-        },
-      );
+          qualifying.push({ row, rows: tickerRows, rawRowCount: tickerRows.length });
+        }
+
+        // ── Step 2d: per-qualifying-ticker shares+price + compute ──
+        const computed = await pLimitedMap<QualifyingTicker, PerTickerResult>(
+          qualifying,
+          concurrency,
+          async ({ row, rows }) => {
+            const { ticker, gics_sector } = row;
+            try {
+              const [sharesResult, priceResult] = await Promise.all([
+                ctx.sharesOutstanding.fetchShares(ticker),
+                ctx.priceHistory.fetchPriceHistory(ticker, as_of, PRICE_LOOKBACK_DAYS),
+              ]);
+
+              if (sharesResult.kind === 'unavailable') {
+                return {
+                  kind: 'skip',
+                  skip: {
+                    ticker,
+                    reason: 'missing_shares_outstanding',
+                    detail:
+                      sharesResult.reason === 'subscription_gated'
+                        ? 'polygon 403: reference endpoint not entitled (shares-outstanding unavailable)'
+                        : 'polygon reference endpoint returned no usable share_class_shares_outstanding',
+                  },
+                };
+              }
+              if (priceResult === null || priceResult.length === 0) {
+                return {
+                  kind: 'skip',
+                  skip: {
+                    ticker,
+                    reason: 'data_unavailable',
+                    detail: priceResult === null
+                      ? 'polygon 404: ticker missing from reference (likely delisted)'
+                      : `no price bars in trailing ${PRICE_LOOKBACK_DAYS}d window`,
+                  },
+                };
+              }
+              const shares = sharesResult.shares;
+              const lastClose = priceResult[priceResult.length - 1].close;
+              if (
+                !Number.isFinite(shares) || shares <= 0 ||
+                !Number.isFinite(lastClose) || lastClose <= 0
+              ) {
+                return {
+                  kind: 'skip',
+                  skip: {
+                    ticker,
+                    reason: 'missing_shares_outstanding',
+                    detail: `defensive: shares=${shares} close=${lastClose} not positive-finite`,
+                  },
+                };
+              }
+              const market_cap = shares * lastClose;
+
+              const res = computeInsiderSignal(rows, as_of, market_cap);
+              if (res === null) {
+                // Defensive: filterQualifyingTransactions said >0 above
+                // but the compute returned null (e.g. all rows dropped
+                // by role classifier). Surface as typed-absence.
+                return {
+                  kind: 'skip',
+                  skip: {
+                    ticker,
+                    reason: 'no_qualifying_transactions',
+                    detail: `0 role-classifiable rows after filter (${rows.length} raw rows pre-filter)`,
+                  },
+                };
+              }
+
+              return {
+                kind: 'value',
+                ticker,
+                raw_signal: res.raw_signal,
+                gics_sector,
+              };
+            } catch (err) {
+              const message = err instanceof SignalComputationError
+                ? err.message
+                : err instanceof Error
+                  ? err.message
+                  : String(err);
+              return {
+                kind: 'skip',
+                skip: { ticker, reason: 'fetch_error', detail: message },
+              };
+            }
+          },
+        );
+        for (const r of computed) perTicker.push(r);
+      }
 
       // ── Step 3: within-sector z-score ────────────────────────────────
       const values = perTicker

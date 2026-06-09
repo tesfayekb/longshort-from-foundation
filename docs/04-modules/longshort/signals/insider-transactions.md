@@ -1,6 +1,6 @@
 # Insider Transactions (Signal #4)
 
-> **Owner:** longshort strategy module | **Phase:** Phase 2.4 / FP-042 | **Status:** compute + officer-title classifier + entitlement-aware Form 4 fetcher + orchestrator + cron/manual handlers + disarmed `job_registry` row (MIG-077) + `signal_registry` planned→live flip landed. Cron wiring + enable-flip pending operator-run DEC-043 attestation.
+> **Owner:** longshort strategy module | **Phase:** Phase 2.4 / FP-042 (+ ACT-155 market-wide-fetch addendum) | **Status:** compute + officer-title classifier + entitlement-aware Form 4 fetcher (per-ticker + market-wide variants) + orchestrator (market-wide Step 2) + cron/manual handlers + disarmed `job_registry` row (MIG-077) + `signal_registry` planned→live flip landed. Cron wiring + enable-flip pending operator re-fire after the ACT-155 CPU-limit fix.
 
 Detailed component reference for Signal #4 (insider transactions, 90-day, 14-day decay) per CROSSWIND §4.4.4 — the fourth of nine signals. Sparse-by-design: most names have zero qualifying insider transactions in any given 90-day window, which is the NORMAL state, not failure.
 
@@ -73,13 +73,24 @@ market_cap  = shares_outstanding × latest_close
 universe_membership (load latest snapshot)
         │
         ▼
-pLimitedMap (concurrency=20)
-   per ticker:
-     Promise.all([
-       PolygonForm4Fetcher.fetchForm4(ticker, as_of, 90)              // Form 4 rows
-       PolygonSharesOutstandingFetcher.fetchShares(ticker)            // shares (FP-041 reuse)
-       PolygonPriceHistoryFetcher.fetchPriceHistory(ticker, as_of, 7) // latest close
-     ])
+ONE market-wide Form 4 fetch (ACT-155):
+  PolygonForm4Fetcher.fetchForm4MarketWide(as_of, 90)
+    → paginated /stocks/filings/vX/form-4?transaction_date.gte=…&lte=… (NO ticker=)
+    → next_url cursor pagination (≤50 pages × 1000 rows)
+    → grouped locally by tickers[0] (primary-issuer attribution)
+    → Map<ticker, Form4Row[]>
+        │
+        ▼
+for each universe ticker: filterQualifyingTransactions(rowsByTicker.get(t) ?? [])
+    │
+    ├─ 0 qualifying → typed skip (no_qualifying_transactions)  ← MOST TICKERS, no market-cap fetch
+    │
+    └─ ≥1 qualifying:
+         pLimitedMap (concurrency=20, ONLY over qualifying tickers — typically <100):
+           Promise.all([
+             PolygonSharesOutstandingFetcher.fetchShares(ticker)            // shares (FP-041 reuse)
+             PolygonPriceHistoryFetcher.fetchPriceHistory(ticker, as_of, 7) // latest close
+           ])
        ├─ form4 403  → typed skip (subscription_gated)
        ├─ form4 404  → typed skip (data_unavailable)
        ├─ shares 403/404/missing/zero/negative → typed skip (missing_shares_outstanding)
@@ -87,10 +98,9 @@ pLimitedMap (concurrency=20)
        ├─ other 4xx/5xx after retries → throws → caught → fetch_error
        └─ all ok → market_cap = shares × close
                │
-               ├─ filterQualifyingTransactions (drop holdings + apply §4.4.4 code/10b5-1 filter)
                ├─ classifyRoleWeight per row (3-tier title-heuristic; null → drop)
                ├─ Σ shares × price × sign × role_weight × exp(-age/14) / market_cap
-               ├─ qualifying_count==0 OR market_cap==0 → typed skip (no_qualifying_transactions)
+               ├─ market_cap==0 → typed skip (missing_shares_outstanding, defensive)
                └─ raw_signal
          │
          ▼
@@ -102,6 +112,41 @@ SignalRow[] → captureSignalObservations (idempotent UPSERT)
          ▼
 signal_compute_log (telemetry, includes skip_counts + skipped_detail)
 ```
+
+## FP-042 / ACT-155 — Market-wide-fetch addendum (CPU-limit fix)
+
+The deployed cron handler died with HTTP 546 `WORKER_RESOURCE_LIMIT`
+(CPU-time-exceeded, NOT memory, NOT wall-time) on the first full-universe
+invocation. Cause: per-ticker Form 4 fetch across ~839 tickers totals
+~2517 HTTPS calls (Form 4 + shares + price ×839) + 839 JSON parses, ~3–5×
+short-interest's CPU footprint, blowing the ~2 s edge-isolate CPU budget
+~6 s after boot. No `signal_compute_log` row landed.
+
+The fix replaces the per-ticker Form 4 calls with ONE market-wide paginated
+fetch (`fetchForm4MarketWide`) keyed by the 90-day date window with NO
+`ticker=` parameter. Rows are returned for all issuers in the window,
+grouped locally by `tickers[0]` (primary-issuer attribution; multi-ticker
+rows are attributed only to the first listed ticker — rows without
+`tickers[]` are dropped, no fabricated attribution). Then:
+
+- `filterQualifyingTransactions` is applied per-universe-ticker BEFORE
+  any per-ticker fetch. Most names have zero qualifying transactions and
+  skip with `no_qualifying_transactions` without ever incurring a
+  shares/price HTTPS call — collapsing the per-ticker side-fetches from
+  1678 to typically <200.
+- `shares + price` (concurrency=20) is fetched ONLY for tickers with
+  qualifying transactions, and the per-ticker compute proceeds exactly
+  as before (`computeInsiderSignal`, classifier, decay, divide-by-zero
+  guard, z-score, persist are byte-unchanged).
+
+Entitlement handling on the market-wide call: 403 → all-universe
+`subscription_gated` skip; 404 → all-universe `data_unavailable` skip; a
+throw → all-universe `fetch_error` skip (the run still `completed` with
+`persisted_count=0`, mirroring the per-ticker degradation semantics).
+
+This market-wide-fetch-by-date + group-by-ticker pattern is the template
+for the remaining feed-signals (#1 analyst, #2 PEAD, #3 options, #8 news);
+any per-ticker-across-the-universe fetch would hit the same CPU wall.
 
 ## Expected operational profile
 
