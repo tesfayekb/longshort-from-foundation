@@ -20,6 +20,7 @@ import { SIGNAL_ID as REVERSAL_SIGNAL_ID } from '../short-term-reversal/reversal
 import { SIGNAL_ID as SHORT_INTEREST_SIGNAL_ID } from '../short-interest-change/short-interest-orchestrator.ts';
 import { SIGNAL_ID as INSIDER_SIGNAL_ID } from '../insider-transactions/insider-orchestrator.ts';
 import { SIGNAL_ID as OPTIONS_FLOW_SIGNAL_ID } from '../options-flow/options-flow-orchestrator.ts';
+import { SIGNAL_ID as PEAD_SIGNAL_ID } from '../pead/pead-orchestrator.ts';
 
 Deno.test('(1) JOB_ID_TO_SIGNAL_ID contains the momentum entry verbatim', () => {
   assertEquals(
@@ -81,6 +82,16 @@ Deno.test('(2e) mapping value matches options-flow-orchestrator SIGNAL_ID export
   assertEquals(OPTIONS_FLOW_SIGNAL_ID, 'options_flow_imbalance_5d');
 });
 
+Deno.test('(2f) mapping value matches pead-orchestrator SIGNAL_ID export (cross-reference)', () => {
+  // Drift sentinel for Signal #2 (FP-044).
+  assertEquals(
+    JOB_ID_TO_SIGNAL_ID['longshort.pead.compute'],
+    PEAD_SIGNAL_ID,
+    'JOB_ID_TO_SIGNAL_ID pead entry decoupled from pead-orchestrator SIGNAL_ID',
+  );
+  assertEquals(PEAD_SIGNAL_ID, 'pead_sue_20d');
+});
+
 Deno.test('(3) resolveSignalIdForJob returns the value for known job_ids', () => {
   assertEquals(
     resolveSignalIdForJob('longshort.momentum.compute'),
@@ -97,7 +108,9 @@ Deno.test('(5) JOB_ID_TO_SIGNAL_ID has exactly the FP-010 A3 set (single entry)'
   // FP-010 A3 shipped v1 with one entry (momentum). FP-040 added the
   // second (short-term reversal / Signal #7). FP-041 adds the third
   // (short-interest changes / Signal #5). FP-042 adds the fourth
-  // (insider transactions / Signal #4). Each subsequent signal execution
+  // (insider transactions / Signal #4). FP-043 adds the fifth (options
+  // flow / Signal #3). FP-044 adds the sixth (PEAD / Signal #2). Each
+  // subsequent signal execution
   // prompt adds exactly one entry in the same PR that registers its
   // compute job.
   const keys = Object.keys(JOB_ID_TO_SIGNAL_ID).sort();
@@ -105,6 +118,7 @@ Deno.test('(5) JOB_ID_TO_SIGNAL_ID has exactly the FP-010 A3 set (single entry)'
     'longshort.insider.compute',
     'longshort.momentum.compute',
     'longshort.options_flow.compute',
+    'longshort.pead.compute',
     'longshort.reversal.compute',
     'longshort.short_interest.compute',
   ]);
