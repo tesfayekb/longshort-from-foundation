@@ -3024,3 +3024,71 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/longshort-pead-compute-manual/index.ts` |
 | **Tests** | `supabase/functions/longshort-pead-compute-manual/index_test.ts` — source-sentinel tests covering operator-JWT wiring, `longshort.manage` permission, POST-only 405, body validation, FINNHUB_API_KEY, dual audit envelope ordering, wall-clock discipline, orchestrator wiring. |
 | **Added by** | FP-044 |
+
+#### `supabase/functions/longshort-queue-init/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-045 — Phase 2) |
+| **Classification** | edge function — generic queue-init cron handler. Seeds `signal_queue_runs` + `signal_queue_cursor` for a signal_id from `productionQueueRegistry`; slice-worker cron drains across subsequent invocations. |
+| **Trigger** | POST + `verifyCronSecret` (X-Cron-Secret). NO cron registered in Phase 2 — Phase 3 (PEAD) and Phase 4 (options-flow) wire the per-signal init crons. |
+| **Purpose** | Generalized init for the DEC-047 cursor-drain queue-worker engine. Body `{ signal_id }`; idempotent: refuses second init while an open run exists for `(signal_id, as_of_date)`. Returns 202 with `kind` ∈ `started` / `already_open` / `empty_universe`. Emits `longshort.signal_queue.run.started` on success; `.run.failed` on throw. |
+| **File** | `supabase/functions/longshort-queue-init/index.ts` |
+| **Tests** | `supabase/functions/longshort-queue-init/index_test.ts` — source-sentinel: POST-only, verifyCronSecret precedes DB, body validation (`signal_id_required`, `unknown_signal_id`), productionQueueRegistry + productionClock (no `Date.now`), QUEUE_AUDIT_EVENTS symbols (no literal event strings), 202 response, no `any`/eslint-disable. |
+| **Added by** | FP-045 |
+
+#### `supabase/functions/longshort-queue-init-manual/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-045 — Phase 2) |
+| **Classification** | edge function — operator-triggered queue-init. Same engine as the cron sibling; operator picks `signal_id` + optional `as_of` (YYYY-MM-DD; rejects future). |
+| **Trigger** | POST + `authenticateRequest` + `checkPermissionOrThrow('longshort.manage')`. |
+| **Purpose** | DEC-043 prudent-sequencing test-fire path for any rate-capped signal registered in the queue. Emits `longshort.signal_queue.run.started` with `trigger: 'manual'` and full actor context. |
+| **File** | `supabase/functions/longshort-queue-init-manual/index.ts` |
+| **Tests** | `supabase/functions/longshort-queue-init-manual/index_test.ts` — source-sentinel: POST-only + JWT + manage gate, parseAsOfDate + future guard, QUEUE_AUDIT_EVENTS + `trigger:'manual'` metadata, 202 response, no `any`/eslint-disable/Date.now. |
+| **Added by** | FP-045 |
+
+#### `supabase/functions/longshort-queue-slice/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-045 — Phase 2) |
+| **Classification** | edge function — generic slice-worker cron. Picks the OLDEST running run across ALL registered signals (vendor-cap-never-stacks per addendum §5), processes one slice via `runQueueSlice`, and — if the slice's CAS to `finalizing` wins — invokes `runQueueFinalizer` in-process. |
+| **Trigger** | POST + `verifyCronSecret`. Cron schedule wired in Phase 3 (every minute). Phase 2 ships the handler; empty registry → 200 noop. |
+| **Purpose** | The minute-tick drain. Per-slice instrumentation (`claimed`/`succeeded`/`skipped`/`cas_won`/`empty`) emits `longshort.signal_queue.slice.completed` — the INC-72 visibility fix. Distributed-correctness rests on the MIG-083 RPCs (`signal_queue_claim_slice` for `FOR UPDATE SKIP LOCKED`; `signal_queue_cas_finalizing` for the aggregation barrier). |
+| **File** | `supabase/functions/longshort-queue-slice/index.ts` |
+| **Tests** | `supabase/functions/longshort-queue-slice/index_test.ts` — source-sentinel: POST-only + cron-auth, `pickOldestRunningRun` wiring, slice + finalizer audit event symbols, no `any`/eslint-disable/`Date.now`/`new Date()`. Engine module unit tests in `_shared/longshort-signals/shared/queue-worker/queue-slice-worker_test.ts` cover the CAS-race contract. |
+| **Added by** | FP-045 |
+
+#### `supabase/functions/longshort-queue-sweeper/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-045 — Phase 2) |
+| **Classification** | edge function — orphan-sweeper cron. Fails-out runs whose `heartbeat_at` exceeds the per-signal `heartbeatTimeoutSec`; prunes staging + skips for terminal runs past `stagingTtlSec`. |
+| **Trigger** | POST + `verifyCronSecret`. Cron schedule wired in Phase 3 (every 5 minutes). |
+| **Purpose** | The crash-in-finalizing safety net. Fail-out CAS is guarded by observed status so a slice-worker that bumps the heartbeat first wins (sweeper is best-effort, never preemptive). Emits `longshort.signal_queue.run.failed` per signal with `failed_out > 0`. |
+| **File** | `supabase/functions/longshort-queue-sweeper/index.ts` |
+| **Tests** | `supabase/functions/longshort-queue-sweeper/index_test.ts` — source-sentinel: POST-only + cron-auth, registry wiring, `stale_heartbeat` reason wired, no `any`/eslint-disable/Date.now. Engine module unit tests cover CAS-lost (slice-worker bumps first) + TTL prune + empty-registry no-op. |
+| **Added by** | FP-045 |
+
+#### `public.signal_queue_claim_slice(uuid, integer)` (RPC)
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-045 — Phase 2 / MIG-083) |
+| **Classification** | database function — `SECURITY DEFINER`, `SET search_path=public`, EXECUTE granted to `service_role` only (REVOKEd from PUBLIC/anon/authenticated). |
+| **Purpose** | Atomically claims up to `p_limit` unclaimed `signal_queue_cursor` rows for `p_run_id` via `FOR UPDATE SKIP LOCKED`, marks them `claimed_at = now()`, returns `(ticker, gics_sector)`. Backs the slice-worker's claim — concurrent slice-workers across isolates never claim the same ticker. |
+| **Consumers** | `_shared/longshort-signals/shared/queue-worker/queue-slice-worker.ts` (`runQueueSlice`). |
+| **Added by** | FP-045 / MIG-083 |
+
+#### `public.signal_queue_cas_finalizing(uuid, timestamptz)` (RPC)
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-045 — Phase 2 / MIG-083) |
+| **Classification** | database function — `SECURITY DEFINER`, `SET search_path=public`, service_role only. |
+| **Purpose** | Compare-and-set transition `signal_queue_runs.status 'running' → 'finalizing'` guarded inside the same UPDATE by `NOT EXISTS (SELECT 1 FROM signal_queue_cursor WHERE run_id = p_run_id)`. The cursor-empty predicate IS the aggregation barrier — z-score normalization can never run on a partial staging set. Returns `true` only for the unique caller that wins the race. |
+| **Consumers** | `_shared/longshort-signals/shared/queue-worker/queue-slice-worker.ts` (`runQueueSlice` post-drain). |
+| **Added by** | FP-045 / MIG-083 |
