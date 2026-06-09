@@ -235,23 +235,49 @@ Deno.test('(5) missing price (null/empty) → data_unavailable skip', async () =
   assertEquals(nopx!.reason, 'data_unavailable');
 });
 
-Deno.test('(6) fetcher throw (non-403/404) → fetch_error skip with ticker context', async () => {
+Deno.test('(6) market-wide fetch throw → outcome=failed + failure_reason, NO per-ticker skips (INC-70 / ACT-156 double-tally fix)', async () => {
+  // FP-042 P2 fix: a throw on the SOLE Form 4 source means the run has
+  // zero data and MUST surface as a single `outcome='failed'` with a
+  // failure_reason carrying the thrown message. Crucially, the run must
+  // NOT push per-ticker `fetch_error` skips AND must NOT fall through
+  // into the qualifying-filter loop (the pre-ACT-156 bug pushed BOTH
+  // a `fetch_error` and a `no_qualifying_transactions` skip per ticker,
+  // producing 1678 skips for an 839-ticker universe).
   const universe = [
     { ticker: 'AAPL', gics_sector: 'IT' },
     { ticker: 'MSFT', gics_sector: 'IT' },
     { ticker: 'XYZ', gics_sector: 'IT' },
   ];
-  const { supabase } = makeSupabase({ universe });
+  const { supabase, upsertPayloads } = makeSupabase({ universe });
+  // The mock form4 throws from fetchForm4MarketWide when ANY behavior is
+  // 'throw' (see makeForm4 helper) — modeling the real market-wide call
+  // failing for the whole run.
   const form4 = makeForm4({
-    AAPL: { kind: 'rows', rows: [buyRow()] },
-    MSFT: { kind: 'rows', rows: [buyRow()] },
-    XYZ: { kind: 'throw', err: new SignalComputationError('polygon_form4', 'XYZ', 'HTTP 500 boom') },
+    XYZ: {
+      kind: 'throw',
+      err: new SignalComputationError(
+        'polygon_form4',
+        'MARKET_WIDE',
+        'pagination cap exceeded (50 pages); refusing to follow further',
+      ),
+    },
   });
   const res = await createInsiderOrchestrator(ctx(supabase, form4)).run(AS_OF);
-  const xyz = res.skipped.find((s) => s.ticker === 'XYZ');
-  assert(xyz);
-  assertEquals(xyz!.reason, 'fetch_error');
-  assertStringIncludes(xyz!.detail!, 'XYZ');
+  assertEquals(res.outcome, 'failed');
+  assertEquals(res.universe_size, 3);
+  assertEquals(res.persisted_count, 0);
+  // No per-ticker skips emitted on the throw path — failure_reason is
+  // the single canonical surface for the diagnosis.
+  assertEquals(res.skipped.length, 0);
+  // No double-tally: a single ticker can never appear in two skip
+  // classes (the bug fixed at INC-70 / ACT-156).
+  assertEquals(res.skipped.filter((s) => s.ticker === 'XYZ').length, 0);
+  assert(res.failure_reason);
+  assertStringIncludes(res.failure_reason!, 'form4 market-wide fetch failed');
+  assertStringIncludes(res.failure_reason!, 'pagination cap exceeded');
+  // Persist was not called on the failed path (no signal_observations
+  // upsert for a zero-data run).
+  assertEquals(upsertPayloads.length, 0);
 });
 
 Deno.test('(7) sign convention — buy → positive raw, sale → negative raw (ordering)', async () => {

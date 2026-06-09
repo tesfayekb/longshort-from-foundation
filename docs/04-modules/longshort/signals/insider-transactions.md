@@ -162,3 +162,21 @@ UNLIKE momentum / reversal (dense) or short-interest (dense across SI-reported n
 - CROSSWIND §4.4.4 (signal spec); §4.3.5 (non-critical signal rule); §2 axiom 4 (conscious-approximation discipline).
 - Code: `_shared/longshort-signals/shared/polygon-form4-fetcher.ts`; `_shared/longshort-signals/insider-transactions/compute-insider.ts`; `_shared/longshort-signals/insider-transactions/insider-orchestrator.ts`; `supabase/functions/longshort-insider-compute/index.ts`; `supabase/functions/longshort-insider-compute-manual/index.ts`.
 - Reuse: `_shared/longshort-signals/shared/polygon-shares-outstanding-fetcher.ts` (FP-041); `_shared/longshort-signals/shared/polygon-price-history-fetcher.ts` (FP-009).
+
+## FP-042 / ACT-156 — Signal #4 disarmed (INC-70 — Polygon Form 4 endpoint filters are no-ops; EDGAR rebuild deferred to DW-094)
+
+After the ACT-155 market-wide fix, the next fire returned HTTP 200 but with telemetrically-impossible skip counts (`fetch_error:839 + no_qualifying_transactions:839` for an 839-ticker universe — 1678 skips; `signal_compute_log.run_id='1021808b-4b1c-4b04-bb45-d989d56b5193'`). A 9-variant probe of `/stocks/filings/vX/form-4` against the deployed `POLYGON_API_KEY` confirmed the endpoint **silently ignores `ticker` (every multi-ticker syntax) and `transaction_date.gte/lte`** at our Stocks Advanced entitlement tier — every variant returned a byte-identical 1.85 MB / 1000-row firehose; `ticker=AAPL` returned rows NOT containing AAPL. Only `limit=` is honored.
+
+**Implication.** The original FP-042 per-ticker fetcher was producing a phantom signal since deploy: same firehose fetched 839×, locally filtered by `tickers[0]===ticker`, ~0 matches per name (the firehose is dominated by recent high-volume filers, not our S&P 900 universe), compute layer marked each ticker `no_qualifying_transactions` — perfectly indistinguishable from the EXPECTED sparse profile. Looked sparse, was wrong. The ACT-155 CPU failure was the lucky trigger that exposed the silent data bug.
+
+**Disarm.** `signal_registry.status` for `insider_transactions_90d` flipped `'live' → 'planned'` at ACT-156 (data UPDATE; no new MIG). `job_registry.longshort.insider.compute.enabled` stays `false` (was disarmed since FP-042 ship). The combiner imputes the non-critical signal's absence per §6.5; the long-short stack continues to rank on momentum / reversal / short-interest.
+
+**P2 telemetry fix.** The ACT-155 catch block on a market-wide throw is rewritten to return `outcome='failed'` with a single `failure_reason='form4 market-wide fetch failed: <thrown message>'` and `skipped: []`, short-circuiting before the qualifying-filter loop. A run can never again show two skip classes for the same ticker. The `kind:'unavailable'` (typed entitlement) branch is UNCHANGED.
+
+**FP-042 compute / classifier / filter / z-score code is UNTOUCHED** and remains in the codebase — it is correct and reused as-is when the EDGAR fetcher lands. Only the data-acquisition layer needs replacing.
+
+**Rebuild path (DW-094).** SEC EDGAR direct: `User-Agent`-keyed GET against `data.sec.gov/submissions/CIK{cik10}.json` filtered to `form='4'`, per-accession-number XML fetch, parse Form 4 XML to per-transaction rows matching the existing `Form4Row` shape. EDGAR is the original source Polygon resells; authoritative per-CIK filtering, no entitlement, well-documented schemas. The FP-042 compute / classifier / filter / z-score layer is the contract this new fetcher targets.
+
+**Pattern lesson (codified).** See [`_pattern-vendor-fetcher-filter-honesty.md`](./_pattern-vendor-fetcher-filter-honesty.md) — every vendor-endpoint fetcher MUST implement a `verifyFilterHonored()` pre-flight before trusting any documented filter. Applies to Signals #1 / #2 / #3 / #8.
+
+**Cross-references.** INC-70 (the endpoint failure); DW-094 (the EDGAR rebuild); ACT-156 (this disarm + P2 fix); FP-042 second addendum (Rule 8); ACT-154 (original ship); ACT-155 (market-wide rewrite); DW-093 (DEF-14A NEO enrichment — independent but parallel); `signal_compute_log.run_id='1021808b-…'` (diagnostic exhibit).
