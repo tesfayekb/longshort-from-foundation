@@ -2913,3 +2913,43 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/longshort-insider-compute-manual/index.ts` |
 | **Tests** | `index_test.ts` — 9 source-sentinel tests (auth + permission + POST-only + body validation + parser + POLYGON_API_KEY + dual audit envelope ordering + wall-clock + 3-fetcher orchestrator wiring + no-short-interest-fetcher leak). |
 | **Added by** | FP-042 |
+
+### FP-043 — Signal #3 (Options Flow Imbalance) shared functions
+
+| Symbol | File | Purpose | Added by |
+|---|---|---|---|
+| `TradierOptionsChainFetcher` (+ `verifyFilterHonored`, `verifyFieldsPresent`) | `supabase/functions/_shared/longshort-signals/shared/tradier-options-chain-fetcher.ts` | Production Tradier options-chain fetcher with entitlement mapping (401/403→`subscription_gated`, 404/empty→`data_unavailable`), Tradier-array-quirk normalisation, and dual-axis fetcher self-checks. First fetcher to embed both honesty axes (INC-70 + INC-71). | FP-043 |
+| `computeOptionsFlowRaw(contracts, as_of, params?)` + `SIGNAL_ID='options_flow_imbalance_5d'` | `supabase/functions/_shared/longshort-signals/options-flow/compute-options-flow.ts` | Pure compute: 4-case direction classifier, smart-money filter (`volume>=100`, `DTE>=7`, `|delta|<=0.65`), 48h-half-life exponential decay keyed off `as_of`, `MIN_QUALIFYING_PRINTS=5` floor, div-by-zero guard. | FP-043 |
+| `createOptionsFlowOrchestrator(...)` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-orchestrator.ts` | Single-process orchestrator: per-ticker expirations → nearest DTE≥7 → chain → raw compute → within-sector GICS z-score → persist via `captureSignalObservations`. | FP-043 |
+| `runOptionsFlowChunk(shard, deps)` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-chunk-runner.ts` | Per-shard runner consumed by workers; returns per-ticker `signal` or `SignalSkip`. | FP-043 |
+| `runOptionsFlowCoordinator(universe, as_of, opts)` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-coordinator.ts` | Shards universe into N=6 strides, fans out parallel HTTPS to workers (X-Cron-Secret), aggregates slices, performs within-sector z-score on the full set, persists results. Partial-failure honesty: a failed worker emits `fetch_error` skips for every ticker in its shard. | FP-043 |
+| `TokenBucket` + `pacedHttpFetch(bucket, underlying)` | `supabase/functions/_shared/longshort-signals/options-flow/token-bucket.ts` | Leaky-bucket pacer honouring the 120 req/min Tradier cap; per-worker share ~0.28 req/sec. Default clock routes through `productionClock` (DEC-034 (4) chokepoint) so the file has zero direct wall-clock reads — the operational-timing precedent for future feed-signal pacers. | FP-043 |
+| `JOB_ID_TO_SIGNAL_ID['longshort.options_flow.compute']='options_flow_imbalance_5d'` | `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping.ts` | Extends the registry consumed by `longshort-signal-monitor`; the drift sentinel test cross-references `options-flow-orchestrator.ts::SIGNAL_ID`. | FP-043 |
+| `SignalSkipReason.no_qualifying_flow` | `supabase/functions/_shared/longshort-signals/shared/signal-types.ts` | New typed-absence reason for tickers below `MIN_QUALIFYING_PRINTS`; seeded in `persist-signal-compute-log.ts` aggregate counts and pinned by `persist-signal-compute-log_test.ts` exact-match assertions. | FP-043 |
+
+### FP-043 — Signal #3 cron handler
+
+| Field | Value |
+|---|---|
+| **Endpoint** | `POST /functions/v1/longshort-options-flow-compute` (cron, `X-Cron-Secret`) |
+| **Purpose** | Cron-triggered coordinator entry point. Resolves `as_of`, fans out to N=6 workers under the token-bucket cap, persists `signal_observations` + `signal_compute_log`, emits started/completed/failed audit events. |
+| **File** | `supabase/functions/longshort-options-flow-compute/index.ts` |
+| **Added by** | FP-043 |
+
+### FP-043 — Signal #3 worker handler
+
+| Field | Value |
+|---|---|
+| **Endpoint** | `POST /functions/v1/longshort-options-flow-worker` (internal, `X-Cron-Secret`) |
+| **Purpose** | Per-shard runner. Receives a universe slice + `as_of`, paces Tradier calls via a local token bucket, returns per-ticker signals + typed skips. |
+| **File** | `supabase/functions/longshort-options-flow-worker/index.ts` |
+| **Added by** | FP-043 |
+
+### FP-043 — Signal #3 manual-trigger handler
+
+| Field | Value |
+|---|---|
+| **Endpoint** | `POST /functions/v1/longshort-options-flow-compute-manual` (operator, JWT + `longshort.manage`) |
+| **Purpose** | Operator-triggered backfill / debug run. Parses + validates body (`as_of` ISO date with future-date guard), invokes the coordinator, emits dual-trail audit events (`manual_triggered` BEFORE, `manual_completed`/`manual_failed` AFTER). |
+| **File** | `supabase/functions/longshort-options-flow-compute-manual/index.ts` |
+| **Added by** | FP-043 |
