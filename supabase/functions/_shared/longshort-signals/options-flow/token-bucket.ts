@@ -66,14 +66,11 @@ export class TokenBucket {
  * bucket `acquire()` before delegation. Compatible with
  * `TradierOptionsChainFetcher`'s `HttpFetch` constructor parameter.
  */
-// deno-lint-ignore no-explicit-any
-export function pacedHttpFetch<F extends (...args: any[]) => any>(
-  bucket: TokenBucket,
-  underlying: F,
-): F {
-  // deno-lint-ignore no-explicit-any
-  return (async (...args: any[]) => {
+import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
+
+export function pacedHttpFetch(bucket: TokenBucket, underlying: HttpFetch): HttpFetch {
+  return async (input, init) => {
     await bucket.acquire();
-    return underlying(...args);
-  }) as F;
+    return underlying(input, init);
+  };
 }
