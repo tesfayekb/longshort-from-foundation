@@ -117,7 +117,7 @@ The token-bucket pacer at `_shared/longshort-signals/options-flow/token-bucket.t
 ## Job + signal registry
 
 - `job_registry.longshort.options_flow.compute` — schedule `0 22 * * 1-5`, `enabled=false`, `handler_path='supabase/functions/longshort-options-flow-compute/index.ts'`, `timeout_seconds=600`. Seeded by MIG-078.
-- `signal_registry.options_flow_imbalance_5d` — `status='live'`, `job_registry_id='longshort.options_flow.compute'`, `stale_after_hours=72` (≈ one cadence cycle + weekend slack). Flipped from `planned` by MIG-078.
+- `signal_registry.options_flow_imbalance_5d` — `status='live'`, `job_registry_id='longshort.options_flow.compute'`, `cadence='daily (after-close; intraday 5-min deferred to v2 per DEC-046)'` (corrected by MIG-079 to match the actual EOD schedule; the §4.4.7 5-min canonical cadence is preserved as the v2 target), `stale_after_hours=72` (Friday 22:00 UTC → Monday 22:00 UTC = 72 h — one cadence cycle + weekend slack). Flipped from `planned` by MIG-078.
 - Job ↔ signal mapping wired in `_shared/longshort-signals/shared/job-signal-mapping.ts` with a cross-reference drift sentinel against `options-flow-orchestrator.ts::SIGNAL_ID`.
 
 Enable-flip + cron wiring + DEC-043 end-to-end attestation are a separate operator-run step per DEC-040 — MIG-078 is metadata only.
@@ -143,6 +143,7 @@ Enable-flip + cron wiring + DEC-043 end-to-end attestation are a separate operat
 - INC-71 (Polygon Options Developer NBBO-absence — disqualifier evidence).
 - ACT-157 (Tradier 4-axis vetting; dual-axis pattern codification).
 - MIG-078 (`job_registry` seed + `signal_registry` planned→live flip).
+- MIG-079 (`signal_registry.cadence` truth-in-telemetry correction to match the v1 EOD schedule).
 - DEC-034 (4) + `_shared/longshort-clock.ts` (productionClock chokepoint — operational-timing precedent).
 - `_pattern-vendor-fetcher-filter-honesty.md` (dual-axis discipline, binding on Signals #1/#2/#8).
 - DEC-040 + DEC-043 (cron-wiring + attestation as a separate operator step).
