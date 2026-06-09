@@ -121,7 +121,16 @@ export async function runQueueSlice(
   // Serial within the slice — pacing is per-second, not concurrent. Keeps
   // the per-slice budget linear and the vendor-cap math one-to-one.
   for (const row of claimed) {
-    await bucket.acquire();
+    // FP-045 Phase 3 — acquire `callsPerName` tokens per ticker so the
+    // pacer matches the actual vendor-call rate (PEAD adapter fires 2
+    // Finnhub endpoints per ticker; options-flow fires 1). The
+    // pre-flight arithmetic row in each consumer's registration uses
+    // `(sliceSize × callsPerName) / ratePerSec` — the runtime must
+    // match it for the budget to be honest. Backward-compatible:
+    // callsPerName=1 (Phase 2 synthetic test config) is unchanged.
+    for (let i = 0; i < config.callsPerName; i++) {
+      await bucket.acquire();
+    }
     try {
       const result = await compute({
         ticker: row.ticker,
