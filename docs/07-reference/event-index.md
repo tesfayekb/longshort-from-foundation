@@ -2276,3 +2276,91 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Payload schema** | `metadata: { operator_id, signal_id, as_of, error?, stage?, failure_reason?, trigger: 'manual' }` |
 | **Lifecycle** | active |
 | **Added by** | FP-043 |
+
+## Long-Short PEAD Signal Events (FP-044 / Signal #2)
+
+The six events below mirror the short-interest signal's event family exactly, with `short_interest` → `pead` and `short_interest_change_30d` → `pead_sue_20d`. Same target table (`public.longshort_audit_logs`), same payload shapes, same lifecycle semantics. NON-CRITICAL signal: degraded runs (`subscription_gated` / `pead_panel_below_floor` / `zero_dispersion` / `no_recent_earnings`) still emit `.completed` with appropriate `skip_counts` and a low (or zero) `persisted_count`.
+
+#### `longshort.pead.compute.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the `longshort-pead-compute` cron handler before the orchestrator runs. |
+| **Emitted by** | `supabase/functions/longshort-pead-compute/index.ts` via `writeStrategyAuditEvent` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { as_of, signal_id: 'pead_sue_20d', trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-044 |
+
+#### `longshort.pead.compute.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler after a successful orchestrator + signal_compute_log persist. NON-CRITICAL semantics: a degraded run (all-missing due to `subscription_gated` / below-floor / zero-dispersion / no-recent-earnings) still emits `.completed` with the appropriate `skip_counts` and a low or zero `persisted_count`. |
+| **Emitted by** | `supabase/functions/longshort-pead-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-044 |
+
+#### `longshort.pead.compute.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler on orchestrator-throw, `outcome='failed'` structured result, or signal_compute_log persistence error. `metadata.stage` discriminates `'orchestrator_throw'` vs `'signal_compute_log_persist'`. |
+| **Emitted by** | `supabase/functions/longshort-pead-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, error?, failure_reason?, stage?, run_id?, outcome?, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-044 |
+
+#### `longshort.pead.compute.manual_triggered` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler BEFORE orchestrator invocation. Establishes a forensic trigger trail even when the orchestrator crashes. |
+| **Emitted by** | `supabase/functions/longshort-pead-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-044 |
+
+#### `longshort.pead.compute.manual_completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler after orchestrator returns `outcome='completed'` and the `signal_compute_log` row is persisted. |
+| **Emitted by** | `supabase/functions/longshort-pead-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-044 |
+
+#### `longshort.pead.compute.manual_failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler on orchestrator-throw, `outcome='failed'` structured result, or persistence error. Dual-trail discipline: a 200 response with `outcome='failed'` body still emits this event. `metadata.stage` discriminates as in the cron `.failed` event. |
+| **Emitted by** | `supabase/functions/longshort-pead-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, error?, failure_reason?, stage?, run_id?, outcome?, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-044 |
