@@ -865,6 +865,159 @@ export type Database = {
         }
         Relationships: []
       }
+      signal_queue_cursor: {
+        Row: {
+          claimed_at: string | null
+          created_at: string
+          gics_sector: string | null
+          run_id: string
+          signal_id: string
+          ticker: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string
+          gics_sector?: string | null
+          run_id: string
+          signal_id: string
+          ticker: string
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string
+          gics_sector?: string | null
+          run_id?: string
+          signal_id?: string
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_queue_cursor_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "signal_queue_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
+      }
+      signal_queue_runs: {
+        Row: {
+          as_of_date: string
+          created_at: string
+          failure_reason: string | null
+          finalized_at: string | null
+          heartbeat_at: string
+          metadata: Json
+          operator_id: string
+          run_id: string
+          signal_id: string
+          status: string
+          universe_size: number
+          updated_at: string
+        }
+        Insert: {
+          as_of_date: string
+          created_at?: string
+          failure_reason?: string | null
+          finalized_at?: string | null
+          heartbeat_at?: string
+          metadata?: Json
+          operator_id: string
+          run_id?: string
+          signal_id: string
+          status: string
+          universe_size: number
+          updated_at?: string
+        }
+        Update: {
+          as_of_date?: string
+          created_at?: string
+          failure_reason?: string | null
+          finalized_at?: string | null
+          heartbeat_at?: string
+          metadata?: Json
+          operator_id?: string
+          run_id?: string
+          signal_id?: string
+          status?: string
+          universe_size?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      signal_queue_skips: {
+        Row: {
+          detail: Json
+          recorded_at: string
+          run_id: string
+          signal_id: string
+          skip_reason: string
+          ticker: string
+        }
+        Insert: {
+          detail?: Json
+          recorded_at?: string
+          run_id: string
+          signal_id: string
+          skip_reason: string
+          ticker: string
+        }
+        Update: {
+          detail?: Json
+          recorded_at?: string
+          run_id?: string
+          signal_id?: string
+          skip_reason?: string
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_queue_skips_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "signal_queue_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
+      }
+      signal_queue_staging: {
+        Row: {
+          computed_at: string
+          gics_sector: string | null
+          metadata: Json
+          raw_signal: number
+          run_id: string
+          signal_id: string
+          ticker: string
+        }
+        Insert: {
+          computed_at?: string
+          gics_sector?: string | null
+          metadata?: Json
+          raw_signal: number
+          run_id: string
+          signal_id: string
+          ticker: string
+        }
+        Update: {
+          computed_at?: string
+          gics_sector?: string | null
+          metadata?: Json
+          raw_signal?: number
+          run_id?: string
+          signal_id?: string
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_queue_staging_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "signal_queue_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
+      }
       signal_registry: {
         Row: {
           cadence: string | null
