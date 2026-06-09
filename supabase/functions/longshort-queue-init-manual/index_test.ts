@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-import-prefix -- std assert import
 // @ts-nocheck — source-sentinel test for longshort-queue-init-manual handler.
 import { assert } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 
