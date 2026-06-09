@@ -13,6 +13,8 @@ import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { productionQueueRegistry } from '../_shared/longshort-signals/shared/queue-worker/queue-config.ts';
 import { runQueueSweeper } from '../_shared/longshort-signals/shared/queue-worker/queue-sweeper.ts';
 import { QUEUE_AUDIT_EVENTS } from '../_shared/longshort-signals/shared/queue-worker/queue-audit-events.ts';
+// Side-effect import — registers every live queue consumer at isolate boot.
+import '../_shared/longshort-signals/shared/queue-worker/production-registrations.ts';
 
 Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
