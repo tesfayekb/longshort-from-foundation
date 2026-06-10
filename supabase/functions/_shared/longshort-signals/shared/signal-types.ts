@@ -117,7 +117,7 @@ export type SignalSkipReason =
                              // mode CROSSWIND §2 axiom 3 + DEC-034 sentinel-fallback
                              // discipline forbid). Non-critical; ticker is still
                              // ranked by other signals.
-  | 'zero_dispersion';       // FP-044 / Signal #2 — the panel has N≥2 analysts but
+  | 'zero_dispersion'        // FP-044 / Signal #2 — the panel has N≥2 analysts but
                              // `epsHigh === epsLow` so the DEC-051 range-proxy
                              // `σ = (epsHigh − epsLow) / (2 × 1.349)` evaluates to
                              // exactly 0. Per DEC-051 + DEC-053: this is typed
@@ -126,6 +126,30 @@ export type SignalSkipReason =
                              // determined entirely by the fabricated ε — a phantom
                              // signal. Non-critical; ticker still ranked by other
                              // signals.
+  | 'no_revisions_in_window' // FP-047 / Signal #1 (Analyst Revision Drift §4.4.5) —
+                             // ticker has ZERO focal analyst-revision events inside
+                             // the trailing 30-calendar-day window (CROSSWIND
+                             // §4.4.5 missing-data clause). EXPECTED for the long
+                             // tail of names with low analyst coverage on any given
+                             // day. Non-critical; ticker is still ranked by other
+                             // signals (combiner imputes (-999, 0) in Phase 3).
+  | 'revision_prior_unavailable' // FP-047 / Signal #1 — ≥1 in-window focal events
+                             // exist but NONE has a recoverable same-analyst prior
+                             // target via `findSameAnalystPrior` (DEC-055 §(f)+(g)
+                             // strict identity match within 365d). Per FP-047
+                             // Phase-0 closed-with-revision: we do NOT fabricate
+                             // a magnitude from `(priceTarget − priceWhenPosted)`
+                             // as a fallback — the NKE probe documented that
+                             // implied-upside is a semantically distinct quantity
+                             // from revision-direction. Typed absence; ticker still
+                             // ranked by other signals.
+  | 'zero_magnitude_only';   // FP-047 / Signal #1 — scored revisions exist but
+                             // every recovered pair has `newTarget === priorTarget`
+                             // (e.g., reiterations) so the summed contribution is
+                             // exactly 0 by construction with no information. Per
+                             // CROSSWIND §2 axiom 3 + DEC-034 (2): typed absence
+                             // beats a fabricated zero. Non-critical; ticker still
+                             // ranked by other signals.
 
 export interface SignalSkip {
   ticker: string;
