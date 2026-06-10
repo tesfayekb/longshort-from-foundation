@@ -107,6 +107,10 @@ This FP intentionally ships the cron job DISARMED. End-to-end attestation that t
 
 Until both pieces of evidence exist post wire-and-enable, this signal's cron path is NOT attested as live — the registry row's presence alone is not evidence (per FP-039 / INC-69 lineage). The manual handler (`longshort-pead-compute-manual`) is the recommended path for validating math + persistence + entitlement-degradation independently of cron.
 
+## Arm-up status (MIG-086, 2026-06-10) — ARMED
+
+`job_registry.longshort.pead.compute.enabled=true` (flipped by MIG-086). Operator-applied `cron.job` jobid:88 carries `schedule='0 23 * * 1-5'`, `active=true` — byte-identical to the registry's `schedule` column per the DEC-040 byte-match attestation in `docs/04-modules/longshort/signals/queue-worker.md`. FP-045 Phase 3 validation run `signal_queue_runs.run_id=451b9ee7-9703-429d-97bc-61aeb2697bbc` (2026-06-10, `outcome=completed`, `persisted_count=835/839`, 9 slices, CAS-clean) is the engine-validation evidence the arm-up bound to. DEC-043 end-to-end attestation (200 + cron-attributable `signal_compute_log` row) completes after tonight's natural 23:00 UTC fire.
+
 ## References
 
 - **CROSSWIND §4.4.6** — signal spec (verbatim).
