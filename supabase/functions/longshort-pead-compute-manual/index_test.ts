@@ -31,12 +31,16 @@ Deno.test('(c) POST-only + as_of validation preserved (parseAsOfDate + future-da
 
 Deno.test('(d) shim delegates to initQueueRun — in-process orchestrator REMOVED', () => {
   assert(HANDLER_SOURCE.includes('initQueueRun({'));
-  assert(!HANDLER_SOURCE.includes('createPeadOrchestrator'),
+  const codeOnly = HANDLER_SOURCE
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\*.*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+  assert(!codeOnly.includes('createPeadOrchestrator'),
     'regression: stranded in-process orchestrator path resurrected (the exact thing FP-045 Phase 4 fix removed)');
-  assert(!HANDLER_SOURCE.includes('new FinnhubEpsEstimateFetcher'),
+  assert(!codeOnly.includes('new FinnhubEpsEstimateFetcher'),
     'shim must not instantiate Finnhub fetchers — they belong in the registration');
-  assert(!HANDLER_SOURCE.includes('new FinnhubEarningsFetcher'));
-  assert(!HANDLER_SOURCE.includes('persistSignalComputeLog('),
+  assert(!codeOnly.includes('new FinnhubEarningsFetcher'));
+  assert(!codeOnly.includes('persistSignalComputeLog('),
     'signal_compute_log persist lives in the finalizer, not the shim');
 });
 
