@@ -1,7 +1,7 @@
 # Generalized Cursor-Drain Queue-Worker Engine
 
 **Owner:** longshort • **Plan:** FP-045 • **Decisions:** DEC-047, DEC-048, DEC-051, DEC-053
-**Schema:** MIG-082 (tables) + MIG-083 (RPCs) + MIG-084 (slice/sweeper job_registry rows, disarmed) • **Phase 3 — PEAD consumer registered. Disarmed pending DEC-043 attestation.**
+**Schema:** MIG-082 (tables) + MIG-083 (RPCs) + MIG-084 (slice/sweeper job_registry rows, disarmed) + MIG-085 (Phase 4 options-flow signal_registry flip + job_registry description update) • **Phase 4 — PEAD + options-flow both registered. Disarmed pending the combined DEC-040/043 arm-up.**
 
 ## Why this engine exists
 
@@ -75,9 +75,13 @@ vs the 150s HTTP wall. The slice wall budget is intentionally generous — the c
 |---|---:|---:|---:|---:|---|---|
 | Synthetic test (Phase 2) | 10 | 1 | 1000 | 0.01s | Safe | engine self-test |
 | PEAD (Phase 3) | 100 | 2 | 4.25 | ~47.1s | Safe (≈69% headroom) | **registered (Phase 3), disarmed (DEC-048)** |
-| Options-flow (Phase 4, planned) | 80 | 1 | 1.7 | ~47s | Safe (31%) | not yet registered |
+| Options-flow (Phase 4) | 80 | 1 | 1.7 | ~94.1s (wire) | Safe (≈37% headroom vs 150s) | **registered (Phase 4), disarmed (DEC-048; closes DW-095)** |
 
-Full-run estimate for PEAD on a ≈840-name universe: 1,680 calls / 4.25 rps ≈ 395s of compute, spread across ⌈840/100⌉ = 9 slices at one-per-minute cadence ≈ 9 minutes wall-time. No single isolate ever crosses the 150s HTTP wall or the ~400s background-task budget — this is the FP-045 / INC-72 fix in one line.
+Full-run estimate for PEAD on a ≈840-name universe: 1,680 calls / 4.25 rps ≈ 395s of compute, spread across ⌈840/100⌉ = 9 slices at one-per-minute cadence ≈ 9 minutes wall-time. Validated end-to-end at run `451b9ee7-9703-429d-97bc-61aeb2697bbc` (2026-06-10): 839 universe, 835 persisted, 9 slices, CAS-clean, zero 429s.
+
+Full-run estimate for options-flow on the same ≈840-name universe: 1,680 wire calls (2 per ticker) / 1.7 rps ≈ 988s of wire time, spread across ⌈840/80⌉ = 11 slices at one-per-minute cadence ≈ 11 minutes wall-time. NOTE: options-flow's `callsPerName=1` is the slot-cost (one logical name per slice slot); the two wire-level Tradier calls per ticker (expirations + chain) are sequentialized through the token-bucket wired into the fetcher, so the wire rate equals `ratePerSec` at the bucket boundary. The arithmetic-budget pin in `options-flow-queue-registration_test.ts` checks the wire-call budget (`80 × 2 / 1.7 ≈ 94.1s`) against the 150s wall — this is the binding constraint.
+
+No single isolate ever crosses the 150s HTTP wall or the ~400s background-task budget — this is the FP-045 / INC-72 fix in one line.
 
 ### Pacing contract (Phase 3 — slice-worker × `callsPerName`)
 
@@ -119,14 +123,20 @@ Names follow the established `longshort.<domain>.<sub>.<verb>` convention (verif
 | `longshort-queue-slice` | `verifyCronSecret` | Every minute (single shared cron — picks oldest across ALL signals). |
 | `longshort-queue-sweeper` | `verifyCronSecret` | Every 5 minutes. |
 | `longshort-pead-compute` | `verifyCronSecret` | **Phase 3 PEAD init shim** — name preserved per addendum §5; body delegates to `initQueueRun(productionQueueRegistry.get('pead_sue_20d'))`. Existing MIG-081 cron row (`0 23 * * 1-5`, DISARMED) is the per-signal init trigger. |
+| `longshort-options-flow-compute` | `verifyCronSecret` | **Phase 4 options-flow init shim** — name preserved per MIG-078 + FP-045 §5; body delegates to `initQueueRun(productionQueueRegistry.get('options_flow_imbalance_5d'))`. Existing MIG-078 cron row (`0 22 * * 1-5`, DISARMED) is the per-signal init trigger. |
+| `longshort-pead-compute-manual` / `longshort-options-flow-compute-manual` | JWT + `longshort.manage` | **Phase 4 manual init shims** — `longshort-pead-compute-manual` previously imported the synchronous orchestrator (stranded-handler discovered in fresh-clone Phase 4 review; would have 504'd per INC-72 if fired); both manual handlers now seed a queue run via `initQueueRun` and return 202 with the operator-supplied `as_of`. Same auth + audit envelope as before. |
+| `longshort-options-flow-worker` | (none — 410 Gone) | **Phase 4 deprecation.** The FP-043 chunked worker is replaced by the queue-slice path. Handler returns `410 options_flow_worker_deprecated` with a structured pointer at the enqueue paths. The shared `options-flow-chunk-runner.ts` stays in the tree (FP-043 preservation promise); its per-ticker semantics are mirrored by `options-flow-queue-adapter.ts`. |
 
-**Phase 3 cron wiring:** MIG-084 registers `longshort.queue.slice` (every minute) and `longshort.queue.sweeper` (every 5 min) as DISARMED rows. The `longshort.pead.compute` init row remains DISARMED (MIG-081). Operator-run step (per DEC-040 + DEC-043) wires the three crons + flips `enabled=true` after end-to-end attestation against a real PEAD test-fire (200 response + queue-attributable `signal_compute_log` row written by the finalizer).
+**Phase 3 cron wiring:** MIG-084 registers `longshort.queue.slice` (every minute) and `longshort.queue.sweeper` (every 5 min) as DISARMED rows. The `longshort.pead.compute` init row remains DISARMED (MIG-081). Phase 3 validation test-fire (run `451b9ee7`, 2026-06-10) completed CLEAN — see the FP-045 Phase 3 validation addendum in `docs/08-planning/feature-proposals.md`.
+
+**Phase 4 cron wiring:** MIG-085 leaves `longshort.options_flow.compute` DISARMED (description updated to the queue-shim shape). The combined operator arm-up (per DEC-040 + DEC-043) wires the per-signal init crons for BOTH consumers + flips `enabled=true` after the options-flow test-fire validates against the live queue path (per the Phase 4 validation criteria: qualifying-prints coverage, 429-absence, within-sector z distribution).
 
 ## Migration ledger
 
 - **MIG-082** — Four tables (`signal_queue_runs`, `signal_queue_cursor`, `signal_queue_staging`, `signal_queue_skips`) with RLS deny-write to authenticated, read via `longshort.view`.
 - **MIG-083** — Two RPCs (`signal_queue_claim_slice`, `signal_queue_cas_finalizing`) — service-role only, `SECURITY DEFINER`, `SET search_path=public`.
 - **MIG-084** — `job_registry` rows for `longshort.queue.slice` (every minute, disarmed) and `longshort.queue.sweeper` (every 5 minutes, disarmed). The existing `longshort.pead.compute` row (MIG-081) is preserved as the per-signal init trigger; name + handler_path unchanged, body gutted to enqueue shim.
+- **MIG-085** — Phase 4 metadata update. `job_registry.longshort.options_flow.compute` description updated to the queue-shim shape (row name + handler_path preserved per MIG-078; stays DISARMED). `signal_registry.options_flow_imbalance_5d` flipped `planned`→`live` with the truth-in-telemetry cadence string (`daily (after-close; queue-drained ~11 min; interim per DEC-048 — §4.4.7 5-min intraday target deferred per DEC-046 v2)`); `planned_phase` cleared (DW-095 closed). No new rows: the MIG-084 slice/sweeper rows are shared engine rows, signal-agnostic by design.
 
 ## Phase 3 consumer registration — PEAD (Signal #2 / FP-044)
 
@@ -144,6 +154,23 @@ Names follow the established `longshort.<domain>.<sub>.<verb>` convention (verif
 | `fetchAndCompute` | `createPeadAdapter(...)` | Wraps `computePead` + dual-Finnhub fetch; orchestrator unchanged |
 
 The PEAD adapter (`pead-queue-adapter.ts`) imports `computePead` verbatim from `compute-pead.ts` — the FP-044 per-ticker compute arm is NOT edited. Skip semantics (DEC-052 `pead_panel_below_floor`, DEC-051/053 `zero_dispersion`, `no_recent_earnings`, `subscription_gated`, `data_unavailable`, `fetch_error`) are owned by the adapter + `computePead` — addendum §7 invariant (engine carries no divisor or floor policy) is preserved.
+
+## Phase 4 consumer registration — options-flow (Signal #3 / FP-043; closes DW-095)
+
+`_shared/longshort-signals/options-flow/options-flow-queue-registration.ts` registers options-flow into the production registry via side-effect import from `production-registrations.ts`.
+
+| Field | Value |
+|---|---|
+| `signalId` | `options_flow_imbalance_5d` | `options-flow-orchestrator.ts` export `SIGNAL_ID` |
+| `jobId` | `longshort.options_flow.compute` | MIG-078 `job_registry` row (preserved) |
+| `ratePerSec` | 1.7 | Tradier production cap (120/min = 2/s) × 0.85 DEC-047 safety (ACT-157) |
+| `callsPerName` | 1 | one logical name per slice slot; the two wire-level Tradier calls (expirations + chain) are sequentialized through the token-bucket inside the paced fetcher |
+| `sliceSize` | 80 | Yields ≈94.1s wire-call budget per slice (≈37% headroom vs 150s wall) |
+| `heartbeatTimeoutSec` | 600 | ~6× nominal wire budget before sweeper preempts |
+| `stagingTtlSec` | 86 400 | 24h diagnostic retention post-finalize |
+| `fetchAndCompute` | `createOptionsFlowAdapter(...)` | Mirrors `options-flow-chunk-runner.ts` per-ticker arm verbatim; `computeOptionsFlow` + `TradierOptionsChainFetcher` reused unchanged |
+
+The options-flow adapter (`options-flow-queue-adapter.ts`) mirrors `runOptionsFlowChunk`'s per-ticker semantics (the canonical per-ticker pin) — the FP-043 compute + fetcher are NOT edited. Skip taxonomy (`subscription_gated`, `data_unavailable`, `no_qualifying_flow`, `fetch_error`) is owned by the compute + adapter. The deprecated `longshort-options-flow-worker` handler now returns 410 Gone (the chunk-runner module stays in tree per FP-043 preservation). DW-095 is closed by this registration.
 
 ## Gate-4 discipline (forward-binding, from FP-045 Phase-2 revision)
 
