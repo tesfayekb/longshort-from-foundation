@@ -58,7 +58,7 @@ Deno.test('(2) happy-path: walks pages until older-than-cutoff sentinel', async 
   let calls = 0;
   const fetcher = new FmpPriceTargetFeedFetcher(
     'k', async () => jsonResp(pages[calls++]),
-    1000, 'https://example', { pageLimit: 100, maxPages: 10 },
+    1000, 'https://example', { pageLimit: 2, maxPages: 10 },
   );
   const out = await fetcher.fetchFeed(AS_OF);
   assertEquals(out.kind, 'feed');
