@@ -74,14 +74,15 @@ export const OPTIONS_FLOW_QUEUE_CONFIG = {
 
 /**
  * Idempotent registration. Constructs a TokenBucket-paced fetcher once
- * per isolate (the bucket's `nextAvailableMs` cursor must be shared
- * across all per-ticker calls in the isolate so the wire rate is
- * honestly capped at `ratePerSec`). The bucket reads the sanctioned
- * `productionClock` chokepoint by default — no direct wall-clock here.
- * Fetcher is constructed lazily from `Deno.env.get('TRADIER_API_KEY')`
- * at first compute invocation per ticker, so import-time has no env
- * dependency (keeps the registry constructable in unit tests where the
- * secret is unset).
+ * per isolate at first register call — the bucket's `nextAvailableMs`
+ * cursor must be shared across all per-ticker calls in the isolate so
+ * the wire rate is honestly capped at `ratePerSec`. The bucket reads
+ * the sanctioned `productionClock` chokepoint by default — no direct
+ * wall-clock here. `TRADIER_API_KEY` is read at register time (parallel
+ * to PEAD's Finnhub-key pattern); unit tests construct
+ * `createOptionsFlowAdapter` directly with mocked fetchers and never
+ * invoke this registration function, so the unset-key path stays inert
+ * outside of production / handler boot.
  */
 export function registerOptionsFlowQueueConsumer(): void {
   if (productionQueueRegistry.has(SIGNAL_ID)) return;
