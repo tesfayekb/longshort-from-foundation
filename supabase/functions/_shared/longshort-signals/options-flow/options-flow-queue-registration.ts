@@ -10,15 +10,23 @@
  * ─── Pre-flight arithmetic row (addendum §6 — required) ───────────────
  *
  *   sliceSize          = 80 tickers
- *   callsPerName       = 1          (one logical name per slot — the
- *                                    fetcher's token-bucket wraps the
- *                                    two wire-level calls per ticker,
- *                                    expirations + chain, in sequence)
+ *   callsPerName       = 2          (the Tradier per-ticker arm makes
+ *                                    TWO wire calls — expirations +
+ *                                    chains — and the slice-worker
+ *                                    token-bucket owns ALL pacing
+ *                                    [REVISION-FIX 2026-06-10]; the
+ *                                    adapter passes raw `fetch` so the
+ *                                    bucket is the single chokepoint —
+ *                                    no double-acquisition)
  *   ratePerSec         = 1.7        (120/min Tradier × 0.85 — ACT-157
  *                                    + DEC-047 safety margin)
- *   → wire-call budget per slice = 80 × 2 / 1.7 ≈ 94.1 s wall
- *     (two requests per ticker × 80 tickers, paced through the bucket)
- *   → slot-cost budget per slice (engine-cost units) = 80 × 1 / 1.7 ≈ 47 s
+ *   → wire-call budget per slice = (80 × callsPerName) / 1.7
+ *                                = (80 × 2) / 1.7 ≈ 94.1 s wall
+ *     (the worker acquires 2 tokens per ticker before invoking the
+ *     adapter; the two HTTP calls then burst back-to-back inside the
+ *     reserved 1.18s slot — average wire rate = 1.7 rps = 102 req/min
+ *     < Tradier 120 req/min cap; minute-window cap permits the burst-
+ *     of-2 shape)
  *   → margin vs 150 s HTTP wall ≈ 56 s (≈37% headroom) — SAFE.
  *
  *   Full-run estimate for an ≈840-name universe:
@@ -40,6 +48,20 @@
  * exponential-decay arithmetic. The engine carries no divisor or floor
  * policy — see `docs/04-modules/longshort/signals/queue-worker.md`.
  *
+ * ─── Pacing ownership (REVISION-FIX 2026-06-10) ───────────────────────
+ * Pacing is owned in EXACTLY ONE place: the slice-worker's TokenBucket
+ * (constructed from `ratePerSec` per the engine's `defaultBucketFactory`
+ * in `queue-slice-worker.ts`). The worker acquires `callsPerName=2`
+ * tokens per ticker before invoking the adapter; the adapter then makes
+ * its two HTTP calls through raw `fetch` (no second token-bucket wrap).
+ * This eliminates the double-acquisition bug present in the original
+ * Phase-4 commit (which paired `callsPerName=1` worker pacing with a
+ * second `pacedHttpFetch`-wrapped bucket inside the adapter — two
+ * buckets, both at 1.7 rps, serialized → per-ticker time = ~1.76s →
+ * 80-slice ≈ 141s, dangerously close to the 150s HTTP wall). The fix
+ * collapses to one bucket whose `callsPerName` matches the fetcher's
+ * actual wire-call count. See failure-mode log Catalog #39.
+ *
  * ─── Heartbeat / staging-TTL sizing ───────────────────────────────────
  * `heartbeatTimeoutSec = 600` — 10 minutes. An options-flow slice
  * finishes in ≤94s of wire time under nominal pacing; a 600s ceiling
@@ -54,7 +76,6 @@
 import { productionQueueRegistry } from '../shared/queue-worker/queue-config.ts';
 import { createOptionsFlowAdapter } from './options-flow-queue-adapter.ts';
 import { TradierOptionsChainFetcher } from '../shared/tradier-options-chain-fetcher.ts';
-import { TokenBucket, pacedHttpFetch } from './token-bucket.ts';
 import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
 import { SIGNAL_ID } from './options-flow-orchestrator.ts';
 
@@ -66,29 +87,28 @@ export const OPTIONS_FLOW_QUEUE_CONFIG = {
   signalId: SIGNAL_ID,
   jobId: OPTIONS_FLOW_QUEUE_JOB_ID,
   ratePerSec: 1.7,
-  callsPerName: 1,
+  callsPerName: 2,
   sliceSize: 80,
   heartbeatTimeoutSec: 600,
   stagingTtlSec: 86_400,
 } as const;
 
 /**
- * Idempotent registration. Constructs a TokenBucket-paced fetcher once
- * per isolate at first register call — the bucket's `nextAvailableMs`
- * cursor must be shared across all per-ticker calls in the isolate so
- * the wire rate is honestly capped at `ratePerSec`. The bucket reads
- * the sanctioned `productionClock` chokepoint by default — no direct
- * wall-clock here. `TRADIER_API_KEY` is read at register time (parallel
- * to PEAD's Finnhub-key pattern); unit tests construct
+ * Idempotent registration. Pacing is owned by the slice-worker bucket
+ * (REVISION-FIX 2026-06-10); the adapter receives raw `fetch` and the
+ * worker acquires `callsPerName=2` tokens per ticker — see "Pacing
+ * ownership" in the file header. `TRADIER_API_KEY` is read at register
+ * time (parallel to PEAD's Finnhub-key pattern); unit tests construct
  * `createOptionsFlowAdapter` directly with mocked fetchers and never
  * invoke this registration function, so the unset-key path stays inert
  * outside of production / handler boot.
  */
 export function registerOptionsFlowQueueConsumer(): void {
   if (productionQueueRegistry.has(SIGNAL_ID)) return;
-  const bucket = new TokenBucket({ ratePerSec: OPTIONS_FLOW_QUEUE_CONFIG.ratePerSec });
-  const paced = pacedHttpFetch(bucket, fetch as unknown as HttpFetch);
-  const tradier = new TradierOptionsChainFetcher(getTradierKeyOrThrow(), paced);
+  const tradier = new TradierOptionsChainFetcher(
+    getTradierKeyOrThrow(),
+    fetch as unknown as HttpFetch,
+  );
   productionQueueRegistry.register({
     signalId: OPTIONS_FLOW_QUEUE_CONFIG.signalId,
     jobId: OPTIONS_FLOW_QUEUE_CONFIG.jobId,
