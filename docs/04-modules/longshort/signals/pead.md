@@ -91,6 +91,12 @@ Seven `SignalSkipReason` values: the four shared (`fetch_error`, `missing_sector
 - `pead_panel_below_floor` — `numberAnalysts < 2` (DEC-052). Documented small-cap consequence (see flag #3).
 - `zero_dispersion` — `epsHigh == epsLow` (DEC-051 / DEC-053). **Strictly no ε-fallback** — typed absence, never fabricated denominator. This is the load-bearing anti-phantom guard for Signal #2.
 
+### Known vendor anomaly — `epsHigh < epsLow` ordering (watch-only)
+
+On rare occasions Finnhub `/stock/eps-estimate?freq=quarterly` returns a row where `epsHigh < epsLow` on negative-EPS panels — the high/low fields are surfaced as-emitted by the vendor rather than min/max-canonicalized. The `(epsHigh − epsLow) / (2 × 1.349)` σ_proxy then resolves to a **negative** value, which `compute-pead.ts:128` traps via `sigma_proxy <= 0 → zero_dispersion`. The behavior is correct: a non-positive σ_proxy is no more meaningful than a structurally zero one, and DEC-051 / DEC-053 forbid an ε-fallback in either case — typed absence is the only honest outcome.
+
+**First observed:** FP-045 Phase-3 validation run `signal_queue_runs.run_id=451b9ee7-…`, 2026-06-10. **Single occurrence in 839 names: SATS** (`period=2026-03-31`, `epsHigh=-1.2495 epsLow=-1.1662 → σ_proxy=-0.0309`; persisted in `signal_compute_log.skipped_detail`). **Status: watch-only** — no orchestrator or fetcher change. If the rate of negative-σ trips climbs above ~5 names per run on this universe, escalate via a fetcher-level min/max canonicalization (would need its own ADR + the `_pattern-vendor-fetcher-filter-honesty.md` `verifyFieldsPresent` extension to cover ordering, not just presence).
+
 `subscription_gated` and `data_unavailable` are emitted by the fetcher pair on 403 / 404; the orchestrator funnels both into the same typed-absence flow as the other non-critical signals.
 
 ## Cron-attestation gate (DEC-043)
