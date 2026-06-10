@@ -2,6 +2,8 @@
 
 ### ACT-151: FP-040 — Signal #7 (Short-Term Reversal) implementation
 
+### ACT-163: FP-047 Phase 0 — Signal #1 vendor-shape probe + governance (Branch A locked; FP-047 + DEC-055 landed; no code)
+
 ### ACT-152: FP-038 — Signal Registry + "All Signals" Overview
 
 ### ACT-153: FP-041 — Signal #5 — Short Interest Changes (30-day)
