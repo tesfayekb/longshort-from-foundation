@@ -75,17 +75,17 @@ vs the 150s HTTP wall. The slice wall budget is intentionally generous — the c
 |---|---:|---:|---:|---:|---|---|
 | Synthetic test (Phase 2) | 10 | 1 | 1000 | 0.01s | Safe | engine self-test |
 | PEAD (Phase 3) | 100 | 2 | 4.25 | ~47.1s | Safe (≈69% headroom) | **registered (Phase 3), disarmed (DEC-048)** |
-| Options-flow (Phase 4) | 80 | 1 | 1.7 | ~94.1s (wire) | Safe (≈37% headroom vs 150s) | **registered (Phase 4), disarmed (DEC-048; closes DW-095)** |
+| Options-flow (Phase 4) | 80 | 2 | 1.7 | ~94.1s | Safe (≈37% headroom vs 150s) | **registered (Phase 4), disarmed (DEC-048; closes DW-095)** |
 
 Full-run estimate for PEAD on a ≈840-name universe: 1,680 calls / 4.25 rps ≈ 395s of compute, spread across ⌈840/100⌉ = 9 slices at one-per-minute cadence ≈ 9 minutes wall-time. Validated end-to-end at run `451b9ee7-9703-429d-97bc-61aeb2697bbc` (2026-06-10): 839 universe, 835 persisted, 9 slices, CAS-clean, zero 429s.
 
-Full-run estimate for options-flow on the same ≈840-name universe: 1,680 wire calls (2 per ticker) / 1.7 rps ≈ 988s of wire time, spread across ⌈840/80⌉ = 11 slices at one-per-minute cadence ≈ 11 minutes wall-time. NOTE: options-flow's `callsPerName=1` is the slot-cost (one logical name per slice slot); the two wire-level Tradier calls per ticker (expirations + chain) are sequentialized through the token-bucket wired into the fetcher, so the wire rate equals `ratePerSec` at the bucket boundary. The arithmetic-budget pin in `options-flow-queue-registration_test.ts` checks the wire-call budget (`80 × 2 / 1.7 ≈ 94.1s`) against the 150s wall — this is the binding constraint.
+Full-run estimate for options-flow on the same ≈840-name universe: 1,680 wire calls (2 per ticker) / 1.7 rps ≈ 988s of wire time, spread across ⌈840/80⌉ = 11 slices at one-per-minute cadence ≈ 11 minutes wall-time. NOTE (REVISION-FIX 2026-06-10 — failure-mode Catalog #39): `callsPerName=2` matches the fetcher's TWO Tradier wire calls per ticker (expirations + chains). Pacing is owned in EXACTLY ONE place — the slice-worker's `TokenBucket(ratePerSec=1.7)` — and the adapter receives raw `fetch` (no second token-bucket inside the adapter). The worker acquires 2 tokens per ticker (reserving a 1.18s slot at 1.7 rps); the two HTTP calls then burst back-to-back within that slot. Average wire rate = 1.7 rps = 102 req/min < Tradier's 120/min minute-window cap. The arithmetic-budget pin in `options-flow-queue-registration_test.ts` derives the wire-call budget from `callsPerName` (not a hand-entered constant) and asserts `callsPerName === TRADIER_WIRE_CALLS_PER_TICKER` — this is the structural check that prevents the Catalog #39 defect class.
 
 No single isolate ever crosses the 150s HTTP wall or the ~400s background-task budget — this is the FP-045 / INC-72 fix in one line.
 
 ### Pacing contract (Phase 3 — slice-worker × `callsPerName`)
 
-The slice-worker acquires `config.callsPerName` tokens from the bucket BEFORE invoking the adapter (per ticker), so the runtime rate matches the per-slice arithmetic above. PEAD adapter fires two Finnhub endpoints per ticker in parallel (`Promise.all` — eps-estimate + earnings); the bucket has already throttled entry by 2/rate so the burst-of-2 is rate-honest. Backward-compatible with Phase 2 synthetic config (`callsPerName=1`).
+The slice-worker acquires `config.callsPerName` tokens from the bucket BEFORE invoking the adapter (per ticker), so the runtime rate matches the per-slice arithmetic above. PEAD adapter fires two Finnhub endpoints per ticker in parallel (`Promise.all` — eps-estimate + earnings); the bucket has already throttled entry by 2/rate so the burst-of-2 is rate-honest. Options-flow follows the same pattern (`callsPerName=2`, two Tradier calls). **Single-bucket invariant (REVISION-FIX 2026-06-10):** adapters MUST pass raw `fetch` to their underlying fetchers — wrapping the adapter-side HTTP path in a second `pacedHttpFetch` causes double-acquisition (two buckets serialized at the same rate) and silently doubles per-ticker wall time, eroding the slice-budget headroom. Pacing is owned by the worker bucket, period. Backward-compatible with Phase 2 synthetic config (`callsPerName=1`).
 
 ## σ=0, floors, and divisor policy (addendum §7)
 
@@ -164,8 +164,8 @@ The PEAD adapter (`pead-queue-adapter.ts`) imports `computePead` verbatim from `
 | `signalId` | `options_flow_imbalance_5d` | `options-flow-orchestrator.ts` export `SIGNAL_ID` |
 | `jobId` | `longshort.options_flow.compute` | MIG-078 `job_registry` row (preserved) |
 | `ratePerSec` | 1.7 | Tradier production cap (120/min = 2/s) × 0.85 DEC-047 safety (ACT-157) |
-| `callsPerName` | 1 | one logical name per slice slot; the two wire-level Tradier calls (expirations + chain) are sequentialized through the token-bucket inside the paced fetcher |
-| `sliceSize` | 80 | Yields ≈94.1s wire-call budget per slice (≈37% headroom vs 150s wall) |
+| `callsPerName` | 2 | matches the fetcher's TWO wire calls per ticker (expirations + chains); pacing owned by the slice-worker bucket — adapter passes raw `fetch` (REVISION-FIX 2026-06-10) |
+| `sliceSize` | 80 | Yields ≈94.1s wire-call budget per slice (`80 × 2 / 1.7`); ≈37% headroom vs 150s wall |
 | `heartbeatTimeoutSec` | 600 | ~6× nominal wire budget before sweeper preempts |
 | `stagingTtlSec` | 86 400 | 24h diagnostic retention post-finalize |
 | `fetchAndCompute` | `createOptionsFlowAdapter(...)` | Mirrors `options-flow-chunk-runner.ts` per-ticker arm verbatim; `computeOptionsFlow` + `TradierOptionsChainFetcher` reused unchanged |
