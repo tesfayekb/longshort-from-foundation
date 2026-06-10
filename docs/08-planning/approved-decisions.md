@@ -656,8 +656,8 @@ If any field is missing → the decision is **INVALID**.
 - **Plan Section:** FP-043 (CROSSWIND §4.4.7 implementation) — coordinator rebuild path
 - **Date Approved:** 2026-06-09
 - **Decision Type:** architecture / orchestration governance
-- **Status:** active (design preserved; build deferred via DW-095)
-- **Superseded By:** —
+- **Status:** implemented (FP-045 generalized engine + Phase 3 PEAD consumer + Phase 4 options-flow consumer; DW-095 closed). The "design preserved; build deferred" status applied 2026-06-09; engine landed FP-045 Phase 2 (MIG-082/083), PEAD consumer landed Phase 3 (MIG-084 + validated end-to-end at run `451b9ee7`, 2026-06-10), options-flow consumer landed Phase 4 (MIG-085 + adapter mirrors `runOptionsFlowChunk` per-ticker semantics verbatim, 2026-06-10).
+- **Superseded By:** — (decision realized, not superseded)
 - **Decision:**
 
   **Locked input.** Project tier: Supabase Pro (400s background-task budget, confirmed via operator billing screenshot). Tradier production cap: 120 req/min × 0.85 safety = **1.7 req/sec aggregate** across all isolates. Universe: 839 underlyings (current `universe_membership` snapshot).
