@@ -4,6 +4,8 @@
 > **Authority:** CROSSWIND_SPEC.md §12.5 Rule 10 + §12.10 capture protocol
 > **Review Cadence:** Quarterly per §12.8; quarterly-review ADRs land in `docs/decisions/`
 
+<!-- sync-nudge: 2026-06-10T16:42Z — operator reconnected GitHub integration; trivial touch to flush Lovable→GitHub sync backlog (fd12cbe7, ac04b048, addc9df4). -->
+
 ## Purpose
 
 This document serves two coexisting governance purposes under the canonical filename mandated by CROSSWIND §12.5 Rule 10 + §12.10:
