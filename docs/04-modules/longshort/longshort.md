@@ -126,3 +126,23 @@ the path of any current FP.)
 - Feature proposal: FP-005 (this bootstrap); FP-006 (CROSSWIND v0.9 implementation, future)
 - Signal registry + multi-signal overview: FP-038 (`signal_registry` table + `AllSignalsTab` — the index page; per-signal detail lives in `RankingsTab` (FP-024))
 - Plan section: PLAN-TRADING-001 (foundation, complete) and PLAN-TRADING-001-LONGSHORT-001 (this module)
+
+## Signal-Stack Enhancement Phase Ladder (DEC-054 / FP-046)
+
+Roadmap-only. Each entry below requires its own operator-authorized build FP — this section codifies the agreed sequence and is the doc-resident anchor for DEC-054.
+
+| Phase | Item | Priority | Vehicle | Authority | Summary |
+|---|---|---|---|---|---|
+| 2.10 | **R2 — Squeeze-guard short-book veto** | P0 | future build FP | DEC-054 / FP-046 | Extend §3.3e: short-book entry vetoed when `(SI > 20% of float) AND (DTC > 5) AND (5-day return > 0)`. DTC = SI ÷ 20-day ADV, derived from Signal #5 + bars data; DTC also exposed as a combiner feature. $0 vendor cost. |
+| 2.11 | **R1 — Trend-quality combiner features** | P1 | future build FP | DEC-054 / FP-046 | Two combiner feature pairs computed from the SAME Polygon daily bars Signal #6 uses: (a) information discreteness `ID = sign(formation return) × (%neg − %pos)` over T-21→T-252 (Da/Gurun/Warachka FIP); (b) formation-period realized vol (GRJMOM). Signal #6 unchanged; combiner learns the interaction. **Risk recorded:** FIP's 6-month horizon vs §6.2 10-day labels — Phase 7 ablation is the arbiter; retirement acceptable. $0 vendor cost. |
+| 2.12 | **R3 — Signal #10: quality / gross-profitability** | P1 | future build FP | DEC-054 / FP-046 | Novy-Marx GP/A from FMP Premium fundamentals (already subscribed; $0 marginal). Annually-refreshed; within-sector z; non-critical; standard (value, is_present) combiner pair. Signal count → 10 (within spec's ~12 pre-ablation ceiling). |
+| 3 (forward-pointer) | **R4 — Market-state regime features** | P2 | folded into the Phase 3 combiner build spec | DEC-054 / FP-046 | 2-3 features: trailing market return (sign + magnitude), trailing market realized vol. Lets the ranker learn momentum-crash-state downweighting (Daniel-Moskowitz). Spec-only now; lands with the combiner FP. |
+| 4 (forward-pointer) | **R6 — Asymmetric book sizing** | P2 (conditional on R5) | future build FP | DEC-054 / FP-046 | If R5 shows materially weaker short-side IC, re-derive long/short counts (currently 20/20) from realized signal quality. No pre-committed number; the diagnostic decides. |
+| 4 / 5 (forward-pointer) | **R7 — Drawdown-conditional gross-exposure scaling** | P2 | future build FP | DEC-054 / FP-046 | Barroso-Santa Clara lineage (vol/drawdown-managed momentum). Rule parameters NOT set here — calibrated at Phase 7. Reserves the architectural slot: portfolio construction consumes a gross-scaling multiplier input (default 1.0 until the rule ships). |
+| 7 (requirement) | **R5 — Long-vs-short IC diagnostic** | P0 | Phase 7 ablation spec — spec-only | DEC-054 / FP-046 | Phase 7 ablation MUST produce a per-signal × per-side IC table (long-tail IC vs short-tail IC, all signals). Motivation: structural long-bias suspicion in #4 / #1 / #8. Gates R6. |
+
+**Sequencing.** Phase 2 closure FIRST — Signal #1 full-spec, Signal #8 (news), Signal #9 (catalyst), DW-094 (insider rebuild) remain the in-flight plan; the enhancement arc does NOT preempt them. Then 2.10 (R2) → 2.11 (R1) → 2.12 (R3) in priority order, each via its own operator-authorized build FP.
+
+**Named rejections (binding — see DEC-054 for full rationale).** (a) Shortening the momentum lookback. (b) RSI / overbought-style exhaustion timers. (c) 52-week-high proximity filter on longs. (d) The "audit Signal #9 residual-reversal before R1" gate — REJECTED AS FACTUALLY VOID (no residual-reversal signal exists in the stack; §4.4.4 is insider transactions, §4.4.9 is catalyst flag, #7 is RAW non-residualized 5-day reversal). The legitimate underlying concept is parked at DW-096, not gating.
+
+**Source review cycle.** Operator concern (2026-06-10) → supervisor analysis → second-opinion review → supervisor reconciliation. Full record at ACT-162.
