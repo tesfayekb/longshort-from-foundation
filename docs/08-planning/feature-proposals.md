@@ -243,6 +243,19 @@ Authority: ACT-149.
 | **Original preserved** | FP-045 Phase 4 Closure Addendum + all prior addendums + the original FP-045 entry remain VERBATIM per Constitution Rule 8; this addendum forward-points only and corrects the `callsPerName` claim by supersession. |
 | **Forward-pointer** | `docs/04-modules/longshort/signals/queue-worker.md` (corrected arithmetic + pacing-contract invariant); `docs/08-planning/deferred-work-register.md` (DW-095 closure cell — corrected wire-arithmetic narrative); `docs/ai-failure-modes.md` (Catalog #39 + §12.10 operational-log second-occurrence event). |
 
+### FP-045 Phase 4 Validation + Arm-Up Addendum (Rule 8 — Forward-Pointer, Original Preserved)
+
+| Field | Value |
+|---|---|
+| **Addendum Date** | 2026-06-10 |
+| **Authority** | Operator EXECUTION-mode greenlight ("EXECUTION (governance + metadata flip)") following the options-flow validation run + four-cron wire-up. |
+| **Phase 4 Disposition** | `validated` (engine end-to-end on a second independent rate-capped consumer). Options-flow validation run `signal_queue_runs.run_id=0eba38a7-0c84-49fb-9948-86a09e188901` (2026-06-10) finalized `outcome=completed`, `persisted_count=53/839` (6.3% qualifying-prints coverage — v1 baseline per `options-flow.md`), 11 slices, CAS-clean, zero 429s, zero `subscription_gated`, zero `fetch_error`. Within-sector z distribution: mean=0.00000, std=0.92144, min=−2.49687, max=1.42910, ±3 clips=0. Skip breakdown: `no_qualifying_flow=781`, `data_unavailable=5`; mass balance ✅. Per-slice timing held within ±0.5s of the 94.1s wire budget (post-REVISION-FIX arithmetic). |
+| **Arm-up recorded** | MIG-086 flipped four `job_registry` rows to `enabled=true` (`longshort.queue.slice`, `longshort.queue.sweeper`, `longshort.options_flow.compute`, `longshort.pead.compute`). Operator-applied `cron.job` jobids 85/86/87/88 carry byte-identical `schedule` columns vs the registry (DEC-040 byte-match attestation table in `docs/04-modules/longshort/signals/queue-worker.md`); all four `cron.job.active=true`. PEAD per-slice instrumentation + options-flow per-slice instrumentation both verified end-to-end. |
+| **DEC-043 status** | OPEN. End-to-end attestation completes after tonight's natural 22:00 UTC (options-flow) + 23:00 UTC (PEAD) fires — operator will read both signals' `signal_compute_log` rows + observation counts tomorrow; that read closes DEC-043 end-to-end and FP-045 formally. |
+| **Validation choreography lesson (recorded)** | The 2026-06-10 01:03 stale-deployment fire ran the pre-Phase-4 synchronous coordinator (504 IDLE_TIMEOUT on 6 worker chunks at 01:09:00) because the gutted handlers + 410-Gone shim were committed but not deployed to the live edge runtime. Resolution: deploy-confirmation is now a mandatory pre-fire step in every future validation choreography. Codified in `docs/ai-failure-modes.md` §12.10 same-day entry. |
+| **Original preserved** | All prior FP-045 addendums + the original FP-045 entry remain VERBATIM per Constitution Rule 8; this addendum forward-points only. |
+| **Forward-pointer** | `docs/07-reference/database-migration-ledger.md` (MIG-086); `docs/04-modules/longshort/signals/queue-worker.md` (byte-match table + both consumers' validation runs); `docs/04-modules/longshort/signals/options-flow.md` (LIVE-ON-QUEUE ARMED banner + 6.3% v1 baseline); `docs/04-modules/longshort/signals/pead.md` (ARMED status); `docs/ai-failure-modes.md` (validation-choreography-missing-deploy-step §12.10 entry). |
+
 ### FP-039: Cron-Auth Outage Remediation (atomic env-rotate + redeploy + command-reconcile across 6 consumers)
 
 | Field | Value |
