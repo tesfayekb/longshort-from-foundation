@@ -3132,3 +3132,20 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/longshort-signals/analyst-revisions/fmp-price-target-history-fetcher.ts` |
 | **Tests** | `fmp-price-target-history-fetcher_test.ts` — 11 Deno tests (constructor-throws + happy-path within look-ahead window + future-dated row excluded + 403/429/404 + empty array → data_unavailable + network → SignalComputationError + unexpected shape throws + URL shape + injected nowMs records latencyMs). |
 | **Added by** | FP-047 |
+
+#### `supabase/functions/_shared/longshort-signals/analyst-revisions/compute-analyst-revision.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-047 — Phase 2 / Signal #1) |
+| **Classification** | shared infrastructure — pure compute for Analyst Revision Drift (CROSSWIND §4.4.5). No I/O, no clock, no randomness; deterministic for replay. |
+| **Exports** | `function computeAnalystRevision(inputs): AnalystRevisionComputeResult`; `interface AnalystRevisionInputs`; `interface AnalystRevisionMeta`; `type AnalystRevisionComputeResult`; `type AnalystRevisionSkipReason`; constants `REVISION_WINDOW_DAYS` (30), `REVISION_DECAY_TAU_DAYS` (5), `REVISION_MAGNITUDE_CAP` (0.50), `ANALYST_CREDIBILITY_WEIGHT` (1.0). |
+| **Formula** | `signal_N = Σ direction(R) × min(|magnitude(R)|, 0.50) × analyst_credibility_weight(R) × exp(-age_days / 5)` over R in trailing 30d (CROSSWIND §4.4.5 verbatim). Per-revision (not consensus-average). |
+| **Term bindings** | `direction = sign(newTarget − priorTarget)` (NOT implied-upside — NKE-probe justification, DEC-055 §(c)). `magnitude = (newTarget − priorTarget) / priorTarget`. `credibility = 1.0` uniform (DEC-055 §(a)). `age_days` from injected `asOf: Date`. |
+| **Window boundary** | INCLUSIVE: `0 ≤ ageDays ≤ 30` in-window; 30.0d included, 31d excluded (test-pinned). |
+| **Adjusted/raw pairing** | Use `adjPriceTarget` on BOTH rows iff finite and > 0 on both; else fall back to `priceTarget` on BOTH. NEVER mix adjusted with unadjusted across the pair (test-pinned). |
+| **Unrecovered accounting** | Focal events without a same-analyst prior are NOT scored; counted in `meta.unrecoveredCount` per DEC-055 §(g). All-unrecovered → typed skip `revision_prior_unavailable`. Mixed (≥1 recovered + ≥1 unrecovered) → `{kind:'value', meta.unrecoveredCount=N}`. |
+| **Skip taxonomy** | `no_revisions_in_window` / `revision_prior_unavailable` / `zero_magnitude_only` / `data_unavailable` (all-malformed pairs). No sentinel numerics; no ε fallback. |
+| **File** | `supabase/functions/_shared/longshort-signals/analyst-revisions/compute-analyst-revision.ts` |
+| **Tests** | `compute-analyst-revision_test.ts` — 17 Deno tests (decay pins @ 0d/5d/30d with exp(-1)≈0.3679 4dp assertion + NKE-shaped cut sign + raise sign + clip ±0.50 exact + 3-revision exact-sum + 30d-inclusive/31d-excluded boundary + 4 skip-taxonomy paths + mixed 1-recovered/2-unrecovered + adjusted-wins + mixed-availability falls-back-to-raw never-mixes + purity bit-identical + credibility=1.0 + future-dated dropped). |
+| **Added by** | FP-047 |
