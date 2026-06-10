@@ -2,6 +2,22 @@
 
 ### ACT-151: FP-040 — Signal #7 (Short-Term Reversal) implementation
 
+### ACT-165: FP-047 Phase 3 — Signal #1 orchestrator + cron + manual handlers + MIG-087 registry truth (DISARMED)
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-165 (next-free after ACT-164; grep-verified at HEAD). |
+| **Mode** | Execution (Tier A, operator-authorized FP-047 Phase 3). |
+| **Scope** | (1) `analyst-revision-orchestrator.ts` + tests (5 behavioral) — Branch A+H single-invocation; mass-balance identity; vendor-gating fan-out. (2) `longshort-analyst-compute/index.ts` + tests (8 source-sentinel) — cron handler, `verifyCronSecret`-first, productionClock-only, one shared `TokenBucket` per vendor, all three audit events. (3) `longshort-analyst-compute-manual/index.ts` + tests (6 source-sentinel) — operator JWT + `longshort.manage`, `parseAsOfDate` + future-date guard, dual audit envelope; SINGLE-INVOCATION (no queue delegation). (4) `persist-signal-compute-log.ts` — extended `aggregateSkipCounts` seed with three new skip reasons (`no_revisions_in_window`/`revision_prior_unavailable`/`zero_magnitude_only`) so the `Record<SignalSkipReason, number>` typecheck passes. (5) `job-signal-mapping.ts` (+ test 2g + key-set test (5)) — new entry `'longshort.analyst.compute' → 'analyst_revision_drift'` with drift sentinel cross-referenced against the orchestrator `SIGNAL_ID` export. (6) MIG-087 — `job_registry` insert + `signal_registry` flip (live + cadence + planned_phase=NULL + job_registry_id wiring). (7) Docs same-PR: `analyst-revision.md` (new module doc), `function-index.md` (5 entries), `event-index.md` (6 new audit events), `database-migration-ledger.md` (MIG-087), `feature-proposals.md` (FP-047 Phase-1/2/3 dispositions + Status update). |
+| **Gates** | Wall-clock scanner CLEAN (0 violations); `npx eslint .` 0 errors / 15 baseline warnings (unchanged); `deno test --allow-read --allow-env` over the analyst-revisions suite + both new handler suites + `job-signal-mapping_test.ts` = **84/84 passing** (was 33 at Phase 1; +51 from Phase 2 compute + Phase 3 orchestrator/handlers/mapping). |
+| **Pre-flight arithmetic (Catalog #39 — BOTH bounds, worst case binding)** | Rate-bound floor `(37 + H) / 10.625` rps: typical `H≈100` → 12.9 s; worst `H=839` → 82.4 s. Latency-bound `(37 + H) × 0.4 / 6` (C=6): typical 9.1 s; worst 58.4 s. **Worst-case binding bound = rate-bound 82.4 s vs 150 s HTTP wall, ~45 % headroom.** Earnings-season clustering raises H; worst-case row is the operating guarantee. |
+| **Live-DB §22.5.1 evidence (post-apply, via supabase--read_query)** | `job_registry.longshort.analyst.compute` → `{enabled:false, schedule:'0 21 * * 1-5', trigger_type:scheduled, timeout_seconds:150, handler_path:'supabase/functions/longshort-analyst-compute/index.ts'}`. `signal_registry.analyst_revision_drift` → `{status:'live', cadence:'daily (after-close; single-invocation ~15-90s; interim per DEC-048 — §4.4.5 spec target is 15-min intraday, Phase 7 picks final cadence)', planned_phase:NULL, job_registry_id:'longshort.analyst.compute'}`. |
+| **Files created (verbatim)** | `supabase/functions/_shared/longshort-signals/analyst-revisions/analyst-revision-orchestrator.ts`; `supabase/functions/_shared/longshort-signals/analyst-revisions/analyst-revision-orchestrator_test.ts`; `supabase/functions/longshort-analyst-compute/index.ts`; `supabase/functions/longshort-analyst-compute/index_test.ts`; `supabase/functions/longshort-analyst-compute-manual/index.ts`; `supabase/functions/longshort-analyst-compute-manual/index_test.ts`; `docs/04-modules/longshort/signals/analyst-revision.md`; `supabase/migrations/20260610160333_e0c9ecdf-ec19-4db9-8cc2-7bdc8204505e.sql`. |
+| **Universe-load path mirrored** | `pead-orchestrator.ts:113-152` (latest `as_of_date` from `universe_membership` then `(ticker, gics_sector)` selection at that snapshot date). |
+| **Out-of-scope guarantees** | NO cron arming (`cron.job` untouched — operator owns arm-up after validation). NO queue-engine edits. NO compute/fetcher edits (Phase-1/2 files untouched). NO Signal #8 / #9 / Finnhub code. NO `CROSSWIND_SPEC.md` edit (DEC-055 carries the bindings per Rule 8). |
+| **Status** | Closed-pending-validation. Phase 4 (deploy + operator validation fire) pending supervisor authorization. |
+
+
 ### ACT-163: FP-047 Phase 0 — Signal #1 vendor-shape probe + governance (Branch A locked; FP-047 + DEC-055 landed; no code)
 
 ### ACT-164: FP-047 Phase 0 revision-fix — same-analyst prior-recovery mini-probe + DEC-055 (c)/(f)/(g) addenda + DEC-049/053 Rule-8 corrective annotations
