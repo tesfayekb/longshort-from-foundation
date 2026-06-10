@@ -1,15 +1,30 @@
 /**
- * longshort-pead-compute-manual — operator-triggered manual PEAD compute.
- * FP-044 / Signal #2. Sibling of the cron handler `longshort-pead-compute`.
+ * longshort-pead-compute-manual — operator-triggered PEAD ENQUEUE SHIM
+ * (FP-045 Phase 4 — STRANDED-HANDLER FIX).
  *
- * Mirrors `longshort-short-interest-compute-manual/index.ts`:
- *   - Operator JWT (`authenticateRequest`) + `longshort.manage` permission.
- *   - `POST` with `{ "as_of": "YYYY-MM-DD" }` body; reuses `parseAsOfDate`.
- *   - Dual audit envelope: `.manual_triggered` BEFORE orchestrator,
- *     `.manual_completed` or `.manual_failed` AFTER.
- *   - Vendor: Finnhub Estimate-1 fetcher pair (DEC-053 split-vendor lock).
+ * BODY GUTTED: the prior in-process synchronous orchestrator (FP-044
+ * Phase 3) was the same shell that 504'd at the 150s HTTP wall on the
+ * cron path (INC-72). The cron sibling (`longshort-pead-compute`) was
+ * gutted in FP-045 Phase 3; this manual sibling was overlooked and left
+ * importing `createPeadOrchestrator` — discovered in fresh-clone during
+ * Phase 4 review (stranded synchronous handler). Now seeds a queue run
+ * via the FP-045 engine and returns 202 — same operational semantics
+ * as the cron path, JWT-gated for operator-triggered fires.
+ *
+ * Preserved invariants:
+ *   - POST + `authenticateRequest` + `checkPermissionOrThrow('longshort.manage')`.
+ *   - `parseAsOfDate({as_of: 'YYYY-MM-DD'})` + future-date guard.
+ *   - Dual audit envelope: `manual_triggered` BEFORE init, paired with
+ *     `RUN_STARTED` (queue) on success or a typed manual_failed on
+ *     thrown init.
+ *   - Signal-id sourced from the orchestrator export (no drift).
  *
  * Does NOT register in `job_registry` — operator-invoked, not scheduled.
+ *
+ * Wall-clock discipline (DEC-034 clause 4): `productionClock` chokepoint
+ * only — no `new Date()` in this file.
+ *
+ * Owner: longshort (FP-045 — Phase 4 stranded-handler fix)
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
@@ -18,38 +33,27 @@ import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
-import { FinnhubEpsEstimateFetcher } from '../_shared/longshort-signals/shared/finnhub-eps-estimate-fetcher.ts';
-import { FinnhubEarningsFetcher } from '../_shared/longshort-signals/shared/finnhub-earnings-fetcher.ts';
-import {
-  createPeadOrchestrator,
-  SIGNAL_ID,
-  type PeadOrchestratorContext,
-} from '../_shared/longshort-signals/pead/pead-orchestrator.ts';
 import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
-import {
-  aggregateSkipCounts,
-  persistSignalComputeLog,
-} from '../_shared/persist-signal-compute-log.ts';
+import { productionQueueRegistry } from '../_shared/longshort-signals/shared/queue-worker/queue-config.ts';
+import { initQueueRun } from '../_shared/longshort-signals/shared/queue-worker/queue-init.ts';
+import { QUEUE_AUDIT_EVENTS } from '../_shared/longshort-signals/shared/queue-worker/queue-audit-events.ts';
+import { SIGNAL_ID } from '../_shared/longshort-signals/pead/pead-orchestrator.ts';
+// Side-effect: registers every live consumer (PEAD + options-flow) at boot.
+import '../_shared/longshort-signals/shared/queue-worker/production-registrations.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
-const DEFAULT_CONCURRENCY = 5;
 
 Deno.serve(createHandler(async (req: Request) => {
   if (req.method !== 'POST') {
     return apiError(405, 'method_not_allowed', { correlationId: crypto.randomUUID() });
   }
-
   const authCtx = await authenticateRequest(req);
   await checkPermissionOrThrow(authCtx.user.id, 'longshort.manage');
-
   const correlationId = authCtx.correlationId;
 
   let bodyRaw: unknown;
-  try {
-    bodyRaw = await req.json();
-  } catch {
-    return apiError(400, 'invalid_json_body', { correlationId });
-  }
+  try { bodyRaw = await req.json(); }
+  catch { return apiError(400, 'invalid_json_body', { correlationId }); }
   const asOfRaw = (bodyRaw as Record<string, unknown> | null)?.as_of;
   if (asOfRaw === undefined || asOfRaw === null) {
     return apiError(400, 'as_of_required', { correlationId });
@@ -58,16 +62,15 @@ Deno.serve(createHandler(async (req: Request) => {
   if (!as_of) {
     return apiError(400, 'as_of_invalid_format_expected_YYYY_MM_DD', { correlationId });
   }
-
   const now = productionClock.getWallClockTs();
   if (as_of.getTime() > now.getTime()) {
     return apiError(400, 'as_of_in_future', { correlationId });
   }
 
-  const finnhubApiKey = Deno.env.get('FINNHUB_API_KEY');
-  if (!finnhubApiKey) {
-    return apiError(500, 'finnhub_api_key_unset', { correlationId });
+  if (!productionQueueRegistry.has(SIGNAL_ID)) {
+    return apiError(500, 'pead_queue_consumer_unregistered', { correlationId });
   }
+  const config = productionQueueRegistry.get(SIGNAL_ID);
 
   await writeStrategyAuditEvent({
     strategyKey: 'longshort',
@@ -84,80 +87,33 @@ Deno.serve(createHandler(async (req: Request) => {
     },
   });
 
-  // KEEP IN SYNC with longshort-pead-compute/index.ts cron handler.
-  const ctx: PeadOrchestratorContext = {
-    supabase: supabaseAdmin,
-    epsEstimate: new FinnhubEpsEstimateFetcher(finnhubApiKey),
-    earnings: new FinnhubEarningsFetcher(finnhubApiKey),
-    operator_id: DEFAULT_OPERATOR_ID,
-    concurrency: DEFAULT_CONCURRENCY,
-  };
-
   try {
-    const orch = createPeadOrchestrator(ctx);
-    const result = await orch.run(as_of);
-
-    const { run_id, persist_error } = await persistSignalComputeLog(
-      supabaseAdmin,
-      result,
-      DEFAULT_OPERATOR_ID,
-    );
-    if (persist_error) {
+    const result = await initQueueRun({
+      supabase: supabaseAdmin,
+      operator_id: DEFAULT_OPERATOR_ID,
+      config,
+      as_of,
+    });
+    if (result.kind === 'started') {
       await writeStrategyAuditEvent({
         strategyKey: 'longshort',
-        action: 'longshort.pead.compute.manual_failed',
+        action: QUEUE_AUDIT_EVENTS.RUN_STARTED,
         actorId: authCtx.user.id,
         correlationId,
         ipAddress: authCtx.ipAddress ?? undefined,
         userAgent: authCtx.userAgent ?? undefined,
         metadata: {
-          operator_id: authCtx.user.id,
-          signal_id: SIGNAL_ID,
+          signal_id: result.signal_id,
+          run_id: result.run_id,
           as_of: as_of.toISOString(),
-          error: persist_error.message,
-          stage: 'signal_compute_log_persist',
+          as_of_date: result.as_of_date,
+          universe_size: result.universe_size,
           trigger: 'manual',
+          handler: 'longshort-pead-compute-manual',
         },
       });
-      return apiError(500, 'signal_compute_log_persist_failed', { correlationId });
     }
-
-    await writeStrategyAuditEvent({
-      strategyKey: 'longshort',
-      action:
-        result.outcome === 'completed'
-          ? 'longshort.pead.compute.manual_completed'
-          : 'longshort.pead.compute.manual_failed',
-      actorId: authCtx.user.id,
-      correlationId,
-      ipAddress: authCtx.ipAddress ?? undefined,
-      userAgent: authCtx.userAgent ?? undefined,
-      metadata: {
-        operator_id: authCtx.user.id,
-        signal_id: SIGNAL_ID,
-        as_of: as_of.toISOString(),
-        run_id,
-        outcome: result.outcome,
-        universe_size: result.universe_size,
-        persisted_count: result.persisted_count,
-        skip_counts: aggregateSkipCounts(result.skipped),
-        failure_reason: result.failure_reason,
-        trigger: 'manual',
-      },
-    });
-
-    return apiSuccess({
-      status: 'ok',
-      run_id,
-      signal_id: SIGNAL_ID,
-      as_of: as_of.toISOString(),
-      as_of_date: result.as_of_date,
-      outcome: result.outcome,
-      universe_size: result.universe_size,
-      persisted_count: result.persisted_count,
-      skip_counts: aggregateSkipCounts(result.skipped),
-      correlation_id: correlationId,
-    });
+    return apiSuccess({ ...result, correlation_id: correlationId }, 202);
   } catch (e) {
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
@@ -171,10 +127,10 @@ Deno.serve(createHandler(async (req: Request) => {
         signal_id: SIGNAL_ID,
         as_of: as_of.toISOString(),
         error: e instanceof Error ? e.message : String(e),
-        stage: 'orchestrator_throw',
+        stage: 'queue_init',
         trigger: 'manual',
       },
     });
-    return apiError(500, 'manual_pead_compute_failed', { correlationId });
+    return apiError(500, 'queue_init_failed', { correlationId });
   }
 }));

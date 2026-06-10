@@ -1,11 +1,20 @@
 /**
- * longshort-options-flow-compute-manual — operator-triggered manual
- * variant of the FP-043 chunked coordinator. POST + JWT +
- * `longshort.manage`. Same coordinator engine as the cron handler; the
- * worker still authenticates via cron-secret so the fan-out hop is
- * uniform regardless of operator-initiated vs schedule-initiated.
+ * longshort-options-flow-compute-manual — operator-triggered options-flow
+ * ENQUEUE SHIM (FP-045 Phase 4 — Signal #3 revival; closes DW-095).
  *
- * Owner: longshort (FP-043 — Signal #3 / Phase 3)
+ * BODY GUTTED: the prior in-process chunked coordinator is retired by
+ * the DEC-047 cursor-drain queue-worker engine; this manual sibling now
+ * seeds a queue run and returns 202 — same operational semantics as the
+ * cron path, JWT-gated for operator-triggered fires.
+ *
+ * Preserved invariants:
+ *   - POST + `authenticateRequest` + `checkPermissionOrThrow('longshort.manage')`.
+ *   - `parseAsOfDate({as_of: 'YYYY-MM-DD'})` + future-date guard.
+ *   - Dual audit envelope: `manual_triggered` BEFORE init, paired with
+ *     `RUN_STARTED` on success or typed `manual_failed` on thrown init.
+ *   - Signal-id sourced from the orchestrator export (no drift).
+ *
+ * Owner: longshort (FP-045 — Phase 4 / Signal #3 manual enqueue shim)
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
@@ -14,14 +23,13 @@ import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
-import {
-  runOptionsFlowCoordinator,
-  type OptionsFlowCoordinatorContext,
-  type WorkerFetch,
-} from '../_shared/longshort-signals/options-flow/options-flow-coordinator.ts';
-import { SIGNAL_ID } from '../_shared/longshort-signals/options-flow/options-flow-orchestrator.ts';
 import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
-import { aggregateSkipCounts, persistSignalComputeLog } from '../_shared/persist-signal-compute-log.ts';
+import { productionQueueRegistry } from '../_shared/longshort-signals/shared/queue-worker/queue-config.ts';
+import { initQueueRun } from '../_shared/longshort-signals/shared/queue-worker/queue-init.ts';
+import { QUEUE_AUDIT_EVENTS } from '../_shared/longshort-signals/shared/queue-worker/queue-audit-events.ts';
+import { SIGNAL_ID } from '../_shared/longshort-signals/options-flow/options-flow-orchestrator.ts';
+// Side-effect: registers every live consumer (PEAD + options-flow) at boot.
+import '../_shared/longshort-signals/shared/queue-worker/production-registrations.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -29,10 +37,8 @@ Deno.serve(createHandler(async (req: Request) => {
   if (req.method !== 'POST') {
     return apiError(405, 'method_not_allowed', { correlationId: crypto.randomUUID() });
   }
-
   const authCtx = await authenticateRequest(req);
   await checkPermissionOrThrow(authCtx.user.id, 'longshort.manage');
-
   const correlationId = authCtx.correlationId;
 
   let bodyRaw: unknown;
@@ -51,10 +57,10 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(400, 'as_of_in_future', { correlationId });
   }
 
-  const cronSecret = Deno.env.get('CRON_SECRET');
-  if (!cronSecret) return apiError(500, 'cron_secret_unset', { correlationId });
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  if (!supabaseUrl) return apiError(500, 'supabase_url_unset', { correlationId });
+  if (!productionQueueRegistry.has(SIGNAL_ID)) {
+    return apiError(500, 'options_flow_queue_consumer_unregistered', { correlationId });
+  }
+  const config = productionQueueRegistry.get(SIGNAL_ID);
 
   await writeStrategyAuditEvent({
     strategyKey: 'longshort',
@@ -71,79 +77,33 @@ Deno.serve(createHandler(async (req: Request) => {
     },
   });
 
-  const ctx: OptionsFlowCoordinatorContext = {
-    supabase: supabaseAdmin,
-    operator_id: DEFAULT_OPERATOR_ID,
-    workerFetch: fetch as unknown as WorkerFetch,
-    workerUrl: `${supabaseUrl}/functions/v1/longshort-options-flow-worker`,
-    cronSecret,
-    correlationId,
-  };
-
   try {
-    const result = await runOptionsFlowCoordinator(ctx, as_of);
-
-    const { run_id, persist_error } = await persistSignalComputeLog(
-      supabaseAdmin,
-      result,
-      DEFAULT_OPERATOR_ID,
-    );
-    if (persist_error) {
+    const result = await initQueueRun({
+      supabase: supabaseAdmin,
+      operator_id: DEFAULT_OPERATOR_ID,
+      config,
+      as_of,
+    });
+    if (result.kind === 'started') {
       await writeStrategyAuditEvent({
         strategyKey: 'longshort',
-        action: 'longshort.options_flow.compute.manual_failed',
+        action: QUEUE_AUDIT_EVENTS.RUN_STARTED,
         actorId: authCtx.user.id,
         correlationId,
         ipAddress: authCtx.ipAddress ?? undefined,
         userAgent: authCtx.userAgent ?? undefined,
         metadata: {
-          operator_id: authCtx.user.id,
-          signal_id: SIGNAL_ID,
+          signal_id: result.signal_id,
+          run_id: result.run_id,
           as_of: as_of.toISOString(),
-          error: persist_error.message,
-          stage: 'signal_compute_log_persist',
+          as_of_date: result.as_of_date,
+          universe_size: result.universe_size,
           trigger: 'manual',
+          handler: 'longshort-options-flow-compute-manual',
         },
       });
-      return apiError(500, 'signal_compute_log_persist_failed', { correlationId });
     }
-
-    await writeStrategyAuditEvent({
-      strategyKey: 'longshort',
-      action:
-        result.outcome === 'completed'
-          ? 'longshort.options_flow.compute.manual_completed'
-          : 'longshort.options_flow.compute.manual_failed',
-      actorId: authCtx.user.id,
-      correlationId,
-      ipAddress: authCtx.ipAddress ?? undefined,
-      userAgent: authCtx.userAgent ?? undefined,
-      metadata: {
-        operator_id: authCtx.user.id,
-        signal_id: SIGNAL_ID,
-        as_of: as_of.toISOString(),
-        run_id,
-        outcome: result.outcome,
-        universe_size: result.universe_size,
-        persisted_count: result.persisted_count,
-        skip_counts: aggregateSkipCounts(result.skipped),
-        failure_reason: result.failure_reason,
-        trigger: 'manual',
-      },
-    });
-
-    return apiSuccess({
-      status: 'ok',
-      run_id,
-      signal_id: SIGNAL_ID,
-      as_of: as_of.toISOString(),
-      as_of_date: result.as_of_date,
-      outcome: result.outcome,
-      universe_size: result.universe_size,
-      persisted_count: result.persisted_count,
-      skip_counts: aggregateSkipCounts(result.skipped),
-      correlation_id: correlationId,
-    });
+    return apiSuccess({ ...result, correlation_id: correlationId }, 202);
   } catch (e) {
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
@@ -157,10 +117,10 @@ Deno.serve(createHandler(async (req: Request) => {
         signal_id: SIGNAL_ID,
         as_of: as_of.toISOString(),
         error: e instanceof Error ? e.message : String(e),
-        stage: 'coordinator_throw',
+        stage: 'queue_init',
         trigger: 'manual',
       },
     });
-    return apiError(500, 'manual_options_flow_compute_failed', { correlationId });
+    return apiError(500, 'queue_init_failed', { correlationId });
   }
 }));

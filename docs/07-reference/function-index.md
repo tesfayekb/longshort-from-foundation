@@ -2920,9 +2920,11 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 |---|---|---|---|
 | `TradierOptionsChainFetcher` (+ `verifyFilterHonored`, `verifyFieldsPresent`) | `supabase/functions/_shared/longshort-signals/shared/tradier-options-chain-fetcher.ts` | Production Tradier options-chain fetcher with entitlement mapping (401/403→`subscription_gated`, 404/empty→`data_unavailable`), Tradier-array-quirk normalisation, and dual-axis fetcher self-checks. First fetcher to embed both honesty axes (INC-70 + INC-71). | FP-043 |
 | `computeOptionsFlowRaw(contracts, as_of, params?)` + `SIGNAL_ID='options_flow_imbalance_5d'` | `supabase/functions/_shared/longshort-signals/options-flow/compute-options-flow.ts` | Pure compute: 4-case direction classifier, smart-money filter (`volume>=100`, `DTE>=7`, `|delta|<=0.65`), 48h-half-life exponential decay keyed off `as_of`, `MIN_QUALIFYING_PRINTS=5` floor, div-by-zero guard. | FP-043 |
-| `createOptionsFlowOrchestrator(...)` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-orchestrator.ts` | Single-process orchestrator: per-ticker expirations → nearest DTE≥7 → chain → raw compute → within-sector GICS z-score → persist via `captureSignalObservations`. | FP-043 |
-| `runOptionsFlowChunk(shard, deps)` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-chunk-runner.ts` | Per-shard runner consumed by workers; returns per-ticker `signal` or `SignalSkip`. | FP-043 |
-| `runOptionsFlowCoordinator(universe, as_of, opts)` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-coordinator.ts` | Shards universe into N=6 strides, fans out parallel HTTPS to workers (X-Cron-Secret), aggregates slices, performs within-sector z-score on the full set, persists results. Partial-failure honesty: a failed worker emits `fetch_error` skips for every ticker in its shard. | FP-043 |
+| `createOptionsFlowOrchestrator(...)` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-orchestrator.ts` | Single-process orchestrator: per-ticker expirations → nearest DTE≥7 → chain → raw compute → within-sector GICS z-score → persist via `captureSignalObservations`. **Retained as the unit-replay path for small-universe diagnostic runs; no longer wired to a handler** (FP-045 Phase 4 closes DW-095 by routing production through the queue-worker engine). The exported `pickQualifyingExpiration` + `SIGNAL_ID` are consumed by the queue adapter. | FP-043 / FP-045 Phase 4 |
+| `runOptionsFlowChunk(shard, deps)` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-chunk-runner.ts` | Per-shard runner; **canonical per-ticker semantics pin for options-flow** (mirrored verbatim by `options-flow-queue-adapter.ts`). Returns per-ticker `signal` or `SignalSkip`. Retained in tree per FP-043 preservation promise; no longer wired to a handler. | FP-043 / FP-045 Phase 4 |
+| `runOptionsFlowCoordinator(universe, as_of, opts)` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-coordinator.ts` | **DEPRECATED by FP-045 Phase 4** (DW-095 closed). Chunked-coordinator architecture replaced by the cursor-drain queue-worker engine. Module retained in tree per FP-043 preservation promise; not imported by any production handler. | FP-043 / FP-045 Phase 4 |
+| `createOptionsFlowAdapter({tradier})` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-queue-adapter.ts` | Per-ticker `TickerComputeFn` adapter for the FP-045 cursor-drain queue-worker. Mirrors `runOptionsFlowChunk`'s per-ticker arm verbatim (typed value-or-skip, no fabricated zeros). Wraps the FP-043 `TradierOptionsChainFetcher` + `computeOptionsFlow` unchanged. | FP-045 Phase 4 |
+| `OPTIONS_FLOW_QUEUE_CONFIG` + `registerOptionsFlowQueueConsumer()` | `supabase/functions/_shared/longshort-signals/options-flow/options-flow-queue-registration.ts` | Side-effect registration of options-flow into `productionQueueRegistry` (PR-time arithmetic row: `80 × 2 / 1.7 ≈ 94.1s` per slice; ratePerSec = Tradier 120/min × 0.85). Drift sentinels in `_test.ts` pin `signalId`, `jobId`, vendor-cap headroom, and aggregator side-effect import. | FP-045 Phase 4 |
 | `TokenBucket` + `pacedHttpFetch(bucket, underlying)` | `supabase/functions/_shared/longshort-signals/options-flow/token-bucket.ts` | Leaky-bucket pacer honouring the 120 req/min Tradier cap; per-worker share ~0.28 req/sec. Default clock routes through `productionClock` (DEC-034 (4) chokepoint) so the file has zero direct wall-clock reads — the operational-timing precedent for future feed-signal pacers. | FP-043 |
 | `JOB_ID_TO_SIGNAL_ID['longshort.options_flow.compute']='options_flow_imbalance_5d'` | `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping.ts` | Extends the registry consumed by `longshort-signal-monitor`; the drift sentinel test cross-references `options-flow-orchestrator.ts::SIGNAL_ID`. | FP-043 |
 | `SignalSkipReason.no_qualifying_flow` | `supabase/functions/_shared/longshort-signals/shared/signal-types.ts` | New typed-absence reason for tickers below `MIN_QUALIFYING_PRINTS`; seeded in `persist-signal-compute-log.ts` aggregate counts and pinned by `persist-signal-compute-log_test.ts` exact-match assertions. | FP-043 |
@@ -2932,27 +2934,27 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | Field | Value |
 |---|---|
 | **Endpoint** | `POST /functions/v1/longshort-options-flow-compute` (cron, `X-Cron-Secret`) |
-| **Purpose** | Cron-triggered coordinator entry point. Resolves `as_of`, fans out to N=6 workers under the token-bucket cap, persists `signal_observations` + `signal_compute_log`, emits started/completed/failed audit events. |
+| **Purpose** | **FP-045 Phase 4: gutted to enqueue shim.** Cron-triggered entry point that resolves `as_of` via `productionClock`, looks up the registered options-flow config in `productionQueueRegistry`, calls `initQueueRun()`, and returns 202. Compute drains across N subsequent `longshort-queue-slice` cron ticks. Emits `QUEUE_AUDIT_EVENTS.RUN_STARTED` on success or `RUN_FAILED` on init throw. Handler name + MIG-078 row preserved per FP-045 §5. |
 | **File** | `supabase/functions/longshort-options-flow-compute/index.ts` |
-| **Added by** | FP-043 |
+| **Added by** | FP-043 (handler) / FP-045 Phase 4 (gutted to enqueue shim) |
 
 ### FP-043 — Signal #3 worker handler
 
 | Field | Value |
 |---|---|
 | **Endpoint** | `POST /functions/v1/longshort-options-flow-worker` (internal, `X-Cron-Secret`) |
-| **Purpose** | Per-shard runner. Receives a universe slice + `as_of`, paces Tradier calls via a local token bucket, returns per-ticker signals + typed skips. |
+| **Purpose** | **DEPRECATED by FP-045 Phase 4.** Returns `410 options_flow_worker_deprecated` with a structured pointer at the new enqueue paths (`longshort-options-flow-compute` cron / `longshort-options-flow-compute-manual`) + the queue-worker module doc. Handler file preserved per FP-043 promise; not invoked by any production caller. |
 | **File** | `supabase/functions/longshort-options-flow-worker/index.ts` |
-| **Added by** | FP-043 |
+| **Added by** | FP-043 (worker body) / FP-045 Phase 4 (410 Gone deprecation) |
 
 ### FP-043 — Signal #3 manual-trigger handler
 
 | Field | Value |
 |---|---|
 | **Endpoint** | `POST /functions/v1/longshort-options-flow-compute-manual` (operator, JWT + `longshort.manage`) |
-| **Purpose** | Operator-triggered backfill / debug run. Parses + validates body (`as_of` ISO date with future-date guard), invokes the coordinator, emits dual-trail audit events (`manual_triggered` BEFORE, `manual_completed`/`manual_failed` AFTER). |
+| **Purpose** | **FP-045 Phase 4: gutted to manual init shim.** Auth (JWT + `longshort.manage`) + `parseAsOfDate` + future-date guard preserved; body now delegates to `initQueueRun()` and returns 202. Dual audit envelope: `manual_triggered` BEFORE init, `QUEUE_AUDIT_EVENTS.RUN_STARTED` on success / typed `manual_failed` on init throw. |
 | **File** | `supabase/functions/longshort-options-flow-compute-manual/index.ts` |
-| **Added by** | FP-043 |
+| **Added by** | FP-043 (handler) / FP-045 Phase 4 (gutted to enqueue shim) |
 
 ## PEAD Signal (FP-044 / Phase 2.6 / Signal #2)
 
@@ -3017,13 +3019,13 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 
 | Field | Value |
 |-------|-------|
-| **Module** | longshort (FP-044) |
-| **Classification** | edge function — operator-trigger sibling of `longshort-pead-compute`. Invokes the same orchestrator with an operator-supplied `as_of`. Recommended path for validating Signal #2 math + persistence + entitlement-degradation before any cron wiring (per DEC-043 prudent-sequencing). |
+| **Module** | longshort (FP-044 / FP-045 Phase 4 stranded-handler fix) |
+| **Classification** | edge function — operator-trigger sibling of the gutted `longshort-pead-compute` enqueue shim. Originally invoked the synchronous orchestrator (FP-044 Phase 3); discovered stranded in fresh-clone Phase-4 review (would have 504'd per INC-72 if fired since the cron sibling was gutted in FP-045 Phase 3). **Now gutted to a manual init shim** that delegates to `initQueueRun()` and returns 202 with the operator-supplied `as_of`. JWT + `longshort.manage` + `parseAsOfDate` + future-date guard preserved. |
 | **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST-only. |
-| **Purpose** | Operator-driven backfill / first-fire validation. Dual audit envelope (`.manual_triggered` BEFORE; `.manual_completed` / `.manual_failed` AFTER). |
+| **Purpose** | Operator-driven enqueue for ad-hoc PEAD runs (any historical `as_of`, replay diagnostics, validation test-fires). Dual audit envelope: `manual_triggered` BEFORE init, `QUEUE_AUDIT_EVENTS.RUN_STARTED` on success / typed `manual_failed` on init throw. |
 | **File** | `supabase/functions/longshort-pead-compute-manual/index.ts` |
-| **Tests** | `supabase/functions/longshort-pead-compute-manual/index_test.ts` — source-sentinel tests covering operator-JWT wiring, `longshort.manage` permission, POST-only 405, body validation, FINNHUB_API_KEY, dual audit envelope ordering, wall-clock discipline, orchestrator wiring. |
-| **Added by** | FP-044 |
+| **Tests** | `supabase/functions/longshort-pead-compute-manual/index_test.ts` — source-sentinel tests guard the gutted-to-queue-path shape: JWT + permission, POST-only, body validation, `initQueueRun` delegation, fetcher absence, dual audit envelope ordering, productionClock-only, signal_id-from-export, drift sentinel. |
+| **Added by** | FP-044 (handler) / FP-045 Phase 4 (stranded-handler fix — gutted to enqueue shim) |
 
 #### `supabase/functions/longshort-queue-init/index.ts`
 
