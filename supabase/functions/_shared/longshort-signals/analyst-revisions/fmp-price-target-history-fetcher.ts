@@ -119,6 +119,10 @@ export class FmpPriceTargetHistoryFetcher {
       );
     } catch (e) {
       const isTimeout = e instanceof Error && e.name === 'AbortError';
+      // Translate persistent HTTP 429 (post-retry) into typed rate_limited.
+      if (e instanceof Error && /^HTTP 429\b/.test(e.message)) {
+        return { kind: 'unavailable', reason: 'rate_limited' };
+      }
       const message = isTimeout
         ? `request timeout after ${this.timeoutMs}ms on history for ${symbol}`
         : e instanceof Error
