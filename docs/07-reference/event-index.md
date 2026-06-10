@@ -2224,8 +2224,8 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-options-flow-compute/index.ts` via `writeStrategyAuditEvent` |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { as_of, signal_id: 'options_flow_imbalance_5d', trigger: 'cron' }`; `correlation_id` UUID generated per fire |
-| **Lifecycle** | active |
-| **Added by** | FP-043 |
+| **Lifecycle** | **DEPRECATED by FP-045 Phase 4.** The cron handler is now an enqueue shim emitting `QUEUE_AUDIT_EVENTS.RUN_STARTED` / `RUN_FAILED` (see the Queue-Worker Engine Events section) instead of this `.started` / `.completed` / `.failed` family. Event no longer emitted. |
+| **Added by** | FP-043 (deprecated by FP-045 Phase 4) |
 
 ### `longshort.options_flow.compute.completed`
 
