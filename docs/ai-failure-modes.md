@@ -90,6 +90,16 @@ Each entry MUST include:
 | **Subsequent firings** | — |
 | **Status** | open |
 
+### #39 — Vendor-Cap Arithmetic Inconsistency Between Documented Budget and Code-Level Config
+
+| Field | Value |
+|-------|-------|
+| **Symptom** | A signal-registration's `callsPerName` (or analogous slot-cost field) diverges from the fetcher's TRUE per-ticker wire-call count, while the file-header arithmetic comment (and module-doc arithmetic row) cite the TRUE count. The two narratives are internally inconsistent; the test that pins the arithmetic budget hand-enters the wire-call multiplier (`sliceSize * 2`) instead of deriving it from `callsPerName`, so the test passes against the documented number while the runtime config under-counts the budget. A second token-bucket inside the adapter — duplicating the engine's worker-side bucket — is the common implementation co-defect (two buckets at the same rate, serialized, double-acquisition) that silently doubles per-ticker wall time. Gates 2/4/11 cannot detect: lint/typecheck/Deno-tests pass; the defect surfaces only as slice-budget erosion under load, or as a budget-narrative grep mismatch under fresh-clone review. |
+| **Codification target** | Structural test pattern (per-signal registration test): declare `<VENDOR>_WIRE_CALLS_PER_TICKER = N` constant in the registration test file with a header comment citing the fetcher function as source-of-truth; assert `callsPerName === <VENDOR>_WIRE_CALLS_PER_TICKER`; derive `perSliceWire = (sliceSize × callsPerName) / ratePerSec` (NOT a hand-entered `* N`). Pair invariant in module-doc: pacing owned in EXACTLY ONE place (the engine's slice-worker bucket) — adapters MUST pass raw `fetch` to fetchers, never a second `pacedHttpFetch`-wrapped fetch. Codification landed in `options-flow-queue-registration_test.ts` (REVISION-FIX 2026-06-10); reference template for all future per-signal registrations. |
+| **First fired** | FP-044 Phase 2 / INC-72 (orchestrator header rate-math comment claimed "≤10 req/sec well under the cap" against Finnhub's 5 rps cap; concurrency-throttled `pLimitedMap` does not enforce req/sec; empirical 504 detection). Logged in §12.10 operational log entry "2026-06-09 — Supervisor fresh-clone verification missed vendor-cap arithmetic on FP-044 Phase 2 (PEAD orchestrator)". |
+| **Subsequent firings** | FP-045 Phase 4 closure (2026-06-10) shipped `callsPerName=1` against Tradier 2-call/ticker shape, with a second adapter-side `TokenBucket` causing double-acquisition; documented budget cited `2 × 80 / 1.7 ≈ 94.1s` while runtime per-ticker time was ~1.76s (80-slice ≈ 141s); REVISION-FIX same day. §12.10 operational log second-occurrence entry below. |
+| **Status** | open — codified at the per-signal-registration test level (REVISION-FIX 2026-06-10); structural scanner extension still pending (a Gate-2-style grep for "second `pacedHttpFetch` inside an adapter when the engine bucket already paces" would catch the implementation co-defect at PR time). |
+
 ## Quarterly Review Protocol (per §12.8)
 
 1. At each quarterly boundary, review action-tracker entries from the prior quarter for defect-class firings.
