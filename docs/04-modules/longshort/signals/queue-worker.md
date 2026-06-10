@@ -131,12 +131,24 @@ Names follow the established `longshort.<domain>.<sub>.<verb>` convention (verif
 
 **Phase 4 cron wiring:** MIG-085 leaves `longshort.options_flow.compute` DISARMED (description updated to the queue-shim shape). The combined operator arm-up (per DEC-040 + DEC-043) wires the per-signal init crons for BOTH consumers + flips `enabled=true` after the options-flow test-fire validates against the live queue path (per the Phase 4 validation criteria: qualifying-prints coverage, 429-absence, within-sector z distribution).
 
+**Arm-up (MIG-086, 2026-06-10) — DEC-040 byte-match attestation.** Operator wired four `cron.job` entries out-of-band (jobids 85/86/87/88) and MIG-086 flipped all four `job_registry` rows to `enabled=true`. Byte-match table (`cron.job.schedule` vs `job_registry.schedule`, all four byte-identical, all four `cron.job.active=true`):
+
+| jobid | jobname | cron.job.schedule | job_registry.schedule | match |
+|---|---|---|---|---|
+| 85 | `longshort.queue.slice` | `* * * * *` | `* * * * *` | ✅ |
+| 86 | `longshort.queue.sweeper` | `*/5 * * * *` | `*/5 * * * *` | ✅ |
+| 87 | `longshort.options_flow.compute` | `0 22 * * 1-5` | `0 22 * * 1-5` | ✅ |
+| 88 | `longshort.pead.compute` | `0 23 * * 1-5` | `0 23 * * 1-5` | ✅ |
+
+**Validation runs recorded (both consumers).** PEAD (FP-045 Phase 3): `signal_queue_runs.run_id=451b9ee7-9703-429d-97bc-61aeb2697bbc`, 2026-06-10 00:01–00:10 UTC, `outcome=completed`, `persisted_count=835/839`, 9 slices, CAS-won on slice 9, zero 429s / zero stale-heartbeat / zero `slice.failed`. Options-flow (FP-045 Phase 4): `signal_queue_runs.run_id=0eba38a7-0c84-49fb-9948-86a09e188901`, 2026-06-10, `outcome=completed`, `persisted_count=53/839` (6.3% qualifying-prints coverage — v1 baseline; see `options-flow.md`), 11 slices, CAS-clean, zero 429s, zero `subscription_gated`, zero `fetch_error`. Per-slice timing held within ±0.5s of the 94.1s budget; final slice 11 carried the 39-name tail at ~12s. The engine is now validated end-to-end on TWO independent rate-capped consumers — architecture green. DEC-043 end-to-end attestation completes after tonight's natural 22:00/23:00 UTC fires.
+
 ## Migration ledger
 
 - **MIG-082** — Four tables (`signal_queue_runs`, `signal_queue_cursor`, `signal_queue_staging`, `signal_queue_skips`) with RLS deny-write to authenticated, read via `longshort.view`.
 - **MIG-083** — Two RPCs (`signal_queue_claim_slice`, `signal_queue_cas_finalizing`) — service-role only, `SECURITY DEFINER`, `SET search_path=public`.
 - **MIG-084** — `job_registry` rows for `longshort.queue.slice` (every minute, disarmed) and `longshort.queue.sweeper` (every 5 minutes, disarmed). The existing `longshort.pead.compute` row (MIG-081) is preserved as the per-signal init trigger; name + handler_path unchanged, body gutted to enqueue shim.
 - **MIG-085** — Phase 4 metadata update. `job_registry.longshort.options_flow.compute` description updated to the queue-shim shape (row name + handler_path preserved per MIG-078; stays DISARMED). `signal_registry.options_flow_imbalance_5d` flipped `planned`→`live` with the truth-in-telemetry cadence string (`daily (after-close; queue-drained ~11 min; interim per DEC-048 — §4.4.7 5-min intraday target deferred per DEC-046 v2)`); `planned_phase` cleared (DW-095 closed). No new rows: the MIG-084 slice/sweeper rows are shared engine rows, signal-agnostic by design.
+- **MIG-086** — FP-045 arm-up. Single `UPDATE` flips four `job_registry` rows (`longshort.queue.slice`, `longshort.queue.sweeper`, `longshort.options_flow.compute`, `longshort.pead.compute`) to `enabled=true`. Metadata-only mirror of operator-applied `cron.job` jobids 85/86/87/88. DEC-040 byte-match attestation table above.
 
 ## Phase 3 consumer registration — PEAD (Signal #2 / FP-044)
 
