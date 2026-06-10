@@ -155,6 +155,12 @@ export class FmpPriceTargetFeedFetcher {
         );
       } catch (e) {
         const isTimeout = e instanceof Error && e.name === 'AbortError';
+        // fetchWithTimeoutAndRetry exhausts retries on 429/5xx and throws
+        // `Error('HTTP <code> ...')`. Translate persistent 429 into the
+        // typed `rate_limited` unavailable (distinct from fetch_error).
+        if (e instanceof Error && /^HTTP 429\b/.test(e.message)) {
+          return { kind: 'unavailable', reason: 'rate_limited' };
+        }
         const message = isTimeout
           ? `request timeout after ${this.timeoutMs}ms on feed page ${page}`
           : e instanceof Error
