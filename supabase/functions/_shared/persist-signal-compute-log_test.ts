@@ -191,6 +191,9 @@ Deno.test('persistSignalComputeLog: skip_counts JSON shape is stable when no ski
     no_recent_earnings: 0,
     pead_panel_below_floor: 0,
     zero_dispersion: 0,
+    no_revisions_in_window: 0,
+    revision_prior_unavailable: 0,
+    zero_magnitude_only: 0,
   });
 });
 
