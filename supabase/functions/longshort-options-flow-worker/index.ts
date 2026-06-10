@@ -17,7 +17,8 @@
  *
  * Owner: longshort (FP-043 / FP-045 — deprecated by Phase 4)
  */
-import { createHandler, apiError } from '../_shared/handler.ts';
+import { createHandler } from '../_shared/handler.ts';
+import { apiError } from '../_shared/api-error.ts';
 
 Deno.serve(createHandler(async (_req: Request) => {
   return apiError(410, 'options_flow_worker_deprecated', {
