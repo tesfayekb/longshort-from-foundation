@@ -3094,3 +3094,41 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Purpose** | Compare-and-set transition `signal_queue_runs.status 'running' → 'finalizing'` guarded inside the same UPDATE by `NOT EXISTS (SELECT 1 FROM signal_queue_cursor WHERE run_id = p_run_id)`. The cursor-empty predicate IS the aggregation barrier — z-score normalization can never run on a partial staging set. Returns `true` only for the unique caller that wins the race. |
 | **Consumers** | `_shared/longshort-signals/shared/queue-worker/queue-slice-worker.ts` (`runQueueSlice` post-drain). |
 | **Added by** | FP-045 / MIG-083 |
+
+#### `supabase/functions/_shared/longshort-signals/analyst-revisions/analyst-identity.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-047 — Phase 1 / Signal #1) |
+| **Classification** | shared infrastructure — pure normalization + selection for analyst-revision prior recovery. No I/O, no wall-clock. |
+| **Exports** | `interface RawPriceTargetRow`; `interface NormalizedAnalystKey`; `type FindPriorResult`; `type PriorAbsenceReason`; `function normalizeAnalystKey(name, company)`; `function analystKeysEqual(a, b)`; `function parseFmpDate(s)`; `function findSameAnalystPrior(focal, history)`. |
+| **Policy** | DEC-055 §(f) strict match — BOTH normalized fields equal AND `analystName` non-empty on BOTH sides; empty-name rows never match (phantom-prior prevention). Window: strictly before focal, max 365d (inclusive). |
+| **File** | `supabase/functions/_shared/longshort-signals/analyst-revisions/analyst-identity.ts` |
+| **Tests** | `analyst-identity_test.ts` — 11 Deno tests (normalization shape + empty-name never-match + both-fields-required + parseFmpDate accepts 3 shapes + NKE-shaped true Δ recovery + DDOG-shaped firm-only-with-empty-name typed absence + HYLN-shaped sparse → absence + empty-focal-analyst typed absence + 366d-excluded/365d-included boundary + equal-timestamp strictly-before boundary + most-recent wins). |
+| **Added by** | FP-047 |
+
+#### `supabase/functions/_shared/longshort-signals/analyst-revisions/fmp-price-target-feed-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-047 — Phase 1 / Signal #1) |
+| **Classification** | shared infrastructure — first FMP-sourced fetcher (FP-047 Phase 0 Branch A+H — feed-paged event discovery on `/stable/price-target-latest-news`). |
+| **Exports** | `class FmpPriceTargetFeedFetcher { constructor(apiKey, ...); fetchFeed(as_of): Promise<FeedFetchResult> }`; `type FeedFetchResult`; `const FMP_BASE_URL`; `const FEED_OPERATION_ID`; `const DEFAULT_LOOKBACK_DAYS` (30); `const DEFAULT_PAGE_LIMIT` (100); `const DEFAULT_MAX_PAGES` (40). |
+| **Look-ahead gate** | `publishedDate <= as_of` enforced on every row; future-dated rows silently dropped (mirrors PEAD ACT-160 discipline). Test-pinned. |
+| **Error taxonomy** | typed `subscription_gated` (401/402/403), `rate_limited` (429 — distinct, post-retry translation), `data_unavailable` (404 OR first-page empty); thrown `SignalComputationError` for network / 5xx / parse / unexpected shape. |
+| **File** | `supabase/functions/_shared/longshort-signals/analyst-revisions/fmp-price-target-feed-fetcher.ts` |
+| **Tests** | `fmp-price-target-feed-fetcher_test.ts` — 11 Deno tests (constructor-throws + happy-path multi-page walk until cutoff sentinel + look-ahead gate excludes future + 403/429/404 error taxonomy + network → SignalComputationError + unexpected shape throws + injected nowMs records per-page latency + URL shape + short-page early exit). |
+| **Added by** | FP-047 |
+
+#### `supabase/functions/_shared/longshort-signals/analyst-revisions/fmp-price-target-history-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-047 — Phase 1 / Signal #1) |
+| **Classification** | shared infrastructure — second FMP-sourced fetcher (FP-047 Phase 0 Branch A+H — per-symbol history on `/stable/price-target-news?symbol={t}` for same-analyst prior recovery). |
+| **Exports** | `class FmpPriceTargetHistoryFetcher { constructor(apiKey, ...); fetchHistory(symbol, as_of): Promise<HistoryFetchResult> }`; `type HistoryFetchResult`; `const HISTORY_OPERATION_ID`; `const DEFAULT_HISTORY_LIMIT` (100). |
+| **Look-ahead gate** | `publishedDate <= as_of` on every returned row; strictly-before discriminator lives in `findSameAnalystPrior` (the focal event itself is on-or-before as_of by convention). |
+| **Error taxonomy** | identical to feed fetcher — `subscription_gated` / `rate_limited` / `data_unavailable` / thrown `SignalComputationError`. |
+| **File** | `supabase/functions/_shared/longshort-signals/analyst-revisions/fmp-price-target-history-fetcher.ts` |
+| **Tests** | `fmp-price-target-history-fetcher_test.ts` — 11 Deno tests (constructor-throws + happy-path within look-ahead window + future-dated row excluded + 403/429/404 + empty array → data_unavailable + network → SignalComputationError + unexpected shape throws + URL shape + injected nowMs records latencyMs). |
+| **Added by** | FP-047 |
