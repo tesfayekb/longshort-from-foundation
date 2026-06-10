@@ -18,17 +18,20 @@
  * Owner: longshort (FP-043 / FP-045 — deprecated by Phase 4)
  */
 import { createHandler } from '../_shared/handler.ts';
-import { apiError } from '../_shared/api-error.ts';
+import { corsHeaders } from '../_shared/cors.ts';
+
+const GONE_BODY = JSON.stringify({
+  error: 'options_flow_worker_deprecated',
+  code: 'GONE',
+  replaced_by: 'longshort-queue-slice + options-flow-queue-adapter (FP-045 Phase 4 / DEC-047)',
+  enqueue_path_cron: '/functions/v1/longshort-options-flow-compute',
+  enqueue_path_manual: '/functions/v1/longshort-options-flow-compute-manual',
+  reference: 'docs/04-modules/longshort/signals/queue-worker.md',
+});
 
 Deno.serve(createHandler(async (_req: Request) => {
-  return apiError(410, 'options_flow_worker_deprecated', {
-    correlationId: crypto.randomUUID(),
-    details: {
-      replaced_by: 'longshort-queue-slice + options-flow-queue-adapter (FP-045 Phase 4 / DEC-047)',
-      enqueue_path:
-        'POST /functions/v1/longshort-options-flow-compute (cron) OR ' +
-        '/functions/v1/longshort-options-flow-compute-manual (operator JWT)',
-      reference: 'docs/04-modules/longshort/signals/queue-worker.md',
-    },
+  return new Response(GONE_BODY, {
+    status: 410,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }));
