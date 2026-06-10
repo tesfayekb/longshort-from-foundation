@@ -2434,3 +2434,87 @@ The six events below mirror the short-interest signal's event family exactly, wi
 | **Payload schema** | `metadata: { signal_id, run_id?, as_of, stage, error?, failure_reason?, failed_out? }` |
 | **Lifecycle** | active |
 | **Added by** | FP-045 |
+
+#### `longshort.analyst.compute.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the `longshort-analyst-compute` cron handler before the Signal #1 (Analyst Revision Drift) orchestrator runs. |
+| **Emitted by** | `supabase/functions/longshort-analyst-compute/index.ts` via `writeStrategyAuditEvent` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { as_of, signal_id: 'analyst_revision_drift', trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-047 Phase 3 |
+
+#### `longshort.analyst.compute.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler when the orchestrator returns `outcome='completed'` and the `signal_compute_log` row is persisted. |
+| **Emitted by** | `supabase/functions/longshort-analyst-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-047 Phase 3 |
+
+#### `longshort.analyst.compute.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler on orchestrator-throw, `outcome='failed'`, or persistence error. `metadata.stage` discriminates: `orchestrator_throw` / `signal_compute_log_persist`. |
+| **Emitted by** | `supabase/functions/longshort-analyst-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, error?, failure_reason?, stage?, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-047 Phase 3 |
+
+#### `longshort.analyst.compute.manual_triggered` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler BEFORE orchestrator invocation. Forensic trigger trail even if the orchestrator crashes. |
+| **Emitted by** | `supabase/functions/longshort-analyst-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-047 Phase 3 |
+
+#### `longshort.analyst.compute.manual_completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler after the orchestrator returns `outcome='completed'` and the `signal_compute_log` row is persisted. |
+| **Emitted by** | `supabase/functions/longshort-analyst-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-047 Phase 3 |
+
+#### `longshort.analyst.compute.manual_failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler on orchestrator-throw, `outcome='failed'`, or persistence error. |
+| **Emitted by** | `supabase/functions/longshort-analyst-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, error?, failure_reason?, stage?, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-047 Phase 3 |

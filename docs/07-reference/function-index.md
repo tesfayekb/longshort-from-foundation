@@ -3149,3 +3149,42 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/longshort-signals/analyst-revisions/compute-analyst-revision.ts` |
 | **Tests** | `compute-analyst-revision_test.ts` — 17 Deno tests (decay pins @ 0d/5d/30d with exp(-1)≈0.3679 4dp assertion + NKE-shaped cut sign + raise sign + clip ±0.50 exact + 3-revision exact-sum + 30d-inclusive/31d-excluded boundary + 4 skip-taxonomy paths + mixed 1-recovered/2-unrecovered + adjusted-wins + mixed-availability falls-back-to-raw never-mixes + purity bit-identical + credibility=1.0 + future-dated dropped). |
 | **Added by** | FP-047 |
+
+#### `supabase/functions/_shared/longshort-signals/analyst-revisions/analyst-revision-orchestrator.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-047 — Phase 3 / Signal #1) |
+| **Classification** | shared infrastructure — orchestrator for Analyst Revision Drift. SINGLE-INVOCATION (Branch A+H per FP-047 Phase-0 closure); does NOT use the FP-045 queue-worker engine. |
+| **Exports** | `function createAnalystRevisionOrchestrator(ctx)`; `const SIGNAL_ID = 'analyst_revision_drift'`; `interface AnalystRevisionOrchestratorContext`. |
+| **Pipeline** | Stage 1 feed-paged discovery (FmpPriceTargetFeedFetcher, 30d window) → Stage 2 per-symbol history fetch (FmpPriceTargetHistoryFetcher) bounded-concurrency via pLimitedMap (default 6) → Stage 3 computeAnalystRevision per symbol → Stage 4 within-sector GICS z-score (±3 clip) + captureSignalObservations upsert. Universe members with zero in-window focal events emit a `no_revisions_in_window` skip so `|values| + |skips| = |universe|` (mass balance). |
+| **Pacing** | One shared TokenBucket per vendor (Catalog #39): 750/min × 0.85 ≈ 10.625 req/s — both fetchers receive the same paced HttpFetch. Constructed at the handler boundary. |
+| **Pre-flight (both bounds)** | Rate-bound floor typical (37+100)/10.625 ≈ 12.9s; worst (37+839)/10.625 ≈ 82.4s. Latency-bound C=6 typical ≈9.1s; worst ≈58.4s. Worst-case binding = 82.4s vs 150s HTTP wall, ~45% headroom. |
+| **Wall-clock** | None. All timestamps derive from injected `as_of: Date` (DEC-034 clause 4). |
+| **File** | `supabase/functions/_shared/longshort-signals/analyst-revisions/analyst-revision-orchestrator.ts` |
+| **Tests** | `analyst-revision-orchestrator_test.ts` — 5 Deno tests (empty universe → empty_universe failure; feed subscription_gated → universe-wide typed skip; mass-balance with 4-name universe mixing values + no_revisions_in_window + singleton_sector; history data_unavailable → revision_prior_unavailable; history subscription_gated → subscription_gated). |
+| **Added by** | FP-047 |
+
+#### `supabase/functions/longshort-analyst-compute/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-047 — Phase 3 / Signal #1) |
+| **Classification** | edge function — cron handler for Signal #1 daily compute. DISARMED at creation (MIG-087 ships `enabled=false`); operator-run step enables after the FP-047 Phase-3 validation fire. |
+| **Auth** | `verifyCronSecret` (X-Cron-Secret header). |
+| **Pipeline** | productionClock → FMP_API_KEY check → construct one TokenBucket + paced fetch + both FMP fetchers → orchestrator.run(as_of) → persistSignalComputeLog → audit envelope (.started / .completed / .failed) → 200 summary JSON. |
+| **File** | `supabase/functions/longshort-analyst-compute/index.ts` |
+| **Tests** | `index_test.ts` — 8 source-sentinel tests (cron auth wired; productionClock-only; FMP_API_KEY checked; single TokenBucket across both fetchers; persistSignalComputeLog wired; all three audit events; handler path matches MIG-087; does NOT use queue-worker engine). |
+| **Added by** | FP-047 |
+
+#### `supabase/functions/longshort-analyst-compute-manual/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-047 — Phase 3 / Signal #1) |
+| **Classification** | edge function — operator-triggered manual sibling of the cron handler. Not registered in `job_registry`. |
+| **Auth** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. |
+| **Pipeline** | POST `{ "as_of": "YYYY-MM-DD" }` → parseAsOfDate + future-date guard → same orchestrator construction as cron sibling → dual audit envelope (manual_triggered / manual_completed / manual_failed) → 200 summary JSON. SINGLE-INVOCATION (no queue delegation). |
+| **File** | `supabase/functions/longshort-analyst-compute-manual/index.ts` |
+| **Tests** | `index_test.ts` — 6 source-sentinel tests (JWT + longshort.manage gating; parseAsOfDate + future-date guard; productionClock-only; single TokenBucket; dual audit envelope; no queue-worker delegation). |
+| **Added by** | FP-047 |

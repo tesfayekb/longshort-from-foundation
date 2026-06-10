@@ -47,6 +47,7 @@ export const JOB_ID_TO_SIGNAL_ID: Readonly<Record<string, string>> = {
   'longshort.insider.compute': 'insider_transactions_90d',
   'longshort.options_flow.compute': 'options_flow_imbalance_5d',
   'longshort.pead.compute': 'pead_sue_20d',
+  'longshort.analyst.compute': 'analyst_revision_drift',
 } as const;
 
 /**
