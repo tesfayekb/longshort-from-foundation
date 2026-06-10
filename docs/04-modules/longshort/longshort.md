@@ -123,7 +123,8 @@ the path of any current FP.)
 - Canonical design source (verbatim, ART-017): `docs/04-modules/longshort/design-source/` — see `README.md` there for full attribution
 - Per-strategy folder index: `docs/04-modules/longshort/README.md`
 - Governing decisions: DEC-030 (scope expansion), DEC-031 (architectural pattern + sub-point 3/6 clarifications), DEC-032 (FP-005 bootstrap surface), DEC-033 v4.1 (shared audit-writer contract)
-- Feature proposal: FP-005 (this bootstrap); FP-006 (CROSSWIND v0.9 implementation, future)
+- Governing decisions (roadmap): DEC-054 (signal-quality enhancement roadmap — R1-R7 authority; anchors the Signal-Stack Enhancement Phase Ladder section below)
+- Feature proposal: FP-005 (this bootstrap); FP-006 (CROSSWIND v0.9 implementation, future); FP-046 (ROI-enhancement roadmap container — DEC-054; ACT-162 review-cycle record)
 - Signal registry + multi-signal overview: FP-038 (`signal_registry` table + `AllSignalsTab` — the index page; per-signal detail lives in `RankingsTab` (FP-024))
 - Plan section: PLAN-TRADING-001 (foundation, complete) and PLAN-TRADING-001-LONGSHORT-001 (this module)
 
