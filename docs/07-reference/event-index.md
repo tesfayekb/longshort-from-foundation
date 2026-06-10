@@ -2234,8 +2234,8 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-options-flow-compute/index.ts` after coordinator returns `outcome='completed'` |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { signal_id, as_of, run_id, outcome: 'completed', universe_size, persisted_count, skip_counts: Record<SignalSkipReason, number>, trigger: 'cron' }` |
-| **Lifecycle** | active |
-| **Added by** | FP-043 |
+| **Lifecycle** | **DEPRECATED by FP-045 Phase 4.** Compute is no longer in-process at the cron handler; per-run completion is signaled by the finalizer's `QUEUE_AUDIT_EVENTS.RUN_COMPLETED` event. Event no longer emitted. |
+| **Added by** | FP-043 (deprecated by FP-045 Phase 4) |
 
 ### `longshort.options_flow.compute.failed`
 
@@ -2244,8 +2244,8 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-options-flow-compute/index.ts` on persist-error / coordinator-throw / `outcome='failed'` |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { signal_id, as_of, error?, stage?: 'coordinator_throw' \| 'signal_compute_log_persist', failure_reason?, trigger: 'cron' }` |
-| **Lifecycle** | active |
-| **Added by** | FP-043 |
+| **Lifecycle** | **DEPRECATED by FP-045 Phase 4** — superseded by `QUEUE_AUDIT_EVENTS.RUN_FAILED` (init-time failure) + per-slice `slice.failed` (compute-time failure). Event no longer emitted from the cron path. |
+| **Added by** | FP-043 (deprecated by FP-045 Phase 4) |
 
 ### `longshort.options_flow.compute.manual_triggered`
 
@@ -2254,7 +2254,7 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-options-flow-compute-manual/index.ts` BEFORE coordinator invocation (dual-trail discipline) |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { operator_id, signal_id, as_of, trigger: 'manual' }`; `actor_id` = `auth.uid()`; carries `ip_address` + `user_agent` |
-| **Lifecycle** | active |
+| **Lifecycle** | active (preserved across FP-045 Phase 4 manual-shim gut — still emitted BEFORE `initQueueRun`; paired with `QUEUE_AUDIT_EVENTS.RUN_STARTED` on success). |
 | **Added by** | FP-043 |
 
 ### `longshort.options_flow.compute.manual_completed`
@@ -2264,8 +2264,8 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-options-flow-compute-manual/index.ts` AFTER coordinator + persist succeed |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { operator_id, signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, trigger: 'manual' }` |
-| **Lifecycle** | active |
-| **Added by** | FP-043 |
+| **Lifecycle** | **DEPRECATED by FP-045 Phase 4** — manual handler is now an enqueue shim; per-run completion is signaled by the finalizer's `QUEUE_AUDIT_EVENTS.RUN_COMPLETED` event. Event no longer emitted. |
+| **Added by** | FP-043 (deprecated by FP-045 Phase 4) |
 
 ### `longshort.options_flow.compute.manual_failed`
 
@@ -2274,7 +2274,7 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-options-flow-compute-manual/index.ts` on persist-error / coordinator-throw / `outcome='failed'` |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { operator_id, signal_id, as_of, error?, stage?, failure_reason?, trigger: 'manual' }` |
-| **Lifecycle** | active |
+| **Lifecycle** | active (preserved across FP-045 Phase 4 manual-shim gut — emitted on `initQueueRun` throw with `stage:'queue_init'`). |
 | **Added by** | FP-043 |
 
 ## Long-Short PEAD Signal Events (FP-044 / Signal #2)
