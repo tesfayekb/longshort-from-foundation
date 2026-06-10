@@ -3019,13 +3019,13 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 
 | Field | Value |
 |-------|-------|
-| **Module** | longshort (FP-044) |
-| **Classification** | edge function — operator-trigger sibling of `longshort-pead-compute`. Invokes the same orchestrator with an operator-supplied `as_of`. Recommended path for validating Signal #2 math + persistence + entitlement-degradation before any cron wiring (per DEC-043 prudent-sequencing). |
+| **Module** | longshort (FP-044 / FP-045 Phase 4 stranded-handler fix) |
+| **Classification** | edge function — operator-trigger sibling of the gutted `longshort-pead-compute` enqueue shim. Originally invoked the synchronous orchestrator (FP-044 Phase 3); discovered stranded in fresh-clone Phase-4 review (would have 504'd per INC-72 if fired since the cron sibling was gutted in FP-045 Phase 3). **Now gutted to a manual init shim** that delegates to `initQueueRun()` and returns 202 with the operator-supplied `as_of`. JWT + `longshort.manage` + `parseAsOfDate` + future-date guard preserved. |
 | **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST-only. |
-| **Purpose** | Operator-driven backfill / first-fire validation. Dual audit envelope (`.manual_triggered` BEFORE; `.manual_completed` / `.manual_failed` AFTER). |
+| **Purpose** | Operator-driven enqueue for ad-hoc PEAD runs (any historical `as_of`, replay diagnostics, validation test-fires). Dual audit envelope: `manual_triggered` BEFORE init, `QUEUE_AUDIT_EVENTS.RUN_STARTED` on success / typed `manual_failed` on init throw. |
 | **File** | `supabase/functions/longshort-pead-compute-manual/index.ts` |
-| **Tests** | `supabase/functions/longshort-pead-compute-manual/index_test.ts` — source-sentinel tests covering operator-JWT wiring, `longshort.manage` permission, POST-only 405, body validation, FINNHUB_API_KEY, dual audit envelope ordering, wall-clock discipline, orchestrator wiring. |
-| **Added by** | FP-044 |
+| **Tests** | `supabase/functions/longshort-pead-compute-manual/index_test.ts` — source-sentinel tests guard the gutted-to-queue-path shape: JWT + permission, POST-only, body validation, `initQueueRun` delegation, fetcher absence, dual audit envelope ordering, productionClock-only, signal_id-from-export, drift sentinel. |
+| **Added by** | FP-044 (handler) / FP-045 Phase 4 (stranded-handler fix — gutted to enqueue shim) |
 
 #### `supabase/functions/longshort-queue-init/index.ts`
 
