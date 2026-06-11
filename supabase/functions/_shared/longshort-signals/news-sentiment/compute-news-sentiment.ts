@@ -184,39 +184,26 @@ export function computeNewsSentiment(
 
   // Post-exclusion emptiness branch — (b) ruling.
   if (articleCount === 0) {
-    // All in-window items were PR-excluded → no_articles_in_window.
-    // All-malformed (and no PR) → data_unavailable.
-    // Pure unrelated-window (everything out of window AND no malformed) →
-    // also no_articles_in_window (genuinely no coverage).
-    if (malformedCount > 0 && prExcludedCount === 0 && inWindowConsidered === malformedCount + 0) {
-      // Note: `inWindowConsidered` does NOT include malformed-timestamp rows
-      // (those failed the timestamp guard before the in-window check). The
-      // malformed-unknown-sentiment rows ARE counted in inWindowConsidered.
-      return {
-        kind: 'skip',
-        reason: 'data_unavailable',
-        detail: `${malformedCount} malformed in-window entries (unknown sentiment category); none scorable`,
-      };
-    }
-    if (prExcludedCount > 0 && malformedCount === 0) {
+    // Routing precedence:
+    //   PR-excluded present → (b) post-exclusion emptiness; the PR-only or
+    //     PR+malformed case is the SEMANTIC absence of scorable coverage.
+    //   Else malformed-only → (d) data_unavailable (data-quality class).
+    //   Else truly zero in-window → no_articles_in_window (genuine absence).
+    if (prExcludedCount > 0) {
+      const malformedSuffix = malformedCount > 0
+        ? ` + ${malformedCount} malformed`
+        : '';
       return {
         kind: 'skip',
         reason: 'no_articles_in_window',
-        detail: `${prExcludedCount} in-window article(s) were PR-wire excluded (DEC-056 §(e)); zero scorable`,
-      };
-    }
-    if (prExcludedCount > 0 && malformedCount > 0) {
-      return {
-        kind: 'skip',
-        reason: 'no_articles_in_window',
-        detail: `${prExcludedCount} PR-wire excluded + ${malformedCount} malformed in-window; zero scorable`,
+        detail: `${prExcludedCount} in-window article(s) PR-wire excluded (DEC-056 §(e))${malformedSuffix}; zero scorable`,
       };
     }
     if (malformedCount > 0) {
       return {
         kind: 'skip',
         reason: 'data_unavailable',
-        detail: `${malformedCount} malformed entries; none scorable`,
+        detail: `${malformedCount} malformed entries (non-finite timestamp or unknown sentiment category); none scorable`,
       };
     }
     return {
