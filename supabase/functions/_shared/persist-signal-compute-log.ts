@@ -41,6 +41,7 @@ export function aggregateSkipCounts(
     no_revisions_in_window: 0,
     revision_prior_unavailable: 0,
     zero_magnitude_only: 0,
+    no_articles_in_window: 0,
   };
   for (const s of skips) counts[s.reason] += 1;
   return counts;
