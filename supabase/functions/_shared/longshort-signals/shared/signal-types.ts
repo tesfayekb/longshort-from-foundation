@@ -143,13 +143,24 @@ export type SignalSkipReason =
                              // implied-upside is a semantically distinct quantity
                              // from revision-direction. Typed absence; ticker still
                              // ranked by other signals.
-  | 'zero_magnitude_only';   // FP-047 / Signal #1 — scored revisions exist but
+  | 'zero_magnitude_only'    // FP-047 / Signal #1 — scored revisions exist but
                              // every recovered pair has `newTarget === priorTarget`
                              // (e.g., reiterations) so the summed contribution is
                              // exactly 0 by construction with no information. Per
                              // CROSSWIND §2 axiom 3 + DEC-034 (2): typed absence
                              // beats a fabricated zero. Non-critical; ticker still
                              // ranked by other signals.
+  | 'no_articles_in_window'; // FP-048 / Signal #8 (News Sentiment §4.4.8) — ticker
+                             // has ZERO classified, non-PR-excluded articles inside
+                             // the trailing 7-calendar-day inclusive window vs
+                             // `as_of`. Per DEC-056 §(e) + FP-048 Phase-2 ruling
+                             // (b): PR-wire-only coverage does NOT count toward
+                             // presence (post-exclusion emptiness). Distinct from
+                             // an all-neutral pool — neutral news IS the signal
+                             // and yields a value of 0.0, NOT this skip (contrast
+                             // PEAD `zero_dispersion` where the denominator
+                             // vanishes). Non-critical; ticker still ranked by
+                             // other signals.
 
 export interface SignalSkip {
   ticker: string;
