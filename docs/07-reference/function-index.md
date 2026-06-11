@@ -3188,3 +3188,34 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/longshort-analyst-compute-manual/index.ts` |
 | **Tests** | `index_test.ts` — 6 source-sentinel tests (JWT + longshort.manage gating; parseAsOfDate + future-date guard; productionClock-only; single TokenBucket; dual audit envelope; no queue-worker delegation). |
 | **Added by** | FP-047 |
+
+## News Sentiment Signal (FP-048 / Phase 2.5 / Signal #8)
+
+#### `supabase/functions/_shared/longshort-signals/news-sentiment/polygon-news-feed-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-048 — Phase 1 / Signal #8) |
+| **Classification** | shared infrastructure — first Polygon `/v2/reference/news` consumer. Branch B (global feed paged) per FP-048 Phase-0 evidence. |
+| **Exports** | `class PolygonNewsFeedFetcher { constructor(apiKey, httpFetch?, timeoutMs?, baseUrl?, options?); fetchFeed(as_of): Promise<NewsFeedFetchResult> }`; `type PolygonNewsRow`, `PolygonNewsInsight`, `NewsFeedFetchResult`; `const POLYGON_BASE_URL`, `NEWS_FEED_OPERATION_ID`, `DEFAULT_LOOKBACK_DAYS` (7), `DEFAULT_PAGE_LIMIT` (1000), `DEFAULT_MAX_PAGES` (200). |
+| **Pagination** | Global feed `?published_utc.gte={asOf-7d}&published_utc.lte={asOf}&order=desc&sort=published_utc&limit=1000` walked via Polygon `next_url`; `apiKey` re-attached when absent (idempotent). |
+| **Look-ahead gate** | Vendor-side `published_utc.lte=as_of` + client per-row re-check (`tsMs > asOfMs → drop`). Both layers tested. |
+| **Error taxonomy** | 401/402/403 → `subscription_gated`; 429 → `rate_limited`; 404 or empty-first-page → `data_unavailable`; otherwise `SignalComputationError` (orchestrator records `fetch_error`). |
+| **Pacing** | Accepts injected `HttpFetch`; downstream TokenBucket wrap at Phase 3 orchestrator (operator-supplied Polygon dashboard rate-cap is a named Phase-3 pre-condition). |
+| **Wall-clock** | None. `as_of: Date` injected; per-page latency uses optional injectable `nowMs` (defaults to a zero function — fixture tests are deterministic). |
+| **File** | `supabase/functions/_shared/longshort-signals/news-sentiment/polygon-news-feed-fetcher.ts` |
+| **Tests** | `polygon-news-feed-fetcher_test.ts` — 13 fixture-driven tests (WWDC multi-ticker insights[]; look-ahead gate; 7d cutoff; filter-honesty empty-first-page → data_unavailable; malformed rows dropped silently; GlobeNewswire passes through fetcher; 403/404/empty taxonomy; next_url pagination with key reattachment; pre-existing apiKey not duplicated; maxPages hit surfaces hitPageCap; injected nowMs latency; invalid as_of throws). |
+| **Added by** | FP-048 |
+
+#### `supabase/functions/_shared/longshort-signals/news-sentiment/news-filters.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-048 — Phase 1 / Signal #8) |
+| **Classification** | shared infrastructure — DEC-056 binding constants + per-article classifier. Pure data + pure functions; no wall-clock; no network. |
+| **Exports** | `const SENTIMENT_MAP` (frozen, DEC-056 §(a) verbatim: positive=+1.0, neutral=0.0, negative=−1.0, mixed=0.0); `mapSentiment(raw): number \| null` (typed-absent, never sentinel); `const PUBLISHER_TIER_TABLE` (frozen; §(c) tier-1/2/3 seeded; tier-4 empty per DEC); `const DEFAULT_TIER_WEIGHT` (0.4 per §(d)); `lookupTierWeight(name): { weight, mapped, normalizedKey }`; `const PRESS_RELEASE_DENY_SET` (§(e) frozen); `isPressReleaseWire(name): boolean`; `norm(s)` (§(c)/(e) verbatim); `classifyArticle({publisherName, sentimentCategory}): ArticleClassification` discriminated union. |
+| **Normalization** | `norm(s) = s.toLowerCase().replace(/[^a-z0-9]/g, "")`. Used for both publisher tier lookup and PR-wire deny-set match. |
+| **Wall-clock** | None. |
+| **File** | `supabase/functions/_shared/longshort-signals/news-sentiment/news-filters.ts` |
+| **Tests** | `news-filters_test.ts` — 15 fixture-driven tests (frozen-map invariants; categorical case-insensitive round-trip; unknown sentiment→null; norm rule; tier lookup mapped + unmapped paths; PR deny-set membership; classifyArticle WWDC multi-ticker; GlobeNewswire excluded with reason; unmapped publisher tier 0.4 + mapped:false; mixed → 0.0 NOT skipped; unknown sentiment scalar null). |
+| **Added by** | FP-048 |
