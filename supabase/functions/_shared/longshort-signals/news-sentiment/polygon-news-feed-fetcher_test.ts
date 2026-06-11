@@ -55,7 +55,7 @@ function makeFetcher(httpFetch: HttpFetch): PolygonNewsFeedFetcher {
 // ── happy path: single page, multi-ticker insights preserved ──────────────
 
 Deno.test('fetchFeed — WWDC multi-ticker fixture preserves per-(article,ticker) insights', async () => {
-  const fetcher = makeFetcher(((_url, _init) => {
+  const fetcher = makeFetcher(((_url: string | URL, _init?: RequestInit) => {
     return Promise.resolve(
       jsonResponse({
         results: [
@@ -92,7 +92,7 @@ Deno.test('fetchFeed — WWDC multi-ticker fixture preserves per-(article,ticker
 // ── look-ahead gate: future-dated article dropped ─────────────────────────
 
 Deno.test('fetchFeed — look-ahead gate drops articles with published_utc > as_of', async () => {
-  const fetcher = makeFetcher(((_url, _init) =>
+  const fetcher = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
     Promise.resolve(
       jsonResponse({
         results: [
@@ -112,7 +112,7 @@ Deno.test('fetchFeed — look-ahead gate drops articles with published_utc > as_
 // ── cutoff gate: as_of - 7d boundary ──────────────────────────────────────
 
 Deno.test('fetchFeed — cutoff gate drops articles older than (as_of - 7d)', async () => {
-  const fetcher = makeFetcher(((_url, _init) =>
+  const fetcher = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
     Promise.resolve(
       jsonResponse({
         results: [
@@ -132,7 +132,7 @@ Deno.test('fetchFeed — cutoff gate drops articles older than (as_of - 7d)', as
 
 Deno.test('fetchFeed — filter-honesty: future-window response → 0 rows then data_unavailable', async () => {
   // Mirrors Phase-0 probe: published_utc.gte=2099-01-01 → count=0
-  const fetcher = makeFetcher(((_url, _init) =>
+  const fetcher = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
     Promise.resolve(jsonResponse({ results: [] }))) as unknown as HttpFetch);
 
   const r = await fetcher.fetchFeed(AS_OF);
@@ -143,7 +143,7 @@ Deno.test('fetchFeed — filter-honesty: future-window response → 0 rows then 
 
 Deno.test('fetchFeed — filter-honesty: malformed rows are silently dropped (no throw, 0 valid rows)', async () => {
   // Mirrors impossible-ticker probe: response shape is honored but rows are unusable
-  const fetcher = makeFetcher(((_url, _init) =>
+  const fetcher = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
     Promise.resolve(
       jsonResponse({
         results: [
@@ -164,7 +164,7 @@ Deno.test('fetchFeed — filter-honesty: malformed rows are silently dropped (no
 // ── GlobeNewswire passes through the fetcher (exclusion is downstream) ────
 
 Deno.test('fetchFeed — GlobeNewswire row survives fetcher (exclusion is filters.ts job)', async () => {
-  const fetcher = makeFetcher(((_url, _init) =>
+  const fetcher = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
     Promise.resolve(
       jsonResponse({
         results: [
@@ -186,7 +186,7 @@ Deno.test('fetchFeed — GlobeNewswire row survives fetcher (exclusion is filter
 // ── typed error taxonomy ──────────────────────────────────────────────────
 
 Deno.test('fetchFeed — 403 → subscription_gated', async () => {
-  const fetcher = makeFetcher(((_url, _init) =>
+  const fetcher = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
     Promise.resolve(new Response('forbidden', { status: 403 }))) as unknown as HttpFetch);
   const r = await fetcher.fetchFeed(AS_OF);
   if (r.kind !== 'unavailable') throw new Error('expected unavailable');
@@ -194,7 +194,7 @@ Deno.test('fetchFeed — 403 → subscription_gated', async () => {
 });
 
 Deno.test('fetchFeed — 404 on first page → data_unavailable', async () => {
-  const fetcher = makeFetcher(((_url, _init) =>
+  const fetcher = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
     Promise.resolve(new Response('not found', { status: 404 }))) as unknown as HttpFetch);
   const r = await fetcher.fetchFeed(AS_OF);
   if (r.kind !== 'unavailable') throw new Error('expected unavailable');
@@ -206,7 +206,7 @@ Deno.test('fetchFeed — 404 on first page → data_unavailable', async () => {
 Deno.test('fetchFeed — follows next_url; reattaches apiKey when absent', async () => {
   let call = 0;
   const seenUrls: string[] = [];
-  const fetcher = makeFetcher((async (url, _init) => {
+  const fetcher = makeFetcher((async (url: string | URL, _init?: RequestInit) => {
     seenUrls.push(String(url));
     call += 1;
     if (call === 1) {
@@ -233,7 +233,7 @@ Deno.test('fetchFeed — follows next_url; reattaches apiKey when absent', async
 Deno.test('fetchFeed — pre-existing apiKey in next_url is not duplicated', async () => {
   let call = 0;
   const seenUrls: string[] = [];
-  const fetcher = makeFetcher((async (url, _init) => {
+  const fetcher = makeFetcher((async (url: string | URL, _init?: RequestInit) => {
     seenUrls.push(String(url));
     call += 1;
     if (call === 1) {
@@ -253,7 +253,7 @@ Deno.test('fetchFeed — pre-existing apiKey in next_url is not duplicated', asy
 // ── page cap surfaces hitPageCap=true ─────────────────────────────────────
 
 Deno.test('fetchFeed — page cap reached → hitPageCap=true', async () => {
-  const f = new PolygonNewsFeedFetcher(KEY, ((async (_url, _init) =>
+  const f = new PolygonNewsFeedFetcher(KEY, ((async (_url: string | URL, _init?: RequestInit) =>
     jsonResponse({
       results: [article({ id: `p-${Math.random()}` })],
       next_url: `${POLYGON_BASE_URL}/v2/reference/news?cursor=x`,
@@ -269,7 +269,7 @@ Deno.test('fetchFeed — page cap reached → hitPageCap=true', async () => {
 
 Deno.test('fetchFeed — latencyMsPerPage uses injected nowMs', async () => {
   let t = 1000;
-  const f = new PolygonNewsFeedFetcher(KEY, ((async (_url, _init) =>
+  const f = new PolygonNewsFeedFetcher(KEY, ((async (_url: string | URL, _init?: RequestInit) =>
     jsonResponse({ results: [article({ id: 'p' })] })) as unknown as HttpFetch), 30_000, POLYGON_BASE_URL, {
     nowMs: () => {
       const v = t;
@@ -286,7 +286,7 @@ Deno.test('fetchFeed — latencyMsPerPage uses injected nowMs', async () => {
 // ── as_of validation ──────────────────────────────────────────────────────
 
 Deno.test('fetchFeed — invalid as_of throws SignalComputationError', async () => {
-  const f = makeFetcher(((_url, _init) =>
+  const f = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
     Promise.resolve(jsonResponse({ results: [] }))) as unknown as HttpFetch);
   let threw = false;
   try {
