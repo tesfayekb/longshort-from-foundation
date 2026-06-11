@@ -3219,3 +3219,21 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/longshort-signals/news-sentiment/news-filters.ts` |
 | **Tests** | `news-filters_test.ts` — 15 fixture-driven tests (frozen-map invariants; categorical case-insensitive round-trip; unknown sentiment→null; norm rule; tier lookup mapped + unmapped paths; PR deny-set membership; classifyArticle WWDC multi-ticker; GlobeNewswire excluded with reason; unmapped publisher tier 0.4 + mapped:false; mixed → 0.0 NOT skipped; unknown sentiment scalar null). |
 | **Added by** | FP-048 |
+
+#### `supabase/functions/_shared/longshort-signals/news-sentiment/compute-news-sentiment.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-048 — Phase 2 / Signal #8) |
+| **Classification** | shared infrastructure — pure per-ticker compute kernel for `news_sentiment_7d`. No I/O, no clock, no random. |
+| **Formula** | §4.4.8 verbatim: `raw_N = Σ sentiment_A × source_weight(A) × exp(-age_hours / 24)` over post-exclusion classified articles in the trailing 7-day inclusive window vs injected `as_of` (`age_hours = (asOfMs − publishedAtMs) / 3.6e6`). |
+| **Exports** | `function computeNewsSentiment(inputs): NewsSentimentComputeResult`; `interface NewsArticleEntry`, `NewsSentimentInputs`, `NewsSentimentMeta`; `type NewsSentimentComputeResult`, `NewsSentimentSkipReason`; constants `NEWS_WINDOW_HOURS` (168), `NEWS_DECAY_TAU_HOURS` (24). |
+| **Input contract** | `entries: ReadonlyArray<{publishedAtMs:number, classification:ArticleClassification}>` — one entry per `(article, ticker)` pairing for the ticker being computed (orchestrator fans out by `insights[].ticker`). Trusts the frozen DEC-056 §(a) `SENTIMENT_MAP` + §(c) `PUBLISHER_TIER_TABLE` from `news-filters.ts` — does NOT re-map. |
+| **Output contract** | `{kind:'value', raw:number, meta:{articleCount, prExcludedCount, unmappedPublisherCount}}` (always when ≥1 in-window scorable article, INCLUDING raw=0.0 from all-neutral/mixed coverage per ruling (a)) \| `{kind:'skip', reason, detail}` with reason ∈ `no_articles_in_window` \| `data_unavailable`. |
+| **Skip semantics** | (a) Articles present → ALWAYS a value, including 0.0 (all-neutral/mixed IS information — contrast PEAD's `zero_dispersion` where the denominator vanishes). (b) PR-wire entries (DEC-056 §(e)) do NOT count toward presence; PR-only coverage → `no_articles_in_window` (post-exclusion emptiness). (d) Malformed entries (non-finite `publishedAtMs` OR `sentimentScalar===null`) are NEVER coerced to 0; all-malformed in-window → `data_unavailable`. |
+| **Window boundary** | `0 ≤ age_hours ≤ 168` (INCLUSIVE both ends). 168h is in-window; 169h is out. Future-dated entries (`publishedAtMs > asOfMs`) silently dropped (defence-in-depth vs fetcher look-ahead gate). |
+| **Wall-clock** | None. `asOf: Date` injected. Gate-2 / Gate-6 clean. |
+| **File** | `supabase/functions/_shared/longshort-signals/news-sentiment/compute-news-sentiment.ts` |
+| **Tests** | `compute-news-sentiment_test.ts` — 17 fixture-driven tests (decay pins @ 0h→1.0 exact, 24h→e^(-1), 168h→e^(-7) to 4dp; window boundary 168h-in / 169h-out; WWDC multi-ticker AAPL neutral→0 + GOOG +1×0.4×decay; 3-article mixed-sign exact superposition; all-neutral → value 0.0 NOT skip; all-mixed → value 0.0 NOT skip; only-PR-wire → no_articles_in_window; PR + far-out-of-window → no_articles_in_window; unmapped publisher contributes + surfaces in meta.unmappedPublisherCount; non-finite timestamp → data_unavailable (only) / dropped (mixed); unknown sentiment in-window → data_unavailable; invalid asOf → data_unavailable; empty entries → no_articles_in_window; purity bit-equal raw; constants verbatim). |
+| **Skip-union impact** | Adds `no_articles_in_window` to `SignalSkipReason` (signal-types.ts) + `aggregateSkipCounts` seed + the three `persist-signal-compute-log_test.ts` expected-shape assertions in the same commit. |
+| **Added by** | FP-048 |
