@@ -149,7 +149,6 @@ export function computeNewsSentiment(
   let prExcludedCount = 0;
   let unmappedPublisherCount = 0;
   let malformedCount = 0;
-  let inWindowConsidered = 0;
 
   for (const e of i.entries) {
     // (d) malformed timestamp guard — never coerce
@@ -161,7 +160,6 @@ export function computeNewsSentiment(
     if (e.publishedAtMs > asOfMs) continue;
     // In-window: age_hours ∈ [0, 168] inclusive ⇔ publishedAtMs ≥ windowFloorMs.
     if (e.publishedAtMs < windowFloorMs) continue;
-    inWindowConsidered++;
 
     if (e.classification.excluded) {
       // (b) PR-excluded — observed but NOT counted toward presence.
