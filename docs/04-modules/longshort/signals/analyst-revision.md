@@ -1,7 +1,17 @@
 # Signal #1 — Analyst Revision Drift (CROSSWIND §4.4.5)
 
-**Status:** live (DISARMED — MIG-087 ships `enabled=false`; operator-run step
-enables after the FP-047 Phase-3 validation fire).
+**Status:** live (**ARMED** — MIG-088 flipped
+`job_registry.longshort.analyst.compute.enabled=true` 2026-06-11 after the
+FP-047 Phase-4 validation fire on run `1be8850d` cleared all gates
+[212 persisted / 346 `no_revisions_in_window` / 281
+`revision_prior_unavailable` — conservation `346+281+212=839` ✓; NKE
+within-sector z = −1.50 (Jay Sole $62 → $50, sign-correct); zero vendor
+429s / zero retries]. **DEC-040 byte-match (live-DB, §22.5.1, pre-apply):**
+`cron.job` jobid=89 `schedule='0 21 * * 1-5' active=true` ≡
+`job_registry.schedule='0 21 * * 1-5'`. **DEC-043 end-to-end attestation
+OPEN** — closes on tonight's natural 21:00 UTC cron-attributable
+`signal_compute_log` row (cron-fire wall-clock signature distinct from the
+`as_of`-derived midnight signature of the manual validation fire).)
 **Vendor:** FMP Premium `/stable/price-target-latest-news` (discovery) +
 `/stable/price-target-news?symbol={t}` (per-symbol history). Split-vendor
 lock per DEC-053.
