@@ -298,6 +298,20 @@ Authority: ACT-149.
 | **Original preserved** | All prior FP-045 addendums + the original FP-045 entry remain VERBATIM per Constitution Rule 8; this addendum forward-points only. |
 | **Forward-pointer** | `docs/07-reference/database-migration-ledger.md` (MIG-086); `docs/04-modules/longshort/signals/queue-worker.md` (byte-match table + both consumers' validation runs); `docs/04-modules/longshort/signals/options-flow.md` (LIVE-ON-QUEUE ARMED banner + 6.3% v1 baseline); `docs/04-modules/longshort/signals/pead.md` (ARMED status); `docs/ai-failure-modes.md` (validation-choreography-missing-deploy-step §12.10 entry). |
 
+### FP-045 Formal Closure Addendum — Two-Consumer Natural-Fire Attestation (Rule 8 — Forward-Pointer, Original Preserved)
+
+| Field | Value |
+|---|---|
+| **Addendum Date** | 2026-06-11 |
+| **Authority** | Operator INVESTIGATION-then-DOCUMENTATION mode; natural overnight 22:00 + 23:00 UTC fires 2026-06-10 (zero human involvement at fire-time). |
+| **Status** | **FP-045 CLOSED.** Full lineage: INC-72 (2026-06-09 PEAD synchronous-orchestrator 504) → DEC-047 (cursor-drain queue-worker, Option D) → FP-045 generalized engine (Phases 1–2: MIG-082/083 + `_shared/longshort-signals/shared/queue-worker/*` + `longshort-queue-{init,slice,sweeper}` handlers) → two-consumer validation (Phase 3 PEAD `451b9ee7` 2026-06-10; Phase 4 options-flow `0eba38a7` 2026-06-10) → MIG-086 arm-up (four `enabled=true` flips + four `cron.job` rows byte-match per DEC-040) → **natural-fire attestation 2026-06-10 (this closure):** options 22:00 run `af88ad2b` 56/839 mass-balanced + PEAD 23:00 run `5c2d015d` 835/839 mass-balanced + zero queue/slice/sweeper failures + cron.job_run_details `last_status='succeeded'` for jobids 87+88. The class problem (rate-bound signals failing the 150s wall) is RETIRED from the platform: both rate-capped signal #2 and signal #3 now drain cleanly under the queue engine. |
+| **DEC-043 status** | **CLOSED** for the FP-045 two-consumer scope at this commit. See approved-decisions.md DEC-043 entry (closure attestation block cites both consumers' verbatim live-DB evidence). |
+| **DEC-047 status** | implemented — closure recorded (engine + two consumers both validated end-to-end). |
+| **DW-095 status** | already closed at Phase 4 (FP-045 itself was the unblocking trigger). |
+| **Out of scope (separation discipline)** | Analyst_revision_drift (FP-047 Phase-4 ARMED, 2026-06-11) attests **separately** on its own first natural 21:00 UTC fire — NOT folded into this DEC-043 closure. FP-047 itself remains phase-4-validated / ARMED with attestation OPEN; its one-liner closure lands tomorrow against tonight's fire. |
+| **Original preserved** | All prior FP-045 addendums + the original FP-045 entry remain VERBATIM per Constitution Rule 8; this addendum forward-points only. |
+| **Forward-pointer** | `docs/08-planning/approved-decisions.md` (DEC-043 CLOSED closure block); `docs/04-modules/longshort/signals/pead.md` (ATTESTATION CLOSED banner); `docs/04-modules/longshort/signals/options-flow.md` (ATTESTATION CLOSED banner); `docs/06-tracking/action-tracker.md` (ACT-166); `docs/ai-failure-modes.md` (MIG-088 filename-recall 4th-instance §12.10 entry + codified check). |
+
 ### FP-039: Cron-Auth Outage Remediation (atomic env-rotate + redeploy + command-reconcile across 6 consumers)
 
 | Field | Value |
