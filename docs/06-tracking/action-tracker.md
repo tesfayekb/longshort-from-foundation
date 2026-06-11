@@ -1,5 +1,16 @@
 
 
+### ACT-166: FP-045 Formal Closure — DEC-043 CLOSED on two-consumer natural-fire attestation (options 22:00 + PEAD 23:00, 2026-06-10)
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-166 (next-free after ACT-165; grep-verified via `rg -n "^### ACT-16[0-9]" docs/06-tracking/action-tracker.md`). |
+| **Mode** | Investigation (read-only attestation read) → Documentation (closure commit). |
+| **Scope** | Closure of FP-045 (Generalized Cursor-Drain Queue-Worker, DEC-047) on natural-fire end-to-end evidence: (a) DEC-043 attestation CLOSED for the FP-045 two-consumer scope in `approved-decisions.md`; (b) FP-045 Formal Closure Addendum landed in `feature-proposals.md` (Rule 8 forward-pointer, original preserved); (c) `pead.md` + `options-flow.md` banners flipped to ATTESTATION CLOSED with cited evidence; (d) MIG-088 filename corrected in the ledger (closure-evidence recall defect — 4th-instance filename-verbatim defect logged in `ai-failure-modes.md`); (e) FP-047 FOLLOWUP "stamp `started_at` at orchestrator entry" verified present in the FP-047 Phase-4 entry. NOT folded: FP-047 analyst-revision-drift attestation is a separate one-liner tomorrow against tonight's 21:00 UTC fire. |
+| **Natural-fire evidence (verbatim, no human involvement)** | **options_flow_imbalance_5d** — run `af88ad2b-6d1f-413e-a63f-4d5df88913be`, cron jobid=87, `started_at=2026-06-10 22:00:02.15668+00`, `completed_at=2026-06-10 22:11:00.952+00`, wall 659 s, `outcome=completed`, `universe_size=839`, `persisted_count=56`, `skip_counts={no_qualifying_flow:778, data_unavailable:5}`, mass balance ✓. **pead_sue_20d** — run `5c2d015d-0107-4cdc-8e95-e310061a4aa4`, cron jobid=88, `started_at=2026-06-10 23:00:02.468542+00`, `completed_at=2026-06-10 23:09:01.083+00`, wall 539 s, `outcome=completed`, `universe_size=839`, `persisted_count=835`, `skip_counts={no_recent_earnings:3, missing_sector:1, zero_dispersion:1}`. **`signal_queue_runs` overnight (21:00–06:00 UTC):** exactly 2 rows, both `completed`. **Failure sweep:** zero `slice.failed`/`run.failed`/`sweeper.*stale*`; only 20× `signal_queue.slice.completed` (11 options + 9 PEAD). **`cron.job_run_details`:** jobids 85/86/87/88 all `last_status='succeeded'`. |
+| **Files touched** | `docs/08-planning/approved-decisions.md` (DEC-043 CLOSED block); `docs/08-planning/feature-proposals.md` (FP-045 Formal Closure Addendum); `docs/04-modules/longshort/signals/pead.md` (banner); `docs/04-modules/longshort/signals/options-flow.md` (banner); `docs/07-reference/database-migration-ledger.md` (MIG-088 filename fix); `docs/06-tracking/action-tracker.md` (this entry); `docs/ai-failure-modes.md` (4th-instance filename-verbatim defect entry + codified check). |
+| **Gates** | Gate 4 (`npx eslint .`) — clean (docs-only commit, no source touched). |
+
 ### ACT-151: FP-040 — Signal #7 (Short-Term Reversal) implementation
 
 ### ACT-165: FP-047 Phase 3 — Signal #1 orchestrator + cron + manual handlers + MIG-087 registry truth (DISARMED)

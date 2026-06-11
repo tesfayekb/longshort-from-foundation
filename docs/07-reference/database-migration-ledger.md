@@ -1550,7 +1550,7 @@ This subsection records `sql/NN_*_cron_schedule.sql` artifacts that are applied 
 
 | Field | Value |
 |-------|-------|
-| Migration version | `supabase/migrations/20260611152227_8f05d614-adf3-4b72-864f-bf20efbadd69.sql` |
+| Migration version | `supabase/migrations/20260611152302_44b94698-0dbd-4fec-a8ce-b4bbe57b3bd0.sql` (verbatim from `ls supabase/migrations | tail -1`; corrects the 2026-06-11 closure-evidence recall defect — the recalled stem `20260611152227_8f05d614-…` is NOT on disk; see `docs/ai-failure-modes.md` §12.10 entry "MIG-088 filename-recall defect"). |
 | Applied | 2026-06-11 |
 | Verified | Live-DB §22.5.1 post-apply: `job_registry.longshort.analyst.compute = {enabled:true, schedule:'0 21 * * 1-5'}`. DEC-040 byte-match (live-DB, pre-apply): `cron.job {jobid:89, jobname:'longshort.analyst.compute', schedule:'0 21 * * 1-5', active:true}` ≡ `job_registry.schedule='0 21 * * 1-5'` — byte-identical. Linter findings unchanged from MIG-087 baseline (26 PRE-EXISTING; none attributable — metadata-only `UPDATE` against `job_registry`, no schema change). |
 | Pattern | Metadata-only arm-up flip (`enabled=false → true`). Mirrors the four-row FP-045 arm-up shape. Idempotent. |
