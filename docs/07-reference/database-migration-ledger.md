@@ -1545,3 +1545,17 @@ This subsection records `sql/NN_*_cron_schedule.sql` artifacts that are applied 
 | Sub-step authority | FP-047 Phase 3 (this PR); DEC-053 (split-vendor lock); DEC-055 §(a)-(g) (term bindings + skip taxonomy); DEC-048 (interim cadence — disarmed rows + operator-run enable). |
 | AC evidence | (a) Live-DB read of both registry rows post-apply matches the migration intent verbatim. (b) Drift sentinel `JOB_ID_TO_SIGNAL_ID['longshort.analyst.compute'] === SIGNAL_ID` (from `analyst-revision-orchestrator.ts`) asserted by `job-signal-mapping_test.ts` test (2g). (c) Handler path drift sentinel asserted by `longshort-analyst-compute/index_test.ts` test (7). (d) Pre-flight arithmetic — both bounds — recorded in the orchestrator header and re-stated in `analyst-revision.md` §5; worst-case binding 82.4 s vs 150 s timeout. (e) `enabled=false` post-apply — operator owns the arm-up after validation. |
 | Cross-references | FP-047 Phase 3; DEC-053; DEC-055; DEC-048; `docs/04-modules/longshort/signals/analyst-revision.md`; `function-index.md` (5 new analyst entries); `event-index.md` (6 new `longshort.analyst.compute.*` events); `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping.ts` (drift sentinel). |
+
+### MIG-088: FP-047 Phase 4 arm-up — enable longshort.analyst.compute
+
+| Field | Value |
+|-------|-------|
+| Migration version | `supabase/migrations/20260611152227_8f05d614-adf3-4b72-864f-bf20efbadd69.sql` |
+| Applied | 2026-06-11 |
+| Verified | Live-DB §22.5.1 post-apply: `job_registry.longshort.analyst.compute = {enabled:true, schedule:'0 21 * * 1-5'}`. DEC-040 byte-match (live-DB, pre-apply): `cron.job {jobid:89, jobname:'longshort.analyst.compute', schedule:'0 21 * * 1-5', active:true}` ≡ `job_registry.schedule='0 21 * * 1-5'` — byte-identical. Linter findings unchanged from MIG-087 baseline (26 PRE-EXISTING; none attributable — metadata-only `UPDATE` against `job_registry`, no schema change). |
+| Pattern | Metadata-only arm-up flip (`enabled=false → true`). Mirrors the four-row FP-045 arm-up shape. Idempotent. |
+| Purpose | Closes the FP-047 Phase-4 arm-up gate after the 2026-06-10 manual validation fire on run `1be8850d` cleared every quantitative gate (212 persisted / 346 `no_revisions_in_window` / 281 `revision_prior_unavailable`; conservation `346+281+212=839 ✓`; NKE within-sector z = −1.50 sign-correct for the Jay Sole $62 → $50 cut; zero 429s / zero retries). |
+| Dependency | MIG-087 (registry truth); cron.job jobid=89 already wired with byte-matching schedule. |
+| Sub-step authority | FP-047 Phase 4 arm-up (operator EXECUTION-mode greenlight 2026-06-11); DEC-040 (byte-match verified); DEC-043 (end-to-end attestation OPEN — closes on tonight's natural 21:00 UTC cron-attributable `signal_compute_log` row). |
+| AC evidence | (a) Live-DB read post-apply: `enabled=true`. (b) DEC-040 byte-match table above. (c) DEC-043 attestation = OPEN, separate forward-binding evidence (cron-fire wall-clock signature, distinct from manual-fire `as_of`-derived midnight signature of `1be8850d`). |
+| Cross-references | FP-047 Phase 4 disposition; MIG-087; DEC-040; DEC-043; DEC-055 §(g) addendum (observability surface canonically `skip_counts.revision_prior_unavailable` bucket — not scalar); `docs/04-modules/longshort/signals/analyst-revision.md` (ARMED banner); `docs/ai-failure-modes.md` Catalog #40 (Lovable-origin mirror vs GitHub propagation). |
