@@ -281,7 +281,7 @@ export function createActiveCatalystOrchestrator(
 
       // ── Stage 3: Tradier typed-fallback (DEC-057 §(i)) ─────────────
       let tradier_fallback_invoked = false;
-      let tradierRows: RawCatalystEventInput[] = [];
+      const tradierRows: RawCatalystEventInput[] = [];
       if (vendor_unavailable.polygon_splits || vendor_unavailable.polygon_dividends) {
         tradier_fallback_invoked = true;
         const tickers = Array.from(universeSet);
