@@ -232,7 +232,7 @@ export async function readInsiderRowsWindow(
         `insider-load-and-compute: insider_form4_rows read failed: ${error.message}`,
       );
     }
-    const batch = (data ?? []) as InsiderRowFromTable[];
+    const batch = ((data ?? []) as unknown) as InsiderRowFromTable[];
     for (const r of batch) rows.push(r);
     if (batch.length < READ_PAGE_SIZE) break;
     offset += READ_PAGE_SIZE;
