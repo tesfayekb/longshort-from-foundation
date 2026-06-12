@@ -317,6 +317,7 @@ async function runFeedSlice(
   ctx: QueueSliceWorkerContext,
 ): Promise<QueueSliceWorkerResult> {
   const { supabase, config, as_of, run_id } = ctx;
+  const liveClock = ctx.liveClock ?? productionClock;
   const pagesPerSlice = config.pagesPerSlice as number;
   const maxPages = config.maxPages as number;
   const fetchPage = config.fetchPage as FeedFetchPageFn;
@@ -365,83 +366,160 @@ async function runFeedSlice(
   let itemsUpserted = 0;
   let exhausted = false;
 
-  for (let i = 0; i < pagesPerSlice; i++) {
-    if (pagesFetched >= maxPages) {
-      // Runaway guard — terminal-fail the run, clean cursor, return.
-      const reason = `max_pages_exceeded (pages_fetched=${pagesFetched}, maxPages=${maxPages}, signal_id=${config.signalId})`;
-      await failRunTerminal(supabase, run_id, as_of, reason);
+  // ── INC-73 — Wrap the entire drain in try/catch. On throw: stamp
+  //    failure_reason (masked), release the cursor claim, increment
+  //    slice_failure_count. If the counter reaches the 3-strikes
+  //    threshold, terminal-fail the run with the last verbatim error
+  //    (also masked). Then re-throw so the cron-handler shim emits
+  //    slice.failed with the same verbatim message in its 500 body.
+  try {
+    for (let i = 0; i < pagesPerSlice; i++) {
+      if (pagesFetched >= maxPages) {
+        // Runaway guard — terminal-fail the run, clean cursor, return.
+        const reason = `max_pages_exceeded (pages_fetched=${pagesFetched}, maxPages=${maxPages}, signal_id=${config.signalId})`;
+        await failRunTerminal(supabase, run_id, as_of, reason);
+        await supabase
+          .from('signal_queue_cursor')
+          .delete()
+          .eq('run_id', run_id)
+          .eq('ticker', FEED_SYNTHETIC_TICKER);
+        return {
+          run_id, signal_id: config.signalId,
+          claimed: 1, succeeded: 0, skipped: 0,
+          cas_attempted: false, cas_won: false, empty: false,
+          mode: 'sequential-feed',
+          pages_fetched: pagesThisSlice, items_upserted: itemsUpserted,
+          runaway: true,
+        };
+      }
+
+      // One bucket token per page (calls-per-page = 1 by feed-mode contract).
+      await bucket.acquire();
+
+      let page;
+      try {
+        page = await fetchPage({ cursorToken: feedCursor, asOf: as_of });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        // Outer try/catch handles the failure-bookkeeping; we only need
+        // to enrich the message with page-number provenance here.
+        throw new Error(`fetchPage threw on page ${pagesFetched + 1}: ${msg}`);
+      }
+
+      if (page.items.length > 0) {
+        const rows = page.items.map((it) => ({
+          run_id,
+          article_id: it.articleId,
+          ticker: it.ticker,
+          sentiment_num: it.sentimentNum,
+          tier_weight: it.tierWeight,
+          published_utc: it.publishedUtc,
+        }));
+        const { error: itemsErr } = await supabase
+          .from('signal_queue_feed_items')
+          .upsert(rows, { onConflict: 'run_id,article_id,ticker', ignoreDuplicates: false });
+        if (itemsErr) {
+          throw new Error(`feed_items upsert failed: ${itemsErr.message}`);
+        }
+        itemsUpserted += rows.length;
+      }
+
+      feedCursor = page.nextToken;
+      pagesFetched += 1;
+      pagesThisSlice += 1;
+
+      // Per-page advance: feed_cursor + feed_pages_fetched track the
+      // kernel-frozen as_of (replay determinism); heartbeat_at uses
+      // liveClock for monotonic advance so a long drain never looks
+      // stale to the sweeper (INC-73 root cause #3). Status=running
+      // guard preserves the sweeper's CAS-to-failed claim if it won.
+      const liveTs = liveClock.getWallClockTs().toISOString();
+      const { error: advanceErr } = await supabase
+        .from('signal_queue_runs')
+        .update({
+          feed_cursor: feedCursor,
+          feed_pages_fetched: pagesFetched,
+          heartbeat_at: liveTs,
+          updated_at: liveTs,
+        })
+        .eq('run_id', run_id)
+        .eq('status', 'running');
+      if (advanceErr) {
+        throw new Error(`run advance failed: ${advanceErr.message}`);
+      }
+
+      if (page.nextToken === null) {
+        exhausted = true;
+        break;
+      }
+    }
+  } catch (e) {
+    const rawMsg = e instanceof Error ? e.message : String(e);
+    const maskedMsg = maskSecretsInMessage(rawMsg);
+    const reasonStamp = `feed_slice_threw: ${maskedMsg}`;
+
+    // Read current counter for the 3-strikes evaluation.
+    const { data: counterRow } = await supabase
+      .from('signal_queue_runs')
+      .select('slice_failure_count')
+      .eq('run_id', run_id)
+      .single();
+    const prevCount = (counterRow as { slice_failure_count: number } | null)?.slice_failure_count ?? 0;
+    const newCount = prevCount + 1;
+    const liveTs = liveClock.getWallClockTs().toISOString();
+
+    if (newCount >= FEED_SLICE_FAILURE_THRESHOLD) {
+      // 3-strikes terminal-fail. Status guard ensures the sweeper's
+      // CAS-to-failed wins if it raced us; that's fine — both end states
+      // are 'failed' with informative reasons.
+      await supabase
+        .from('signal_queue_runs')
+        .update({
+          status: 'failed',
+          failure_reason: `feed_slice_threw_3x: ${maskedMsg}`,
+          slice_failure_count: newCount,
+          finalized_at: liveTs,
+          heartbeat_at: liveTs,
+          updated_at: liveTs,
+        })
+        .eq('run_id', run_id)
+        .in('status', ['running', 'finalizing']);
+    } else {
+      // Stamp failure_reason + bump counter; keep the run open so the
+      // next slice tick retries from the same cursor (idempotent via
+      // feed_items PK).
+      await supabase
+        .from('signal_queue_runs')
+        .update({
+          failure_reason: reasonStamp,
+          slice_failure_count: newCount,
+          heartbeat_at: liveTs,
+          updated_at: liveTs,
+        })
+        .eq('run_id', run_id)
+        .eq('status', 'running');
+      // Release the cursor claim so the next tick can re-claim it.
       await supabase
         .from('signal_queue_cursor')
-        .delete()
+        .update({ claimed_at: null })
         .eq('run_id', run_id)
         .eq('ticker', FEED_SYNTHETIC_TICKER);
-      return {
-        run_id, signal_id: config.signalId,
-        claimed: 1, succeeded: 0, skipped: 0,
-        cas_attempted: false, cas_won: false, empty: false,
-        mode: 'sequential-feed',
-        pages_fetched: pagesThisSlice, items_upserted: itemsUpserted,
-        runaway: true,
-      };
     }
+    // Re-throw with the masked message; the cron handler propagates
+    // verbatim into the 500 body and emits slice.failed.
+    throw new Error(maskedMsg);
+  }
 
-    // One bucket token per page (calls-per-page = 1 by feed-mode contract).
-    await bucket.acquire();
-
-    let page;
-    try {
-      page = await fetchPage({ cursorToken: feedCursor, asOf: as_of });
-    } catch (e) {
-      // A throw mid-drain is a slice failure (returned via thrown Error
-      // → cron handler logs slice.failed). The next tick re-claims the
-      // same cursor; idempotent retry via feed_items PK.
-      const msg = e instanceof Error ? e.message : String(e);
-      throw new Error(`feed-slice: fetchPage threw on page ${pagesFetched + 1}: ${msg}`);
-    }
-
-    if (page.items.length > 0) {
-      const rows = page.items.map((it) => ({
-        run_id,
-        article_id: it.articleId,
-        ticker: it.ticker,
-        sentiment_num: it.sentimentNum,
-        tier_weight: it.tierWeight,
-        published_utc: it.publishedUtc,
-      }));
-      const { error: itemsErr } = await supabase
-        .from('signal_queue_feed_items')
-        .upsert(rows, { onConflict: 'run_id,article_id,ticker', ignoreDuplicates: false });
-      if (itemsErr) {
-        throw new Error(`feed-slice: feed_items upsert failed: ${itemsErr.message}`);
-      }
-      itemsUpserted += rows.length;
-    }
-
-    feedCursor = page.nextToken;
-    pagesFetched += 1;
-    pagesThisSlice += 1;
-
-    // Per-page advance + heartbeat. Status=running guard preserves the
-    // sweeper's CAS-to-failed claim if it already won.
-    const ts = as_of.toISOString();
-    const { error: advanceErr } = await supabase
+  // Successful page-loop exit — reset the counter (any successful slice
+  // breaks a consecutive-failure streak, per INC-73 §"reset on success").
+  {
+    const liveTs = liveClock.getWallClockTs().toISOString();
+    await supabase
       .from('signal_queue_runs')
-      .update({
-        feed_cursor: feedCursor,
-        feed_pages_fetched: pagesFetched,
-        heartbeat_at: ts,
-        updated_at: ts,
-      })
+      .update({ slice_failure_count: 0, heartbeat_at: liveTs, updated_at: liveTs })
       .eq('run_id', run_id)
-      .eq('status', 'running');
-    if (advanceErr) {
-      throw new Error(`feed-slice: run advance failed: ${advanceErr.message}`);
-    }
-
-    if (page.nextToken === null) {
-      exhausted = true;
-      break;
-    }
+      .eq('status', 'running')
+      .gt('slice_failure_count', 0);
   }
 
   // ── 5. Exhausted → DELETE + CAS. Else RELEASE the claim.
