@@ -150,10 +150,22 @@ export interface ActiveCatalystMeta {
   cross_vendor_duplicates_dropped: number;
   /** §(d) look-ahead drops (from classifier; combined structured + keyword). */
   future_event_excluded: number;
-  /** §(b) verb-gate drops (from classifier; reflects news-keyword pre-classify pass). */
+  /**
+   * §(b) verb-gate drops aggregated across stages — INC-75 fix.
+   * Fetcher-stage (Polygon news pre-filter, the real PRE-gate volume)
+   * + classifier-stage (defence-in-depth; structurally 0 because the
+   * fetcher already filters, but retained as a contract surface).
+   */
   verb_gate_drops: number;
-  /** §(b) numeric-gate drops on guidance (from classifier). */
+  /** §(b) numeric-gate drops on guidance — aggregated identically (INC-75). */
   numeric_gate_drops: number;
+  /**
+   * §(b) PRE-gate article volume seen by the Polygon news-keyword
+   * fetcher. FPR is computable as
+   * `(verb_gate_drops + numeric_gate_drops) / articles_scanned`.
+   * INC-75 instrumentation fix.
+   */
+  articles_scanned: number;
   /** §(e) dividends-only declaration-date-missing counter (Polygon + Tradier). */
   declaration_date_unavailable: number;
   /** True iff Tradier was invoked as the DEC-057 §(i) typed-fallback. */
