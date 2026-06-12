@@ -75,6 +75,16 @@ Deno.serve(createHandler(async (req: Request) => {
       claimed: sliceResult.claimed, succeeded: sliceResult.succeeded,
       skipped: sliceResult.skipped, cas_won: sliceResult.cas_won,
       empty: sliceResult.empty,
+      // INC-74 — feed-mode duplicate-tuple observability. Undefined in
+      // per-ticker mode; zero on a clean feed slice. `duplicate_conflicts`
+      // is the strict subset where the dropped duplicate disagreed with
+      // the first-wins keeper — non-zero is a Phase-7 review signal.
+      ...(sliceResult.duplicate_tuples_dropped !== undefined
+        ? { duplicate_tuples_dropped: sliceResult.duplicate_tuples_dropped }
+        : {}),
+      ...(sliceResult.duplicate_conflicts !== undefined
+        ? { duplicate_conflicts: sliceResult.duplicate_conflicts }
+        : {}),
     },
   });
 

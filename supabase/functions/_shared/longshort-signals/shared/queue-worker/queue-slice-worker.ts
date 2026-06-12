@@ -92,6 +92,22 @@ export interface QueueSliceWorkerResult {
   /** Feed mode only — feed_items rows upserted THIS slice. */
   items_upserted?: number;
   /**
+   * Feed mode only — duplicate `(article_id, ticker)` tuples dropped
+   * pre-upsert across all pages drained by THIS slice (INC-74). Sum of
+   *   (rows_assembled_from_pages) − (rows_actually_sent_to_upsert).
+   * Zero on a clean run. Carried into `slice.completed` metadata for
+   * observability — non-zero is informational, not pathological.
+   */
+  duplicate_tuples_dropped?: number;
+  /**
+   * Feed mode only — subset of `duplicate_tuples_dropped` where the
+   * duplicate carried a DIFFERENT `sentiment_num`, `tier_weight`, or
+   * `published_utc` than the first-wins keeper (INC-74). Counted
+   * separately so a future DEC can revisit the first-wins rule if this
+   * is observed nonzero in Phase 7 / live operation.
+   */
+  duplicate_conflicts?: number;
+  /**
    * Feed mode only — set when the runaway guard tripped and the run was
    * transitioned to `failed`. Surfaces via the cron handler's audit
    * metadata so an operator sees the cause in the run.failed event.
@@ -364,6 +380,10 @@ async function runFeedSlice(
   const bucket = (ctx.bucketFactory ?? defaultBucketFactory)(config.ratePerSec);
   let pagesThisSlice = 0;
   let itemsUpserted = 0;
+  // INC-74 — per-slice duplicate-tuple observability. Counted across
+  // every page drained THIS slice; carried into slice.completed metadata.
+  let duplicateTuplesDropped = 0;
+  let duplicateConflicts = 0;
   let exhausted = false;
 
   // ── INC-73 — Wrap the entire drain in try/catch. On throw: stamp
@@ -407,14 +427,24 @@ async function runFeedSlice(
       }
 
       if (page.items.length > 0) {
-        const rows = page.items.map((it) => ({
-          run_id,
-          article_id: it.articleId,
-          ticker: it.ticker,
-          sentiment_num: it.sentimentNum,
-          tier_weight: it.tierWeight,
-          published_utc: it.publishedUtc,
-        }));
+        // INC-74 — Postgres `ON CONFLICT DO UPDATE` rejects a single
+        // INSERT that targets the same conflict key twice ("command
+        // cannot affect row a second time"). Vendor feeds can legitimately
+        // emit the same `(article_id, ticker)` more than once within a
+        // single page's `insights[]` (e.g. multi-ticker article repeating
+        // a ticker) or across the page boundary when an article spans two
+        // vendor pages drained inside one slice. Dedupe deterministically
+        // (first-occurrence-wins) at the batch-assembly point, mode-scoped
+        // to the engine (NOT the Phase-1 fetcher — fetcher remains the
+        // dumb pipe; engine owns persistence shape).
+        const dedupe = dedupeFeedItems(run_id, page.items);
+        duplicateTuplesDropped += dedupe.duplicatesDropped;
+        duplicateConflicts += dedupe.conflicts;
+        const rows = dedupe.rows;
+        if (rows.length === 0) {
+          // Page only contained duplicates of already-staged-this-page
+          // rows — nothing to upsert; advance cursor as normal.
+        } else {
         const { error: itemsErr } = await supabase
           .from('signal_queue_feed_items')
           .upsert(rows, { onConflict: 'run_id,article_id,ticker', ignoreDuplicates: false });
@@ -422,6 +452,7 @@ async function runFeedSlice(
           throw new Error(`feed_items upsert failed: ${itemsErr.message}`);
         }
         itemsUpserted += rows.length;
+        }
       }
 
       feedCursor = page.nextToken;
@@ -550,6 +581,8 @@ async function runFeedSlice(
     cas_attempted: exhausted, cas_won: casWon, empty: false,
     mode: 'sequential-feed',
     pages_fetched: pagesThisSlice, items_upserted: itemsUpserted,
+    duplicate_tuples_dropped: duplicateTuplesDropped,
+    duplicate_conflicts: duplicateConflicts,
   };
 }
 
@@ -622,4 +655,76 @@ function defaultBucketFactory(ratePerSec: number): TokenBucket {
   // TokenBucket defaults route the clock through `productionClock` per
   // DEC-034 clause 4 — see token-bucket.ts header comment.
   return new TokenBucket({ ratePerSec });
+}
+
+// ── INC-74 — feed-items batch deduper ──────────────────────────────────
+
+export interface FeedItemRow {
+  run_id: string;
+  article_id: string;
+  ticker: string;
+  sentiment_num: number;
+  tier_weight: number;
+  published_utc: string;
+}
+
+export interface DedupeFeedItemsResult {
+  rows: FeedItemRow[];
+  /** Total duplicate tuples (same article_id+ticker) removed. */
+  duplicatesDropped: number;
+  /** Subset where the dropped duplicate disagreed with the first-wins keeper. */
+  conflicts: number;
+}
+
+/**
+ * Deterministic first-occurrence-wins dedupe by `(article_id, ticker)`.
+ * Postgres `ON CONFLICT DO UPDATE` rejects a single INSERT that targets
+ * the same conflict key twice ("command cannot affect row a second
+ * time"); vendor feeds can legitimately surface a duplicate tuple within
+ * one page's `insights[]` or across the page boundary inside one slice.
+ *
+ * Observability — `duplicatesDropped` is the total tuples removed;
+ * `conflicts` is the strict subset whose dropped row carried a different
+ * `sentiment_num`, `tier_weight`, or `published_utc` than the first
+ * occurrence. Both are surfaced through the slice.completed audit event
+ * metadata so a future DEC can revisit the first-wins rule if conflicts
+ * are ever observed nonzero in live operation.
+ */
+export function dedupeFeedItems(
+  run_id: string,
+  items: ReadonlyArray<{
+    articleId: string;
+    ticker: string;
+    sentimentNum: number;
+    tierWeight: number;
+    publishedUtc: string;
+  }>,
+): DedupeFeedItemsResult {
+  const seen = new Map<string, FeedItemRow>();
+  let duplicatesDropped = 0;
+  let conflicts = 0;
+  for (const it of items) {
+    const key = `${it.articleId}\u0001${it.ticker}`;
+    const prev = seen.get(key);
+    if (prev === undefined) {
+      seen.set(key, {
+        run_id,
+        article_id: it.articleId,
+        ticker: it.ticker,
+        sentiment_num: it.sentimentNum,
+        tier_weight: it.tierWeight,
+        published_utc: it.publishedUtc,
+      });
+      continue;
+    }
+    duplicatesDropped += 1;
+    if (
+      prev.sentiment_num !== it.sentimentNum ||
+      prev.tier_weight !== it.tierWeight ||
+      prev.published_utc !== it.publishedUtc
+    ) {
+      conflicts += 1;
+    }
+  }
+  return { rows: [...seen.values()], duplicatesDropped, conflicts };
 }
