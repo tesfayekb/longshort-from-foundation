@@ -394,8 +394,19 @@ export function createActiveCatalystOrchestrator(
         keyword_source_count,
         cross_vendor_duplicates_dropped: classified.cross_vendor_duplicates_dropped,
         future_event_excluded: classified.future_event_excluded,
-        verb_gate_drops: classified.verb_gate_drops,
-        numeric_gate_drops: classified.numeric_gate_drops,
+        // INC-75 fix: aggregate fetcher-stage (real PRE-gate volume from
+        // Polygon news-keyword) + classifier-stage (defence-in-depth)
+        // drop counters. The fetcher counters live on the events-shape
+        // CatalystFetchResult and are absent when the vendor was
+        // unavailable — coalesce to 0.
+        verb_gate_drops:
+          (polygonNewsRes.kind === 'events' ? polygonNewsRes.verb_gate_drops ?? 0 : 0)
+          + classified.verb_gate_drops,
+        numeric_gate_drops:
+          (polygonNewsRes.kind === 'events' ? polygonNewsRes.numeric_gate_drops ?? 0 : 0)
+          + classified.numeric_gate_drops,
+        articles_scanned:
+          polygonNewsRes.kind === 'events' ? polygonNewsRes.articles_scanned ?? 0 : 0,
         declaration_date_unavailable,
         tradier_fallback_invoked,
         vendor_unavailable,
