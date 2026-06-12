@@ -1,5 +1,182 @@
 
 
+### FP-050: Signal #4 — Insider Transactions REBUILD on SEC EDGAR direct (DW-094 discharge; Phase 0 history-recovery + vendor-shape audit; DOCS-ONLY)
+
+| Field | Value |
+|---|---|
+| **ID** | FP-050 (next-free after FP-049; grep-verified at HEAD via `rg -no "FP-[0-9]+" docs/08-planning/feature-proposals.md \| sort -u -t- -k2 -n \| tail` → FP-049 latest, FP-050 only as forward-reference in DW-094 prose, no prior allocation as a `### FP-050` heading). |
+| **Status** | **phase-0-complete-stop / DOCS-ONLY** (ACT-181, 2026-06-12 — Phase 0 history-recovery + vendor-shape audit on SEC EDGAR direct; DEC-058 SKELETON drafted (UNRATIFIED — every binding is a question for operator ratification); no code, no migrations, no registry mutation; Signal #4 STAYS DISARMED through the entire FP-050 ladder until its own validated arm-up at a later phase). |
+| **Authority chain** | Constitution Rule 9 (execution from baseline v4) → DW-094 mandate (EDGAR-direct rebuild; SEC EDGAR is the original source Polygon resells) → ACT-156 disarm (Signal #4 cleanly removed from the live stack pending rebuild) → INC-70 (Polygon `/stocks/filings/vX/form-4` silently ignores `ticker` + `transaction_date` filters at our entitlement tier — the failure mode that drives every design choice in this rebuild) → DEC-044 (FP-042 NEO title-heuristic classifier is contract-preserved; only the data-acquisition layer is replaced) → §4.4.4 spec verbatim. |
+| **Spec — §4.4.4 verbatim (`docs/04-modules/longshort/design-source/CROSSWIND_SPEC.md:454-464` — grep-verified)** | <pre>#### §4.4.4 — Signal #4: Insider transactions (90-day, 14-day half-life)<br>- Definition: Decayed weighted sum of informative insider transactions.<br>  - Filter: Open-market purchases (P) and discretionary sales (S, excluding 10b5-1). Exclude option exercises (M, C), RSU vests (A), gifts (G).<br>  - Role weights: CEO/CFO 1.0; NEOs 0.7; Section 16 officers 0.4; independent directors 0.3; 10%+ owners 0.5.<br>  - Formula: raw_signal_N = sum_over_90d(shares × price × sign × role_weight × exp(-age_days / 14)) / market_cap<br>- Data source: Polygon insider endpoint primary (verify Phase 0 for transaction codes and 10b5-1 flag); SEC EDGAR Form 4 XML direct as backup.<br>- Cadence: 30 min polling during market hours; daily catch-up after close.<br>- Decay: Exponential, 14-day half-life within 90-day window.<br>- Normalization: Within-sector GICS z-score, clipped at ±3.<br>- Missing-data (per §4.3.5 non-critical classification): Returns None when no Form 4 in trailing 90 days. Contributes (value=Decimal('-999'), is_present=0) to combiner.</pre> **Spec-vs-rebuild note (Rule 8):** the spec's "Polygon primary / EDGAR backup" ordering is REVERSED by DW-094 — EDGAR becomes primary because the Polygon endpoint is structurally broken at our entitlement tier (INC-70). DEC-058 carries this as a named deviation. |
+| **Registry truth (grep-verified at HEAD — live-DB §22.5.1 reads)** | `signal_registry.insider_transactions_90d = {status:'planned', signal_num:4, criticality:'non_critical', display_name:'Insider transactions (90-day, 14-day half-life)', spec_ref:'§4.4.4', cadence:'daily (after-close; intraday polling deferred)', planned_phase:'Phase 2.4', job_registry_id:'longshort.insider.compute', stale_after_hours:48}` (ACT-156 disarm: `status` flipped `live`→`planned` via data UPDATE, no MIG). `job_registry.longshort.insider.compute = {enabled:false, schedule:'0 19 * * 1-5', trigger_type:'scheduled', status:'registered', handler_path:'supabase/functions/longshort-insider-compute/index.ts', timeout_seconds:600, max_retries:2}` (DISARMED; schedule is the original FP-042 cron template, NOT re-evaluated under DEC-048 yet — will land in a later FP-050 phase). The exact `signal_id` for downstream code is `insider_transactions_90d`. |
+| **Why the original path failed (history recovery — grep-cited verbatim)** | (a) **INC-70 (`docs/06-tracking/incidental-findings.md:817-831`)** — Polygon `/stocks/filings/vX/form-4` returned byte-identical 1.85 MB / 1000-row firehose responses for single-ticker, `ticker.any_of`, comma-list, `ticker.in`, pipe-delimited, repeated-param, market-wide 90-day, AND market-wide 14-day; `ticker=AAPL` returned rows NOT containing AAPL (top buckets: DELL=312, FCNCA=41, SSMR=38). Only `limit=` was honored. The FP-042 per-ticker fetcher was broken since deploy: fetched the same firehose 839×, locally filtered by `tickers[0]===ticker` (~0 rows per S&P-500 name since our universe isn't dominant in the firehose), compute marked each ticker `no_qualifying_transactions` — perfectly indistinguishable from the EXPECTED sparse profile. **Phantom signal: looked sparse, was actually wrong.** (b) **ACT-156 disarm rationale (`docs/06-tracking/incidental-findings.md:826`)** — Signal #4 disarmed in `signal_registry` (`status='live'`→`'planned'`); `job_registry.longshort.insider.compute.enabled` stays `false`; combiner imputes the non-critical signal's absence per §6.5; FP-042 compute / classifier / filter / z-score code UNTOUCHED — correct and reused as-is with the EDGAR fetcher. (c) **DW-094 mandate (`docs/08-planning/deferred-work-register.md:2035-2049`)** — Rebuild on EDGAR direct (`company_tickers.json` → CIK; `data.sec.gov/submissions/CIK{10}.json` filtered to form type 4; parse Form 4 XML to per-transaction rows); EDGAR is the original source Polygon resells; authoritative per-CIK filtering; no entitlement; well-documented schemas; **requires `User-Agent` header with valid contact email else 403, respects 10 req/sec limit**. (d) **In-tree remnants at HEAD (state-of-the-tree, NOT deleted):** `supabase/functions/_shared/longshort-signals/insider-transactions/compute-insider.ts`, `compute-insider_test.ts`, `insider-orchestrator.ts`, `insider-orchestrator_test.ts`; `supabase/functions/longshort-insider-compute/index.ts` + `index_test.ts`; `supabase/functions/longshort-insider-compute-manual/index.ts` + `index_test.ts`; `supabase/functions/_shared/longshort-signals/shared/polygon-form4-fetcher.ts` (the FAILED vendor fetcher — kept for forensic reference; will be DELETED at the FP-050 fetcher-replacement phase per DW-094 "data-acquisition layer needs replacing" + ACT-156 "FP-042 compute / classifier / filter / z-score is correct and reused as-is"). (e) **Dual-date axis blind spot (the highest-stakes finding — newly surfaced by Phase 0 probes):** the original code keyed decay AND look-ahead on `transaction_date` only (grep: `compute-insider.ts:34` `age_days = (as_of − transaction_date) in days`; `compute-insider.ts:157,160,206` `ageDays(r.transaction_date!, as_of)`; `polygon-form4-fetcher.ts:91` `Used for decay (age_days = as_of − transaction_date)`). **There is no `acceptance_datetime` field in the persisted contract, and no look-ahead gate against acceptance.** Per Phase-0 lag table below, transactions become knowable up to ~5.95 calendar days AFTER `transaction_date` (the SEC 2-business-day filing rule spans weekends). An `as_of` computed at noon ET with `transaction_date` filtered to `[as_of−90d, as_of]` would have included transactions whose Form-4 had not been ACCEPTED yet at `as_of` — a silent look-ahead bias of up to ~5 calendar days for filings near the window-right boundary. The phantom-firehose bug (a) made this latent rather than active (the compute never saw real transactions), but the rebuild MUST close this axis at v1 — see DEC-058 §(b). |
+| **B1 — EDGAR endpoint map (live-probe-grounded; all probes ran 2026-06-12 with declared UA `Lovable-Crosswind-Probe FP-050/0.1 (contact: ops@crosswind.invalid)`)** | See the table below (separate fenced block — markdown-table-in-cell breaks rendering). |
+| **B2 — Probes (raw evidence; ≤40 EDGAR requests; pre-flight UA-discipline observation included)** | See the §B2 evidence block below (separate fenced block). Probe scaffolding was performed via direct `curl` from the dev sandbox (no edge-runtime probe function deployed) — nothing to delete edge-side. Local `/tmp/*.html`, `/tmp/*.xml`, `/tmp/*.json`, `/tmp/sub*.json`, `/tmp/idx.html`, `/tmp/_f4.xml`, `/tmp/fidx.txt`, `/tmp/dlist.html` artifacts are ephemeral and will be reaped by sandbox lifecycle (not part of repo). |
+| **B3 — Gap table → DEC-058 skeleton (every binding a QUESTION for operator ratification — DEC-058 UNRATIFIED)** | See the §B3 skeleton block below (separate fenced block). Each binding names the failure mode it addresses (INC-70 firehose; dual-date blind spot; 10b5-1 silent inclusion; NEO proxy; CIK-mapping quirk; SEC fair-access). |
+| **Phase ladder (proposed; only Phase 0 executed; Phases 1-4 await DEC-058 ratification)** | **Phase 0 (this turn, ACT-181) — DOCS-ONLY** history recovery + EDGAR vendor-shape audit + DEC-058 skeleton. **Phase 1 — DEC-058 ratification + EDGAR fetcher build** (`edgar-form4-fetcher.ts` with both `verifyFilterHonored()` (INC-70 axis) AND `verifyFieldsPresent()` (INC-71 axis) pre-flights; per-CIK and/or daily-feed branch per B3 §(i) arithmetic; UA-header constant; self-imposed RPS cap; 10b5-1 footnote detector per B3 §(c); Form 4/A amendment handler per B3 §(h); dual-date persistence — both `transaction_date` AND `acceptance_datetime` carried to compute per B3 §(b)). **Phase 2 — orchestrator wiring** (re-use FP-042 `compute-insider.ts` + classifier + filter + z-score UNTOUCHED per ACT-156 contract preservation; new orchestrator stages: Stage 0 universe load, Stage 1 CIK resolution from `company_tickers.json` snapshot per B3 §(f), Stage 2 EDGAR Form-4 discovery + XML parse, Stage 3 acceptance-gated look-ahead filter per B3 §(b), Stage 4 reuse FP-042 compute, Stage 5 within-sector z-score, Stage 6 `captureSignalObservations`; d066c890 entry-stamping pattern at orchestrator entry/finalization). **Phase 3 — registry truth + cron template** (MIG-NNN seeds new schedule per DEC-048; `signal_registry.insider_transactions_90d.status` flip `planned`→`live`; module doc + `function-index.md` + `event-index.md` updates; cron.job template lands DISARMED). **Phase 4 — arm-up choreography** (operator-applied `cron.schedule`; MIG-NNN flip `enabled:false→true`; DEC-040 byte-match attestation; DEC-043-pattern attestation on first natural cron-fire). |
+| **Forbiddens (all observed at Phase 0)** | No code beyond transient probe scaffolding (none committed — only `curl` from dev sandbox). No registry / migration / `cron.job` changes — Signal #4 STAYS DISARMED through the entire FP-050 ladder until its own validated arm-up. No FMP / Finnhub insider endpoints (the original vendor path is what failed — EDGAR-primary is the DW-094 mandate). No edits to live signals (Signals #1, #2, #3, #5, #7, #8, #9 untouched). No edits to FP-042 compute / classifier / filter / z-score code (contract preservation per ACT-156). |
+| **Gates (project-root canonical — verbatim final lines)** | `deno run --allow-read scripts/check-wall-clock.ts` → **`check-wall-clock: CLEAN — 0 violations`**. `cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/` → **`ok \| 947 passed \| 0 failed (28s)`** (unchanged from FP-049 ACT-180 baseline — docs-only commit). `npx eslint .` → **`✖ 15 problems (0 errors, 15 warnings)`** — zero errors; 15 pre-existing React-UI warnings; FP-050 Phase 0 contributes 0/0. |
+| **ROI Impact** | **Zero on live signals** (docs-only; no money-path code touched). **Positive on rebuild design quality** — every DEC-058 binding is grounded in either (a) the INC-70 failure mode it must prevent, (b) live EDGAR probe evidence, or (c) a newly-surfaced blind spot (dual-date axis) the original build silently violated. **Positive on attribution honesty** — the dual-date lag table below quantifies what the original `transaction_date`-only contract was structurally missing, making the rebuild's acceptance-gated look-ahead an evidence-backed decision rather than a notional improvement. |
+
+#### §B1 — EDGAR endpoint map (live-probe-grounded)
+
+| Need | EDGAR endpoint | Method | Auth / headers | Filtering verified | Notes |
+|---|---|---|---|---|---|
+| Ticker → CIK resolution | `https://www.sec.gov/files/company_tickers.json` | GET | UA-required (no key) | n/a (full snapshot, ~10,416 entries) | One-shot snapshot; 796 KB; refresh cadence is a DEC-058 §(f) binding question. **CIK-conflict quirk found:** `NXT` resolves to CIK 1852131 (`Nextpower Inc.`) but the S&P-500 NXT is `Nextracker Inc.` (CIK 1953967) — `company_tickers.json` carries one row per ticker only. Mapping override layer needed for known conflicts. |
+| Per-CIK filings discovery | `https://data.sec.gov/submissions/CIK{cik:010d}.json` | GET | UA-required | Authoritative per-CIK (filter by `form == "4" \|\| "4/A"` client-side from `filings.recent.{form, accessionNumber, filingDate, acceptanceDateTime, primaryDocument}`) | AMZN probe: 160 KB, 526 Form-4s in `recent` slice; ~0.5 s wall. **`acceptanceDateTime` carried at filing-discovery layer** — the dual-date axis is available BEFORE we pay the per-XML cost. |
+| Daily cross-market form index | `https://www.sec.gov/Archives/edgar/daily-index/{YYYY}/QTR{n}/form.{YYYYMMDD}.idx` | GET | UA-required + `Accept-Encoding: identity` | Authoritative form-type filter (fixed-width parse on column 0) | 2026-06-11 probe: 882 KB, 4,527 total filings, **1,667 Form-4 + 6 Form-4/A**; 0.3 s wall. **NOT** at `/full-index/` (current-quarter has only the rollup `form.idx`/`company.idx`/etc — no per-day files); IS at `/daily-index/`. |
+| Form-4 XML payload | `https://www.sec.gov/Archives/edgar/data/{cik}/{accession-nodash}/{primary-doc}.xml` | GET | UA-required | n/a (the document itself) | Filename is NOT `primary_doc.xml` for Form-4; it's `wk-form4_{n}.xml` (varies by filer). Must discover via directory index (`/{path}/`) and grep `href=".*\.xml"`. ~4 KB - 28 KB per filing. |
+| Form-4 directory index | `https://www.sec.gov/Archives/edgar/data/{cik}/{accession-nodash}/` | GET | UA-required | n/a (HTML listing) | Probe-verified for all 10 sampled filings; the `<a href="*.xml">` link list is deterministic. Alternative `index.json` exists at same path; not used at Phase 0. |
+
+#### §B2 — Raw probe evidence (UA discipline + CIK coverage + filing shape + Form-4 XML samples + dual-date lag table)
+
+**Fair-access pre-flight (DEC-058 §(g) evidence).** SEC EDGAR fair-access policy requires a declared User-Agent identifying the requestor + contact; courtesy-caps ~10 req/s. Verified empirically:
+
+```
+# Probe 1: company_tickers.json WITHOUT UA → expected 403
+curl -s -o /dev/null -w "HTTP=%{http_code} bytes=%{size_download}\n" \
+  "https://www.sec.gov/files/company_tickers.json"
+→ HTTP=403 bytes=1925
+
+# Probe 2: company_tickers.json WITH UA → 200
+curl -s -H "User-Agent: Lovable-Crosswind-Probe FP-050/0.1 (contact: ops@crosswind.invalid)" \
+  -w "HTTP=%{http_code} bytes=%{size_download}\n" \
+  "https://www.sec.gov/files/company_tickers.json"
+→ HTTP=200 bytes=796479
+→ TOTAL_ROWS=10416
+→ sample: NVDA(CIK 1045810), GOOGL(CIK 1652044), AAPL(CIK 320193)
+```
+
+**CIK coverage check (15/15 of a random universe sample resolve; one mapping conflict found).**
+
+```
+SOLV   -> CIK=   1964738 (Solventum Corp)
+AMZN   -> CIK=   1018724 (AMAZON COM INC)
+PHM    -> CIK=    822416 (PULTEGROUP INC/MI/)
+NOW    -> CIK=   1373715 (ServiceNow, Inc.)
+G      -> CIK=   1398659 (Genpact LTD)
+MAT    -> CIK=     63276 (MATTEL INC /DE/)
+RGLD   -> CIK=     85535 (ROYAL GOLD INC)
+NXT    -> CIK=   1852131 (Nextpower Inc.)        ⚠ S&P-500 NXT is Nextracker (CIK 1953967) — DEC-058 §(f) mapping-override binding
+MRNA   -> CIK=   1682852 (Moderna, Inc.)
+SW     -> CIK=   2005951 (Smurfit Westrock plc)
+MTD    -> CIK=   1037646 (METTLER TOLEDO INTERNATIONAL INC/)
+CPAY   -> CIK=   1175454 (CORPAY, INC.)
+INVH   -> CIK=   1687229 (Invitation Homes Inc.)
+DBX    -> CIK=   1467623 (DROPBOX, INC.)
+AIG    -> CIK=      5272 (AMERICAN INTERNATIONAL GROUP, INC.)
+MISSING: []   # 15/15 resolved
+```
+
+**Per-CIK submissions endpoint shape (AMZN, CIK 0001018724).**
+
+```
+HTTP=200 bytes=160118 time=0.52s
+forms histogram (recent): [('4', 526), ('144', 202), ('8-K', 63), ('PX14A6G', 46),
+                           ('SC 13G/A', 24), ('13F-HR', 22), ('10-Q', 18), ('424B5', 14),
+                           ('DEFA14A', 12), ('3', 11)]
+form-4 count in 'recent' slice = 526
+
+First 5 Form-4 entries (acc | filed | accepted | primaryDoc):
+  0001936006-26-000018 | 2026-06-03 | 2026-06-03T20:27:07.000Z | xslF345X06/wk-form4_1780518424.xml
+  0001374545-26-000008 | 2026-05-26 | 2026-05-26T22:47:08.000Z | xslF345X06/wk-form4_1779835625.xml
+  0002024813-26-000008 | 2026-05-26 | 2026-05-26T22:39:49.000Z | xslF345X06/wk-form4_1779835185.xml
+  0001018724-26-000020 | 2026-05-26 | 2026-05-26T22:33:10.000Z | xslF345X06/wk-form4_1779834787.xml
+  0001557979-26-000006 | 2026-05-26 | 2026-05-26T22:26:07.000Z | xslF345X06/wk-form4_1779834363.xml
+```
+
+**Daily cross-market form index (2026-06-11, the latest available business day at probe time).**
+
+```
+HTTP=200 bytes=882048
+daily total: 4527
+form-4: 1667    form-4/A: 6
+top10: [('4', 1667), ('424B2', 725), ('144', 362), ('8-K', 289), ('3', 178),
+        ('D', 160), ('40-APP/A', 142), ('6-K', 103), ('FWP', 83), ('D/A', 80)]
+```
+
+**Form-4 XML shape (5 AMZN filings parsed; field-by-field map for what compute needs).**
+
+```
+==== /tmp/f4_amzn1.xml (acc 0001018724-26-000020, 20091 bytes)
+issuerName: AMAZON COM INC    issuerCik: 0001018724
+ownerName: Herrington Douglas J
+  isDirector: 0  isOfficer: 1  isTenPercentOwner: 0  isOther: 0
+  officerTitle: "CEO Worldwide Amazon Stores"          ← FP-042 NEO title-heuristic input (DEC-044)
+periodOfReport: 2026-05-21
+  ND tx: code=M date=2026-05-21 A/D=A shares=7500 price=0       D/I=D   ← option exercise (M; OUT per §4.4.4)
+  ND tx: code=M date=2026-05-21 A/D=A shares=2860 price=0       D/I=D
+  ND tx: code=M date=2026-05-21 A/D=A shares=5565 price=0       D/I=D
+  ND tx: code=S date=2026-05-21 A/D=D shares=4200 price=261.8781 D/I=D   ← discretionary sale (S; IN if NOT 10b5-1)
+  ND tx: code=S date=2026-05-21 A/D=D shares=1370 price=263.1154 D/I=D
+  ND tx: code=S date=2026-05-21 A/D=D shares=800  price=263.8538 D/I=D
+  10b5-1 mention in doc: True                          ← excludes all S rows per §4.4.4
+
+==== /tmp/f4_amzn2.xml (acc 0001936006-26-000018, 4199 bytes) — single S, 10b5-1 → all excluded
+==== /tmp/f4_amzn3.xml (acc 0001374545-26-000008, 16433 bytes) — Jassy Andrew R "President and CEO" (CEO 1.0 weight); M+S; 10b5-1 → all excluded
+==== /tmp/f4_amzn4.xml (acc 0002024813-26-000008, 27688 bytes) — Garman Matthew S "CEO Amazon Web Services"; M+S; 10b5-1 → all excluded
+==== /tmp/f4_amzn5.xml (acc 0001557979-26-000006, 20267 bytes) — Zapolsky David "Senior Vice President"; M+S; 10b5-1 → all excluded
+```
+
+**Form-4 XML field-to-compute-contract map (DEC-058 §(a)-(e) inputs).**
+
+| Compute need (§4.4.4) | Form-4 XML XPath | Notes |
+|---|---|---|
+| `transaction_code` (P, S, M, A, C, G, F, ...) | `nonDerivativeTable/nonDerivativeTransaction/transactionCoding/transactionCode` | IN-set per §(a) binding. |
+| `transaction_date` (decay anchor) | `nonDerivativeTable/nonDerivativeTransaction/transactionDate/value` | Original (failed) build's decay key — preserved as decay axis per §(b). |
+| `transaction_shares` | `transactionAmounts/transactionShares/value` | |
+| `transaction_price_per_share` | `transactionAmounts/transactionPricePerShare/value` | `0` for code M/A (no cash price). |
+| `acquired_disposed` (sign) | `transactionAmounts/transactionAcquiredDisposedCode/value` | A=acquired, D=disposed. |
+| `direct_or_indirect_ownership` | `ownershipNature/directOrIndirectOwnership/value` | Per §4.4.4 not weighted; recorded for audit. |
+| `is_officer` / `is_director` / `is_ten_percent_owner` | `reportingOwner/reportingOwnerRelationship/{isOfficer,isDirector,isTenPercentOwner}` | Role-weight tier inputs per §4.4.4 + DEC-044. |
+| `officer_title` (NEO-heuristic input) | `reportingOwner/reportingOwnerRelationship/officerTitle` | DEC-044 `classifyRoleWeight` consumes this. |
+| `10b5_1_indicator` | Free-text scan for `/10b5[- ]?1/i` in the XML body (footnote text) | Form 4 has NO structured 10b5-1 flag; check-box at form level + footnote prose. Phase 0 evidence: 5/5 AMZN filings carried the mention → DEC-058 §(c) detector design question. |
+| `issuer_cik` | `issuer/issuerCik` | Cross-check with `company_tickers.json` lookup. |
+| `accession_number` | (URL path) | Idempotency key — see DEC-058 §(h). |
+| `acceptance_datetime` | NOT in XML — from `submissions/CIK{cik}.json` `filings.recent.acceptanceDateTime[i]` | **The dual-date axis — DEC-058 §(b) binding.** |
+
+**THE DUAL-DATE AXIS — lag distribution table (10 filings; 9 with non-derivative tx; 1 derivative-only).**
+
+| CIK | Accession | `transactionDate` (min) | `periodOfReport` | `acceptanceDateTime` | Lag (cal days) | Codes |
+|---|---|---|---|---|---|---|
+| 1018724 | 0001018724-26-000020 | 2026-05-21 | 2026-05-21 | 2026-05-26T22:33:10Z | **5.94** | S, M |
+| 1018724 | 0001936006-26-000018 | 2026-06-01 | 2026-06-01 | 2026-06-03T20:27:07Z | **2.85** | S |
+| 1018724 | 0001374545-26-000008 | 2026-05-21 | 2026-05-21 | 2026-05-26T22:47:08Z | **5.95** | M, S |
+| 1018724 | 0002024813-26-000008 | 2026-05-21 | 2026-05-21 | 2026-05-26T22:39:49Z | **5.94** | S, M |
+| 1018724 | 0001557979-26-000006 | 2026-05-21 | 2026-05-21 | 2026-05-26T22:26:07Z | **5.93** | S, M |
+| 5272    | 0002025132-26-000006 | 2026-06-03 | 2026-06-03 | 2026-06-03T21:05:52Z | **0.88** | F |
+| 5272    | 0002076280-26-000005 | (none — derivative-only) | 2026-06-01 | 2026-06-01T20:58:59Z | n/a | (no ND) |
+| 1467623 | 0002060166-26-000012 | 2026-06-01 | 2026-06-01 | 2026-06-03T20:47:24Z | **2.87** | S, A |
+| 63276   | 0001967445-26-000004 | 2026-05-29 | 2026-05-29 | 2026-06-02T21:30:45Z | **4.90** | M, F |
+| 1037646 | 0001037646-26-000038 | 2026-05-12 | 2026-05-12 | 2026-05-14T14:48:04Z | **2.62** | A |
+
+**Lag stats (n=9 with ND tx):** min=0.88d, max=5.95d, median≈3d, mean≈4.2d. **All filings spec-compliant in business-day terms** (the 5.93-5.95d cluster spans Thu→Tue = 2 business days). **Implication:** an `as_of` at noon ET with `transaction_date ∈ [as_of−90d, as_of]` includes transactions whose Form-4 was not yet accepted at `as_of` — confirmed look-ahead bias up to ~6 calendar days. This is the failure mode the ORIGINAL build's `compute-insider.ts:34,157,160,206` + `polygon-form4-fetcher.ts:91` blind to. DEC-058 §(b) closes it.
+
+**Architecture-fork arithmetic (per-CIK vs daily-feed; DEC-058 §(i) binding).**
+
+| Branch | Per-fire cost (incremental, daily after-close cadence) | Per-fire cost (90-day backfill) | Notes |
+|---|---|---|---|
+| **Per-CIK** (839 universe × 1 submissions.json) | 839 reqs @ ≤5 rps self-imposed → ~168 s wall + per-match XML fetch (Phase-0 AMZN: 526 Form-4 in `recent` → most names will have ≪10 Form-4 in last 24h). Estimate: 839 + ~30 XML ≈ 174 s. | 839 + ~7,500 XML ≈ 1,667 s ≈ 28 min sequential. Backfill is one-shot. | Authoritative per-CIK; no client-side filtering of an out-of-universe firehose. CIK-mapping quirks per §(f). |
+| **Daily-feed** (1 daily form.idx × 1-N days) | 1 idx (~0.9 MB) + filter to in-universe CIKs (~5% of 1,667 ≈ 83) + 83 XML fetches @ 5 rps ≈ 17 s + 1 s idx ≈ 18 s. | 90 idx + ~7,500 XML ≈ 1,500 s ≈ 25 min. | One file/day; deterministic shape. **Strongly favors incremental.** Per-CIK option still useful for ad-hoc backfill of a single name. |
+
+**Phase-0 leaning:** daily-feed primary for incremental; per-CIK retained as a focused-lookup tool. Both bounds within the 600 s `job_registry.timeout_seconds`. The FP-045 queue-engine availability is noted but NOT obviously needed at v1 wall-clock estimates — DEC-058 §(i) binding question is whether the daily-feed primary is single-invocation or queue-paged.
+
+#### §B3 — DEC-058 skeleton (every binding is a QUESTION for operator ratification; UNRATIFIED)
+
+| Binding | Question for operator | Failure mode addressed | Phase-0 evidence anchor |
+|---|---|---|---|
+| **§(a) Transaction-code IN-set** | Propose: **IN = {P (open-market purchase), S (open-market sale)}** at v1, exactly per §4.4.4 verbatim. **OUT = {M (option exercise), C (conversion), A (RSU vest / award), G (gift), F (tax-withheld), I (discretionary)}**, also per §4.4.4 verbatim. **Named deviation:** v1 reads §4.4.4 strictly — exercise-and-sell sequences (the AMZN cluster of M-then-S) contribute ONLY the S leg, NOT the option exercise; this matches §4.4.4 but operator should confirm whether the M-leg's strike-vs-market spread carries information that warrants a future enhancement-FP. | INC-70 phantom signal (the original "code filter" was a client-side post-firehose filter against a wrong data set; the rebuild's code filter is applied against authoritative per-CIK data, so the IN-set actually means something). | All 5 AMZN Form-4 samples in §B2 — every filing carries M+S pairs, no pure P; the M-leg is OUT per §4.4.4, S-leg is IN iff not 10b5-1. |
+| **§(b) Dual-date axis (HIGHEST-STAKES)** | Two options. **Option A (conservative; proposed):** persist BOTH `transaction_date` AND `acceptance_datetime` per row; the look-ahead gate keys on `acceptance_datetime ≤ as_of` (what was knowable); decay age uses `transaction_date` (per spec §4.4.4 `age_days = (as_of − transaction_date)`). **Option B (simpler v1; operator approximation):** acceptance-gate AND decay both keyed on `acceptance_datetime` — named approximation that shifts decay anchor by the lag distribution (mean ~4.2d, max ~6d) and over-decays transactions by up to ~30% of a half-life. Either option closes the look-ahead blind spot the original build silently violated. | **The dual-date blind spot newly surfaced at Phase 0 history-recovery** — `compute-insider.ts:34,157,160,206` + `polygon-form4-fetcher.ts:91` keyed everything on `transaction_date` only; no `acceptance_datetime` in the persisted contract. | §B2 dual-date lag table (n=9): min 0.88d, max 5.95d, median ≈3d. |
+| **§(c) 10b5-1 plan transactions** | Propose **EXCLUDE** all `S`-coded transactions on filings carrying any 10b5-1 mention (the §4.4.4 "discretionary sales, excluding 10b5-1" clause). Detector: free-text scan for `/10b5[- ]?1/i` in the Form-4 XML body (Form 4 has no structured 10b5-1 flag at the per-transaction level — the indication is a form-level checkbox + free-text footnote prose). **Reliability concern:** the AMZN sample showed 5/5 filings with the mention, suggesting either (a) AMZN executives universally trade via 10b5-1 (plausible; Big-Tech disclosure norm), or (b) the mention surfaces even when only SOME tx rows are 10b5-1-covered (would over-exclude). Operator confirm the conservative-over-exclusion stance for v1, with a footnote-position upgrade logged as a DW if Phase-7 IC ablation shows S-exclusion drags signal. | Spec compliance — §4.4.4 explicit exclusion. Implicit: 10b5-1 sales are pre-scheduled and structurally carry no insider-information edge. | All 5 AMZN samples in §B2 — all carry `10b5-1 mention: True`. |
+| **§(d) Role weighting** | Spec §4.4.4 verbatim: **CEO/CFO 1.0; NEOs 0.7; Section 16 officers 0.4; independent directors 0.3; 10%+ owners 0.5.** FP-042 already implemented this via DEC-044's title-heuristic `classifyRoleWeight` (NEO=0.7 approximated by title-string classifier; DEF-14A authoritative enrichment deferred to DW-093). **Reuse as-is** per ACT-156 contract preservation. Operator confirm no new role-weight bindings at v1. | Contract preservation (ACT-156: FP-042 compute / classifier / filter / z-score is correct and reused as-is). DW-093 unchanged. | §B2 AMZN samples carry distinct `officerTitle` strings: "CEO Worldwide Amazon Stores", "President and CEO", "CEO Amazon Web Services", "Senior Vice President", "Senior Vice President" — DEC-044's heuristic table consumes these unchanged. |
+| **§(e) Formula / size semantics** | Spec §4.4.4 verbatim: `raw_signal_N = sum_over_90d(shares × price × sign × role_weight × exp(-age_days / 14)) / market_cap`. Where `shares × price` = dollar value, `sign = +1 for A (acquired) on code P, −1 for D (disposed) on code S` (after §(a) IN-set filter). Existing FP-042 `compute-insider.ts` implements this contract; **reuse as-is** per ACT-156. | Contract preservation; INC-70 left compute correct, only data layer wrong. | n/a (formula-level; spec-cited). |
+| **§(f) CIK-mapping maintenance + unmapped-name handling** | Two sub-bindings. **(f1) Refresh cadence:** `company_tickers.json` snapshot refreshed at universe-refresh cadence (quarterly per current plan) OR on every fire (10,416-row 800 KB fetch ≤1 s — negligible). Propose: **fetch-per-fire** for staleness safety. **(f2) Mapping override table:** for ticker conflicts (Phase-0 evidence: `NXT` resolves to Nextpower CIK 1852131 but S&P-500 NXT is Nextracker CIK 1953967), maintain a small operator-curated override map in code (`INSIDER_CIK_OVERRIDES: Record<ticker, cik>`). Unmapped names emit typed `skip='ticker_to_cik_unresolved'` per the FP-042 typed-skip discipline — never silent. | INC-70 made silent ticker→data mismatch the failure shape; we close it with explicit typed skip when ticker can't resolve. | §B2 CIK coverage block — 15/15 resolved BUT one mapping conflict (NXT) found. |
+| **§(g) UA + self-imposed RPS cap** | Spec the UA header constant in the fetcher: `User-Agent: Lovable-Crosswind/{module_version} (contact: <ops_email>)` — operator provides `<ops_email>` as a new secret `EDGAR_CONTACT_EMAIL` (NOT a credential; an SEC fair-access identifier). **Self-imposed RPS cap: 5 rps** (half SEC's published 10 rps headroom — DEC-034 chokepoint discipline). Pre-flight check at fetcher construction: a no-UA probe MUST return 403 (proves we're talking to the right endpoint with the right policy); a with-UA probe MUST return 200. | Phase-0 evidence: no-UA returns 403; with-UA returns 200. Without this binding the fetcher fails 100% silently the first time it's invoked. | §B2 fair-access pre-flight block. |
+| **§(h) Form 4/A amendment policy** | Form 4/A = amendment to a prior Form 4 (corrects errors). Daily-index 2026-06-11 evidence: 6 Form-4/A vs 1,667 Form-4 → ~0.36% rate. Propose: **treat 4/A identically to 4** at v1 (same XML schema; the amendment supersedes the original transaction record by accession number). Idempotency: persist per row `idempotency_key = (issuer_cik, accession_number, transaction_seq)`; on Form 4/A re-fetch, the new accession produces new rows that ON-CONFLICT-DO-NOTHING; the original Form 4's rows remain in the table (audit preserved) and the compute layer should prefer the most-recent accession for the same (issuer_cik, owner_cik, transaction_date) tuple — operator confirm or counter-propose. | Idempotency requirement (Constitution / FP-045 precedent). Original FP-042 had no amendment policy because the phantom firehose made it moot. | §B2 daily-index 6 4/A out of 1,667 → low but non-zero rate. |
+| **§(i) Architecture branch (per-CIK vs daily-feed)** | Per §B2 arithmetic: daily-feed primary (~18 s/fire incremental, ~25 min backfill) vs per-CIK (~174 s/fire incremental, ~28 min backfill). Both fit `job_registry.timeout_seconds=600` at incremental cadence; backfill is one-shot via manual handler. Propose: **daily-feed primary + per-CIK fallback** for focused lookups, single-invocation (NOT queue) — both bounds within FP-047 single-invocation envelope. If a future cadence change to intraday-15-min surfaces, revisit FP-045 queue. | INC-70's "per-ticker fan-out across a non-authoritative firehose" was the worst of both worlds; daily-feed gives us a single authoritative index. | §B2 architecture-fork arithmetic table. |
+| **§(j) Cross-signal consistency with DEC-057 §(c)** | DEC-057 §(c) ratified ADDITIVE independence: §4.4.9 Tier-2 "significant insider transaction" overlaps Signal #4 (`insider_transactions_90d`); both signals score the same event independently by design (catalyst measures decayed event-presence; insider measures dollar-weighted magnitude). **Record consistency requirement:** any change to Signal #4's IN-set per §(a) MUST NOT silently change the catalyst classifier's "significant insider transaction" Tier-2 detection (currently keyword-derived per DEC-057 §(g); structurally orthogonal — confirmed). | Double-count prevention by explicit design choice rather than silent gating. | DEC-057 §(c) text + Signal #9's catalyst keyword fetcher's structural separation from Form-4 XML pipeline. |
+
+
 ### FP-049: Signal #9 — Active Catalyst Flag (§4.4.9 trailing-5-trading-day decayed weighted-sum across detected catalyst events; multi-vendor; Phase 0 vendor-shape audit)
 
 | Field | Value |
