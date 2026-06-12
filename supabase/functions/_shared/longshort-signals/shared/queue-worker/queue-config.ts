@@ -337,12 +337,58 @@ function validateConfig(cfg: QueueSignalConfig): void {
   if (!Number.isInteger(cfg.stagingTtlSec) || cfg.stagingTtlSec <= 0) {
     throw new Error(`QueueSignalConfig[${cfg.signalId}]: stagingTtlSec must be > 0`);
   }
-  if (cfg.mode !== undefined && cfg.mode !== 'per-ticker' && cfg.mode !== 'sequential-feed') {
+  if (
+    cfg.mode !== undefined &&
+    cfg.mode !== 'per-ticker' &&
+    cfg.mode !== 'sequential-feed' &&
+    cfg.mode !== 'work-list'
+  ) {
     throw new Error(
-      `QueueSignalConfig[${cfg.signalId}]: mode must be 'per-ticker' or 'sequential-feed' (got ${String(cfg.mode)})`,
+      `QueueSignalConfig[${cfg.signalId}]: mode must be 'per-ticker', 'sequential-feed', or 'work-list' (got ${String(cfg.mode)})`,
     );
   }
-  if (isFeedMode(cfg)) {
+  if (isWorkListMode(cfg)) {
+    // work-list mode requires its own fields and FORBIDS both per-ticker
+    // AND feed-mode fields — cross-mode contamination is a config-time bug.
+    if (cfg.fetchAndCompute !== undefined) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: work-list mode must not set fetchAndCompute (per-ticker field)`,
+      );
+    }
+    if (cfg.sliceSize !== undefined) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: work-list mode must not set sliceSize (use itemsPerSlice)`,
+      );
+    }
+    if (cfg.callsPerName !== undefined) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: work-list mode must not set callsPerName (use callsPerItem)`,
+      );
+    }
+    if (
+      cfg.pagesPerSlice !== undefined || cfg.maxPages !== undefined ||
+      cfg.fetchPage !== undefined || cfg.computeFromItems !== undefined
+    ) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: work-list mode must not set feed-mode fields`,
+      );
+    }
+    if (!Number.isInteger(cfg.itemsPerSlice) || (cfg.itemsPerSlice as number) <= 0) {
+      throw new Error(`QueueSignalConfig[${cfg.signalId}]: itemsPerSlice must be a positive integer`);
+    }
+    if (!Number.isInteger(cfg.callsPerItem) || (cfg.callsPerItem as number) <= 0) {
+      throw new Error(`QueueSignalConfig[${cfg.signalId}]: callsPerItem must be a positive integer`);
+    }
+    if (typeof cfg.seedWorkItems !== 'function') {
+      throw new Error(`QueueSignalConfig[${cfg.signalId}]: seedWorkItems must be a function`);
+    }
+    if (typeof cfg.processItem !== 'function') {
+      throw new Error(`QueueSignalConfig[${cfg.signalId}]: processItem must be a function`);
+    }
+    if (typeof cfg.loadAndCompute !== 'function') {
+      throw new Error(`QueueSignalConfig[${cfg.signalId}]: loadAndCompute must be a function`);
+    }
+  } else if (isFeedMode(cfg)) {
     // Feed mode requires its own fields and FORBIDS the per-ticker ones —
     // cross-mode contamination is a config-time bug.
     if (cfg.fetchAndCompute !== undefined) {
@@ -358,6 +404,15 @@ function validateConfig(cfg: QueueSignalConfig): void {
     if (cfg.sliceSize !== undefined) {
       throw new Error(
         `QueueSignalConfig[${cfg.signalId}]: feed mode must not set sliceSize (pagesPerSlice is the per-slice bound)`,
+      );
+    }
+    if (
+      cfg.itemsPerSlice !== undefined || cfg.callsPerItem !== undefined ||
+      cfg.seedWorkItems !== undefined || cfg.processItem !== undefined ||
+      cfg.loadAndCompute !== undefined
+    ) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: feed mode must not set work-list fields`,
       );
     }
     if (!Number.isInteger(cfg.pagesPerSlice) || (cfg.pagesPerSlice as number) <= 0) {
@@ -387,6 +442,15 @@ function validateConfig(cfg: QueueSignalConfig): void {
         || cfg.fetchPage !== undefined || cfg.computeFromItems !== undefined) {
       throw new Error(
         `QueueSignalConfig[${cfg.signalId}]: per-ticker mode must not set feed-mode fields`,
+      );
+    }
+    if (
+      cfg.itemsPerSlice !== undefined || cfg.callsPerItem !== undefined ||
+      cfg.seedWorkItems !== undefined || cfg.processItem !== undefined ||
+      cfg.loadAndCompute !== undefined
+    ) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: per-ticker mode must not set work-list fields`,
       );
     }
   }
