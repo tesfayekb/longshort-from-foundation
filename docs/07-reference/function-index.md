@@ -3439,3 +3439,43 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Additive surface** | `CATALYST_TIER_WEIGHT: Readonly<Record<CatalystTier, number>>` (3.0/1.5/0.5 — §4.4.9 verbatim); `CATALYST_TIER_BY_EVENT_TYPE: Readonly<Record<CatalystEventType, CatalystTier>>` (§(g) IN-set mapping, frozen); `CATALYST_HALF_LIFE_HOURS: Readonly<Record<CatalystEventType, number>>` (DEC-057 §(a) frozen table — earnings 48h, M&A 96h, FDA 72h, regulatory 96h, guidance 48h, executive_change 72h, analyst_rating 24h, partnership 36h, dividend_change 36h, splits 24h). All `Object.freeze`d; consumed by `compute-active-catalyst.ts`. |
 | **Byte-equivalence fence** | Existing `catalyst-types_test.ts` (5 tests) passes UNMODIFIED — pure additive surface. |
 | **Added by** | FP-049 (ACT-175) |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/active-catalyst-orchestrator.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 3a / Signal #9 / ACT-176) |
+| **Classification** | shared infrastructure — orchestrator for Active Catalyst Flag. SINGLE-INVOCATION (FP-047 shape; ratified by supervisor arithmetic gate 2026-06-13). Does NOT use the FP-045 queue-worker engine. |
+| **Exports** | `function createActiveCatalystOrchestrator(ctx)`; `const SIGNAL_ID = 'active_catalyst_flag'`; `const CATALYST_WINDOW_TRADING_DAYS = 5`; `function nthPrecedingTradingDay(as_of, n)`; `interface ActiveCatalystOrchestratorContext`, `ActiveCatalystOrchestratorResult`, `ActiveCatalystMeta`. |
+| **Pipeline** | Stage 0 universe load (mirrors analyst-revision-orchestrator) → Stage 1 window construction (`window_start_at = nthPrecedingTradingDay(as_of, 5)`; v1 weekends-only approx, holidays NOT modelled; bounded shortfall ≤ 1 trading day per double-holiday week absorbed by 48 h earnings half-life) → Stage 2 concurrent fetch across vendors via `Promise.all` (FMP earnings + M&A + grades \| Polygon splits + dividends + news-keyword \| Finnhub FDA) → Stage 3 Tradier typed-fallback (§(i)) invoked iff Polygon splits OR dividends `unavailable`; chunked at `TRADIER_MAX_SYMBOLS_PER_CALL` → Stage 4 `classifyCatalystEvents` (dedup + vendor precedence + look-ahead gate + window floor; keyword rows passed as pre-classified `structured` so single dedup pass authoritatively resolves §(h)) → Stage 5 per-ticker `computeActiveCatalyst`; zero-event names emit `no_catalyst_events_in_window` typed skip → Stage 6 within-sector GICS z-score (±3 clip) → Stage 7 `captureSignalObservations` upsert. Handler writes `signal_compute_log` via `persistSignalComputeLog`. Mass balance `\|values\| + \|skips\| = \|universe\|`. |
+| **Pacing (per-vendor TokenBuckets — multi-vendor first)** | FMP 750/min × 0.85 = 10.625 rps (earnings + M&A + grades); Polygon 10 rps × 0.85 = 8.5 rps (splits + dividends + news-keyword pages, DEC-056); Finnhub 300/min × 0.85 = 4.25 rps (FDA); Tradier — no bucket at v1 (typed-fallback only, 0 calls/fire). One bucket per vendor, never one-per-fetcher. Concurrent across vendors; serial within. |
+| **Pre-flight arithmetic (supervisor-ratified 2026-06-13, BOTH bounds)** | 8–13 calls per fire; news-page sequential drain in Polygon bucket dominates. Latency lo ≈ 31–42 s (news-dominated, 3–4 pages × 10.2 s/page measured FP-048 run `9e8395a7`); robustness ceiling ≈ 40–55 s with structured-tail + jitter. STOP gate 120 s; HTTP wall 150 s. Headroom ≥ 65 s vs STOP, ≥ 95 s vs HTTP wall. SAFE → SINGLE-INVOCATION. Full row in `docs/04-modules/longshort/signals/active-catalyst-flag.md §6`. |
+| **catalyst_meta (extends SignalOrchestratorResult)** | `{ total_event_count, by_tier:{1,2,3}, keyword_source_count, cross_vendor_duplicates_dropped, future_event_excluded, verb_gate_drops, numeric_gate_drops, declaration_date_unavailable, tradier_fallback_invoked, vendor_unavailable:{7 flags} }`. Carried via handler audit metadata; NOT persisted in `signal_compute_log` (no jsonb metadata column at v1). |
+| **Wall-clock** | None in compute. `started_at` / `completed_at` stamped from injected `liveClock` (default `productionClock`) at orchestrator ENTRY / FINALIZATION respectively — d066c890 pattern; FP-047 defect (started_at == completed_at == as_of) structurally prevented. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/active-catalyst-orchestrator.ts` |
+| **Tests** | `active-catalyst-orchestrator_test.ts` — 8 typed-mock tests (empty universe → `empty_universe`; all-vendors-events-but-empty → universe-wide `no_catalyst_events_in_window` mass balance; mixed values + skips with z-scoring; Tradier typed-fallback invoked iff polygon splits/dividends unavailable; `liveClock` advances → `completed_at > started_at` d066c890 pattern; per-vendor `vendor_unavailable` flags surface in meta; `nthPrecedingTradingDay` weekend skip; replay-determinism — `as_of_date` from `as_of` only, not liveClock). |
+| **Added by** | FP-049 (ACT-176) |
+
+#### `supabase/functions/longshort-catalyst-compute/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 3a / Signal #9 / ACT-176) |
+| **Classification** | edge function — cron handler for Signal #9 daily compute. DISARMED at Phase 3a creation (no `job_registry` row yet; MIG-091 lands at Phase 3b with `enabled=false`); operator-run step enables + arms cron after the Phase-3b deploy + validation choreography. |
+| **Auth** | `verifyCronSecret` (X-Cron-Secret header). |
+| **Pipeline** | productionClock → four vendor API-key checks (FMP / Polygon / Finnhub / Tradier) → construct THREE TokenBuckets (FMP 10.625 rps, Polygon 8.5 rps, Finnhub 4.25 rps; Tradier unbucketed at v1) + per-vendor paced fetches + seven fetchers + Tradier fallback fetcher → `createActiveCatalystOrchestrator(...)` → `orch.run(as_of)` → `persistSignalComputeLog` → audit envelope (.started / .completed / .failed) with `catalyst_meta` in metadata → 200 summary JSON. |
+| **File** | `supabase/functions/longshort-catalyst-compute/index.ts` |
+| **Tests** | `index_test.ts` — 9 source-sentinel tests (cron auth wired; productionClock-only; all four API keys checked; exactly three TokenBuckets (Tradier has none); all seven fetchers + tradier wired; `persistSignalComputeLog` + `catalyst_meta` surfaced in audit; three audit events; no queue-worker delegation; handler path matches future MIG-091 row). |
+| **Added by** | FP-049 (ACT-176) |
+
+#### `supabase/functions/longshort-catalyst-compute-manual/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 3a / Signal #9 / ACT-176) |
+| **Classification** | edge function — operator-triggered manual sibling of the cron handler. Not registered in `job_registry`. |
+| **Auth** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. |
+| **Pipeline** | POST `{ "as_of": "YYYY-MM-DD" }` → `parseAsOfDate` + future-date guard → same orchestrator construction as cron sibling (three TokenBuckets, seven fetchers + Tradier fallback) → dual audit envelope (`manual_triggered` / `manual_completed` / `manual_failed`) with `catalyst_meta` in metadata → 200 summary JSON. SINGLE-INVOCATION (no queue delegation). |
+| **File** | `supabase/functions/longshort-catalyst-compute-manual/index.ts` |
+| **Tests** | `index_test.ts` — 7 source-sentinel tests (JWT + longshort.manage gating; parseAsOfDate + future-date guard; productionClock-only; three TokenBuckets; dual audit envelope; no queue-worker delegation; catalyst_meta surfaced). |
+| **Added by** | FP-049 (ACT-176) |
