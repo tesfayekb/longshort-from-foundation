@@ -34,6 +34,7 @@ import {
   isWorkListMode,
   type FeedComputeFromItemsFn,
   type QueueSignalConfig,
+  type TickerComputeResult,
   type WorkListLoadAndComputeFn,
 } from './queue-config.ts';
 import type { SignalRow, SignalSkip, SignalSkipReason } from '../signal-types.ts';
@@ -388,7 +389,7 @@ async function buildWorkListAggregates(
   const { config, as_of } = ctx;
   const loadAndCompute = config.loadAndCompute as WorkListLoadAndComputeFn;
 
-  let results: ReadonlyArray<{ ticker: string; gics_sector: string | null; result: { kind: 'value'; raw: number } | { kind: 'skip'; reason: string; detail: string } }>;
+  let results: ReadonlyArray<{ ticker: string; gicsSector: string | null; result: TickerComputeResult }>;
   try {
     results = await loadAndCompute({ asOf: as_of });
   } catch (e) {
@@ -409,7 +410,7 @@ async function buildWorkListAggregates(
       } else {
         staging.push({
           ticker: r.ticker,
-          gics_sector: r.gics_sector,
+          gics_sector: r.gicsSector,
           raw_signal: r.result.raw,
         });
       }
