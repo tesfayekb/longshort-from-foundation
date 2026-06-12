@@ -299,3 +299,191 @@ Deno.test('fetchFeed — invalid as_of throws SignalComputationError', async () 
   }
   assertStrictEquals(threw, true);
 });
+
+// ────────────────────────────────────────────────────────────────────────
+// FP-048 Phase 3b — fetchOnePage additive-surface tests.
+// Byte-equivalence with fetchFeed is proven by the 13 tests above passing
+// UNMODIFIED; the suite below exercises the per-page primitive directly so
+// the sequential-feed engine wrapper has a regression fence on each
+// behavioral facet the wrapper depends on.
+// ────────────────────────────────────────────────────────────────────────
+
+Deno.test('fetchOnePage — token threading across two calls (raw next_url out → cursorToken in)', async () => {
+  const seenUrls: string[] = [];
+  const f = makeFetcher((async (url: string | URL, _init?: RequestInit) => {
+    seenUrls.push(String(url));
+    if (seenUrls.length === 1) {
+      return jsonResponse({
+        results: [article({ id: 'a1' })],
+        next_url: `${POLYGON_BASE_URL}/v2/reference/news?cursor=zzz`,
+      });
+    }
+    return jsonResponse({ results: [article({ id: 'a2' })] });
+  }) as unknown as HttpFetch);
+
+  const p1 = await f.fetchOnePage({ cursorToken: null, asOf: AS_OF });
+  if (p1.kind !== 'page') throw new Error(`expected page, got ${p1.kind}`);
+  assertStrictEquals(p1.rows.length, 1);
+  if (p1.nextToken === null) throw new Error('expected non-null nextToken');
+  // Raw vendor next_url (NOT yet apiKey-attached) is what's returned.
+  assertStrictEquals(p1.nextToken, `${POLYGON_BASE_URL}/v2/reference/news?cursor=zzz`);
+
+  const p2 = await f.fetchOnePage({ cursorToken: p1.nextToken, asOf: AS_OF });
+  if (p2.kind !== 'page') throw new Error(`expected page, got ${p2.kind}`);
+  assertStrictEquals(p2.rows.length, 1);
+  assertStrictEquals(p2.nextToken, null);
+
+  // First call URL had apiKey; second URL had apiKey reattached by the fetcher.
+  if (!seenUrls[0].includes('apiKey=')) throw new Error('first URL missing apiKey');
+  if (!seenUrls[1].includes('apiKey=')) throw new Error('apiKey not reattached on second call');
+});
+
+Deno.test('fetchOnePage — per-page look-ahead gate drops future-dated rows on cursor-threaded page', async () => {
+  const f = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
+    Promise.resolve(
+      jsonResponse({
+        results: [
+          article({ id: 'past', published_utc: '2026-06-10T12:00:00Z' }),
+          article({ id: 'future', published_utc: '2026-06-12T12:00:00Z' }),
+        ],
+      }),
+    )) as unknown as HttpFetch);
+
+  // Cursor-threaded page (not page 0) — the gate must still apply.
+  const r = await f.fetchOnePage({
+    cursorToken: `${POLYGON_BASE_URL}/v2/reference/news?cursor=mid`,
+    asOf: AS_OF,
+  });
+  if (r.kind !== 'page') throw new Error(`expected page, got ${r.kind}`);
+  assertStrictEquals(r.rows.length, 1);
+  assertStrictEquals(r.rows[0].id, 'past');
+});
+
+Deno.test('fetchOnePage — per-page cutoff gate drops out-of-window rows on cursor-threaded page', async () => {
+  const f = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
+    Promise.resolve(
+      jsonResponse({
+        results: [
+          article({ id: 'fresh', published_utc: '2026-06-10T00:00:00Z' }),
+          article({ id: 'stale', published_utc: '2026-06-01T00:00:00Z' }),
+        ],
+      }),
+    )) as unknown as HttpFetch);
+
+  const r = await f.fetchOnePage({
+    cursorToken: `${POLYGON_BASE_URL}/v2/reference/news?cursor=mid`,
+    asOf: AS_OF,
+  });
+  if (r.kind !== 'page') throw new Error('expected page');
+  assertStrictEquals(r.rows.length, 1);
+  assertStrictEquals(r.rows[0].id, 'fresh');
+});
+
+Deno.test('fetchOnePage — error taxonomy: first-page 401 → unavailable subscription_gated', async () => {
+  const f = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
+    Promise.resolve(new Response('no', { status: 401 }))) as unknown as HttpFetch);
+  const r = await f.fetchOnePage({ cursorToken: null, asOf: AS_OF });
+  if (r.kind !== 'unavailable') throw new Error('expected unavailable');
+  assertStrictEquals(r.reason, 'subscription_gated');
+});
+
+Deno.test('fetchOnePage — error taxonomy: 429 → unavailable rate_limited', async () => {
+  const f = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
+    Promise.resolve(new Response('slow down', { status: 429 }))) as unknown as HttpFetch);
+  const r = await f.fetchOnePage({ cursorToken: null, asOf: AS_OF });
+  if (r.kind !== 'unavailable') throw new Error('expected unavailable');
+  assertStrictEquals(r.reason, 'rate_limited');
+});
+
+Deno.test('fetchOnePage — error taxonomy: first-page 404 → unavailable data_unavailable; cursor-threaded 404 → end', async () => {
+  const f404 = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
+    Promise.resolve(new Response('nope', { status: 404 }))) as unknown as HttpFetch);
+
+  const first = await f404.fetchOnePage({ cursorToken: null, asOf: AS_OF });
+  if (first.kind !== 'unavailable') throw new Error('expected unavailable');
+  assertStrictEquals(first.reason, 'data_unavailable');
+
+  const mid = await f404.fetchOnePage({
+    cursorToken: `${POLYGON_BASE_URL}/v2/reference/news?cursor=mid`,
+    asOf: AS_OF,
+  });
+  assertStrictEquals(mid.kind, 'end');
+});
+
+Deno.test('fetchOnePage — error taxonomy: first-page empty results → unavailable; cursor-threaded empty → end', async () => {
+  const fEmpty = makeFetcher(((_url: string | URL, _init?: RequestInit) =>
+    Promise.resolve(jsonResponse({ results: [] }))) as unknown as HttpFetch);
+
+  const first = await fEmpty.fetchOnePage({ cursorToken: null, asOf: AS_OF });
+  if (first.kind !== 'unavailable') throw new Error('expected unavailable on first page empty');
+  assertStrictEquals(first.reason, 'data_unavailable');
+
+  const mid = await fEmpty.fetchOnePage({
+    cursorToken: `${POLYGON_BASE_URL}/v2/reference/news?cursor=mid`,
+    asOf: AS_OF,
+  });
+  assertStrictEquals(mid.kind, 'end');
+});
+
+Deno.test('fetchOnePage — key masking: thrown SignalComputationError on non-ok status never leaks apiKey', async () => {
+  const f = new PolygonNewsFeedFetcher(
+    'SECRET-LIVE-KEY-DO-NOT-LEAK',
+    ((_url: string | URL, _init?: RequestInit) =>
+      Promise.resolve(new Response('boom', { status: 502 }))) as unknown as HttpFetch,
+    30_000,
+    POLYGON_BASE_URL,
+  );
+  let caught: unknown = null;
+  try {
+    await f.fetchOnePage({ cursorToken: null, asOf: AS_OF });
+  } catch (e) {
+    caught = e;
+  }
+  if (!(caught instanceof Error)) throw new Error('expected throw on 502');
+  // The error message must not include the api key.
+  if (caught.message.includes('SECRET-LIVE-KEY-DO-NOT-LEAK')) {
+    throw new Error(`apiKey leaked in error message: ${caught.message}`);
+  }
+});
+
+Deno.test('fetchOnePage — latencyMs uses injected nowMs (no wall-clock); same value on success/unavailable/end', async () => {
+  // Success path.
+  {
+    let t = 5_000;
+    const f = new PolygonNewsFeedFetcher(KEY,
+      ((async (_url: string | URL, _init?: RequestInit) =>
+        jsonResponse({ results: [article({ id: 'p' })] })) as unknown as HttpFetch),
+      30_000, POLYGON_BASE_URL,
+      { nowMs: () => { const v = t; t += 333; return v; } });
+    const r = await f.fetchOnePage({ cursorToken: null, asOf: AS_OF });
+    if (r.kind !== 'page') throw new Error('expected page');
+    assertStrictEquals(r.latencyMs, 333);
+  }
+  // Unavailable path.
+  {
+    let t = 5_000;
+    const f = new PolygonNewsFeedFetcher(KEY,
+      ((_url: string | URL, _init?: RequestInit) =>
+        Promise.resolve(new Response('no', { status: 403 }))) as unknown as HttpFetch,
+      30_000, POLYGON_BASE_URL,
+      { nowMs: () => { const v = t; t += 100; return v; } });
+    const r = await f.fetchOnePage({ cursorToken: null, asOf: AS_OF });
+    if (r.kind !== 'unavailable') throw new Error('expected unavailable');
+    assertStrictEquals(r.latencyMs, 100);
+  }
+  // End path.
+  {
+    let t = 5_000;
+    const f = new PolygonNewsFeedFetcher(KEY,
+      ((async (_url: string | URL, _init?: RequestInit) =>
+        jsonResponse({ results: [] })) as unknown as HttpFetch),
+      30_000, POLYGON_BASE_URL,
+      { nowMs: () => { const v = t; t += 77; return v; } });
+    const r = await f.fetchOnePage({
+      cursorToken: `${POLYGON_BASE_URL}/v2/reference/news?cursor=x`,
+      asOf: AS_OF,
+    });
+    if (r.kind !== 'end') throw new Error('expected end');
+    assertStrictEquals(r.latencyMs, 77);
+  }
+});
