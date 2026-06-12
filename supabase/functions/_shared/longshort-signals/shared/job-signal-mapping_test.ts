@@ -22,6 +22,7 @@ import { SIGNAL_ID as INSIDER_SIGNAL_ID } from '../insider-transactions/insider-
 import { SIGNAL_ID as OPTIONS_FLOW_SIGNAL_ID } from '../options-flow/options-flow-orchestrator.ts';
 import { SIGNAL_ID as PEAD_SIGNAL_ID } from '../pead/pead-orchestrator.ts';
 import { SIGNAL_ID as ANALYST_SIGNAL_ID } from '../analyst-revisions/analyst-revision-orchestrator.ts';
+import { SIGNAL_ID as CATALYST_SIGNAL_ID } from '../active-catalyst/active-catalyst-orchestrator.ts';
 
 Deno.test('(1) JOB_ID_TO_SIGNAL_ID contains the momentum entry verbatim', () => {
   assertEquals(
@@ -103,6 +104,16 @@ Deno.test('(2g) mapping value matches analyst-revision-orchestrator SIGNAL_ID ex
   assertEquals(ANALYST_SIGNAL_ID, 'analyst_revision_drift');
 });
 
+Deno.test('(2h) mapping value matches active-catalyst-orchestrator SIGNAL_ID export (cross-reference)', () => {
+  // Drift sentinel for Signal #9 (FP-049 Phase 3b).
+  assertEquals(
+    JOB_ID_TO_SIGNAL_ID['longshort.catalyst.compute'],
+    CATALYST_SIGNAL_ID,
+    'JOB_ID_TO_SIGNAL_ID catalyst entry decoupled from active-catalyst-orchestrator SIGNAL_ID',
+  );
+  assertEquals(CATALYST_SIGNAL_ID, 'active_catalyst_flag');
+});
+
 Deno.test('(3) resolveSignalIdForJob returns the value for known job_ids', () => {
   assertEquals(
     resolveSignalIdForJob('longshort.momentum.compute'),
@@ -123,13 +134,17 @@ Deno.test('(5) JOB_ID_TO_SIGNAL_ID has exactly the FP-010 A3 set (single entry)'
   // flow / Signal #3). FP-044 adds the sixth (PEAD / Signal #2).
   // FP-047 adds the seventh (analyst-revision-drift / Signal #1).
   // FP-048 Phase 3b adds the eighth (news_sentiment_7d / Signal #8 —
-  // first sequential-feed consumer on the FP-045 engine). Each
+  // first sequential-feed consumer on the FP-045 engine). FP-049
+  // Phase 3b adds the ninth (active_catalyst_flag / Signal #9 —
+  // single-invocation, multi-vendor; supervisor-ratified arithmetic
+  // gate 2026-06-13). Each
   // subsequent signal execution
   // prompt adds exactly one entry in the same PR that registers its
   // compute job.
   const keys = Object.keys(JOB_ID_TO_SIGNAL_ID).sort();
   assertEquals(keys, [
     'longshort.analyst.compute',
+    'longshort.catalyst.compute',
     'longshort.insider.compute',
     'longshort.momentum.compute',
     'longshort.news.compute',
