@@ -20,7 +20,9 @@ export function maskSecretsInMessage(msg: string): string {
   // Query-string apiKey / apikey / api_key
   out = out.replace(/([?&](?:api[_-]?key))=([^&\s"'<>]+)/gi, '$1=***REDACTED***');
   // Header echoes — apiKey: foo, Authorization: Bearer foo
-  out = out.replace(/(api[_-]?key\s*[:=]\s*)([A-Za-z0-9_\-]{8,})/gi, '$1***REDACTED***');
-  out = out.replace(/(authorization\s*:\s*bearer\s+)([A-Za-z0-9_\-\.]{8,})/gi, '$1***REDACTED***');
+  // Permit an optional opening quote so JSON-stringified payloads
+  // ({"apikey":"..."}) and bare colon/equals forms both mask.
+  out = out.replace(/(api[_-]?key\s*["']?\s*[:=]\s*["']?)([A-Za-z0-9_\-\.]{8,})/gi, '$1***REDACTED***');
+  out = out.replace(/(authorization\s*["']?\s*:\s*["']?bearer\s+)([A-Za-z0-9_\-\.]{8,})/gi, '$1***REDACTED***');
   return out;
 }
