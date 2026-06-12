@@ -180,6 +180,26 @@ export interface QueueSignalConfig {
   fetchPage?: FeedFetchPageFn;
   /** Per-universe-ticker aggregation (see {@link FeedComputeFromItemsFn}). */
   computeFromItems?: FeedComputeFromItemsFn;
+  // ─── work-list mode fields (required when mode='work-list') ────────────
+  /**
+   * Items claimed per slice-worker invocation (work-list analogue of
+   * `sliceSize` / `pagesPerSlice`). Chosen so
+   * `(itemsPerSlice × callsPerItem) / ratePerSec` fits well under the
+   * 150s HTTP wall. Insider: 50 × 2 / 5 = 20s paced + parse.
+   */
+  itemsPerSlice?: number;
+  /**
+   * Vendor calls per processed item — drives the pre-flight arithmetic
+   * row (work-list analogue of `callsPerName`). Insider: 2 (accession
+   * index.json + primary XML).
+   */
+  callsPerItem?: number;
+  /** Seeds the run's work list (see {@link WorkListSeedFn}). */
+  seedWorkItems?: WorkListSeedFn;
+  /** Per-item processor (see {@link WorkListProcessItemFn}). */
+  processItem?: WorkListProcessItemFn;
+  /** Finalize-time aggregator (see {@link WorkListLoadAndComputeFn}). */
+  loadAndCompute?: WorkListLoadAndComputeFn;
 }
 
 /** Discriminator helper — single point of truth for runtime branching. */
