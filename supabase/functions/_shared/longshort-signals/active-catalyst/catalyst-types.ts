@@ -176,3 +176,58 @@ export type CatalystTradierFallbackReason = Extract<
   CatalystFetchUnavailableReason,
   'subscription_gated' | 'rate_limited' | 'data_unavailable'
 >;
+
+/**
+ * §4.4.9 verbatim tier table (CROSSWIND_SPEC.md:552, 557-560). Frozen.
+ * Per DEC-057 §(g) IN-set this v1 build covers 10 event types. The tier
+ * mapping below assigns each IN-set type per §4.4.9 spec text.
+ */
+export const CATALYST_TIER_WEIGHT: Readonly<Record<CatalystTier, number>> =
+  Object.freeze({ 1: 3.0, 2: 1.5, 3: 0.5 });
+
+/**
+ * §4.4.9 verbatim tier-by-event mapping for the DEC-057 §(g) IN-set.
+ * Tier 1 (3.0): Earnings; M&A; FDA advisory; regulatory action;
+ *               major guidance update; CEO/CFO (executive) change.
+ * Tier 2 (1.5): Major analyst rating; material partnership;
+ *               buyback/dividend change; stock split/special dividend.
+ * Tier 3 (0.5): (none in the IN-set — Tier 3 §4.4.9 types are all in
+ *               the DEC-057 §(g) OUT-set: minor analyst, conference,
+ *               non-material launch, investor day).
+ * Frozen at Phase 1; any change requires a DEC-057 amendment.
+ */
+export const CATALYST_TIER_BY_EVENT_TYPE: Readonly<
+  Record<CatalystEventType, CatalystTier>
+> = Object.freeze({
+  earnings: 1,
+  ma: 1,
+  fda_advisory: 1,
+  regulatory_action: 1,
+  guidance: 1,
+  executive_change: 1,
+  analyst_rating: 2,
+  partnership: 2,
+  dividend_change: 2,
+  splits: 2,
+});
+
+/**
+ * DEC-057 §(a) frozen half-life table — FROZEN at Phase 1. Phase-7 IC
+ * ablation may re-ratify any value via DEC-057 amendment, never silently.
+ * Compute MUST consume this table; no per-event re-derivation. The keys
+ * cover the §(g) IN-set; types in the OUT-set are not present.
+ */
+export const CATALYST_HALF_LIFE_HOURS: Readonly<
+  Record<CatalystEventType, number>
+> = Object.freeze({
+  earnings: 48,
+  ma: 96,
+  fda_advisory: 72,
+  regulatory_action: 96,
+  guidance: 48,
+  executive_change: 72,
+  analyst_rating: 24,
+  partnership: 36,
+  dividend_change: 36,
+  splits: 24,
+});

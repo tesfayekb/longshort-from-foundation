@@ -3405,10 +3405,10 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 |-------|-------|
 | **Module** | longshort (FP-049 — Phase 1 commit 1b revision / Signal #9 / ACT-174) |
 | **Classification** | shared infrastructure — DEC-057 §(b)+(j) KEYWORD-DERIVED catalyst-event fetcher over Polygon news. Composes FP-048's `PolygonNewsFeedFetcher` (Option B — additive widen of `PolygonNewsRow` with optional `title?` / `description?`; byte-equivalence fence intact). |
-| **Exports** | `class PolygonNewsKeywordFetcher { constructor(apiKey, httpFetch?, timeoutMs?, baseUrl?, options?); fetch(window): Promise<CatalystFetchResult> }`; `const POLYGON_NEWS_KEYWORD_OPERATION_ID`, `POLYGON_NEWS_KEYWORD_LOOKBACK_DAYS` (7). |
+| **Exports** | `class PolygonNewsKeywordFetcher { constructor(apiKey, httpFetch?, timeoutMs?, baseUrl?, options?); fetch(window): Promise<CatalystFetchResult> }`; `const POLYGON_NEWS_KEYWORD_OPERATION_ID`, `POLYGON_NEWS_KEYWORD_LOOKBACK_DAYS` (10 — bumped from 7 at FP-049 Phase 2 footnote-fix; double-holiday-week under-fetch elimination, floor logic unchanged). |
 | **§(b)/(j) matching** | Each Polygon row's `title` + `description` are concatenated and passed to `matchKeywordEvent` from `classify-catalyst-event.ts` — single source of truth for the noun + action-verb + numeric gates. Word-boundary discipline inherited (the `partners` ⊂ `partnership` defect is structurally impossible). |
 | **§(d) look-ahead gate** | `applyLookAheadGate(candidates, window.as_of)` applied client-side after the per-page walk (defence-in-depth — inner `fetchOnePage` already enforces; `future_event_excluded` counter surfaced regardless). |
-| **§(f) trading-day floor** | Calendar/trading-day discrepancy resolved AT THIS LAYER per the operator brief ("do not leave the calendar/trading discrepancy to Phase 2"). Over-fetches a 7-calendar-day window from FP-048; trims to the §4.4.9 5-TRADING-DAY floor via `applyWindowLowerBound(rows, window.window_start_at)`. The orchestrator computes `window_start_at` from the trading-calendar. |
+| **§(f) trading-day floor** | Calendar/trading-day discrepancy resolved AT THIS LAYER per the operator brief ("do not leave the calendar/trading discrepancy to Phase 2"). Over-fetches a 10-calendar-day window from FP-048 (FP-049 Phase 2 footnote-fix — was 7, now safe across double-holiday weeks); trims to the §4.4.9 5-TRADING-DAY floor via `applyWindowLowerBound(rows, window.window_start_at)`. The orchestrator computes `window_start_at` from the trading-calendar. |
 | **Multi-ticker fan-out** | On a positive match, emits ONE `RawCatalystEventInput` per attributed ticker in `row.tickers[]`; downstream `classifyCatalystEvents` performs §(h) 1h-bucket dedup with `structured > keyword` precedence. |
 | **Source provenance** | Every emitted row carries `source: 'keyword'`, `vendor: 'polygon'`, `meta.keyword_misclassification_risk: true`, `meta.keyword_family`, `meta.article_id` per DEC-057 §(b) named misclassification flag. |
 | **Error taxonomy** | First-page 401/402/403 → `subscription_gated`; 429 → `rate_limited`; 404 or empty results → `data_unavailable`; mid-walk unavailability propagated identically (matches FP-048 `fetchFeed` semantics — not silently swallowed). |
@@ -3416,3 +3416,26 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/polygon-news-keyword-fetcher.ts` |
 | **Tests** | `polygon-news-keyword-fetcher_test.ts` — 15 fixture-driven tests (1 true-positive + 1 verb-gate-blocked false-positive per family: executive_change, guidance, regulatory_action, partnership including the `partners` ⊂ `partnership` block; multi-ticker fan-out; §(d) future-row drop; §(f) trading-day floor trim; HTTP 403 → subscription_gated; empty first page → data_unavailable; rows missing both title + description silently dropped — no fabricated text; constructor key-required). |
 | **Added by** | FP-049 (ACT-174) |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/compute-active-catalyst.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 2 / Signal #9 / ACT-175) |
+| **Classification** | shared infrastructure — pure compute, no I/O, no clock, no random. Implements CROSSWIND §4.4.9 verbatim formula over the `classifyCatalystEvents` output. |
+| **Exports** | `function computeActiveCatalyst(inputs: ActiveCatalystInputs): ActiveCatalystComputeResult`; `interface ActiveCatalystInputs`, `ActiveCatalystMeta`; `type ActiveCatalystSkipReason`, `ActiveCatalystComputeResult`. |
+| **Formula** | `raw = Σ catalyst_weight(tier) × exp(−age_hours / half_life_hours(event_type))` per §4.4.9. Tier weight from frozen `CATALYST_TIER_WEIGHT` (3.0/1.5/0.5); half-life from frozen `CATALYST_HALF_LIFE_HOURS` (DEC-057 §(a)). Compute trusts the classifier — no re-classification, no re-windowing, no re-deduping. |
+| **Semantics** | (a) ≥1 in-window event → ALWAYS a value (presence-intensity; single Tier-3 event is the smallest non-skip output). (b) Zero in-window events → `no_catalyst_events_in_window` typed skip. (c) Malformed rows (non-finite `event_at`, unknown `event_type`) → `data_unavailable` when ALL in-window content is malformed; never coerced to 0. (d) `raw >= 0` by construction; runtime assert guards future sign-flip refactors. |
+| **Output** | `{kind:'value', raw, meta:{eventCount, byTier:{1,2,3}, keywordSourceCount, dedupDropped}}` \| `{kind:'skip', reason, detail}`. `dedupDropped` is always 0 (dedup happens upstream) — stable-shape field so orchestrator can pass through `ClassifyResult.cross_vendor_duplicates_dropped` for `signal_compute_log.metadata`. |
+| **Wall-clock** | None. `asOf` is caller-supplied `Date`. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/compute-active-catalyst.ts` |
+| **Tests** | `compute-active-catalyst_test.ts` — 17 typed-mock tests (zero `any`): §(a) decay pins (earnings 0h→1.0; earnings 48h→3·e⁻¹ with decay factor 0.3679 4dp; analyst_rating 24h→1.5·e⁻¹); tier-weight pins (Tier-1=3.0 exact, Tier-2=1.5 exact, Tier-3=0.5 frozen-coefficient pin); multi-event exact sum across mixed types; window-floor trust boundary (compute does NOT re-window — older event still scores); single in-window event always yields a value; zero events → `no_catalyst_events_in_window`; all-malformed → `data_unavailable`; unknown event_type cast-bypass → malformed; `raw>=0` invariant; purity (same inputs → same outputs); meta-shape stability; invalid asOf → `data_unavailable`. |
+| **Added by** | FP-049 (ACT-175) |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/catalyst-types.ts` (FP-049 ACT-175 additive widen)
+
+| Field | Value |
+|-------|-------|
+| **Additive surface** | `CATALYST_TIER_WEIGHT: Readonly<Record<CatalystTier, number>>` (3.0/1.5/0.5 — §4.4.9 verbatim); `CATALYST_TIER_BY_EVENT_TYPE: Readonly<Record<CatalystEventType, CatalystTier>>` (§(g) IN-set mapping, frozen); `CATALYST_HALF_LIFE_HOURS: Readonly<Record<CatalystEventType, number>>` (DEC-057 §(a) frozen table — earnings 48h, M&A 96h, FDA 72h, regulatory 96h, guidance 48h, executive_change 72h, analyst_rating 24h, partnership 36h, dividend_change 36h, splits 24h). All `Object.freeze`d; consumed by `compute-active-catalyst.ts`. |
+| **Byte-equivalence fence** | Existing `catalyst-types_test.ts` (5 tests) passes UNMODIFIED — pure additive surface. |
+| **Added by** | FP-049 (ACT-175) |

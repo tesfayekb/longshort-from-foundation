@@ -150,7 +150,7 @@ export type SignalSkipReason =
                              // CROSSWIND §2 axiom 3 + DEC-034 (2): typed absence
                              // beats a fabricated zero. Non-critical; ticker still
                              // ranked by other signals.
-  | 'no_articles_in_window'; // FP-048 / Signal #8 (News Sentiment §4.4.8) — ticker
+  | 'no_articles_in_window'  // FP-048 / Signal #8 (News Sentiment §4.4.8) — ticker
                              // has ZERO classified, non-PR-excluded articles inside
                              // the trailing 7-calendar-day inclusive window vs
                              // `as_of`. Per DEC-056 §(e) + FP-048 Phase-2 ruling
@@ -161,6 +161,19 @@ export type SignalSkipReason =
                              // PEAD `zero_dispersion` where the denominator
                              // vanishes). Non-critical; ticker still ranked by
                              // other signals.
+  | 'no_catalyst_events_in_window'; // FP-049 / Signal #9 (Active Catalyst
+                             // Flag §4.4.9) — ticker has ZERO deduped
+                             // classified catalyst events inside the trailing
+                             // 5-trading-day window vs `as_of`. Per DEC-057
+                             // §(g) IN-set + §(h) dedup discipline. EXPECTED
+                             // for most names on most days (§4.4.9 missing-
+                             // data clause: "expected case for most names").
+                             // Non-critical; ticker still ranked by other
+                             // signals (combiner imputes (-999, 0) in Phase 3).
+                             // Distinct from `data_unavailable` which surfaces
+                             // malformed event rows; a single Tier-3 event
+                             // always yields a value per FP-049 Phase 2 ruling
+                             // (a) — presence-intensity, never a skip.
 
 export interface SignalSkip {
   ticker: string;
