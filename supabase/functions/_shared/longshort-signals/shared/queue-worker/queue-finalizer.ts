@@ -367,11 +367,64 @@ async function buildFeedAggregates(
   return { kind: 'ok', staging, skips };
 }
 
-async function transitionToFailed(
+/**
+ * Work-list-mode aggregation (FP-050 Phase 3.6a) — calls the consumer's
+ * loadAndCompute({asOf}) which reads from the consumer-private
+ * persistence table over its window and returns one TickerComputeResult
+ * per universe ticker. The engine never touches the consumer's table.
+ *
+ * Mass-balance (Q4 two-ledger): the 839 universe-name accounting is
+ * CONSUMER's responsibility — every universe ticker must appear in
+ * loadAndCompute's return (value OR typed skip). Item-scope permanent
+ * skips in signal_queue_skips are telemetry-only and NOT read here.
+ */
+async function buildWorkListAggregates(
   ctx: QueueFinalizerContext,
-  runRow: RunRow,
-  failure_reason: string,
-): Promise<QueueFinalizerResult>;
+  _runRow: RunRow,
+): Promise<
+  | { kind: 'ok'; staging: StagingRow[]; skips: SkipRow[] }
+  | { kind: 'failed'; reason: string }
+> {
+  const { config, as_of } = ctx;
+  const loadAndCompute = config.loadAndCompute as WorkListLoadAndComputeFn;
+
+  let results: ReadonlyArray<{ ticker: string; gics_sector: string | null; result: { kind: 'value'; raw: number } | { kind: 'skip'; reason: string; detail: string } }>;
+  try {
+    results = await loadAndCompute({ asOf: as_of });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { kind: 'failed', reason: `work-list-finalizer: loadAndCompute threw: ${msg}` };
+  }
+
+  const staging: StagingRow[] = [];
+  const skips: SkipRow[] = [];
+  for (const r of results) {
+    if (r.result.kind === 'value') {
+      if (!Number.isFinite(r.result.raw)) {
+        skips.push({
+          ticker: r.ticker,
+          skip_reason: 'fetch_error',
+          detail: `loadAndCompute returned non-finite value: ${r.result.raw}`,
+        });
+      } else {
+        staging.push({
+          ticker: r.ticker,
+          gics_sector: r.gics_sector,
+          raw_signal: r.result.raw,
+        });
+      }
+    } else {
+      skips.push({
+        ticker: r.ticker,
+        skip_reason: r.result.reason,
+        detail: r.result.detail,
+      });
+    }
+  }
+
+  return { kind: 'ok', staging, skips };
+}
+
 async function transitionToFailed(
   ctx: QueueFinalizerContext,
   runRow: RunRow,
