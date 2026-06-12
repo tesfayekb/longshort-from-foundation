@@ -1,6 +1,6 @@
 # Signal #9 — Active Catalyst Flag (CROSSWIND §4.4.9)
 
-**Status:** phase-3a-complete-stop (FP-049 / ACT-176, 2026-06-13 — orchestrator + cron + manual handlers + module doc + reference indexes landed; MIG-091 + `signal_registry` flip + job-signal-mapping deferred to Phase 3b; status flip to `live` follows the Phase-3b arm-up + DEC-043-pattern attestation).
+**Status:** phase-3b-complete-stop (FP-049 / ACT-177, 2026-06-13 — MIG-091 applied DISARMED; `signal_registry` flipped `planned`→`live` with `job_registry_id='longshort.catalyst.compute'`; `JOB_ID_TO_SIGNAL_ID` extended to nine entries; ledger + DEC-057 §(f) addendum + DW-098 NYSE-calendar follow-up landed. **REGISTRY LIVE, CRON DISARMED** — arm-up is operator-side at the deploy + validation choreography turn per DEC-040 / DEC-048; DEC-043-pattern attestation OPEN pending first natural cron-fire wall-clock signature at next weekday 21:45 UTC after arm-up.).
 **Vendors:** FMP (earnings-calendar + M&A + grades), Polygon (splits + dividends + news-keyword pages), Finnhub (FDA advisory), Tradier (DEC-057 §(i) typed-fallback only).
 **Architecture:** SINGLE-INVOCATION (FP-047 shape). Ratified by the supervisor arithmetic gate 2026-06-13. Does NOT use the FP-045 queue-worker engine.
 
@@ -100,8 +100,11 @@ No sentinel numerics anywhere. Mass balance: `|persisted| + |skips| = |universe|
 
 `as_of` is the ONLY timestamp that enters compute inputs. `started_at` / `completed_at` are stamped from injected `liveClock` (default `productionClock`) at orchestrator ENTRY and FINALIZATION respectively — NEVER at `as_of` (which would silently equate the two and reintroduce the FP-047 defect). Test 5 / Test 8 in `active-catalyst-orchestrator_test.ts` pin the advancing-clock invariant.
 
-## 11. Registry truth (Phase 3a — current state)
+## 11. Registry truth (Phase 3b — live-DB §22.5.1 reads, post-MIG-091)
 
-- `signal_registry.active_catalyst_flag` — **still `planned`**; flip to `live` lands at Phase 3b (MIG-091) alongside `job_registry_id='longshort.catalyst.compute'` + cadence string truth-in-telemetry update.
-- `job_registry.longshort.catalyst.compute` — **does NOT exist yet**; will be seeded at Phase 3b MIG-091 with `enabled=false`, `schedule='45 21 * * 1-5'` (21:45 UTC: after news 21:30 + its ~6-min drain; before options 22:00 — non-overlap reasoning logged in the ledger entry), `handler_path='supabase/functions/longshort-catalyst-compute/index.ts'`.
-- Cron arm-up is operator-side at the deploy + validation choreography turn; Phase 3a ships the handler code DISARMED by registry-absence.
+- `signal_registry.active_catalyst_flag` — **`{status:'live', cadence:'daily (after-close; single-invocation ~31-55s; interim per DEC-048 — §4.4.9 spec target is 5-min intraday, Phase 7 picks final cadence)', planned_phase:NULL, job_registry_id:'longshort.catalyst.compute'}`** (verified via `SELECT signal_id, status, cadence, planned_phase, job_registry_id FROM signal_registry WHERE signal_id='active_catalyst_flag'`).
+- `job_registry.longshort.catalyst.compute` — **`{enabled:false, schedule:'45 21 * * 1-5', trigger_type:'scheduled', status:'registered', handler_path:'supabase/functions/longshort-catalyst-compute/index.ts', timeout_seconds:150, max_retries:2}`** (verified via `SELECT id, enabled, schedule, trigger_type, status, handler_path, timeout_seconds, max_retries FROM job_registry WHERE id='longshort.catalyst.compute'`).
+- **Slot reasoning (`45 21 * * 1-5`):** lands AFTER analyst (`0 21 * * 1-5`) AND after news (`30 21 * * 1-5` + observed ~6 min queue drain → wraps by ~21:36 UTC); lands BEFORE options-flow (`0 22 * * 1-5`). No two init triggers fire on the same minute and the news queue drain is comfortably finished before catalyst starts → no cross-signal vendor-bucket contention even though catalyst and news both pace against the Polygon bucket.
+- `JOB_ID_TO_SIGNAL_ID` — **9 entries** post-Phase-3b (was 8 after MIG-089b news). Cross-reference test `(2h)` pins the catalyst entry to the orchestrator's `SIGNAL_ID` export; set-membership test `(5)` pins the exact 9-entry key list.
+- **Cron arm-up:** operator-side at the deploy + validation choreography turn per DEC-040 byte-match attestation discipline. `sql/15_longshort_catalyst_cron_schedule.sql` carries the placeholder-bearing `cron.schedule()` template + post-apply verification SQL; not committed to `cron.job` by this migration.
+- **DEC-043-pattern attestation:** OPEN. Closes when the first natural cron-fire row lands in `signal_compute_log` with wall-clock proximity to 21:45 UTC (distinct from the manual-fire `as_of`-derived midnight signature).
