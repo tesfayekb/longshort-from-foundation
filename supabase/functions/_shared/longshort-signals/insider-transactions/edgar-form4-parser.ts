@@ -47,8 +47,16 @@ export const FORM4_PARSER_OPERATION_ID = 'edgar_form4_parser';
 export interface EdgarForm4Row {
   /** §(h) idempotency triple #1: padded 10-digit issuer CIK. */
   issuer_cik: string;
-  /** Owner (reporting person) CIK. May be empty string if the filing
-   *  omits it (rare; logged but not a parse failure). */
+  /** Owner (reporting person) CIK — padded 10-digit. REQUIRED;
+   *  absent / non-numeric `rptOwnerCik` ⇒ parse failure
+   *  (`kind:'unparseable'`). Tightened FP-050 Phase 3.6b.iii′ (M1
+   *  ruling 2026-06-12): the prior leniency would have let an empty
+   *  string land in the persisted row, violating MIG-095's `NOT NULL`
+   *  and shifting the §(h) four-part dedup key (issuer_cik,
+   *  owner_cik, transaction_date, transaction_seq) into a silent
+   *  three-part collision (R1 regression). Parser tests did not pin
+   *  the prior leniency (verified by grep), so the contract owner
+   *  enforces the contract here — no consumer-side leniency seam. */
   owner_cik: string;
   /** §(h) idempotency triple #2. */
   accession_number: string;
@@ -171,6 +179,15 @@ export function parseEdgarForm4(input: EdgarForm4ParseInput): EdgarForm4ParseRes
   const ownerBlock = firstTag(xml, 'reportingOwner') ?? '';
   const ownerIdBlock = firstTag(ownerBlock, 'reportingOwnerId') ?? '';
   const ownerCik = padCikString(firstTag(ownerIdBlock, 'rptOwnerCik'));
+  if (ownerCik === '') {
+    // M1 ruling (2026-06-12): absent owner_cik = typed parse failure,
+    // never silently '' (would collapse the §(h) four-part dedup key
+    // and violate MIG-095 NOT NULL).
+    return {
+      kind: 'unparseable',
+      reason: '§(h) four-part-key contract violated: missing or non-numeric rptOwnerCik',
+    };
+  }
   const relBlock = firstTag(ownerBlock, 'reportingOwnerRelationship') ?? '';
   const isDirector = boolTag(relBlock, 'isDirector');
   const isOfficer = boolTag(relBlock, 'isOfficer');
