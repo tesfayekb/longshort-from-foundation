@@ -201,6 +201,75 @@ export type Database = {
           },
         ]
       }
+      insider_form4_rows: {
+        Row: {
+          acceptance_datetime: string
+          accession_number: string
+          aff_10b5_one: boolean
+          filing_form_type: string
+          ingested_at: string
+          ingested_run_id: string | null
+          is_director: boolean
+          is_officer: boolean
+          is_ten_percent_owner: boolean
+          issuer_cik: string
+          not_subject_to_section_16: boolean
+          officer_title: string | null
+          security_type: string | null
+          ticker: string
+          transaction_acquired_disposed: string
+          transaction_code: string
+          transaction_date: string
+          transaction_price_per_share: number | null
+          transaction_seq: number
+          transaction_shares: number
+        }
+        Insert: {
+          acceptance_datetime: string
+          accession_number: string
+          aff_10b5_one?: boolean
+          filing_form_type: string
+          ingested_at?: string
+          ingested_run_id?: string | null
+          is_director?: boolean
+          is_officer?: boolean
+          is_ten_percent_owner?: boolean
+          issuer_cik: string
+          not_subject_to_section_16?: boolean
+          officer_title?: string | null
+          security_type?: string | null
+          ticker: string
+          transaction_acquired_disposed: string
+          transaction_code: string
+          transaction_date: string
+          transaction_price_per_share?: number | null
+          transaction_seq: number
+          transaction_shares: number
+        }
+        Update: {
+          acceptance_datetime?: string
+          accession_number?: string
+          aff_10b5_one?: boolean
+          filing_form_type?: string
+          ingested_at?: string
+          ingested_run_id?: string | null
+          is_director?: boolean
+          is_officer?: boolean
+          is_ten_percent_owner?: boolean
+          issuer_cik?: string
+          not_subject_to_section_16?: boolean
+          officer_title?: string | null
+          security_type?: string | null
+          ticker?: string
+          transaction_acquired_disposed?: string
+          transaction_code?: string
+          transaction_date?: string
+          transaction_price_per_share?: number | null
+          transaction_seq?: number
+          transaction_shares?: number
+        }
+        Relationships: []
+      }
       invitations: {
         Row: {
           accepted_at: string | null
