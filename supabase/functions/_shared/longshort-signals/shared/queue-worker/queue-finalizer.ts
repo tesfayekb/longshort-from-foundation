@@ -31,8 +31,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   isFeedMode,
+  isWorkListMode,
   type FeedComputeFromItemsFn,
   type QueueSignalConfig,
+  type TickerComputeResult,
+  type WorkListLoadAndComputeFn,
 } from './queue-config.ts';
 import type { SignalRow, SignalSkip, SignalSkipReason } from '../signal-types.ts';
 import { zScoreNormalizeWithinSector } from '../z-score-normalize.ts';
@@ -118,9 +121,22 @@ export async function runQueueFinalizer(
   //      (no staging-table writes for feed mode — feed_items is the
   //      durable record; staging writes would be redundant disk traffic
   //      with zero diagnostic value feed_items doesn't already provide).
+  //      Work-list mode (FP-050 Phase 3.6a) calls the consumer's
+  //      loadAndCompute({asOf}) which reads from the consumer-private
+  //      persistence table (e.g. insider_form4_rows) over its window
+  //      and returns one TickerComputeResult per universe ticker. NO
+  //      staging reads, NO feed_items reads, NO signal_queue_skips reads
+  //      (those carry item-scope skips for telemetry only — Q4 two-ledger).
   let staging: StagingRow[];
   let skipsDb: SkipRow[];
-  if (isFeedMode(config)) {
+  if (isWorkListMode(config)) {
+    const res = await buildWorkListAggregates(ctx, runRow);
+    if (res.kind === 'failed') {
+      return await transitionToFailed(ctx, runRow, res.reason);
+    }
+    staging = res.staging;
+    skipsDb = res.skips;
+  } else if (isFeedMode(config)) {
     const res = await buildFeedAggregates(ctx, runRow);
     if (res.kind === 'failed') {
       return await transitionToFailed(ctx, runRow, res.reason);
@@ -345,6 +361,64 @@ async function buildFeedAggregates(
         ticker: u.ticker,
         skip_reason: result.reason,
         detail: detailFor(result),
+      });
+    }
+  }
+
+  return { kind: 'ok', staging, skips };
+}
+
+/**
+ * Work-list-mode aggregation (FP-050 Phase 3.6a) — calls the consumer's
+ * loadAndCompute({asOf}) which reads from the consumer-private
+ * persistence table over its window and returns one TickerComputeResult
+ * per universe ticker. The engine never touches the consumer's table.
+ *
+ * Mass-balance (Q4 two-ledger): the 839 universe-name accounting is
+ * CONSUMER's responsibility — every universe ticker must appear in
+ * loadAndCompute's return (value OR typed skip). Item-scope permanent
+ * skips in signal_queue_skips are telemetry-only and NOT read here.
+ */
+async function buildWorkListAggregates(
+  ctx: QueueFinalizerContext,
+  _runRow: RunRow,
+): Promise<
+  | { kind: 'ok'; staging: StagingRow[]; skips: SkipRow[] }
+  | { kind: 'failed'; reason: string }
+> {
+  const { config, as_of } = ctx;
+  const loadAndCompute = config.loadAndCompute as WorkListLoadAndComputeFn;
+
+  let results: ReadonlyArray<{ ticker: string; gicsSector: string | null; result: TickerComputeResult }>;
+  try {
+    results = await loadAndCompute({ asOf: as_of });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { kind: 'failed', reason: `work-list-finalizer: loadAndCompute threw: ${msg}` };
+  }
+
+  const staging: StagingRow[] = [];
+  const skips: SkipRow[] = [];
+  for (const r of results) {
+    if (r.result.kind === 'value') {
+      if (!Number.isFinite(r.result.raw)) {
+        skips.push({
+          ticker: r.ticker,
+          skip_reason: 'fetch_error',
+          detail: `loadAndCompute returned non-finite value: ${r.result.raw}`,
+        });
+      } else {
+        staging.push({
+          ticker: r.ticker,
+          gics_sector: r.gicsSector,
+          raw_signal: r.result.raw,
+        });
+      }
+    } else {
+      skips.push({
+        ticker: r.ticker,
+        skip_reason: r.result.reason,
+        detail: r.result.detail,
       });
     }
   }

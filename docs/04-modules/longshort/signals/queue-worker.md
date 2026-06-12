@@ -271,3 +271,50 @@ npx eslint .
 ```
 
 (source: `.github/workflows/strong-evidence.yml`, "Gate 4" step). `deno lint` is supplementary diagnostic only — it does NOT enforce `@typescript-eslint/no-explicit-any` and is NEVER acceptable as Gate-4 evidence. Every PR's Gate-4 evidence block MUST state the exact command line above its output. The Phase 2 commits b4f4941 / 5396165 produced false-green Gate 4 by substituting `deno lint`; revision commit (this PR) restores the discipline by re-running the CI command and quoting it verbatim. `@ts-nocheck` does NOT silence ESLint — typed mocks (`unknown` in place of `any`, narrow interface stubs) are the only acceptable convention for Deno test files in this tree.
+
+## Work-list mode (FP-050 Phase 3.6a — engine third mode)
+
+Engine mode union widened to `mode: 'per-ticker' | 'sequential-feed' | 'work-list'`. Existing PEAD + options-flow (per-ticker) + news (sequential-feed) registrations are byte-faithful — work-list is a strictly-additive third mode validated by the same registry + bidirectional contamination guards (queue-config.ts: 3×3 mode/field matrix).
+
+**Work-list is for signals whose work unit is a CONSUMER-pre-enumerated, FINITE, NON-OPAQUE list of items** (insider: the day's qualifying Form-4 accessions). Distinct from sequential-feed (vendor-opaque pagination token, items materialized into engine-owned `signal_queue_feed_items`) and per-ticker (universe membership is the seed, items are tickers).
+
+### Q-ruling contract (binding — operator 2026-06-12 ruling on 3.6a)
+
+| Ruling | Contract | Enforcement |
+|---|---|---|
+| **Q1** CAS barrier | Per-item: `processItem` → consumer-private upsert (inside processItem) → engine-deletes that item's cursor row. After batch: CAS predicate = "no cursor rows for this run". MIRRORS per-ticker verbatim — no new ordering semantics. | `runWorkListSlice` per-item delete loop + `attemptFinalizingCAS` |
+| **Q2** Heartbeat granularity | At slice entry AND every `WORK_LIST_HEARTBEAT_ITEM_INTERVAL = 25` processed items (≈10s at 2 calls/item, 5 rps). Constant exported and named so tests assert against it, not a magic number. liveClock for monotonic advance; kernel-frozen `as_of` reserved for compute-input timestamps. | `WORK_LIST_HEARTBEAT_ITEM_INTERVAL` constant + `bumpHeartbeatLive` |
+| **Q3** 3-strikes + deadlock guard | Run-level counter counts SLICE-LEVEL throws only, reset on any slice that processes ≥1 item successfully. Per-item failures split: typed-permanent → delete cursor + signal_queue_skips item-scope row; transient → leave cursor row, release claim at slice end, count `item_retries`. **Deadlock guard:** slice with `claimed>0 ∧ succeeded=0` (all transient OR all permanent_skip) counts as a failed slice — stamps last verbatim masked item error, increments counter. At `WORK_LIST_SLICE_FAILURE_THRESHOLD = 3` consecutive failures → terminal-fail with last verbatim error. | `WORK_LIST_SLICE_FAILURE_THRESHOLD` + the slice-worker's deadlock-guard arm |
+| **Q4** Two-ledger skips | Item-scope permanent skips land in `signal_queue_skips` with item-scope marker for uniform telemetry. **NOT** part of the 839 universe-name mass balance — name-level accounting comes ENTIRELY from the consumer's `loadAndCompute` return (names with no in-window rows → consumer's typed skips). Finalizer NEVER reads `signal_queue_skips` in work-list mode (pinned by `finalizer work-list Q4: signal_queue_skips NOT read for mass balance`). | `buildWorkListAggregates` calls `loadAndCompute` exclusively |
+| **Q5** Seed failure semantics | `seedWorkItems` throw → run inserted in TERMINAL `status='failed'` with `failure_reason='seed_failed: <masked verbatim>'`, NEVER half-seeded. Successfully-computed EMPTY list → VALID run, `status='running'`, ZERO cursor rows, next slice tick finds empty cursor and CASes-to-finalizing on the empty predicate. **Empty seed ≠ no-op** — for insider, an empty filing day still reads the consumer's 90-day window. | `initWorkListRun` failure path + `kind:'seed_failed'` / `kind:'started_empty_work_list'` result variants |
+
+### Cursor seeding contract
+
+| Property | Value |
+|---|---|
+| `signal_queue_cursor.ticker` | synthetic-ticker = `item.id` (insider: EDGAR accession_number — lex-sortable; the claim RPC's `ORDER BY ticker` drains in lex order, deterministic + replay-safe per Q2 ruling on secondary Q2) |
+| `signal_queue_cursor.gics_sector` | `NULL` per Q ruling on secondary Q3 — compute resolves sectors from `universe_membership` at finalize-time inside the consumer's `loadAndCompute` |
+| Batch size | `WORK_LIST_CURSOR_BATCH_SIZE = 500` (~10k-item backfill seeds in 20 inserts under the Supabase JSON payload soft-cap) |
+| Duplicate-id guard | init throws on duplicate `item.id` (defensive cursor-PK guard; a buggy consumer that returns duplicates would corrupt the `(run_id, ticker)` PK assumption) |
+
+### Sweeper coverage (verified, no engine extension required)
+
+`queue-sweeper.ts` operates on `signal_queue_runs`, `signal_queue_cursor`, `signal_queue_staging`, `signal_queue_skips`, `signal_queue_feed_items` — all engine-owned tables. Work-list runs use the same `signal_queue_runs` / `signal_queue_cursor` / `signal_queue_skips` shape as per-ticker mode; `signal_queue_feed_items` is a no-op (zero rows). The stale-heartbeat fail-out CAS, post-failout cursor-claim release, and staging+skip TTL prune all work uninstrumented.
+
+**Explicit limit:** the sweeper does NOT touch consumer-private persistence tables (e.g. `insider_form4_rows`). TTL/retention of those is the consumer's responsibility — the 90-day window itself bounds the relevant rows, and longer-horizon pruning lives in the consumer's own migration ledger (not the engine's).
+
+### Engine API surface added in 3.6a
+
+- Types: `WorkListItem`, `WorkListItemResult`, `WorkListSeedFn`, `WorkListProcessItemFn`, `WorkListLoadAndComputeFn`
+- Constants: `WORK_LIST_HEARTBEAT_ITEM_INTERVAL` (25), `WORK_LIST_SLICE_FAILURE_THRESHOLD` (3, mirrors INC-73)
+- Discriminator: `isWorkListMode(cfg)`
+- Result-kind additions: `QueueInitResult.kind ∈ {'seed_failed', 'started_empty_work_list'}`; `QueueSliceWorkerResult.item_retries`, `mode='work-list'`
+
+### Cross-mode regression fence (3.6a.ii commit evidence)
+
+- `queue-config_test.ts`: 21 passed (8 baseline + 13 new — 3.6a.i)
+- `queue-init_test.ts`: 5 passed (unchanged per-ticker)
+- `queue-slice-worker_test.ts`: passes unchanged
+- `queue-feed-mode_test.ts` / `queue-feed-slice-dedupe_test.ts` / `queue-feed-slice-failure_test.ts`: pass unchanged (full sequential-feed parity preserved)
+- `queue-finalizer_test.ts` / `queue-sweeper_test.ts`: pass unchanged
+- `queue-work-list-mode_test.ts`: **19 new tests** covering all five Q-rulings + the INC-73 five-contract parity bar (verbatim failure_reason stamping; slice.failed re-throw; claim/cursor preservation across retries; 3-strikes incl. deadlock guard and ≥1-success reset; heartbeat monotonic advance under injected clock at the 25-item interval)

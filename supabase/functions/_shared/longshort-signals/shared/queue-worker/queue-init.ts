@@ -26,8 +26,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   FEED_SYNTHETIC_TICKER,
   isFeedMode,
+  isWorkListMode,
   type QueueSignalConfig,
+  type WorkListItem,
+  type WorkListSeedFn,
 } from './queue-config.ts';
+import { maskSecretsInMessage } from './error-key-mask.ts';
 
 export interface QueueInitContext {
   supabase: SupabaseClient;
@@ -55,12 +59,42 @@ export type QueueInitResult =
       as_of_date: string;
       existing_run_id: string;
       existing_status: string;
+    }
+  | {
+      // FP-050 Phase 3.6a Q5 — seedWorkItems threw at init; the run row
+      // is inserted with status='failed' + failure_reason='seed_failed:
+      // <masked>'. Never half-seeded (no cursor rows written). The
+      // distinction from the empty-but-successful seed below is binding.
+      kind: 'seed_failed';
+      signal_id: string;
+      as_of_date: string;
+      run_id: string;
+      failure_reason: string;
+    }
+  | {
+      // FP-050 Phase 3.6a Q5 — seedWorkItems returned an empty array.
+      // VALID run: status='running', zero cursor rows, no items to drain.
+      // The next slice-tick (or, with an immediate handler dispatch, the
+      // first claim) finds the empty cursor, attempts the CAS-to-
+      // finalizing predicate "no cursor rows", wins, and the finalizer's
+      // loadAndCompute reads the consumer's window. Empty seed ≠ no-op.
+      kind: 'started_empty_work_list';
+      run_id: string;
+      signal_id: string;
+      as_of_date: string;
     };
 
 interface UniverseRow {
   ticker: string;
   gics_sector: string | null;
 }
+
+/**
+ * FP-050 Phase 3.6a — cursor-insert batch size for work-list seeds.
+ * 500 keeps a single insert under the Supabase JSON payload soft-cap
+ * while still draining a ~10k-item backfill seed in 20 batches.
+ */
+const WORK_LIST_CURSOR_BATCH_SIZE = 500;
 
 export async function initQueueRun(ctx: QueueInitContext): Promise<QueueInitResult> {
   const { supabase, operator_id, config, as_of } = ctx;
@@ -87,6 +121,19 @@ export async function initQueueRun(ctx: QueueInitContext): Promise<QueueInitResu
       existing_run_id: r.run_id,
       existing_status: r.status,
     };
+  }
+
+  // ── 2a. Work-list mode (FP-050 Phase 3.6a): seedWorkItems is the seed
+  //       source (NOT universe_membership). Q5 ruling: a throw is a
+  //       fail-loud init failure with `failure_reason='seed_failed: ...'`
+  //       (the run row is inserted into a TERMINAL 'failed' state so the
+  //       failure is durable + diagnosable, never half-seeded). A
+  //       successfully-computed EMPTY array is a VALID run that proceeds
+  //       directly to finalize via the empty-cursor CAS path. Universe
+  //       resolution happens at finalize-time inside the consumer's
+  //       `loadAndCompute` (gics_sector NULL on cursor rows per Q ruling).
+  if (isWorkListMode(config)) {
+    return await initWorkListRun(ctx, as_of_iso, as_of_date);
   }
 
   // ── 2. Load latest universe snapshot.
@@ -188,5 +235,145 @@ export async function initQueueRun(ctx: QueueInitContext): Promise<QueueInitResu
     signal_id: config.signalId,
     as_of_date,
     universe_size: universe.length,
+  };
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// FP-050 Phase 3.6a — work-list mode init branch
+// ───────────────────────────────────────────────────────────────────────
+
+async function initWorkListRun(
+  ctx: QueueInitContext,
+  as_of_iso: string,
+  as_of_date: string,
+): Promise<QueueInitResult> {
+  const { supabase, operator_id, config, as_of } = ctx;
+  const seed = config.seedWorkItems as WorkListSeedFn;
+
+  // ── (1) Seed the work list. Q5 ruling: a throw inserts a TERMINAL
+  //       'failed' run row so the failure_reason is durable, never
+  //       half-seeded. (We insert AFTER the throw — no run row exists
+  //       on the failure path until we explicitly persist the failure.)
+  let items: ReadonlyArray<WorkListItem>;
+  try {
+    items = await seed({ asOf: as_of });
+  } catch (e) {
+    const rawMsg = e instanceof Error ? e.message : String(e);
+    const maskedMsg = maskSecretsInMessage(rawMsg);
+    const failure_reason = `seed_failed: ${maskedMsg}`;
+    const { data: failedRow, error: failedErr } = await supabase
+      .from('signal_queue_runs')
+      .insert({
+        signal_id: config.signalId,
+        operator_id,
+        as_of_date,
+        status: 'failed',
+        universe_size: 0,
+        heartbeat_at: as_of_iso,
+        finalized_at: as_of_iso,
+        failure_reason,
+        metadata: { as_of: as_of_iso, job_id: config.jobId, mode: 'work-list', seed_failed: true },
+      })
+      .select('run_id')
+      .single();
+    if (failedErr || !failedRow) {
+      // Re-throw the SEED error (it's the root cause; the run-insert
+      // error is secondary and would mask the real failure).
+      throw new Error(`queue-init[work-list]: seedWorkItems threw (${maskedMsg}); failed-run insert also failed: ${failedErr?.message ?? 'no data'}`);
+    }
+    return {
+      kind: 'seed_failed',
+      signal_id: config.signalId,
+      as_of_date,
+      run_id: (failedRow as { run_id: string }).run_id,
+      failure_reason,
+    };
+  }
+
+  // ── (2) Validate item shape (defensive — a buggy consumer that returns
+  //       duplicate IDs would corrupt the cursor PK assumption).
+  const seenIds = new Set<string>();
+  for (const it of items) {
+    if (!it || typeof it.id !== 'string' || it.id.length === 0) {
+      throw new Error(`queue-init[work-list]: seedWorkItems returned an item with missing/empty id`);
+    }
+    if (seenIds.has(it.id)) {
+      throw new Error(`queue-init[work-list]: seedWorkItems returned duplicate id '${it.id}'`);
+    }
+    seenIds.add(it.id);
+  }
+
+  // ── (3) Insert the run row. universe_size carries the seeded item
+  //       count (the work-list analogue of universe size; consumer's
+  //       loadAndCompute mass-balance still uses real universe_membership
+  //       at finalize-time per Q4).
+  const { data: runRow, error: runErr } = await supabase
+    .from('signal_queue_runs')
+    .insert({
+      signal_id: config.signalId,
+      operator_id,
+      as_of_date,
+      status: 'running',
+      universe_size: items.length,
+      heartbeat_at: as_of_iso,
+      metadata: {
+        as_of: as_of_iso,
+        job_id: config.jobId,
+        mode: 'work-list',
+        seeded_item_count: items.length,
+      },
+    })
+    .select('run_id')
+    .single();
+  if (runErr || !runRow) {
+    throw new Error(`queue-init[work-list]: run insert failed: ${runErr?.message ?? 'no data'}`);
+  }
+  const run_id = (runRow as { run_id: string }).run_id;
+
+  // ── (4) Empty seed → VALID run that proceeds directly to finalize via
+  //       the CAS-on-empty-cursor predicate. We do NOT seed any cursor
+  //       rows; the first slice tick finds the empty cursor, the CAS
+  //       predicate "no cursor rows for this run" is naturally true,
+  //       the CAS wins, finalizer runs loadAndCompute on the consumer's
+  //       window. Empty seed ≠ no-op (Q5 distinction, test-pinned).
+  if (items.length === 0) {
+    return {
+      kind: 'started_empty_work_list',
+      run_id,
+      signal_id: config.signalId,
+      as_of_date,
+    };
+  }
+
+  // ── (5) Batched cursor seed — one row per item. synthetic-ticker =
+  //       item.id (Q ruling: lex-sortable, drained in lex order), gics_
+  //       sector NULL (Q ruling: compute resolves sectors at finalize).
+  //       Batched so a ~10k-item backfill doesn't exceed Supabase JSON
+  //       payload soft-cap in a single insert.
+  for (let i = 0; i < items.length; i += WORK_LIST_CURSOR_BATCH_SIZE) {
+    const slice = items.slice(i, i + WORK_LIST_CURSOR_BATCH_SIZE);
+    const cursorRows = slice.map((it) => ({
+      run_id,
+      signal_id: config.signalId,
+      ticker: it.id,
+      gics_sector: null as string | null,
+    }));
+    const { error: cursorErr } = await supabase
+      .from('signal_queue_cursor')
+      .upsert(cursorRows, { onConflict: 'run_id,ticker', ignoreDuplicates: true });
+    if (cursorErr) {
+      // Best-effort rollback — sweeper will fail us out if rollback fails.
+      await supabase.from('signal_queue_cursor').delete().eq('run_id', run_id);
+      await supabase.from('signal_queue_runs').delete().eq('run_id', run_id);
+      throw new Error(`queue-init[work-list]: cursor batch ${i}/${items.length} insert failed: ${cursorErr.message}`);
+    }
+  }
+
+  return {
+    kind: 'started',
+    run_id,
+    signal_id: config.signalId,
+    as_of_date,
+    universe_size: items.length,
   };
 }
