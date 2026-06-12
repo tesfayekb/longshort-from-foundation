@@ -1,12 +1,5 @@
 
 
-### ACT-182: FP-050 Phase 1 — DEC-058 ratification + EDGAR fetcher trio commit (cik-mapper + daily-index-fetcher + form4-parser + form4-fetcher; reuse-fence preserved; Signal #4 STAYS DISARMED)
-*** End Patch
-*** Begin Patch
-*** Update File: docs/06-tracking/action-tracker.md
-@@
-
-
 ### ACT-183: REVISION-FIX — `no-useless-escape` in `edgar-daily-index-fetcher.ts:98` + Gate-Evidence-Substitution countermeasure (ai-failure-modes #41)
 
 | Field | Value |
