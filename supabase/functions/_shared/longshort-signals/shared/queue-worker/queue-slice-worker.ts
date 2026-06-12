@@ -125,7 +125,7 @@ export async function runQueueSlice(
 
   // ── 3. Compute under the token bucket.
   const bucket = (ctx.bucketFactory ?? defaultBucketFactory)(config.ratePerSec);
-  const compute: TickerComputeFn = config.fetchAndCompute;
+  const compute: TickerComputeFn = config.fetchAndCompute as TickerComputeFn;
 
   const stagingRows: Array<{
     run_id: string; signal_id: string; ticker: string;
