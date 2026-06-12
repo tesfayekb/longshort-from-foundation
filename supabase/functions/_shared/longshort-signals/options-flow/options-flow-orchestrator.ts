@@ -1,10 +1,16 @@
 /**
  * Options flow imbalance (Signal #3) orchestrator — v1 CHAIN-SNAPSHOT.
  *
- * Mirrors `insider-orchestrator.ts` (FP-042) structurally — load universe
- * → bounded-concurrency per-ticker fetch + compute → within-sector GICS
- * z-score → SignalRow build → persist. Diffs vs the insider orchestrator
- * are tied to §4.4.7:
+ * Historical citation (preserved per Rule 8): originally framed as
+ * "mirrors `insider-orchestrator.ts` (FP-042) structurally — load
+ * universe → bounded-concurrency per-ticker fetch + compute → within-
+ * sector GICS z-score → SignalRow build → persist". The mirrored file
+ * was deleted in FP-050 Phase 3.6b.ii″ (ACT-192) when Signal #4
+ * migrated to a queue-drained work-list architecture; the structural
+ * mirror described here is now historical. The shared shape
+ * (load → per-ticker fetch+compute → within-sector z-score → persist)
+ * remains the v1 chain-snapshot pattern for this signal. Diffs vs the
+ * original insider mirror were tied to §4.4.7:
  *
  *   1. PER-TICKER side-input is the Tradier OPTION CHAIN at the
  *      first-qualifying expiration (DTE ≥ MIN_DTE_DAYS=7):
