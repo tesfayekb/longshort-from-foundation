@@ -204,3 +204,45 @@ Deno.test('history subscription_gated → subscription_gated skip', async () => 
   const res = await orch.run(AS_OF);
   assertEquals(res.skipped[0].reason, 'subscription_gated');
 });
+
+/**
+ * FP-047 FOLLOWUP — orchestrator stamps `started_at` at ENTRY and
+ * `completed_at` at FINALIZATION from the injected liveClock, NOT from
+ * the `as_of` parameter. Verifies a non-zero wall-duration when the
+ * clock advances between entry and finalize (the defect was both
+ * timestamps colliding on the single `as_of` snapshot → 0.000s wall).
+ */
+Deno.test('liveClock — started_at < completed_at; wall-duration > 0; as_of is NOT the source', async () => {
+  const universe = [{ ticker: 'AAA', gics_sector: 'Tech' }];
+  const feedRows = [row('AAA', '2026-06-09 12:00:00', 'Jane Doe', 'Acme', 120)];
+  const sb = makeSupabase({ universe });
+
+  // Mutable clock: each call returns +1s past the prior call.
+  let counter = 0;
+  const BASE = new Date('2026-06-12T03:00:00.000Z').getTime();
+  const liveClock = {
+    getWallClockTs() {
+      const d = new Date(BASE + counter * 1000);
+      counter += 1;
+      return d;
+    },
+  };
+
+  const orch = createAnalystRevisionOrchestrator({
+    supabase: sb.client as never,
+    operator_id: OPERATOR_ID,
+    feed: makeFeed(feedRows) as never,
+    history: makeHistory({}) as never,
+    liveClock: liveClock as never,
+  });
+  const res = await orch.run(AS_OF);
+
+  const startedMs = Date.parse(res.started_at);
+  const completedMs = Date.parse(res.completed_at);
+  assert(completedMs > startedMs, `expected completed_at > started_at (got ${res.started_at} → ${res.completed_at})`);
+  assert(completedMs - startedMs >= 1000, 'expected wall-duration >= 1s under advancing test clock');
+  // started_at MUST NOT alias as_of (the defect).
+  assert(res.started_at !== AS_OF.toISOString(), 'started_at must be liveClock-sourced, not as_of');
+  // as_of_date still derives from as_of (compute-input determinism preserved).
+  assertEquals(res.as_of_date, AS_OF_DATE);
+});

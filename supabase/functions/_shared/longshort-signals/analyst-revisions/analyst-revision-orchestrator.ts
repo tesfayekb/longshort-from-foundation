@@ -47,10 +47,17 @@
  * H toward the worst case; the worst-case row is the operating guarantee.
  *
  * ─── Wall-clock discipline (DEC-034 clause 4) ─────────────────────────
- * NO wall-clock reads in this file. All timestamps derive from the
- * injected `as_of` parameter. The shared TokenBucket has its own
- * internal `productionClock` for pacing (operational rate-limiting is
- * NOT a strategy-decision kernel — see token-bucket.ts header).
+ * `as_of` remains the ONLY timestamp that enters compute inputs
+ * (deterministic per DEC-034 / DEC-035 replay). Orchestrator-telemetry
+ * timestamps (`started_at` / `completed_at`) are stamped from the
+ * injected `liveClock` (default `productionClock`) at orchestrator
+ * ENTRY and FINALIZATION respectively — the INC-73-sanctioned pattern
+ * also used by the queue-worker engine. This is what produces a
+ * non-zero wall reading in `signal_compute_log` for FP-047 FOLLOWUP.
+ * Tests inject a mutable clock to assert `completed_at > started_at`.
+ * The shared TokenBucket has its own internal `productionClock` for
+ * pacing (operational rate-limiting is NOT a strategy-decision
+ * kernel — see token-bucket.ts header).
  *
  * Owner: longshort (FP-047 Phase 3 — Signal #1)
  */
@@ -66,6 +73,7 @@ import type {
 import { pLimitedMap } from '../shared/p-limited-map.ts';
 import { zScoreNormalizeWithinSector } from '../shared/z-score-normalize.ts';
 import { captureSignalObservations } from '../shared/missingness-capture.ts';
+import { productionClock, type ClockReader } from '../../longshort-clock.ts';
 import type { FmpPriceTargetFeedFetcher } from './fmp-price-target-feed-fetcher.ts';
 import type { FmpPriceTargetHistoryFetcher } from './fmp-price-target-history-fetcher.ts';
 import {
@@ -109,16 +117,24 @@ export interface AnalystRevisionOrchestratorContext
   extends Omit<SignalOrchestratorContext, 'priceHistory'> {
   feed: FmpPriceTargetFeedFetcher;
   history: FmpPriceTargetHistoryFetcher;
+  /**
+   * Injectable wall-clock for orchestrator telemetry (`started_at` /
+   * `completed_at`). Defaults to `productionClock`. Compute inputs
+   * never touch this clock — they consume `as_of` only.
+   */
+  liveClock?: ClockReader;
 }
 
 export function createAnalystRevisionOrchestrator(
   ctx: AnalystRevisionOrchestratorContext,
 ) {
+  const liveClock = ctx.liveClock ?? productionClock;
   return {
     async run(as_of: Date): Promise<SignalOrchestratorResult> {
-      const ts = as_of.toISOString();
-      const started_at = ts;
-      const as_of_date = ts.slice(0, 10);
+      const started_at = liveClock.getWallClockTs().toISOString();
+      const as_of_iso = as_of.toISOString();
+      const as_of_date = as_of_iso.slice(0, 10);
+      const finalize = (): string => liveClock.getWallClockTs().toISOString();
 
       // ── Stage 0: load current universe (mirrors pead-orchestrator) ──
       const { data: latestRows, error: latestErr } = await ctx.supabase
@@ -137,7 +153,7 @@ export function createAnalystRevisionOrchestrator(
           ? (latestRows[0] as { as_of_date: string }).as_of_date
           : null;
       if (latest_as_of_date === null) {
-        return emptyUniverseResult(as_of_date, started_at, ts);
+        return emptyUniverseResult(as_of_date, started_at, finalize());
       }
       const { data: universeRows, error: universeErr } = await ctx.supabase
         .from('universe_membership')
@@ -151,7 +167,7 @@ export function createAnalystRevisionOrchestrator(
       }
       const universe = (universeRows ?? []) as UniverseRow[];
       if (universe.length === 0) {
-        return emptyUniverseResult(as_of_date, started_at, ts);
+        return emptyUniverseResult(as_of_date, started_at, finalize());
       }
       const universeBySymbol = new Map<string, UniverseRow>();
       for (const u of universe) universeBySymbol.set(u.ticker, u);
@@ -182,7 +198,7 @@ export function createAnalystRevisionOrchestrator(
             persisted_count: 0,
             skipped: skips,
             started_at,
-            completed_at: ts,
+            completed_at: finalize(),
           };
         }
         feedRowsBySymbol = groupFeedRowsByUniverseSymbol(
@@ -200,7 +216,7 @@ export function createAnalystRevisionOrchestrator(
           skipped: [],
           failure_reason: `feed_fetch_failed: ${message}`,
           started_at,
-          completed_at: ts,
+          completed_at: finalize(),
         };
       }
 
@@ -301,7 +317,7 @@ export function createAnalystRevisionOrchestrator(
       const zScored = zScoreNormalizeWithinSector(values);
 
       // ── Stage 4b: SignalRow build + sector-related typed skips ─────
-      const computed_at = ts;
+      const computed_at = as_of_iso;
       const rows: SignalRow[] = [];
       for (const z of zScored) {
         if (z.value === null) {
@@ -341,7 +357,7 @@ export function createAnalystRevisionOrchestrator(
           skipped: skips,
           failure_reason: `signal_observations persistence failed: ${persistErr.message}`,
           started_at,
-          completed_at: ts,
+          completed_at: finalize(),
         };
       }
 
@@ -353,7 +369,7 @@ export function createAnalystRevisionOrchestrator(
         persisted_count: inserted,
         skipped: skips,
         started_at,
-        completed_at: ts,
+        completed_at: finalize(),
       };
     },
   };
@@ -362,7 +378,7 @@ export function createAnalystRevisionOrchestrator(
 function emptyUniverseResult(
   as_of_date: string,
   started_at: string,
-  ts: string,
+  completed_at: string,
 ): SignalOrchestratorResult {
   return {
     outcome: 'failed',
@@ -373,7 +389,7 @@ function emptyUniverseResult(
     skipped: [],
     failure_reason: 'empty_universe',
     started_at,
-    completed_at: ts,
+    completed_at,
   };
 }
 

@@ -12,10 +12,20 @@ skip_counts.revision_prior_unavailable=286 — conservation `345+286+208=839 ✓
 z_std=0.952950 z_min=−2.820452 z_max=3.000000 (within-sector ~N(0,1) sane).
 MIG-088 arm-up landed prior; DEC-040 byte-match remains
 `cron.job` jobid=89 `schedule='0 21 * * 1-5' active=true` ≡
-`job_registry.schedule='0 21 * * 1-5'`. **Single open follow-up:**
-`signal_compute_log.started_at` is stamped at finalization rather than
-orchestrator entry (`started_at == completed_at` on both `1be8850d` and
-`3f58a03e`); closes at FP-047 closure, non-blocking for attestation.)
+`job_registry.schedule='0 21 * * 1-5'`. **FP-047 FOLLOWUP — CLOSED
+2026-06-12:** `signal_compute_log.started_at` now stamps at orchestrator
+ENTRY and `completed_at` at FINALIZATION from injectable `liveClock`
+(default `productionClock`) — the INC-73-sanctioned pattern. Compute
+inputs continue to consume `as_of` only (determinism preserved per
+DEC-034 / DEC-035). Regression-fenced by the existing six orchestrator
+tests; a seventh test ("liveClock — started_at < completed_at …")
+asserts the FOLLOWUP behavior with an advancing test clock. The fix
+takes effect from the NEXT natural fire — tomorrow's 21:00 UTC cron
+row is the first `signal_compute_log` with a real wall-duration
+reading. **FP-047 formally CLOSED:** probe → semantic-drift catch /
+Option-2 → DEC-055 → Phases 1–4 (compute / identity / orchestrator /
+handlers) → MIG-088 arm-up → natural-fire attestation `3f58a03e` →
+FOLLOWUP (this commit). No remaining open items.)
 **Vendor:** FMP Premium `/stable/price-target-latest-news` (discovery) +
 `/stable/price-target-news?symbol={t}` (per-symbol history). Split-vendor
 lock per DEC-053.
