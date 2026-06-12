@@ -95,7 +95,7 @@ export function parseAccessionFromFilename(filename: string): string | null {
   const dashed = filename.match(/(\d{10}-\d{2}-\d{6})/);
   if (dashed !== null) return dashed[1];
   // No-dash form: 18 digits in a path segment.
-  const flat = filename.match(/\/(\d{10})(\d{2})(\d{6})(?:[\/.]|$)/);
+  const flat = filename.match(/\/(\d{10})(\d{2})(\d{6})(?:[/.]|$)/);
   if (flat !== null) return `${flat[1]}-${flat[2]}-${flat[3]}`;
   return null;
 }
