@@ -80,6 +80,7 @@ Deno.test('aggregateSkipCounts: empty array yields all-zero stable shape', () =>
     revision_prior_unavailable: 0,
     zero_magnitude_only: 0,
     no_articles_in_window: 0,
+    no_catalyst_events_in_window: 0,
   });
 });
 
@@ -110,6 +111,7 @@ Deno.test('aggregateSkipCounts: per-reason counts aggregate correctly', () => {
     revision_prior_unavailable: 0,
     zero_magnitude_only: 0,
     no_articles_in_window: 0,
+    no_catalyst_events_in_window: 0,
   });
 });
 
