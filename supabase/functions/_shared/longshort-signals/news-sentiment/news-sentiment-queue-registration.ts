@@ -27,17 +27,25 @@
  *
  * ─── Pre-flight arithmetic row (both-bounds discipline per Catalog #39) ─
  *
- *   pagesPerSlice            = 15
- *   OBSERVED_PAGE_LATENCY_S  = 6.3       (FP-048 Phase-0 row 17 — global
- *                                          1000-item probe, single page)
- *   → latency-bound per slice = 15 × 6.3 = 94.5 s
- *     vs the 120 s STOP gate ≈ 25.5 s headroom — SAFE.
- *     vs the 150 s HTTP wall ≈ 55.5 s headroom — SAFE.
+ *   pagesPerSlice            = 10
+ *   OBSERVED_PAGE_LATENCY_S  = 10.2      (MEASURED — run
+ *                                          9e8395a7-6f5f-4bd0-a213-149a06a5af5a,
+ *                                          as_of 2026-06-12: fetch +
+ *                                          3317-row upsert + finalize ÷
+ *                                          2 pages = 10.2 s/page wall.
+ *                                          SUPERSEDES the Phase-0 row 17
+ *                                          6.3 s fetch-only figure — the
+ *                                          superseded provenance is
+ *                                          retained in the module doc
+ *                                          per Rule 8.)
+ *   → latency-bound per slice = 10 × 10.2 = 102 s
+ *     vs the 120 s STOP gate ≈ 18 s headroom — SAFE.
+ *     vs the 150 s HTTP wall ≈ 48 s headroom — SAFE.
  *
  *   ratePerSec               = 10 × 0.85 = 8.5 rps
  *                              (self-imposed 10 rps cap × 0.85 safety,
  *                              matches the FP-045 PEAD/options convention)
- *   → rate-bound per slice    = 15 pages / 8.5 rps ≈ 1.76 s
+ *   → rate-bound per slice    = 10 pages / 8.5 rps ≈ 1.18 s
  *     The rate-bound is TRIVIALLY non-binding at this entitlement; the
  *     latency bound is the binding number (acknowledged here so the
  *     arithmetic row in the module doc is not silently lopsided).
@@ -49,11 +57,13 @@
  *                                     fails the run with reason
  *                                     `max_pages_exceeded`).
  *
- * Full-run estimate (35–70 pages observed, 15 pages/slice, slice cron
- * every minute): ⌈70/15⌉ = 5 slices → ≈ 5 min worst-case drain;
- * optimistic ⌈35/15⌉ = 3 slices → ≈ 3 min. Both fit the
- * truth-in-telemetry cadence `"daily (after-close; queue-drained
- * ~3-6 min …)"` registered alongside.
+ * Full-run estimate (measured: 2 pages typical at v1 entitlement /
+ * 928-article 7d pool; 10 pages/slice): typical run completes in 1
+ * slice (≈22 s end-to-end). Phase-0 35–70-page worst-case (retained
+ * as robustness ceiling — see DEC-056 §(architecture) corrected-
+ * arithmetic addendum) would drain in ⌈70/10⌉ = 7 slices ≈ 7 min,
+ * still within the truth-in-telemetry cadence `"daily (after-close;
+ * queue-drained ~3-6 min …)"` registered alongside.
  *
  * ─── Processed-count semantics (named per operator directive) ──────────
  *
@@ -113,13 +123,19 @@ export const NEWS_SIGNAL_ID = 'news_sentiment_7d';
 export const NEWS_QUEUE_JOB_ID = 'longshort.news.compute';
 
 /**
- * Phase-0 observed per-page latency (FP-048 Phase-0 row 17 — global
- * 1000-item probe, 6.3 s wall). Hard-coded here so the structural
- * arithmetic test (`news-sentiment-queue-registration_test.ts`) can
- * derive the slice latency mechanically and surface drift as a typed
+ * MEASURED per-page latency (end-to-end slice: fetch + per-page
+ * upsert + finalize amortized). Cited to run
+ * `9e8395a7-6f5f-4bd0-a213-149a06a5af5a` (as_of 2026-06-12, 20.4 s
+ * single-slice wall ÷ 2 pages = 10.2 s/page). SUPERSEDES the
+ * Phase-0 row 17 6.3 s fetch-only figure (which excluded upsert +
+ * finalize). The superseded provenance is retained in
+ * `docs/04-modules/longshort/signals/news-sentiment.md` §3 per
+ * Rule 8. Hard-coded here so the structural arithmetic test
+ * (`news-sentiment-queue-registration_test.ts`) can derive the
+ * slice latency mechanically and surface drift as a typed
  * assertion failure rather than a hand-edited number going stale.
  */
-export const OBSERVED_PAGE_LATENCY_S = 6.3;
+export const OBSERVED_PAGE_LATENCY_S = 10.2;
 
 /** Self-imposed engineering rate cap per DEC-056 cap-provenance addendum. */
 export const SELF_IMPOSED_RATE_CAP_RPS = 10;
@@ -134,7 +150,7 @@ export const NEWS_QUEUE_CONFIG = {
   heartbeatTimeoutSec: 600,
   stagingTtlSec: 86_400,
   mode: 'sequential-feed' as const,
-  pagesPerSlice: 15,
+  pagesPerSlice: 10,
   maxPages: 100,
 } as const;
 
