@@ -469,6 +469,7 @@ function emptyMeta(): ActiveCatalystMeta {
     future_event_excluded: 0,
     verb_gate_drops: 0,
     numeric_gate_drops: 0,
+    articles_scanned: 0,
     declaration_date_unavailable: 0,
     tradier_fallback_invoked: false,
     vendor_unavailable: {
