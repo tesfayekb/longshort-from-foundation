@@ -3371,3 +3371,29 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/tradier-corporate-actions-fetcher.ts` |
 | **Tests** | `tradier-corporate-actions-fetcher_test.ts` — 8 tests (cash_dividend + stock_split normalization + §(e) declaration-missing count; empty-tickers short-circuit; over-cap throws; Bearer auth + CSV upper-case; 401/missing-securities/500 taxonomy; constructor key-required). |
 | **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/catalyst-keywords.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1b / Signal #9) |
+| **Classification** | shared data — DEC-057 §(b)+(j) frozen keyword + verb-gate maps for the four KEYWORD-DERIVED families per §(g) IN-set (`executive_change`, `guidance`, `regulatory_action`, `partnership`). |
+| **Exports** | `const CATALYST_KEYWORDS: Record<CatalystKeywordEventType, ReadonlyArray<string>>`; `const CATALYST_VERB_GATE: Record<CatalystKeywordEventType, ReadonlyArray<string>>`; `const GUIDANCE_NUMERIC_PATTERN: RegExp` (§(b) numeric-token gate for `guidance` ONLY); `type CatalystKeywordEventType`; `const CATALYST_KEYWORD_FAMILIES`; `assertKeywordMapsConsistent()` (cold-start desync detector). |
+| **§(j) discipline** | Both maps are FROZEN at the top level AND at the inner-array level via `Object.freeze`; mutation throws `TypeError` (test-asserted). All terms lower-case (single-pass `toLowerCase` in the matcher). Module-load self-check fails loudly on noun/verb key desync — anti-silent-collapse. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/catalyst-keywords.ts` |
+| **Tests** | `catalyst-keywords_test.ts` — 7 tests (key parity; non-empty per family; lower-case enforcement; frozen-mutation rejection; numeric-pattern accepts digits / rejects letters-only; self-check passes on shipped baseline; the four §(g) families enumerated). |
+| **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/classify-catalyst-event.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1b / Signal #9) |
+| **Classification** | shared infrastructure — DEC-057 §(b) keyword classifier + §(d) look-ahead gate + §(h) 1h-bucket cross-vendor dedup with vendor precedence (`structured` > `keyword`, then first-occurrence-wins). |
+| **Exports** | `interface CatalystNewsInput { ticker; published_utc; text; vendor: 'fmp'\|'polygon' }`; `interface ClassifyOptions`; `interface ClassifyResult { rows; verb_gate_drops; numeric_gate_drops; cross_vendor_duplicates_dropped; future_event_excluded }`; `function matchKeywordEvent(text): KeywordMatch`; `function classifyCatalystEvents(structured, news, opts): ClassifyResult`. |
+| **Word-boundary matching** | `containsAny` uses `\b<escaped-term>\b` (NOT plain `String#includes`) because the verb "partners" is a substring of the noun "partnership" — without boundaries every partnership-text would trivially pass the verb gate. Multi-word phrases ("chief executive", "strategic alliance") match naturally because `\b` only anchors at the outer edges. |
+| **§(h) dedup key** | `(ticker, event_type, floor_to_hour(event_at))`. Floor-to-hour is the conservative reading of the §(h) "1-hour bucket" wording (collapses MORE within-hour duplicates, not fewer). Vendor-precedence upgrade: keyword → structured replaces; same-source → first-occurrence-wins. Drops counted in `cross_vendor_duplicates_dropped`. |
+| **Wall-clock** | None. `as_of` + `window_start_at` are caller-supplied `Date`. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/classify-catalyst-event.ts` |
+| **Tests** | `classify-catalyst-event_test.ts` — 12 tests (guidance noun+verb+numeric gate; executive_change / regulatory_action / partnership noun+verb gates; verb_gate vs numeric_gate counters distinct; §(d) future-row exclusion; window lower bound; §(h) structured>keyword upgrade; §(h) same-source first-wins; hour-bucket boundary precision; keyword meta carries misclassification-risk + family; degenerate empty-ticker/empty-text inputs do not throw). |
+| **Added by** | FP-049 |
