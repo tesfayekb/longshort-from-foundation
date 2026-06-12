@@ -1,6 +1,11 @@
 /**
  * Source-sentinel test for `longshort-insider-compute` cron handler.
- * Mirrors `longshort-short-interest-compute/index_test.ts` (FP-041 pattern).
+ * FP-050 Phase 3.6b.ii″ intentional-stub window — pins:
+ *   - cron-auth guard FIRST (unauthenticated callers see 401, not 503);
+ *   - 503 with the literal `insider_compute_pending_queue_rewire` code;
+ *   - the deleted-orchestrator imports are ABSENT (no zombie wiring).
+ * Replaces the FP-042 wiring-sentinels; the prior orchestrator file was
+ * deleted in this commit.
  */
 import { assert } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 
@@ -13,58 +18,31 @@ Deno.test('(1) cron auth wired via verifyCronSecret (NOT operator JWT)', () => {
   assert(!HANDLER_SOURCE.includes('checkPermissionOrThrow('));
 });
 
-Deno.test('(1a) auth-first ordering: verifyCronSecret precedes clock/audit', () => {
+Deno.test('(2) auth-first ordering: verifyCronSecret precedes the 503 stub', () => {
   const cronIdx = HANDLER_SOURCE.indexOf('verifyCronSecret(req)');
-  const clockIdx = HANDLER_SOURCE.indexOf('productionClock.getWallClockTs()');
-  const auditIdx = HANDLER_SOURCE.indexOf('writeStrategyAuditEvent({');
-  assert(cronIdx > 0 && cronIdx < clockIdx);
-  assert(cronIdx < auditIdx);
+  const stubIdx = HANDLER_SOURCE.indexOf("'insider_compute_pending_queue_rewire'");
+  assert(cronIdx > 0, 'cron-auth call present');
+  assert(stubIdx > 0, '503 stub code present');
+  assert(cronIdx < stubIdx, 'auth fires before the stub returns 503');
 });
 
-Deno.test('(2) productionClock is sole wall-clock — no Date() leak', () => {
-  assert(HANDLER_SOURCE.includes('productionClock.getWallClockTs()'));
-  const codeOnly = HANDLER_SOURCE
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\*.*$/gm, '')
-    .replace(/\/\/.*$/gm, '');
-  assert(!/new\s+Date\s*\(\s*\)/.test(codeOnly));
-  assert(!/Date\.now\s*\(/.test(codeOnly));
-  assert(!/performance\.now\s*\(/.test(codeOnly));
+Deno.test('(3) 503 stub returned with structured error code', () => {
+  assert(HANDLER_SOURCE.includes("apiError(503, 'insider_compute_pending_queue_rewire'"));
 });
 
-Deno.test('(3) POLYGON_API_KEY + EDGAR_CONTACT_EMAIL checked with structured error codes', () => {
-  assert(HANDLER_SOURCE.includes("Deno.env.get('POLYGON_API_KEY')"));
-  assert(HANDLER_SOURCE.includes("'polygon_api_key_unset'"));
-  assert(HANDLER_SOURCE.includes("Deno.env.get('EDGAR_CONTACT_EMAIL')"));
-  assert(HANDLER_SOURCE.includes("'edgar_contact_email_unset'"));
-});
-
-Deno.test('(4) createInsiderOrchestrator wired with EDGAR pipeline + TokenBucket + Polygon side-inputs', () => {
-  assert(HANDLER_SOURCE.includes('createInsiderOrchestrator(ctx)'));
-  assert(HANDLER_SOURCE.includes('cikMapper: new EdgarCikMapper'));
-  assert(HANDLER_SOURCE.includes('dailyIndex: new EdgarDailyIndexFetcher'));
-  assert(HANDLER_SOURCE.includes('accessionIndex: new EdgarAccessionIndexFetcher'));
-  assert(HANDLER_SOURCE.includes('form4Edgar: new EdgarForm4Fetcher'));
-  assert(HANDLER_SOURCE.includes('bucket: new TokenBucket'));
-  assert(HANDLER_SOURCE.includes('ratePerSec: DEFAULT_EDGAR_RPS'));
-  assert(HANDLER_SOURCE.includes('sharesOutstanding: new PolygonSharesOutstandingFetcher'));
-  assert(HANDLER_SOURCE.includes('priceHistory: new PolygonPriceHistoryFetcher'));
-  assert(HANDLER_SOURCE.includes('supabase: supabaseAdmin'));
-  assert(HANDLER_SOURCE.includes('operator_id: DEFAULT_OPERATOR_ID'));
-  assert(HANDLER_SOURCE.includes('concurrency: DEFAULT_CONCURRENCY'));
-  // No legacy Polygon Form-4 leak in.
+Deno.test('(4) deleted-orchestrator wiring is ABSENT (no zombie imports)', () => {
+  assert(!HANDLER_SOURCE.includes('createInsiderOrchestrator'));
+  assert(!HANDLER_SOURCE.includes('insider-orchestrator'));
+  assert(!HANDLER_SOURCE.includes('EdgarCikMapper'));
+  assert(!HANDLER_SOURCE.includes('EdgarDailyIndexFetcher'));
+  assert(!HANDLER_SOURCE.includes('EdgarAccessionIndexFetcher'));
+  assert(!HANDLER_SOURCE.includes('EdgarForm4Fetcher'));
+  assert(!HANDLER_SOURCE.includes('TokenBucket'));
   assert(!HANDLER_SOURCE.includes('PolygonForm4Fetcher'));
-  assert(!HANDLER_SOURCE.includes('PolygonShortInterestFetcher'));
 });
 
-Deno.test('(5) persistSignalComputeLog wired', () => {
-  assert(HANDLER_SOURCE.includes('persistSignalComputeLog('));
-  assert(HANDLER_SOURCE.includes("'../_shared/persist-signal-compute-log.ts'"));
-});
-
-Deno.test('(6) all three audit events wired (.started/.completed/.failed)', () => {
-  assert(HANDLER_SOURCE.includes("'longshort.insider.compute.started'"));
-  assert(HANDLER_SOURCE.includes("'longshort.insider.compute.completed'"));
-  assert(HANDLER_SOURCE.includes("'longshort.insider.compute.failed'"));
-  assert(!HANDLER_SOURCE.includes('manual_triggered'));
+Deno.test('(5) no audit events in the stub (audit returns at 3.6b.iii′ queue-init shim)', () => {
+  assert(!HANDLER_SOURCE.includes('writeStrategyAuditEvent'));
+  assert(!HANDLER_SOURCE.includes("'longshort.insider.compute.started'"));
+  assert(!HANDLER_SOURCE.includes("'longshort.insider.compute.completed'"));
 });
