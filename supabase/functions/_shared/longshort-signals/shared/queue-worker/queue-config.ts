@@ -150,7 +150,7 @@ export interface QueueSignalConfig {
    * (or omitted only when defaulted) and surfaces a clear error on
    * cross-mode contamination.
    */
-  mode?: 'per-ticker' | 'sequential-feed';
+  mode?: 'per-ticker' | 'sequential-feed' | 'work-list';
   // ─── per-ticker mode fields (required when mode is per-ticker / unset) ───
   /** Drives the pre-flight arithmetic row. PEAD: 2. Options: 1. */
   callsPerName?: number;
