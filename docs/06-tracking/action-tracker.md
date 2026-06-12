@@ -1,5 +1,18 @@
 
 
+### ACT-171: FP-049 — DEC-057 ratification commit (docs-only); all ten B3 bindings adopted as proposed with §(d) OCCURRED-ONLY sharpening; FP-049 → phase-1-authorized
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-171 (next-free after ACT-170; grep-verified at HEAD via `rg -n "^### ACT-17[0-9]" docs/06-tracking/action-tracker.md` — only ACT-170 present). |
+| **Mode** | DOCUMENTATION (single docs-only commit; no code, no migration). |
+| **Operator ratification** | 2026-06-12 — all ten B3 bindings (a) half-life table, (b) tier-assignment authority + keyword taxonomy + action-verb gate, (c) cross-signal independence (INDEPENDENT additive), (d) upcoming-vs-occurred axis (OCCURRED-ONLY — sharpening: the "upcoming-within-2-trading-days anticipation" alternative REJECTED for v1, recorded as a possible future enhancement-arc FP, NOT a deferred rider), (e) declaration_date decay-origin, (f) NYSE 5-trading-day window, (g) v1 IN-set (10 types) / OUT-set (5 types deferred to v2), (h) 1h-bucket cross-vendor dedup + first-occurrence-wins, (i) Tradier typed-fallback backup, (j) frozen CATALYST_KEYWORDS + CATALYST_VERB_GATE maps. |
+| **DEC-057 placement** | `docs/08-planning/approved-decisions.md` — inserted after DEC-056 Phase-3b addenda, before "## Decision Integrity Rules". Full bindings (a)–(j) written verbatim from the B3 skeleton, rationale columns preserved per Rule 8. Status: ratified (operator 2026-06-12). |
+| **FP-049 Status** | `phase-0-complete-stop / DOCS-ONLY` → `phase-1-authorized` (Rule 8 — previous status preserved as lineage in the cell). |
+| **Files touched** | `docs/08-planning/approved-decisions.md` (DEC-057 inserted); `docs/08-planning/feature-proposals.md` (FP-049 Status updated); `docs/06-tracking/action-tracker.md` (this ACT-171 entry). NO code; NO migration; NO reference-index registrations (those land at Phase 1 per the FP-049 scope). |
+| **Gates** | `deno run --allow-read scripts/check-wall-clock.ts` → CLEAN (no code changes; gate is no-op-by-design but run for canonical completeness). `npx eslint .` → 0 errors (baseline preserved). Test suite untouched (no code delta). |
+| **STOP** | DEC-057 ratification commit complete. Phase 1 (FP-049 commits 1a + 1b) authorized to begin; supervisor verification of this ratification commit precedes Phase 1 commit 1a. |
+
 ### ACT-170: FP-049 Phase 0 — Signal #9 (Active Catalyst Flag) vendor-shape audit, 45 live probes, B1/B2/B3 + DEC-057 skeleton (docs-only)
 
 | Field | Value |
