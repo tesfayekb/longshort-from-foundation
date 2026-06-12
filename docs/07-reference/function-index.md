@@ -3398,3 +3398,21 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/classify-catalyst-event.ts` |
 | **Tests** | `classify-catalyst-event_test.ts` — 12 tests (guidance noun+verb+numeric gate; executive_change / regulatory_action / partnership noun+verb gates; verb_gate vs numeric_gate counters distinct; §(d) future-row exclusion; window lower bound; §(h) structured>keyword upgrade; §(h) same-source first-wins; hour-bucket boundary precision; keyword meta carries misclassification-risk + family; degenerate empty-ticker/empty-text inputs do not throw). |
 | **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/polygon-news-keyword-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1b revision / Signal #9 / ACT-174) |
+| **Classification** | shared infrastructure — DEC-057 §(b)+(j) KEYWORD-DERIVED catalyst-event fetcher over Polygon news. Composes FP-048's `PolygonNewsFeedFetcher` (Option B — additive widen of `PolygonNewsRow` with optional `title?` / `description?`; byte-equivalence fence intact). |
+| **Exports** | `class PolygonNewsKeywordFetcher { constructor(apiKey, httpFetch?, timeoutMs?, baseUrl?, options?); fetch(window): Promise<CatalystFetchResult> }`; `const POLYGON_NEWS_KEYWORD_OPERATION_ID`, `POLYGON_NEWS_KEYWORD_LOOKBACK_DAYS` (7). |
+| **§(b)/(j) matching** | Each Polygon row's `title` + `description` are concatenated and passed to `matchKeywordEvent` from `classify-catalyst-event.ts` — single source of truth for the noun + action-verb + numeric gates. Word-boundary discipline inherited (the `partners` ⊂ `partnership` defect is structurally impossible). |
+| **§(d) look-ahead gate** | `applyLookAheadGate(candidates, window.as_of)` applied client-side after the per-page walk (defence-in-depth — inner `fetchOnePage` already enforces; `future_event_excluded` counter surfaced regardless). |
+| **§(f) trading-day floor** | Calendar/trading-day discrepancy resolved AT THIS LAYER per the operator brief ("do not leave the calendar/trading discrepancy to Phase 2"). Over-fetches a 7-calendar-day window from FP-048; trims to the §4.4.9 5-TRADING-DAY floor via `applyWindowLowerBound(rows, window.window_start_at)`. The orchestrator computes `window_start_at` from the trading-calendar. |
+| **Multi-ticker fan-out** | On a positive match, emits ONE `RawCatalystEventInput` per attributed ticker in `row.tickers[]`; downstream `classifyCatalystEvents` performs §(h) 1h-bucket dedup with `structured > keyword` precedence. |
+| **Source provenance** | Every emitted row carries `source: 'keyword'`, `vendor: 'polygon'`, `meta.keyword_misclassification_risk: true`, `meta.keyword_family`, `meta.article_id` per DEC-057 §(b) named misclassification flag. |
+| **Error taxonomy** | First-page 401/402/403 → `subscription_gated`; 429 → `rate_limited`; 404 or empty results → `data_unavailable`; mid-walk unavailability propagated identically (matches FP-048 `fetchFeed` semantics — not silently swallowed). |
+| **Wall-clock** | None. `window.as_of` + `window.window_start_at` are caller-supplied `Date`. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/polygon-news-keyword-fetcher.ts` |
+| **Tests** | `polygon-news-keyword-fetcher_test.ts` — 15 fixture-driven tests (1 true-positive + 1 verb-gate-blocked false-positive per family: executive_change, guidance, regulatory_action, partnership including the `partners` ⊂ `partnership` block; multi-ticker fan-out; §(d) future-row drop; §(f) trading-day floor trim; HTTP 403 → subscription_gated; empty first page → data_unavailable; rows missing both title + description silently dropped — no fabricated text; constructor key-required). |
+| **Added by** | FP-049 (ACT-174) |
