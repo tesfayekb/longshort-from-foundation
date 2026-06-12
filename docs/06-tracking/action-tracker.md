@@ -1,5 +1,22 @@
 
 
+### ACT-170: FP-049 Phase 0 — Signal #9 (Active Catalyst Flag) vendor-shape audit, 45 live probes, B1/B2/B3 + DEC-057 skeleton (docs-only)
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-170 (next-free after ACT-169; grep-verified at HEAD via `rg -n "^### ACT-17[0-9]" docs/06-tracking/action-tracker.md` — no prior allocation). |
+| **Mode** | INVESTIGATION (bounded; ≤40 FMP + ≤10 Polygon + ≤10 Finnhub authorized) + DOCUMENTATION (single docs-only commit). |
+| **FP-049 allocation** | FP-049 next-free at HEAD; DEC-057 number reserved (binding text deferred to operator ratification — every B3 row is a question for the operator, NOT a pre-decided binding). |
+| **§4.4.9 spec read** | `docs/04-modules/longshort/design-source/CROSSWIND_SPEC.md:546-567` — verbatim text quoted in FP-049 entry (decayed weighted sum, tiers 3.0/1.5/0.5, half-life table includes 8 spec-stated values + "Other Tier 2/3 24–48h" range, 5-trading-day window, unsigned). |
+| **Registry-truth grep** | `supabase/migrations/20260608152448_71f5dd70-d2ba-4380-b8f8-7d97af1196ee.sql:96-98` — `signal_id='active_catalyst_flag'`, signal_number=9, status='planned', planned_phase='Phase 2.9', job_registry_id=NULL. No job_registry seed for #9 (consistent with planned phase). |
+| **Probes** | 45 live calls — 25 FMP (16 endpoints exercised, 9 confirmed 200-with-data, 6 confirmed 404 / NOT-AVAILABLE at /stable, 1 filter-honesty 0 ✓), 10 Polygon (8 200-with-data, 1 400 invalid-event-type, 1 financials structured), 10 Finnhub (5 200-with-data, 3 403-gated, 1 HTML-landing-page premium, 1 aggregate-not-event). Raw items pasted in FP-049 §B2. **Scaffolding deleted same-PR:** `supabase/functions/probe-fp049-catalysts/` removed locally (`rm -rf`) AND deleted from edge runtime (`supabase functions delete probe-fp049-catalysts` → "Successfully deleted edge functions"). Probe budget: 45 of 60 authorized (FMP 25/40, Polygon 10/10, Finnhub 10/10). |
+| **B1 deliverable** | Event-type → endpoint mapping table covering all §4.4.9 event types × 4 existing vendors (FMP/Polygon/Finnhub/Tradier-listed-only-not-probed) — see FP-049 §B1. Honest verdict column per row distinguishes STRUCTURED / KEYWORD-DERIVED / NOT AVAILABLE (typed gap, never silent drop). |
+| **B3 deliverable** | DEC-057 binding skeleton — 10 enumerated bindings: (a) half-life operational table (8 spec-stated + 6 proposed for the 24–48h range); (b) tier-assignment authority + keyword-inference taxonomy with action-verb gate; (c) cross-signal independence flags (Signal-#1 ratings overlap + Signal-#4 insider overlap); (d) upcoming-vs-occurred earnings axis; (e) announcement-date vs ex-date axis (declaration_date origin); (f) 5-trading-day → calendar-day window arithmetic + NYSE holiday rule; (g) v1 event-type subset with named §(k)-rider deviations (IN-set: 10 types; OUT-set: 5 types deferred to v2 with named reasons); (h) cross-vendor dedup key + source-of-truth precedence; (i) Tradier corporate-actions backup binding (typed-fallback only); (j) minimum-keyword taxonomy per event family. **Every binding is a QUESTION for operator ratification — DEC-057 text NOT written this PR.** |
+| **Forbidden adherence** | No Signal-#4 / EDGAR work. No compute / fetcher / orchestrator builds for #9. No edits to live signals (analyst-revision + news-sentiment paths untouched). No registry / migration changes. No Benzinga or new-vendor SKU proposals. |
+| **Files touched** | `docs/08-planning/feature-proposals.md` (new FP-049 section inserted before FP-048; ~120 lines); `docs/06-tracking/action-tracker.md` (this ACT-170 entry). NO code changes. NO migration. NO edits to other docs. |
+| **Gates** | `deno run --allow-read scripts/check-wall-clock.ts` → **CLEAN — 0 violations** (no code changes; gate is no-op-by-design but run for canonical completeness). `npx eslint .` → **0 errors** (15 pre-existing warnings; identical to ACT-169 baseline). Test suite untouched (no code delta; analyst-revision orchestrator's 7-pass post-Part-A baseline preserved). |
+| **STOP** | Phase 0 complete. Supervisor verification + operator DEC-057 ratification required before any FP-049 Phase 1 work (fetcher families, keyword taxonomy, half-life table, dedup logic). |
+
 ### ACT-169: FP-048 — DEC-056 ratification (Polygon locked) + Phase 1 fetcher + filters landed
 
 | Field | Value |
