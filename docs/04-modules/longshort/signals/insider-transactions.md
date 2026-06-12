@@ -299,3 +299,43 @@ After the ACT-155 market-wide fix, the next fire returned HTTP 200 but with tele
 **Pattern lesson (codified).** See [`_pattern-vendor-fetcher-filter-honesty.md`](./_pattern-vendor-fetcher-filter-honesty.md) — every vendor-endpoint fetcher MUST implement a `verifyFilterHonored()` pre-flight before trusting any documented filter. Applies to Signals #1 / #2 / #3 / #8.
 
 **Cross-references.** INC-70 (the endpoint failure); DW-094 (the EDGAR rebuild); ACT-156 (this disarm + P2 fix); FP-042 second addendum (Rule 8); ACT-154 (original ship); ACT-155 (market-wide rewrite); DW-093 (DEF-14A NEO enrichment — independent but parallel); `signal_compute_log.run_id='1021808b-…'` (diagnostic exhibit).
+
+## FP-050 Phase 3.6b.iii′ pre-work (ACT-194, 2026-06-12) — backfill arithmetic + PK contract
+
+### Backfill arithmetic (M4 — derivation, all factors named)
+
+Three figures contested before this entry: (a) ACT-190 §(i) row: ~91k calls / ~5h, (b) ACT-193 correction: ~300,060 calls / ~16.7h, (c) operator challenge: ~31.9k calls / ~1.78h. Catalog #43's measured-inputs rule (recursive — applied to ourselves) demands every factor on the table:
+
+| Factor | Value | Provenance |
+|---|---|---|
+| Window | 90 calendar days = ~63 trading days | DEC-058 §(b) / §4.4.4 spec; the backfill must seed the rows the FIRST as_of-fire's 90-day window will read. |
+| Accessions/day basis | **In-universe only** — Phase-0 measured ~1,667/day | The producer's `seedWorkItems` in-universe filter applies identically to backfill and daily-fire — no separate full-market backfill. The ~253 figure was a confused factor (coincidence with trading-days-per-year; no measurement provenance). |
+| Calls/accession | 2 (`index.json` discovery + XML parse) | DEC-058 §(i) (A) ruling. |
+| Daily-index calls | 1/trading day = ~63 | Negligible vs the per-accession total. |
+| Rate cap | 5 rps self-imposed | DEC-058 §(g); half SEC's 10 rps headroom. |
+
+**Surviving figure:** ~63 trading days × ~1,667 accessions/day × 2 calls + ~63 daily-index = **~210,105 calls / 5 rps ≈ 42,021 sec ≈ ~11.7 hours**.
+
+(a) is anomalous (~91k has no recoverable derivation — likely an unmeasured estimate that propagated). (c)'s ~253/day figure is dismissed (no measurement provenance). (b)'s ~300k figure is closer but assumed 90 calendar days instead of 63 trading days.
+
+**Drain plan: single overnight.** A ~12h window fits between US market close (21:00 UTC) and pre-market open (~13:00 UTC next day) with ~3h headroom for retries / `signal_queue_skips` reconciliation. Multiple drains rejected — adds operator coordination cost for zero throughput benefit at the 5 rps wall.
+
+### MIG-094 PK contract (M5 — verified for `onConflict`)
+
+Quoted verbatim from `supabase/migrations/20260612153805_…sql` line 57:
+
+```sql
+PRIMARY KEY (issuer_cik, accession_number, transaction_seq)
+```
+
+This is the DEC-058 §(h) idempotency triple — keep-all-versions, no write-time merge. The §(h) four-part most-recent-accession preference (`issuer_cik, owner_cik, transaction_date, transaction_seq`) is a READ-TIME in-memory operation in `preferMostRecentAccession`; it is **NOT the PK** and **is NOT indexed**.
+
+**γ commit-1 `processItem` upsert MUST quote this PK verbatim:**
+
+```ts
+await supabase.from('insider_form4_rows').upsert(rows, {
+  onConflict: 'issuer_cik,accession_number,transaction_seq',
+});
+```
+
+Any other tuple either fabricates an index (runtime failure) or shifts the idempotency contract silently. The `owner_cik` column lands on every upserted row (MIG-095 `NOT NULL`); the M1 parser hardening guarantees no empty-string sentinel ever reaches the upsert.
