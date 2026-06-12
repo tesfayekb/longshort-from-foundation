@@ -2544,3 +2544,87 @@ The six events below mirror the short-interest signal's event family exactly, wi
 | **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, error?, failure_reason?, stage?, trigger: 'manual', correlation_id }` |
 | **Lifecycle** | active |
 | **Added by** | FP-047 Phase 3 |
+
+#### `longshort.catalyst.compute.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the `longshort-catalyst-compute` cron handler before the Signal #9 (Active Catalyst Flag) orchestrator runs. |
+| **Emitted by** | `supabase/functions/longshort-catalyst-compute/index.ts` via `writeStrategyAuditEvent` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { as_of, signal_id: 'active_catalyst_flag', trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-049 Phase 3a |
+
+#### `longshort.catalyst.compute.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler when the orchestrator returns `outcome='completed'` and the `signal_compute_log` row is persisted. Carries `catalyst_meta` (Signal-#9-specific aggregates) — `signal_compute_log` has no jsonb metadata column at v1, so meta lives here. |
+| **Emitted by** | `supabase/functions/longshort-catalyst-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, catalyst_meta: { total_event_count, by_tier:{1,2,3}, keyword_source_count, cross_vendor_duplicates_dropped, future_event_excluded, verb_gate_drops, numeric_gate_drops, declaration_date_unavailable, tradier_fallback_invoked, vendor_unavailable:{7 flags} }, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-049 Phase 3a |
+
+#### `longshort.catalyst.compute.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the cron handler on orchestrator-throw, `outcome='failed'`, or persistence error. `metadata.stage` discriminates: `orchestrator_throw` / `signal_compute_log_persist`. |
+| **Emitted by** | `supabase/functions/longshort-catalyst-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, error?, failure_reason?, stage?, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-049 Phase 3a |
+
+#### `longshort.catalyst.compute.manual_triggered` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler BEFORE orchestrator invocation. Forensic trigger trail even if the orchestrator crashes. |
+| **Emitted by** | `supabase/functions/longshort-catalyst-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-049 Phase 3a |
+
+#### `longshort.catalyst.compute.manual_completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler after the orchestrator returns `outcome='completed'` and the `signal_compute_log` row is persisted. Carries `catalyst_meta` in metadata (same shape as the cron `.completed` event). |
+| **Emitted by** | `supabase/functions/longshort-catalyst-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, catalyst_meta, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-049 Phase 3a |
+
+#### `longshort.catalyst.compute.manual_failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler on orchestrator-throw, `outcome='failed'`, or persistence error. |
+| **Emitted by** | `supabase/functions/longshort-catalyst-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, error?, failure_reason?, stage?, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-049 Phase 3a |
