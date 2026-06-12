@@ -173,7 +173,7 @@ export type SignalSkipReason =
                              // ticker is still ranked by other signals.
                              // Non-critical; combiner imputes (-999, 0)
                              // in Phase 3.
-  | 'no_catalyst_events_in_window'; // FP-049 / Signal #9 (Active Catalyst
+  | 'no_catalyst_events_in_window' // FP-049 / Signal #9 (Active Catalyst
                              // Flag §4.4.9) — ticker has ZERO deduped
                              // classified catalyst events inside the trailing
                              // 5-trading-day window vs `as_of`. Per DEC-057
@@ -186,6 +186,21 @@ export type SignalSkipReason =
                              // malformed event rows; a single Tier-3 event
                              // always yields a value per FP-049 Phase 2 ruling
                              // (a) — presence-intensity, never a skip.
+  | 'no_primary_doc';        // FP-050 / Signal #4 EDGAR rebuild — per-
+                             // accession `index.json` (DEC-058 §(i) (A))
+                             // returned no primary-document filename (no
+                             // `.xml` candidate, or the candidate did not
+                             // match the §(h) form-type tiebreak rule).
+                             // Typed-permanent skip surfaced by the
+                             // 3.6b.iii′ work-list `processItem`; the
+                             // accession is counted, never silently
+                             // retried as transient. M2 ruling
+                             // (2026-06-12): the alternative (heuristic
+                             // "guess a filename") is the INC-70 rule
+                             // violation the EDGAR rebuild exists to
+                             // close. The TICKER row is still ranked by
+                             // other signals; a single accession with
+                             // no primary doc never poisons the name.
 
 export interface SignalSkip {
   ticker: string;
