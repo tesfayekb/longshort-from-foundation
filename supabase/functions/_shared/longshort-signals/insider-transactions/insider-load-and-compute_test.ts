@@ -324,6 +324,17 @@ Deno.test('(C.1) end-to-end: 839 mass-balance invariant + hand-computed z-score 
       transaction_price_per_share: 25,
       officer_title: 'Chief Executive Officer',
     }),
+    row({
+      ticker: 'DELI',
+      issuer_cik: '0000222222',
+      owner_cik: '0004444444',
+      accession_number: '0000222222-26-000001',
+      transaction_code: 'P',
+      transaction_acquired_disposed: 'A',
+      transaction_shares: 100,
+      transaction_price_per_share: 10,
+      officer_title: 'Chief Executive Officer',
+    }),
   ];
   const supabase = makeSupabaseE2E({ universe, rows });
   const ctx = {
