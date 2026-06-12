@@ -1,10 +1,15 @@
 # Signal #8 — News Sentiment Momentum (CROSSWIND §4.4.8)
 
-**Status:** live (REGISTERED, **DISARMED** — MIG-089b seeded
-`job_registry.longshort.news.compute.enabled=false` 2026-06-12 awaiting
-the FP-048 Phase 3b deploy + validation choreography after supervisor
-verification of this PR). **Schedule slot:** `30 21 * * 1-5` UTC (after
-analyst 21:00, before options 22:00; non-overlapping init triggers).
+**Status:** live (REGISTERED, **ARMED** — MIG-090 flipped
+`job_registry.longshort.news.compute.enabled=true` 2026-06-12 paired
+with operator-applied `cron.job` jobid 90 at `30 21 * * 1-5` UTC
+(DEC-040 byte-match verified). DEC-043-pattern wall-clock attestation
+**OPEN** — pending the first natural cron fire at the next weekday
+21:30 UTC slot, distinguished from manual fires by completed_at
+wall-clock-proximity to 21:30 UTC vs the as_of-derived midnight
+signature of manual fires). **Schedule slot:** `30 21 * * 1-5` UTC
+(after analyst 21:00, before options 22:00; non-overlapping init
+triggers).
 **Architecture:** SEQUENTIAL-FEED consumer on the FP-045 cursor-drain
 queue engine — first of its kind. Operator ratification 2026-06-11
 (Option 1 in the Phase-3 fork) after Phase-0 evidence (35–70 pages ×
@@ -59,22 +64,27 @@ AAPL→neutral while GOOG/GOOGL→positive on the same article).
 
 | Bound | Formula | Value | vs wall | Status |
 |---|---|---:|---|---|
-| **Latency-bound (binding)** | `pagesPerSlice × OBSERVED_PAGE_LATENCY_S = 15 × 6.3` | **94.5 s** | 25.5 s headroom vs 120 s STOP gate; 55.5 s vs 150 s HTTP wall | SAFE |
-| Rate-bound (non-binding) | `pagesPerSlice / (10 rps × 0.85)` = `15 / 8.5` | ≈1.76 s | n/a — latency dominates by ≈54× | non-binding |
+| **Latency-bound (binding)** | `pagesPerSlice × OBSERVED_PAGE_LATENCY_S = 10 × 10.2` | **102 s** | 18 s headroom vs 120 s STOP gate; 48 s vs 150 s HTTP wall | SAFE |
+| Rate-bound (non-binding) | `pagesPerSlice / (10 rps × 0.85)` = `10 / 8.5` | ≈1.18 s | n/a — latency dominates by ≈87× | non-binding |
 | Runaway guard | `maxPages` | 100 | exceeds Phase-0 observed worst-case (70 pages) by ≈1.4× | SAFE |
 
-`OBSERVED_PAGE_LATENCY_S = 6.3` cites FP-048 Phase-0 row 17 (global
-1000-item probe, single page, 6.3 s wall). The structural arithmetic
-is asserted by `news-sentiment-queue-registration_test.ts` — any tweak
-of `pagesPerSlice` or `OBSERVED_PAGE_LATENCY_S` mechanically breaks the
-test before the table here goes stale.
+`OBSERVED_PAGE_LATENCY_S = 10.2` is the MEASURED end-to-end per-page
+wall from run `9e8395a7-6f5f-4bd0-a213-149a06a5af5a` (20.4 s ÷ 2 pages,
+including fetch + 3317-row upsert + finalize). It SUPERSEDES the prior
+Phase-0 row 17 fetch-only figure (6.3 s/page, retained here as
+provenance per Rule 8: the superseded number was a fetch-only probe and
+did not include the per-page upsert + finalize cost). The structural
+arithmetic is asserted by `news-sentiment-queue-registration_test.ts`
+— any tweak of `pagesPerSlice` or `OBSERVED_PAGE_LATENCY_S`
+mechanically breaks the test before the table here goes stale.
 
-**Full-run estimate:** Phase-0 observed 35–70 pages → ⌈35/15⌉ = 3 slices
-(≈3 min) to ⌈70/15⌉ = 5 slices (≈5 min). Truth-in-telemetry cadence
-`"daily (after-close; queue-drained ~3-6 min …)"` registered alongside.
-First-run page count is MEASURED at the first natural fire and
-recorded back here as forward-binding evidence (Phase-3 deploy +
-validation step — separate authorization).
+**Full-run estimate (post DEC-056 §(architecture) corrected
+arithmetic):** Typical run at the v1 entitlement (≈928-article 7d pool
+→ ≈2 pages) completes in 1 slice ≈22 s end-to-end. The Phase-0
+35–70-page worst-case is retained as a robustness ceiling — at 10
+pages/slice it would drain in ⌈70/10⌉ = 7 slices ≈ 7 min. Both fit the
+truth-in-telemetry cadence `"daily (after-close; queue-drained
+~3-6 min …)"` registered alongside.
 
 **First-CLEAN-run measurement (run `9e8395a7-6f5f-4bd0-a213-149a06a5af5a`,
 as_of 2026-06-12, fired 02:11:40 UTC — third sequential-feed fire; first
