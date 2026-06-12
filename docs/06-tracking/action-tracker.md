@@ -2,6 +2,25 @@
 
 ### ACT-187: FP-050 Phase 3 — Signal #4 (insider_transactions_90d) cadence decision + MIG-093 + registry truth (DISARMED through Phase 3; arm-up = Phase 4)
 
+---
+
+### ACT-188: FP-050 Phase 3.6a.i — Queue-engine `work-list` mode types + validator (REVISION-FIX folded; ai-failure-modes #41 — Attestation-Block-Omission first live catch by the codified sentinel)
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-188 (next-free after ACT-187; grep-verified). |
+| **Mode** | EXECUTION (scope-restricted: types + validator + contamination tests only — 3.6a.ii engine wiring deferred) + folded REVISION-FIX (one `as any` token in the 13 new tests → typed-mock `as unknown as QueueSignalConfig['mode']` boundary cast; zero behavior change; verified by `grep -nE '\\bany\\b\\|as any' queue-config_test.ts` → only matches the boundary-cast JSDoc word-form `'unknown'`). |
+| **Authority chain** | Operator ruling 2026-06-12 "(I) execute 3.6a.i now" → FP-050 Phase 3.6a ruling (mode `'work-list'`) + five secondary-question bindings (Q1 CAS / Q2 heartbeat=25 / Q3 3-strikes / Q4 skips two-ledger / Q5 seed failure) → FP-045 / DEC-047 queue-worker engine extension. Five rulings encoded as types + JSDoc this turn; behavioral enforcement lands in 3.6a.ii (slice-worker + init + finalizer + INC-73 parity). |
+| **Scope (one commit)** | (1) `queue-config.ts`: added `isWorkListMode`, `WorkListItem`, `WorkListItemResult`, `WorkListSeedFn`, `WorkListProcessItemFn`, `WorkListLoadAndComputeFn`, `WORK_LIST_HEARTBEAT_ITEM_INTERVAL=25` (Q2 named constant); widened `QueueSignalConfig.mode` union to include `'work-list'`; added 5 optional mode-scoped fields (`itemsPerSlice`, `callsPerItem`, `seedWorkItems`, `processItem`, `loadAndCompute`); added work-list validator branch + bidirectional contamination guards in feed-mode and per-ticker-mode branches (full 3×3 mode/field matrix). (2) `queue-config_test.ts`: +13 tests (heartbeat constant pin, discriminator mutual-exclusivity, minimal valid registration, unknown-mode rejection via typed `unknown` boundary cast, integer/function field validators, full 3×3 contamination matrix). (3) REVISION-FIX folded: replaced `as any` boundary cast with `as unknown as QueueSignalConfig['mode']`. (4) This ACT entry. (5) Attestation block from `scripts/check-gate-evidence.ts` at HEAD. |
+| **Reuse fence** | UNTOUCHED. No edits to `queue-init.ts` / `queue-slice-worker.ts` / `queue-finalizer.ts` / `queue-sweeper.ts` / `production-registrations.ts` / any insider consumer / any migration / any handler / any doc. Engine behavior for existing `per-ticker` (PEAD future) and `sequential-feed` (news) consumers — UNCHANGED. |
+| **Tests** | 21 passed / 0 failed in `queue-config_test.ts` (baseline 8 + new 13). Full repo Gate-2: 998 passed / 0 failed (`scripts/check-gate-evidence.ts` output, verbatim below). |
+| **Files added** | None. |
+| **Files edited** | `supabase/functions/_shared/longshort-signals/shared/queue-worker/queue-config.ts`; `supabase/functions/_shared/longshort-signals/shared/queue-worker/queue-config_test.ts`; `docs/06-tracking/action-tracker.md` (this entry + ai-failure-modes #41 cross-reference line). |
+| **ai-failure-modes #41 — first live catch** | The Attestation-Block-Omission sentinel (codified at ACT-183 after the fourth-firing #41 family escalation, then operator-strengthened at ACT-187 to "auto-NEEDS-REVISION regardless of content if the block is absent") fired on its first live opportunity this loop: the 3.6a.i initial report was emitted without the `scripts/check-gate-evidence.ts` attestation block. The codified countermeasure loop closing on its own first recurrence is the record. New rule line in #41 (verbatim, operator-dictated): "From this turn forward, a report without the block is auto-NEEDS-REVISION regardless of content." Logged here in absence of `docs/ai-failure-modes.md` being part of this turn's scope; entry update folds into 3.6a.ii or a docs-only follow-up per supervisor direction. |
+| **Signal #4** | STAYS DISARMED. No `job_registry` change, no migration, no edge function deployment, no insider consumer code. |
+| **Attestation block (verbatim from `scripts/check-gate-evidence.ts`)** | <pre>=== check-gate-evidence ATTESTATION (paste verbatim) ===<br>HEAD: 0c07cae2dbf800b22f85f0234137a74006272e9a<br>Generated: 2026-06-12T14:50:56.956Z<br><br>Gate 1: deno run --allow-read scripts/check-wall-clock.ts<br>  exit=0  duration_ms=224<br>  final-line: check-wall-clock: CLEAN — 0 violations<br><br>Gate 2: cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/<br>  exit=0  duration_ms=32057<br>  final-line: ok &#124; 998 passed &#124; 0 failed (30s)<br><br>Gate 3: npx eslint .<br>  exit=0  duration_ms=9429<br>  final-line: ✖ 15 problems (0 errors, 15 warnings)<br><br>Verdict: ALL GREEN<br>=== end attestation ===</pre> |
+| **STOP** | Awaiting operator verification of 3.6a.i (clone + re-run gates) before 3.6a.ii authorization (slice-worker + init + finalizer dispatch + INC-73 parity, ~1,050 LOC, with the five rulings enforced behaviorally). |
+
 | Field | Value |
 |---|---|
 | **ID** | ACT-187 (next-free after ACT-186; grep-verified). |
