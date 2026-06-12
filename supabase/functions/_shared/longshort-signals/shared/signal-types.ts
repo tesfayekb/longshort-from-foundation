@@ -150,7 +150,7 @@ export type SignalSkipReason =
                              // CROSSWIND §2 axiom 3 + DEC-034 (2): typed absence
                              // beats a fabricated zero. Non-critical; ticker still
                              // ranked by other signals.
-  | 'no_articles_in_window'; // FP-048 / Signal #8 (News Sentiment §4.4.8) — ticker
+  | 'no_articles_in_window'  // FP-048 / Signal #8 (News Sentiment §4.4.8) — ticker
                              // has ZERO classified, non-PR-excluded articles inside
                              // the trailing 7-calendar-day inclusive window vs
                              // `as_of`. Per DEC-056 §(e) + FP-048 Phase-2 ruling
