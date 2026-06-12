@@ -31,8 +31,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   isFeedMode,
+  isWorkListMode,
   type FeedComputeFromItemsFn,
   type QueueSignalConfig,
+  type WorkListLoadAndComputeFn,
 } from './queue-config.ts';
 import type { SignalRow, SignalSkip, SignalSkipReason } from '../signal-types.ts';
 import { zScoreNormalizeWithinSector } from '../z-score-normalize.ts';
@@ -118,9 +120,22 @@ export async function runQueueFinalizer(
   //      (no staging-table writes for feed mode — feed_items is the
   //      durable record; staging writes would be redundant disk traffic
   //      with zero diagnostic value feed_items doesn't already provide).
+  //      Work-list mode (FP-050 Phase 3.6a) calls the consumer's
+  //      loadAndCompute({asOf}) which reads from the consumer-private
+  //      persistence table (e.g. insider_form4_rows) over its window
+  //      and returns one TickerComputeResult per universe ticker. NO
+  //      staging reads, NO feed_items reads, NO signal_queue_skips reads
+  //      (those carry item-scope skips for telemetry only — Q4 two-ledger).
   let staging: StagingRow[];
   let skipsDb: SkipRow[];
-  if (isFeedMode(config)) {
+  if (isWorkListMode(config)) {
+    const res = await buildWorkListAggregates(ctx, runRow);
+    if (res.kind === 'failed') {
+      return await transitionToFailed(ctx, runRow, res.reason);
+    }
+    staging = res.staging;
+    skipsDb = res.skips;
+  } else if (isFeedMode(config)) {
     const res = await buildFeedAggregates(ctx, runRow);
     if (res.kind === 'failed') {
       return await transitionToFailed(ctx, runRow, res.reason);
