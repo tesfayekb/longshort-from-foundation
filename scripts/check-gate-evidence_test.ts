@@ -9,7 +9,7 @@
  * final-line extractor would silently mis-attest), so those are tested.
  */
 
-import { assertEquals, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertEquals, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   extractFinalLine,
   GATES,
@@ -68,28 +68,43 @@ Deno.test('extractFinalLine — strips ANSI SGR escape codes from captured line'
   assertEquals(extractFinalLine(raw, denoSummary), 'ok | 985 passed | 0 failed (29s)');
 });
 
-Deno.test('GATES — exactly three canonical gates in fixed order', () => {
-  assertEquals(GATES.length, 3);
+Deno.test('GATES — exactly four canonical gates in fixed order (Gate 2b added at ACT-197)', () => {
+  assertEquals(GATES.length, 4);
   assertEquals(GATES[0].index, 1);
   assertStringIncludes(GATES[0].displayCommand, 'check-wall-clock.ts');
+  // Gate 2 — `_shared/`-scoped deno test.
   assertStringIncludes(GATES[1].displayCommand, 'deno test');
   assertStringIncludes(GATES[1].displayCommand, '_shared/');
-  assertEquals(GATES[2].displayCommand, 'npx eslint .');
+  // Gate 2b — repo-wide deno test (CI Gate 11 parity). Critical
+  // structural invariant: NO `_shared/` filter — Gate 2b's failure
+  // mode is exactly what Gate 2 misses, so a regression that re-adds
+  // the filter would re-open the ACT-196 scope-gap.
+  assertEquals(GATES[2].index, 2.5);
+  assertStringIncludes(GATES[2].displayCommand, 'deno test');
+  assert(!GATES[2].displayCommand.includes('_shared/'),
+    'Gate 2b MUST NOT carry a _shared/ filter — it mirrors CI Gate 11 verbatim');
+  assert(!GATES[2].argv.includes('_shared/'),
+    'Gate 2b argv MUST NOT carry _shared/');
+  // Gate 3 — eslint.
+  assertEquals(GATES[3].displayCommand, 'npx eslint .');
 });
 
 Deno.test('renderAttestation — includes HEAD, each gate final-line, and ALL GREEN verdict on all-zero', () => {
   const results: GateResult[] = [
     { index: 1, command: GATES[0].displayCommand, cwd: '.', finalLine: 'check-wall-clock: CLEAN — 0 violations', exitCode: 0, durationMs: 100 },
     { index: 2, command: GATES[1].displayCommand, cwd: 'supabase/functions', finalLine: 'ok | 985 passed | 0 failed (29s)', exitCode: 0, durationMs: 29000 },
-    { index: 3, command: GATES[2].displayCommand, cwd: '.', finalLine: '✖ 15 problems (0 errors, 15 warnings)', exitCode: 0, durationMs: 5000 },
+    { index: 2.5, command: GATES[2].displayCommand, cwd: 'supabase/functions', finalLine: 'ok | 1254 passed | 0 failed (31s)', exitCode: 0, durationMs: 31000 },
+    { index: 3, command: GATES[3].displayCommand, cwd: '.', finalLine: '✖ 15 problems (0 errors, 15 warnings)', exitCode: 0, durationMs: 5000 },
   ];
   const block = renderAttestation('abc123', results);
   assertStringIncludes(block, 'HEAD: abc123');
   assertStringIncludes(block, 'Gate 1:');
   assertStringIncludes(block, 'Gate 2:');
+  assertStringIncludes(block, 'Gate 2b:');
   assertStringIncludes(block, 'Gate 3:');
   assertStringIncludes(block, 'check-wall-clock: CLEAN — 0 violations');
   assertStringIncludes(block, 'ok | 985 passed | 0 failed (29s)');
+  assertStringIncludes(block, 'ok | 1254 passed | 0 failed (31s)');
   assertStringIncludes(block, '✖ 15 problems (0 errors, 15 warnings)');
   assertStringIncludes(block, 'Verdict: ALL GREEN');
 });
@@ -98,7 +113,8 @@ Deno.test('renderAttestation — FAILURE verdict when any gate non-zero', () => 
   const results: GateResult[] = [
     { index: 1, command: GATES[0].displayCommand, cwd: '.', finalLine: 'check-wall-clock: CLEAN — 0 violations', exitCode: 0, durationMs: 100 },
     { index: 2, command: GATES[1].displayCommand, cwd: 'supabase/functions', finalLine: 'error: Test failed', exitCode: 1, durationMs: 29000 },
-    { index: 3, command: GATES[2].displayCommand, cwd: '.', finalLine: '✖ 15 problems (0 errors, 15 warnings)', exitCode: 0, durationMs: 5000 },
+    { index: 2.5, command: GATES[2].displayCommand, cwd: 'supabase/functions', finalLine: 'ok | 1254 passed | 0 failed (31s)', exitCode: 0, durationMs: 31000 },
+    { index: 3, command: GATES[3].displayCommand, cwd: '.', finalLine: '✖ 15 problems (0 errors, 15 warnings)', exitCode: 0, durationMs: 5000 },
   ];
   const block = renderAttestation('abc123', results);
   assertStringIncludes(block, 'FAILURE');

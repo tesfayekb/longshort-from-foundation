@@ -19,9 +19,20 @@
  *   commit's HEAD SHA, the gates are evidence-incomplete and the work is
  *   not considered landed.
  *
- * The three canonical commands (in fixed order; ai-failure-modes #41):
+ * The four canonical commands (in fixed order; ai-failure-modes #41;
+ * Gate 2b added at ACT-197 / γ commit-2b to mechanically close the
+ * scope-gap operator surfaced: Gate 2's `_shared/` filter narrows the
+ * sweep to a subset of what CI Gate 11 executes, so any commit that
+ * touches handler test files OUTSIDE `_shared/` (e.g. the
+ * `longshort-insider-compute<X>/index_test.ts` rewires at γ commit-2,
+ * where <X> is the empty cron handler or `-manual` suffix)
+ * could have passed Gate 2 while a repo-wide failure went unattested.
+ * Gate 2b mirrors CI Gate 11's verbatim invocation):
  *   1. deno run --allow-read scripts/check-wall-clock.ts
  *   2. cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/
+ *   2b. cd supabase/functions && deno test --allow-net --allow-env --allow-read
+ *       (repo-wide; mirrors CI Gate 11 — `.github/workflows/strong-evidence.yml`
+ *       — verbatim, no `_shared/` filter)
  *   3. npx eslint .
  *
  * For each command, the attestation captures: the literal command line, the
@@ -88,6 +99,24 @@ const GATES: readonly GateSpec[] = [
       '--allow-env',
       '--allow-read',
       '_shared/',
+    ],
+    cwd: 'supabase/functions',
+    canonicalSummary: /^(ok|FAILED)\s*\|\s*\d+\s+passed\s*\|\s*\d+\s+failed/,
+  },
+  {
+    // Gate 2b — repo-wide deno test (mirrors CI Gate 11). The trailing
+    // 'b' is a display-only suffix; index is 2.5 so renderAttestation
+    // sorts it adjacent to Gate 2. Closes the ACT-196 scope-gap: Gate 2
+    // covers `_shared/`-only, Gate 2b covers what CI actually runs.
+    index: 2.5,
+    displayCommand:
+      'cd supabase/functions && deno test --allow-net --allow-env --allow-read',
+    argv: [
+      'deno',
+      'test',
+      '--allow-net',
+      '--allow-env',
+      '--allow-read',
     ],
     cwd: 'supabase/functions',
     canonicalSummary: /^(ok|FAILED)\s*\|\s*\d+\s+passed\s*\|\s*\d+\s+failed/,
@@ -183,7 +212,9 @@ function renderAttestation(headSha: string, results: readonly GateResult[]): str
   lines.push(`Generated: ${new Date().toISOString()}`);
   lines.push('');
   for (const r of results) {
-    lines.push(`Gate ${r.index}: ${r.command}`);
+    // Render Gate 2b with the literal 'b' suffix the doc comment uses.
+    const label = r.index === 2.5 ? '2b' : String(r.index);
+    lines.push(`Gate ${label}: ${r.command}`);
     lines.push(`  exit=${r.exitCode}  duration_ms=${r.durationMs}`);
     lines.push(`  final-line: ${r.finalLine}`);
     lines.push('');

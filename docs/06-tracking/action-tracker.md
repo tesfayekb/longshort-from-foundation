@@ -1,6 +1,50 @@
 
 
 
+
+
+### ACT-197: FP-050 Phase 3.6b.iii′ γ commit-2b — `.run()` shim deleted from `insider-load-and-compute.ts`; 7 hand-computed fixtures migrated to the `runStaged` seam (z+persist arithmetic relocated to engine-finalizer-level surfaces, byte-identical); Gate 2b added to `scripts/check-gate-evidence.ts` (repo-wide CI Gate 11 parity); #41 phantom-defect symmetric-form note recorded; Signal #4 STAYS DISARMED
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-197 (next-free after ACT-196). |
+| **Mode** | execution (γ commit-2b — no-corpses closure of the ACT-196 §22.8.4 deferral + mechanical scope-gap closure via Gate 2b). |
+| **Tier** | A — money-path test-surface migration: the deleted `.run()` shim was the in-process orchestrator path. Its replacement is the `runStaged` seam the work-list adapter already calls + the engine finalizer's z+persist (`queue-finalizer.ts:174` + `:202`). Wrong migration here either leaves a corpse importable from the wrong call site or silently weakens the ±√2/2 z-arithmetic assertion. |
+| **Branch** | feature/fp-050-phase-3.6b.iii-prime-gamma-commit-2b. |
+| **Authority** | Operator γ commit-2b greenlight 2026-06-12 atop ACT-196 (γ commit-2 handler rewires + production-registrations wire + cross-mode contamination) with the **hard-scheduled-no-further-deferral** ruling: γ commit-2b lands BEFORE γ commit-3. Gate 2b approved as specified in the same prompt. Phantom-defect note recorded per the same prompt's provenance correction. |
+| **Scope** | (1) `.run()` method DELETED from `supabase/functions/_shared/longshort-signals/insider-transactions/insider-load-and-compute.ts` (-77 LOC; the shim that wrapped `runStaged` + z + persist). Unused imports cleaned (`SignalOrchestratorResult`, `SignalRow`, `SignalSkipReason`, `zScoreNormalizeWithinSector`, `captureSignalObservations`). `runStaged` is the SOLE exported per-run entry point now; the work-list adapter at `insider-work-list-registration.ts:578` already calls it (M3 ruling). (2) `insider-load-and-compute_test.ts` — the 7 hand-computed fixtures (A.1, A.2, B.1, B.2, C.1, D.1, E.1) migrated. A.1/A.2/B.1/B.2/D.1 required no semantic change (they test `preferMostRecentAccession` / `readInsiderRowsWindow` / `mapInsiderRowToForm4Row` — surfaces independent of `.run()`). C.1 pivoted from `.run()` to `runStaged()` and now asserts the staged-seam shape (per-ticker values + skips + mass-balance + raw-signal signs + zero `signal_observations` writes — the staged seam MUST NOT persist). E.1 pivoted from `.run()` to `runStaged()` and now asserts `kind:'short-circuit'` with `failure_reason='empty_universe'` (the adapter throws on short-circuit per `insider-work-list-registration.ts:584`, preserving the deleted shim's `outcome:'failed'` semantics at the engine finalizer). (3) NEW fixture C.2 — relocates the prior C.1 ±√2/2 z-score arithmetic + persist-payload assertions to the engine-finalizer's actual call sites: `zScoreNormalizeWithinSector` (where `queue-finalizer.ts:174` invokes z) + `captureSignalObservations` (where `queue-finalizer.ts:202` invokes persist). Inputs mirror the C.1 staged outputs; arithmetic byte-identical (the n=2 sample-std property z(v_i) = sign(v_i − v_other) × √2/2 is independent of raw magnitudes; the persist payload retains SIGNAL_ID + as_of_date + is_present invariants). (4) `scripts/check-gate-evidence.ts` — Gate 2b ADDED as the fourth `GateSpec` (index 2.5, label `Gate 2b`): `cd supabase/functions && deno test --allow-net --allow-env --allow-read` (no `_shared/` filter — mirrors CI Gate 11 in `.github/workflows/strong-evidence.yml` verbatim). Closes the operator-surfaced ACT-196 scope-gap (Gate 2's `_shared/` filter narrows to a subset of CI; handler-test-touching commits could pass Gate 2 while CI failed). `renderAttestation` extended to print the `2b` label. (5) `scripts/check-gate-evidence_test.ts` — gate-count assertion lifted 3→4; new sentinels: Gate 2b MUST NOT carry `_shared/` in either displayCommand or argv (regression would re-open the scope-gap); renderAttestation tests extended with the Gate 2b row + `ok | 1255 passed | 0 failed (34s)` final-line. (6) `docs/ai-failure-modes.md` #41 — Status field extended with the symmetric-form phantom-defect note (mirror of phantom-success; ACT-196's *"pre-existing TS2307 errors in the broader suite are unrelated to this commit"* line was a positive existence claim with no supporting evidence; repo-wide Gate 2b at HEAD `89e39b92` ran 1255/0 clean, falsifying the asserted defect surface; both shapes substitute narrative for evidence and are rejected as #41-class). (7) `docs/06-tracking/action-tracker.md` — this entry. |
+| **Files Touched (planned vs actual)** | EDITED: `supabase/functions/_shared/longshort-signals/insider-transactions/insider-load-and-compute.ts` (-77 LOC, `.run()` + unused imports removed); `…/insider-load-and-compute_test.ts` (C.1/E.1 pivoted + C.2 added; A.1/A.2/B.1/B.2/D.1 unchanged); `scripts/check-gate-evidence.ts` (Gate 2b GateSpec + renderAttestation label); `scripts/check-gate-evidence_test.ts` (4-gate sentinels + renderAttestation row); `docs/ai-failure-modes.md` (#41 Status extended with phantom-defect symmetric-form note); `docs/06-tracking/action-tracker.md` (this entry). NEW: none. DELETED: none (the deletion is the in-file `.run()` block, not a file). NOT TOUCHED: `compute-insider.ts` / classifier / `insider-work-list-registration.ts` / handlers / production-registrations / module doc (γ commit-3 owns the module-doc closure). |
+| **Evidence (DEC-043)** | Targeted insider load+compute suite at HEAD `89e39b92` (post Gate-2b commit): **`ok \| 8 passed \| 0 failed (16ms)`** — 7 migrated fixtures all green + 1 new C.2 fixture green. check-gate-evidence_test at HEAD: **`ok \| 12 passed \| 0 failed (38ms)`** — 4-gate assertions + Gate 2b structural sentinels + renderAttestation extensions all green. Four-gate canonical attestation (block pasted below) at HEAD: ALL GREEN — Gate 1 CLEAN; Gate 2 `1038 passed / 0 failed` (+1 over ACT-196's 1037 = the new C.2 fixture); Gate 2b `1255 passed / 0 failed` (+1 over ACT-196's repo-wide 1254 = the same C.2 fixture surfaces in both scopes since `insider-load-and-compute_test.ts` lives under `_shared/`); Gate 3 0 errors / 15 warnings (parity). |
+| **Out-of-scope guarantees** | Zero migration; zero RBAC/permission/role/RLS change; zero touch to `compute-insider.ts` / classifier / z-score / `insider-work-list-registration.ts` / handlers / `production-registrations.ts`; zero touch to `job_registry` (Signal #4 stays DISARMED); zero secret added; zero new dependency. The deleted `.run()` shim had no consumers outside `_test.ts` (grep-verified at HEAD pre-commit: only `createInsiderLoadAndCompute(...).run(...)` callers were the two test fixtures C.1 + E.1; the work-list adapter calls `.runStaged` directly; the cron + manual handlers route through the engine init, not `.run`). |
+| **Status** | VERIFIED GREEN at HEAD `89e39b92fd4d6a92bea5614c548656a9bdeca4cb` via four-gate attestation. The §22.8.4 STOP-with-partials surface ACT-196 opened (deletion + migration) is CLOSED in this commit; no further deferral. γ commit-3 (docs + FP-050 Status + final ACT) follows. Phase 4 choreography (deploy → operator backfill init → overnight drain watch → validation fire → arm) follows γ commit-3. |
+
+**Attestation block (ACT-197)** — produced by `scripts/check-gate-evidence.ts` at HEAD `89e39b92`:
+
+```
+=== check-gate-evidence ATTESTATION (paste verbatim) ===
+HEAD: 89e39b92fd4d6a92bea5614c548656a9bdeca4cb
+Generated: 2026-06-12T18:32:25.680Z
+
+Gate 1: deno run --allow-read scripts/check-wall-clock.ts
+  exit=0  duration_ms=436
+  final-line: check-wall-clock: CLEAN — 0 violations
+
+Gate 2: cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/
+  exit=0  duration_ms=35157
+  final-line: ok | 1038 passed | 0 failed (31s)
+
+Gate 2b: cd supabase/functions && deno test --allow-net --allow-env --allow-read
+  exit=0  duration_ms=37419
+  final-line: ok | 1255 passed | 0 failed (34s)
+
+Gate 3: npx eslint .
+  exit=0  duration_ms=11272
+  final-line: ✖ 15 problems (0 errors, 15 warnings)
+
+Verdict: ALL GREEN
+=== end attestation ===
+```
+
 ### ACT-196: FP-050 Phase 3.6b.iii′ γ commit-2 — both handlers rewired from 503 stubs to queue-init shims; production-registrations wired (DAILY mode); cross-mode contamination test landed; backfill drain derivation reconciled (~3.1-4.9 h slice-wall → ~5.3 h cron-cadence binding); Signal #4 STAYS DISARMED
 
 | Field | Value |
