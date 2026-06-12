@@ -1,10 +1,15 @@
 # Signal #8 — News Sentiment Momentum (CROSSWIND §4.4.8)
 
-**Status:** live (REGISTERED, **DISARMED** — MIG-089b seeded
-`job_registry.longshort.news.compute.enabled=false` 2026-06-12 awaiting
-the FP-048 Phase 3b deploy + validation choreography after supervisor
-verification of this PR). **Schedule slot:** `30 21 * * 1-5` UTC (after
-analyst 21:00, before options 22:00; non-overlapping init triggers).
+**Status:** live (REGISTERED, **ARMED** — MIG-090 flipped
+`job_registry.longshort.news.compute.enabled=true` 2026-06-12 paired
+with operator-applied `cron.job` jobid 90 at `30 21 * * 1-5` UTC
+(DEC-040 byte-match verified). DEC-043-pattern wall-clock attestation
+**OPEN** — pending the first natural cron fire at the next weekday
+21:30 UTC slot, distinguished from manual fires by completed_at
+wall-clock-proximity to 21:30 UTC vs the as_of-derived midnight
+signature of manual fires). **Schedule slot:** `30 21 * * 1-5` UTC
+(after analyst 21:00, before options 22:00; non-overlapping init
+triggers).
 **Architecture:** SEQUENTIAL-FEED consumer on the FP-045 cursor-drain
 queue engine — first of its kind. Operator ratification 2026-06-11
 (Option 1 in the Phase-3 fork) after Phase-0 evidence (35–70 pages ×
@@ -54,27 +59,35 @@ AAPL→neutral while GOOG/GOOGL→positive on the same article).
 
 - **§(architecture)** Sequential-feed on the FP-045 cursor-drain queue engine, ratified by operator 2026-06-11 after the latency-bound breach (35–70 pages × 6.3 s = 220–441 s vs the 120 s STOP gate and 150 s HTTP wall) disqualified single-invocation; Option 1 in the Phase-3 fork.
 - **§(cap-provenance)** Polygon `/v2/reference/news` rate cap reads "unlimited" per the operator dashboard → SELF-IMPOSED engineering cap 10 req/s (rate-bound at this entitlement is trivially non-binding, ≈1.76 s/slice — the latency bound 94.5 s/slice is the binding number); recorded as self-imposed per anti-phantom discipline ("unlimited" is not a pacing parameter).
+- **§(architecture) corrected-arithmetic addendum (supervisor ruling 2026-06-12, operator-visible at arm-up prompt)** The original 35–70-page latency-bound that motivated sequential-feed conflated the Polygon default page size with `limit=1000`: at `limit=1000` the true 7d global pool is ≈928 articles ≈ 2 pages ≈ 22 s end-to-end (measured, run `9e8395a7`). The sequential-feed architecture is **RETAINED** on three forward-looking grounds: (1) robustness to pool growth — vendor expansions or upgraded entitlements could push pool size above the 120 s single-invocation gate; (2) validated path — the engine + dedupe + telemetry contracts are now live-fire-validated by runs 72d7f1e3/74e46ece/9e8395a7 and re-architecting would discard that evidence; (3) cross-signal serialization — slice/sweeper crons already drain news alongside PEAD/options/analyst at minute granularity without extra coordination. The 35–70-page figure is reframed as a robustness ceiling, NOT a binding pre-flight number.
+- **§(coverage)** First-clean-run coverage = 96 persisted / 839 universe = **11.4 %** at the v1 4-publisher entitlement (3 tier-3 + 1 PR-wire excluded; tier-1/2 absent). Sparse-coverage is a KNOWN v1 property — DEC-056 §(h) typed-skip `no_articles_in_window` (743 names this run) is the discipline. Precedent: options-flow Phase 4 ran at comparable sparse coverage on a similar entitlement footprint. The combiner must treat news as a presence-aware input (a present z-score is a real signal; an absent value is `no_articles_in_window`, not a 0).
+- **§(meta-non-persistence)** Per-name `meta.prExcluded` / `meta.unmappedPublisherCount` live on the slice events + `signal_queue_feed_items` rows, NOT on the per-name `signal_observations.meta` payload (the feed-mode finalizer's `computeFromItems` adapter passes `tierMapped: true` to preserve `raw` exactly — see §5.2). Recorded as a named v1 limitation; aggregate is recoverable from `signal_queue_feed_items` post-hoc and a future Phase-4 MIG could add `tier_mapped boolean` to feed_items if per-name precision becomes observable-evidence-required.
 
 ## 3. Pre-flight arithmetic (both-bounds discipline per Catalog #39)
 
 | Bound | Formula | Value | vs wall | Status |
 |---|---|---:|---|---|
-| **Latency-bound (binding)** | `pagesPerSlice × OBSERVED_PAGE_LATENCY_S = 15 × 6.3` | **94.5 s** | 25.5 s headroom vs 120 s STOP gate; 55.5 s vs 150 s HTTP wall | SAFE |
-| Rate-bound (non-binding) | `pagesPerSlice / (10 rps × 0.85)` = `15 / 8.5` | ≈1.76 s | n/a — latency dominates by ≈54× | non-binding |
+| **Latency-bound (binding)** | `pagesPerSlice × OBSERVED_PAGE_LATENCY_S = 10 × 10.2` | **102 s** | 18 s headroom vs 120 s STOP gate; 48 s vs 150 s HTTP wall | SAFE |
+| Rate-bound (non-binding) | `pagesPerSlice / (10 rps × 0.85)` = `10 / 8.5` | ≈1.18 s | n/a — latency dominates by ≈87× | non-binding |
 | Runaway guard | `maxPages` | 100 | exceeds Phase-0 observed worst-case (70 pages) by ≈1.4× | SAFE |
 
-`OBSERVED_PAGE_LATENCY_S = 6.3` cites FP-048 Phase-0 row 17 (global
-1000-item probe, single page, 6.3 s wall). The structural arithmetic
-is asserted by `news-sentiment-queue-registration_test.ts` — any tweak
-of `pagesPerSlice` or `OBSERVED_PAGE_LATENCY_S` mechanically breaks the
-test before the table here goes stale.
+`OBSERVED_PAGE_LATENCY_S = 10.2` is the MEASURED end-to-end per-page
+wall from run `9e8395a7-6f5f-4bd0-a213-149a06a5af5a` (20.4 s ÷ 2 pages,
+including fetch + 3317-row upsert + finalize). It SUPERSEDES the prior
+Phase-0 row 17 fetch-only figure (6.3 s/page, retained here as
+provenance per Rule 8: the superseded number was a fetch-only probe and
+did not include the per-page upsert + finalize cost). The structural
+arithmetic is asserted by `news-sentiment-queue-registration_test.ts`
+— any tweak of `pagesPerSlice` or `OBSERVED_PAGE_LATENCY_S`
+mechanically breaks the test before the table here goes stale.
 
-**Full-run estimate:** Phase-0 observed 35–70 pages → ⌈35/15⌉ = 3 slices
-(≈3 min) to ⌈70/15⌉ = 5 slices (≈5 min). Truth-in-telemetry cadence
-`"daily (after-close; queue-drained ~3-6 min …)"` registered alongside.
-First-run page count is MEASURED at the first natural fire and
-recorded back here as forward-binding evidence (Phase-3 deploy +
-validation step — separate authorization).
+**Full-run estimate (post DEC-056 §(architecture) corrected
+arithmetic):** Typical run at the v1 entitlement (≈928-article 7d pool
+→ ≈2 pages) completes in 1 slice ≈22 s end-to-end. The Phase-0
+35–70-page worst-case is retained as a robustness ceiling — at 10
+pages/slice it would drain in ⌈70/10⌉ = 7 slices ≈ 7 min. Both fit the
+truth-in-telemetry cadence `"daily (after-close; queue-drained
+~3-6 min …)"` registered alongside.
 
 **First-CLEAN-run measurement (run `9e8395a7-6f5f-4bd0-a213-149a06a5af5a`,
 as_of 2026-06-12, fired 02:11:40 UTC — third sequential-feed fire; first
@@ -177,7 +190,8 @@ rather than silently dropped (axiom 3).
 ## 8. Migration ledger entries
 
 - **MIG-089a** (FP-048 Phase 3a) — substrate: `signal_queue_feed_items` table + `signal_queue_runs.feed_cursor` / `feed_pages_fetched` columns + nullability precondition assertion. RLS deny-write to authenticated, read via `longshort.view`.
-- **MIG-089b** (FP-048 Phase 3b — this PR) — registry truth: inserts `longshort.news.compute` into `job_registry` (DISARMED, schedule `30 21 * * 1-5`); flips `signal_registry.news_sentiment_7d` from `planned`/`intraday (5 min)`/`Phase 2.8` to `live` with truth-in-telemetry cadence. Metadata-only DML; no DDL; no new slice/sweeper job rows (MIG-084 rows are shared engine rows, signal-agnostic by design).
+- **MIG-089b** (FP-048 Phase 3b) — registry truth: inserts `longshort.news.compute` into `job_registry` (DISARMED, schedule `30 21 * * 1-5`); flips `signal_registry.news_sentiment_7d` from `planned`/`intraday (5 min)`/`Phase 2.8` to `live` with truth-in-telemetry cadence. Metadata-only DML; no DDL; no new slice/sweeper job rows (MIG-084 rows are shared engine rows, signal-agnostic by design).
+- **MIG-090** (FP-048 arm-up — this PR) — flips `job_registry.longshort.news.compute.enabled` `false`→`true`, paired with operator-applied `cron.job` jobid 90 at `30 21 * * 1-5` UTC. DEC-040 byte-match (cron.job.schedule == job_registry.schedule == `30 21 * * 1-5`, byte-identical). DEC-043-pattern attestation OPEN — pending first natural cron-fire wall-clock signature at next weekday 21:30 UTC. Metadata-only `UPDATE`; no DDL; no GRANT/RLS/policy changes.
 
 ## 9. Cross-references
 

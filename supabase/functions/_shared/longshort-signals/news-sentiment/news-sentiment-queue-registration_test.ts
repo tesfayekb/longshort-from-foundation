@@ -6,7 +6,10 @@
  *   - sequential-feed mode discipline (config can't be registered as
  *     per-ticker without raising — cross-mode contamination test)
  *   - structural arithmetic: pagesPerSlice × OBSERVED_PAGE_LATENCY_S
- *     = 94.5 s; assert < 150 s wall and < 120 s STOP gate
+ *     = 10 × 10.2 = 102 s; assert < 120 s STOP gate and < 150 s wall
+ *     (retuned to MEASURED per-page wall from run 9e8395a7 —
+ *     end-to-end fetch+upsert+finalize ÷ 2 pages; SUPERSEDES the
+ *     Phase-0 row 17 6.3 s fetch-only figure)
  *   - rate-bound is computed but ASSERTED NON-BINDING (latency dominates)
  *
  * The arithmetic is derived structurally so a future tweak of any
@@ -115,9 +118,9 @@ Deno.test('registration — cross-mode contamination guard (mirror): feed mode +
 
 // ── structural pre-flight arithmetic (both-bounds) ───────────────────────
 
-Deno.test('registration — latency bound: pagesPerSlice × OBSERVED_PAGE_LATENCY_S = 94.5 s, SAFE vs 120 s STOP gate and 150 s HTTP wall', () => {
+Deno.test('registration — latency bound: pagesPerSlice × OBSERVED_PAGE_LATENCY_S = 102 s, SAFE vs 120 s STOP gate and 150 s HTTP wall', () => {
   const latencyBoundS = NEWS_QUEUE_CONFIG.pagesPerSlice * OBSERVED_PAGE_LATENCY_S;
-  assertStrictEquals(latencyBoundS, 94.5);
+  assertStrictEquals(latencyBoundS, 102);
   // Both binding walls — assert headroom is strictly positive.
   const STOP_GATE_S = 120;
   const HTTP_WALL_S = 150;
@@ -129,13 +132,13 @@ Deno.test('registration — latency bound: pagesPerSlice × OBSERVED_PAGE_LATENC
   }
 });
 
-Deno.test('registration — rate bound: pagesPerSlice / (cap × safety) ≈ 1.76 s, NON-BINDING (latency dominates)', () => {
+Deno.test('registration — rate bound: pagesPerSlice / (cap × safety) ≈ 1.18 s, NON-BINDING (latency dominates)', () => {
   const ratePerSec = SELF_IMPOSED_RATE_CAP_RPS * RATE_SAFETY_MULTIPLIER;
   assertStrictEquals(ratePerSec, NEWS_QUEUE_CONFIG.ratePerSec);
   assertStrictEquals(ratePerSec, 8.5);
   const rateBoundS = NEWS_QUEUE_CONFIG.pagesPerSlice / ratePerSec;
   // Round to 2dp for the assertion.
-  assertStrictEquals(Math.round(rateBoundS * 100) / 100, 1.76);
+  assertStrictEquals(Math.round(rateBoundS * 100) / 100, 1.18);
   const latencyBoundS = NEWS_QUEUE_CONFIG.pagesPerSlice * OBSERVED_PAGE_LATENCY_S;
   // Latency must dominate by an order of magnitude — anti-phantom assertion
   // so future config tweaks that flip the binding bound surface here.
