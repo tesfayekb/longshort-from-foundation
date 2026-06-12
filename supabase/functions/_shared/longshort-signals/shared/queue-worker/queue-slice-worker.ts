@@ -45,6 +45,11 @@ import {
 } from './queue-config.ts';
 import type { SignalSkip } from '../signal-types.ts';
 import { TokenBucket } from '../../options-flow/token-bucket.ts';
+import { productionClock, type ClockReader } from '../../../longshort-clock.ts';
+import { maskSecretsInMessage } from './error-key-mask.ts';
+
+/** INC-73 — consecutive feed-slice-throw threshold before terminal-failing the run. */
+export const FEED_SLICE_FAILURE_THRESHOLD = 3;
 
 export interface QueueSliceWorkerContext {
   supabase: SupabaseClient;
@@ -58,6 +63,16 @@ export interface QueueSliceWorkerContext {
   run_id: string;
   /** Injectable for tests. Defaults to a real TokenBucket. */
   bucketFactory?: (ratePerSec: number) => TokenBucket;
+  /**
+   * INC-73 — Injectable wall-clock reader for the per-page heartbeat
+   * monotonic-advance fix. Production callers omit this and accept the
+   * `productionClock` default (DEC-034 clause 4 sanctioned exception);
+   * tests inject a fixed clock to assert advancement under deterministic
+   * timestamps. The kernel-frozen `as_of` is reserved for compute-input
+   * timestamps (replay-determinism); heartbeats MUST track real time so
+   * a long-running healthy slice never looks stale to the sweeper.
+   */
+  liveClock?: ClockReader;
 }
 
 export interface QueueSliceWorkerResult {
