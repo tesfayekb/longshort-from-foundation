@@ -900,11 +900,51 @@ export type Database = {
           },
         ]
       }
+      signal_queue_feed_items: {
+        Row: {
+          article_id: string
+          created_at: string
+          published_utc: string
+          run_id: string
+          sentiment_num: number
+          ticker: string
+          tier_weight: number
+        }
+        Insert: {
+          article_id: string
+          created_at?: string
+          published_utc: string
+          run_id: string
+          sentiment_num: number
+          ticker: string
+          tier_weight: number
+        }
+        Update: {
+          article_id?: string
+          created_at?: string
+          published_utc?: string
+          run_id?: string
+          sentiment_num?: number
+          ticker?: string
+          tier_weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_queue_feed_items_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "signal_queue_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
+      }
       signal_queue_runs: {
         Row: {
           as_of_date: string
           created_at: string
           failure_reason: string | null
+          feed_cursor: string | null
+          feed_pages_fetched: number
           finalized_at: string | null
           heartbeat_at: string
           metadata: Json
@@ -919,6 +959,8 @@ export type Database = {
           as_of_date: string
           created_at?: string
           failure_reason?: string | null
+          feed_cursor?: string | null
+          feed_pages_fetched?: number
           finalized_at?: string | null
           heartbeat_at?: string
           metadata?: Json
@@ -933,6 +975,8 @@ export type Database = {
           as_of_date?: string
           created_at?: string
           failure_reason?: string | null
+          feed_cursor?: string | null
+          feed_pages_fetched?: number
           finalized_at?: string | null
           heartbeat_at?: string
           metadata?: Json
