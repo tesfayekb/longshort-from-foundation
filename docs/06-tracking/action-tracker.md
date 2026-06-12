@@ -1,11 +1,5 @@
 
 
-### ACT-181: FP-050 Phase 0 — Signal #4 (Insider Transactions) EDGAR-rebuild history-recovery + vendor-shape audit (DOCS-ONLY; DEC-058 skeleton drafted UNRATIFIED)
-
-| Field | Value |
-|---|---|
-| **ID** | ACT-182 (next-free after ACT-181; grep-verified at HEAD via `rg -no "ACT-[0-9]+" docs/06-tracking/action-tracker.md \| sort -u -t- -k2 -n \| tail` — ACT-181 latest; no ACT-182 allocation prior). NOTE: this entry is intentionally inserted ABOVE the ACT-181 placeholder header below; this section IS the ACT-182 body. The ACT-181 heading immediately follows. |
-
 ### ACT-182: FP-050 Phase 1 — DEC-058 ratification + EDGAR fetcher trio commit (cik-mapper + daily-index-fetcher + form4-parser + form4-fetcher; reuse-fence preserved; Signal #4 STAYS DISARMED)
 
 | Field | Value |
@@ -25,16 +19,7 @@
 | **Verification status** | Tests: 985 / 0 (38 new Deno tests added — all pass on first run after one daily-index parser fix for header-anchored column derivation). Wall-clock: CLEAN. ESLint: 0 errors. Reuse fence: VERIFIED (no edits to `compute-insider.ts` / `insider-orchestrator.ts` / `polygon-form4-fetcher.ts`). Signal #4 DISARMED state UNCHANGED at HEAD. DEC-058 ratification recorded in `approved-decisions.md`. Phase 2 (orchestrator rewiring + acceptance-gate integration + Polygon fetcher deletion) authorization follows supervisor verification. |
 
 
-### ACT-181b: PLACEHOLDER (no entry — see ACT-181 below). This is a no-op separator to preserve the ACT-181 heading position.
-
-
-### ACT-181: FP-050 Phase 0 — Signal #4 (Insider Transactions) EDGAR-rebuild history-recovery + vendor-shape audit (DOCS-ONLY; DEC-058 skeleton drafted UNRATIFIED) — RETAINED HEADING (the entry body for ACT-181 follows below, untouched)
-*** End Patch
-*** Begin Patch
-*** Update File: docs/06-tracking/action-tracker.md
-@@
-
-
+### ACT-181: FP-050 Phase 0 — Signal #4 (Insider Transactions) EDGAR-rebuild history-recovery + vendor-shape audit (DOCS-ONLY; DEC-058 skeleton drafted UNRATIFIED)
 
 | Field | Value |
 |---|---|
