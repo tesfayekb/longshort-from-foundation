@@ -1,6 +1,71 @@
 # Insider Transactions (Signal #4)
 
-> **Owner:** longshort strategy module | **Phase:** Phase 2.4 / FP-042 (+ ACT-155 market-wide-fetch addendum) | **Status:** ⛔ **FULLY DISARMED (ACT-156, 2026-06-09).** compute + officer-title classifier + entitlement-aware Form 4 fetcher (per-ticker + market-wide variants) + orchestrator (market-wide Step 2) + cron/manual handlers landed. `job_registry.longshort.insider.compute.enabled=false`; `signal_registry.insider_transactions_90d.status='planned'` (flipped back from 'live' per ACT-156 data UPDATE — no new MIG). Disarm is pending the DW-094 EDGAR-fetcher rebuild: the Polygon `/stocks/filings/vX/form-4` source produced systematically-empty (mostly-zero qualifying-transaction) data even after the ACT-155 market-wide CPU fix, so the signal is removed from the live combiner per §6.5 (NON-CRITICAL imputation) until the EDGAR replacement lands. No new allocations under this banner — work tracked via DW-094 + ACT-156.
+> **Owner:** longshort strategy module | **Phase:** Phase 3 / FP-050 (EDGAR rebuild) | **Status:** 🟡 **REGISTRY-LIVE / CRON-DISARMED (ACT-187, 2026-06-12 — FP-050 Phase 3 complete).** EDGAR pipeline implemented end-to-end (Phase 1 fetcher trio + Phase 2 orchestrator rewiring + per-accession `index.json` discovery per DEC-058 §(i) (A) ruling); `polygon-form4-fetcher.ts` DELETED per DW-094 (ACT-186 recovery). `signal_registry.insider_transactions_90d.status='live'` with truth-in-telemetry DEC-048 interim cadence string; `job_registry.longshort.insider.compute = {schedule:'15 21 * * 1-5' UTC, enabled:false}` (MIG-093, evening-family gap slot per DEC-058 §(k)). Arm-up = Phase 4 (deploy + operator validation fire + DEC-040 byte-match + DEC-043-pattern first-natural-fire attestation). Historical FP-042 / ACT-155 / ACT-156 sections preserved below per Rule 8.
+
+## FP-050 — EDGAR-rebuild Phase 3 status (registry-live, cron-disarmed)
+
+**DEC-058 bindings index (all 11 clauses ratified — see `docs/08-planning/approved-decisions.md` for verbatim text).**
+
+| Clause | Binding |
+|---|---|
+| §(a) | Transaction-code IN-set `{P, S}` per §4.4.4 verbatim; M/C/A/G/F/I OUT at v1; parser preserves all codes; compute layer is single filter authority. |
+| §(b) | **Dual-date axis — Option A.** Persist BOTH `transaction_date` AND `acceptance_datetime`; look-ahead gate keys on `acceptance_datetime ≤ as_of` (timestamp comparison); decay age on `transaction_date`. Two-layer enforcement (boundary fetcher + parser). Closes the FP-042 blind spot (~5.95-day max look-ahead bias). |
+| §(c) | 10b5-1 EXCLUDE — form-level body scan (`/10b5[- ]?1/i`); conservative over-exclusion; per-row attribution upgrade deferred to DW-100. |
+| §(d) | Role weights — reuse DEC-044 verbatim (CEO/CFO 1.0, NEOs 0.7, Sec-16 0.4, indep dirs 0.3, 10%+ 0.5); DEF-14A NEO enrichment deferred to DW-093. |
+| §(e) | Formula reuse — FP-042 `compute-insider.ts` unchanged; only data source replaced. |
+| §(f) | CIK fetch-per-fire of `company_tickers.json` + frozen `INSIDER_CIK_OVERRIDES` (NXT→1953967 seeded); unmapped emits typed `kind:'unresolved'` → `ticker_to_cik_unresolved` skip. |
+| §(g) | UA from `EDGAR_CONTACT_EMAIL` at construction (fail-loud absent); self-imposed 5 rps cap (half SEC's 10 rps headroom — DEC-034). |
+| §(h) | Form 4 / 4-A identical treatment; idempotency triple `(issuer_cik, accession_number, transaction_seq)`; orchestrator-side most-recent-accession preference on `(issuer, owner, date, seq)`. |
+| §(i) | **Architecture — daily-feed primary + single-invocation.** ~18s/fire incremental (well within `timeout_seconds=600`); ~25 min one-shot backfill. NOT the FP-045 queue-engine. **Discovery revision (operator (A) ruling 2026-06-12):** per-accession `index.json` fetch via `edgar-accession-index-fetcher.ts` (13 tests) — primary-doc selection + atomic `acceptance_datetime` from one truth-source, NO heuristic tiebreak (INC-70 rule). Per-CIK submissions feed REJECTED for the discovery step (added join layer + recent-filings cap edge). |
+| §(j) | Cross-signal additive independence with DEC-057 §(c) Tier-2 "significant insider transaction" — both signals score the same event independently by explicit design (catalyst measures decayed event-presence; insider measures dollar-weighted magnitude). Double-count prevention = additive independence, NOT silent gating. |
+| §(k) | **Cadence — `15 21 * * 1-5` UTC (evening-family gap slot).** Lands between analyst (21:00) and news (21:30 + drain). as_of↔acceptance convention LOCKED to timestamp comparison (`acceptance_datetime_ts ≤ as_of_ts`) matching every sibling signal's look-ahead gate. EDGAR 22:00-ET filing-cutoff trade-off named honestly via §(b) `not_yet_knowable_excluded` — late-accepted filings carried to D+1. Post-cutoff `0 3 * * 2-6` UTC alternative REJECTED for consistency-beats-cleverness. Phase-7 IC ablation reopens. |
+
+**Dual-date axis (diagram-in-prose, §(b) hard contract).**
+
+```text
+EDGAR Form 4 row
+   │
+   ├── transaction_date     ──► age_days = (as_of − transaction_date) / 14
+   │                           (decay anchor, spec §4.4.4 formula)
+   │
+   └── acceptance_datetime  ──► gate: acceptance_datetime_ts ≤ as_of_ts
+                               (look-ahead gate, timestamp comparison)
+                               │
+                               ├── PASS  → row enters 90d window
+                               └── FAIL  → not_yet_knowable_excluded++
+                                          (HONEST exclusion; row reappears
+                                           in D+1 fire when acceptance ≤ as_of)
+
+Two-layer enforcement (no silent default):
+   parser-level:    `edgar-form4-parser.ts`  — missing acceptance ⇒ kind:'unparseable'
+   boundary-level:  `edgar-form4-fetcher.ts` — refuses HTTP without acceptance pre-validation
+```
+
+**§(i) arithmetic row (single-invocation envelope, post per-accession-index revision).**
+
+| Step | Operation | Calls | Latency |
+|---|---|---|---|
+| 1 | `company_tickers.json` (CIK map) | 1 | ~1.0 s |
+| 2 | Daily-index sweep (90 weekday-business-days) | ~64 | ~6.4 s @ 5 rps |
+| 3 | Per-accession `index.json` (qualifying accessions, ~50/fire S&P-900) | ~50 | ~5.0 s @ 5 rps |
+| 4 | Form 4 XML fetch + parse (post §(b) gate) | ~50 | ~5.0 s @ 5 rps |
+| **Total** | **incremental fire** | **~165 HTTPS** | **~17.4 s** (rounds to the DEC-058 §(i) ~18 s/fire seeded envelope) |
+
+Backfill (one-shot, 90-trading-day cold start) bounds at ~25 min one-shot per DEC-058 §(i) — well within `timeout_seconds=600` budget at single-invocation cadence (operator-validated arithmetic in DEC-058 §(i) verbatim).
+
+**Registry truth (live-DB §22.5.1 post-MIG-093 reads, 2026-06-12).**
+
+- `job_registry.longshort.insider.compute = {schedule:'15 21 * * 1-5', handler_path:'supabase/functions/longshort-insider-compute/index.ts', enabled:false, status:'registered'}` — schedule retuned from FP-042-era `0 19 * * 1-5`; `enabled` STAYS FALSE through Phase 3.
+- `signal_registry.insider_transactions_90d = {status:'live', cadence:'daily (after-close; single-invocation ~18s/fire incremental; acceptance-gated per DEC-058 §(b) — late-accepted filings carried to next fire; interim per DEC-048 — §4.4.4 30-min intraday revisit is a future enhancement-FP, Phase 7 picks final cadence)', job_registry_id:'longshort.insider.compute', planned_phase:NULL}`.
+- `JOB_ID_TO_SIGNAL_ID['longshort.insider.compute'] = 'insider_transactions_90d'` already present at `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping.ts:47` (NO duplication — Constitution Rule 5).
+
+**What's NOT decided at Phase 3.** Phase 4 arm-up (deploy + operator validation fire + DEC-040 byte-match against operator-applied `cron.job` + DEC-043-pattern first-natural-fire wall-clock signature) follows supervisor verification of this commit. Signal #4 STAYS DISARMED through the end of Phase 3.
+
+---
+
+## Historical record (FP-042 / ACT-156 — preserved per Rule 8)
+
+The sections below are the FP-042 ship + ACT-156 disarm + INC-70 root-cause record. Preserved verbatim as governance history. The EDGAR rebuild above SUPERSEDES the Polygon-fetcher path described below — the FP-042 compute / classifier / filter / z-score code is reused byte-unchanged; only the data-acquisition layer was replaced.
 
 Detailed component reference for Signal #4 (insider transactions, 90-day, 14-day decay) per CROSSWIND §4.4.4 — the fourth of nine signals. Sparse-by-design: most names have zero qualifying insider transactions in any given 90-day window, which is the NORMAL state, not failure.
 
