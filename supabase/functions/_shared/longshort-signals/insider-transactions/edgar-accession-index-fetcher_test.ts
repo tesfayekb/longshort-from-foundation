@@ -140,8 +140,7 @@ Deno.test('(12) fetchIndex — acceptance missing → ambiguous (§(b) non-defau
 Deno.test('(13) constructor requires contact email (UA discipline §(g))', () => {
   let threw = false;
   try {
-    // deno-lint-ignore no-explicit-any
-    new EdgarAccessionIndexFetcher(undefined as any);
+    new EdgarAccessionIndexFetcher(undefined);
   } catch {
     threw = true;
   }
