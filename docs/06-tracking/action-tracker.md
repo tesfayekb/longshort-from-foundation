@@ -1,5 +1,21 @@
 
 
+### ACT-172: FP-049 Phase 1 commit 1a — structured-source fetchers (7 fetchers + shared types, 54 tests, function-index registered)
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-172 (next-free after ACT-171; grep-verified at HEAD via `rg -n "^### ACT-17[0-9]"` — only ACT-170/171 present). |
+| **Mode** | EXECUTION (Phase 1 commit 1a per FP-049 + DEC-057). |
+| **Scope root** | `supabase/functions/_shared/longshort-signals/active-catalyst/` (new directory; no edits to live signals — Signal-#1 analyst-revisions plumbing untouched per DEC-057 §(c) decoupled-parallel-fetcher discipline). |
+| **Files added** | `catalyst-types.ts` (shared types + look-ahead-gate + window-lower-bound helpers); `fmp-earnings-calendar-fetcher.ts`; `fmp-ma-fetcher.ts`; `fmp-grades-fetcher.ts`; `polygon-splits-fetcher.ts`; `polygon-dividends-fetcher.ts`; `finnhub-fda-advisory-fetcher.ts`; `tradier-corporate-actions-fetcher.ts`; + 8 `*_test.ts` siblings. |
+| **DEC-057 bindings honored** | §(b) authority-per-type (structured-endpoint primaries seven of seven); §(c) decoupled FMP-grades fetcher (no Signal-#1 plumbing reuse — independent test surface); §(d) OCCURRED-ONLY (`applyLookAheadGate` + `future_event_excluded` counter on every fetcher); §(e) `declaration_date` decay-origin + `declaration_date_unavailable` typed counter (Polygon dividends + Tradier backup; NEVER ex-date substitution); §(g) IN-set only (10 event-type union); §(i) Tradier as typed-fallback contract (fetcher lands Phase 1; invocation gating Phase 3). |
+| **Tests** | 54 new fixture-driven tests, all PASS. Per-fetcher coverage: shape fixtures from Phase-0 §B2 evidence; look-ahead fixtures (future-dated rows counted, never silently kept); typed error taxonomy (401/402/403/404/429/5xx/empty/wrapped-shape); window-boundary fixtures; secret non-leak on error path. Full repo suite: **624 passed / 0 failed** (was 570 pre-commit). |
+| **Reference index** | `docs/07-reference/function-index.md` — new "Active Catalyst Flag Signal" section with 8 entries (one per file). Same-PR per Rule 6. |
+| **Gates** | `deno run --allow-read scripts/check-wall-clock.ts` → **CLEAN — 0 violations**. `npx eslint .` → **0 errors / 15 warnings** (identical pre-existing baseline; no new warnings introduced). `deno test --allow-net --allow-env --allow-read _shared/longshort-signals/` → **624 passed / 0 failed**. |
+| **TypeScript hygiene** | Zero literal `any` in new code (all `unknown`-first wire validation per the anti-phantom default). Every fetcher: injectable `HttpFetch`, typed error result, `fetchWithTimeoutAndRetry` for backoff. Secrets read from `apiKey` constructor arg (never logged; error-path key non-leak test asserts on FMP earnings-calendar as the canonical pattern). |
+| **Out of scope (per the brief)** | No Phase-1b keyword fetcher / classification layer (commit 1b); no Phase-2 compute; no Phase-3 orchestrator/cron/MIG; no edits to live signals (#1, #8 untouched); no registry/migration changes; no new vendors. |
+| **STOP** | Phase 1 commit 1a complete. Supervisor verification precedes commit 1b (`catalyst-keywords.ts` + Polygon-news keyword fetcher reusing Signal #8's `fetchOnePage` surface + `classify-catalyst-event.ts` + dedup tests). |
+
 ### ACT-171: FP-049 — DEC-057 ratification commit (docs-only); all ten B3 bindings adopted as proposed with §(d) OCCURRED-ONLY sharpening; FP-049 → phase-1-authorized
 
 | Field | Value |
