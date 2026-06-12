@@ -53,6 +53,11 @@ export const JOB_ID_TO_SIGNAL_ID: Readonly<Record<string, string>> = {
   // (MIG-089b). FP-010 inheritance pattern — no change to
   // `longshort-signal-monitor/index.ts` required.
   'longshort.news.compute': 'news_sentiment_7d',
+  // FP-049 Phase 3b — Signal #9 (active_catalyst_flag), DEC-057. Added
+  // in the same PR as MIG-091 (job_registry seed + signal_registry
+  // planned→live flip with job_registry_id wiring). FP-010 inheritance
+  // pattern — no change to `longshort-signal-monitor/index.ts` required.
+  'longshort.catalyst.compute': 'active_catalyst_flag',
 } as const;
 
 /**

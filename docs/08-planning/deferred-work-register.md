@@ -2109,3 +2109,25 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **status** | open (PARK pending Phase-7 evidence). |
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
+
+### DW-098: Signal #9 — NYSE-calendar holiday-aware trading-day stepper for window arithmetic
+
+| Field | Value |
+|---|---|
+| **id** | DW-098 (next-free after DW-097; grep-verified at HEAD via `grep -nE "^### DW-09[8-9]" docs/08-planning/deferred-work-register.md` — no prior allocation). |
+| **date_deferred** | 2026-06-13 (FP-049 Phase 3b / ACT-177; DEC-057 §(f) v1-approximation addendum). |
+| **source_plan_section** | FP-049 Phase 3 (Signal #9 `active_catalyst_flag` orchestrator window arithmetic / DEC-057 §(f) binding). |
+| **source_phase** | Phase 3b. |
+| **title** | Upgrade `nthPrecedingTradingDay` stepper from weekends-only to NYSE-calendar holiday-aware (vendor-sourced exchange calendar OR static per-year NYSE holiday table). |
+| **reason_deferred** | The v1 stepper walks weekends only (Sat/Sun skipped); US exchange holidays (Good Friday, Memorial Day, Independence Day, Labor Day, Thanksgiving + half-day Friday, Christmas Eve + Christmas Day) are NOT modelled. v1 ships the simpler stepper because a holiday-aware variant requires either a vendor exchange-calendar dependency (none currently consumed by any signal) OR a static NYSE holiday table that needs annual maintenance + a verification path. Bounded shortfall ≤ 1 trading day per double-holiday week, affecting only window-floor events at negligible decayed weights → not material enough to gate v1. |
+| **blocking_dependencies** | (a) Phase 7 IC ablation infrastructure exists + has run for Signal #9; (b) ablation evidence shows the holiday-aware window materially shifts catalyst-decay arithmetic (i.e. residual IC gap between weekends-only stepper vs NYSE-calendar stepper > implementation + maintenance cost); (c) either a vendor exchange-calendar SKU is approved OR the operator commits to annual static-table maintenance. |
+| **impact_on_source_phase** | None — Phase 3b ships cleanly. Worst-case shortfall is ≤ 1 trading day per double-holiday week (2-3 weeks per year), affecting only events that would land exactly at the WINDOW FLOOR. Floor-aged earnings event at §(a) 48h half-life decays to `exp(-120/48) ≈ 0.082` of its tier weight → dropped contribution is ~22% of the typical mid-window contribution, on names where an event lands on exactly the affected floor weekday in one of those 2-3 weeks. Within-sector z-score normalization absorbs at the panel level. |
+| **future_owner_phase** | Phase 7 (IC ablation review) — gated. May promote to a Phase-3-revision or a separate FP if Phase 7 motivates. |
+| **future_owner_module** | longshort / signals / active-catalyst (`supabase/functions/_shared/longshort-signals/active-catalyst/active-catalyst-orchestrator.ts` — the `nthPrecedingTradingDay` helper). |
+| **required_plan_realignment** | If promoted: introduce a shared `_shared/longshort-signals/shared/nyse-calendar.ts` (or vendor-sourced equivalent) module carrying the holiday set; replace the weekends-only inner branch in `nthPrecedingTradingDay` with a holiday-aware check; preserve the weekends-only path as fallback when the holiday table is absent (typed-absence, never silent default-swap); update DEC-057 §(f) addendum to reflect the upgrade; expose the holiday set in `signal_compute_log.metadata` for replay determinism. |
+| **related_decisions** | DEC-057 (§(f) v1-approximation addendum 2026-06-13; §(d) addendum 2026-06-12 / DW-097 precedent for vendor-gated catalyst-fetcher approximations). |
+| **related_actions** | ACT-177 (this deferral); ACT-176 (Phase 3a — orchestrator + stepper landing); ACT-175 (Phase 2 — pure compute consuming windowed events). |
+| **required_tests_for_closure** | (a) NYSE-calendar table unit tests (≥ 6 tests covering each named holiday + half-day Friday + weekend-adjacent observance + leap-year edge); (b) `nthPrecedingTradingDay` parity test asserting the new path returns the same date as the weekends-only path on holiday-free windows (regression fence); (c) divergence test asserting the new path adds ≥ 1 trading-day step on a known double-holiday week (e.g. Thanksgiving-week as_of); (d) IC-ablation comparison fixture showing the upgrade's window-floor age-weight shift matches the predicted ≤ 22% per-event envelope; (e) replay-determinism test asserting `signal_compute_log.metadata.window_start_at` matches across pre-upgrade and post-upgrade for non-holiday weeks. |
+| **status** | open (PARK pending Phase-7 evidence). |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
