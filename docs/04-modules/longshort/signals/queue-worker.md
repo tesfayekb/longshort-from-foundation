@@ -1,7 +1,7 @@
 # Generalized Cursor-Drain Queue-Worker Engine
 
 **Owner:** longshort • **Plan:** FP-045 • **Decisions:** DEC-047, DEC-048, DEC-051, DEC-053
-**Schema:** MIG-082 (tables) + MIG-083 (RPCs) + MIG-084 (slice/sweeper job_registry rows, disarmed) + MIG-085 (Phase 4 options-flow signal_registry flip + job_registry description update) • **Phase 4 — PEAD + options-flow both registered. Disarmed pending the combined DEC-040/043 arm-up.**
+**Schema:** MIG-082 (tables) + MIG-083 (RPCs) + MIG-084 (slice/sweeper job_registry rows, disarmed) + MIG-085 (Phase 4 options-flow signal_registry flip + job_registry description update) + MIG-089a (FP-048 Phase 3a sequential-feed substrate: `signal_queue_feed_items` + `feed_cursor`/`feed_pages_fetched` columns) + MIG-089b (FP-048 Phase 3b registry: `longshort.news.compute` row + `news_sentiment_7d` flip) • **Phase 3b (FP-048) — news registered as the THIRD consumer and the FIRST sequential-feed consumer; PEAD + options-flow + news all registered. News DISARMED pending its own arm-up (separate authorization).**
 
 ## Why this engine exists
 
@@ -67,15 +67,17 @@ interface QueueSignalConfig {
 
 Every consumer registration MUST land with the per-slice budget calculation:
 
-`per_slice_seconds = (sliceSize × callsPerName) / ratePerSec`
+`per_slice_seconds = (sliceSize × callsPerName) / ratePerSec`   (per-ticker mode)
+`per_slice_seconds = pagesPerSlice × OBSERVED_PAGE_LATENCY_S`    (sequential-feed mode — latency dominates; rate-bound `pagesPerSlice / ratePerSec` recorded NON-BINDING)
 
 vs the 150s HTTP wall. The slice wall budget is intentionally generous — the cron handler returns immediately after one slice; the run completes across N cron ticks.
 
-| Consumer | sliceSize | callsPerName | ratePerSec | per-slice | vs 150s wall | Status |
-|---|---:|---:|---:|---:|---|---|
-| Synthetic test (Phase 2) | 10 | 1 | 1000 | 0.01s | Safe | engine self-test |
-| PEAD (Phase 3) | 100 | 2 | 4.25 | ~47.1s | Safe (≈69% headroom) | **registered (Phase 3), disarmed (DEC-048)** |
-| Options-flow (Phase 4) | 80 | 2 | 1.7 | ~94.1s | Safe (≈37% headroom vs 150s) | **registered (Phase 4), disarmed (DEC-048; closes DW-095)** |
+| Consumer | Mode | sliceSize / pagesPerSlice | callsPerName / page latency | ratePerSec | per-slice | vs 120s STOP gate / 150s wall | Status |
+|---|---|---:|---:|---:|---:|---|---|
+| Synthetic test (Phase 2) | per-ticker | 10 | 1 | 1000 | 0.01s | Safe | engine self-test |
+| PEAD (Phase 3) | per-ticker | 100 | 2 | 4.25 | ~47.1s | Safe (≈69% headroom vs 150s wall) | **registered (Phase 3), ARMED (MIG-086)** |
+| Options-flow (Phase 4) | per-ticker | 80 | 2 | 1.7 | ~94.1s | Safe (≈37% headroom vs 150s wall) | **registered (Phase 4), ARMED (MIG-086; closes DW-095)** |
+| News-sentiment (FP-048 Phase 3b) | **sequential-feed** | 15 pages | 6.3 s/page (Phase-0 row 17) | 8.5 (self-imposed 10 × 0.85) | **94.5s (latency)** / 1.76s (rate, non-binding) | Safe (25.5s headroom vs 120s STOP gate; 55.5s vs 150s wall) | **registered (FP-048 Phase 3b), DISARMED (MIG-089b — arm-up pending validation fire)** |
 
 Full-run estimate for PEAD on a ≈840-name universe: 1,680 calls / 4.25 rps ≈ 395s of compute, spread across ⌈840/100⌉ = 9 slices at one-per-minute cadence ≈ 9 minutes wall-time. Validated end-to-end at run `451b9ee7-9703-429d-97bc-61aeb2697bbc` (2026-06-10): 839 universe, 835 persisted, 9 slices, CAS-clean, zero 429s.
 
@@ -184,6 +186,82 @@ The PEAD adapter (`pead-queue-adapter.ts`) imports `computePead` verbatim from `
 
 The options-flow adapter (`options-flow-queue-adapter.ts`) mirrors `runOptionsFlowChunk`'s per-ticker semantics (the canonical per-ticker pin) — the FP-043 compute + fetcher are NOT edited. Skip taxonomy (`subscription_gated`, `data_unavailable`, `no_qualifying_flow`, `fetch_error`) is owned by the compute + adapter. The deprecated `longshort-options-flow-worker` handler now returns 410 Gone (the chunk-runner module stays in tree per FP-043 preservation). DW-095 is closed by this registration.
 
+## Sequential-feed mode (FP-048 Phase 3a — engine union)
+
+Phase 3a extended `QueueSignalConfig` with a discriminated union by
+`mode: 'per-ticker' | 'sequential-feed'`. Existing PEAD + options-flow
+registrations OMIT the field and default to `per-ticker` (regression-
+clean — verified by the engine-extension test suite). The new
+`'sequential-feed'` mode is for signals whose work unit is a
+vendor-paginated GLOBAL feed (opaque `next_url` token) rather than a
+pre-seedable per-ticker enumeration.
+
+### Lifecycle
+
+```text
+init  → seeds one synthetic cursor row (ticker='__feed__', gics_sector=NULL)
+         in signal_queue_cursor, signal_queue_runs.feed_cursor=NULL,
+         signal_queue_runs.feed_pages_fetched=0
+slice → claims the synthetic cursor row (FOR UPDATE SKIP LOCKED), loops
+         fetchPage up to pagesPerSlice times (acquires ONE bucket token
+         per page), upserts FeedItemRecord rows into
+         signal_queue_feed_items (PK retry-idempotent), persists
+         updated feed_cursor + heartbeat; releases the cursor row if
+         feed_cursor !== null (more pages remain), or DELETEs the
+         cursor row if exhausted (drives the CAS finalize predicate)
+         or fails the run with reason 'max_pages_exceeded' if
+         feed_pages_fetched ≥ maxPages
+CAS   → unchanged; finalize predicate is "no cursor rows for run_id"
+         (synthetic row deleted iff exhausted)
+final → re-reads universe_membership at (operator_id, as_of_date);
+         groups signal_queue_feed_items by ticker; invokes
+         computeFromItems per universe ticker; persists via the
+         existing z-score + signal_observations + signal_compute_log
+         path. No signal_queue_staging writes in feed mode (feed_items
+         is the durable record; staging adds redundant disk traffic
+         with zero diagnostic value feed_items doesn't already
+         provide).
+sweep → existing staging/skips TTL prune extends to delete
+         signal_queue_feed_items for terminal-status runs older than
+         stagingTtlSec.
+```
+
+### Phase 3b consumer registration — news-sentiment (Signal #8 / FP-048)
+
+`_shared/longshort-signals/news-sentiment/news-sentiment-queue-registration.ts`
+registers the news-sentiment consumer via side-effect import from
+`production-registrations.ts`.
+
+| Field | Value | Source |
+|---|---|---|
+| `signalId` | `news_sentiment_7d` | DEC-056 binding literal (also exported as `NEWS_SIGNAL_ID`) |
+| `jobId` | `longshort.news.compute` | MIG-089b `job_registry` row (DISARMED, `30 21 * * 1-5` UTC) |
+| `mode` | `'sequential-feed'` | DEC-056 §(architecture) addendum |
+| `ratePerSec` | 8.5 | Self-imposed 10 rps × 0.85 safety per DEC-056 §(cap-provenance) addendum |
+| `pagesPerSlice` | 15 | Yields ≈94.5s latency-bound per slice (15 × 6.3 s); SAFE vs 120s STOP gate and 150s HTTP wall |
+| `maxPages` | 100 | Runaway guard — exceeds Phase-0 observed worst-case (70 pages) by ≈1.4× before slice-worker fails the run with `max_pages_exceeded` |
+| `heartbeatTimeoutSec` | 600 | ≈6× nominal slice budget before sweeper preempts |
+| `stagingTtlSec` | 86 400 | 24h diagnostic retention post-finalize; sweeper also prunes `signal_queue_feed_items` |
+| `fetchPage` | wraps `PolygonNewsFeedFetcher.fetchOnePage` | Phase-1 fetcher's additive per-page surface (supervisor-authorized 2026-06-12; byte-equivalence fence: all 13 existing Phase-1 tests pass UNMODIFIED). Per-page classify per insight → `FeedItemRecord[]`. Typed `unavailable` outcomes throw `SignalComputationError` (engine records `fetch_error`); mid-walk `end` → `{items:[], nextToken:null}`. |
+| `computeFromItems` | wraps `computeNewsSentiment` | Pure compute kernel reused unchanged. Zero-item names emit typed `no_articles_in_window` skip. |
+
+**`meta.unmappedPublisherCount` v1 limitation:** `tier_mapped` is not
+stored in `signal_queue_feed_items` (only `tier_weight`); at our
+entitlement tier-3 = 0.4 collides with `DEFAULT_TIER_WEIGHT` = 0.4 so
+per-name unmapped count is not recoverable post-hoc. The wrapper
+passes `tierMapped: true` to preserve the `raw` value exactly. See
+`news-sentiment.md` §5.2.
+
+**Processed-count semantics** (named per operator directive — feed
+mode telemetry can otherwise be ambiguous between pages and tickers):
+`signal_queue_runs.feed_pages_fetched` = pages drained (incremented
+per `fetchPage` success); `signal_compute_log.persisted_count` = FINAL
+ticker count, stamped at finalize. Never pages.
+
+### MIG-089a/b ledger entries (Phase 3a + Phase 3b)
+
+- **MIG-089a** — sequential-feed substrate. `ALTER TABLE signal_queue_runs ADD COLUMN feed_cursor text, feed_pages_fetched integer NOT NULL DEFAULT 0`. New table `signal_queue_feed_items` (PK `run_id, article_id, ticker`) with `(run_id, ticker)` index. RLS family pattern (1 SELECT permissive via `longshort.view` + 3 RESTRICTIVE authenticated deny-write). DO-block precondition assertion that `signal_queue_cursor.gics_sector` is nullable (MIG-082 invariant — feed-mode init seeds the synthetic cursor row with `gics_sector = NULL`).
+- **MIG-089b** — registry truth. Inserts `longshort.news.compute` into `job_registry` (DISARMED, schedule `30 21 * * 1-5`, handler `supabase/functions/longshort-news-compute/index.ts`). Flips `signal_registry.news_sentiment_7d` from `planned`/`intraday (5 min)`/`Phase 2.8` to `live` with truth-in-telemetry cadence. Metadata-only DML; no DDL. **No new slice/sweeper job rows** — the MIG-084 rows (`longshort.queue.slice`, `longshort.queue.sweeper`) are shared engine rows, signal-agnostic by design, and already serve all three consumers.
 ## Gate-4 discipline (forward-binding, from FP-045 Phase-2 revision)
 
 Gate 4 for any PR touching this module is the CI workflow's ESLint command verbatim:
