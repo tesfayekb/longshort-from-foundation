@@ -43,7 +43,10 @@ Deno.test('(3) regulatory_action: SEC + verb required', () => {
 
 Deno.test('(4) partnership: noun + verb', () => {
   assertEquals(matchKeywordEvent('Acme announces strategic alliance').family, 'partnership');
-  assertEquals(matchKeywordEvent('Existing partnership continues').drop_reason, 'verb_gate');
+  // NB: avoid "partnership" as the noun in the drop-test because the verb
+  // "partners" is a substring of "partnership" and would spuriously pass
+  // the verb gate. Use "joint venture" + a non-verb predicate instead.
+  assertEquals(matchKeywordEvent('Joint venture continues operating').drop_reason, 'verb_gate');
 });
 
 Deno.test('(5) classifyCatalystEvents counts verb_gate and numeric_gate drops separately', () => {
