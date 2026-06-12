@@ -10,11 +10,15 @@
  * ─── Architecture (supervisor-ruled Option B) ─────────────────────────
  * Consumes FP-048's `PolygonNewsFeedFetcher.fetchOnePage` directly via
  * composition: this fetcher constructs an inner FP-048 instance with
- * `{ lookbackDays: 7 }` (over-fetch a 7-calendar-day window so the
- * §4.4.9 5-TRADING-DAY floor is always inside the vendor-fetched range,
- * even across a 3-day weekend / holiday). The §(f) trading-day floor is
- * then applied CLIENT-SIDE here via `applyWindowLowerBound` — the
- * calendar-vs-trading-day discrepancy is resolved at this layer, NOT
+ * `{ lookbackDays: 10 }` (over-fetch a 10-calendar-day window so the
+ * §4.4.9 5-TRADING-DAY floor is always inside the vendor-fetched range
+ * even across double-holiday weeks — Thanksgiving + 4-day market closure,
+ * Christmas+New-Year overlap. Bumped from 7 at Phase 1 footnote-fix:
+ * worst-case 5-trading-day span = ~9 calendar days (e.g., trading-week
+ * with two early-close holidays), 7 left zero margin and risked truncating
+ * the 5th trading day; 10 restores +1 day safety). The §(f) trading-day
+ * floor is then applied CLIENT-SIDE here via `applyWindowLowerBound` —
+ * the calendar-vs-trading-day discrepancy is resolved at this layer, NOT
  * deferred to Phase 2.
  *
  * Title/description availability: FP-048 was widened additively in the
@@ -56,14 +60,17 @@ import { matchKeywordEvent } from './classify-catalyst-event.ts';
 export const POLYGON_NEWS_KEYWORD_OPERATION_ID = 'polygon_news_keyword';
 
 /**
- * §(f) — over-fetch a 7-calendar-day window so the 5-TRADING-DAY floor
- * is always inside the vendor range across weekends/holidays (max gap:
- * Fri-close + 3-day holiday weekend = ~5 calendar days; +2 days margin
- * keeps the 5th trading day strictly inside the fetched window). The
+ * §(f) — over-fetch a 10-calendar-day window so the 5-TRADING-DAY floor
+ * is ALWAYS inside the vendor range, including double-holiday weeks
+ * (Thanksgiving-week and Christmas+New-Year overlaps push the 5-trading-
+ * day span out to ~9 calendar days; +1 day margin keeps the 5th trading
+ * day strictly inside the fetched window). Bumped from 7 at the FP-049
+ * Phase 1 footnote-fix — the 7-day under-fetch eliminated. The
  * `applyWindowLowerBound` call below trims to `window.window_start_at`,
- * which the orchestrator computes from the trading-calendar.
+ * which the orchestrator computes from the trading-calendar. Floor logic
+ * unchanged — only the over-fetch ceiling moved.
  */
-export const POLYGON_NEWS_KEYWORD_LOOKBACK_DAYS = 7;
+export const POLYGON_NEWS_KEYWORD_LOOKBACK_DAYS = 10;
 
 export interface PolygonNewsKeywordOptions {
   /** Forwarded to the inner FP-048 fetcher (default 200 — FP-048 default). */
