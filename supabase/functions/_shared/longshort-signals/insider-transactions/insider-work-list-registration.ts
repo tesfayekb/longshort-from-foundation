@@ -403,7 +403,10 @@ function makeSeedWorkItems(deps: InsiderWorkListDeps, mode: InsiderWorkListMode)
           date_filed: entry.date_filed,
           form_type: entry.form_type,
         };
-        items.push({ id: entry.accession_number, payload });
+        items.push({
+          id: entry.accession_number,
+          payload: payload as unknown as Readonly<Record<string, unknown>>,
+        });
       }
     }
     return items;
