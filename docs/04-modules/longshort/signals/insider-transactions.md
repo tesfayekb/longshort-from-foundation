@@ -304,21 +304,26 @@ After the ACT-155 market-wide fix, the next fire returned HTTP 200 but with tele
 
 ### Backfill arithmetic (M4 — derivation, all factors named)
 
-Three figures contested before this entry: (a) ACT-190 §(i) row: ~91k calls / ~5h, (b) ACT-193 correction: ~300,060 calls / ~16.7h, (c) operator challenge: ~31.9k calls / ~1.78h. Catalog #43's measured-inputs rule (recursive — applied to ourselves) demands every factor on the table:
+> **Corrected 2026-06-12 (M4 RE-RULE, supersedes the original M4 table below).** The original M4 row labelled ~1,667/day as the "in-universe" measurement. That inverted the provenance: ~1,667 is the **total-market** Form-4 count for 2026-06-11 (`feature-proposals.md:27,175` — daily cross-market `form.{YYYYMMDD}.idx` probe: "1,667 Form-4 + 6 Form-4/A" across ALL filers, not the universe filter). The **in-universe** measurement is the Phase-3.5 forensic table: three real daily indexes 2026-06-03/04/05 with filer CIKs resolved against the universe CIK map returned **352 / 215 / 192 in-universe** (out of 3,298 / 1,707 / 2,067 total-market) → **mean ≈253/day, measured-max ≈352/day**. One supervisor review passed the inverted figure before the challenge round caught it (Catalog #43 supervisor-symmetric clause: a single-supervisor green is not sufficient for measured-input claims; the challenge round is part of the discipline, not an exception to it).
 
 | Factor | Value | Provenance |
 |---|---|---|
 | Window | 90 calendar days = ~63 trading days | DEC-058 §(b) / §4.4.4 spec; the backfill must seed the rows the FIRST as_of-fire's 90-day window will read. |
-| Accessions/day basis | **In-universe only** — Phase-0 measured ~1,667/day | The producer's `seedWorkItems` in-universe filter applies identically to backfill and daily-fire — no separate full-market backfill. The ~253 figure was a confused factor (coincidence with trading-days-per-year; no measurement provenance). |
+| Accessions/day basis (typical) | **In-universe — Phase-3.5 forensic mean ~253/day** | Three real daily indexes (2026-06-03/04/05): in-universe counts 352 / 215 / 192 against totals 3,298 / 1,707 / 2,067; filer CIKs resolved against the universe CIK map. Replaces the inverted ~1,667 figure (which was the 2026-06-11 total-market count from `feature-proposals.md:27`). |
+| Accessions/day basis (measured-max) | ~352/day | The 2026-06-03 high cell of the same forensic table. Used as the sizing ceiling for `accessionsPerSlice`. |
 | Calls/accession | 2 (`index.json` discovery + XML parse) | DEC-058 §(i) (A) ruling. |
 | Daily-index calls | 1/trading day = ~63 | Negligible vs the per-accession total. |
 | Rate cap | 5 rps self-imposed | DEC-058 §(g); half SEC's 10 rps headroom. |
 
-**Surviving figure:** ~63 trading days × ~1,667 accessions/day × 2 calls + ~63 daily-index = **~210,105 calls / 5 rps ≈ 42,021 sec ≈ ~11.7 hours**.
+**Surviving figure:** ~63 trading days × ~253 accessions/day × 2 calls + ~63 daily-index ≈ **~31,941 calls + 63 ≈ ~32k calls / 5 rps ≈ ~6,400 sec ≈ ~1.8 hours wall-clock**.
 
-(a) is anomalous (~91k has no recoverable derivation — likely an unmeasured estimate that propagated). (c)'s ~253/day figure is dismissed (no measurement provenance). (b)'s ~300k figure is closer but assumed 90 calendar days instead of 63 trading days.
+**Drain plan: single overnight, widened headroom.** A ~12h window between US market close (21:00 UTC) and pre-market open (~13:00 UTC next day) now carries ~10h of headroom against the ~1.8h drain (vs the ~3h headroom against the inverted ~11.7h estimate). Multiple drains remain rejected (no throughput benefit at the 5 rps wall; the headroom upgrade is pure margin against post-earnings clusters and retry storms).
 
-**Drain plan: single overnight.** A ~12h window fits between US market close (21:00 UTC) and pre-market open (~13:00 UTC next day) with ~3h headroom for retries / `signal_queue_skips` reconciliation. Multiple drains rejected — adds operator coordination cost for zero throughput benefit at the 5 rps wall.
+**Variance robustness.** If a backfill day's in-universe count materially exceeds the measured band (e.g. post-earnings clusters concentrate Form-4 filings on a single date), the FP-045 queue engine absorbs the overflow by design — `accessionsPerSlice` sizes the PLAN against the ~253 typical / ~352 measured-max band, and the engine carries any excess across additional slices at the same 5 rps wall. The arithmetic above sizes the operator's drain expectation; the engine handles the variance.
+
+**`seedWorkItems` in-universe filter — unchanged by this correction.** The producer's `seedWorkItems` step ALWAYS filtered the daily-index against the universe CIK map (DEC-058 §(i); the design pre-dates this M4 RE-RULE). What was wrong here was the **count estimate**, not the filter. No one is to "fix" the in-universe filter to make the prior ~1,667 figure true; the filter is correct, and the prior ~1,667 figure was a label inversion that the forensic table at `Phase-3.5 corrections` already disproved.
+
+**Prior-figure reconciliation (for the audit trail).** (a) ACT-190 §(i) row: ~91k calls / ~5h — anomalous, no recoverable derivation. (b) ACT-193: ~300,060 calls / ~16.7h — used the inverted ~1,667 figure × 90 calendar days. (c) Operator's first challenge: ~31.9k calls / ~1.78h — the surviving derivation, identical to this corrected row to ±100 calls (rounding on trading-day count). The 2026-06-12 M4 RE-RULE retires (a) and (b); (c) is the surviving figure under restored provenance.
 
 ### MIG-094 PK contract (M5 — verified for `onConflict`)
 
