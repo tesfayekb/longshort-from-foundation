@@ -1,5 +1,22 @@
 
 
+### ACT-183: REVISION-FIX — `no-useless-escape` in `edgar-daily-index-fetcher.ts:98` + Gate-Evidence-Substitution countermeasure (ai-failure-modes #41)
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-183 (next-free after ACT-182; grep-verified at HEAD via `grep -oE "ACT-[0-9]+" docs/06-tracking/action-tracker.md \| sort -u -t- -k2 -n \| tail` — ACT-182 latest at allocation). |
+| **Mode** | REVISION-FIX (Tier A; operator brief 2026-06-12 "REVISION-FIX (one CI error + the recurrence countermeasure)"). One commit covers (1) the lint fix and (2) the third-firing countermeasure entry. |
+| **Authority chain** | Operator brief 2026-06-12 → ai-failure-modes class "Gate-Evidence Substitution" (third firing in <30 days: ACT-176 suite-scoped Gate-11 → ACT-179/INC-73 omitted-then-false-red Gate 4 → ACT-182 inferred-instead-of-run Gate 4) → supervisor-instructions §22.10 escalation clause (third firing ⇒ codify mechanically rather than re-promise) → ACT-182 (the immediate prior commit whose `npx eslint .` line was substituted by inference). |
+| **Scope (one commit)** | (1) `edgar-daily-index-fetcher.ts:98` — remove the unnecessary `\/` escape inside the character class `[\/.]` → `[/.]`. Behavior-identical: forward-slash inside a character class is a literal `/`, never a regex metacharacter; the affected accession-flat-form regex matches the same string set before/after. Affected test file (`edgar-daily-index-fetcher_test.ts`) re-run isolated → **9 passed / 0 failed** (no test change required, no semantic drift). (2) `docs/ai-failure-modes.md` — new Catalog entry **#41 — Gate-Evidence Substitution** (this loop's third-firing countermeasure): the simpler-preferred-of-two options (Catalog rule rather than `scripts/check-gate-evidence.ts` linter) per operator brief; all three firings recorded with citations; mechanical scanner reserved as the escalation if a fourth firing occurs. (3) This action-tracker entry. |
+| **Files added** | (none) |
+| **Files edited** | `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-daily-index-fetcher.ts` (1-line regex de-escape on line 98), `docs/ai-failure-modes.md` (Catalog entry #41 appended after #40), `docs/06-tracking/action-tracker.md` (this entry). |
+| **Reuse fence** | UNTOUCHED. No edits to `compute-insider.ts` / classifier / `insider-orchestrator.ts` / `polygon-form4-fetcher.ts`. No edits to live signals (#1, #2, #3, #5, #7, #8, #9). No registry / migration / `cron.job` changes — **Signal #4 STAYS DISARMED** at HEAD. |
+| **Gates (project-root canonical — verbatim final lines at the REVISION-FIX HEAD; per ai-failure-modes #41 the three canonical commands are quoted in full, no inferences, no baselines-by-reference)** | `deno run --allow-read scripts/check-wall-clock.ts` → **`check-wall-clock: CLEAN — 0 violations`**. `cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/` → **`ok \| 985 passed \| 0 failed (29s)`** (unchanged from ACT-182 — the regex de-escape is behavior-identical and no test was added or modified). `npx eslint .` → **`✖ 15 problems (0 errors, 15 warnings)`** (zero errors after the de-escape fix; 15 pre-existing React-UI warnings unchanged). |
+| **Forbiddens (all observed)** | No scope creep beyond the one-line regex fix + the catalog entry + this ACT row. No edits to FP-042 contract code. No registry / migration / job changes. No Phase 2 anticipation (orchestrator rewiring + Polygon fetcher deletion remain at the FP-050 Phase 2 landing slot). |
+| **ROI Impact** | **Zero on live signals** (lint-only fix in a disarmed-signal new file; no money-path code touched). **Positive on governance integrity** — codifies that Gates sections without literal final-output lines at HEAD are evidence-incomplete, closing the class of "report-says-green-but-gate-not-run-at-HEAD" defect at Catalog level. |
+| **Verification status** | Tests: 985/0 (full `_shared/` run at REVISION-FIX HEAD). Wall-clock: CLEAN. ESLint: 0 errors / 15 warnings (the lint error that triggered this fix is gone; warning count unchanged). Affected test isolated re-run: 9/0. Reuse fence: VERIFIED. Signal #4 DISARMED state UNCHANGED at HEAD. Phase 2 authorization follows supervisor verification. |
+
+
 ### ACT-182: FP-050 Phase 1 — DEC-058 ratification + EDGAR fetcher trio commit (cik-mapper + daily-index-fetcher + form4-parser + form4-fetcher; reuse-fence preserved; Signal #4 STAYS DISARMED)
 
 | Field | Value |
