@@ -3027,6 +3027,30 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Tests** | `supabase/functions/longshort-pead-compute-manual/index_test.ts` — source-sentinel tests guard the gutted-to-queue-path shape: JWT + permission, POST-only, body validation, `initQueueRun` delegation, fetcher absence, dual audit envelope ordering, productionClock-only, signal_id-from-export, drift sentinel. |
 | **Added by** | FP-044 (handler) / FP-045 Phase 4 (stranded-handler fix — gutted to enqueue shim) |
 
+#### `supabase/functions/longshort-news-compute/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-048 — Phase 3b / Signal #8 sequential-feed cron shim) |
+| **Classification** | edge function — daily News-Sentiment production cron handler. Sequential-feed enqueue shim on the FP-045 cursor-drain queue engine; first sequential-feed consumer. |
+| **Trigger** | `verifyCronSecret` (X-Cron-Secret); registered in `job_registry` as `longshort.news.compute` via MIG-089b (`enabled=false`, schedule `'30 21 * * 1-5'` — INTERIM per DEC-048). |
+| **Purpose** | Cron-only path. Derives `as_of` from `productionClock`; resolves the news consumer from `productionQueueRegistry` (fail-loud 500 `news_queue_consumer_unregistered` if absent); calls `initQueueRun` which seeds a `signal_queue_runs` row + a single synthetic `signal_queue_cursor` row (`ticker='__feed__'`, `gics_sector=NULL`) and returns 202; emits `QUEUE_AUDIT_EVENTS.RUN_STARTED` on success (metadata includes `mode:'sequential-feed'`) and `.RUN_FAILED` on throw. Actual page drain runs across N subsequent `longshort-queue-slice` cron ticks (15 pages/slice × 6.3 s observed = 94.5 s, SAFE vs 120 s STOP gate); finalizer aggregates `signal_queue_feed_items` by universe ticker via the registered `computeFromItems` adapter → `computeNewsSentiment` per name. |
+| **File** | `supabase/functions/longshort-news-compute/index.ts` |
+| **Tests** | Drift sentinels in `_shared/longshort-signals/news-sentiment/news-sentiment-queue-registration_test.ts` pin signalId/jobId/mapping coherence + cross-mode contamination guard + structural arithmetic. |
+| **Added by** | FP-048 Phase 3b |
+
+#### `supabase/functions/longshort-news-compute-manual/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-048 — Phase 3b / Signal #8 sequential-feed manual shim) |
+| **Classification** | edge function — operator-triggered News-Sentiment enqueue (any historical `as_of`, replay diagnostics, validation test-fires). |
+| **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST-only. |
+| **Purpose** | Same `initQueueRun` call as the cron sibling; differs only in trigger/audit envelope. Parses `{as_of:'YYYY-MM-DD'}` via shared `parseAsOfDate` + future-date guard against `productionClock`; dual audit envelope (`longshort.news.compute.manual_triggered` BEFORE init, `QUEUE_AUDIT_EVENTS.RUN_STARTED` on success / `longshort.news.compute.manual_failed` on throw). |
+| **File** | `supabase/functions/longshort-news-compute-manual/index.ts` |
+| **Tests** | Drift sentinels via `news-sentiment-queue-registration_test.ts` (the consumer registration is the shared invariant; handler-shape mirrors the FP-045/FP-047 manual-shim shape). |
+| **Added by** | FP-048 Phase 3b |
+
 #### `supabase/functions/longshort-queue-init/index.ts`
 
 | Field | Value |
