@@ -136,7 +136,18 @@ export async function runQueueSweeper(
       if (skipDelErr) {
         throw new Error(`sweeper[${signalId}]: skips prune failed: ${skipDelErr.message}`);
       }
-      const pruned = (stageCount ?? 0) + (skipCount ?? 0);
+      // FP-048 Phase 3a — also prune signal_queue_feed_items for feed-mode
+      // runs. Per-ticker runs have zero rows here (no-op); rolled into the
+      // staging_pruned aggregate per operator amendment to avoid changing
+      // the existing sweeper audit-event metadata shape.
+      const { error: feedDelErr, count: feedCount } = await supabase
+        .from('signal_queue_feed_items')
+        .delete({ count: 'exact' })
+        .eq('run_id', row.run_id);
+      if (feedDelErr) {
+        throw new Error(`sweeper[${signalId}]: feed_items prune failed: ${feedDelErr.message}`);
+      }
+      const pruned = (stageCount ?? 0) + (skipCount ?? 0) + (feedCount ?? 0);
       if (pruned > 0) runs_pruned += 1;
       staging_pruned += pruned;
     }

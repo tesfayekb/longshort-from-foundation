@@ -29,7 +29,11 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { QueueSignalConfig } from './queue-config.ts';
+import {
+  isFeedMode,
+  type FeedComputeFromItemsFn,
+  type QueueSignalConfig,
+} from './queue-config.ts';
 import type { SignalRow, SignalSkip, SignalSkipReason } from '../signal-types.ts';
 import { zScoreNormalizeWithinSector } from '../z-score-normalize.ts';
 import { captureSignalObservations } from '../missingness-capture.ts';
@@ -70,6 +74,19 @@ interface SkipRow {
   detail: string | null;
 }
 
+interface FeedItemRow {
+  article_id: string;
+  ticker: string;
+  sentiment_num: number;
+  tier_weight: number;
+  published_utc: string;
+}
+
+interface UniverseFinalizerRow {
+  ticker: string;
+  gics_sector: string | null;
+}
+
 export async function runQueueFinalizer(
   ctx: QueueFinalizerContext,
 ): Promise<QueueFinalizerResult> {
@@ -94,25 +111,41 @@ export async function runQueueFinalizer(
     return { kind: 'not_eligible', run_id, observed_status: runRow.status };
   }
 
-  // ── 1. Read full staging + skip sets (the aggregation barrier
-  //      guarantees the cursor is empty, so these reads are complete).
-  const { data: stagingRaw, error: stageErr } = await supabase
-    .from('signal_queue_staging')
-    .select('ticker, gics_sector, raw_signal')
-    .eq('run_id', run_id);
-  if (stageErr) {
-    return await transitionToFailed(ctx, runRow, `staging read failed: ${stageErr.message}`);
-  }
-  const staging = (stagingRaw ?? []) as StagingRow[];
+  // ── 1. Build the (staging, upstreamSkips) pair. Per-ticker mode reads
+  //      both from DB tables (the slice-workers wrote them). Feed mode
+  //      derives both IN-MEMORY by re-loading universe + grouping
+  //      feed_items and invoking computeFromItems per universe ticker
+  //      (no staging-table writes for feed mode — feed_items is the
+  //      durable record; staging writes would be redundant disk traffic
+  //      with zero diagnostic value feed_items doesn't already provide).
+  let staging: StagingRow[];
+  let skipsDb: SkipRow[];
+  if (isFeedMode(config)) {
+    const res = await buildFeedAggregates(ctx, runRow);
+    if (res.kind === 'failed') {
+      return await transitionToFailed(ctx, runRow, res.reason);
+    }
+    staging = res.staging;
+    skipsDb = res.skips;
+  } else {
+    const { data: stagingRaw, error: stageErr } = await supabase
+      .from('signal_queue_staging')
+      .select('ticker, gics_sector, raw_signal')
+      .eq('run_id', run_id);
+    if (stageErr) {
+      return await transitionToFailed(ctx, runRow, `staging read failed: ${stageErr.message}`);
+    }
+    staging = (stagingRaw ?? []) as StagingRow[];
 
-  const { data: skipsRaw, error: skipErr } = await supabase
-    .from('signal_queue_skips')
-    .select('ticker, skip_reason, detail')
-    .eq('run_id', run_id);
-  if (skipErr) {
-    return await transitionToFailed(ctx, runRow, `skips read failed: ${skipErr.message}`);
+    const { data: skipsRaw, error: skipErr } = await supabase
+      .from('signal_queue_skips')
+      .select('ticker, skip_reason, detail')
+      .eq('run_id', run_id);
+    if (skipErr) {
+      return await transitionToFailed(ctx, runRow, `skips read failed: ${skipErr.message}`);
+    }
+    skipsDb = (skipsRaw ?? []) as SkipRow[];
   }
-  const skipsDb = (skipsRaw ?? []) as SkipRow[];
 
   // ── 2. Within-sector z-score. Degenerate sectors (singleton OR std=0)
   //      emit value=null per the existing normalizer contract; the
@@ -198,6 +231,125 @@ export async function runQueueFinalizer(
     compute_log_run_id, outcome: 'completed',
     persisted_count: capture.inserted,
   };
+}
+
+/**
+ * Feed-mode aggregation — re-load universe (mass-balance source of
+ * truth), group feed_items by ticker, invoke `computeFromItems` per
+ * universe name (including names with zero items so the consumer can
+ * emit `no_articles_in_window` — mass balance ruling 839). Returns an
+ * in-memory staging-shaped list + skip list that the existing z + persist
+ * pipeline consumes unchanged.
+ */
+async function buildFeedAggregates(
+  ctx: QueueFinalizerContext,
+  runRow: RunRow,
+): Promise<
+  | { kind: 'ok'; staging: StagingRow[]; skips: SkipRow[] }
+  | { kind: 'failed'; reason: string }
+> {
+  const { supabase, config, operator_id, as_of } = ctx;
+  const compute = config.computeFromItems as FeedComputeFromItemsFn;
+
+  // 1. Re-load the universe used by init for this (operator, as_of_date).
+  //    Init seeds universe_size from a LATEST snapshot read; we re-read
+  //    the SAME snapshot here so the mass-balance invariant holds even if
+  //    the universe table mutated between init and finalize. The
+  //    operator's daily universe-refresh is a 1×/day write; the
+  //    finalizer running within a single intraday drain (5-6 min worst)
+  //    sees the same snapshot init saw.
+  const { data: latestRows, error: latestErr } = await supabase
+    .from('universe_membership')
+    .select('as_of_date')
+    .eq('operator_id', operator_id)
+    .order('as_of_date', { ascending: false })
+    .limit(1);
+  if (latestErr) {
+    return { kind: 'failed', reason: `feed-finalizer: universe latest-date probe failed: ${latestErr.message}` };
+  }
+  const latest = latestRows && latestRows.length > 0
+    ? (latestRows[0] as { as_of_date: string }).as_of_date
+    : null;
+  if (latest === null) {
+    return { kind: 'failed', reason: 'feed-finalizer: universe snapshot disappeared between init and finalize' };
+  }
+  const { data: universeRaw, error: universeErr } = await supabase
+    .from('universe_membership')
+    .select('ticker, gics_sector')
+    .eq('operator_id', operator_id)
+    .eq('as_of_date', latest);
+  if (universeErr) {
+    return { kind: 'failed', reason: `feed-finalizer: universe read failed: ${universeErr.message}` };
+  }
+  const universe = (universeRaw ?? []) as UniverseFinalizerRow[];
+  if (universe.length === 0) {
+    return { kind: 'failed', reason: 'feed-finalizer: universe snapshot empty at finalize-time' };
+  }
+
+  // 2. Load feed_items for the run, group by ticker.
+  const { data: itemsRaw, error: itemsErr } = await supabase
+    .from('signal_queue_feed_items')
+    .select('article_id, ticker, sentiment_num, tier_weight, published_utc')
+    .eq('run_id', runRow.run_id);
+  if (itemsErr) {
+    return { kind: 'failed', reason: `feed-finalizer: feed_items read failed: ${itemsErr.message}` };
+  }
+  const items = (itemsRaw ?? []) as FeedItemRow[];
+  const byTicker = new Map<string, FeedItemRow[]>();
+  for (const it of items) {
+    const arr = byTicker.get(it.ticker);
+    if (arr) arr.push(it);
+    else byTicker.set(it.ticker, [it]);
+  }
+
+  // 3. Per universe ticker, call computeFromItems → value or typed skip.
+  const staging: StagingRow[] = [];
+  const skips: SkipRow[] = [];
+  const detailFor = (s: { reason: string; detail: string }) => s.detail;
+  for (const u of universe) {
+    const tickerItems = (byTicker.get(u.ticker) ?? []).map((r) => ({
+      articleId: r.article_id,
+      sentimentNum: r.sentiment_num,
+      tierWeight: r.tier_weight,
+      publishedUtc: r.published_utc,
+    }));
+    let result;
+    try {
+      result = compute({
+        ticker: u.ticker,
+        gicsSector: u.gics_sector,
+        items: tickerItems,
+        asOf: as_of,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      skips.push({ ticker: u.ticker, skip_reason: 'fetch_error', detail: `computeFromItems threw: ${msg}` });
+      continue;
+    }
+    if (result.kind === 'value') {
+      if (!Number.isFinite(result.raw)) {
+        skips.push({
+          ticker: u.ticker,
+          skip_reason: 'fetch_error',
+          detail: `computeFromItems returned non-finite value: ${result.raw}`,
+        });
+      } else {
+        staging.push({
+          ticker: u.ticker,
+          gics_sector: u.gics_sector,
+          raw_signal: result.raw,
+        });
+      }
+    } else {
+      skips.push({
+        ticker: u.ticker,
+        skip_reason: result.reason,
+        detail: detailFor(result),
+      });
+    }
+  }
+
+  return { kind: 'ok', staging, skips };
 }
 
 async function transitionToFailed(
