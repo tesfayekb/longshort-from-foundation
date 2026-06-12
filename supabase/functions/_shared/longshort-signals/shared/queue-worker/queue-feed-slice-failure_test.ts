@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-import-prefix no-explicit-any
+// deno-lint-ignore-file no-import-prefix
 // @ts-nocheck — Deno test file.
 /**
  * INC-73 regression suite — feed-mode slice-failure telemetry contract.
@@ -16,6 +16,10 @@
  * Source-sentinel only (does not boot Postgres). Validates the engine
  * surface emits the documented telemetry shape and threshold semantics
  * through a stubbed SupabaseClient that records every call.
+ *
+ * Typing convention (FP-041): narrow local interfaces + `as unknown as <T>`
+ * boundary casts. Zero literal `any` tokens — enforced by Gate-11 sentinel
+ * `scripts/check-queue-worker-test-any.ts`.
  */
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
@@ -25,29 +29,85 @@ import {
 import { FEED_SYNTHETIC_TICKER } from './queue-config.ts';
 import { createFixedClock } from '../../../longshort-clock.ts';
 
-// ── Stub builder ────────────────────────────────────────────────────────
+// ── Narrow stub types ───────────────────────────────────────────────────
 
-function makeStub(opts: {
+type Filters = Record<string, unknown>;
+type Payload = Record<string, unknown>;
+
+interface RunStateRow {
+  feed_cursor: string | null;
+  feed_pages_fetched: number;
+  slice_failure_count: number;
+  status?: string;
+  failure_reason?: string;
+  heartbeat_at?: string;
+}
+
+interface RecordedCall {
+  table: string;
+  op: string;
+  payload?: Payload;
+  filters?: Filters;
+}
+
+interface PageResult {
+  items: unknown[];
+  nextToken: string | null;
+}
+
+interface FetchPageCall {
+  cursorToken: string | null;
+}
+
+type FetchPageImpl = (call: FetchPageCall) => Promise<PageResult> | PageResult;
+
+interface StubHandle {
+  supabase: unknown;
+  calls: RecordedCall[];
+  getRunState: () => RunStateRow;
+  getClaimedAt: () => string | null;
+  config: unknown;
+}
+
+interface MakeStubOpts {
   initialPagesFetched?: number;
   initialSliceFailureCount?: number;
-  fetchPageImpl: (call: { cursorToken: string | null }) => Promise<any> | any;
-}) {
-  const calls: Array<{ table: string; op: string; payload?: any; filters?: any }> = [];
-  let runState = {
-    feed_cursor: null as string | null,
+  fetchPageImpl: FetchPageImpl;
+}
+
+// ── Stub builder ────────────────────────────────────────────────────────
+
+function makeStub(opts: MakeStubOpts): StubHandle {
+  const calls: RecordedCall[] = [];
+  let runState: RunStateRow = {
+    feed_cursor: null,
     feed_pages_fetched: opts.initialPagesFetched ?? 0,
     slice_failure_count: opts.initialSliceFailureCount ?? 0,
   };
   let claimed_at: string | null = null;
 
-  const fromBuilder = (table: string) => {
-    const ctx: any = { _filters: {} };
+  interface QueryCtx {
+    _filters: Filters;
+    select: (cols: string) => QueryCtx;
+    eq: (k: string, v: unknown) => QueryCtx;
+    in: (k: string, v: unknown) => QueryCtx;
+    not: (k: string, op: string, v: unknown) => QueryCtx;
+    gt: (k: string, v: unknown) => QueryCtx;
+    lt: (k: string, v: unknown) => QueryCtx;
+    single: () => Promise<{ data: RunStateRow | null; error: null }>;
+    update: (payload: Payload) => unknown;
+    upsert: (rows: unknown, options: unknown) => unknown;
+    delete: (o?: unknown) => unknown;
+  }
+
+  const fromBuilder = (table: string): QueryCtx => {
+    const ctx = { _filters: {} as Filters } as QueryCtx;
     ctx.select = (_cols: string) => ctx;
-    ctx.eq = (k: string, v: any) => { ctx._filters[k] = v; return ctx; };
-    ctx.in = (_k: string, _v: any) => ctx;
-    ctx.not = (_k: string, _op: string, _v: any) => ctx;
-    ctx.gt = (_k: string, _v: any) => ctx;
-    ctx.lt = (_k: string, _v: any) => ctx;
+    ctx.eq = (k: string, v: unknown) => { ctx._filters[k] = v; return ctx; };
+    ctx.in = (_k: string, _v: unknown) => ctx;
+    ctx.not = (_k: string, _op: string, _v: unknown) => ctx;
+    ctx.gt = (_k: string, _v: unknown) => ctx;
+    ctx.lt = (_k: string, _v: unknown) => ctx;
     ctx.single = async () => {
       if (table === 'signal_queue_runs') {
         calls.push({ table, op: 'select.single', filters: { ...ctx._filters } });
@@ -55,30 +115,30 @@ function makeStub(opts: {
       }
       return { data: null, error: null };
     };
-    ctx.update = (payload: any) => {
+    ctx.update = (payload: Payload) => {
       calls.push({ table, op: 'update', payload, filters: { ...ctx._filters } });
       if (table === 'signal_queue_runs') {
-        runState = { ...runState, ...payload } as any;
+        runState = { ...runState, ...(payload as Partial<RunStateRow>) };
       }
       if (table === 'signal_queue_cursor' && 'claimed_at' in payload) {
-        claimed_at = payload.claimed_at;
+        claimed_at = payload.claimed_at as string | null;
       }
-      return { ...ctx, then: (resolve: any) => resolve({ error: null, count: 1 }) };
+      return { ...ctx, then: (resolve: (v: unknown) => void) => resolve({ error: null, count: 1 }) };
     };
-    ctx.upsert = (rows: any, _opts: any) => {
-      calls.push({ table, op: 'upsert', payload: rows });
-      return { then: (resolve: any) => resolve({ error: null }) };
+    ctx.upsert = (rows: unknown, _opts: unknown) => {
+      calls.push({ table, op: 'upsert', payload: rows as Payload });
+      return { then: (resolve: (v: unknown) => void) => resolve({ error: null }) };
     };
-    ctx.delete = (_o?: any) => {
+    ctx.delete = (_o?: unknown) => {
       calls.push({ table, op: 'delete', filters: { ...ctx._filters } });
-      return { ...ctx, then: (resolve: any) => resolve({ error: null, count: 0 }) };
+      return { ...ctx, then: (resolve: (v: unknown) => void) => resolve({ error: null, count: 0 }) };
     };
     return ctx;
   };
 
-  const supabase: any = {
+  const supabase = {
     from: fromBuilder,
-    rpc: async (name: string, _args: any) => {
+    rpc: async (name: string, _args: unknown) => {
       if (name === 'signal_queue_claim_slice') {
         claimed_at = new Date().toISOString();
         return { data: [{ ticker: FEED_SYNTHETIC_TICKER, gics_sector: null }], error: null };
@@ -88,27 +148,29 @@ function makeStub(opts: {
     },
   };
 
+  const config = {
+    signalId: 'news_sentiment_7d',
+    ratePerSec: 100,
+    callsPerName: 1,
+    sliceSize: 1,
+    maxObservationsPerRun: 2000,
+    heartbeatTimeoutSec: 600,
+    stagingTtlSec: 3600,
+    // feed-mode markers
+    mode: 'sequential-feed',
+    pagesPerSlice: 15,
+    maxPages: 70,
+    fetchPage: opts.fetchPageImpl,
+    buildObservations: () => [],
+    fetchAndCompute: async () => ({ kind: 'skip', reason: 'no_data', detail: 'unused' }),
+  };
+
   return {
-    supabase,
+    supabase: supabase as unknown,
     calls,
     getRunState: () => ({ ...runState }),
     getClaimedAt: () => claimed_at,
-    config: {
-      signalId: 'news_sentiment_7d',
-      ratePerSec: 100,
-      callsPerName: 1,
-      sliceSize: 1,
-      maxObservationsPerRun: 2000,
-      heartbeatTimeoutSec: 600,
-      stagingTtlSec: 3600,
-      // feed-mode markers
-      mode: 'sequential-feed',
-      pagesPerSlice: 15,
-      maxPages: 70,
-      fetchPage: opts.fetchPageImpl,
-      buildObservations: () => [],
-      fetchAndCompute: async () => ({ kind: 'skip', reason: 'no_data', detail: 'unused' }),
-    } as any,
+    config: config as unknown,
   };
 }
 
@@ -144,10 +206,11 @@ Deno.test('INC-73: throw on page 2 stamps failure_reason, increments counter, re
 
   const failureStamps = stub.calls.filter(
     (c) => c.table === 'signal_queue_runs' && c.op === 'update' &&
-           c.payload?.failure_reason?.startsWith('feed_slice_threw:'),
+           typeof c.payload?.failure_reason === 'string' &&
+           (c.payload.failure_reason as string).startsWith('feed_slice_threw:'),
   );
   assert(failureStamps.length >= 1, 'expected failure_reason stamp');
-  assert(failureStamps[0].payload.failure_reason.includes('upstream HTTP 500'));
+  assert((failureStamps[0].payload!.failure_reason as string).includes('upstream HTTP 500'));
 
   const releases = stub.calls.filter(
     (c) => c.table === 'signal_queue_cursor' && c.op === 'update' && c.payload?.claimed_at === null,
@@ -172,9 +235,10 @@ Deno.test('INC-73: 3rd consecutive throw terminal-fails run with last verbatim e
 
   const final = stub.getRunState();
   assertEquals(final.slice_failure_count, FEED_SLICE_FAILURE_THRESHOLD);
-  assertEquals((final as any).status, 'failed');
-  assert((final as any).failure_reason.startsWith('feed_slice_threw_3x:'));
-  assert((final as any).failure_reason.includes('upstream HTTP 503'));
+  assertEquals(final.status, 'failed');
+  const reason = final.failure_reason as string;
+  assert(reason.startsWith('feed_slice_threw_3x:'));
+  assert(reason.includes('upstream HTTP 503'));
 });
 
 // ── (4) successful slice resets counter
@@ -216,12 +280,12 @@ Deno.test('INC-73: per-page heartbeat tracks liveClock not as_of (monotonic adva
   });
   const advances = stub.calls.filter(
     (c) => c.table === 'signal_queue_runs' && c.op === 'update' &&
-           'feed_pages_fetched' in (c.payload ?? {}),
+           c.payload !== undefined && 'feed_pages_fetched' in c.payload,
   );
   assert(advances.length >= 1, 'expected at least one per-page advance');
   for (const a of advances) {
-    assertEquals(a.payload.heartbeat_at, liveInstant.toISOString(),
+    assertEquals(a.payload!.heartbeat_at, liveInstant.toISOString(),
       'heartbeat_at MUST use liveClock, not as_of');
-    assert(a.payload.heartbeat_at !== asOfFrozen.toISOString());
+    assert(a.payload!.heartbeat_at !== asOfFrozen.toISOString());
   }
 });
