@@ -23,15 +23,17 @@
  * ─── DEC-057 §(d) `event_at` precision binding ────────────────────────
  * FMP earnings-calendar rows carry a date-only `date` field (no
  * session-anchor hour). DEC-057 §(d) names Finnhub `hour` as the
- * Tier-1 enrichment when the FMP row lacks time — but the brief
- * (Part B commit 1a) bars silent cross-vendor enrichment per event
- * row. v1 ruling for this fetcher: assign the documented per-vendor
- * session-anchor default `12:00 ET` (the §(d) "blank" branch — neutral
- * mid-session anchor) when the FMP row carries no time, AND surface
- * the Finnhub-hour enrichment as a NAMED FOLLOW-UP if Phase-7 IC
- * ablation evidence shows session-anchor precision materially shifts
- * the catalyst-decay arithmetic. Recording the binding here so the
- * decision is auditable rather than buried in the orchestrator.
+ * Tier-1 enrichment when the FMP row lacks time — but v1 explicitly
+ * bars silent cross-vendor enrichment per event row (named no-phantom-
+ * enrichment discipline). v1 binding (DEC-057 §(d) v1-approximation
+ * addendum, Rule 8 append 2026-06-12 at Phase 1 commit 1b): anchor
+ * ALL FMP earnings rows at the per-vendor default `12:00 ET` (the §(d)
+ * "blank" branch — neutral mid-session anchor); the Finnhub bmo/amc
+ * upgrade is logged as named follow-up **DW-097** contingent on
+ * Phase-7 IC ablation evidence. Materiality bound: worst-case anchor
+ * error ≤±6.5h vs the §(a) 48h earnings half-life → exp(-6.5/48) ≈
+ * 0.873 (~13% per-event age-weight envelope), which the within-sector
+ * z-score normalization absorbs at the panel level.
  *
  * 12:00 ET = 16:00 UTC during EDT, 17:00 UTC during EST. v1 uses
  * 16:00 UTC year-round (the 1h EDT/EST drift is well inside the §(a)
