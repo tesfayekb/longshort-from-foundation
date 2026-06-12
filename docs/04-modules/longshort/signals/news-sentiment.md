@@ -76,6 +76,21 @@ First-run page count is MEASURED at the first natural fire and
 recorded back here as forward-binding evidence (Phase-3 deploy +
 validation step — separate authorization).
 
+**First-CLEAN-run measurement (run `9e8395a7-6f5f-4bd0-a213-149a06a5af5a`,
+as_of 2026-06-12, fired 02:11:40 UTC — third sequential-feed fire; first
+two terminal-failed pre-INC-73/74 fixes):** `feed_pages_fetched = 2`,
+single slice, wall 02:11:40.064 → 02:12:00.503 = **20.4 s end-to-end**
+(slice fetch+upsert+finalize). Per-page wall ≈ **10.2 s/page** (2 pages
+including the 3317-row upsert overhead — strictly higher than the
+Phase-0 6.3 s/page fetch-only number). The 2-page count is dramatically
+below the Phase-0 35–70 estimate — the vendor `next_url` chain
+terminated at page 2 for this as_of, not a slice-cap hit (cursor drained
+to NULL cleanly, no runaway-guard trip). Latency-bound headroom held
+with margin to spare. Forward binding: this measurement is one
+data-point; the binding pre-flight numbers remain the Phase-0 row 17
+evidence (6.3 s/page, 35–70 pages worst-case) until a multi-fire
+distribution is collected.
+
 ## 4. WWDC per-ticker example (CROSSWIND §4.4.8 + DEC-056 §(b))
 
 Polygon Phase-0 probe item — WWDC keynote 2026-06-09 10:00 UTC,
