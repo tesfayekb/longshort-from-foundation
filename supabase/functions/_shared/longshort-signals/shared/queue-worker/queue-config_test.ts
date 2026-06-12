@@ -113,8 +113,11 @@ Deno.test('work-list: minimal valid config registers', () => {
 
 Deno.test('work-list: rejects unknown mode string', () => {
   const r = createTestRegistry();
-  // deno-lint-ignore no-explicit-any
-  assertThrows(() => r.register(makeWorkListCfg({ mode: 'bogus' as any })), Error, "mode must be");
+  // Typed-mock convention: cast through `unknown` at the boundary to
+  // simulate a runtime mode string the QueueSignalConfig union forbids
+  // at compile time — no untyped escape hatch needed.
+  const bogus = { mode: 'bogus' as unknown as QueueSignalConfig['mode'] };
+  assertThrows(() => r.register(makeWorkListCfg(bogus)), Error, 'mode must be');
 });
 
 Deno.test('work-list: requires itemsPerSlice positive integer', () => {
