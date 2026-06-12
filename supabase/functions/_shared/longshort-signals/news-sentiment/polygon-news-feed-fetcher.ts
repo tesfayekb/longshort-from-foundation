@@ -30,6 +30,23 @@
  * unset, latency array is zero-filled — fixture tests are
  * deterministic and contain no wall-clock.
  *
+ * ─── FP-048 Phase 3b — additive per-page surface ──────────────────────
+ *
+ * `fetchOnePage({cursorToken, asOf})` is added as a public per-page
+ * primitive so the FP-045 queue engine's `sequential-feed` mode can
+ * thread the vendor `next_url` cursor across slice ticks (FP-048
+ * Phase 3b — Signal #8 consumer registration). `fetchFeed` is now a
+ * thin loop over `fetchOnePage`; behavior is byte-equivalent — proven
+ * by the existing Phase-1 test suite passing UNMODIFIED.
+ *
+ * Supervisor ruling (2026-06-12, FP-048 Phase 3b authorization):
+ * the "Phase-1/2 modules never edited" discipline's PURPOSE is
+ * preventing semantic drift in verified modules — NOT freezing their
+ * public surface. Supervisor-authorized additive surface with a
+ * byte-equivalence regression fence (every existing test passes
+ * unmodified) is permitted. The additive surface is `fetchOnePage`;
+ * `fetchFeed` retains identical semantics.
+ *
  * Typed error taxonomy (never conflated):
  *   - `subscription_gated` — HTTP 401 / 402 / 403
  *   - `rate_limited`       — HTTP 429 (post-retry exhaustion)
@@ -104,6 +121,44 @@ export type NewsFeedFetchResult =
       kind: 'unavailable';
       reason: 'subscription_gated' | 'rate_limited' | 'data_unavailable';
     };
+
+/**
+ * Per-page outcome (FP-048 Phase 3b additive surface). The caller of
+ * `fetchOnePage` is responsible for orchestration — looping while
+ * `nextToken !== null` (sequential-feed mode does this across slice
+ * ticks; `fetchFeed` does this in-process).
+ *
+ * Semantics — identical to a single iteration of the original `fetchFeed`
+ * loop body:
+ *   - `kind: 'page'`        — HTTP 200 with one or more raw vendor rows
+ *                             (normalized + look-ahead-gated to `rows`,
+ *                             may be empty after gating; `nextToken` is
+ *                             the opaque vendor cursor for the next call
+ *                             or `null` when the feed is exhausted).
+ *   - `kind: 'unavailable'` — `cursorToken === null` (first page) AND a
+ *                             401/402/403, 429, 404, or empty-results
+ *                             response. Caller MUST stop (the feed has
+ *                             no scorable coverage at this entitlement).
+ *   - `kind: 'end'`         — `cursorToken !== null` AND a 404 OR
+ *                             empty-results response. Vendor signaled
+ *                             "no more pages" mid-walk; caller breaks.
+ *
+ * `latencyMs` is captured on every outcome (success, unavailable, end)
+ * so the caller can record per-page telemetry uniformly.
+ */
+export type NewsFeedPageOutcome =
+  | {
+      kind: 'page';
+      rows: PolygonNewsRow[];
+      nextToken: string | null;
+      latencyMs: number;
+    }
+  | {
+      kind: 'unavailable';
+      reason: 'subscription_gated' | 'rate_limited' | 'data_unavailable';
+      latencyMs: number;
+    }
+  | { kind: 'end'; latencyMs: number };
 
 interface PolygonNewsWire {
   id?: string;
@@ -192,127 +247,34 @@ export class PolygonNewsFeedFetcher {
    * Walk the global news feed back to (as_of - lookbackDays). All returned
    * rows satisfy `published_utc <= as_of` (look-ahead gate, client-re-checked
    * even though the vendor-side `published_utc.lte` parameter is sent).
+   *
+   * Behavior identical to the pre-Phase-3b implementation; now factored
+   * as a loop over `fetchOnePage`. The Phase-1 test suite is the
+   * byte-equivalence fence.
    */
   async fetchFeed(as_of: Date): Promise<NewsFeedFetchResult> {
-    const asOfMs = as_of.getTime();
-    if (!Number.isFinite(asOfMs)) {
-      throw new SignalComputationError(
-        NEWS_FEED_OPERATION_ID,
-        '__feed__',
-        'as_of is not a valid Date',
-      );
-    }
-    const cutoffMs = asOfMs - this.lookbackDays * MS_PER_DAY;
-    const asOfIso = new Date(asOfMs).toISOString();
-    const cutoffIso = new Date(cutoffMs).toISOString();
-
     const rows: PolygonNewsRow[] = [];
     const latencyMsPerPage: number[] = [];
     let pagesFetched = 0;
     let hitPageCap = false;
-    let url: string | null = this.buildInitialUrl(cutoffIso, asOfIso);
+    let cursorToken: string | null = null;
 
     for (let page = 0; page < this.maxPages; page++) {
-      if (url === null) break;
-
-      const t0 = this.nowMs();
-      let resp: Awaited<ReturnType<HttpFetch>>;
-      try {
-        resp = await fetchWithTimeoutAndRetry(
-          this.httpFetch,
-          url,
-          { method: 'GET' },
-          { timeoutMs: this.timeoutMs },
-        );
-      } catch (e) {
-        const isTimeout = e instanceof Error && e.name === 'AbortError';
-        if (e instanceof Error && /^HTTP 429\b/.test(e.message)) {
-          return { kind: 'unavailable', reason: 'rate_limited' };
-        }
-        const message = isTimeout
-          ? `request timeout after ${this.timeoutMs}ms on news feed page ${page}`
-          : e instanceof Error
-            ? `${e.message} on news feed page ${page}`
-            : `network error on news feed page ${page}`;
-        throw new SignalComputationError(
-          NEWS_FEED_OPERATION_ID,
-          '__feed__',
-          message,
-          e,
-        );
-      }
-      latencyMsPerPage.push(this.nowMs() - t0);
+      const outcome = await this.fetchOnePage({ cursorToken, asOf: as_of });
       pagesFetched += 1;
+      latencyMsPerPage.push(outcome.latencyMs);
 
-      if (resp.status === 401 || resp.status === 402 || resp.status === 403) {
-        return { kind: 'unavailable', reason: 'subscription_gated' };
+      if (outcome.kind === 'unavailable') {
+        return { kind: 'unavailable', reason: outcome.reason };
       }
-      if (resp.status === 429) {
-        return { kind: 'unavailable', reason: 'rate_limited' };
-      }
-      if (resp.status === 404) {
-        if (page === 0) {
-          return { kind: 'unavailable', reason: 'data_unavailable' };
-        }
+      if (outcome.kind === 'end') {
         break;
       }
-      if (!resp.ok) {
-        throw new SignalComputationError(
-          NEWS_FEED_OPERATION_ID,
-          '__feed__',
-          `HTTP ${resp.status} ${resp.statusText} on news feed page ${page}`,
-        );
-      }
-
-      let body: unknown;
-      try {
-        body = await resp.json();
-      } catch (e) {
-        throw new SignalComputationError(
-          NEWS_FEED_OPERATION_ID,
-          '__feed__',
-          `JSON parse error on news feed page ${page}`,
-          e,
-        );
-      }
-      if (typeof body !== 'object' || body === null) {
-        throw new SignalComputationError(
-          NEWS_FEED_OPERATION_ID,
-          '__feed__',
-          `unexpected response shape: expected object, got ${typeof body} on page ${page}`,
-        );
-      }
-      const respBody = body as PolygonNewsResponse;
-      const results: unknown[] = Array.isArray(respBody.results)
-        ? respBody.results
-        : [];
-      if (results.length === 0) {
-        if (page === 0 && rows.length === 0) {
-          return { kind: 'unavailable', reason: 'data_unavailable' };
-        }
-        break;
-      }
-
-      for (const w of results) {
-        if (typeof w !== 'object' || w === null) continue;
-        const norm = normalizeWireRow(w as PolygonNewsWire);
-        if (norm === null) continue;
-        const tsMs = Date.parse(norm.published_utc);
-        if (!Number.isFinite(tsMs)) continue;
-        if (tsMs > asOfMs) continue; // look-ahead gate (client re-check)
-        if (tsMs < cutoffMs) continue;
-        rows.push(norm);
-      }
-
-      if (typeof respBody.next_url === 'string' && respBody.next_url.length > 0) {
-        url = this.attachApiKey(respBody.next_url);
-      } else {
-        url = null;
-      }
-
-      if (page === this.maxPages - 1 && url !== null) {
-        hitPageCap = true;
-      }
+      // outcome.kind === 'page'
+      for (const r of outcome.rows) rows.push(r);
+      cursorToken = outcome.nextToken;
+      if (cursorToken === null) break;
+      if (page === this.maxPages - 1) hitPageCap = true;
     }
 
     return {
@@ -322,6 +284,137 @@ export class PolygonNewsFeedFetcher {
       hitPageCap,
       latencyMsPerPage,
     };
+  }
+
+  /**
+   * FP-048 Phase 3b — additive per-page primitive.
+   *
+   * One HTTP call against the vendor news feed:
+   *   - `cursorToken === null` → first page (built from `as_of`, the
+   *     configured lookback window, sort/order/limit params).
+   *   - `cursorToken !== null` → next page (vendor `next_url`; apiKey
+   *     reattached when absent, idempotent — never duplicates).
+   *
+   * The look-ahead gate (`published_utc <= as_of`) is re-applied
+   * per-page on the client, identical to `fetchFeed`. The cutoff gate
+   * (`published_utc >= as_of - lookbackDays`) is also re-applied
+   * per-page so cursor-threaded callers (queue engine) cannot drift
+   * out of window even if vendor pagination ever returned older rows.
+   *
+   * Pure with respect to instance state: no hidden cursor stored on
+   * `this`. Same `(cursorToken, asOf)` → same outcome (modulo HTTP).
+   * No `Date.now()` — latency uses injected `nowMs`.
+   */
+  async fetchOnePage(args: { cursorToken: string | null; asOf: Date }): Promise<NewsFeedPageOutcome> {
+    const asOfMs = args.asOf.getTime();
+    if (!Number.isFinite(asOfMs)) {
+      throw new SignalComputationError(
+        NEWS_FEED_OPERATION_ID,
+        '__feed__',
+        'as_of is not a valid Date',
+      );
+    }
+    const cutoffMs = asOfMs - this.lookbackDays * MS_PER_DAY;
+    const isFirstPage = args.cursorToken === null;
+    const url: string = isFirstPage
+      ? this.buildInitialUrl(
+          new Date(cutoffMs).toISOString(),
+          new Date(asOfMs).toISOString(),
+        )
+      : this.attachApiKey(args.cursorToken as string);
+
+    const t0 = this.nowMs();
+    let resp: Awaited<ReturnType<HttpFetch>>;
+    try {
+      resp = await fetchWithTimeoutAndRetry(
+        this.httpFetch,
+        url,
+        { method: 'GET' },
+        { timeoutMs: this.timeoutMs },
+      );
+    } catch (e) {
+      const latencyMs = this.nowMs() - t0;
+      const isTimeout = e instanceof Error && e.name === 'AbortError';
+      if (e instanceof Error && /^HTTP 429\b/.test(e.message)) {
+        return { kind: 'unavailable', reason: 'rate_limited', latencyMs };
+      }
+      const message = isTimeout
+        ? `request timeout after ${this.timeoutMs}ms on news feed page`
+        : e instanceof Error
+          ? `${e.message} on news feed page`
+          : `network error on news feed page`;
+      throw new SignalComputationError(
+        NEWS_FEED_OPERATION_ID,
+        '__feed__',
+        message,
+        e,
+      );
+    }
+    const latencyMs = this.nowMs() - t0;
+
+    if (resp.status === 401 || resp.status === 402 || resp.status === 403) {
+      return { kind: 'unavailable', reason: 'subscription_gated', latencyMs };
+    }
+    if (resp.status === 429) {
+      return { kind: 'unavailable', reason: 'rate_limited', latencyMs };
+    }
+    if (resp.status === 404) {
+      return isFirstPage
+        ? { kind: 'unavailable', reason: 'data_unavailable', latencyMs }
+        : { kind: 'end', latencyMs };
+    }
+    if (!resp.ok) {
+      throw new SignalComputationError(
+        NEWS_FEED_OPERATION_ID,
+        '__feed__',
+        `HTTP ${resp.status} ${resp.statusText} on news feed page`,
+      );
+    }
+
+    let body: unknown;
+    try {
+      body = await resp.json();
+    } catch (e) {
+      throw new SignalComputationError(
+        NEWS_FEED_OPERATION_ID,
+        '__feed__',
+        'JSON parse error on news feed page',
+        e,
+      );
+    }
+    if (typeof body !== 'object' || body === null) {
+      throw new SignalComputationError(
+        NEWS_FEED_OPERATION_ID,
+        '__feed__',
+        `unexpected response shape: expected object, got ${typeof body} on news feed page`,
+      );
+    }
+    const respBody = body as PolygonNewsResponse;
+    const results: unknown[] = Array.isArray(respBody.results) ? respBody.results : [];
+    if (results.length === 0) {
+      return isFirstPage
+        ? { kind: 'unavailable', reason: 'data_unavailable', latencyMs }
+        : { kind: 'end', latencyMs };
+    }
+
+    const rows: PolygonNewsRow[] = [];
+    for (const w of results) {
+      if (typeof w !== 'object' || w === null) continue;
+      const norm = normalizeWireRow(w as PolygonNewsWire);
+      if (norm === null) continue;
+      const tsMs = Date.parse(norm.published_utc);
+      if (!Number.isFinite(tsMs)) continue;
+      if (tsMs > asOfMs) continue; // look-ahead gate (client re-check)
+      if (tsMs < cutoffMs) continue;
+      rows.push(norm);
+    }
+
+    const nextToken: string | null =
+      typeof respBody.next_url === 'string' && respBody.next_url.length > 0
+        ? respBody.next_url
+        : null;
+
+    return { kind: 'page', rows, nextToken, latencyMs };
   }
 
   private buildInitialUrl(cutoffIso: string, asOfIso: string): string {

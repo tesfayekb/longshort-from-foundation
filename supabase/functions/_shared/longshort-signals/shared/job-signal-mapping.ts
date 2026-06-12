@@ -48,6 +48,11 @@ export const JOB_ID_TO_SIGNAL_ID: Readonly<Record<string, string>> = {
   'longshort.options_flow.compute': 'options_flow_imbalance_5d',
   'longshort.pead.compute': 'pead_sue_20d',
   'longshort.analyst.compute': 'analyst_revision_drift',
+  // FP-048 Phase 3b — Signal #8 (news_sentiment_7d), DEC-056. Added in
+  // the same PR that registers `longshort.news.compute` in `job_registry`
+  // (MIG-089b). FP-010 inheritance pattern — no change to
+  // `longshort-signal-monitor/index.ts` required.
+  'longshort.news.compute': 'news_sentiment_7d',
 } as const;
 
 /**
