@@ -116,33 +116,32 @@ function isForm4(formType: string): formType is '4' | '4/A' {
  */
 export function parseDailyIndexBody(body: string): DailyIndexEntry[] {
   const lines = body.split(/\r?\n/);
-  // Find delimiter line (a long run of dashes after a header line that
-  // starts with "Form Type").
+  // Locate the header line ("Form Type ... Filename") and use its column
+  // positions to derive fixed-width column starts. The next line is a
+  // dashed delimiter (real EDGAR ships it as one continuous run of `-`,
+  // so we rely on the HEADER for column starts, not the delimiter).
   let headerIdx = -1;
-  let delimIdx = -1;
   for (let i = 0; i < lines.length; i += 1) {
-    if (lines[i].startsWith('Form Type') && headerIdx === -1) headerIdx = i;
-    if (headerIdx !== -1 && /^-+\s+-+/.test(lines[i])) { delimIdx = i; break; }
+    if (lines[i].startsWith('Form Type')) { headerIdx = i; break; }
   }
-  if (headerIdx === -1 || delimIdx === -1) return [];
-  const delim = lines[delimIdx];
-  // Find column start positions by scanning delim for the start of each
-  // dash run.
+  if (headerIdx === -1) return [];
+  const header = lines[headerIdx];
+  // Locate the five known column-name start positions.
+  const colNames = ['Form Type', 'Company Name', 'CIK', 'Date Filed', 'Filename'];
   const starts: number[] = [];
-  let inRun = false;
-  for (let i = 0; i < delim.length; i += 1) {
-    const c = delim[i];
-    if (c === '-') {
-      if (!inRun) { starts.push(i); inRun = true; }
-    } else {
-      inRun = false;
-    }
+  for (const name of colNames) {
+    const idx = header.indexOf(name);
+    if (idx === -1) return [];
+    starts.push(idx);
   }
-  // Expect 5 columns. If not, the file shape changed — return empty.
-  if (starts.length !== 5) return [];
   const [s0, s1, s2, s3, s4] = starts;
+  // Skip past the dashed delimiter line (one or more lines of `-`).
+  let dataIdx = headerIdx + 1;
+  while (dataIdx < lines.length && /^[-\s]+$/.test(lines[dataIdx]) && lines[dataIdx].includes('-')) {
+    dataIdx += 1;
+  }
   const out: DailyIndexEntry[] = [];
-  for (let i = delimIdx + 1; i < lines.length; i += 1) {
+  for (let i = dataIdx; i < lines.length; i += 1) {
     const line = lines[i];
     if (line.length === 0) continue;
     const formType = line.slice(s0, s1).trim();
