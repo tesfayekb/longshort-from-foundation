@@ -2863,6 +2863,54 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **CPU-limit fix (ACT-155)** | The market-wide method exists to satisfy the ~2 s edge-isolate CPU budget. Per-ticker fetch across ~839 tickers killed the deployed handler with HTTP 546 `WORKER_RESOURCE_LIMIT`; market-wide pagination collapses ~839 HTTPS calls + 839 JSON parses to ~1–5 paginated pages. The orchestrator (`insider-orchestrator.ts`) consumes ONLY the market-wide method; the per-ticker method is retained for the manual single-ticker debug path. |
 | **Added by** | FP-042 |
 
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-cik-mapper.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-050 — Signal #4 EDGAR rebuild / Phase 1) |
+| **Classification** | shared infrastructure — SEC ticker→CIK resolution per DEC-058 §(f). Fetch-per-fire of `company_tickers.json` (§(f1) staleness safety). Frozen `INSIDER_CIK_OVERRIDES` map seeded with the Phase-0 NXT conflict (NXT → 1953967 Nextracker) — overrides ALWAYS win against the raw snapshot. Unresolved tickers → typed `kind:'unresolved'` (orchestrator counts as `ticker_to_cik_unresolved`, never silent / never fabricated). UA header built from `EDGAR_CONTACT_EMAIL` secret at construction (§(g)); absent env → `EdgarConfigurationError` (fail-loud, no fake default). |
+| **Exports** | `class EdgarCikMapper { constructor(contactEmail, httpFetch?, moduleId?); loadMap(): Promise<(ticker:string)=>CikLookupResult> }`; `const INSIDER_CIK_OVERRIDES: Readonly<Record<string,number>>`; `function buildEdgarUserAgent(contactEmail, module): string`; `function padCik(cik:number): string`; `class EdgarConfigurationError`; `class EdgarFetchError`; `type CikLookupResult = { kind:'resolved'; ticker; cik10; source:'override'\|'snapshot' } \| { kind:'unresolved'; ticker }`; constants `COMPANY_TICKERS_URL`, `CIK_MAPPER_OPERATION_ID`. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-cik-mapper.ts` |
+| **Tests** | `edgar-cik-mapper_test.ts` — 11 Deno tests: missing/empty EDGAR_CONTACT_EMAIL throws EdgarConfigurationError (no fake default), UA header shape, padCik zero-padding (1/320193/1953967), snapshot resolution + case-insensitive ticker normalization, **override wins over snapshot for NXT** (Nextracker not Nextpower), unknown-ticker → kind=unresolved, malformed-JSON + non-object body + HTTP 403 → EdgarFetchError, whitespace trim. |
+| **Secret** | `EDGAR_CONTACT_EMAIL` (NOT a credential — SEC fair-access identifier per §(g)). |
+| **Added by** | FP-050 Phase 1 |
+
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-daily-index-fetcher.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-050 — Signal #4 EDGAR rebuild / Phase 1) |
+| **Classification** | shared infrastructure — DEC-058 §(i) daily-feed primary branch (architecture-fork: ~18 s/fire incremental vs ~174 s per-CIK). Fetches `/Archives/edgar/daily-index/{YYYY}/QTR{n}/form.{YYYYMMDD}.idx` (Phase-0-corrected path; NOT `/full-index/`), parses fixed-width header-anchored columns, returns Form 4 / 4/A entries with derived accession numbers. §(h) treats 4/A identically. Typed taxonomy: 404 → `kind:'unavailable'` (holiday / archive boundary, NEVER throws); 403/5xx → `EdgarFetchError`; UA constructed per §(g). |
+| **Exports** | `class EdgarDailyIndexFetcher { constructor(contactEmail, httpFetch?, moduleId?); fetchDay(date:Date): Promise<DailyIndexResult> }`; `function dailyIndexUrl(d:Date): string`; `function quarterOf(d:Date): 1\|2\|3\|4`; `function parseAccessionFromFilename(filename:string): string\|null`; `function parseDailyIndexBody(body:string): DailyIndexEntry[]`; `interface DailyIndexEntry { form_type:'4'\|'4/A'; filer_cik; company_name; date_filed; filename; accession_number }`; `type DailyIndexResult = { kind:'rows'; entries; date } \| { kind:'unavailable'; reason:'data_unavailable'; date }`; constants `DAILY_INDEX_BASE`, `DAILY_INDEX_OPERATION_ID`. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-daily-index-fetcher.ts` |
+| **Tests** | `edgar-daily-index-fetcher_test.ts` — 9 Deno tests: quarter mapping incl. boundaries (Q1↔Q2, Q3↔Q4); URL construction; accession parser (dashed + flat); fixture body (Phase-0 B2 shape) — filters Form 4 + 4/A only, derives accession from filename, preserves CIK + date + company name; empty/malformed body → []; happy path returns kind=rows; **404 → kind=unavailable (never throws)**; 403 → EdgarFetchError; network throw → EdgarFetchError. |
+| **Secret** | `EDGAR_CONTACT_EMAIL` (UA per §(g)). |
+| **Added by** | FP-050 Phase 1 |
+
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-form4-parser.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-050 — Signal #4 EDGAR rebuild / Phase 1) |
+| **Classification** | shared pure-compute module. Parses Form-4 XML body + injected `acceptance_datetime` to per-transaction non-derivative rows. **Implements the DEC-058 §(b) Option-A dual-date contract: BOTH `transaction_date` (decay anchor) AND `acceptance_datetime` (look-ahead gate) on every row; absent acceptance_datetime is `kind:'unparseable'`, NEVER silently defaulted.** §(c) 10b5-1 detector: free-text body scan for `/10b5[- ]?1/i` — boolean attaches to every row in the filing (conservative over-exclusion form-level discipline). §(h) idempotency triple `(issuer_cik, accession_number, transaction_seq)`. §(a): parser does NOT filter on transaction code — preserves P/S/M/A/C/G/F/I verbatim; the FP-042 compute layer is the single filter authority. Derivative-only filings → `kind:'parsed', rows:[]` (counted, NOT errored). |
+| **Exports** | `function parseEdgarForm4(input: EdgarForm4ParseInput): EdgarForm4ParseResult`; `interface EdgarForm4Row { issuer_cik; owner_cik; accession_number; transaction_seq; transaction_code; shares; price_per_share; acquired_disposed; ownership_type; officer_title; is_director; is_officer; is_ten_percent_owner; has_10b5_1_mention; transaction_date; acceptance_datetime }`; `interface EdgarForm4ParseInput { xml; accession_number; acceptance_datetime }`; `type EdgarForm4ParseResult = { kind:'parsed'; rows } \| { kind:'unparseable'; reason }`; `const FORM4_PARSER_OPERATION_ID`. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-form4-parser.ts` |
+| **Tests** | `edgar-form4-parser_test.ts` — 10 Deno tests: AMZN M-then-S fixture (two rows, codes M+S preserved per §(a), transaction_seq=0/1, issuer/owner CIK 10-padded); **§(b) dual-date both fields on every row**; **§(c) 10b5-1 mention attaches form-level to every row** (AMZN 10b5-1 fixture true; pure-P fixture false); Form 4/A parses identically (§(h)); derivative-only → rows=[] (counted, not errored); missing acceptance_datetime → kind=unparseable (§(b) non-negotiable); empty + structurally-broken XML → unparseable; officer-title + role booleans surface from reportingOwnerRelationship; §(a) parser preserves all transaction codes (no filter). |
+| **Added by** | FP-050 Phase 1 |
+
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-form4-fetcher.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-050 — Signal #4 EDGAR rebuild / Phase 1) |
+| **Classification** | shared infrastructure — per-accession Form-4 XML IO layer composed over `edgar-form4-parser.ts`. URL shape `/Archives/edgar/data/{cik-unpadded}/{accession-no-dashes}/{primary_document}`. Typed taxonomy: 404 → `kind:'unavailable'`; 429 → `kind:'rate_limited'` (orchestrator can backoff cleanly — the TokenBucket cap per §(g) lands at Phase 3); 403 / 5xx → `EdgarFetchError`. Missing `acceptance_datetime` at input → `kind:'unparseable'` returned WITHOUT issuing the HTTP call (dual-date contract pre-validated at the boundary). |
+| **Exports** | `class EdgarForm4Fetcher { constructor(contactEmail, httpFetch?, moduleId?); fetchAndParse(input: EdgarForm4FetchInput): Promise<EdgarForm4FetchResult> }`; `function form4XmlUrl(input): string`; `interface EdgarForm4FetchInput { cik; accession_number; acceptance_datetime; primary_document }`; `type EdgarForm4FetchResult = { kind:'rows'; rows } \| { kind:'unavailable'; reason:'data_unavailable' } \| { kind:'rate_limited' } \| { kind:'unparseable'; reason }`; constants `ARCHIVES_BASE`, `FORM4_FETCHER_OPERATION_ID`. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-form4-fetcher.ts` |
+| **Tests** | `edgar-form4-fetcher_test.ts` — 8 Deno tests: URL builder strips CIK padding + collapses accession dashes; happy path returns kind=rows with parsed P row; **404 → kind=unavailable (never throws)**; **429 → kind=rate_limited (typed for orchestrator backoff)**; 403 → EdgarFetchError; missing acceptance_datetime → kind=unparseable WITHOUT issuing HTTP call (boundary pre-validation); network throw → EdgarFetchError; parser-surfaced unparseable propagates verbatim. |
+| **Secret** | `EDGAR_CONTACT_EMAIL` (UA per §(g)). |
+| **Phase-2-landing-slot** | The `polygon-form4-fetcher.ts` entry above is **scheduled for deletion at the FP-050 Phase 2 orchestrator rewiring commit** — at that commit the `insider-orchestrator.ts` import moves from `polygon-form4-fetcher.ts` to this EDGAR trio (per DW-094 "data-acquisition layer needs replacing" + ACT-156 "FP-042 compute / classifier / filter / z-score is correct and reused as-is"). The Polygon fetcher is retained THIS PR for orchestrator compile-correctness; the deletion has a named landing slot. |
+| **Added by** | FP-050 Phase 1 |
+
 #### `supabase/functions/_shared/longshort-signals/insider-transactions/compute-insider.ts`
 
 | Field | Value |
