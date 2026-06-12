@@ -215,6 +215,7 @@ export type Database = {
           issuer_cik: string
           not_subject_to_section_16: boolean
           officer_title: string | null
+          owner_cik: string
           security_type: string | null
           ticker: string
           transaction_acquired_disposed: string
@@ -237,6 +238,7 @@ export type Database = {
           issuer_cik: string
           not_subject_to_section_16?: boolean
           officer_title?: string | null
+          owner_cik: string
           security_type?: string | null
           ticker: string
           transaction_acquired_disposed: string
@@ -259,6 +261,7 @@ export type Database = {
           issuer_cik?: string
           not_subject_to_section_16?: boolean
           officer_title?: string | null
+          owner_cik?: string
           security_type?: string | null
           ticker?: string
           transaction_acquired_disposed?: string
