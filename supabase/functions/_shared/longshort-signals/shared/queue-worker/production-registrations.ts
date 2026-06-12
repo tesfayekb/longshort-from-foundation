@@ -15,8 +15,12 @@
 
 import { registerPeadQueueConsumer } from '../../pead/pead-queue-registration.ts';
 import { registerOptionsFlowQueueConsumer } from '../../options-flow/options-flow-queue-registration.ts';
+import { registerNewsSentimentQueueConsumer } from '../../news-sentiment/news-sentiment-queue-registration.ts';
 
 // Phase 3 — PEAD (Signal #2 / FP-044).
 registerPeadQueueConsumer();
 // Phase 4 — options-flow (Signal #3 / FP-043; closes DW-095).
 registerOptionsFlowQueueConsumer();
+// FP-048 Phase 3b — news-sentiment (Signal #8 / FP-048; first
+// sequential-feed consumer on the FP-045 engine).
+registerNewsSentimentQueueConsumer();
