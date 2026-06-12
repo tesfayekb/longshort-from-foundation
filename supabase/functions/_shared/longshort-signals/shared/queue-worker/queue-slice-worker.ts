@@ -39,9 +39,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   FEED_SYNTHETIC_TICKER,
   isFeedMode,
+  isWorkListMode,
+  WORK_LIST_HEARTBEAT_ITEM_INTERVAL,
   type FeedFetchPageFn,
   type QueueSignalConfig,
   type TickerComputeFn,
+  type WorkListItemResult,
+  type WorkListProcessItemFn,
 } from './queue-config.ts';
 import type { SignalSkip } from '../signal-types.ts';
 import { TokenBucket } from '../../options-flow/token-bucket.ts';
@@ -50,6 +54,17 @@ import { maskSecretsInMessage } from './error-key-mask.ts';
 
 /** INC-73 — consecutive feed-slice-throw threshold before terminal-failing the run. */
 export const FEED_SLICE_FAILURE_THRESHOLD = 3;
+
+/**
+ * FP-050 Phase 3.6a Q3 — work-list run-level slice-failure threshold.
+ * Mirrors the feed-mode 3-strikes contract verbatim (INC-73 parity) so a
+ * persistently-failing work-list slice terminates the run honestly rather
+ * than spinning forever. Reset on any slice with ≥1 item processed
+ * successfully (Q3 ruling — "reset on any slice that processes ≥1 item
+ * successfully"). Same numeric value as the feed threshold — exported
+ * separately so a future tuning can diverge without coupling.
+ */
+export const WORK_LIST_SLICE_FAILURE_THRESHOLD = 3;
 
 export interface QueueSliceWorkerContext {
   supabase: SupabaseClient;
@@ -86,7 +101,7 @@ export interface QueueSliceWorkerResult {
   /** True when the claim returned zero rows — slice is a no-op (cursor empty). */
   empty: boolean;
   /** Engine mode the slice was processed under. Optional for backward-compat. */
-  mode?: 'per-ticker' | 'sequential-feed';
+  mode?: 'per-ticker' | 'sequential-feed' | 'work-list';
   /** Feed mode only — pages fetched THIS slice (not cumulative). */
   pages_fetched?: number;
   /** Feed mode only — feed_items rows upserted THIS slice. */
@@ -113,6 +128,14 @@ export interface QueueSliceWorkerResult {
    * metadata so an operator sees the cause in the run.failed event.
    */
   runaway?: boolean;
+  /**
+   * Work-list mode only (FP-050 Phase 3.6a Q3) — items that threw and
+   * were left in their claimed-but-not-deleted state for natural retry
+   * by a subsequent slice. NOT a terminal count; a steady-state nonzero
+   * value here across consecutive slices is what eventually trips the
+   * deadlock-guard (claimed>0 ∧ succeeded=0 = failed slice).
+   */
+  item_retries?: number;
 }
 
 interface ClaimedRow {
@@ -123,6 +146,9 @@ interface ClaimedRow {
 export async function runQueueSlice(
   ctx: QueueSliceWorkerContext,
 ): Promise<QueueSliceWorkerResult> {
+  if (isWorkListMode(ctx.config)) {
+    return runWorkListSlice(ctx);
+  }
   if (isFeedMode(ctx.config)) {
     return runFeedSlice(ctx);
   }
