@@ -2849,19 +2849,17 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Tests** | `supabase/functions/longshort-reversal-compute-manual/index_test.ts` — 10 source-sentinel tests (auth + permission + POST-only + body validation + parser + POLYGON_API_KEY + dual audit envelope ordering + wall-clock + orchestrator wiring + no momentum-orchestrator-import drift). |
 | **Added by** | FP-040 |
 
-#### `supabase/functions/_shared/longshort-signals/shared/polygon-form4-fetcher.ts`
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/form4-row-types.ts`
 
 | Field | Value |
 |---|---|
-| **Module** | longshort (FP-042) |
-| **Classification** | shared infrastructure — Polygon Form 4 (insider transaction) fetcher. ENTITLEMENT-AWARE — 403 → `{ kind: 'unavailable', reason: 'subscription_gated' }`, 404 → `{ kind: 'unavailable', reason: 'data_unavailable' }` (neither throws; both degrade gracefully per §4.3.5 non-critical-signal rule). 401 / 5xx after retries / parse / timeout throw `SignalComputationError` with ticker context. Returns BOTH `record_type='transaction'` AND `record_type='holding'` rows untouched — the compute layer (`compute-insider.ts`) is the single filter authority; the fetcher does NOT pre-filter on `record_type` / `transaction_code` so filter discipline lives in one tested place. |
-| **Exports** | `class PolygonForm4Fetcher { fetchForm4(ticker, as_of, windowDays?, limit?): Promise<Form4FetchResult>; fetchForm4MarketWide(as_of, windowDays?, pageLimit?): Promise<Form4MarketWideResult> }`; `const FORM4_OPERATION_ID = 'polygon_form4'`; `const FORM4_WINDOW_DAYS = 90`; `const DEFAULT_FORM4_LIMIT = 500`; `interface Form4Row { record_type, tickers?, transaction_code?, aff_10b5_one?, transaction_acquired_disposed?, transaction_shares?, transaction_price_per_share?, transaction_date?, is_director?, is_officer?, is_ten_percent_owner?, not_subject_to_section_16?, officer_title?, security_type? }`; `type Form4FetchResult = { kind: 'rows'; rows: Form4Row[] } \| { kind: 'unavailable'; reason: 'subscription_gated' \| 'data_unavailable' }`; `type Form4MarketWideResult = { kind: 'rows'; rowsByTicker: Map<string, Form4Row[]> } \| { kind: 'unavailable'; reason: 'subscription_gated' \| 'data_unavailable' }`. |
-| **File** | `supabase/functions/_shared/longshort-signals/shared/polygon-form4-fetcher.ts` |
-| **Tests** | `polygon-form4-fetcher_test.ts` — 16 Deno tests. Per-ticker (10): constructor-throws-on-missing-apiKey + happy path normalizes all needed fields including holding rows + 403 → subscription_gated + 404 → data_unavailable + 401 throws with ticker context + 200/empty results → kind=rows/[] + URL carries 90-day window + apiKey + ticker + date filters + FORM4_WINDOW_DAYS=90 spec lock + malformed rows dropped + fetcher discipline does NOT pre-filter holding/M/C/A/G. Market-wide (6 — ACT-155): single-page → grouped Map<ticker, rows[]> + next_url cursor pagination merging across 3 pages + 403 → subscription_gated + 404 → data_unavailable + rows-without-tickers[] dropped (no fabricated attribution) + multi-ticker row attributed to tickers[0] only. |
-| **Secret** | POLYGON_API_KEY. |
-| **Live-probe evidence** | 2026-06-08 per-ticker probe against production POLYGON key on AAPL/RBRK/NTRA/DELL — 200 status, documented field set verified incl. compound `officer_title='CEO AND PRESIDENT'`, real `aff_10b5_one=true` on a 10b5-1 sale, both `record_type='transaction'` and `record_type='holding'` rows present. 2026-06-09 market-wide probe (NO `ticker=`, 90-day date window) returned `status:OK` with all-issuer results carrying `tickers[]` arrays — confirms entitlement for `fetchForm4MarketWide`. |
-| **CPU-limit fix (ACT-155)** | The market-wide method exists to satisfy the ~2 s edge-isolate CPU budget. Per-ticker fetch across ~839 tickers killed the deployed handler with HTTP 546 `WORKER_RESOURCE_LIMIT`; market-wide pagination collapses ~839 HTTPS calls + 839 JSON parses to ~1–5 paginated pages. The orchestrator (`insider-orchestrator.ts`) consumes ONLY the market-wide method; the per-ticker method is retained for the manual single-ticker debug path. |
-| **Added by** | FP-042 |
+| **Module** | longshort (FP-050 Phase 2) |
+| **Classification** | shared types module — single home for the `Form4Row` interface consumed by `compute-insider.ts` and produced by the EDGAR seam mapper in `insider-orchestrator.ts`. Extracted VERBATIM from the now-deleted `polygon-form4-fetcher.ts` (DW-094 discharge) so the FP-042 compute / classifier / filter / z-score code remains byte-unchanged behind a one-line import-path edit (logic-empty diff per the (A) ruling). |
+| **Exports** | `interface Form4Row { record_type, tickers?, transaction_code?, aff_10b5_one?, transaction_acquired_disposed?, transaction_shares?, transaction_price_per_share?, transaction_date?, is_director?, is_officer?, is_ten_percent_owner?, not_subject_to_section_16?, officer_title?, security_type? }`. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/form4-row-types.ts` |
+| **Tests** | None directly (pure type alias) — exercised indirectly via the 26 `compute-insider_test.ts` cases (compute fence) and the 15 `insider-orchestrator_test.ts` cases (seam coverage via `mapEdgarRowToForm4Row`). |
+| **Deletion note** | The prior home `supabase/functions/_shared/longshort-signals/shared/polygon-form4-fetcher.ts` (+ its 16-test sibling) was DELETED in the same commit per DW-094; the `Form4Row` interface lives here verbatim. Doc-comment provenance is retained in the file head. |
+| **Added by** | FP-050 Phase 2 (DW-094 discharge) |
 
 #### `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-cik-mapper.ts`
 
@@ -2908,8 +2906,21 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-form4-fetcher.ts` |
 | **Tests** | `edgar-form4-fetcher_test.ts` — 8 Deno tests: URL builder strips CIK padding + collapses accession dashes; happy path returns kind=rows with parsed P row; **404 → kind=unavailable (never throws)**; **429 → kind=rate_limited (typed for orchestrator backoff)**; 403 → EdgarFetchError; missing acceptance_datetime → kind=unparseable WITHOUT issuing HTTP call (boundary pre-validation); network throw → EdgarFetchError; parser-surfaced unparseable propagates verbatim. |
 | **Secret** | `EDGAR_CONTACT_EMAIL` (UA per §(g)). |
-| **Phase-2-landing-slot** | The `polygon-form4-fetcher.ts` entry above is **scheduled for deletion at the FP-050 Phase 2 orchestrator rewiring commit** — at that commit the `insider-orchestrator.ts` import moves from `polygon-form4-fetcher.ts` to this EDGAR trio (per DW-094 "data-acquisition layer needs replacing" + ACT-156 "FP-042 compute / classifier / filter / z-score is correct and reused as-is"). The Polygon fetcher is retained THIS PR for orchestrator compile-correctness; the deletion has a named landing slot. |
+| **Phase-2-landing-slot DISCHARGED** | DW-094 deletion landed in FP-050 Phase 2 (ACT-185). `polygon-form4-fetcher.ts` + its test were removed; the `insider-orchestrator.ts` import-set moved verbatim to this EDGAR trio + the new `edgar-accession-index-fetcher.ts` per the (A) ruling on DEC-058 §(i) discovery. |
 | **Added by** | FP-050 Phase 1 |
+
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-accession-index-fetcher.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-050 Phase 2 — DEC-058 §(i) discovery, (A) ruling) |
+| **Classification** | shared infrastructure — per-accession discovery layer. GETs `https://www.sec.gov/Archives/edgar/data/<cik-unpadded>/<accession-no-dashes>/index.json` per qualifying accession (5 rps bucket, UA per §(g)). Returns the primary Form-4 XML basename AND `acceptanceDateTime` atomically from one truth-source (closes the INC-70 cross-feed-join failure family at the discovery layer). Primary-document selection is TYPED (regex include `\.xml$/i` minus documented EDGAR non-primaries: `index.xml`, `.xsd`, `-cal/-def/-lab/-pre.xml`); ZERO or >1 eligible candidates ⇒ `kind:'ambiguous'` with the verbatim filename list — NO heuristic tiebreak (INC-70 rule). Typed taxonomy: 404→`kind:'unavailable'`; 429→`kind:'rate_limited'`; 403/5xx→`EdgarFetchError`; missing `acceptanceDateTime`→`kind:'ambiguous'` (non-defaultable per §(b)). |
+| **Exports** | `class EdgarAccessionIndexFetcher { constructor(contactEmail, httpFetch?, moduleId?); fetchIndex(input: EdgarAccessionIndexInput): Promise<EdgarAccessionIndexResult> }`; `function accessionIndexUrl(input): string`; `function selectPrimaryDocument(filenames): { primary, eligible }`; `interface EdgarAccessionIndexInput { cik; accession_number }`; `type EdgarAccessionIndexResult = { kind:'resolved'; primary_document; acceptance_datetime; filenames } \| { kind:'unavailable'; reason:'data_unavailable' } \| { kind:'rate_limited' } \| { kind:'ambiguous'; filenames; eligible_count; acceptance_datetime }`; constants `ARCHIVES_BASE`, `ACCESSION_INDEX_OPERATION_ID`. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/edgar-accession-index-fetcher.ts` |
+| **Tests** | `edgar-accession-index-fetcher_test.ts` — 13 Deno tests: URL strips CIK padding + collapses accession dashes (string + numeric CIK); selectPrimaryDocument resolves single eligible xml, accepts `primary_doc.xml` (modern), excludes index.xml + XBRL linkbases (cal/def/lab/pre) + .xsd, returns null on zero-eligible OR >1-eligible (NO tiebreak); fetchIndex resolved happy path; 404→`unavailable`; 429→`rate_limited` (NOT thrown); 403→EdgarFetchError; >1 eligible→`ambiguous`; missing `acceptanceDateTime`→`ambiguous` (§(b) non-defaultable); constructor requires contact email. |
+| **Secret** | `EDGAR_CONTACT_EMAIL` (UA per §(g)). |
+| **Call-budget arithmetic (§(i) revision)** | (A)-ruling cost: ONE extra HTTPS call per qualifying accession (vs the rejected per-CIK submissions feed). On a typical fire ~40–80 qualifying accessions across the trailing 90d window → ~80–160 GETs total (accession-index + Form-4 XML) at 5 rps ≈ ~16–32 s. Backfill scale: ~1k accessions ≈ ~6.7 min — acceptable given the per-fire one-truth-source guarantee. The Phase-0 row in FP-050 estimated only the daily-index sweep arithmetic; this row supersedes it for the discovery branch. |
+| **Added by** | FP-050 Phase 2 (DEC-058 §(i) ruling A) |
 
 #### `supabase/functions/_shared/longshort-signals/insider-transactions/compute-insider.ts`
 
@@ -2928,39 +2939,41 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 
 | Field | Value |
 |---|---|
-| **Module** | longshort (FP-042) |
-| **Classification** | shared orchestrator factory — 5-step pipeline mirror of `short-interest-orchestrator.ts` with THREE parallel side-input fetchers per ticker (form-4 + shares-outstanding + price for `market_cap = shares × close`). NON-CRITICAL signal with SPARSE expected profile: most names yield `no_qualifying_transactions` skip → `is_present=0` — that is the NORMAL state, not failure. |
-| **Exports** | `function createInsiderOrchestrator(ctx): { run(as_of): Promise<SignalOrchestratorResult> }`; `const SIGNAL_ID = 'insider_transactions_90d'`; `interface InsiderOrchestratorContext` (extends `SignalOrchestratorContext` with `form4: PolygonForm4Fetcher` + `sharesOutstanding: PolygonSharesOutstandingFetcher`; `priceHistory` inherited). |
+| **Module** | longshort (FP-042 fence + FP-050 Phase 2 EDGAR rewiring) |
+| **Classification** | shared orchestrator factory — 11-step EDGAR pipeline: (1) load universe; (2) CIK map fetch-per-fire (DEC-058 §(f) — unresolved tickers → typed `ticker_to_cik_unresolved` skip); (3) reverse-map CIK10→ticker; (4) daily-index sweep over `[as_of − 90d, as_of]` inclusive (holiday-clean via typed `unavailable`; any throw → outcome=failed with date in failure_reason); (5+6) per-accession `index.json` discovery + §(b) acceptance gate (drop accessions with `acceptance > as_of` and increment `not_yet_knowable_excluded`) + Form-4 XML fetch+parse (BOTH bucket-gated via the injected 5 rps `TokenBucket` — wired here as the rate-limit authority boundary); (7) §(h) most-recent-accession preference per `(issuer_cik, owner_cik, transaction_date, transaction_seq)`; (8) seam mapper EdgarForm4Row→Form4Row (per-row, exhaustive, no defaults); (9) per-ticker `filterQualifyingTransactions` + shares+price side-inputs via `pLimitedMap` (concurrency=20); (10) within-sector z-score; (11) persist via `captureSignalObservations`. NON-CRITICAL signal with SPARSE expected profile. |
+| **Exports** | `function createInsiderOrchestrator(ctx): { run(as_of): Promise<SignalOrchestratorResult> }`; `const SIGNAL_ID = 'insider_transactions_90d'`; `const WINDOW_DAYS = 90`; `const DEFAULT_EDGAR_RPS = 5`; `function mapEdgarRowToForm4Row(r): Form4Row` (seam); `function preferMostRecentAccession(rows): EdgarForm4Row[]` (§(h)); `interface InsiderOrchestratorContext` (extends `SignalOrchestratorContext` with `cikMapper`, `dailyIndex`, `accessionIndex`, `form4Edgar`, `sharesOutstanding`, `priceHistory`, `bucket: TokenBucket`). |
 | **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/insider-orchestrator.ts` |
-| **Tests** | `insider-orchestrator_test.ts` — 12 Deno tests via DI mocks (signal_id lock + happy-path 3-tickers with 1 sparse skip + subscription_gated typed skip + missing_shares_outstanding skip + missing-price → data_unavailable skip + fetcher-throw → fetch_error + sign-convention ordering (buy>sell) + 10b5-1 sales all excluded → all `no_qualifying_transactions` + empty universe → failed/empty_universe + persistence error → failed + determinism + as_of_date slice). All 12 assertions preserved BYTE-IDENTICAL through the ACT-155 market-wide-fetch restructure — only the Form4 mock shape changed (now mocks `fetchForm4MarketWide` returning a `Map<ticker, Form4Row[]>`). |
-| **Step-2 architecture (ACT-155)** | ONE market-wide Form 4 fetch → `filterQualifyingTransactions` per universe ticker → universe tickers with 0 qualifying rows skip with `no_qualifying_transactions` WITHOUT any per-ticker shares/price fetch (massive CPU saving — typically <100 of 839 tickers need a market-cap fetch) → `pLimitedMap` (concurrency=20) over qualifying tickers only fetches `shares + price` and runs `computeInsiderSignal`. Compute / filter / classifier / z-score / persist are byte-unchanged. |
-| **Wall-clock** | All timestamps derive from injected `as_of` (DEC-034 clause 4). The decay arithmetic in the underlying compute is also `as_of`-parameterized — no `Date.now()` anywhere. |
-| **Cadence** | Daily after-close via cron schedule `0 19 * * 1-5` (MIG-077). 30-min intraday polling noted in §4.4.4 is deferred future refinement. |
-| **Added by** | FP-042 |
+| **Tests** | `insider-orchestrator_test.ts` — 15 Deno tests via DI mocks for the full EDGAR pipeline: signal_id lock + WINDOW_DAYS=90 + seam mapping is exhaustive (incl. 10b5-1 propagation) + §(h) preference (Form 4/A supersedes Form 4) + happy path 3-tickers / 2-persisted / 1 no_qualifying + ticker_to_cik_unresolved typed skip + **§(b) acceptance gate drops + counter increments** + §(h) end-to-end (amended row's shares win) + ambiguous accession (>1 .xml) → data_unavailable skip with filenames in detail + CIK map fetch throw → outcome=failed/failure_reason + daily-index throw → outcome=failed with date in failure_reason + empty universe → failed/empty_universe + persistence error → failed + determinism + as_of_date slice. |
+| **§(b) acceptance gate** | Acceptance threading occurs at step 5 (BEFORE the Form-4 XML fetch), so not-yet-knowable accessions consume one accession-index call but ZERO Form-4 XML calls (call-budget hygiene). The result's `not_yet_knowable_excluded` counter is a non-per-ticker counter; per-ticker skips remain authoritative for the sparse-profile surface. |
+| **§(h) preference** | Implemented in `preferMostRecentAccession` (exported for test isolation). Dedup key `(issuer_cik, owner_cik, transaction_date, transaction_seq)`; tiebreak = highest `acceptance_datetime` (ISO 8601 UTC lex-sorts correctly). Form 4 vs 4/A is symmetric — the parser+seam don't distinguish; §(h) is the single restate-collision resolver. |
+| **Rate-limit authority** | The 5 rps `TokenBucket` is wired in the handler (`longshort-insider-compute{,-manual}/index.ts`) — `new TokenBucket({ ratePerSec: DEFAULT_EDGAR_RPS })` — and injected via `ctx.bucket`. The orchestrator is the single boundary that gates BOTH the accession-index GET and the Form-4 XML GET on this bucket; CIK-map (1/fire) and daily-index (~91/fire) are intentionally NOT bucket-gated (well under the SEC fair-access cap). |
+| **Wall-clock** | All timestamps derive from the injected `as_of` (DEC-034 clause 4). The bucket's pacer is operational rate-limiting (parallel to `_shared/rate-limit.ts:73`), explicitly carved out of the kernel ban. |
+| **Cadence** | Daily after-close via cron schedule `0 19 * * 1-5` (MIG-077) — DEC-048 cadence re-evaluation tracked at FP-050 Phase 3. Signal #4 STAYS DISARMED through the rest of the FP-050 ladder until its own validated arm-up. |
+| **Added by** | FP-042 (original); FP-050 Phase 2 EDGAR rewiring (current) |
 
 #### `supabase/functions/longshort-insider-compute/index.ts`
 
 | Field | Value |
 |---|---|
-| **Module** | longshort (FP-042) |
-| **Classification** | edge function — daily-cadence cron handler for Signal #4. Mirror of `longshort-short-interest-compute/index.ts`. DISARMED-at-creation per MIG-077 (`enabled=false`); enable-flip + cron-wiring are a separate operator-run step gated on DEC-043 attestation. |
+| **Module** | longshort (FP-042 + FP-050 Phase 2 rewiring) |
+| **Classification** | edge function — daily-cadence cron handler for Signal #4. DISARMED-at-creation per MIG-077; enable-flip + cron-wiring are a separate operator-run step gated on DEC-043 attestation. |
 | **Trigger** | `verifyCronSecret` (X-Cron-Secret header); registered in `job_registry` as `longshort.insider.compute` via MIG-077 (`enabled=false`, schedule `'0 19 * * 1-5'`). |
-| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `POLYGON_API_KEY` check → build `InsiderOrchestratorContext` (3 fetchers) → `createInsiderOrchestrator(ctx).run(as_of)` → `persistSignalComputeLog` → `.started`/`.completed`/`.failed` audit events. |
+| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `POLYGON_API_KEY` + `EDGAR_CONTACT_EMAIL` checks (structured `polygon_api_key_unset` / `edgar_contact_email_unset` errors) → build `InsiderOrchestratorContext` (EDGAR pipeline: `EdgarCikMapper` + `EdgarDailyIndexFetcher` + `EdgarAccessionIndexFetcher` + `EdgarForm4Fetcher`; 5-rps `TokenBucket`; Polygon shares + price for market-cap denominator) → `createInsiderOrchestrator(ctx).run(as_of)` → `persistSignalComputeLog` → `.started`/`.completed`/`.failed` audit events. |
 | **File** | `supabase/functions/longshort-insider-compute/index.ts` |
-| **Tests** | `index_test.ts` — 7 source-sentinel tests (cron auth wired + auth-first ordering + wall-clock discipline + POLYGON_API_KEY + 3-fetcher orchestrator wiring + no-short-interest-fetcher leak + persist-helper + 3 audit events). |
-| **Added by** | FP-042 |
+| **Tests** | `index_test.ts` — 7 source-sentinel tests: cron auth wired + auth-first ordering + wall-clock discipline + POLYGON_API_KEY + EDGAR_CONTACT_EMAIL checks + EDGAR pipeline + TokenBucket + Polygon side-inputs wiring + no-PolygonForm4Fetcher leak + no-short-interest-fetcher leak + persist-helper + 3 audit events. |
+| **Added by** | FP-042 (original); FP-050 Phase 2 (rewiring) |
 
 #### `supabase/functions/longshort-insider-compute-manual/index.ts`
 
 | Field | Value |
 |---|---|
-| **Module** | longshort (FP-042) |
+| **Module** | longshort (FP-042 + FP-050 Phase 2 rewiring) |
 | **Classification** | edge function — operator-trigger sibling of `longshort-insider-compute`. Recommended path for validating Signal #4 math + persistence + the sparse-expected profile before any cron wiring (per DEC-043 prudent-sequencing). |
 | **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST with `{ "as_of": "YYYY-MM-DD" }` body. Does NOT register in `job_registry`. 405 on non-POST. |
-| **Pipeline** | auth → perm → body validation (`parseAsOfDate`) → future-`as_of` rejection via `productionClock` comparison → `POLYGON_API_KEY` check → `.manual_triggered` audit BEFORE → orchestrator → `persistSignalComputeLog` → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
+| **Pipeline** | auth → perm → body validation (`parseAsOfDate`) → future-`as_of` rejection via `productionClock` comparison → `POLYGON_API_KEY` + `EDGAR_CONTACT_EMAIL` checks → `.manual_triggered` audit BEFORE → orchestrator (EDGAR pipeline + 5-rps TokenBucket + Polygon side-inputs) → `persistSignalComputeLog` → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
 | **File** | `supabase/functions/longshort-insider-compute-manual/index.ts` |
-| **Tests** | `index_test.ts` — 9 source-sentinel tests (auth + permission + POST-only + body validation + parser + POLYGON_API_KEY + dual audit envelope ordering + wall-clock + 3-fetcher orchestrator wiring + no-short-interest-fetcher leak). |
-| **Added by** | FP-042 |
+| **Tests** | `index_test.ts` — 9 source-sentinel tests: auth + permission + POST-only + body validation + parser + POLYGON_API_KEY + EDGAR_CONTACT_EMAIL checks + dual audit envelope ordering + wall-clock + EDGAR pipeline + TokenBucket + Polygon side-inputs wiring + no-PolygonForm4Fetcher leak + no-short-interest-fetcher leak. |
+| **Added by** | FP-042 (original); FP-050 Phase 2 (rewiring) |
 
 ### FP-043 — Signal #3 (Options Flow Imbalance) shared functions
 
