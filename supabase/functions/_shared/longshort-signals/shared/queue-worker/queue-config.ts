@@ -187,6 +187,87 @@ export function isFeedMode(cfg: QueueSignalConfig): boolean {
   return cfg.mode === 'sequential-feed';
 }
 
+/** Discriminator helper — work-list mode (FP-050 Phase 3.6a). */
+export function isWorkListMode(cfg: QueueSignalConfig): boolean {
+  return cfg.mode === 'work-list';
+}
+
+/** A pre-enumerated, opaque-to-engine work item (FP-050 Phase 3.6a). */
+export interface WorkListItem {
+  /**
+   * Stable item identifier — used as the synthetic-ticker cursor key.
+   * MUST be unique within the run, deterministic across re-seeds, and
+   * ORDER-COMPATIBLE with lexicographic ticker sort (drains in lex order
+   * — Q2: replay-safe is the property that matters). For insider: the
+   * EDGAR accession_number (already lex-sortable).
+   */
+  id: string;
+  /**
+   * Opaque consumer payload threaded through `processItem` unchanged.
+   * Engine MUST NOT introspect this — semantics live in the consumer.
+   */
+  payload: Readonly<Record<string, unknown>>;
+}
+
+export type WorkListItemResult =
+  | { kind: 'processed' }
+  | { kind: 'permanent_skip'; reason: SignalSkipReason; detail: string };
+
+/**
+ * Seeds the run's work list. THROW = fail-loud init failure
+ * (`failure_reason='seed_failed: <masked verbatim>'`, never half-seeded
+ * — Q5). A successfully-computed empty array is a VALID run that
+ * proceeds directly to finalize (Q5 distinction: empty seed ≠ no-op —
+ * for insider an empty filing day still reads the 90-day window).
+ */
+export type WorkListSeedFn = (args: {
+  asOf: Date;
+}) => Promise<ReadonlyArray<WorkListItem>>;
+
+/**
+ * Process one work item. Return-vs-throw discipline encodes Q3:
+ *   • `{kind:'processed'}`      → success; engine deletes cursor row.
+ *   • `{kind:'permanent_skip'}` → typed-permanent (zero-or-many-primary,
+ *     malformed XML, 404 — honestly dead, retry pointless); engine
+ *     deletes cursor row AND writes a `signal_queue_skips` row with
+ *     item-scope marker (Q4).
+ *   • THROW                     → transient (network, 5xx, 429); engine
+ *     leaves the cursor row for natural retry, counts `item_retries`.
+ *
+ * Consumers MUST persist successful work into their own private table
+ * BEFORE returning `{kind:'processed'}` so the CAS barrier (Q1) holds:
+ * process → upsert → engine-delete cursor row.
+ */
+export type WorkListProcessItemFn = (args: {
+  item: WorkListItem;
+  asOf: Date;
+}) => Promise<WorkListItemResult>;
+
+/**
+ * Finalize-time aggregator. Reads from the consumer-private persistence
+ * table over its window and returns one result per universe ticker. The
+ * engine persists these to `signal_queue_staging` exactly as in
+ * per-ticker mode — mass balance (839 = values + typed skips) is the
+ * CONSUMER's responsibility (Q4: two ledgers, two scopes). Pure: no I/O
+ * timestamps, no clock — `asOf` is injected.
+ */
+export type WorkListLoadAndComputeFn = (args: {
+  asOf: Date;
+}) => Promise<ReadonlyArray<{
+  ticker: string;
+  gicsSector: string | null;
+  result: TickerComputeResult;
+}>>;
+
+/**
+ * Heartbeat granularity for work-list mode (Q2 ruling): emit at slice
+ * entry AND every N processed items. 25 ≈ 10s of paced work at 2 calls
+ * per item (5 rps) — frequent enough that no sweeper threshold can
+ * starve mid-slice, sparse enough not to spam. Exported so slice-worker
+ * tests can assert against the named constant.
+ */
+export const WORK_LIST_HEARTBEAT_ITEM_INTERVAL = 25;
+
 export class QueueConfigRegistry {
   private readonly map = new Map<string, QueueSignalConfig>();
 
