@@ -274,13 +274,13 @@ Deno.test('(10) §(d) look-ahead gate drops future-dated rows + counts them', as
   assertEquals(out.rows[0].ticker, 'AAPL');
 });
 
-Deno.test('(11) §(f) trading-day floor trims rows older than window_start_at (over-fetched 7-day window)', async () => {
+Deno.test('(11) §(f) trading-day floor trims rows older than window_start_at (over-fetched 10-day window)', async () => {
   let call = 0;
   const f = new PolygonNewsKeywordFetcher('k', async () => {
     call += 1;
     if (call === 1) {
       return newsPage([
-        // Inside 7-day calendar lookback but BEFORE the 5-trading-day
+        // Inside 10-day calendar lookback but BEFORE the 5-trading-day
         // window_start_at — must be trimmed client-side here.
         {
           id: 'a11a',
