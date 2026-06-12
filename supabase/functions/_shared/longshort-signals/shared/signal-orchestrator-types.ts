@@ -37,4 +37,15 @@ export interface SignalOrchestratorResult {
   failure_reason?: string;     // populated when outcome='failed'
   started_at: string;          // ISO timestamp (orchestrator telemetry; not signal value)
   completed_at: string;        // ISO timestamp
+  /**
+   * FP-050 Phase 2 / DEC-058 §(b) — count of Form-4 ACCESSIONS dropped
+   * because their `acceptance_datetime` was strictly greater than `as_of`
+   * (i.e., the transaction was not knowable at the as_of cutoff). NOT a
+   * per-ticker skip — multiple accessions for the same ticker may be
+   * gated; the per-ticker no_qualifying_transactions skip is a separate,
+   * downstream surface. Optional: only the insider-transactions
+   * orchestrator populates this for v1; other signals leave it
+   * undefined (no field-shape pressure on other signals).
+   */
+  not_yet_knowable_excluded?: number;
 }

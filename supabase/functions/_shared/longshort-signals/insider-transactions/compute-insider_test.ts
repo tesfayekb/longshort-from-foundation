@@ -10,7 +10,7 @@ import {
   filterQualifyingTransactions,
   ROLE_TIER_SOURCE,
 } from './compute-insider.ts';
-import type { Form4Row } from '../shared/polygon-form4-fetcher.ts';
+import type { Form4Row } from './form4-row-types.ts';
 
 const AS_OF = new Date('2026-06-08T00:00:00Z');
 const ONE_BILLION = 1_000_000_000;
