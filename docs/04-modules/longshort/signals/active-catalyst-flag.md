@@ -94,7 +94,9 @@ No sentinel numerics anywhere. Mass balance: `|persisted| + |skips| = |universe|
 
 ## 9. Audit meta (catalyst_meta — emitted on `.completed` / `.manual_completed`)
 
-`{ total_event_count, by_tier:{1,2,3}, keyword_source_count, cross_vendor_duplicates_dropped, future_event_excluded, verb_gate_drops, numeric_gate_drops, declaration_date_unavailable, tradier_fallback_invoked, vendor_unavailable:{fmp_earnings, fmp_ma, fmp_grades, polygon_splits, polygon_dividends, polygon_news_keyword, finnhub_fda} }`. Carried in `writeStrategyAuditEvent.metadata.catalyst_meta`; not persisted in `signal_compute_log` (no jsonb metadata column at v1).
+`{ total_event_count, by_tier:{1,2,3}, keyword_source_count, cross_vendor_duplicates_dropped, future_event_excluded, verb_gate_drops, numeric_gate_drops, articles_scanned, declaration_date_unavailable, tradier_fallback_invoked, vendor_unavailable:{fmp_earnings, fmp_ma, fmp_grades, polygon_splits, polygon_dividends, polygon_news_keyword, finnhub_fda} }`. Carried in `writeStrategyAuditEvent.metadata.catalyst_meta`; not persisted in `signal_compute_log` (no jsonb metadata column at v1).
+
+**INC-75 stage-aggregation rule (ACT-179).** `verb_gate_drops` and `numeric_gate_drops` AGGREGATE two stages: (a) the Polygon news-keyword **fetcher** stage (real PRE-gate volume — `matchKeywordEvent` runs inline at fetch time and the fetcher now returns its drop counts on the `CatalystFetchResult` events shape) plus (b) the `classifyCatalystEvents` **classifier** stage (defence-in-depth — structurally 0 at v1 because the orchestrator routes pre-classified news rows through `structured` with `news=[]`, retained as a contract surface for any future code path that does feed news through the classifier). `articles_scanned` is the PRE-gate denominator from the fetcher (non-empty-text articles seen); `FPR = (verb_gate_drops + numeric_gate_drops) / articles_scanned` is computable from the meta envelope alone. Without this aggregation the surface read structural-zero across the entire universe — see INC-75 for the source-trace.
 
 ## 10. Wall-clock discipline (DEC-034 clause 4, d066c890 pattern)
 

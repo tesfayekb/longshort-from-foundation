@@ -356,3 +356,81 @@ Deno.test('(15) constructor throws on missing apiKey', () => {
   }
   assert(threw);
 });
+
+/*
+ * (16) INC-75 regression — fetcher-stage gate-drop telemetry.
+ *
+ * Stage-mismatched instrumentation: gate-drop counters were previously
+ * incremented only inside `classifyCatalystEvents`, which the news path
+ * never reached (the fetcher pre-filters via `matchKeywordEvent`).
+ * `catalyst_meta.{verb_gate_drops,numeric_gate_drops}` therefore read
+ * STRUCTURALLY 0 — a clean-FPR mirage masquerading as healthy noise.
+ *
+ * Fixture: 5 articles → 2 matchable (1 executive_change true-positive +
+ * 1 guidance true-positive with numeric) + 2 noun-only verb-gate
+ * failures (executive_change + partnership where "partnership" contains
+ * the substring "partners" but no verb is present) + 1 guidance
+ * numeric-gate failure (noun + verb, no numeric token). Expected:
+ *
+ *   rows.length === 2 (the two true-positives)
+ *   articles_scanned === 5
+ *   verb_gate_drops === 2
+ *   numeric_gate_drops === 1
+ */
+Deno.test('(16) INC-75 fetcher-stage gate-drop telemetry — drops + scanned surfaced', async () => {
+  let call = 0;
+  const f = new PolygonNewsKeywordFetcher('k', async () => {
+    call += 1;
+    if (call === 1) {
+      return newsPage([
+        // True-positive #1 — executive_change (noun + verb)
+        {
+          id: 'b1',
+          tickers: ['AAPL'],
+          published_utc: '2026-06-09T14:00:00Z',
+          title: 'Acme appoints new CEO',
+          description: 'Board names industry veteran as chief executive.',
+        },
+        // True-positive #2 — guidance (noun + verb + numeric)
+        {
+          id: 'b2',
+          tickers: ['NVDA'],
+          published_utc: '2026-06-09T15:00:00Z',
+          title: 'NVDA raises 2026 guidance',
+          description: 'Outlook raised to $4.5B revenue.',
+        },
+        // Verb-gate fail #1 — executive_change noun, no verb
+        {
+          id: 'b3',
+          tickers: ['AAPL'],
+          published_utc: '2026-06-09T15:30:00Z',
+          title: 'CEO speaks at industry conference',
+          description: 'Routine keynote remarks; no leadership change.',
+        },
+        // Verb-gate fail #2 — partnership noun, no verb (partners-substring trap)
+        {
+          id: 'b4',
+          tickers: ['MSFT'],
+          published_utc: '2026-06-09T16:00:00Z',
+          title: 'Existing partnership continues into next quarter',
+          description: 'No new agreement; routine continuation only.',
+        },
+        // Numeric-gate fail — guidance noun + verb, no numeric token
+        {
+          id: 'b5',
+          tickers: ['TSLA'],
+          published_utc: '2026-06-09T17:00:00Z',
+          title: 'TSLA raises long-term guidance',
+          description: 'Outlook raised qualitatively.',
+        },
+      ]);
+    }
+    return ENDPAGE;
+  });
+  const out = await f.fetch(WINDOW);
+  if (out.kind !== 'events') throw new Error('unreachable');
+  assertEquals(out.rows.length, 2);
+  assertEquals(out.articles_scanned, 5);
+  assertEquals(out.verb_gate_drops, 2);
+  assertEquals(out.numeric_gate_drops, 1);
+});

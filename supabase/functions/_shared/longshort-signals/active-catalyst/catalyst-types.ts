@@ -91,6 +91,24 @@ export type CatalystFetchResult =
       future_event_excluded: number;
       /** §(e)-only counter for the dividends fetcher; 0 elsewhere. */
       declaration_date_unavailable?: number;
+      /**
+       * §(b) keyword-fetcher-stage gate-drop counters. Populated only by
+       * `PolygonNewsKeywordFetcher` (the only fetcher that runs the
+       * keyword + verb gate at its own fetch stage); other fetchers
+       * leave these undefined. The orchestrator AGGREGATES these into
+       * `catalyst_meta.{verb_gate_drops,numeric_gate_drops}` together
+       * with the classifier-stage counters (defence-in-depth) so the
+       * meta surface measures the true PRE-gate volume — INC-75 fix.
+       */
+      verb_gate_drops?: number;
+      numeric_gate_drops?: number;
+      /**
+       * §(b) PRE-gate article count seen at the fetcher stage. Only
+       * `PolygonNewsKeywordFetcher` populates this; FPR is computable
+       * as `(verb_gate_drops + numeric_gate_drops) / articles_scanned`.
+       * INC-75 fix.
+       */
+      articles_scanned?: number;
     }
   | {
       kind: 'unavailable';
