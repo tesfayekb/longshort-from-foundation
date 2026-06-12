@@ -112,15 +112,23 @@ const GATES: readonly GateSpec[] = [
  * footnote — both of which look passable but carry zero gate-pass
  * information, exactly the substitution shape #41 was created to prevent.
  */
+/** Strip ANSI SGR escape codes so attested lines paste cleanly into markdown. */
+function stripAnsi(s: string): string {
+  // ESC [ ... letter — matches the SGR family Deno's test runner emits.
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+}
+
 function extractFinalLine(combined: string, canonical?: RegExp): string {
+  const clean = stripAnsi(combined);
   if (canonical) {
-    const lines = combined.split(/\r?\n/);
+    const lines = clean.split(/\r?\n/);
     for (let i = lines.length - 1; i >= 0; i--) {
       const trimmed = lines[i].trimEnd();
       if (canonical.test(trimmed)) return trimmed;
     }
   }
-  const lines = combined.split(/\r?\n/);
+  const lines = clean.split(/\r?\n/);
   for (let i = lines.length - 1; i >= 0; i--) {
     const trimmed = lines[i].trimEnd();
     if (trimmed.length > 0) return trimmed;

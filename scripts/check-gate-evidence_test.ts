@@ -62,6 +62,12 @@ Deno.test('extractFinalLine — falls back to last non-empty when regex matches 
   assertEquals(extractFinalLine('foo\nbar\n', /no-match/), 'bar');
 });
 
+Deno.test('extractFinalLine — strips ANSI SGR escape codes from captured line', () => {
+  const raw = '\x1b[32mok\x1b[0m | 985 passed | 0 failed \x1b[38;5;245m(29s)\x1b[0m';
+  const denoSummary = /^(ok|FAILED)\s*\|\s*\d+\s+passed\s*\|\s*\d+\s+failed/;
+  assertEquals(extractFinalLine(raw, denoSummary), 'ok | 985 passed | 0 failed (29s)');
+});
+
 Deno.test('GATES — exactly three canonical gates in fixed order', () => {
   assertEquals(GATES.length, 3);
   assertEquals(GATES[0].index, 1);
