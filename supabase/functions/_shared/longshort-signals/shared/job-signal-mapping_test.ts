@@ -18,7 +18,7 @@ import {
 import { SIGNAL_ID as MOMENTUM_SIGNAL_ID } from '../cross-sectional-momentum/momentum-orchestrator.ts';
 import { SIGNAL_ID as REVERSAL_SIGNAL_ID } from '../short-term-reversal/reversal-orchestrator.ts';
 import { SIGNAL_ID as SHORT_INTEREST_SIGNAL_ID } from '../short-interest-change/short-interest-orchestrator.ts';
-import { SIGNAL_ID as INSIDER_SIGNAL_ID } from '../insider-transactions/insider-orchestrator.ts';
+import { SIGNAL_ID as INSIDER_SIGNAL_ID } from '../insider-transactions/insider-load-and-compute.ts';
 import { SIGNAL_ID as OPTIONS_FLOW_SIGNAL_ID } from '../options-flow/options-flow-orchestrator.ts';
 import { SIGNAL_ID as PEAD_SIGNAL_ID } from '../pead/pead-orchestrator.ts';
 import { SIGNAL_ID as ANALYST_SIGNAL_ID } from '../analyst-revisions/analyst-revision-orchestrator.ts';
@@ -64,12 +64,15 @@ Deno.test('(2c) mapping value matches short-interest-orchestrator SIGNAL_ID expo
   assertEquals(SHORT_INTEREST_SIGNAL_ID, 'short_interest_change_30d');
 });
 
-Deno.test('(2d) mapping value matches insider-orchestrator SIGNAL_ID export (cross-reference)', () => {
-  // Drift sentinel for Signal #4 (FP-042).
+Deno.test('(2d) mapping value matches insider-load-and-compute SIGNAL_ID export (cross-reference)', () => {
+  // Drift sentinel for Signal #4. SIGNAL_ID was lifted from the now-
+  // deleted `insider-orchestrator.ts` to `insider-load-and-compute.ts`
+  // in FP-050 Phase 3.6b.ii″ (ACT-192) verbatim; the assertion is
+  // unchanged.
   assertEquals(
     JOB_ID_TO_SIGNAL_ID['longshort.insider.compute'],
     INSIDER_SIGNAL_ID,
-    'JOB_ID_TO_SIGNAL_ID insider entry decoupled from insider-orchestrator SIGNAL_ID',
+    'JOB_ID_TO_SIGNAL_ID insider entry decoupled from insider-load-and-compute SIGNAL_ID',
   );
   assertEquals(INSIDER_SIGNAL_ID, 'insider_transactions_90d');
 });

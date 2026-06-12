@@ -1,159 +1,50 @@
 /**
- * longshort-insider-compute — daily insider-transactions compute cron handler.
- * FP-042 / Signal #4 / Phase 2.4.
+ * longshort-insider-compute — Signal #4 daily cron handler.
  *
- * Mirror of `longshort-short-interest-compute/index.ts`. Differences:
- *   - Uses `createInsiderOrchestrator` + EDGAR pipeline
- *     (`EdgarCikMapper` + `EdgarDailyIndexFetcher` +
- *     `EdgarAccessionIndexFetcher` + `EdgarForm4Fetcher`) gated by a
- *     5-rps `TokenBucket`, plus `PolygonSharesOutstandingFetcher` +
- *     `PolygonPriceHistoryFetcher` for the market-cap denominator
- *     (FP-050 Phase 2 EDGAR rewiring — DW-094 discharge).
- *   - Daily cadence (v1) per FP-042 (30-min intraday polling is future
- *     refinement noted in spec §4.4.4 "cadence"; daily-after-close is
- *     sufficient for v1 — disarmed seed).
- *   - Audit event family: `longshort.insider.compute.{started,completed,failed}`.
- *   - NON-CRITICAL signal with SPARSE expected profile — most names
- *     `is_present=0` (no qualifying insider trades in 90d). That is the
- *     normal, healthy state, NOT a failure.
+ * FP-050 Phase 3.6b.ii prime-prime INTENTIONAL-STUB WINDOW. The
+ * Phase-2 single-invocation EDGAR-pipeline orchestrator was deleted in
+ * this commit because its measured per-fire wall-clock (~11 min for
+ * ~1,667 in-universe Form-4 accessions/day at the 5-rps SEC fair-
+ * access cap) exceeds both the queue-slice and edge-function timeouts.
+ * See the insider-transactions module doc for the architectural
+ * rationale and the closure pointer to 3.6b.iii prime.
  *
- * Auth: cron-only path — `verifyCronSecret` against `X-Cron-Secret`.
- * Disarmed at creation: MIG-077 ships `job_registry` row with
- * `enabled=false`. Cron wiring + enable-flip is a separate DEC-043 step.
+ * Replacement architecture: the FP-045 work-list engine drains the
+ * accession sweep across queue slices (producer = the work-list
+ * registration landing in 3.6b.iii prime), persists per-accession rows
+ * into the `insider_form4_rows` table (MIG-094 + MIG-095), and the
+ * load+compute consumer at `insider-load-and-compute.ts` (this commit)
+ * reads the 90-day window at finalize.
  *
- * Owner: longshort (FP-042 — Signal #4)
+ * Window state (3.6b.ii prime-prime to 3.6b.iii prime): no producer is
+ * wired yet, so the compute consumer has no rows to read. Rather than
+ * ship a half-wired path that would silently return outcome=completed
+ * with persisted_count=0 (the exact phantom-firehose shape INC-70
+ * exists to forbid), this handler fails LOUD with HTTP 503 +
+ * `insider_compute_pending_queue_rewire`. The cron-auth guard fires
+ * FIRST so unauthenticated callers still see 401, preserving the
+ * pre-stub auth surface for the sentinel tests.
+ *
+ * Closure pointer: 3.6b.iii prime replaces this handler body with the
+ * queue-init shim (the news-handler pattern). Signal #4 stays DISARMED
+ * in `job_registry` throughout; no cron entry exists at `15 21 * * 1-5`
+ * pre-arm-up so the 503 is structurally unreachable in production
+ * (operator-applied `cron.job` lands at Phase-4 arm-up only).
+ *
+ * Owner: longshort (FP-050 Phase 3.6b.ii prime-prime intentional-stub window)
  */
-import { createHandler, apiSuccess } from '../_shared/handler.ts';
+import { createHandler } from '../_shared/handler.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
 import { apiError } from '../_shared/api-error.ts';
-import { productionClock } from '../_shared/longshort-clock.ts';
-import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
-import { supabaseAdmin } from '../_shared/supabase-admin.ts';
-import { PolygonSharesOutstandingFetcher } from '../_shared/longshort-signals/shared/polygon-shares-outstanding-fetcher.ts';
-import { PolygonPriceHistoryFetcher } from '../_shared/longshort-signals/shared/polygon-price-history-fetcher.ts';
-import { EdgarCikMapper } from '../_shared/longshort-signals/insider-transactions/edgar-cik-mapper.ts';
-import { EdgarDailyIndexFetcher } from '../_shared/longshort-signals/insider-transactions/edgar-daily-index-fetcher.ts';
-import { EdgarAccessionIndexFetcher } from '../_shared/longshort-signals/insider-transactions/edgar-accession-index-fetcher.ts';
-import { EdgarForm4Fetcher } from '../_shared/longshort-signals/insider-transactions/edgar-form4-fetcher.ts';
-import { TokenBucket } from '../_shared/longshort-signals/options-flow/token-bucket.ts';
-import {
-  createInsiderOrchestrator,
-  SIGNAL_ID,
-  DEFAULT_EDGAR_RPS,
-  type InsiderOrchestratorContext,
-} from '../_shared/longshort-signals/insider-transactions/insider-orchestrator.ts';
-import { aggregateSkipCounts, persistSignalComputeLog } from '../_shared/persist-signal-compute-log.ts';
-
-const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
-const DEFAULT_CONCURRENCY = 20;
 
 Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
 
+  // AUTH GUARD FIRST. Cron-secret rejection remains the pre-stub error
+  // surface — unauthenticated callers see 401, not the 503.
   const cronAuthError = verifyCronSecret(req);
   if (cronAuthError) return cronAuthError;
 
-  const as_of = productionClock.getWallClockTs();
-
-  const polygonApiKey = Deno.env.get('POLYGON_API_KEY');
-  if (!polygonApiKey) {
-    return apiError(500, 'polygon_api_key_unset', { correlationId });
-  }
-  const edgarContactEmail = Deno.env.get('EDGAR_CONTACT_EMAIL');
-  if (!edgarContactEmail) {
-    return apiError(500, 'edgar_contact_email_unset', { correlationId });
-  }
-
-  // KEEP IN SYNC with longshort-insider-compute-manual/index.ts.
-  const ctx: InsiderOrchestratorContext = {
-    supabase: supabaseAdmin,
-    cikMapper: new EdgarCikMapper(edgarContactEmail),
-    dailyIndex: new EdgarDailyIndexFetcher(edgarContactEmail),
-    accessionIndex: new EdgarAccessionIndexFetcher(edgarContactEmail),
-    form4Edgar: new EdgarForm4Fetcher(edgarContactEmail),
-    sharesOutstanding: new PolygonSharesOutstandingFetcher(polygonApiKey),
-    priceHistory: new PolygonPriceHistoryFetcher(polygonApiKey),
-    bucket: new TokenBucket({ ratePerSec: DEFAULT_EDGAR_RPS }),
-    operator_id: DEFAULT_OPERATOR_ID,
-    concurrency: DEFAULT_CONCURRENCY,
-  };
-
-  await writeStrategyAuditEvent({
-    strategyKey: 'longshort',
-    action: 'longshort.insider.compute.started',
-    correlationId,
-    metadata: { as_of: as_of.toISOString(), signal_id: SIGNAL_ID, trigger: 'cron' },
-  });
-
-  try {
-    const orch = createInsiderOrchestrator(ctx);
-    const result = await orch.run(as_of);
-
-    const { run_id, persist_error } = await persistSignalComputeLog(
-      supabaseAdmin,
-      result,
-      DEFAULT_OPERATOR_ID,
-    );
-    if (persist_error) {
-      await writeStrategyAuditEvent({
-        strategyKey: 'longshort',
-        action: 'longshort.insider.compute.failed',
-        correlationId,
-        metadata: {
-          signal_id: SIGNAL_ID,
-          as_of: as_of.toISOString(),
-          error: persist_error.message,
-          stage: 'signal_compute_log_persist',
-          trigger: 'cron',
-        },
-      });
-      return apiError(500, 'signal_compute_log_persist_failed', { correlationId });
-    }
-
-    await writeStrategyAuditEvent({
-      strategyKey: 'longshort',
-      action:
-        result.outcome === 'completed'
-          ? 'longshort.insider.compute.completed'
-          : 'longshort.insider.compute.failed',
-      correlationId,
-      metadata: {
-        signal_id: SIGNAL_ID,
-        as_of: as_of.toISOString(),
-        run_id,
-        outcome: result.outcome,
-        universe_size: result.universe_size,
-        persisted_count: result.persisted_count,
-        skip_counts: aggregateSkipCounts(result.skipped),
-        failure_reason: result.failure_reason,
-        trigger: 'cron',
-      },
-    });
-
-    return apiSuccess({
-      status: 'ok',
-      run_id,
-      signal_id: SIGNAL_ID,
-      as_of_date: result.as_of_date,
-      outcome: result.outcome,
-      universe_size: result.universe_size,
-      persisted_count: result.persisted_count,
-      skip_counts: aggregateSkipCounts(result.skipped),
-      correlation_id: correlationId,
-    });
-  } catch (e) {
-    await writeStrategyAuditEvent({
-      strategyKey: 'longshort',
-      action: 'longshort.insider.compute.failed',
-      correlationId,
-      metadata: {
-        signal_id: SIGNAL_ID,
-        as_of: as_of.toISOString(),
-        error: e instanceof Error ? e.message : String(e),
-        stage: 'orchestrator_throw',
-        trigger: 'cron',
-      },
-    });
-    return apiError(500, 'insider_compute_failed', { correlationId });
-  }
+  // Intentional-stub: producer (work-list registration) lands in 3.6b.iii′.
+  return apiError(503, 'insider_compute_pending_queue_rewire', { correlationId });
 }));

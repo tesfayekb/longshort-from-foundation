@@ -1,7 +1,16 @@
 /**
  * form4-row-types.ts — Form 4 row-shape contract consumed by the
  * insider-transactions compute layer (`compute-insider.ts`) and produced
- * by the EDGAR seam mapper in `insider-orchestrator.ts`.
+ * by the seam mapper in `insider-load-and-compute.ts`
+ * (`mapInsiderRowToForm4Row`, FP-050 Phase 3.6b.ii″).
+ *
+ * Historical citation (preserved per Rule 8): prior to FP-050 Phase
+ * 3.6b.ii″, the producer was the EDGAR seam mapper in
+ * `insider-orchestrator.ts` (`mapEdgarRowToForm4Row`). That orchestrator
+ * file was deleted in ACT-192 along with its in-line EDGAR fetch loop;
+ * the seam mapper relocated to `insider-load-and-compute.ts` and
+ * re-rooted on the persisted `insider_form4_rows` table (work-list
+ * producer landing in 3.6b.iii′).
  *
  * PROVENANCE (FP-050 Phase 2 / DW-094 deletion):
  *   The `Form4Row` interface was extracted VERBATIM (byte-identical for
