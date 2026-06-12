@@ -344,3 +344,32 @@ await supabase.from('insider_form4_rows').upsert(rows, {
 ```
 
 Any other tuple either fabricates an index (runtime failure) or shifts the idempotency contract silently. The `owner_cik` column lands on every upserted row (MIG-095 `NOT NULL`); the M1 parser hardening guarantees no empty-string sentinel ever reaches the upsert.
+
+## FP-050 Phase 3.6b.iii′ γ commit-1 (ACT-195, 2026-06-12) — producer module landed
+
+**File:** `supabase/functions/_shared/longshort-signals/insider-transactions/insider-work-list-registration.ts` (+ companion `_test.ts`, 21 tests). Conforms to the ACT-193 crosswalk + M1-M5 rulings + the ACT-194 Rule-8 M4 RE-RULE corrected band.
+
+**Surface (factory):** `createInsiderWorkListConfig(deps, mode)` returns a registry-ready `QueueSignalConfig`. `mode: 'daily' | 'backfill'` selects the seed strategy; same `signalId` (`insider_transactions_90d`), distinct `jobId` (`longshort.insider.compute` daily / `longshort.insider.compute.backfill` manual). γ commit-2 wires the cron and manual handlers.
+
+**accessionsPerSlice arithmetic row (drift-sentinel-pinned at `(A.1)`):** `itemsPerSlice = 50`; `callsPerItem = 2`; `ratePerSec = 5 × 0.85 = 4.25` (SEC fair-access half-share + FP-045 safety multiplier). Rate-bound per slice = `50 × 2 / 4.25 ≈ 23.5 s` paced + parser CPU + upsert wall ≈ 35-55 s end-to-end. 65-85 s headroom under the 120 s STOP gate; 95-115 s under the 150 s HTTP wall. Daily fire (M4 RE-RULE band): ~253 typical → 6 slices ≈ 3-6 min; ~352 measured-max → 8 slices ≈ 5-7 min. Backfill (~63 trading days × ~253 ≈ ~16k accessions) → 320 slices × 35-55 s ≈ **~3.1-4.9 hours** — fits the single overnight window with ~7-9 h headroom.
+
+**Q3 classification at each call site (typed-permanent vs transient):**
+
+| Layer | Outcome | Classification |
+|---|---|---|
+| accession `index.json` | 404 | `permanent_skip` `data_unavailable` |
+| accession `index.json` | ambiguous (0/>1 primary) | `permanent_skip` `no_primary_doc` (M2; INC-70 anti-heuristic) |
+| accession `index.json` | 429 | THROW (transient — cursor preserved) |
+| Form-4 XML | 404 | `permanent_skip` `data_unavailable` |
+| Form-4 XML | 429 | THROW (transient) |
+| Form-4 XML | `unparseable` (incl. absent `owner_cik` per M1) | `permanent_skip` `data_unavailable` |
+| upsert | Postgres error | THROW (transient) |
+| Form-4 XML | `rows: []` (derivative-only filing) | `processed` (no upsert, cursor deleted) |
+
+**Q1 barrier:** upsert completes BEFORE `{kind:'processed'}` is returned (verified by `(F.1)`/`(F.3)` ordering). MIG-095 dual-write enforced by passing `owner_cik` verbatim from the parser's `EdgarForm4Row` (the M1 hardening makes the empty-string sentinel unreachable; the producer carries a defensive throw should it ever fire).
+
+**`ingested_at` derivation (DEC-034 clause 4):** every upserted row carries `ingested_at: asOf.toISOString()` — derived from the engine-injected `asOf`, NOT the DB-side `now()` default. Replay-determinism preserved; verified at `(F.1)`.
+
+**STOP-with-partials surfacing (per the operator's "if migration sprawls, STOP" escape clause).** The `.run()` shim in `insider-load-and-compute.ts` and its 7 hand-computed fixtures (R1 different-owner regression, §(b) boundary pair, 839 mass-balance, ±√2/2 z-score) REMAIN at this commit. The shim's deletion + fixture migration to the `runStaged` seam is INTENTIONALLY deferred to a follow-up sub-commit (γ commit-1b or rolled into γ commit-2's handler rewiring, operator's choice). Reason: deleting `.run()` before γ commit-2 wires the handlers off it would break the existing 503-stubbed handler tests' compile fence; the no-corpses closure is held one window because the corpse is load-bearing temporarily. The new producer module is fully exercised by its own 21 tests; the staged seam is exercised end-to-end by `(H.1)`.
+
+**Cross-references:** ACT-193 (read-only crosswalk), ACT-194 (M1-M5 pre-work + Rule-8 M4 RE-RULE), ACT-195 (this entry).
