@@ -150,7 +150,7 @@ export interface QueueSignalConfig {
    * (or omitted only when defaulted) and surfaces a clear error on
    * cross-mode contamination.
    */
-  mode?: 'per-ticker' | 'sequential-feed';
+  mode?: 'per-ticker' | 'sequential-feed' | 'work-list';
   // ─── per-ticker mode fields (required when mode is per-ticker / unset) ───
   /** Drives the pre-flight arithmetic row. PEAD: 2. Options: 1. */
   callsPerName?: number;
@@ -180,12 +180,113 @@ export interface QueueSignalConfig {
   fetchPage?: FeedFetchPageFn;
   /** Per-universe-ticker aggregation (see {@link FeedComputeFromItemsFn}). */
   computeFromItems?: FeedComputeFromItemsFn;
+  // ─── work-list mode fields (required when mode='work-list') ────────────
+  /**
+   * Items claimed per slice-worker invocation (work-list analogue of
+   * `sliceSize` / `pagesPerSlice`). Chosen so
+   * `(itemsPerSlice × callsPerItem) / ratePerSec` fits well under the
+   * 150s HTTP wall. Insider: 50 × 2 / 5 = 20s paced + parse.
+   */
+  itemsPerSlice?: number;
+  /**
+   * Vendor calls per processed item — drives the pre-flight arithmetic
+   * row (work-list analogue of `callsPerName`). Insider: 2 (accession
+   * index.json + primary XML).
+   */
+  callsPerItem?: number;
+  /** Seeds the run's work list (see {@link WorkListSeedFn}). */
+  seedWorkItems?: WorkListSeedFn;
+  /** Per-item processor (see {@link WorkListProcessItemFn}). */
+  processItem?: WorkListProcessItemFn;
+  /** Finalize-time aggregator (see {@link WorkListLoadAndComputeFn}). */
+  loadAndCompute?: WorkListLoadAndComputeFn;
 }
 
 /** Discriminator helper — single point of truth for runtime branching. */
 export function isFeedMode(cfg: QueueSignalConfig): boolean {
   return cfg.mode === 'sequential-feed';
 }
+
+/** Discriminator helper — work-list mode (FP-050 Phase 3.6a). */
+export function isWorkListMode(cfg: QueueSignalConfig): boolean {
+  return cfg.mode === 'work-list';
+}
+
+/** A pre-enumerated, opaque-to-engine work item (FP-050 Phase 3.6a). */
+export interface WorkListItem {
+  /**
+   * Stable item identifier — used as the synthetic-ticker cursor key.
+   * MUST be unique within the run, deterministic across re-seeds, and
+   * ORDER-COMPATIBLE with lexicographic ticker sort (drains in lex order
+   * — Q2: replay-safe is the property that matters). For insider: the
+   * EDGAR accession_number (already lex-sortable).
+   */
+  id: string;
+  /**
+   * Opaque consumer payload threaded through `processItem` unchanged.
+   * Engine MUST NOT introspect this — semantics live in the consumer.
+   */
+  payload: Readonly<Record<string, unknown>>;
+}
+
+export type WorkListItemResult =
+  | { kind: 'processed' }
+  | { kind: 'permanent_skip'; reason: SignalSkipReason; detail: string };
+
+/**
+ * Seeds the run's work list. THROW = fail-loud init failure
+ * (`failure_reason='seed_failed: <masked verbatim>'`, never half-seeded
+ * — Q5). A successfully-computed empty array is a VALID run that
+ * proceeds directly to finalize (Q5 distinction: empty seed ≠ no-op —
+ * for insider an empty filing day still reads the 90-day window).
+ */
+export type WorkListSeedFn = (args: {
+  asOf: Date;
+}) => Promise<ReadonlyArray<WorkListItem>>;
+
+/**
+ * Process one work item. Return-vs-throw discipline encodes Q3:
+ *   • `{kind:'processed'}`      → success; engine deletes cursor row.
+ *   • `{kind:'permanent_skip'}` → typed-permanent (zero-or-many-primary,
+ *     malformed XML, 404 — honestly dead, retry pointless); engine
+ *     deletes cursor row AND writes a `signal_queue_skips` row with
+ *     item-scope marker (Q4).
+ *   • THROW                     → transient (network, 5xx, 429); engine
+ *     leaves the cursor row for natural retry, counts `item_retries`.
+ *
+ * Consumers MUST persist successful work into their own private table
+ * BEFORE returning `{kind:'processed'}` so the CAS barrier (Q1) holds:
+ * process → upsert → engine-delete cursor row.
+ */
+export type WorkListProcessItemFn = (args: {
+  item: WorkListItem;
+  asOf: Date;
+}) => Promise<WorkListItemResult>;
+
+/**
+ * Finalize-time aggregator. Reads from the consumer-private persistence
+ * table over its window and returns one result per universe ticker. The
+ * engine persists these to `signal_queue_staging` exactly as in
+ * per-ticker mode — mass balance (839 = values + typed skips) is the
+ * CONSUMER's responsibility (Q4: two ledgers, two scopes). Pure: no I/O
+ * timestamps, no clock — `asOf` is injected.
+ */
+export type WorkListLoadAndComputeFn = (args: {
+  asOf: Date;
+}) => Promise<ReadonlyArray<{
+  ticker: string;
+  gicsSector: string | null;
+  result: TickerComputeResult;
+}>>;
+
+/**
+ * Heartbeat granularity for work-list mode (Q2 ruling): emit at slice
+ * entry AND every N processed items. 25 ≈ 10s of paced work at 2 calls
+ * per item (5 rps) — frequent enough that no sweeper threshold can
+ * starve mid-slice, sparse enough not to spam. Exported so slice-worker
+ * tests can assert against the named constant.
+ */
+export const WORK_LIST_HEARTBEAT_ITEM_INTERVAL = 25;
 
 export class QueueConfigRegistry {
   private readonly map = new Map<string, QueueSignalConfig>();
@@ -236,12 +337,58 @@ function validateConfig(cfg: QueueSignalConfig): void {
   if (!Number.isInteger(cfg.stagingTtlSec) || cfg.stagingTtlSec <= 0) {
     throw new Error(`QueueSignalConfig[${cfg.signalId}]: stagingTtlSec must be > 0`);
   }
-  if (cfg.mode !== undefined && cfg.mode !== 'per-ticker' && cfg.mode !== 'sequential-feed') {
+  if (
+    cfg.mode !== undefined &&
+    cfg.mode !== 'per-ticker' &&
+    cfg.mode !== 'sequential-feed' &&
+    cfg.mode !== 'work-list'
+  ) {
     throw new Error(
-      `QueueSignalConfig[${cfg.signalId}]: mode must be 'per-ticker' or 'sequential-feed' (got ${String(cfg.mode)})`,
+      `QueueSignalConfig[${cfg.signalId}]: mode must be 'per-ticker', 'sequential-feed', or 'work-list' (got ${String(cfg.mode)})`,
     );
   }
-  if (isFeedMode(cfg)) {
+  if (isWorkListMode(cfg)) {
+    // work-list mode requires its own fields and FORBIDS both per-ticker
+    // AND feed-mode fields — cross-mode contamination is a config-time bug.
+    if (cfg.fetchAndCompute !== undefined) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: work-list mode must not set fetchAndCompute (per-ticker field)`,
+      );
+    }
+    if (cfg.sliceSize !== undefined) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: work-list mode must not set sliceSize (use itemsPerSlice)`,
+      );
+    }
+    if (cfg.callsPerName !== undefined) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: work-list mode must not set callsPerName (use callsPerItem)`,
+      );
+    }
+    if (
+      cfg.pagesPerSlice !== undefined || cfg.maxPages !== undefined ||
+      cfg.fetchPage !== undefined || cfg.computeFromItems !== undefined
+    ) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: work-list mode must not set feed-mode fields`,
+      );
+    }
+    if (!Number.isInteger(cfg.itemsPerSlice) || (cfg.itemsPerSlice as number) <= 0) {
+      throw new Error(`QueueSignalConfig[${cfg.signalId}]: itemsPerSlice must be a positive integer`);
+    }
+    if (!Number.isInteger(cfg.callsPerItem) || (cfg.callsPerItem as number) <= 0) {
+      throw new Error(`QueueSignalConfig[${cfg.signalId}]: callsPerItem must be a positive integer`);
+    }
+    if (typeof cfg.seedWorkItems !== 'function') {
+      throw new Error(`QueueSignalConfig[${cfg.signalId}]: seedWorkItems must be a function`);
+    }
+    if (typeof cfg.processItem !== 'function') {
+      throw new Error(`QueueSignalConfig[${cfg.signalId}]: processItem must be a function`);
+    }
+    if (typeof cfg.loadAndCompute !== 'function') {
+      throw new Error(`QueueSignalConfig[${cfg.signalId}]: loadAndCompute must be a function`);
+    }
+  } else if (isFeedMode(cfg)) {
     // Feed mode requires its own fields and FORBIDS the per-ticker ones —
     // cross-mode contamination is a config-time bug.
     if (cfg.fetchAndCompute !== undefined) {
@@ -257,6 +404,15 @@ function validateConfig(cfg: QueueSignalConfig): void {
     if (cfg.sliceSize !== undefined) {
       throw new Error(
         `QueueSignalConfig[${cfg.signalId}]: feed mode must not set sliceSize (pagesPerSlice is the per-slice bound)`,
+      );
+    }
+    if (
+      cfg.itemsPerSlice !== undefined || cfg.callsPerItem !== undefined ||
+      cfg.seedWorkItems !== undefined || cfg.processItem !== undefined ||
+      cfg.loadAndCompute !== undefined
+    ) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: feed mode must not set work-list fields`,
       );
     }
     if (!Number.isInteger(cfg.pagesPerSlice) || (cfg.pagesPerSlice as number) <= 0) {
@@ -286,6 +442,15 @@ function validateConfig(cfg: QueueSignalConfig): void {
         || cfg.fetchPage !== undefined || cfg.computeFromItems !== undefined) {
       throw new Error(
         `QueueSignalConfig[${cfg.signalId}]: per-ticker mode must not set feed-mode fields`,
+      );
+    }
+    if (
+      cfg.itemsPerSlice !== undefined || cfg.callsPerItem !== undefined ||
+      cfg.seedWorkItems !== undefined || cfg.processItem !== undefined ||
+      cfg.loadAndCompute !== undefined
+    ) {
+      throw new Error(
+        `QueueSignalConfig[${cfg.signalId}]: per-ticker mode must not set work-list fields`,
       );
     }
   }
