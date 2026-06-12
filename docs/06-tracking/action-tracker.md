@@ -1,6 +1,12 @@
 
 
 ### ACT-181: FP-050 Phase 0 — Signal #4 (Insider Transactions) EDGAR-rebuild history-recovery + vendor-shape audit (DOCS-ONLY; DEC-058 skeleton drafted UNRATIFIED)
+*** End Patch
+*** Begin Patch
+*** Update File: docs/06-tracking/action-tracker.md
+@@
+
+
 
 | Field | Value |
 |---|---|
