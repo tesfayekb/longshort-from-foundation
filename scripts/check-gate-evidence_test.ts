@@ -37,6 +37,31 @@ Deno.test('extractFinalLine — whitespace-only input returns sentinel', () => {
   assertEquals(extractFinalLine('   \n\t\n'), '(no output)');
 });
 
+Deno.test('extractFinalLine — canonical regex prefers matching line over later non-matching trailing noise', () => {
+  const denoTestOutput = [
+    'running 100 tests',
+    'ok | 985 passed | 0 failed (29s)',
+    '    at file:///dev-server/supabase/functions/deno.json',
+  ].join('\n');
+  const denoSummary = /^(ok|FAILED)\s*\|\s*\d+\s+passed\s*\|\s*\d+\s+failed/;
+  assertEquals(extractFinalLine(denoTestOutput, denoSummary), 'ok | 985 passed | 0 failed (29s)');
+});
+
+Deno.test('extractFinalLine — canonical regex prefers ESLint summary over auto-fix footnote', () => {
+  const eslintOutput = [
+    'some-file.tsx',
+    '  10:5  warning  Unused variable',
+    '✖ 15 problems (0 errors, 15 warnings)',
+    '  0 errors and 6 warnings potentially fixable with the `--fix` option.',
+  ].join('\n');
+  const eslintSummary = /^✖\s*\d+\s+problems?\s*\(\d+\s+errors?,\s*\d+\s+warnings?\)$/;
+  assertEquals(extractFinalLine(eslintOutput, eslintSummary), '✖ 15 problems (0 errors, 15 warnings)');
+});
+
+Deno.test('extractFinalLine — falls back to last non-empty when regex matches nothing', () => {
+  assertEquals(extractFinalLine('foo\nbar\n', /no-match/), 'bar');
+});
+
 Deno.test('GATES — exactly three canonical gates in fixed order', () => {
   assertEquals(GATES.length, 3);
   assertEquals(GATES[0].index, 1);

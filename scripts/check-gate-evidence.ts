@@ -58,6 +58,15 @@ interface GateSpec {
   readonly displayCommand: string;
   readonly argv: readonly string[];
   readonly cwd: string;
+  /**
+   * Canonical-summary regex. The attestation prefers the LAST line of
+   * stdout that matches this pattern over the literal last line, because
+   * `deno test` (stack-trace/import noise on completion) and `npx eslint`
+   * (auto-fix footnote) both emit lines AFTER their canonical summary line.
+   * If no line matches, falls back to the last non-empty line of combined
+   * stdout+stderr — preserving the original behavior for unknown tools.
+   */
+  readonly canonicalSummary: RegExp;
 }
 
 const GATES: readonly GateSpec[] = [
@@ -66,6 +75,7 @@ const GATES: readonly GateSpec[] = [
     displayCommand: 'deno run --allow-read scripts/check-wall-clock.ts',
     argv: ['deno', 'run', '--allow-read', 'scripts/check-wall-clock.ts'],
     cwd: '.',
+    canonicalSummary: /^check-wall-clock:\s/,
   },
   {
     index: 2,
@@ -80,17 +90,36 @@ const GATES: readonly GateSpec[] = [
       '_shared/',
     ],
     cwd: 'supabase/functions',
+    canonicalSummary: /^(ok|FAILED)\s*\|\s*\d+\s+passed\s*\|\s*\d+\s+failed/,
   },
   {
     index: 3,
     displayCommand: 'npx eslint .',
     argv: ['npx', 'eslint', '.'],
     cwd: '.',
+    canonicalSummary: /^✖\s*\d+\s+problems?\s*\(\d+\s+errors?,\s*\d+\s+warnings?\)$/,
   },
 ];
 
-/** Extract the last non-empty line from a combined stdout/stderr buffer. */
-function extractFinalLine(combined: string): string {
+/**
+ * Extract the canonical summary line. Prefers the LAST line of `stdout`
+ * matching `canonicalSummary`; falls back to the LAST line of `stdout`
+ * matching it; then to the last non-empty line of combined stdout+stderr.
+ *
+ * This per-gate canonicalization is the substitution-resistance core:
+ * without it, `deno test` would attest "at file:///…/deno.json" (Deno's
+ * import-provenance footer) and `npx eslint` would attest the auto-fix
+ * footnote — both of which look passable but carry zero gate-pass
+ * information, exactly the substitution shape #41 was created to prevent.
+ */
+function extractFinalLine(combined: string, canonical?: RegExp): string {
+  if (canonical) {
+    const lines = combined.split(/\r?\n/);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const trimmed = lines[i].trimEnd();
+      if (canonical.test(trimmed)) return trimmed;
+    }
+  }
   const lines = combined.split(/\r?\n/);
   for (let i = lines.length - 1; i >= 0; i--) {
     const trimmed = lines[i].trimEnd();
@@ -110,14 +139,19 @@ async function runGate(spec: GateSpec): Promise<GateResult> {
   const { code, stdout, stderr } = await cmd.output();
   const durationMs = Math.round(performance.now() - start);
   const decoder = new TextDecoder();
-  // Some tools (npx eslint) emit the summary on stdout; others on stderr.
-  // Concatenate in source order so the final line is the human-visible one.
-  const combined = decoder.decode(stdout) + decoder.decode(stderr);
+  const stdoutText = decoder.decode(stdout);
+  const stderrText = decoder.decode(stderr);
+  // Try stdout-only first (the canonical-summary lines all land on stdout
+  // for the three current gates); fall back to combined.
+  const stdoutLine = extractFinalLine(stdoutText, spec.canonicalSummary);
+  const finalLine = stdoutLine === '(no output)'
+    ? extractFinalLine(stdoutText + stderrText, spec.canonicalSummary)
+    : stdoutLine;
   return {
     index: spec.index,
     command: spec.displayCommand,
     cwd: spec.cwd,
-    finalLine: extractFinalLine(combined),
+    finalLine,
     exitCode: code,
     durationMs,
   };
