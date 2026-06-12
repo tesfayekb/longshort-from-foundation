@@ -656,3 +656,75 @@ function defaultBucketFactory(ratePerSec: number): TokenBucket {
   // DEC-034 clause 4 — see token-bucket.ts header comment.
   return new TokenBucket({ ratePerSec });
 }
+
+// ── INC-74 — feed-items batch deduper ──────────────────────────────────
+
+export interface FeedItemRow {
+  run_id: string;
+  article_id: string;
+  ticker: string;
+  sentiment_num: number;
+  tier_weight: number;
+  published_utc: string;
+}
+
+export interface DedupeFeedItemsResult {
+  rows: FeedItemRow[];
+  /** Total duplicate tuples (same article_id+ticker) removed. */
+  duplicatesDropped: number;
+  /** Subset where the dropped duplicate disagreed with the first-wins keeper. */
+  conflicts: number;
+}
+
+/**
+ * Deterministic first-occurrence-wins dedupe by `(article_id, ticker)`.
+ * Postgres `ON CONFLICT DO UPDATE` rejects a single INSERT that targets
+ * the same conflict key twice ("command cannot affect row a second
+ * time"); vendor feeds can legitimately surface a duplicate tuple within
+ * one page's `insights[]` or across the page boundary inside one slice.
+ *
+ * Observability — `duplicatesDropped` is the total tuples removed;
+ * `conflicts` is the strict subset whose dropped row carried a different
+ * `sentiment_num`, `tier_weight`, or `published_utc` than the first
+ * occurrence. Both are surfaced through the slice.completed audit event
+ * metadata so a future DEC can revisit the first-wins rule if conflicts
+ * are ever observed nonzero in live operation.
+ */
+export function dedupeFeedItems(
+  run_id: string,
+  items: ReadonlyArray<{
+    articleId: string;
+    ticker: string;
+    sentimentNum: number;
+    tierWeight: number;
+    publishedUtc: string;
+  }>,
+): DedupeFeedItemsResult {
+  const seen = new Map<string, FeedItemRow>();
+  let duplicatesDropped = 0;
+  let conflicts = 0;
+  for (const it of items) {
+    const key = `${it.articleId}\u0001${it.ticker}`;
+    const prev = seen.get(key);
+    if (prev === undefined) {
+      seen.set(key, {
+        run_id,
+        article_id: it.articleId,
+        ticker: it.ticker,
+        sentiment_num: it.sentimentNum,
+        tier_weight: it.tierWeight,
+        published_utc: it.publishedUtc,
+      });
+      continue;
+    }
+    duplicatesDropped += 1;
+    if (
+      prev.sentiment_num !== it.sentimentNum ||
+      prev.tier_weight !== it.tierWeight ||
+      prev.published_utc !== it.publishedUtc
+    ) {
+      conflicts += 1;
+    }
+  }
+  return { rows: [...seen.values()], duplicatesDropped, conflicts };
+}
