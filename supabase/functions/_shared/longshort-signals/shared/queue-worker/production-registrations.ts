@@ -16,6 +16,7 @@
 import { registerPeadQueueConsumer } from '../../pead/pead-queue-registration.ts';
 import { registerOptionsFlowQueueConsumer } from '../../options-flow/options-flow-queue-registration.ts';
 import { registerNewsSentimentQueueConsumer } from '../../news-sentiment/news-sentiment-queue-registration.ts';
+import { registerInsiderDailyConsumer } from '../../insider-transactions/insider-queue-bootstrap.ts';
 
 // Phase 3 — PEAD (Signal #2 / FP-044).
 registerPeadQueueConsumer();
@@ -24,3 +25,10 @@ registerOptionsFlowQueueConsumer();
 // FP-048 Phase 3b — news-sentiment (Signal #8 / FP-048; first
 // sequential-feed consumer on the FP-045 engine).
 registerNewsSentimentQueueConsumer();
+// FP-050 Phase 3.6b.iii′ γ commit-2 — insider-transactions (Signal #4 /
+// FP-050; first WORK-LIST consumer on the FP-045 engine). Registered in
+// DAILY mode for slice/sweeper/cron/init-manual isolates; the BACKFILL
+// mode is reachable only via the dedicated `longshort-insider-compute-
+// manual` handler's per-request config build (registry never carries
+// backfill mode — cross-mode contamination test pins this invariant).
+registerInsiderDailyConsumer();
