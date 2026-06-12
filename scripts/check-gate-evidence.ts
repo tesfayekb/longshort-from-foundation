@@ -24,7 +24,8 @@
  * scope-gap operator surfaced: Gate 2's `_shared/` filter narrows the
  * sweep to a subset of what CI Gate 11 executes, so any commit that
  * touches handler test files OUTSIDE `_shared/` (e.g. the
- * `longshort-insider-compute*/index_test.ts` rewires at γ commit-2)
+ * `longshort-insider-compute<X>/index_test.ts` rewires at γ commit-2,
+ * where <X> is the empty cron handler or `-manual` suffix)
  * could have passed Gate 2 while a repo-wide failure went unattested.
  * Gate 2b mirrors CI Gate 11's verbatim invocation):
  *   1. deno run --allow-read scripts/check-wall-clock.ts
