@@ -48,13 +48,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { SignalComputationError } from '../shared/signal-types.ts';
 import type {
   SignalOrchestratorContext,
-  SignalOrchestratorResult,
 } from '../shared/signal-orchestrator-types.ts';
-import type { SignalRow, SignalSkip, SignalSkipReason } from '../shared/signal-types.ts';
+import type { SignalSkip } from '../shared/signal-types.ts';
 import { pLimitedMap } from '../shared/p-limited-map.ts';
 import { computeInsiderSignal, filterQualifyingTransactions } from './compute-insider.ts';
-import { zScoreNormalizeWithinSector } from '../shared/z-score-normalize.ts';
-import { captureSignalObservations } from '../shared/missingness-capture.ts';
 import type { PolygonSharesOutstandingFetcher } from '../shared/polygon-shares-outstanding-fetcher.ts';
 import type { Form4Row } from './form4-row-types.ts';
 
@@ -458,80 +455,5 @@ export function createInsiderLoadAndCompute(ctx: InsiderLoadAndComputeContext) {
 
   return {
     runStaged,
-    async run(as_of: Date): Promise<SignalOrchestratorResult> {
-      const ts = as_of.toISOString();
-      // .run() is now a thin shim over runStaged + z/persist. The
-      // 3.6b.iii′ work-list adapter bypasses this path entirely
-      // (it calls runStaged and the engine finalizer owns z+persist
-      // — see M3 ruling above). This shim is preserved temporarily so
-      // the existing cron/manual handlers (currently 503-stubbed) plus
-      // the existing test fixtures continue to type-check; γ commit-1
-      // deletes it once the adapter wiring lands (no-corpses rule).
-      const staged = await runStaged(as_of);
-      const { started_at, as_of_date, universe_size } = staged;
-      if (staged.kind === 'short-circuit') {
-        return {
-          outcome: 'failed', signal_id: SIGNAL_ID, as_of_date,
-          universe_size, persisted_count: 0, skipped: [],
-          failure_reason: staged.failure_reason,
-          started_at, completed_at: ts,
-          not_yet_knowable_excluded: 0,
-        };
-      }
-      const perTicker = staged.per_ticker;
-
-      // ── Step 6: within-sector z-score ─────────────────────────────────
-      const values = perTicker
-        .filter((r): r is Extract<PerTickerResult, { kind: 'value' }> => r.kind === 'value')
-        .map((r) => ({ ticker: r.ticker, value: r.raw_signal, gics_sector: r.gics_sector }));
-      const skips: SignalSkip[] = perTicker
-        .filter((r): r is Extract<PerTickerResult, { kind: 'skip' }> => r.kind === 'skip')
-        .map((r) => r.skip);
-      const zScored = zScoreNormalizeWithinSector(values);
-      const computed_at = ts;
-      const outRows: SignalRow[] = [];
-      for (const z of zScored) {
-        if (z.value === null) {
-          const reason: SignalSkipReason =
-            z.gics_sector === null ? 'missing_sector' : 'singleton_sector';
-          skips.push({
-            ticker: z.ticker,
-            reason,
-            detail: z.gics_sector
-              ? `sector="${z.gics_sector}" yielded std=0`
-              : 'gics_sector is null',
-          });
-          continue;
-        }
-        outRows.push({
-          operator_id: ctx.operator_id,
-          signal_id: SIGNAL_ID,
-          ticker: z.ticker,
-          as_of_date,
-          value: z.value,
-          is_present: true,
-          gics_sector: z.gics_sector,
-          computed_at,
-        });
-      }
-
-      // ── Step 7: persist ───────────────────────────────────────────────
-      const { inserted, error: persistErr } = await captureSignalObservations(ctx.supabase, outRows);
-      if (persistErr) {
-        return {
-          outcome: 'failed', signal_id: SIGNAL_ID, as_of_date,
-          universe_size, persisted_count: 0, skipped: skips,
-          failure_reason: `signal_observations persistence failed: ${persistErr.message}`,
-          started_at, completed_at: ts,
-          not_yet_knowable_excluded: 0,
-        };
-      }
-      return {
-        outcome: 'completed', signal_id: SIGNAL_ID, as_of_date,
-        universe_size, persisted_count: inserted, skipped: skips,
-        started_at, completed_at: ts,
-        not_yet_knowable_excluded: 0,
-      };
-    },
   };
 }
