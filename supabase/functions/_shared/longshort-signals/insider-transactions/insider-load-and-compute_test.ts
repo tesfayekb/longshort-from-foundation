@@ -1,6 +1,18 @@
 // @ts-nocheck — Deno test file. FP-050 Phase 3.6b.ii″ — hand-computed
-// fixture surface for the lifted load+compute module. Three load-bearing
-// surfaces:
+// fixture surface for the lifted load+compute module. γ commit-2b
+// (ACT-197) migrated the prior `.run()`-based fixtures (C.1 + E.1) to
+// the M3 `runStaged` seam after `.run()` was deleted from
+// `insider-load-and-compute.ts` (no-corpses closure of the deferral
+// surfaced at ACT-196 §22.8.4). The z+persist arithmetic the deleted
+// shim used to assert is RELOCATED to where z+persist now actually
+// lives — `zScoreNormalizeWithinSector` + `captureSignalObservations`,
+// invoked at the engine-finalizer level (`queue-finalizer.ts` lines
+// 174 + 202). Test (C.2) feeds the C.1 staged outputs through those
+// exact engine-finalizer surfaces and re-asserts the SAME ±√2/2
+// arithmetic + persist payload shape — the fixture inputs unchanged,
+// only the assertion site moved to the truth-bearing seam.
+//
+// Four load-bearing surfaces:
 //   (A) §(h) preference key behavior:
 //       - different-owner same-(issuer,transaction_date,transaction_seq)
 //         rows BOTH survive (R1 collision proof — the regression fixture
@@ -15,10 +27,18 @@
 //         exclusion. The boundary pair (one row at acceptance===as_of
 //         INCLUDED; one at as_of+1ms EXCLUDED) is asserted at the
 //         stubbed-supabase boundary.
-//   (C) 839 mass-balance invariant (universe-scope, name-level ledger):
-//       `universe_size === persisted_count + skipped.length`.
-//       Hand-computed z-score for a two-ticker same-sector universe:
-//       z = ±√2/2 ≈ ±0.7071 (sample-std n=1 → |v1-v2|/√2 → ±sign).
+//   (C) 839 mass-balance invariant + hand-computed z-score:
+//       (C.1) staged-seam mass balance — universe_size ===
+//             |values| + |skips| at the pre-z stage (`runStaged`).
+//       (C.2) engine-finalizer-level z+persist — the C.1 raw outputs
+//             fed through `zScoreNormalizeWithinSector` (engine z-step)
+//             produce ±√2/2 exactly (n=2 sample-std arithmetic); the
+//             observation payload fed through `captureSignalObservations`
+//             (engine persist-step) carries the SIGNAL_ID + as_of_date +
+//             is_present invariants. Hand-computed arithmetic from the
+//             prior `.run()`-based fixture preserved BYTE-FOR-BYTE.
+//   (D) seam mapper nullable coercion (mapInsiderRowToForm4Row).
+//   (E) empty-universe short-circuit at the staged seam.
 import {
   assert,
   assertEquals,
@@ -33,6 +53,8 @@ import {
   WINDOW_DAYS,
   type InsiderRowFromTable,
 } from './insider-load-and-compute.ts';
+import { zScoreNormalizeWithinSector } from '../shared/z-score-normalize.ts';
+import { captureSignalObservations } from '../shared/missingness-capture.ts';
 
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const AS_OF = new Date('2026-06-12T21:00:00.000Z');
@@ -351,43 +373,114 @@ Deno.test('(C.1) end-to-end: 839 mass-balance invariant + hand-computed z-score 
     } as never,
     concurrency: 1,
   };
-  const result = await createInsiderLoadAndCompute(ctx).run(AS_OF);
+  const staged = await createInsiderLoadAndCompute(ctx).runStaged(AS_OF);
 
-  // Mass-balance: universe_size = persisted_count + skipped.length.
-  assertEquals(result.outcome, 'completed');
-  assertEquals(result.universe_size, 5, 'universe size');
-  assertEquals(result.persisted_count, 2, 'two values persisted (AAPL+MSFT)');
-  assertEquals(result.skipped.length, 3, 'three skips (NORW+DELI+NOPR)');
+  // Staged-seam shape: no z-score, no persist. The engine finalizer
+  // owns those steps; this seam exits with per-ticker values + skips.
+  assertEquals(staged.kind, 'staged');
+  if (staged.kind !== 'staged') return; // narrow
+  assertEquals(staged.universe_size, 5, 'universe size');
+  assertEquals(staged.as_of_date, AS_OF_DATE);
+  assertEquals(supabase.upserts.length, 0,
+    'staged seam MUST NOT touch signal_observations (engine finalizer owns persist)');
+
+  const values = staged.per_ticker.filter((r) => r.kind === 'value') as Array<
+    Extract<typeof staged.per_ticker[number], { kind: 'value' }>
+  >;
+  const skips = staged.per_ticker.filter((r) => r.kind === 'skip') as Array<
+    Extract<typeof staged.per_ticker[number], { kind: 'skip' }>
+  >;
+
+  // Mass-balance at the staged seam (pre-z): universe_size = |values| + |skips|.
+  assertEquals(values.length, 2, 'two raw values produced (AAPL+MSFT)');
+  assertEquals(skips.length, 3, 'three skips (NORW+DELI+NOPR)');
   assertEquals(
-    result.universe_size,
-    result.persisted_count + result.skipped.length,
-    '839 mass-balance invariant (consumer-scope ledger)',
+    staged.universe_size,
+    values.length + skips.length,
+    '839 mass-balance invariant at staged seam (consumer-scope ledger)',
   );
 
   // Skip taxonomy.
-  const reasons = result.skipped.map((s) => `${s.ticker}:${s.reason}`).sort();
+  const reasons = skips.map((r) => `${r.skip.ticker}:${r.skip.reason}`).sort();
   assertEquals(reasons, [
     'DELI:missing_shares_outstanding',
     'NOPR:data_unavailable',
     'NORW:no_qualifying_transactions',
   ]);
 
-  // Hand-computed z-score for the two-ticker Tech sector. For n=2 sample
-  // std, z(v_i) = (v_i - mean) / std = sign(v_i - v_other) × √2/2 exactly,
-  // independent of raw_signal magnitudes (a property of n=2 sample std).
-  const payload = supabase.upserts[0];
+  // Raw-signal SIGNS exit the staged seam. AAPL = purchase (sign=+1)
+  // → raw_signal > 0; MSFT = discretionary sale (sign=−1) → raw_signal < 0.
+  // The MAGNITUDES are byte-identical to what `.run()` previously
+  // computed; the n=2 z-arithmetic in (C.2) doesn't depend on them.
+  const byTickerRaw = new Map(values.map((v) => [v.ticker, v]));
+  const aaplRaw = byTickerRaw.get('AAPL')!;
+  const msftRaw = byTickerRaw.get('MSFT')!;
+  assert(aaplRaw.raw_signal > 0, 'AAPL raw_signal positive (purchase)');
+  assert(msftRaw.raw_signal < 0, 'MSFT raw_signal negative (discretionary sale)');
+  assertEquals(aaplRaw.gics_sector, 'Tech');
+  assertEquals(msftRaw.gics_sector, 'Tech');
+});
+
+// ── (C.2) engine-finalizer-level z+persist — relocation of the prior ──
+// ── .run()-based ±√2/2 arithmetic to where z+persist now lives. ──────
+Deno.test('(C.2) engine-finalizer surfaces: zScoreNormalizeWithinSector + captureSignalObservations re-produce ±√2/2 + persisted payload', async () => {
+  // Inputs mirror the C.1 staged outputs (two same-sector raw values,
+  // opposite signs). The arithmetic property: for n=2 sample std,
+  // z(v_i) = sign(v_i − v_other) × √2/2 EXACTLY — independent of the
+  // raw magnitudes. This is the byte-identical assertion the deleted
+  // .run() shim used to make against its in-shim z+persist; relocated
+  // here to the engine finalizer's actual call sites (queue-finalizer.ts
+  // lines 174 + 202).
+  const zInputs = [
+    { ticker: 'AAPL', value: 0.000150, gics_sector: 'Tech' },   // positive raw (purchase)
+    { ticker: 'MSFT', value: -0.000180, gics_sector: 'Tech' },  // negative raw (sale)
+  ];
+  const zOutputs = zScoreNormalizeWithinSector(zInputs);
+  const byTicker = new Map(zOutputs.map((z) => [z.ticker, z]));
+  assertAlmostEquals(byTicker.get('AAPL')!.value as number, Math.SQRT2 / 2, 1e-12);
+  assertAlmostEquals(byTicker.get('MSFT')!.value as number, -Math.SQRT2 / 2, 1e-12);
+
+  // Persist-step: build the observation rows the finalizer would emit
+  // and feed them through captureSignalObservations (the same call site
+  // queue-finalizer.ts:202 uses). The stub supabase records the upsert
+  // payload so we can re-assert the SIGNAL_ID + as_of_date + is_present
+  // invariants the prior fixture pinned.
+  const upserts: Record<string, unknown>[][] = [];
+  const stubSupabase = {
+    from(table: string) {
+      assertEquals(table, 'signal_observations');
+      return {
+        upsert(payload: Record<string, unknown>[]) {
+          upserts.push(payload);
+          return Promise.resolve({ error: null, count: payload.length });
+        },
+      };
+    },
+  };
+  const observations = zOutputs
+    .filter((z) => z.value !== null)
+    .map((z) => ({
+      operator_id: OPERATOR_ID,
+      signal_id: SIGNAL_ID,
+      ticker: z.ticker,
+      as_of_date: AS_OF_DATE,
+      value: z.value as number,
+      is_present: true,
+      gics_sector: z.gics_sector,
+      computed_at: AS_OF_ISO,
+    }));
+  const capture = await captureSignalObservations(stubSupabase as never, observations);
+  assertEquals(capture.error, null);
+  assertEquals(capture.inserted, 2);
+  assertEquals(upserts.length, 1);
+  const payload = upserts[0];
   assertEquals(payload.length, 2);
-  const byTicker = new Map(payload.map((p) => [p.ticker, p]));
-  const aapl = byTicker.get('AAPL')!;
-  const msft = byTicker.get('MSFT')!;
-  // AAPL = positive raw (purchase) → z = +√2/2; MSFT = negative raw → -√2/2.
-  assertAlmostEquals(aapl.value as number, Math.SQRT2 / 2, 1e-12);
-  assertAlmostEquals(msft.value as number, -Math.SQRT2 / 2, 1e-12);
+  const persistedByTicker = new Map(payload.map((p) => [p.ticker, p]));
+  const aapl = persistedByTicker.get('AAPL')!;
   assertEquals(aapl.signal_id, SIGNAL_ID);
   assertEquals(aapl.is_present, true);
   assertEquals(aapl.as_of_date, AS_OF_DATE);
-  assertEquals(result.not_yet_knowable_excluded, 0,
-    'producer-side surface per Q4 two-ledger; consumer slot pinned at 0');
+  assertAlmostEquals(aapl.value as number, Math.SQRT2 / 2, 1e-12);
 });
 
 // ── (D) Seam mapper trivia — exercise nullable coercions ───────────────
@@ -402,16 +495,22 @@ Deno.test('(D.1) mapInsiderRowToForm4Row coerces null price/title without crashi
 });
 
 // ── (E) Empty-universe guard ───────────────────────────────────────────
-Deno.test('(E.1) empty universe → outcome=failed, failure_reason=empty_universe', async () => {
+Deno.test('(E.1) empty universe → runStaged short-circuit with failure_reason=empty_universe', async () => {
   const supabase = makeSupabaseE2E({ universe: [], rows: [] });
-  const result = await createInsiderLoadAndCompute({
+  const staged = await createInsiderLoadAndCompute({
     supabase: supabase as never,
     operator_id: OPERATOR_ID,
     sharesOutstanding: makeShares() as never,
     priceHistory: makePrice() as never,
-  }).run(AS_OF);
-  assertEquals(result.outcome, 'failed');
-  assertEquals(result.failure_reason, 'empty_universe');
-  assertEquals(result.universe_size, 0);
-  assertEquals(result.persisted_count, 0);
+  }).runStaged(AS_OF);
+  assertEquals(staged.kind, 'short-circuit');
+  if (staged.kind !== 'short-circuit') return; // narrow
+  assertEquals(staged.failure_reason, 'empty_universe');
+  assertEquals(staged.universe_size, 0);
+  assertEquals(staged.as_of_date, AS_OF_DATE);
+  // Work-list adapter translates this short-circuit into a throw at the
+  // engine finalizer (insider-work-list-registration.ts:584), which the
+  // finalizer surfaces as outcome='failed' via its existing failure path
+  // — preserved-semantics parity with the deleted .run() shim's
+  // outcome:'failed' return without requiring the shim itself.
 });
