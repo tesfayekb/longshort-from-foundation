@@ -371,6 +371,11 @@ async function transitionToFailed(
   ctx: QueueFinalizerContext,
   runRow: RunRow,
   failure_reason: string,
+): Promise<QueueFinalizerResult>;
+async function transitionToFailed(
+  ctx: QueueFinalizerContext,
+  runRow: RunRow,
+  failure_reason: string,
 ): Promise<QueueFinalizerResult> {
   const { supabase, config, operator_id, as_of, run_id } = ctx;
   const computed_at = as_of.toISOString();
