@@ -2087,3 +2087,25 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future phase assignment** | UNSET — no current planned phase. Re-evaluated at each phase boundary per the deferred-work protocol; expected to remain parked unless Phase 7 evidence motivates promotion. |
 | **Future owner module** | longshort / signals / short-term-reversal (if ever built). |
 | **Attestation** | Open (PARK only — no resolution sought). Cross-references: DEC-054 (the authority that parks this idea + rejects the false "gate" framing); FP-046 (the roadmap container); ACT-162 (the review cycle that surfaced + voided the fabrication); CROSSWIND §4.4.2 (the Signal #7 spec — unchanged); §21.9 citation-precision discipline (the basis for rejecting the second-opinion fabrication). |
+
+### DW-097: Signal #9 — Finnhub `hour` (bmo/amc) session-anchor enrichment for FMP earnings rows
+
+| Field | Value |
+|---|---|
+| **id** | DW-097 (next-free after DW-096; grep-verified at HEAD via `grep -nE "^### DW-09[7-9]" docs/08-planning/deferred-work-register.md` — no prior allocation). |
+| **date_deferred** | 2026-06-12 (FP-049 Phase 1 commit 1b / ACT-173). |
+| **source_plan_section** | FP-049 Phase 1 (Signal #9 `active_catalyst_flag` / DEC-057 §(d) precision binding). |
+| **source_phase** | Phase 1 (commit 1b). |
+| **title** | Upgrade FMP earnings-row decay-origin precision from the v1 12:00 ET blank-branch session anchor to a per-row Finnhub `hour` (bmo / amc / blank) join. |
+| **reason_deferred** | The structured FMP `/stable/earnings-calendar` row carries only a date (no time field). The DEC-057 §(d) binding names Finnhub `hour` as the Tier-1 enrichment, but v1 explicitly bars silent cross-vendor mixing per event row (named no-phantom-enrichment discipline). v1 ships the FMP fetcher with the 12:00 ET (blank-branch) mid-session anchor as the documented per-vendor default + `meta.session_anchor='mid_session_default'` for forensic traceability; the bmo/amc join is deferred until Phase-7 IC-ablation evidence shows the anchor imprecision materially degrades the signal. |
+| **blocking_dependencies** | (a) Phase 7 IC ablation infrastructure exists + has run for Signal #9; (b) ablation evidence shows session-anchor precision materially shifts catalyst-decay arithmetic (i.e. residual IC gap between 12:00 ET constant anchor vs per-row bmo/amc anchor > implementation cost); (c) Finnhub `/calendar/earnings` entitlement remains live at upgrade time. |
+| **impact_on_source_phase** | None — Phase 1 commit 1b ships cleanly. Worst-case anchor materiality is bounded at ≤±6.5h (12:00 ET ↔ 09:30 ET bmo OR 12:00 ET ↔ 16:00 ET amc envelope) against the §(a) 48h earnings half-life → `exp(-6.5/48) ≈ 0.873` vs all-aligned ideal (~13% per-event age-weight envelope), which the within-sector z-score normalization absorbs at the panel level. |
+| **future_owner_phase** | Phase 7 (IC ablation review) — gated. May promote to a Phase-3-revision or a separate FP if Phase 7 motivates. |
+| **future_owner_module** | longshort / signals / active-catalyst (`supabase/functions/_shared/longshort-signals/active-catalyst/`). |
+| **required_plan_realignment** | If promoted: add a Finnhub earnings-calendar fetcher (currently absent — Phase 0 §B2 confirmed the endpoint is live + carries `hour`); add a per-(ticker,date) join layer in the orchestrator; replace the FMP fetcher's `FMP_DEFAULT_SESSION_ANCHOR_UTC` constant with per-row join output; preserve the constant as fallback when the Finnhub row is absent (typed-absence, never silent default-swap). Update DEC-057 §(d) addendum to reflect the upgrade. |
+| **related_decisions** | DEC-057 (§(d) addendum 2026-06-12; §(g) IN-set; §(b) authority-per-type binding); DEC-051 (Signal #2 PEAD FMP earnings vendor lock — precedent for FMP-as-primary on earnings). |
+| **related_actions** | ACT-173 (this deferral); ACT-172 (Phase 1 commit 1a — FMP earnings-calendar fetcher landing); ACT-170 (Phase 0 vendor-shape audit — confirmed Finnhub `hour` field live). |
+| **required_tests_for_closure** | (a) Finnhub earnings-calendar fetcher unit tests parallel to `fmp-earnings-calendar-fetcher_test.ts` (≥6 tests covering bmo/amc/blank/missing-hour shape paths + entitlement-gated path); (b) per-(ticker,date) join test asserting no silent swap when the Finnhub side is absent (typed-fallback to FMP mid-session anchor); (c) IC-ablation comparison fixture showing the upgrade's per-event age-weight shift matches the predicted ≤±6.5h envelope; (d) regression test on the existing FMP-only path (constant anchor) so removing the constant does not regress to wall-clock or sentinel. |
+| **status** | open (PARK pending Phase-7 evidence). |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
