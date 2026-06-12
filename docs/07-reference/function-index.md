@@ -3221,7 +3221,8 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 |-------|-------|
 | **Module** | longshort (FP-048 — Phase 1 / Signal #8) |
 | **Classification** | shared infrastructure — first Polygon `/v2/reference/news` consumer. Branch B (global feed paged) per FP-048 Phase-0 evidence. |
-| **Exports** | `class PolygonNewsFeedFetcher { constructor(apiKey, httpFetch?, timeoutMs?, baseUrl?, options?); fetchFeed(as_of): Promise<NewsFeedFetchResult> }`; `type PolygonNewsRow`, `PolygonNewsInsight`, `NewsFeedFetchResult`; `const POLYGON_BASE_URL`, `NEWS_FEED_OPERATION_ID`, `DEFAULT_LOOKBACK_DAYS` (7), `DEFAULT_PAGE_LIMIT` (1000), `DEFAULT_MAX_PAGES` (200). |
+| **Exports** | `class PolygonNewsFeedFetcher { constructor(apiKey, httpFetch?, timeoutMs?, baseUrl?, options?); fetchFeed(as_of): Promise<NewsFeedFetchResult>; fetchOnePage({cursorToken, asOf}): Promise<NewsFeedPageOutcome> }`; `type PolygonNewsRow`, `PolygonNewsInsight`, `NewsFeedFetchResult`, `NewsFeedPageOutcome`; `const POLYGON_BASE_URL`, `NEWS_FEED_OPERATION_ID`, `DEFAULT_LOOKBACK_DAYS` (7), `DEFAULT_PAGE_LIMIT` (1000), `DEFAULT_MAX_PAGES` (200). |
+| **PolygonNewsRow surface widen (FP-049 ACT-174, 2026-06-12 — supervisor-authorized Option B)** | Additive widen: `title?: string` + `description?: string` added as OPTIONAL fields; `normalizeWireRow` populates only when the wire row carries a non-empty string (`undefined`, never sentinel, when absent). Driven by the FP-049 second consumer (`active-catalyst/polygon-news-keyword-fetcher.ts`) which needs headline + description for the DEC-057 §(b)/(j) keyword + verb-gate match. Byte-equivalence fence: existing `polygon-news-feed-fetcher_test.ts` (22 tests) passes UNMODIFIED. `image_url` + `keywords[]` remain excluded. Same additive-surface discipline as the FP-048 Phase 3b `fetchOnePage` addition (file header lines 42-48). |
 | **Pagination** | Global feed `?published_utc.gte={asOf-7d}&published_utc.lte={asOf}&order=desc&sort=published_utc&limit=1000` walked via Polygon `next_url`; `apiKey` re-attached when absent (idempotent). |
 | **Look-ahead gate** | Vendor-side `published_utc.lte=as_of` + client per-row re-check (`tsMs > asOfMs → drop`). Both layers tested. |
 | **Error taxonomy** | 401/402/403 → `subscription_gated`; 429 → `rate_limited`; 404 or empty-first-page → `data_unavailable`; otherwise `SignalComputationError` (orchestrator records `fetch_error`). |
@@ -3397,3 +3398,21 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/classify-catalyst-event.ts` |
 | **Tests** | `classify-catalyst-event_test.ts` — 12 tests (guidance noun+verb+numeric gate; executive_change / regulatory_action / partnership noun+verb gates; verb_gate vs numeric_gate counters distinct; §(d) future-row exclusion; window lower bound; §(h) structured>keyword upgrade; §(h) same-source first-wins; hour-bucket boundary precision; keyword meta carries misclassification-risk + family; degenerate empty-ticker/empty-text inputs do not throw). |
 | **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/polygon-news-keyword-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1b revision / Signal #9 / ACT-174) |
+| **Classification** | shared infrastructure — DEC-057 §(b)+(j) KEYWORD-DERIVED catalyst-event fetcher over Polygon news. Composes FP-048's `PolygonNewsFeedFetcher` (Option B — additive widen of `PolygonNewsRow` with optional `title?` / `description?`; byte-equivalence fence intact). |
+| **Exports** | `class PolygonNewsKeywordFetcher { constructor(apiKey, httpFetch?, timeoutMs?, baseUrl?, options?); fetch(window): Promise<CatalystFetchResult> }`; `const POLYGON_NEWS_KEYWORD_OPERATION_ID`, `POLYGON_NEWS_KEYWORD_LOOKBACK_DAYS` (7). |
+| **§(b)/(j) matching** | Each Polygon row's `title` + `description` are concatenated and passed to `matchKeywordEvent` from `classify-catalyst-event.ts` — single source of truth for the noun + action-verb + numeric gates. Word-boundary discipline inherited (the `partners` ⊂ `partnership` defect is structurally impossible). |
+| **§(d) look-ahead gate** | `applyLookAheadGate(candidates, window.as_of)` applied client-side after the per-page walk (defence-in-depth — inner `fetchOnePage` already enforces; `future_event_excluded` counter surfaced regardless). |
+| **§(f) trading-day floor** | Calendar/trading-day discrepancy resolved AT THIS LAYER per the operator brief ("do not leave the calendar/trading discrepancy to Phase 2"). Over-fetches a 7-calendar-day window from FP-048; trims to the §4.4.9 5-TRADING-DAY floor via `applyWindowLowerBound(rows, window.window_start_at)`. The orchestrator computes `window_start_at` from the trading-calendar. |
+| **Multi-ticker fan-out** | On a positive match, emits ONE `RawCatalystEventInput` per attributed ticker in `row.tickers[]`; downstream `classifyCatalystEvents` performs §(h) 1h-bucket dedup with `structured > keyword` precedence. |
+| **Source provenance** | Every emitted row carries `source: 'keyword'`, `vendor: 'polygon'`, `meta.keyword_misclassification_risk: true`, `meta.keyword_family`, `meta.article_id` per DEC-057 §(b) named misclassification flag. |
+| **Error taxonomy** | First-page 401/402/403 → `subscription_gated`; 429 → `rate_limited`; 404 or empty results → `data_unavailable`; mid-walk unavailability propagated identically (matches FP-048 `fetchFeed` semantics — not silently swallowed). |
+| **Wall-clock** | None. `window.as_of` + `window.window_start_at` are caller-supplied `Date`. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/polygon-news-keyword-fetcher.ts` |
+| **Tests** | `polygon-news-keyword-fetcher_test.ts` — 15 fixture-driven tests (1 true-positive + 1 verb-gate-blocked false-positive per family: executive_change, guidance, regulatory_action, partnership including the `partners` ⊂ `partnership` block; multi-ticker fan-out; §(d) future-row drop; §(f) trading-day floor trim; HTTP 403 → subscription_gated; empty first page → data_unavailable; rows missing both title + description silently dropped — no fabricated text; constructor key-required). |
+| **Added by** | FP-049 (ACT-174) |

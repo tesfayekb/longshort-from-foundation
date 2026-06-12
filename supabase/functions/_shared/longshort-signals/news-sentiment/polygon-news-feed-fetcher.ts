@@ -82,10 +82,27 @@ export const DEFAULT_MAX_PAGES = 200;
 const MS_PER_DAY = 86_400_000;
 
 /**
- * Typed row shape — Phase-0 probe-validated fields only. Optional vendor
- * fields (image_url, description, keywords[]) are intentionally excluded
- * from the typed row to keep the signal-path surface narrow; if Phase-7
- * ablation motivates them, they ship as a separate fetcher variant.
+ * Typed row shape — Phase-0 probe-validated fields.
+ *
+ * History (DEC-056 "never edited" interpretation; additive-surface lineage):
+ *   - FP-048 Phase 1 (original): the optional vendor fields (`image_url`,
+ *     `description`, `keywords[]`, `title`) were intentionally EXCLUDED
+ *     from the typed row to keep the Signal #8 surface narrow. At Phase 1
+ *     there was a single consumer (`compute-news-sentiment.ts`) that
+ *     scored on `insights[]` alone, so the narrowing imposed no cost.
+ *   - FP-049 Phase 1 commit 1b — SUPERSEDED (supervisor-authorized
+ *     2026-06-12, ACT-174). Active-Catalyst-Flag (Signal #9) introduced
+ *     a second consumer (`active-catalyst/polygon-news-keyword-fetcher.ts`)
+ *     that requires `title` + `description` for the DEC-057 §(b)/(j)
+ *     keyword + verb-gate match. Per the FP-048 Phase 3b precedent
+ *     (additive surface + byte-equivalence fence — every Phase-1 test
+ *     passes UNMODIFIED), `title?` and `description?` are added as
+ *     OPTIONAL fields. Single-consumer paths pay nothing: existing
+ *     consumers ignore the new optionals; the wire normalizer populates
+ *     them only when the vendor row carries them; the row stays
+ *     well-formed when the vendor omits them (`undefined`, not sentinel).
+ *   - `image_url` + `keywords[]` remain excluded; if Phase-7 ablation
+ *     motivates them, the same additive-surface discipline applies.
  */
 export interface PolygonNewsRow {
   /** Polygon-canonical article id; stable across pages — used for dedup. */
@@ -100,6 +117,20 @@ export interface PolygonNewsRow {
    * Phase-0 probe: 1000/1000 articles carry non-empty insights[].
    */
   insights: PolygonNewsInsight[];
+  /**
+   * Polygon-canonical headline. Optional + populated only when the wire
+   * row carries it (FP-049 §(b)/(j) keyword-matching consumer; FP-048
+   * Signal #8 ignores it). NEVER fabricated — absence is typed
+   * (`undefined`), not an empty-string sentinel.
+   */
+  title?: string;
+  /**
+   * Polygon-canonical article description / lede. Optional + populated
+   * only when the wire row carries it (FP-049 keyword-matching consumer
+   * concatenates `title` + `description` before applying the §(b)/(j)
+   * CATALYST_KEYWORDS + CATALYST_VERB_GATE classifier). NEVER fabricated.
+   */
+  description?: string;
 }
 
 export interface PolygonNewsInsight {
@@ -166,6 +197,8 @@ interface PolygonNewsWire {
   published_utc?: string;
   tickers?: unknown;
   insights?: unknown;
+  title?: unknown;
+  description?: unknown;
 }
 
 interface PolygonNewsResponse {
@@ -203,13 +236,20 @@ function normalizeWireRow(w: PolygonNewsWire): PolygonNewsRow | null {
   const insights: PolygonNewsInsight[] = insightsRaw
     .map(normalizeInsight)
     .filter((x): x is PolygonNewsInsight => x !== null);
-  return {
+  const row: PolygonNewsRow = {
     id: w.id,
     publisher: { name: w.publisher.name },
     published_utc: w.published_utc,
     tickers,
     insights,
   };
+  // Additive-surface population (FP-049 supervisor-authorized 2026-06-12,
+  // ACT-174). Only set when the wire carries a non-empty string — never
+  // fabricate; undefined means "vendor did not supply", a typed signal
+  // the FP-049 keyword consumer treats as `text=''` and naturally drops.
+  if (isNonEmptyString(w.title)) row.title = w.title;
+  if (isNonEmptyString(w.description)) row.description = w.description;
+  return row;
 }
 
 export interface PolygonNewsFeedOptions {
