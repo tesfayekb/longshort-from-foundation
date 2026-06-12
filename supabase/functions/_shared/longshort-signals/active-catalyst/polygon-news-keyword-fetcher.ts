@@ -105,6 +105,13 @@ export class PolygonNewsKeywordFetcher {
     const candidates: RawCatalystEventInput[] = [];
     let cursorToken: string | null = null;
     let firstPage = true;
+    // INC-75 fix: count gate-drop volume + scanned articles at the
+    // FETCHER stage (this is where pre-gate text exists). The classifier
+    // never sees these rows downstream — without these counters the
+    // meta surface structurally reads 0 for keyword-derived noise.
+    let verb_gate_drops = 0;
+    let numeric_gate_drops = 0;
+    let articles_scanned = 0;
 
     // Walk the FP-048 cursor surface. Unavailable on the first page is
     // a typed catalyst-fetch unavailability; mid-walk unavailability is
@@ -127,8 +134,13 @@ export class PolygonNewsKeywordFetcher {
       for (const r of outcome.rows) {
         const text = composeText(r);
         if (text.length === 0) continue;
+        articles_scanned += 1;
         const m = matchKeywordEvent(text);
-        if (m.family === null) continue;
+        if (m.family === null) {
+          if (m.drop_reason === 'verb_gate') verb_gate_drops += 1;
+          else if (m.drop_reason === 'numeric_gate') numeric_gate_drops += 1;
+          continue;
+        }
         // Multi-ticker fan-out — one event per attributed ticker.
         for (const ticker of r.tickers) {
           if (typeof ticker !== 'string' || ticker.length === 0) continue;
@@ -160,6 +172,9 @@ export class PolygonNewsKeywordFetcher {
       kind: 'events',
       rows,
       future_event_excluded: gated.future_event_excluded,
+      verb_gate_drops,
+      numeric_gate_drops,
+      articles_scanned,
     };
   }
 }
