@@ -92,6 +92,22 @@ export interface QueueSliceWorkerResult {
   /** Feed mode only — feed_items rows upserted THIS slice. */
   items_upserted?: number;
   /**
+   * Feed mode only — duplicate `(article_id, ticker)` tuples dropped
+   * pre-upsert across all pages drained by THIS slice (INC-74). Sum of
+   *   (rows_assembled_from_pages) − (rows_actually_sent_to_upsert).
+   * Zero on a clean run. Carried into `slice.completed` metadata for
+   * observability — non-zero is informational, not pathological.
+   */
+  duplicate_tuples_dropped?: number;
+  /**
+   * Feed mode only — subset of `duplicate_tuples_dropped` where the
+   * duplicate carried a DIFFERENT `sentiment_num`, `tier_weight`, or
+   * `published_utc` than the first-wins keeper (INC-74). Counted
+   * separately so a future DEC can revisit the first-wins rule if this
+   * is observed nonzero in Phase 7 / live operation.
+   */
+  duplicate_conflicts?: number;
+  /**
    * Feed mode only — set when the runaway guard tripped and the run was
    * transitioned to `failed`. Surfaces via the cron handler's audit
    * metadata so an operator sees the cause in the run.failed event.
