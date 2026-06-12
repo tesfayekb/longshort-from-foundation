@@ -90,6 +90,33 @@ The pre-FP-050-Phase-3.6 §(i) arithmetic stood on an unmeasured ~50-qualifying-
 
 ---
 
+## FP-050 Phase 3.6b.ii″ — load+compute extraction (ACT-192, this commit)
+
+**Status: extraction landed; producer (work-list registration) is 3.6b.iii′. Signal #4 STAYS DISARMED.**
+
+**What changed.** The Phase-2 single-invocation `insider-orchestrator.ts` (+571 LOC) and its companion test (+532 LOC) were DELETED. The universe → §(b) gate → §(h) preference → preserved compute → 839 mass balance → z → persist core was lifted into `supabase/functions/_shared/longshort-signals/insider-transactions/insider-load-and-compute.ts` (consumer-callable). Both handlers (`longshort-insider-compute/index.ts` cron, `longshort-insider-compute-manual/index.ts` operator) were reduced to fail-loud `apiError(503, 'insider_compute_pending_queue_rewire')` stubs — the auth shells (cron-secret on the cron handler; method gate + operator JWT + `longshort.manage` on the manual handler) fire FIRST, so the 503 is only reachable past authentication.
+
+**Lift discipline (Q-A byte-for-byte ruling).** `preferMostRecentAccession` moved VERBATIM with the four-part key `(issuer_cik, owner_cik, transaction_date, transaction_seq)` per DEC-058 §(h) and MIG-095 (ACT-191). The §(b) acceptance gate moved from the orchestrator's in-memory strict-`>` exclusion to the SQL `WHERE acceptance_datetime <= as_of` filter — semantically identical (the boolean complement), with the parity asserted by the boundary-pair fixture in `insider-load-and-compute_test.ts` ((B.1)). The seam mapper `mapInsiderRowToForm4Row` mirrors the deleted `mapEdgarRowToForm4Row` — same field projection, re-rooted on the persisted row. The `computeInsiderSignal` / `filterQualifyingTransactions` / `classifyRoleWeight` chain (FP-042 reuse fence per ACT-156) is imported, not touched.
+
+**Load-bearing test surface (hand-computed fixtures).**
+- **(A.1) Different-owner regression — R1 collision proof.** Two officers' rows sharing `(issuer_cik, transaction_date, transaction_seq)` but differing in `owner_cik` BOTH survive the §(h) preference. This is the permanent forward sentinel that would have caught MIG-094's `owner_cik` schema gap had it existed then (closes the ACT-191 supervisor-accountability binding).
+- **(A.2) 4/A amendment supersedes.** Same four-part key, later `acceptance_datetime` lex-wins.
+- **(B.1) §(b) boundary pair.** Acceptance `===` as_of INCLUDED; acceptance `> as_of` (by 1 ms) EXCLUDED. SQL parity at the call-site (the `lte('acceptance_datetime', AS_OF_ISO)` filter is asserted on the stubbed builder).
+- **(B.2) 90-day window.** `transaction_date >= as_of − 90d` applied as a `gte` filter; the boundary day is included.
+- **(C.1) 839 mass-balance invariant.** Universe of 5 tickers → 2 values persisted + 3 typed skips. `universe_size === persisted_count + skipped.length`. The hand-computed z-score for the two-ticker same-sector pair is exactly `±√2/2 ≈ 0.70710678…` (a property of n=2 sample-std: `|v_1 − v_2|/√2` denominator yields the magnitude independent of raw_signal magnitudes — a stable invariant).
+- **(D.1) Seam coercion.** Null `transaction_price_per_share` → `0`; null `officer_title` → `''`. The compute layer's `dollars === 0` filter drops zero-price rows honestly downstream.
+- **(E.1) Empty universe.** `outcome='failed', failure_reason='empty_universe'`.
+
+**Window state (intentional stub).** No producer is wired yet (registration is 3.6b.iii′). The compute consumer can run E2E but reads an empty table; rather than ship handlers that silently return `outcome='completed', persisted_count=0` (the exact phantom-firehose shape INC-70 exists to forbid), the handlers fail LOUD with `503 insider_compute_pending_queue_rewire`. Signal #4 stays DISARMED in `job_registry` (`enabled=false`); no `cron.job` entry exists pre-arm-up, so the 503 is structurally unreachable in production.
+
+**`not_yet_knowable_excluded` surface.** The SQL §(b) gate excludes late-acceptance rows silently. Per Q4 two-ledger binding, the acceptance-look-ahead count is name-scope NOT consumer-relevant and moves to producer-side run-meta on `signal_queue_runs` in 3.6b.iii′; the `SignalOrchestratorResult.not_yet_knowable_excluded` slot is pinned at `0` here for shape compatibility.
+
+**SIGNAL_ID rewire (§22.8.4 cross-signal entanglement closure).** `SIGNAL_ID = 'insider_transactions_90d'` lifted from the deleted `insider-orchestrator.ts` to `insider-load-and-compute.ts` verbatim. The drift-sentinel import in `_shared/longshort-signals/shared/job-signal-mapping_test.ts` rewired to the new module path; the assertion is unchanged. Two docstring references to the deleted file (`form4-row-types.ts:4`, `options-flow-orchestrator.ts:4`) updated to historical-citation form per Rule 8.
+
+**Closure pointer to 3.6b.iii′.** `insider-work-list-registration.ts` (+ test): `seedWorkItems = yesterday's daily index → in-universe qualifying accessions`; `processItem = accession index.json → typed primary-doc selection → Form-4 fetch+parse → INC-74 batch-dedupe → upsert insider_form4_rows` (dual-write contract: MUST persist `EdgarForm4Row.owner_cik` per MIG-095) with Q3 typed-permanent vs transient classification; `loadAndCompute` call-site swaps from this commit's stubs to the queue-finalizer (news-handler pattern); `accessionsPerSlice` arithmetic + drift sentinels; production-registrations wire + cross-mode contamination test; manual-handler `backfill: true` flag with the backfill-before-arm gate at the honest ~91k-call / ~5-hour figure.
+
+---
+
 ## Historical record (FP-042 / ACT-156 — preserved per Rule 8)
 
 The sections below are the FP-042 ship + ACT-156 disarm + INC-70 root-cause record. Preserved verbatim as governance history. The EDGAR rebuild above SUPERSEDES the Polygon-fetcher path described below — the FP-042 compute / classifier / filter / z-score code is reused byte-unchanged; only the data-acquisition layer was replaced.
