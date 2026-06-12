@@ -683,6 +683,331 @@ function defaultBucketFactory(ratePerSec: number): TokenBucket {
   return new TokenBucket({ ratePerSec });
 }
 
+// ───────────────────────────────────────────────────────────────────────
+// FP-050 Phase 3.6a — work-list slice variant
+// ───────────────────────────────────────────────────────────────────────
+//
+// One cursor row per pre-enumerated work item (synthetic-ticker =
+// item.id, gics_sector NULL). Each tick:
+//   1. Claim N items via the existing RPC (limit=itemsPerSlice;
+//      lex-order by ticker is the Q2 ruling: deterministic + replay-safe).
+//   2. Bump heartbeat at entry (liveClock for monotonic advance;
+//      kernel-frozen as_of stays reserved for compute-input timestamps).
+//   3. For each claimed item: acquire callsPerItem tokens, call
+//      processItem. Q3 return-vs-throw discipline:
+//        - {kind:'processed'}      → succeeded++; DELETE that item's
+//          cursor row (Q1 barrier: process → consumer-private upsert
+//          (already done inside processItem) → engine-delete cursor).
+//        - {kind:'permanent_skip'} → permanentSkips++; DELETE that
+//          item's cursor row AND INSERT a signal_queue_skips row (Q4
+//          two-ledger: item-scope marker for uniform telemetry, NOT
+//          counted in 839 mass balance which comes from loadAndCompute).
+//        - throw                   → itemRetries++; LEAVE the cursor
+//          row claimed-but-not-deleted, then RELEASE its claim at slice
+//          end so the next tick can re-claim. Track the last masked
+//          error for the deadlock-guard's failure stamp.
+//      Every WORK_LIST_HEARTBEAT_ITEM_INTERVAL items processed: heartbeat
+//      (Q2 — frequent enough that no sweeper threshold can starve
+//      mid-slice, sparse enough not to spam).
+//   4. Deadlock guard (Q3): if claimed>0 AND succeeded=0 (no item made
+//      forward progress this slice — every item either threw or was a
+//      permanent_skip), this counts as a FAILED SLICE. Increment
+//      slice_failure_count; stamp the last verbatim masked item error;
+//      if counter reaches WORK_LIST_SLICE_FAILURE_THRESHOLD, terminal-
+//      fail the run; re-throw so the cron-handler shim emits slice.failed.
+//      (Note: a slice where every item is a permanent_skip is forward
+//      progress in the cursor-drain sense but NOT in the "items added
+//      to consumer's persistence table" sense. The Q3 deadlock-guard
+//      ruling specifies the latter — "claimed >0 ∧ succeeded=0 →
+//      failed slice" — so we count permanent_skip-only slices as
+//      failures too. The 3-strikes catches a run whose entire universe
+//      is permanent_skips, which is a typed-data quality red flag.)
+//   5. Else if succeeded ≥1: reset slice_failure_count to 0 (Q3 reset
+//      rule). Release transient-failed items' claims for retry.
+//   6. Attempt CAS to 'finalizing' (idempotent; only the slice that
+//      drained the LAST cursor row wins).
+//
+// Mass-balance accounting (Q4 two-ledger):
+//   • signal_queue_skips carries item-scope permanent skips for
+//     telemetry uniformity with per-ticker/feed modes — these are NOT
+//     read by the finalizer in work-list mode (finalizer uses
+//     loadAndCompute exclusively).
+//   • The 839 universe-name mass balance comes entirely from the
+//     consumer's loadAndCompute return: every universe ticker → value
+//     OR typed skip.
+
+/**
+ * Internal — minimal context for one item's processing. Kept private so
+ * the consumer interface stays at {item, asOf} per WorkListProcessItemFn.
+ */
+interface WorkListItemCtx {
+  ticker: string;
+  gics_sector: string | null;
+}
+
+async function runWorkListSlice(
+  ctx: QueueSliceWorkerContext,
+): Promise<QueueSliceWorkerResult> {
+  const { supabase, config, as_of, run_id } = ctx;
+  const liveClock = ctx.liveClock ?? productionClock;
+  const itemsPerSlice = config.itemsPerSlice as number;
+  const callsPerItem = config.callsPerItem as number;
+  const processItem = config.processItem as WorkListProcessItemFn;
+
+  // ── 1. Claim up to itemsPerSlice items via the SAME RPC (lex-order).
+  const { data: claimedRaw, error: claimErr } = await supabase.rpc(
+    'signal_queue_claim_slice',
+    { p_run_id: run_id, p_limit: itemsPerSlice },
+  );
+  if (claimErr) {
+    throw new Error(`work-list-slice: claim rpc failed: ${claimErr.message}`);
+  }
+  const claimed = (claimedRaw ?? []) as ClaimedRow[];
+  if (claimed.length === 0) {
+    // Empty cursor (or every remaining row locked by a concurrent slice)
+    // → try the CAS in case this is the post-drain heartbeat tick.
+    const cas = await attemptFinalizingCAS(supabase, run_id, as_of);
+    return {
+      run_id, signal_id: config.signalId,
+      claimed: 0, succeeded: 0, skipped: 0,
+      cas_attempted: true, cas_won: cas, empty: true,
+      mode: 'work-list', item_retries: 0,
+    };
+  }
+
+  // ── 2. Entry heartbeat (Q2 — slice entry barrier vs sweeper).
+  await bumpHeartbeatLive(supabase, run_id, liveClock);
+
+  // ── 3. Per-item drain (serial, paced; Q1 barrier in the per-item delete).
+  const bucket = (ctx.bucketFactory ?? defaultBucketFactory)(config.ratePerSec);
+  let succeeded = 0;
+  let permanentSkips = 0;
+  let itemRetries = 0;
+  let lastItemError: string | null = null;
+  const transientItems: string[] = [];   // cursor rows to release (claim=null) at end
+  let itemsProcessedSinceHeartbeat = 0;
+
+  // Q3 deadlock guard wrap: track if ANY item failed permanently (skip)
+  // vs transient (throw). The guard fires when claimed>0 AND succeeded=0.
+  try {
+    for (const row of claimed) {
+      const itemCtx: WorkListItemCtx = { ticker: row.ticker, gics_sector: row.gics_sector };
+      // Acquire callsPerItem tokens per item (Q-ruling: pacing matches
+      // actual vendor-call rate; insider 2 = index.json + primary XML).
+      for (let i = 0; i < callsPerItem; i++) {
+        await bucket.acquire();
+      }
+
+      let result: WorkListItemResult;
+      try {
+        // The engine threads a WorkListItem-shaped object to the consumer.
+        // The synthetic ticker IS the item.id; payload is opaque to the
+        // engine (the consumer reconstructs it from item.id alone, since
+        // the cursor row carries no payload — payload semantics live in
+        // the consumer's seedWorkItems / persistence-table read path).
+        result = await processItem({
+          item: { id: itemCtx.ticker, payload: {} },
+          asOf: as_of,
+        });
+      } catch (e) {
+        // Q3 transient: leave cursor claimed-but-not-deleted; release the
+        // claim at slice end for the next tick to re-claim. Count and
+        // stamp the last masked error for the deadlock-guard.
+        const raw = e instanceof Error ? e.message : String(e);
+        const masked = maskSecretsInMessage(raw);
+        lastItemError = `item '${itemCtx.ticker}' threw: ${masked}`;
+        itemRetries++;
+        transientItems.push(itemCtx.ticker);
+        itemsProcessedSinceHeartbeat++;
+        if (itemsProcessedSinceHeartbeat >= WORK_LIST_HEARTBEAT_ITEM_INTERVAL) {
+          await bumpHeartbeatLive(supabase, run_id, liveClock);
+          itemsProcessedSinceHeartbeat = 0;
+        }
+        continue;
+      }
+
+      if (result.kind === 'processed') {
+        // Q1 barrier: processItem already persisted the consumer-private
+        // row BEFORE returning 'processed'. Engine now deletes the
+        // cursor row to mark the item as drained.
+        const { error: delErr } = await supabase
+          .from('signal_queue_cursor')
+          .delete()
+          .eq('run_id', run_id)
+          .eq('ticker', itemCtx.ticker);
+        if (delErr) {
+          throw new Error(`work-list-slice: cursor delete (processed) failed for '${itemCtx.ticker}': ${delErr.message}`);
+        }
+        succeeded++;
+      } else {
+        // Q4 two-ledger: write an item-scope skip row, then delete the
+        // cursor row. The skip is for telemetry, NOT for 839 mass balance.
+        const { error: skipErr } = await supabase
+          .from('signal_queue_skips')
+          .upsert(
+            [{
+              run_id,
+              signal_id: config.signalId,
+              ticker: itemCtx.ticker,
+              skip_reason: result.reason,
+              detail: result.detail,
+              recorded_at: as_of.toISOString(),
+            }],
+            { onConflict: 'run_id,ticker', ignoreDuplicates: true },
+          );
+        if (skipErr) {
+          throw new Error(`work-list-slice: skip upsert failed for '${itemCtx.ticker}': ${skipErr.message}`);
+        }
+        const { error: delErr } = await supabase
+          .from('signal_queue_cursor')
+          .delete()
+          .eq('run_id', run_id)
+          .eq('ticker', itemCtx.ticker);
+        if (delErr) {
+          throw new Error(`work-list-slice: cursor delete (permanent_skip) failed for '${itemCtx.ticker}': ${delErr.message}`);
+        }
+        permanentSkips++;
+      }
+
+      itemsProcessedSinceHeartbeat++;
+      if (itemsProcessedSinceHeartbeat >= WORK_LIST_HEARTBEAT_ITEM_INTERVAL) {
+        await bumpHeartbeatLive(supabase, run_id, liveClock);
+        itemsProcessedSinceHeartbeat = 0;
+      }
+    }
+  } catch (e) {
+    // A genuine engine error (cursor delete failed, skip insert failed
+    // — NOT a consumer processItem throw, those are caught above and
+    // routed to transient). Stamp the run's failure_reason, release any
+    // remaining transient claims, re-throw.
+    const raw = e instanceof Error ? e.message : String(e);
+    const masked = maskSecretsInMessage(raw);
+    await releaseClaims(supabase, run_id, transientItems);
+    await stampSliceFailure(supabase, run_id, `work_list_slice_engine_error: ${masked}`, liveClock);
+    throw new Error(masked);
+  }
+
+  // ── 4. Release transient items' claims for next-tick retry (Q3).
+  await releaseClaims(supabase, run_id, transientItems);
+
+  // ── 5. Deadlock-guard + 3-strikes evaluation (Q3).
+  if (succeeded === 0 && claimed.length > 0) {
+    // No forward progress this slice (every item either threw or was a
+    // permanent_skip). Counts as a failed slice.
+    const stampMsg = lastItemError ?? `deadlock_guard: claimed=${claimed.length} succeeded=0 (all permanent_skip)`;
+    const masked = maskSecretsInMessage(stampMsg);
+    const reasonStamp = `work_list_slice_deadlock: ${masked}`;
+
+    const { data: counterRow } = await supabase
+      .from('signal_queue_runs')
+      .select('slice_failure_count')
+      .eq('run_id', run_id)
+      .single();
+    const prevCount = (counterRow as { slice_failure_count: number } | null)?.slice_failure_count ?? 0;
+    const newCount = prevCount + 1;
+    const liveTs = liveClock.getWallClockTs().toISOString();
+
+    if (newCount >= WORK_LIST_SLICE_FAILURE_THRESHOLD) {
+      await supabase
+        .from('signal_queue_runs')
+        .update({
+          status: 'failed',
+          failure_reason: `work_list_slice_deadlock_3x: ${masked}`,
+          slice_failure_count: newCount,
+          finalized_at: liveTs,
+          heartbeat_at: liveTs,
+          updated_at: liveTs,
+        })
+        .eq('run_id', run_id)
+        .in('status', ['running', 'finalizing']);
+    } else {
+      await supabase
+        .from('signal_queue_runs')
+        .update({
+          failure_reason: reasonStamp,
+          slice_failure_count: newCount,
+          heartbeat_at: liveTs,
+          updated_at: liveTs,
+        })
+        .eq('run_id', run_id)
+        .eq('status', 'running');
+    }
+    throw new Error(masked);
+  }
+
+  // ── 6. Successful slice (succeeded ≥1) → reset counter (Q3 reset rule).
+  {
+    const liveTs = liveClock.getWallClockTs().toISOString();
+    await supabase
+      .from('signal_queue_runs')
+      .update({ slice_failure_count: 0, heartbeat_at: liveTs, updated_at: liveTs })
+      .eq('run_id', run_id)
+      .eq('status', 'running');
+  }
+
+  // ── 7. Attempt CAS to 'finalizing'. Predicate "no cursor rows for run"
+  //      naturally guards against transient-claim rows still present.
+  const cas_won = await attemptFinalizingCAS(supabase, run_id, as_of);
+
+  return {
+    run_id, signal_id: config.signalId,
+    claimed: claimed.length,
+    succeeded,
+    skipped: permanentSkips,
+    cas_attempted: true,
+    cas_won,
+    empty: false,
+    mode: 'work-list',
+    item_retries: itemRetries,
+  };
+}
+
+async function releaseClaims(
+  supabase: SupabaseClient,
+  run_id: string,
+  tickers: string[],
+): Promise<void> {
+  if (tickers.length === 0) return;
+  const { error } = await supabase
+    .from('signal_queue_cursor')
+    .update({ claimed_at: null })
+    .eq('run_id', run_id)
+    .in('ticker', tickers);
+  if (error) {
+    throw new Error(`work-list-slice: cursor release failed: ${error.message}`);
+  }
+}
+
+async function bumpHeartbeatLive(
+  supabase: SupabaseClient,
+  run_id: string,
+  liveClock: ClockReader,
+): Promise<void> {
+  const liveTs = liveClock.getWallClockTs().toISOString();
+  const { error } = await supabase
+    .from('signal_queue_runs')
+    .update({ heartbeat_at: liveTs, updated_at: liveTs })
+    .eq('run_id', run_id)
+    .eq('status', 'running');
+  if (error) {
+    throw new Error(`work-list-slice: heartbeat bump failed: ${error.message}`);
+  }
+}
+
+async function stampSliceFailure(
+  supabase: SupabaseClient,
+  run_id: string,
+  failure_reason: string,
+  liveClock: ClockReader,
+): Promise<void> {
+  const liveTs = liveClock.getWallClockTs().toISOString();
+  await supabase
+    .from('signal_queue_runs')
+    .update({ failure_reason, heartbeat_at: liveTs, updated_at: liveTs })
+    .eq('run_id', run_id)
+    .eq('status', 'running');
+}
+
 // ── INC-74 — feed-items batch deduper ──────────────────────────────────
 
 export interface FeedItemRow {
