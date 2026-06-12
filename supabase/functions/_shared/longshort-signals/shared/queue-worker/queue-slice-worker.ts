@@ -380,6 +380,10 @@ async function runFeedSlice(
   const bucket = (ctx.bucketFactory ?? defaultBucketFactory)(config.ratePerSec);
   let pagesThisSlice = 0;
   let itemsUpserted = 0;
+  // INC-74 — per-slice duplicate-tuple observability. Counted across
+  // every page drained THIS slice; carried into slice.completed metadata.
+  let duplicateTuplesDropped = 0;
+  let duplicateConflicts = 0;
   let exhausted = false;
 
   // ── INC-73 — Wrap the entire drain in try/catch. On throw: stamp
@@ -423,14 +427,24 @@ async function runFeedSlice(
       }
 
       if (page.items.length > 0) {
-        const rows = page.items.map((it) => ({
-          run_id,
-          article_id: it.articleId,
-          ticker: it.ticker,
-          sentiment_num: it.sentimentNum,
-          tier_weight: it.tierWeight,
-          published_utc: it.publishedUtc,
-        }));
+        // INC-74 — Postgres `ON CONFLICT DO UPDATE` rejects a single
+        // INSERT that targets the same conflict key twice ("command
+        // cannot affect row a second time"). Vendor feeds can legitimately
+        // emit the same `(article_id, ticker)` more than once within a
+        // single page's `insights[]` (e.g. multi-ticker article repeating
+        // a ticker) or across the page boundary when an article spans two
+        // vendor pages drained inside one slice. Dedupe deterministically
+        // (first-occurrence-wins) at the batch-assembly point, mode-scoped
+        // to the engine (NOT the Phase-1 fetcher — fetcher remains the
+        // dumb pipe; engine owns persistence shape).
+        const dedupe = dedupeFeedItems(run_id, page.items);
+        duplicateTuplesDropped += dedupe.duplicatesDropped;
+        duplicateConflicts += dedupe.conflicts;
+        const rows = dedupe.rows;
+        if (rows.length === 0) {
+          // Page only contained duplicates of already-staged-this-page
+          // rows — nothing to upsert; advance cursor as normal.
+        } else {
         const { error: itemsErr } = await supabase
           .from('signal_queue_feed_items')
           .upsert(rows, { onConflict: 'run_id,article_id,ticker', ignoreDuplicates: false });
@@ -438,6 +452,7 @@ async function runFeedSlice(
           throw new Error(`feed_items upsert failed: ${itemsErr.message}`);
         }
         itemsUpserted += rows.length;
+        }
       }
 
       feedCursor = page.nextToken;
@@ -566,6 +581,8 @@ async function runFeedSlice(
     cas_attempted: exhausted, cas_won: casWon, empty: false,
     mode: 'sequential-feed',
     pages_fetched: pagesThisSlice, items_upserted: itemsUpserted,
+    duplicate_tuples_dropped: duplicateTuplesDropped,
+    duplicate_conflicts: duplicateConflicts,
   };
 }
 
