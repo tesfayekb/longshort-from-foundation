@@ -2164,7 +2164,7 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-insider-compute/index.ts` via `writeStrategyAuditEvent` |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { as_of: ISO timestamp, signal_id: 'insider_transactions_90d', trigger: 'cron' }`; `correlation_id` UUID generated per fire |
-| **Lifecycle** | active |
+| **Lifecycle** | **superseded** by FP-050 Phase 3.6b.iii′ γ commit-2 (ACT-196) — the cron handler is now a queue-init shim and emits the shared `longshort.signal_queue.run.started` family (see entry below); metadata extended with `trigger:'cron'` + `mode:'daily'` so monitoring can disambiguate cron/manual × daily/backfill cleanly. No new rows after γ commit-2 deploy. |
 | **Added by** | FP-042 |
 
 ### `longshort.insider.compute.completed`
@@ -2174,7 +2174,7 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-insider-compute/index.ts` after orchestrator returns `outcome='completed'` |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { signal_id, as_of, run_id, outcome: 'completed', universe_size, persisted_count, skip_counts: Record<SignalSkipReason, number>, trigger: 'cron' }` |
-| **Lifecycle** | active |
+| **Lifecycle** | **superseded** by FP-050 Phase 3.6b.iii′ γ commit-2 (ACT-196) — completion now emitted by the engine finalizer as `longshort.signal_queue.run.completed` after the cursor-drain finishes; the handler itself returns 202 immediately after `initQueueRun`. |
 | **Added by** | FP-042 |
 
 ### `longshort.insider.compute.failed`
@@ -2184,7 +2184,7 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-insider-compute/index.ts` on persist-error / orchestrator-throw / `outcome='failed'` |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { signal_id, as_of, error?, stage?: 'orchestrator_throw' \| 'signal_compute_log_persist', failure_reason?, trigger: 'cron' }` |
-| **Lifecycle** | active |
+| **Lifecycle** | **superseded** by FP-050 Phase 3.6b.iii′ γ commit-2 (ACT-196) — init-time failures now emit `longshort.signal_queue.run.failed` with `stage:'queue_init'` + `trigger:'cron'` + `mode:'daily'`; slice/finalizer failures emit `longshort.signal_queue.slice.failed` / `longshort.signal_queue.run.failed` from the engine. |
 | **Added by** | FP-042 |
 
 ### `longshort.insider.compute.manual_triggered`
@@ -2194,7 +2194,7 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-insider-compute-manual/index.ts` BEFORE orchestrator invocation (dual-trail discipline) |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { operator_id, signal_id, as_of, trigger: 'manual' }`; `actor_id` = `auth.uid()`; carries `ip_address` + `user_agent` |
-| **Lifecycle** | active |
+| **Lifecycle** | **superseded** by FP-050 Phase 3.6b.iii′ γ commit-2 (ACT-196) — manual handler is now a queue-init shim; the BEFORE-trigger dual-trail is replaced by the shared `longshort.signal_queue.run.started` emission with `trigger:'manual'` + `mode:'daily' \| 'backfill'`. |
 | **Added by** | FP-042 |
 
 ### `longshort.insider.compute.manual_completed`
@@ -2204,7 +2204,7 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-insider-compute-manual/index.ts` AFTER orchestrator + persist succeed |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { operator_id, signal_id, as_of, run_id, outcome, universe_size, persisted_count, skip_counts, trigger: 'manual' }` |
-| **Lifecycle** | active |
+| **Lifecycle** | **superseded** by FP-050 Phase 3.6b.iii′ γ commit-2 (ACT-196) — completion emitted by the engine finalizer as `longshort.signal_queue.run.completed` once the manual-triggered cursor-drain finishes. |
 | **Added by** | FP-042 |
 
 ### `longshort.insider.compute.manual_failed`
@@ -2214,7 +2214,7 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Emitted by** | `supabase/functions/longshort-insider-compute-manual/index.ts` on persist-error / orchestrator-throw / `outcome='failed'` |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { operator_id, signal_id, as_of, error?, stage?, failure_reason?, trigger: 'manual' }` |
-| **Lifecycle** | active |
+| **Lifecycle** | **superseded** by FP-050 Phase 3.6b.iii′ γ commit-2 (ACT-196) — init-time failures now emit `longshort.signal_queue.run.failed` with `stage:'queue_init'` + `trigger:'manual'` + `mode:'daily' \| 'backfill'`; in-drain failures emit from the engine's slice/finalizer envelopes. |
 | **Added by** | FP-042 |
 
 ### `longshort.options_flow.compute.started`

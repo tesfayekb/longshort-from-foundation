@@ -2955,25 +2955,71 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 
 | Field | Value |
 |---|---|
-| **Module** | longshort (FP-042 + FP-050 Phase 2 rewiring) |
-| **Classification** | edge function — daily-cadence cron handler for Signal #4. DISARMED-at-creation per MIG-077; enable-flip + cron-wiring are a separate operator-run step gated on DEC-043 attestation. |
-| **Trigger** | `verifyCronSecret` (X-Cron-Secret header); registered in `job_registry` as `longshort.insider.compute` via MIG-077 (`enabled=false`, schedule `'0 19 * * 1-5'`). |
-| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `POLYGON_API_KEY` + `EDGAR_CONTACT_EMAIL` checks (structured `polygon_api_key_unset` / `edgar_contact_email_unset` errors) → build `InsiderOrchestratorContext` (EDGAR pipeline: `EdgarCikMapper` + `EdgarDailyIndexFetcher` + `EdgarAccessionIndexFetcher` + `EdgarForm4Fetcher`; 5-rps `TokenBucket`; Polygon shares + price for market-cap denominator) → `createInsiderOrchestrator(ctx).run(as_of)` → `persistSignalComputeLog` → `.started`/`.completed`/`.failed` audit events. |
+| **Module** | longshort (FP-042 → FP-050 Phase 2 EDGAR rewiring → FP-050 Phase 3.6b.iii′ γ commit-2 queue-init shim) |
+| **Classification** | edge function — daily-cadence cron handler for Signal #4, now a **queue-init shim** routing to the FP-045 cursor-drain queue-worker engine via `production-registrations.ts` DAILY-mode registration. DISARMED-at-creation per MIG-077; enable-flip is a separate operator-run step gated on the Phase 4 backfill-before-arm sequence. |
+| **Trigger** | `verifyCronSecret` (X-Cron-Secret header); registered in `job_registry` as `longshort.insider.compute` (MIG-077 + MIG-093 schedule retune to `'15 21 * * 1-5'` UTC; `enabled=false` through γ commit-3). |
+| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → drift sentinel `productionQueueRegistry.has(INSIDER_SIGNAL_ID)` (missing → 500 `insider_registry_drift`) → resolve DAILY config → `initQueueRun({ supabase, operator_id: DEFAULT_OPERATOR_ID, config, as_of })` → on `kind:'started'` emit `QUEUE_AUDIT_EVENTS.RUN_STARTED` with metadata `{ signal_id, run_id, as_of, as_of_date, universe_size, trigger:'cron', mode:'daily' }`; on init throw emit `QUEUE_AUDIT_EVENTS.RUN_FAILED` and return 500 `queue_init_failed`. Returns 202 on success — compute drains across N subsequent `longshort-queue-slice` cron ticks; finalizer owns z-score + persist. |
 | **File** | `supabase/functions/longshort-insider-compute/index.ts` |
-| **Tests** | `index_test.ts` — 7 source-sentinel tests: cron auth wired + auth-first ordering + wall-clock discipline + POLYGON_API_KEY + EDGAR_CONTACT_EMAIL checks + EDGAR pipeline + TokenBucket + Polygon side-inputs wiring + no-PolygonForm4Fetcher leak + no-short-interest-fetcher leak + persist-helper + 3 audit events. |
-| **Added by** | FP-042 (original); FP-050 Phase 2 (rewiring) |
+| **Tests** | `index_test.ts` — source-sentinel suite pinning the queue-init shim shape (cron auth + drift sentinel + `initQueueRun` call + RUN_STARTED/RUN_FAILED audit + trigger/mode metadata + no-orchestrator-leak after the FP-050 Phase 2 → γ commit-2 rewrite). |
+| **Added by** | FP-042 (original); FP-050 Phase 2 (EDGAR rewiring); FP-050 Phase 3.6b.iii′ γ commit-2 (queue-init shim) |
 
 #### `supabase/functions/longshort-insider-compute-manual/index.ts`
 
 | Field | Value |
 |---|---|
-| **Module** | longshort (FP-042 + FP-050 Phase 2 rewiring) |
-| **Classification** | edge function — operator-trigger sibling of `longshort-insider-compute`. Recommended path for validating Signal #4 math + persistence + the sparse-expected profile before any cron wiring (per DEC-043 prudent-sequencing). |
-| **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST with `{ "as_of": "YYYY-MM-DD" }` body. Does NOT register in `job_registry`. 405 on non-POST. |
-| **Pipeline** | auth → perm → body validation (`parseAsOfDate`) → future-`as_of` rejection via `productionClock` comparison → `POLYGON_API_KEY` + `EDGAR_CONTACT_EMAIL` checks → `.manual_triggered` audit BEFORE → orchestrator (EDGAR pipeline + 5-rps TokenBucket + Polygon side-inputs) → `persistSignalComputeLog` → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
+| **Module** | longshort (FP-042 → FP-050 Phase 2 EDGAR rewiring → FP-050 Phase 3.6b.iii′ γ commit-2 queue-init shim with operator-triggerable backfill) |
+| **Classification** | edge function — operator-trigger sibling of `longshort-insider-compute`, now a **queue-init shim**. Carries the operator-only `backfill: true` flag for the Phase 4 backfill-before-arm sequence. |
+| **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST with `{ "as_of": "YYYY-MM-DD", "backfill"?: boolean }` body. Does NOT register in `job_registry`. 405 on non-POST. |
+| **Pipeline** | auth → perm → body parse (`parseAsOfDate` + optional `backfill` flag) → future-`as_of` rejection via `productionClock` → config resolution (when `backfill:true`, `buildInsiderBackfillConfig` builds a per-request config that is NEVER registered — bypasses the drift sentinel; otherwise daily config resolved from `productionQueueRegistry` with drift-sentinel check) → `initQueueRun` → on `kind:'started'` emit `QUEUE_AUDIT_EVENTS.RUN_STARTED` with metadata `{ ..., trigger:'manual', mode:'daily' \| 'backfill' }`; on init throw emit `QUEUE_AUDIT_EVENTS.RUN_FAILED`. |
 | **File** | `supabase/functions/longshort-insider-compute-manual/index.ts` |
-| **Tests** | `index_test.ts` — 9 source-sentinel tests: auth + permission + POST-only + body validation + parser + POLYGON_API_KEY + EDGAR_CONTACT_EMAIL checks + dual audit envelope ordering + wall-clock + EDGAR pipeline + TokenBucket + Polygon side-inputs wiring + no-PolygonForm4Fetcher leak + no-short-interest-fetcher leak. |
-| **Added by** | FP-042 (original); FP-050 Phase 2 (rewiring) |
+| **Tests** | `index_test.ts` — source-sentinel suite pinning the queue-init shim shape including the `backfill: true` build-then-bypass path (auth + perm + POST-only + body parse + config resolution branch + `initQueueRun` + RUN_STARTED/RUN_FAILED + trigger/mode metadata + no-orchestrator-leak). |
+| **Added by** | FP-042 (original); FP-050 Phase 2 (EDGAR rewiring); FP-050 Phase 3.6b.iii′ γ commit-2 (queue-init shim + backfill flag) |
+
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/insider-work-list-registration.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-050 Phase 3.6b.iii′ γ commit-1) |
+| **Classification** | shared module — Signal #4 producer for the FP-045 cursor-drain queue-worker engine. The work-list adapter (seedWorkItems / processItem / loadAndCompute) for in-universe Form-4(/A) accessions. |
+| **Exports** | `createInsiderWorkListConfig(deps, mode: 'daily' \| 'backfill'): QueueSignalConfig` — returns a registry-ready config. Same `signalId = 'insider_transactions_90d'` across modes; distinct `jobId` per mode (`longshort.insider.compute` / `longshort.insider.compute.backfill`). |
+| **Surface** | `seedWorkItems({ asOf, backfill })` — daily seeds yesterday's trading-day EDGAR daily index → in-universe qualifying Form-4(/A) accessions (CIK map fetch-per-fire + ticker→CIK overrides + `ticker_to_cik_unresolved` typed skip); backfill seeds the ~63-trading-day sweep (~16k accessions, ~32k EDGAR HTTPS calls). `processItem(accession)` — accession `index.json` → typed primary-doc selection (INC-70 anti-heuristic; 0/>1 primary → `permanent_skip no_primary_doc`) → Form-4 XML fetch+parse (M1 hardening: absent `owner_cik` → `permanent_skip data_unavailable`) → INC-74 batch-dedupe → upsert `insider_form4_rows` `onConflict: 'issuer_cik,accession_number,transaction_seq'` (MIG-095 dual-write; `owner_cik` carried verbatim; `ingested_at: asOf.toISOString()` per DEC-034 clause 4). `loadAndCompute` reads per-as_of slice via `runStaged`; engine finalizer owns z+persist. |
+| **Q3 typed classification** | 404 → `permanent_skip data_unavailable`; ambiguous primary → `permanent_skip no_primary_doc`; 429 → THROW (transient — cursor preserved); Postgres upsert error → THROW; `rows:[]` (derivative-only filing) → `processed` (no upsert, cursor deleted). |
+| **accessionsPerSlice arithmetic** | `itemsPerSlice = 50`; `callsPerItem = 2`; `ratePerSec = 5 × 0.85 = 4.25`. Rate-bound per slice = `50 × 2 / 4.25 ≈ 23.5 s` paced + parser CPU + upsert wall ≈ 35-55 s end-to-end. 65-85 s headroom under the 120 s STOP gate; 95-115 s under the 150 s HTTP wall. Daily fire (M4 RE-RULE band): ~253 typical → 6 slices ≈ 3-6 min; ~352 measured-max → 8 slices ≈ 5-7 min. Backfill: 320 slices × max(slice_wall, 60 s) ≈ **~5.3 h** (cron-cadence-binding; slice-wall floor ~3.1-4.9 h). Drift sentinel `(A.1)` pins this row. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/insider-work-list-registration.ts` |
+| **Tests** | `insider-work-list-registration_test.ts` — 21 Deno tests covering ACT-193 crosswalk + M1-M5 rulings + the ACT-194 Rule-8 M4 RE-RULE corrected band (worked examples pinned: drift sentinel A.1, Q1 upsert-before-processed barrier F.1/F.3, dual-write MIG-095 invariant, staged-seam end-to-end H.1, cross-mode determinism). |
+| **Added by** | FP-050 Phase 3.6b.iii′ γ commit-1 (ACT-195) |
+
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/insider-queue-bootstrap.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-050 Phase 3.6b.iii′ γ commit-2) |
+| **Classification** | shared module — lazy env-derived deps + DAILY consumer registration + per-request backfill config builder (news-fetcher pattern). |
+| **Exports** | `buildInsiderDepsFromEnv()` (lazy env-derived deps — Polygon side-inputs + EDGAR HTTP layers + 5-rps TokenBucket + Supabase admin); `registerInsiderDailyConsumer()` (side-effect register of DAILY config into `productionQueueRegistry`; backfill is NEVER registered); `buildInsiderBackfillConfig()` (per-request build for the manual handler's `backfill: true` path — bypasses the registry per the no-duplicate-`signalId` contract). |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/insider-queue-bootstrap.ts` |
+| **Tests** | Exercised via `insider-cross-mode-contamination_test.ts` (6 invariants `(CM-1)..(CM-4b)` — duplicate-signalId registration throws; DAILY-only registered jobId; mode argument actually parameterises jobId; cross-mode-family field contamination rejected by `validateConfig` at register time). |
+| **Added by** | FP-050 Phase 3.6b.iii′ γ commit-2 (ACT-196) |
+
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/insider-load-and-compute.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-050 Phase 3.6b.iii′ γ commit-2b post-`.run()`-deletion) |
+| **Classification** | shared module — per-as_of staged-seam reader consumed by the work-list adapter's `loadAndCompute`. `runStaged(as_of)` is the SOLE per-run entry point (the legacy `.run()` shim was deleted in γ commit-2b; z-score + persist now live at the engine finalizer surfaces `zScoreNormalizeWithinSector` (`queue-finalizer.ts:174`) and `captureSignalObservations` (`queue-finalizer.ts:202`)). |
+| **Exports** | `createInsiderLoadAndCompute(ctx).runStaged(as_of)` returning either staged values + skips (per-ticker, mass-balance preserved) or `{ kind:'short-circuit', failure_reason:'empty_universe' }`. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/insider-load-and-compute.ts` |
+| **Tests** | `insider-load-and-compute_test.ts` — 8 fixtures: A.1/A.2/B.1/B.2/D.1 (surfaces independent of `.run()`, unchanged); C.1 + E.1 pivoted to assert `runStaged` shape; new C.2 relocates ±√2/2 z-score arithmetic + persist-payload assertions to the engine-finalizer surfaces (arithmetic byte-identical, SIGNAL_ID + as_of_date + is_present invariants retained). |
+| **Added by** | FP-045 Phase 4 (original staged seam); FP-050 Phase 3.6b.iii′ γ commit-2b (`.run()` deletion + fixture migration) |
+
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/insider-cross-mode-contamination_test.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-050 Phase 3.6b.iii′ γ commit-2) |
+| **Classification** | Deno test file — cross-mode invariants pinning the daily/backfill separation enforced by `insider-queue-bootstrap.ts` against the FP-045 engine registry. |
+| **Coverage** | `(CM-1)` duplicate-`signalId` registration throws (daily + backfill cannot co-exist in the same isolate's registry); `(CM-2)` daily-only registration carries DAILY `jobId`, backfill `jobId` never leaks via the registered path; `(CM-3)` `mode` argument actually parameterises `jobId` (not silently dropped); `(CM-4)` / `(CM-4b)` cross-mode-family field contamination is rejected by `validateConfig` at register time. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/insider-cross-mode-contamination_test.ts` |
+| **Added by** | FP-050 Phase 3.6b.iii′ γ commit-2 (ACT-196) |
 
 ### FP-043 — Signal #3 (Options Flow Imbalance) shared functions
 
