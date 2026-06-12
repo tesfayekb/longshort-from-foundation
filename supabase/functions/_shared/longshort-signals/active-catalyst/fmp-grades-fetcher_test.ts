@@ -18,7 +18,11 @@ const WINDOW = {
 };
 
 Deno.test('(1) preserves action in meta so classifier can pick Tier-2 vs Tier-3', async () => {
-  const f = new FmpGradesFetcher('k', async () => jsonResp(SAMPLE));
+  let call = 0;
+  const f = new FmpGradesFetcher('k', async () => {
+    call += 1;
+    return jsonResp(call === 1 ? SAMPLE : []);
+  });
   const out = await f.fetch(WINDOW);
   if (out.kind !== 'events') throw new Error('unreachable');
   assertEquals(out.rows.length, 2);
@@ -51,9 +55,11 @@ Deno.test('(4) HTTP 500 throws SignalComputationError', async () => {
 });
 
 Deno.test('(5) unknown action preserved (classifier routes conservatively)', async () => {
-  const f = new FmpGradesFetcher('k', async () =>
-    jsonResp([{ symbol: 'X', publishedDate: '2026-06-08T12:00:00Z', action: 'mystery-action' }]),
-  );
+  let call = 0;
+  const f = new FmpGradesFetcher('k', async () => {
+    call += 1;
+    return jsonResp(call === 1 ? [{ symbol: 'X', publishedDate: '2026-06-08T12:00:00Z', action: 'mystery-action' }] : []);
+  });
   const out = await f.fetch(WINDOW);
   if (out.kind !== 'events') throw new Error('unreachable');
   assertEquals(out.rows[0].meta?.action, 'mystery-action');
