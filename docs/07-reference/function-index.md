@@ -3180,6 +3180,19 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Consumers** | `_shared/longshort-signals/shared/queue-worker/queue-slice-worker.ts` (`runQueueSlice` post-drain). |
 | **Added by** | FP-045 / MIG-083 |
 
+#### `supabase/functions/_shared/longshort-signals/shared/queue-worker/queue-config.ts` — work-list mode contract (FP-050 Phase 3.6a)
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-050 — Phase 3.6a engine extension; first consumer: insider in 3.6b) |
+| **Classification** | shared engine contract — third `mode` of the FP-045 queue engine. Pure types + a single discriminator + named-constant tuning parameters. NO I/O, NO clock, NO state. |
+| **Exports** | `interface WorkListItem`; `type WorkListItemResult` ({`'processed'` \| `'permanent_skip'`}); `type WorkListSeedFn`; `type WorkListProcessItemFn`; `type WorkListLoadAndComputeFn`; `function isWorkListMode(cfg)`; `const WORK_LIST_HEARTBEAT_ITEM_INTERVAL = 25` (Q2); `const WORK_LIST_SLICE_FAILURE_THRESHOLD = 3` (Q3 INC-73 parity); widened `QueueSignalConfig.mode` to `'per-ticker'\|'sequential-feed'\|'work-list'` with 5 new mode-scoped fields (`itemsPerSlice`, `callsPerItem`, `seedWorkItems`, `processItem`, `loadAndCompute`). |
+| **Q-ruling contract** | Q1 CAS barrier (process → upsert → engine-deletes cursor per item; CAS predicate = no cursor rows). Q2 heartbeat granularity (slice entry + every 25 items via liveClock). Q3 3-strikes + deadlock guard (slice-level counter, reset on ≥1 success, deadlock = claimed>0 ∧ succeeded=0). Q4 two-ledger skips (item-scope → signal_queue_skips for telemetry; 839 mass balance entirely from `loadAndCompute`). Q5 seed semantics (throw → terminal `seed_failed` run, NEVER half-seeded; empty → VALID run proceeds directly to finalize). |
+| **Behavioral wiring** | `queue-init.ts` (`initWorkListRun`); `queue-slice-worker.ts` (`runWorkListSlice` + helpers `releaseClaims`, `bumpHeartbeatLive`, `stampSliceFailure`); `queue-finalizer.ts` (`buildWorkListAggregates`). |
+| **Tests** | `queue-config_test.ts` (validator + 3×3 contamination matrix); `queue-work-list-mode_test.ts` (19 tests — INC-73 five-contract parity + Q1..Q5 + cross-mode regression fence). |
+| **Reuse fence** | per-ticker + sequential-feed regression suites pass UNMODIFIED (queue-config_test.ts, queue-init_test.ts, queue-slice-worker_test.ts, queue-finalizer_test.ts, queue-sweeper_test.ts, queue-feed-mode_test.ts, queue-feed-slice-dedupe_test.ts, queue-feed-slice-failure_test.ts). |
+| **Added by** | FP-050 Phase 3.6a (types — 3.6a.i; behavioral wiring — 3.6a.ii). First consumer registration in FP-050 Phase 3.6b (insider). |
+
 #### `supabase/functions/_shared/longshort-signals/analyst-revisions/analyst-identity.ts`
 
 | Field | Value |
