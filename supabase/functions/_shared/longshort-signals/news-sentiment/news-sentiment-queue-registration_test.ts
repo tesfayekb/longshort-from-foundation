@@ -56,16 +56,24 @@ Deno.test('registration — NEWS_QUEUE_CONFIG declares sequential-feed mode', ()
 
 Deno.test('registration — cross-mode contamination guard: registering news as per-ticker must fail validation', () => {
   const reg = createTestRegistry();
-  // Build a deliberately-malformed per-ticker config from the news constants.
-  // Mode collapsed to default (per-ticker) but feed-mode fields present →
-  // engine's validator must throw.
+  // Build a deliberately-malformed config: per-ticker required fields
+  // present AND feed-mode fields present. The validator's per-ticker
+  // branch runs (mode omitted → default per-ticker) and the cross-mode
+  // contamination check at the END of that branch must throw.
   const badConfig = {
     signalId: NEWS_SIGNAL_ID,
     jobId: NEWS_QUEUE_JOB_ID,
     ratePerSec: NEWS_QUEUE_CONFIG.ratePerSec,
     heartbeatTimeoutSec: NEWS_QUEUE_CONFIG.heartbeatTimeoutSec,
     stagingTtlSec: NEWS_QUEUE_CONFIG.stagingTtlSec,
-    // mode omitted → per-ticker default
+    // mode omitted → per-ticker default; supply per-ticker required
+    // fields with synthetic values so the validator reaches the
+    // cross-mode contamination check rather than tripping a missing-
+    // required-field error first.
+    callsPerName: 1,
+    sliceSize: 1,
+    fetchAndCompute: async () => ({ kind: 'value' as const, raw: 0 }),
+    // ── feed-mode fields ALSO present — this is the contamination ──
     pagesPerSlice: NEWS_QUEUE_CONFIG.pagesPerSlice,
     maxPages: NEWS_QUEUE_CONFIG.maxPages,
     fetchPage: async () => ({ items: [], nextToken: null }),
@@ -75,6 +83,33 @@ Deno.test('registration — cross-mode contamination guard: registering news as 
     () => reg.register(badConfig),
     Error,
     'per-ticker mode must not set feed-mode fields',
+  );
+});
+
+Deno.test('registration — cross-mode contamination guard (mirror): feed mode + per-ticker fields must fail validation', () => {
+  const reg = createTestRegistry();
+  // Mirror: declare sequential-feed mode but also supply per-ticker
+  // fields → the feed-mode branch's "feed mode must not set X" check
+  // must throw. Catches accidental copy-paste from the PEAD/options
+  // registrations into a feed-mode config.
+  const badConfig = {
+    signalId: NEWS_SIGNAL_ID,
+    jobId: NEWS_QUEUE_JOB_ID,
+    ratePerSec: NEWS_QUEUE_CONFIG.ratePerSec,
+    heartbeatTimeoutSec: NEWS_QUEUE_CONFIG.heartbeatTimeoutSec,
+    stagingTtlSec: NEWS_QUEUE_CONFIG.stagingTtlSec,
+    mode: 'sequential-feed' as const,
+    pagesPerSlice: NEWS_QUEUE_CONFIG.pagesPerSlice,
+    maxPages: NEWS_QUEUE_CONFIG.maxPages,
+    fetchPage: async () => ({ items: [], nextToken: null }),
+    computeFromItems: () => ({ kind: 'value' as const, raw: 0 }),
+    // ── per-ticker contamination ──
+    fetchAndCompute: async () => ({ kind: 'value' as const, raw: 0 }),
+  };
+  assertThrows(
+    () => reg.register(badConfig),
+    Error,
+    'feed mode must not set fetchAndCompute',
   );
 });
 
