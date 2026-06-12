@@ -3261,3 +3261,113 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Tests** | `compute-news-sentiment_test.ts` — 17 fixture-driven tests (decay pins @ 0h→1.0 exact, 24h→e^(-1), 168h→e^(-7) to 4dp; window boundary 168h-in / 169h-out; WWDC multi-ticker AAPL neutral→0 + GOOG +1×0.4×decay; 3-article mixed-sign exact superposition; all-neutral → value 0.0 NOT skip; all-mixed → value 0.0 NOT skip; only-PR-wire → no_articles_in_window; PR + far-out-of-window → no_articles_in_window; unmapped publisher contributes + surfaces in meta.unmappedPublisherCount; non-finite timestamp → data_unavailable (only) / dropped (mixed); unknown sentiment in-window → data_unavailable; invalid asOf → data_unavailable; empty entries → no_articles_in_window; purity bit-equal raw; constants verbatim). |
 | **Skip-union impact** | Adds `no_articles_in_window` to `SignalSkipReason` (signal-types.ts) + `aggregateSkipCounts` seed + the three `persist-signal-compute-log_test.ts` expected-shape assertions in the same commit. |
 | **Added by** | FP-048 |
+
+## Active Catalyst Flag Signal (FP-049 / Phase 2.9 / Signal #9)
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/catalyst-types.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1a / Signal #9) |
+| **Classification** | shared types — Phase-1 fetcher + Phase-1b classifier contract. |
+| **Exports** | `const ACTIVE_CATALYST_SIGNAL_ID = 'active_catalyst_flag'`; `type CatalystEventType` (DEC-057 §(g) IN-set: 10 types); `type CatalystTier` (1\|2\|3); `type CatalystSource` ('structured'\|'keyword'); `type CatalystVendor` ('fmp'\|'polygon'\|'finnhub'\|'tradier'); `interface RawCatalystEventInput`, `CatalystFetchWindow`; `type CatalystFetchUnavailableReason`, `CatalystFetchResult`; `applyLookAheadGate(candidates, as_of)`, `applyWindowLowerBound(candidates, window_start_at)`. |
+| **Authority** | DEC-057 §(g) IN-set governs `CatalystEventType`; amendments require DEC-057 revision. |
+| **Wall-clock** | None. All time inputs are `Date` parameters. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/catalyst-types.ts` |
+| **Tests** | `catalyst-types_test.ts` — 5 fixture-driven tests (look-ahead gate inclusivity; invalid event_at counted not silent; invalid as_of throws; window lower bound inclusive; invalid window_start_at throws). |
+| **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/fmp-earnings-calendar-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1a / Signal #9) |
+| **Classification** | shared infrastructure — DEC-057 §(b) structured-authoritative source for `earnings`. |
+| **Exports** | `class FmpEarningsCalendarFetcher { fetch(window): Promise<CatalystFetchResult> }`; `const FMP_BASE_URL`, `FMP_EARNINGS_CALENDAR_OPERATION_ID`. |
+| **§(d) OCCURRED-ONLY** | Future-dated rows dropped + counted in `future_event_excluded`. Mid-session UTC anchor (16:00 UTC) assigned to date-only vendor rows — Finnhub-hour enrichment named as Phase-7 IC-ablation follow-up; v1 does NOT silently cross-vendor mix per event row. |
+| **Error taxonomy** | 401/402/403 → `subscription_gated`; 429 → `rate_limited`; 404 OR empty array → `data_unavailable`; otherwise throws `SignalComputationError`. |
+| **Secret discipline** | `FMP_API_KEY` never logged; error messages omit the key. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/fmp-earnings-calendar-fetcher.ts` |
+| **Tests** | `fmp-earnings-calendar-fetcher_test.ts` — 9 tests (constructor key-required; OCCURRED-ONLY drops future + counts; mid-session anchor verbatim; window lower bound; 403/404/empty taxonomy; 500 throws; URL composition + key non-leak on error). |
+| **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/fmp-ma-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1a / Signal #9) |
+| **Classification** | shared infrastructure — DEC-057 §(b) structured-authoritative source for `ma`. |
+| **Exports** | `class FmpMaFetcher { fetch(window): Promise<CatalystFetchResult> }`; `const FMP_MA_OPERATION_ID`, `FMP_MA_DEFAULT_MAX_PAGES` (5). |
+| **Two-sided emission** | Each vendor row emits one event per non-empty side (acquirer + target); `meta.side` distinguishes. Cross-vendor dedup at Phase 1b §(h) 1h-bucket collapses within-window duplicates. |
+| **Pagination** | Walks until a full page is below `window_start_at` (early-stop) OR `maxPages` ceiling (default 5 × 100 = 500 deals). |
+| **Error taxonomy** | identical to FMP earnings-calendar; 404 / empty on page 0 → `data_unavailable`; mid-walk treated as end-of-feed. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/fmp-ma-fetcher.ts` |
+| **Tests** | `fmp-ma-fetcher_test.ts` — 7 tests (two-sided emission; early-stop pagination; 403/empty taxonomy; 500 throws; both-empty row dropped no-phantom; constructor key-required). |
+| **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/fmp-grades-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1a / Signal #9) |
+| **Classification** | shared infrastructure — DEC-057 §(b) structured-authoritative source for `analyst_rating`. **§(c) DECOUPLED parallel fetcher** — Signal #1 (`analyst-revisions/`) consumes the SAME endpoint via its own fetcher; this is a deliberate thin duplication so #9's vendor contract is independently tested + observable. |
+| **Exports** | `class FmpGradesFetcher { fetch(window): Promise<CatalystFetchResult> }`; `const FMP_GRADES_OPERATION_ID`, `FMP_GRADES_DEFAULT_MAX_PAGES` (3). |
+| **Action preservation** | Wire `action` (`initialise`/`upgrade`/`downgrade`/`reiterate`) stored verbatim in `meta.action`; Phase-1b classifier maps to §4.4.9 Tier-2 vs Tier-3 (reiterate → Tier-3 "minor analyst rating change"). Unknown actions preserved + routed conservatively. |
+| **Error taxonomy** | 401/402/403 → `subscription_gated`; 429 (incl. thrown HTTP-429) → `rate_limited`; 404/empty on page 0 → `data_unavailable`. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/fmp-grades-fetcher.ts` |
+| **Tests** | `fmp-grades-fetcher_test.ts` — 7 tests (action preservation including reiterate; 403/429/500/empty/unknown-action paths; constructor key-required). |
+| **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/polygon-splits-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1a / Signal #9) |
+| **Classification** | shared infrastructure — DEC-057 §(b) structured-authoritative source for `splits`. |
+| **Exports** | `class PolygonSplitsFetcher { fetch(window): Promise<CatalystFetchResult> }`; `const POLYGON_BASE_URL`, `POLYGON_SPLITS_OPERATION_ID`. |
+| **Event-at** | `execution_date` + mid-session UTC anchor (16:00 UTC). `split_from`/`split_to`/`id` preserved in meta. |
+| **Error taxonomy** | 401/402/403 → `subscription_gated`; 429 → `rate_limited`; 404/empty results → `data_unavailable`; unwrapped (non-`results`) shape → throws. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/polygon-splits-fetcher.ts` |
+| **Tests** | `polygon-splits-fetcher_test.ts` — 6 tests (look-ahead + window-floor enforcement; 403/404/empty taxonomy; unwrapped-shape throws; constructor key-required). |
+| **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/polygon-dividends-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1a / Signal #9) |
+| **Classification** | shared infrastructure — DEC-057 §(b)+(e) structured-authoritative source for `dividend_change`. |
+| **Exports** | `class PolygonDividendsFetcher { fetch(window): Promise<CatalystFetchResult> }`; `const POLYGON_DIVIDENDS_OPERATION_ID`. |
+| **§(e) BINDING** | Decay-origin = `declaration_date`. Rows missing it surface as the typed counter `declaration_date_unavailable` (counted; NEVER ex-date substitution). `dividend_type === 'SC'` (special cash) preserved in `meta.special=true` for Phase-1b Tier-2 "special dividend" routing. |
+| **Error taxonomy** | identical to PolygonSplitsFetcher. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/polygon-dividends-fetcher.ts` |
+| **Tests** | `polygon-dividends-fetcher_test.ts` — 6 tests (§(e) declaration-missing counted + no ex-date substitution; special-dividend meta; 403/empty/500 taxonomy; constructor key-required). |
+| **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/finnhub-fda-advisory-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1a / Signal #9) |
+| **Classification** | shared infrastructure — DEC-057 §(b)+(g) structured-authoritative source for `fda_advisory` (advisory-committee meetings ONLY; approval/rejection outcomes in §(g) OUT-set). |
+| **Exports** | `class FinnhubFdaAdvisoryFetcher { fetch(window): Promise<CatalystFetchResult> }`; `const FINNHUB_BASE_URL`, `FINNHUB_FDA_ADVISORY_OPERATION_ID`. |
+| **Emission shape** | Universe-wide events emitted with sentinel ticker `*` (Finnhub feed lacks per-event symbol). Phase-2 compute fans out via a drug-name → ticker mapping (named Phase-2 deliverable; until landed, fda_advisory events contribute to universe-wide presence count only). `meta.description` bounded to 240 chars for log safety. |
+| **Error taxonomy** | 401/402/403 → `subscription_gated`; 404/empty array → `data_unavailable`; non-array body → throws. |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/finnhub-fda-advisory-fetcher.ts` |
+| **Tests** | `finnhub-fda-advisory-fetcher_test.ts` — 6 tests (universe-wide sentinel + OCCURRED-ONLY enforced; 401/empty/wrapped-shape paths; bounded description; constructor key-required). |
+| **Added by** | FP-049 |
+
+#### `supabase/functions/_shared/longshort-signals/active-catalyst/tradier-corporate-actions-fetcher.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-049 — Phase 1 commit 1a / Signal #9) |
+| **Classification** | shared infrastructure — DEC-057 §(i) **TYPED-FALLBACK ONLY**. Phase-1 lands the fetcher + tests; the Phase-3 orchestrator gates invocation (only on Polygon `unavailable`). |
+| **Exports** | `class TradierCorporateActionsFetcher { fetch(window, tickers): Promise<CatalystFetchResult> }`; `const TRADIER_BASE_URL`, `TRADIER_CORPORATE_ACTIONS_OPERATION_ID`, `TRADIER_MAX_SYMBOLS_PER_CALL` (100). |
+| **Defensive normalization** | Tradier corporate-actions NOT live-probed at Phase 0; every wire field validated `unknown`-first. Shape drift surfaces as `SignalComputationError`, never silent emptiness. `meta.tradier_backup=true` on every emitted row for forensic separation from Polygon primaries. |
+| **§(e) BINDING** | `announcement_date` is the decay-origin for `cash_dividend`. Rows missing it surface as `declaration_date_unavailable` (shared counter name with PolygonDividendsFetcher). |
+| **Auth** | Bearer-token via `TRADIER_API_KEY` (parallel to `tradier-options-chain-fetcher.ts`). |
+| **Chunking** | Per-call cap 100 symbols; caller MUST chunk (throws on overflow rather than silently truncating). |
+| **File** | `supabase/functions/_shared/longshort-signals/active-catalyst/tradier-corporate-actions-fetcher.ts` |
+| **Tests** | `tradier-corporate-actions-fetcher_test.ts` — 8 tests (cash_dividend + stock_split normalization + §(e) declaration-missing count; empty-tickers short-circuit; over-cap throws; Bearer auth + CSV upper-case; 401/missing-securities/500 taxonomy; constructor key-required). |
+| **Added by** | FP-049 |
