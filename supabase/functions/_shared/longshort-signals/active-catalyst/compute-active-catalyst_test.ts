@@ -227,3 +227,27 @@ Deno.test('raw>=0 invariant — assertion guard structural sanity', () => {
     throw new Error('placeholder — see file header rule (d)');
   });
 });
+
+// ── Window-floor trust boundary (compute does NOT re-window) ──────────────
+
+Deno.test('window-floor trust: compute treats inputs as already window-bounded — does NOT re-filter by age', () => {
+  // §(f) the trailing-5-trading-day floor is enforced upstream by
+  // `applyWindowLowerBound` inside the classifier / fetcher. Compute
+  // trusts that pipeline: an event one hour OLDER than the upstream
+  // floor is still scored if the caller passed it (no silent drop) —
+  // proving compute does not re-implement the window check.
+  const t = AS_OF.getTime();
+  // 5 trading days ≈ 5 × 24h = 120h (calendar approximation; the actual
+  // floor is the orchestrator's responsibility). One hour before that:
+  const atFloor = new Date(t - 120 * 3_600_000).toISOString();
+  const oneHourBeforeFloor = new Date(t - 121 * 3_600_000).toISOString();
+
+  const inAtFloor = computeActiveCatalyst(inputs([ev('earnings', atFloor)]));
+  const inBeforeFloor = computeActiveCatalyst(inputs([ev('earnings', oneHourBeforeFloor)]));
+  if (inAtFloor.kind !== 'value' || inBeforeFloor.kind !== 'value') {
+    throw new Error('compute must score both — upstream owns the window');
+  }
+  // Both score; the older one scores slightly less due to the extra
+  // hour of decay. Demonstrates "compute trusts upstream window".
+  assert(inBeforeFloor.raw < inAtFloor.raw);
+});
