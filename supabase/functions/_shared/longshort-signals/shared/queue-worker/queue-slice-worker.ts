@@ -518,8 +518,7 @@ async function runFeedSlice(
       .from('signal_queue_runs')
       .update({ slice_failure_count: 0, heartbeat_at: liveTs, updated_at: liveTs })
       .eq('run_id', run_id)
-      .eq('status', 'running')
-      .gt('slice_failure_count', 0);
+      .eq('status', 'running');
   }
 
   // ── 5. Exhausted → DELETE + CAS. Else RELEASE the claim.
