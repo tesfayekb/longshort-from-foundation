@@ -44,6 +44,7 @@ export function aggregateSkipCounts(
     no_articles_in_window: 0,
     no_catalyst_events_in_window: 0,
     ticker_to_cik_unresolved: 0,
+    no_primary_doc: 0,
   };
   for (const s of skips) counts[s.reason] += 1;
   return counts;
