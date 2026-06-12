@@ -120,7 +120,10 @@ Deno.test('(5) JOB_ID_TO_SIGNAL_ID has exactly the FP-010 A3 set (single entry)'
   // second (short-term reversal / Signal #7). FP-041 adds the third
   // (short-interest changes / Signal #5). FP-042 adds the fourth
   // (insider transactions / Signal #4). FP-043 adds the fifth (options
-  // flow / Signal #3). FP-044 adds the sixth (PEAD / Signal #2). Each
+  // flow / Signal #3). FP-044 adds the sixth (PEAD / Signal #2).
+  // FP-047 adds the seventh (analyst-revision-drift / Signal #1).
+  // FP-048 Phase 3b adds the eighth (news_sentiment_7d / Signal #8 —
+  // first sequential-feed consumer on the FP-045 engine). Each
   // subsequent signal execution
   // prompt adds exactly one entry in the same PR that registers its
   // compute job.
@@ -129,6 +132,7 @@ Deno.test('(5) JOB_ID_TO_SIGNAL_ID has exactly the FP-010 A3 set (single entry)'
     'longshort.analyst.compute',
     'longshort.insider.compute',
     'longshort.momentum.compute',
+    'longshort.news.compute',
     'longshort.options_flow.compute',
     'longshort.pead.compute',
     'longshort.reversal.compute',
