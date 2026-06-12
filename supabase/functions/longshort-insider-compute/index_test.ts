@@ -32,20 +32,28 @@ Deno.test('(2) productionClock is sole wall-clock — no Date() leak', () => {
   assert(!/performance\.now\s*\(/.test(codeOnly));
 });
 
-Deno.test('(3) POLYGON_API_KEY checked with structured error code', () => {
+Deno.test('(3) POLYGON_API_KEY + EDGAR_CONTACT_EMAIL checked with structured error codes', () => {
   assert(HANDLER_SOURCE.includes("Deno.env.get('POLYGON_API_KEY')"));
   assert(HANDLER_SOURCE.includes("'polygon_api_key_unset'"));
+  assert(HANDLER_SOURCE.includes("Deno.env.get('EDGAR_CONTACT_EMAIL')"));
+  assert(HANDLER_SOURCE.includes("'edgar_contact_email_unset'"));
 });
 
-Deno.test('(4) createInsiderOrchestrator wired with all three fetchers', () => {
+Deno.test('(4) createInsiderOrchestrator wired with EDGAR pipeline + TokenBucket + Polygon side-inputs', () => {
   assert(HANDLER_SOURCE.includes('createInsiderOrchestrator(ctx)'));
-  assert(HANDLER_SOURCE.includes('form4: new PolygonForm4Fetcher'));
+  assert(HANDLER_SOURCE.includes('cikMapper: new EdgarCikMapper'));
+  assert(HANDLER_SOURCE.includes('dailyIndex: new EdgarDailyIndexFetcher'));
+  assert(HANDLER_SOURCE.includes('accessionIndex: new EdgarAccessionIndexFetcher'));
+  assert(HANDLER_SOURCE.includes('form4Edgar: new EdgarForm4Fetcher'));
+  assert(HANDLER_SOURCE.includes('bucket: new TokenBucket'));
+  assert(HANDLER_SOURCE.includes('ratePerSec: DEFAULT_EDGAR_RPS'));
   assert(HANDLER_SOURCE.includes('sharesOutstanding: new PolygonSharesOutstandingFetcher'));
   assert(HANDLER_SOURCE.includes('priceHistory: new PolygonPriceHistoryFetcher'));
   assert(HANDLER_SOURCE.includes('supabase: supabaseAdmin'));
   assert(HANDLER_SOURCE.includes('operator_id: DEFAULT_OPERATOR_ID'));
   assert(HANDLER_SOURCE.includes('concurrency: DEFAULT_CONCURRENCY'));
-  // No short-interest fetcher leaks in.
+  // No legacy Polygon Form-4 leak in.
+  assert(!HANDLER_SOURCE.includes('PolygonForm4Fetcher'));
   assert(!HANDLER_SOURCE.includes('PolygonShortInterestFetcher'));
 });
 

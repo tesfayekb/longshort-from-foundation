@@ -161,6 +161,18 @@ export type SignalSkipReason =
                              // PEAD `zero_dispersion` where the denominator
                              // vanishes). Non-critical; ticker still ranked by
                              // other signals.
+  | 'ticker_to_cik_unresolved'  // FP-050 / Signal #4 EDGAR rebuild — the
+                             // universe ticker did not resolve to a SEC
+                             // CIK via `company_tickers.json` + the
+                             // hard-frozen `INSIDER_CIK_OVERRIDES` map
+                             // (DEC-058 §(f)). Typed-absence skip per
+                             // §(f): the alternative (silent map to
+                             // whatever Polygon happened to ship) is the
+                             // exact INC-70 phantom-firehose failure mode
+                             // the FP-050 rebuild exists to close. The
+                             // ticker is still ranked by other signals.
+                             // Non-critical; combiner imputes (-999, 0)
+                             // in Phase 3.
   | 'no_catalyst_events_in_window'; // FP-049 / Signal #9 (Active Catalyst
                              // Flag §4.4.9) — ticker has ZERO deduped
                              // classified catalyst events inside the trailing

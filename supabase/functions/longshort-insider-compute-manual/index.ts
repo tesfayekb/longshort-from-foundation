@@ -15,12 +15,17 @@ import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
-import { PolygonForm4Fetcher } from '../_shared/longshort-signals/shared/polygon-form4-fetcher.ts';
 import { PolygonSharesOutstandingFetcher } from '../_shared/longshort-signals/shared/polygon-shares-outstanding-fetcher.ts';
 import { PolygonPriceHistoryFetcher } from '../_shared/longshort-signals/shared/polygon-price-history-fetcher.ts';
+import { EdgarCikMapper } from '../_shared/longshort-signals/insider-transactions/edgar-cik-mapper.ts';
+import { EdgarDailyIndexFetcher } from '../_shared/longshort-signals/insider-transactions/edgar-daily-index-fetcher.ts';
+import { EdgarAccessionIndexFetcher } from '../_shared/longshort-signals/insider-transactions/edgar-accession-index-fetcher.ts';
+import { EdgarForm4Fetcher } from '../_shared/longshort-signals/insider-transactions/edgar-form4-fetcher.ts';
+import { TokenBucket } from '../_shared/longshort-signals/options-flow/token-bucket.ts';
 import {
   createInsiderOrchestrator,
   SIGNAL_ID,
+  DEFAULT_EDGAR_RPS,
   type InsiderOrchestratorContext,
 } from '../_shared/longshort-signals/insider-transactions/insider-orchestrator.ts';
 import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
@@ -66,6 +71,10 @@ Deno.serve(createHandler(async (req: Request) => {
   if (!polygonApiKey) {
     return apiError(500, 'polygon_api_key_unset', { correlationId });
   }
+  const edgarContactEmail = Deno.env.get('EDGAR_CONTACT_EMAIL');
+  if (!edgarContactEmail) {
+    return apiError(500, 'edgar_contact_email_unset', { correlationId });
+  }
 
   await writeStrategyAuditEvent({
     strategyKey: 'longshort',
@@ -85,9 +94,13 @@ Deno.serve(createHandler(async (req: Request) => {
   // KEEP IN SYNC with longshort-insider-compute/index.ts cron handler.
   const ctx: InsiderOrchestratorContext = {
     supabase: supabaseAdmin,
-    form4: new PolygonForm4Fetcher(polygonApiKey),
+    cikMapper: new EdgarCikMapper(edgarContactEmail),
+    dailyIndex: new EdgarDailyIndexFetcher(edgarContactEmail),
+    accessionIndex: new EdgarAccessionIndexFetcher(edgarContactEmail),
+    form4Edgar: new EdgarForm4Fetcher(edgarContactEmail),
     sharesOutstanding: new PolygonSharesOutstandingFetcher(polygonApiKey),
     priceHistory: new PolygonPriceHistoryFetcher(polygonApiKey),
+    bucket: new TokenBucket({ ratePerSec: DEFAULT_EDGAR_RPS }),
     operator_id: DEFAULT_OPERATOR_ID,
     concurrency: DEFAULT_CONCURRENCY,
   };

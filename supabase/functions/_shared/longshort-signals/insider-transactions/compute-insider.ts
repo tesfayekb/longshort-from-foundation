@@ -50,7 +50,7 @@
  * Owner: longshort (FP-042 — Signal #4 / Phase 2.4)
  */
 
-import type { Form4Row } from '../shared/polygon-form4-fetcher.ts';
+import type { Form4Row } from './form4-row-types.ts';
 
 const DECAY_HALF_LIFE_DAYS = 14;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

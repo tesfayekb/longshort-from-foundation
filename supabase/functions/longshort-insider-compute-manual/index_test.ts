@@ -34,9 +34,11 @@ Deno.test('(c1) parseAsOfDate accepts valid YYYY-MM-DD', () => {
   assertEquals(d!.toISOString(), '2026-05-31T00:00:00.000Z');
 });
 
-Deno.test('(d) POLYGON_API_KEY checked with structured code', () => {
+Deno.test('(d) POLYGON_API_KEY + EDGAR_CONTACT_EMAIL checked with structured codes', () => {
   assert(HANDLER_SOURCE.includes("Deno.env.get('POLYGON_API_KEY')"));
   assert(HANDLER_SOURCE.includes("'polygon_api_key_unset'"));
+  assert(HANDLER_SOURCE.includes("Deno.env.get('EDGAR_CONTACT_EMAIL')"));
+  assert(HANDLER_SOURCE.includes("'edgar_contact_email_unset'"));
 });
 
 Deno.test('(e) dual audit envelope: manual_triggered BEFORE + manual_completed/manual_failed AFTER', () => {
@@ -60,14 +62,23 @@ Deno.test('(f) wall-clock discipline — productionClock only', () => {
   assert(!/Date\.now\s*\(/.test(codeOnly));
 });
 
-Deno.test('(g) orchestrator wiring: createInsiderOrchestrator + 3 fetchers + persist', () => {
+Deno.test('(g) orchestrator wiring: createInsiderOrchestrator + EDGAR pipeline + TokenBucket + Polygon side-inputs + persist', () => {
   assert(HANDLER_SOURCE.includes('createInsiderOrchestrator(ctx)'));
-  assert(HANDLER_SOURCE.includes('PolygonForm4Fetcher'));
+  assert(HANDLER_SOURCE.includes('EdgarCikMapper'));
+  assert(HANDLER_SOURCE.includes('EdgarDailyIndexFetcher'));
+  assert(HANDLER_SOURCE.includes('EdgarAccessionIndexFetcher'));
+  assert(HANDLER_SOURCE.includes('EdgarForm4Fetcher'));
+  assert(HANDLER_SOURCE.includes('TokenBucket'));
+  assert(HANDLER_SOURCE.includes('cikMapper: new EdgarCikMapper'));
+  assert(HANDLER_SOURCE.includes('dailyIndex: new EdgarDailyIndexFetcher'));
+  assert(HANDLER_SOURCE.includes('accessionIndex: new EdgarAccessionIndexFetcher'));
+  assert(HANDLER_SOURCE.includes('form4Edgar: new EdgarForm4Fetcher'));
+  assert(HANDLER_SOURCE.includes('bucket: new TokenBucket'));
   assert(HANDLER_SOURCE.includes('PolygonSharesOutstandingFetcher'));
   assert(HANDLER_SOURCE.includes('PolygonPriceHistoryFetcher'));
-  assert(HANDLER_SOURCE.includes('form4: new PolygonForm4Fetcher'));
   assert(HANDLER_SOURCE.includes('sharesOutstanding: new PolygonSharesOutstandingFetcher'));
   assert(HANDLER_SOURCE.includes('priceHistory: new PolygonPriceHistoryFetcher'));
   assert(HANDLER_SOURCE.includes('persistSignalComputeLog('));
+  assert(!HANDLER_SOURCE.includes('PolygonForm4Fetcher'));
   assert(!HANDLER_SOURCE.includes('PolygonShortInterestFetcher'));
 });
