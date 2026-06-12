@@ -1,5 +1,47 @@
 
 
+### ACT-190: FP-050 Phase 3.6b.i — `insider_form4_rows` persistence layer (MIG-094) + the four Phase-3.5 corrections + Catalog #43 (measured-inputs rule + supervisor-accountability clause); Signal #4 STAYS DISARMED
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-190 (next-free after ACT-189; grep-verified). |
+| **Operator authority** | EXECUTION mode, Tier A, operator (α) ruling 2026-06-12 — three sub-commits with attestation between (3.6b.i schema+docs, 3.6b.ii consumer+test+wire+backfill flag, 3.6b.iii orchestrator refactor + 532-LOC test rewire). The (α) ruling was the operator's response to the executor's pre-fire §22.8.4 STOP-on-sprawl surface — the "mechanical extraction" estimate for item (4) was falsified at 571+532 LOC measurement, recorded as Catalog #43's second same-phase instance. |
+| **Scope (one commit, schema + docs only)** | (1) MIG-094: `insider_form4_rows` table (DEC-058 §(h) idempotency triple PK, keep-all-versions, NO write-time merge; §(b) dual-date axis BOTH dates persisted; row contract = byte-preserved Phase-1 parser output + boundary attribution; RLS family = service-role-all + longshort.view-select + deny-write triad; 2 secondary indexes incl. the 90-day window read index `(ticker, acceptance_datetime DESC)`); + the Phase-3.5 correction 4 of 4: `signal_registry.insider_transactions_90d.cadence` rewritten from the Phase-0-falsified `single-invocation ~18s/fire` string to the queue-drained design with measured per-day numbers. (2) Ledger MIG-094 entry appended (full §22.5.1 live-DB verification + AC evidence + cross-references). (3) Catalog #43 in `docs/ai-failure-modes.md`: **measured-inputs rule** + **supervisor-accountability clause** (verbatim, operator-dictated): *"the supervisor's verification pass that confirms the row's presence without confirming its derivation IS a verification defect of equal weight to the executor's authorship defect."* Second same-phase instance recorded against the FP-050 3.6b sub-fork's "mechanical extraction" estimate falsified at 571+532 LOC. (4) Phase-3.5 corrections 1–3 in `insider-transactions.md`: the ~50/fire arithmetic cell rewritten to Phase-0-measured ~1,667/day, the ~17.4 s / ~18 s total replaced with ~667 s ≈ ~11.1 min wall-clock (REQUIRES queue-engine `work-list` drain), the ~25 min one-shot backfill retracted in favor of ~91k calls / ~5 h queue-drained one-shot with the backfill-before-arm-up Phase-4 gate documented. (5) Module-doc shell — new "FP-050 Phase 3.6b.i — work-list persistence layer" section with the §(h)-triple keep-all-versions binding, §(b) dual-date diagram cross-reference, late-amendment-out-of-window run-meta location, two-ledger note (engine `signal_queue_skips` vs consumer `signal_compute_log.skips`), backfill gate, and 3.6b.ii / 3.6b.iii preview. (6) This ACT entry. (7) Attestation block from `scripts/check-gate-evidence.ts` at HEAD. |
+| **Files edited** | `supabase/migrations/20260612153805_9acc85f9-9547-44eb-b1b6-8f1db97766da.sql` (NEW — MIG-094); `docs/07-reference/database-migration-ledger.md` (MIG-094 entry appended); `docs/ai-failure-modes.md` (Catalog #43 appended before Quarterly Review Protocol); `docs/04-modules/longshort/signals/insider-transactions.md` (DEC-058 §(i) row rewritten; §(i) arithmetic table rewritten with measured inputs; backfill prose retraction; registry-truth bullet updated; new FP-050 Phase 3.6b.i section); `docs/06-tracking/action-tracker.md` (this entry). |
+| **NOT in scope (per (α) ruling)** | NO consumer code (3.6b.ii). NO orchestrator refactor (3.6b.iii). NO production-registrations wire. NO manual handler backfill flag. NO `FP-050 Status` flip in `feature-proposals.md` (folds into 3.6b.iii closure). NO `cron.job` mutation. NO `enabled` flip. NO new `job_registry` rows. NO function-index / event-index / permission-index touch (no new shared functions / events / permissions). |
+| **Live-DB §22.5.1 reads (post-MIG-094)** | `SELECT (table_present, policy_count, index_count, cadence) → (1, 5, 3, <queue-drained string verbatim>)`. The 5 policies = `insider_form4_rows_service_role_all` + `insider_form4_rows_longshort_view_select` + `insider_form4_rows_authenticated_no_{insert,update,delete}`. The 3 indexes = PK `(issuer_cik, accession_number, transaction_seq)` + `idx_insider_form4_rows_ticker_acceptance` + `idx_insider_form4_rows_issuer_txn_date`. The cadence read returned the full corrected string byte-for-byte. |
+| **Phase-3.5 corrections summary** | (1) ~50/fire S&P-900 estimate → Phase-0-measured ~1,667 in-universe Form-4 accessions/day (33× falsification). (2) ~17.4 s ≈ ~18 s/fire single-invocation envelope → ~667 s ≈ ~11.1 min wall-clock @ 5 rps (38× falsification); architecture pivots to queue-engine `work-list` drain. (3) ~25 min one-shot backfill within `timeout_seconds=600` → ~91k calls / ~5 hours queue-drained one-shot; backfill MUST complete before Phase 4 arm-up. (4) `signal_registry.cadence` string rewritten by MIG-094 to the queue-drained design with the measured per-day numbers. |
+| **Catalog #43 — first firing recorded** | The measured-inputs rule + supervisor-accountability clause (verbatim, operator-dictated). First firing = FP-050 §(i) original authorship (the ~50/fire estimate that propagated into the ~18 s envelope, the 25-min backfill claim, and the registry cadence string). Both prior verification passes (executor Phase-3 + supervisor Phase-3 ratification) confirmed the row's PRESENCE without confirming its DERIVATION — the symmetric-accountability defect. Second same-phase instance = FP-050 3.6b sub-fork's "mechanical extraction" sizing estimate for the orchestrator refactor, falsified at 571+532 LOC measurement and caught pre-commit by the §22.8.4 STOP-on-sprawl pre-flight (no commit landed under the falsified estimate). |
+| **Gates (paste verbatim from `scripts/check-gate-evidence.ts` at HEAD)** | See attestation block below. |
+| **ROI Impact** | Net positive. Schema is the load-bearing substrate that lets Signal #4 actually fire under measured EDGAR volume — the prior single-invocation architecture would have wall-clock-failed at the 600 s edge-function timeout on the first real fire. No prediction logic / signal weights / thresholds / sizing / execution timing / monitoring changed (FP-042 compute byte-preserved per DEC-058 §(e)). |
+| **Incidental Findings** | None this commit. The 26 linter findings are pre-existing baseline (matches MIG-091/092/093); none attributable to this PR — table-only RLS additions with no new SECURITY DEFINER / view / function. |
+| **Verification Status** | Signal #4 STAYS DISARMED. Next sub-commit = 3.6b.ii (work-list consumer + test + production-registrations wire + manual-handler backfill flag) on operator clone. Then 3.6b.iii (orchestrator refactor + 532-LOC test rewire, with §22.8.4 STOP-on-sprawl re-armed mid-flight). Phase 4 (deploy → operator backfill drain → validation fire → arm) follows 3.6b.iii verification. |
+
+#### Attestation block (paste verbatim — `scripts/check-gate-evidence.ts` at HEAD)
+
+```
+=== check-gate-evidence ATTESTATION (paste verbatim) ===
+HEAD: 662dcaf4724c8d1eef346a7edaa5523ecb8dad3a
+Generated: 2026-06-12T15:39:28.191Z
+
+Gate 1: deno run --allow-read scripts/check-wall-clock.ts
+  exit=0  duration_ms=229
+  final-line: check-wall-clock: CLEAN — 0 violations
+
+Gate 2: cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/
+  exit=0  duration_ms=30762
+  final-line: ok | 1017 passed | 0 failed (30s)
+
+Gate 3: npx eslint .
+  exit=0  duration_ms=8533
+  final-line: ✖ 15 problems (0 errors, 15 warnings)
+
+Verdict: ALL GREEN
+=== end attestation ===
+```
+
+---
+
 ### ACT-187: FP-050 Phase 3 — Signal #4 (insider_transactions_90d) cadence decision + MIG-093 + registry truth (DISARMED through Phase 3; arm-up = Phase 4)
 
 ---
