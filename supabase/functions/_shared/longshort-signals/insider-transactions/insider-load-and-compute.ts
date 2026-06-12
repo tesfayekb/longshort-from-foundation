@@ -82,6 +82,35 @@ type PerTickerResult =
   | { kind: 'skip'; skip: SignalSkip };
 
 /**
+ * Pre-z staged result — M3 ruling (2026-06-12). The 3.6b.iii′ work-list
+ * `loadAndCompute` adapter calls `runStaged(as_of)` and returns these
+ * per-ticker results to the engine; the engine's finalizer is the
+ * SINGLE authority that runs z-score + `signal_observations` persist.
+ * This enforces the work-list contract's "single execution" principle
+ * — no double-z, no double-persist regardless of how many slices the
+ * producer fired.
+ *
+ * `kind:'short-circuit'` carries the empty-universe / read-failed
+ * outcome the legacy `.run()` materialized as `outcome:'failed'`;
+ * the engine finalizer translates it identically.
+ */
+export type InsiderStagedResult =
+  | {
+      kind: 'staged';
+      universe_size: number;
+      per_ticker: PerTickerResult[];
+      started_at: string;
+      as_of_date: string;
+    }
+  | {
+      kind: 'short-circuit';
+      universe_size: number;
+      failure_reason: string;
+      started_at: string;
+      as_of_date: string;
+    };
+
+/**
  * Shape of one `insider_form4_rows` row read by `loadAndCompute`. Mirrors
  * the live-DB column list verified at MIG-094 + MIG-095 (ACT-190 + ACT-191).
  * The `owner_cik` column landed in MIG-095 specifically to support the
@@ -247,181 +276,209 @@ export async function readInsiderRowsWindow(
  * 3.6b.iii′) can swap call-sites mechanically.
  */
 export function createInsiderLoadAndCompute(ctx: InsiderLoadAndComputeContext) {
-  return {
-    async run(as_of: Date): Promise<SignalOrchestratorResult> {
-      const ts = as_of.toISOString();
-      const started_at = ts;
-      const as_of_date = ts.slice(0, 10);
+  /**
+   * M3 pre-z staged entry point. Steps 1-5 of the legacy `.run()`
+   * (universe load, paginated 90-day insider read, §(h) preference,
+   * per-ticker filter+compute) — returns `PerTickerResult[]` BEFORE
+   * z-score, BEFORE persist. The 3.6b.iii′ work-list adapter calls
+   * THIS; the engine finalizer owns z+persist (single-execution
+   * principle per the work-list contract). Behavior is byte-identical
+   * to the corresponding region of `.run()` — extraction is structural,
+   * not semantic.
+   */
+  async function runStaged(as_of: Date): Promise<InsiderStagedResult> {
+    const ts = as_of.toISOString();
+    const started_at = ts;
+    const as_of_date = ts.slice(0, 10);
 
-      // ── Step 1: load current universe ─────────────────────────────────
-      const { data: latestRows, error: latestErr } = await ctx.supabase
-        .from('universe_membership')
-        .select('as_of_date')
-        .eq('operator_id', ctx.operator_id)
-        .order('as_of_date', { ascending: false })
-        .limit(1);
-      if (latestErr) {
-        throw new Error(
-          `insider-load-and-compute: universe_membership latest-date read failed: ${latestErr.message}`,
-        );
-      }
-      const latest_as_of_date = latestRows && latestRows.length > 0
-        ? (latestRows[0] as { as_of_date: string }).as_of_date
-        : null;
-      if (latest_as_of_date === null) {
-        return {
-          outcome: 'failed', signal_id: SIGNAL_ID, as_of_date,
-          universe_size: 0, persisted_count: 0, skipped: [],
-          failure_reason: 'empty_universe',
-          started_at, completed_at: ts,
-          not_yet_knowable_excluded: 0,
-        };
-      }
-      const { data: universeRows, error: universeErr } = await ctx.supabase
-        .from('universe_membership')
-        .select('ticker, gics_sector')
-        .eq('operator_id', ctx.operator_id)
-        .eq('as_of_date', latest_as_of_date);
-      if (universeErr) {
-        throw new Error(
-          `insider-load-and-compute: universe_membership read failed: ${universeErr.message}`,
-        );
-      }
-      const universe = (universeRows ?? []) as UniverseRow[];
-      if (universe.length === 0) {
-        return {
-          outcome: 'failed', signal_id: SIGNAL_ID, as_of_date,
-          universe_size: 0, persisted_count: 0, skipped: [],
-          failure_reason: 'empty_universe',
-          started_at, completed_at: ts,
-          not_yet_knowable_excluded: 0,
-        };
-      }
+    // ── Step 1: load current universe ─────────────────────────────────
+    const { data: latestRows, error: latestErr } = await ctx.supabase
+      .from('universe_membership')
+      .select('as_of_date')
+      .eq('operator_id', ctx.operator_id)
+      .order('as_of_date', { ascending: false })
+      .limit(1);
+    if (latestErr) {
+      throw new Error(
+        `insider-load-and-compute: universe_membership latest-date read failed: ${latestErr.message}`,
+      );
+    }
+    const latest_as_of_date = latestRows && latestRows.length > 0
+      ? (latestRows[0] as { as_of_date: string }).as_of_date
+      : null;
+    if (latest_as_of_date === null) {
+      return { kind: 'short-circuit', universe_size: 0, failure_reason: 'empty_universe', started_at, as_of_date };
+    }
+    const { data: universeRows, error: universeErr } = await ctx.supabase
+      .from('universe_membership')
+      .select('ticker, gics_sector')
+      .eq('operator_id', ctx.operator_id)
+      .eq('as_of_date', latest_as_of_date);
+    if (universeErr) {
+      throw new Error(
+        `insider-load-and-compute: universe_membership read failed: ${universeErr.message}`,
+      );
+    }
+    const universe = (universeRows ?? []) as UniverseRow[];
+    if (universe.length === 0) {
+      return { kind: 'short-circuit', universe_size: 0, failure_reason: 'empty_universe', started_at, as_of_date };
+    }
 
-      // ── Step 2: paginated 90-day read of insider_form4_rows ───────────
-      const tickers = universe.map((u) => u.ticker);
-      let allRows: InsiderRowFromTable[];
-      try {
-        allRows = await readInsiderRowsWindow(ctx.supabase, tickers, as_of);
-      } catch (e) {
-        return {
-          outcome: 'failed', signal_id: SIGNAL_ID, as_of_date,
-          universe_size: universe.length, persisted_count: 0, skipped: [],
-          failure_reason: e instanceof Error ? e.message : String(e),
-          started_at, completed_at: ts,
-          not_yet_knowable_excluded: 0,
-        };
-      }
+    // ── Step 2: paginated 90-day read of insider_form4_rows ───────────
+    const tickers = universe.map((u) => u.ticker);
+    let allRows: InsiderRowFromTable[];
+    try {
+      allRows = await readInsiderRowsWindow(ctx.supabase, tickers, as_of);
+    } catch (e) {
+      return {
+        kind: 'short-circuit',
+        universe_size: universe.length,
+        failure_reason: e instanceof Error ? e.message : String(e),
+        started_at, as_of_date,
+      };
+    }
 
-      // ── Step 3: group by ticker → §(h) preference → seam ──────────────
-      const rowsByTicker = new Map<string, InsiderRowFromTable[]>();
-      for (const r of allRows) {
-        const b = rowsByTicker.get(r.ticker);
-        if (b === undefined) rowsByTicker.set(r.ticker, [r]);
-        else b.push(r);
-      }
-      const dedupedByTicker = new Map<string, InsiderRowFromTable[]>();
-      for (const [t, rs] of rowsByTicker.entries()) {
-        dedupedByTicker.set(t, preferMostRecentAccession(rs));
-      }
+    // ── Step 3: group by ticker → §(h) preference → seam ──────────────
+    const rowsByTicker = new Map<string, InsiderRowFromTable[]>();
+    for (const r of allRows) {
+      const b = rowsByTicker.get(r.ticker);
+      if (b === undefined) rowsByTicker.set(r.ticker, [r]);
+      else b.push(r);
+    }
+    const dedupedByTicker = new Map<string, InsiderRowFromTable[]>();
+    for (const [t, rs] of rowsByTicker.entries()) {
+      dedupedByTicker.set(t, preferMostRecentAccession(rs));
+    }
 
-      // ── Step 4: per-ticker filter → qualifying set ────────────────────
-      const perTicker: PerTickerResult[] = [];
-      type QualifyingTicker = { row: UniverseRow; rows: Form4Row[] };
-      const qualifying: QualifyingTicker[] = [];
-      for (const u of universe) {
-        const tableRows = dedupedByTicker.get(u.ticker) ?? [];
-        const f4Rows: Form4Row[] = tableRows.map(mapInsiderRowToForm4Row);
-        const filtered = filterQualifyingTransactions(f4Rows);
-        if (filtered.length === 0) {
-          perTicker.push({
-            kind: 'skip',
-            skip: {
-              ticker: u.ticker,
-              reason: 'no_qualifying_transactions',
-              detail: `0 qualifying transactions in trailing 90d (${f4Rows.length} parsed rows pre-filter, ${tableRows.length} post-§(h) dedup)`,
-            },
-          });
-          continue;
-        }
-        qualifying.push({ row: u, rows: f4Rows });
+    // ── Step 4: per-ticker filter → qualifying set ────────────────────
+    const perTicker: PerTickerResult[] = [];
+    type QualifyingTicker = { row: UniverseRow; rows: Form4Row[] };
+    const qualifying: QualifyingTicker[] = [];
+    for (const u of universe) {
+      const tableRows = dedupedByTicker.get(u.ticker) ?? [];
+      const f4Rows: Form4Row[] = tableRows.map(mapInsiderRowToForm4Row);
+      const filtered = filterQualifyingTransactions(f4Rows);
+      if (filtered.length === 0) {
+        perTicker.push({
+          kind: 'skip',
+          skip: {
+            ticker: u.ticker,
+            reason: 'no_qualifying_transactions',
+            detail: `0 qualifying transactions in trailing 90d (${f4Rows.length} parsed rows pre-filter, ${tableRows.length} post-§(h) dedup)`,
+          },
+        });
+        continue;
       }
+      qualifying.push({ row: u, rows: f4Rows });
+    }
 
-      // ── Step 5: per-qualifying-ticker shares+price + compute ──────────
-      const concurrency = ctx.concurrency ?? DEFAULT_CONCURRENCY;
-      const computed = await pLimitedMap<QualifyingTicker, PerTickerResult>(
-        qualifying,
-        concurrency,
-        async ({ row, rows }) => {
-          const { ticker, gics_sector } = row;
-          try {
-            const [sharesResult, priceResult] = await Promise.all([
-              ctx.sharesOutstanding.fetchShares(ticker),
-              ctx.priceHistory.fetchPriceHistory(ticker, as_of, PRICE_LOOKBACK_DAYS),
-            ]);
-            if (sharesResult.kind === 'unavailable') {
-              return {
-                kind: 'skip',
-                skip: {
-                  ticker,
-                  reason: 'missing_shares_outstanding',
-                  detail: sharesResult.reason === 'subscription_gated'
-                    ? 'polygon 403: reference endpoint not entitled (shares-outstanding unavailable)'
-                    : 'polygon reference endpoint returned no usable share_class_shares_outstanding',
-                },
-              };
-            }
-            if (priceResult === null || priceResult.length === 0) {
-              return {
-                kind: 'skip',
-                skip: {
-                  ticker,
-                  reason: 'data_unavailable',
-                  detail: priceResult === null
-                    ? 'polygon 404: ticker missing from reference (likely delisted)'
-                    : `no price bars in trailing ${PRICE_LOOKBACK_DAYS}d window`,
-                },
-              };
-            }
-            const shares = sharesResult.shares;
-            const lastClose = priceResult[priceResult.length - 1].close;
-            if (
-              !Number.isFinite(shares) || shares <= 0 ||
-              !Number.isFinite(lastClose) || lastClose <= 0
-            ) {
-              return {
-                kind: 'skip',
-                skip: {
-                  ticker,
-                  reason: 'missing_shares_outstanding',
-                  detail: `defensive: shares=${shares} close=${lastClose} not positive-finite`,
-                },
-              };
-            }
-            const market_cap = shares * lastClose;
-            const res = computeInsiderSignal(rows, as_of, market_cap);
-            if (res === null) {
-              return {
-                kind: 'skip',
-                skip: {
-                  ticker,
-                  reason: 'no_qualifying_transactions',
-                  detail: `0 role-classifiable rows after filter (${rows.length} raw rows pre-filter)`,
-                },
-              };
-            }
-            return { kind: 'value', ticker, raw_signal: res.raw_signal, gics_sector };
-          } catch (err) {
-            const message = err instanceof SignalComputationError ? err.message
-              : err instanceof Error ? err.message : String(err);
+    // ── Step 5: per-qualifying-ticker shares+price + compute ──────────
+    const concurrency = ctx.concurrency ?? DEFAULT_CONCURRENCY;
+    const computed = await pLimitedMap<QualifyingTicker, PerTickerResult>(
+      qualifying,
+      concurrency,
+      async ({ row, rows }) => {
+        const { ticker, gics_sector } = row;
+        try {
+          const [sharesResult, priceResult] = await Promise.all([
+            ctx.sharesOutstanding.fetchShares(ticker),
+            ctx.priceHistory.fetchPriceHistory(ticker, as_of, PRICE_LOOKBACK_DAYS),
+          ]);
+          if (sharesResult.kind === 'unavailable') {
             return {
               kind: 'skip',
-              skip: { ticker, reason: 'fetch_error', detail: message },
+              skip: {
+                ticker,
+                reason: 'missing_shares_outstanding',
+                detail: sharesResult.reason === 'subscription_gated'
+                  ? 'polygon 403: reference endpoint not entitled (shares-outstanding unavailable)'
+                  : 'polygon reference endpoint returned no usable share_class_shares_outstanding',
+              },
             };
           }
-        },
-      );
-      for (const r of computed) perTicker.push(r);
+          if (priceResult === null || priceResult.length === 0) {
+            return {
+              kind: 'skip',
+              skip: {
+                ticker,
+                reason: 'data_unavailable',
+                detail: priceResult === null
+                  ? 'polygon 404: ticker missing from reference (likely delisted)'
+                  : `no price bars in trailing ${PRICE_LOOKBACK_DAYS}d window`,
+              },
+            };
+          }
+          const shares = sharesResult.shares;
+          const lastClose = priceResult[priceResult.length - 1].close;
+          if (
+            !Number.isFinite(shares) || shares <= 0 ||
+            !Number.isFinite(lastClose) || lastClose <= 0
+          ) {
+            return {
+              kind: 'skip',
+              skip: {
+                ticker,
+                reason: 'missing_shares_outstanding',
+                detail: `defensive: shares=${shares} close=${lastClose} not positive-finite`,
+              },
+            };
+          }
+          const market_cap = shares * lastClose;
+          const res = computeInsiderSignal(rows, as_of, market_cap);
+          if (res === null) {
+            return {
+              kind: 'skip',
+              skip: {
+                ticker,
+                reason: 'no_qualifying_transactions',
+                detail: `0 role-classifiable rows after filter (${rows.length} raw rows pre-filter)`,
+              },
+            };
+          }
+          return { kind: 'value', ticker, raw_signal: res.raw_signal, gics_sector };
+        } catch (err) {
+          const message = err instanceof SignalComputationError ? err.message
+            : err instanceof Error ? err.message : String(err);
+          return {
+            kind: 'skip',
+            skip: { ticker, reason: 'fetch_error', detail: message },
+          };
+        }
+      },
+    );
+    for (const r of computed) perTicker.push(r);
+
+    return {
+      kind: 'staged',
+      universe_size: universe.length,
+      per_ticker: perTicker,
+      started_at, as_of_date,
+    };
+  }
+
+  return {
+    runStaged,
+    async run(as_of: Date): Promise<SignalOrchestratorResult> {
+      const ts = as_of.toISOString();
+      // .run() is now a thin shim over runStaged + z/persist. The
+      // 3.6b.iii′ work-list adapter bypasses this path entirely
+      // (it calls runStaged and the engine finalizer owns z+persist
+      // — see M3 ruling above). This shim is preserved temporarily so
+      // the existing cron/manual handlers (currently 503-stubbed) plus
+      // the existing test fixtures continue to type-check; γ commit-1
+      // deletes it once the adapter wiring lands (no-corpses rule).
+      const staged = await runStaged(as_of);
+      const { started_at, as_of_date, universe_size } = staged;
+      if (staged.kind === 'short-circuit') {
+        return {
+          outcome: 'failed', signal_id: SIGNAL_ID, as_of_date,
+          universe_size, persisted_count: 0, skipped: [],
+          failure_reason: staged.failure_reason,
+          started_at, completed_at: ts,
+          not_yet_knowable_excluded: 0,
+        };
+      }
+      const perTicker = staged.per_ticker;
 
       // ── Step 6: within-sector z-score ─────────────────────────────────
       const values = perTicker
@@ -463,7 +520,7 @@ export function createInsiderLoadAndCompute(ctx: InsiderLoadAndComputeContext) {
       if (persistErr) {
         return {
           outcome: 'failed', signal_id: SIGNAL_ID, as_of_date,
-          universe_size: universe.length, persisted_count: 0, skipped: skips,
+          universe_size, persisted_count: 0, skipped: skips,
           failure_reason: `signal_observations persistence failed: ${persistErr.message}`,
           started_at, completed_at: ts,
           not_yet_knowable_excluded: 0,
@@ -471,7 +528,7 @@ export function createInsiderLoadAndCompute(ctx: InsiderLoadAndComputeContext) {
       }
       return {
         outcome: 'completed', signal_id: SIGNAL_ID, as_of_date,
-        universe_size: universe.length, persisted_count: inserted, skipped: skips,
+        universe_size, persisted_count: inserted, skipped: skips,
         started_at, completed_at: ts,
         not_yet_knowable_excluded: 0,
       };

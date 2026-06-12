@@ -211,3 +211,43 @@ Deno.test('(9) §(a): parser does NOT filter on transaction code — M, P, S, A,
   const codes = r.rows.map((row) => row.transaction_code);
   assertEquals(codes.sort(), ['M', 'S']);
 });
+
+// M1 ruling (2026-06-12) — owner_cik leniency removed at the parser
+// (contract owner). Absent / non-numeric rptOwnerCik ⇒ typed
+// unparseable; never silently ''. Pins the regression forever — the
+// silent default would have shifted the §(h) four-part dedup key
+// `(issuer_cik, owner_cik, transaction_date, transaction_seq)` into a
+// three-part collision and violated MIG-095's NOT NULL contract.
+const MISSING_OWNER_CIK = `<?xml version="1.0"?>
+<ownershipDocument>
+  <issuer><issuerCik>320193</issuerCik></issuer>
+  <reportingOwner>
+    <reportingOwnerId><rptOwnerCik></rptOwnerCik></reportingOwnerId>
+    <reportingOwnerRelationship>
+      <isOfficer>1</isOfficer><officerTitle>CFO</officerTitle>
+    </reportingOwnerRelationship>
+  </reportingOwner>
+  <nonDerivativeTable>
+    <nonDerivativeTransaction>
+      <transactionDate><value>2026-05-20</value></transactionDate>
+      <transactionCoding><transactionCode>P</transactionCode></transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>100</value></transactionShares>
+        <transactionPricePerShare><value>10</value></transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+      </transactionAmounts>
+      <ownershipNature><directOrIndirectOwnership><value>D</value></directOrIndirectOwnership></ownershipNature>
+    </nonDerivativeTransaction>
+  </nonDerivativeTable>
+</ownershipDocument>`;
+
+Deno.test('(10) M1: missing rptOwnerCik → kind=unparseable (§(h) four-part-key contract)', () => {
+  const r = parseEdgarForm4({
+    xml: MISSING_OWNER_CIK, accession_number: 'X', acceptance_datetime: ACCEPTANCE,
+  });
+  assertEquals(r.kind, 'unparseable');
+  if (r.kind === 'unparseable') {
+    assertStringIncludes(r.reason, 'four-part-key');
+    assertStringIncludes(r.reason, 'rptOwnerCik');
+  }
+});
