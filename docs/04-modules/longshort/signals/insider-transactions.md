@@ -373,3 +373,47 @@ Any other tuple either fabricates an index (runtime failure) or shifts the idemp
 **STOP-with-partials surfacing (per the operator's "if migration sprawls, STOP" escape clause).** The `.run()` shim in `insider-load-and-compute.ts` and its 7 hand-computed fixtures (R1 different-owner regression, §(b) boundary pair, 839 mass-balance, ±√2/2 z-score) REMAIN at this commit. The shim's deletion + fixture migration to the `runStaged` seam is INTENTIONALLY deferred to a follow-up sub-commit (γ commit-1b or rolled into γ commit-2's handler rewiring, operator's choice). Reason: deleting `.run()` before γ commit-2 wires the handlers off it would break the existing 503-stubbed handler tests' compile fence; the no-corpses closure is held one window because the corpse is load-bearing temporarily. The new producer module is fully exercised by its own 21 tests; the staged seam is exercised end-to-end by `(H.1)`.
 
 **Cross-references:** ACT-193 (read-only crosswalk), ACT-194 (M1-M5 pre-work + Rule-8 M4 RE-RULE), ACT-195 (this entry).
+
+## FP-050 Phase 3.6b.iii′ γ commit-2 (ACT-196, 2026-06-12) — handlers rewired + consumer wired in production-registrations
+
+**Files touched:**
+- `supabase/functions/longshort-insider-compute/index.ts` — cron handler rewired from the 503 stub to a queue-init shim (DAILY mode).
+- `supabase/functions/longshort-insider-compute-manual/index.ts` — manual handler rewired from the 503 stub to a queue-init shim with the operator-triggerable `backfill: true` flag.
+- `supabase/functions/_shared/longshort-signals/insider-transactions/insider-queue-bootstrap.ts` — NEW. `buildInsiderDepsFromEnv` + `registerInsiderDailyConsumer` (lazy env-derived deps following the news-fetcher pattern) + `buildInsiderBackfillConfig` (per-request backfill config build).
+- `supabase/functions/_shared/longshort-signals/shared/queue-worker/production-registrations.ts` — Signal #4 added to the aggregator (DAILY mode only; backfill never registered).
+- `supabase/functions/_shared/longshort-signals/insider-transactions/insider-cross-mode-contamination_test.ts` — NEW. 6 cross-mode invariants (CM-1 through CM-4b).
+- Sentinel tests for both handlers rewritten from pinning-the-503 to pinning-the-shim (9 + 10 assertions respectively).
+
+**Registration architecture.**
+`production-registrations.ts` registers Signal #4 in DAILY mode only. The four queue edge handlers (init, init-manual, slice, sweeper) plus the dedicated `longshort-insider-compute` cron handler all receive the daily config via this side-effect import.
+The dedicated `longshort-insider-compute-manual` handler, when the operator passes `backfill: true`, BUILDS a fresh backfill-mode config via `buildInsiderBackfillConfig` and passes it directly to `initQueueRun` — the backfill config is NEVER registered. This is forced by the engine registry's no-duplicate-signalId contract (asserted by the new cross-mode contamination test `(CM-1)`); since processItem and loadAndCompute are mode-agnostic, the slice-worker / sweeper isolates remain correct against the daily-registered config regardless of which mode init seeded with.
+
+**Drift sentinel.** Both handlers check `productionQueueRegistry.has(INSIDER_SIGNAL_ID)` before fetching the config. Missing entry → 500 `insider_registry_drift` (no silent misroute). The backfill path bypasses this check because it builds its own config.
+
+**Auth ordering.** Cron handler: POST → `verifyCronSecret` → drift sentinel → `initQueueRun` → audit emit. Manual handler: POST → `authenticateRequest` (operator JWT) → `checkPermissionOrThrow('longshort.manage')` → body parse (optional `backfill`) → config resolution (drift-checked for daily, build-then-bypass for backfill) → `initQueueRun` → audit emit.
+
+**Audit events.** RUN_STARTED on `kind:'started'`; RUN_FAILED on init throw. Both via `QUEUE_AUDIT_EVENTS` symbols (no string literals). Metadata includes `trigger:'cron'|'manual'` and `mode:'daily'|'backfill'` so operators can disambiguate cleanly in the audit stream.
+
+**Backfill drain derivation correction (M4 ACT-194 → γ commit-2 reconciliation).**
+
+The γ commit-1 producer module quoted the backfill drain band as **~3.1-4.9 hours** by multiplying 320 slices × 35-55 s/slice end-to-end. That derivation IS the slice-wall floor (paced + parser CPU + per-row upsert), but it OMITS the binding factor: the slice-worker cron fires at `* * * * *` (every minute) and picks the OLDEST run across ALL signals (per `docs/04-modules/longshort/signals/queue-worker.md` §slice-cron). When `slice_wall < 60 s`, the cron cadence — not the slice wall — is the binding floor.
+
+Reconciled arithmetic, paced floor → wall floor → cadence floor (the binding number):
+
+| Bound | Formula | Value | Binding? |
+|---|---|---|---|
+| Paced (rate-only) | ~32k calls / 4.25 rps | ~7,530 s ≈ **2.1 h** | NO — ignores per-item parser+upsert work |
+| Slice-wall | 320 slices × (35-55 s) | **~3.1-4.9 h** | NO — ignores the minute-cron cadence floor |
+| **Cron-cadence (BINDING)** | 320 slices × max(slice_wall, 60 s) ≈ 320 × 60 s | **~5.3 h** | **YES** — when `slice_wall < 60s`, the cron interval is the throttle |
+
+The factor turning the paced floor into the slice-wall band is **per-item parser CPU + per-row Supabase upsert** (~10-30 s per slice on top of ~23.5 s paced). The factor turning the slice-wall band into the binding figure is **slice-cadence overhead under the `* * * * *` minute-cron** (one slice claim per cron tick, single shared cron across all signals).
+
+**Corrected backfill drain expectation: ~5.3 h queue-drained** (sole insider drain; if PEAD/options/news are concurrently draining, the shared-cron picker serializes signals across ticks → the effective insider rate halves/thirds proportionally, but operators schedule backfill in the overnight window when other signals are inactive). The single overnight window (US close 21:00 UTC → pre-market 13:00 UTC = 16 h) provides ~10.7 h headroom over the ~5.3 h drain — comfortably one-shot, no multi-night plan required.
+
+The slice-cadence floor IS the named factor. Neither `accessionsPerSlice` nor the slice-wall budget changes — only the operator-facing drain figure. The γ commit-1 `(A.1)` drift sentinel remains the per-slice STOP-gate check and is unaffected.
+
+**Cross-mode contamination invariants (new test file).** `(CM-1)` duplicate signalId registration throws (daily+backfill cannot co-exist in the same isolate's registry). `(CM-2)` daily-only registration carries DAILY jobId; backfill jobId never leaks. `(CM-3)` mode argument actually parameterizes jobId (not silently dropped). `(CM-4)`/`(CM-4b)` cross-mode-family field contamination is rejected by `validateConfig` at register time.
+
+**STOP-with-partials surfacing (per §22.8.4).** The `.run()` shim in `insider-load-and-compute.ts` AND its 7 hand-computed fixtures REMAIN at this commit. The deletion + fixture migration to the `runStaged` seam (z+persist assertions relocating to engine-finalizer-level expectations — already covered structurally by `queue-work-list-mode_test.ts`'s finalizer-dispatch tests) is INTENTIONALLY DEFERRED to a follow-up γ commit-2b. Reason: the migration has its own substantive test-churn axis (rewriting the C.1 ±√2/2 z-score fixture and the E.1 empty-universe fixture against the new staged-result shape, with z+persist re-asserted at the engine finalizer surface), and bundling it into γ commit-2's handler rewiring would entangle two orthogonal test-failure surfaces and violate the atomic-commit discipline. The no-corpses closure is held one more window; γ commit-2b is scoped to ONLY this deletion + migration.
+
+**Cross-references:** ACT-193 (crosswalk), ACT-194 (M1-M5 pre-work + M4 RE-RULE), ACT-195 (γ commit-1 producer module), ACT-196 (this entry).
