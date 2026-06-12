@@ -17,6 +17,7 @@ import { runQueueSlice } from '../_shared/longshort-signals/shared/queue-worker/
 import { runQueueFinalizer } from '../_shared/longshort-signals/shared/queue-worker/queue-finalizer.ts';
 import { pickOldestRunningRun } from '../_shared/longshort-signals/shared/queue-worker/queue-sweeper.ts';
 import { QUEUE_AUDIT_EVENTS } from '../_shared/longshort-signals/shared/queue-worker/queue-audit-events.ts';
+import { maskSecretsInMessage } from '../_shared/longshort-signals/shared/queue-worker/error-key-mask.ts';
 // Side-effect import — registers every live queue consumer at isolate boot.
 import '../_shared/longshort-signals/shared/queue-worker/production-registrations.ts';
 
@@ -42,6 +43,14 @@ Deno.serve(createHandler(async (req: Request) => {
       supabase: supabaseAdmin, config, as_of, run_id: pick.run_id,
     });
   } catch (e) {
+    // INC-73 — propagate the verbatim (key-masked) Error.message into
+    // both the slice.failed audit event AND the 500 response body. The
+    // previous shim returned a generic `slice_failed` payload that
+    // discarded the root cause and forced operators to redeploy with
+    // logging to diagnose every crash. Engine masks already; we mask
+    // again here as defence-in-depth for non-engine-originated throws.
+    const rawMsg = e instanceof Error ? e.message : String(e);
+    const maskedMsg = maskSecretsInMessage(rawMsg);
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
       action: QUEUE_AUDIT_EVENTS.SLICE_FAILED,
@@ -49,11 +58,11 @@ Deno.serve(createHandler(async (req: Request) => {
       metadata: {
         signal_id: pick.signal_id, run_id: pick.run_id,
         as_of: as_of.toISOString(),
-        error: e instanceof Error ? e.message : String(e),
+        error: maskedMsg,
         stage: 'slice_worker',
       },
     });
-    return apiError(500, 'slice_failed', { correlationId });
+    return apiError(500, maskedMsg, { code: 'slice_failed', correlationId });
   }
 
   await writeStrategyAuditEvent({

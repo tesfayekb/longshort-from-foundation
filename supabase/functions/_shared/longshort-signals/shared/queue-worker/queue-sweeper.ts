@@ -102,7 +102,22 @@ export async function runQueueSweeper(
       if (casErr) {
         throw new Error(`sweeper[${signalId}]: fail-out CAS error: ${casErr.message}`);
       }
-      if ((count ?? 0) === 1) failed_out += 1;
+      if ((count ?? 0) === 1) {
+        failed_out += 1;
+        // INC-73 defence-in-depth — release any held cursor claim for
+        // the run we just terminal-failed. A claimed-but-unreleased row
+        // (per-ticker or feed __feed__) would otherwise block subsequent
+        // claim attempts for this run_id; staging-TTL prune handles the
+        // ultimate cleanup but releasing now is correct hygiene.
+        const { error: relErr } = await supabase
+          .from('signal_queue_cursor')
+          .update({ claimed_at: null })
+          .eq('run_id', row.run_id)
+          .not('claimed_at', 'is', null);
+        if (relErr) {
+          throw new Error(`sweeper[${signalId}]: post-failout claim release error: ${relErr.message}`);
+        }
+      }
     }
 
     // ── (2) Staging TTL for terminal runs.
