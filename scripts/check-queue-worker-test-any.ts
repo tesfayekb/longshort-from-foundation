@@ -63,13 +63,37 @@ export function findAnyInLine(line: string): boolean {
   return ANY_TOKEN.test(stripped);
 }
 
+/**
+ * Strip block comments across a whole file (line-by-line stripping cannot
+ * see multi-line `/** ... *\/` JSDoc). String literals are left intact at
+ * file scope; per-line stripping handles those.
+ */
+export function stripBlockComments(src: string): string {
+  let out = '';
+  let i = 0;
+  let inBlock = false;
+  while (i < src.length) {
+    const c = src[i], n = src[i + 1];
+    if (inBlock) {
+      if (c === '*' && n === '/') { inBlock = false; i += 2; continue; }
+      // Preserve newlines so line numbers remain stable.
+      if (c === '\n') out += '\n';
+      i++; continue;
+    }
+    if (c === '/' && n === '*') { inBlock = true; i += 2; continue; }
+    out += c; i++;
+  }
+  return out;
+}
+
 export async function scanQueueWorkerTests(rootDir = '.'): Promise<AnyViolation[]> {
   const violations: AnyViolation[] = [];
   try {
     for await (const entry of walk(`${rootDir}/${SCANNED_DIR}`, { exts: ['.ts'], includeDirs: false })) {
       const relPath = entry.path.replace(`${rootDir}/`, '');
       if (!relPath.endsWith('_test.ts')) continue;
-      const text = await Deno.readTextFile(entry.path);
+      const raw = await Deno.readTextFile(entry.path);
+      const text = stripBlockComments(raw);
       const lines = text.split('\n');
       for (let i = 0; i < lines.length; i++) {
         if (findAnyInLine(lines[i])) {
