@@ -16,7 +16,7 @@
 | §(f) | CIK fetch-per-fire of `company_tickers.json` + frozen `INSIDER_CIK_OVERRIDES` (NXT→1953967 seeded); unmapped emits typed `kind:'unresolved'` → `ticker_to_cik_unresolved` skip. |
 | §(g) | UA from `EDGAR_CONTACT_EMAIL` at construction (fail-loud absent); self-imposed 5 rps cap (half SEC's 10 rps headroom — DEC-034). |
 | §(h) | Form 4 / 4-A identical treatment; idempotency triple `(issuer_cik, accession_number, transaction_seq)`; orchestrator-side most-recent-accession preference on `(issuer, owner, date, seq)`. |
-| §(i) | **Architecture — daily-feed primary + single-invocation.** ~18s/fire incremental (well within `timeout_seconds=600`); ~25 min one-shot backfill. NOT the FP-045 queue-engine. **Discovery revision (operator (A) ruling 2026-06-12):** per-accession `index.json` fetch via `edgar-accession-index-fetcher.ts` (13 tests) — primary-doc selection + atomic `acceptance_datetime` from one truth-source, NO heuristic tiebreak (INC-70 rule). Per-CIK submissions feed REJECTED for the discovery step (added join layer + recent-filings cap edge). |
+| §(i) | **Architecture — daily-feed primary + queue-engine `work-list` consumer (FP-050 Phase 3.6b; supersedes the prior single-invocation framing — see Phase-3.5 corrections below).** Phase-0 measured ~1,667 in-universe Form-4 accessions/day; per-fire ~3,425 EDGAR HTTPS calls drained across queue slices at the 5 rps self-imposed cap (~11.4 min wall-clock); backfill ~91k calls / ~5 h queue-drained one-shot and MUST complete before Phase 4 arm-up. Discovery revision (operator (A) ruling 2026-06-12) unchanged: per-accession `index.json` fetch via `edgar-accession-index-fetcher.ts` — primary-doc selection + atomic `acceptance_datetime` from one truth-source, NO heuristic tiebreak (INC-70 rule). Per-CIK submissions feed REJECTED for the discovery step (added join layer + recent-filings cap edge). |
 | §(j) | Cross-signal additive independence with DEC-057 §(c) Tier-2 "significant insider transaction" — both signals score the same event independently by explicit design (catalyst measures decayed event-presence; insider measures dollar-weighted magnitude). Double-count prevention = additive independence, NOT silent gating. |
 | §(k) | **Cadence — `15 21 * * 1-5` UTC (evening-family gap slot).** Lands between analyst (21:00) and news (21:30 + drain). as_of↔acceptance convention LOCKED to timestamp comparison (`acceptance_datetime_ts ≤ as_of_ts`) matching every sibling signal's look-ahead gate. EDGAR 22:00-ET filing-cutoff trade-off named honestly via §(b) `not_yet_knowable_excluded` — late-accepted filings carried to D+1. Post-cutoff `0 3 * * 2-6` UTC alternative REJECTED for consistency-beats-cleverness. Phase-7 IC ablation reopens. |
 
@@ -41,25 +41,52 @@ Two-layer enforcement (no silent default):
    boundary-level:  `edgar-form4-fetcher.ts` — refuses HTTP without acceptance pre-validation
 ```
 
-**§(i) arithmetic row (single-invocation envelope, post per-accession-index revision).**
+**§(i) arithmetic row (queue-engine `work-list` consumer, post-Phase-3.5 correction with Phase-0 measured inputs).**
 
-| Step | Operation | Calls | Latency |
+The pre-FP-050-Phase-3.6 §(i) arithmetic stood on an unmeasured ~50-qualifying-accessions-per-fire S&P-900 estimate. Phase-0 probe-window measurement (three real daily indexes, filer CIKs resolved against the universe CIK map) returned ~1,667 in-universe Form-4 accessions per day. That single datum falsifies the prior table's row 3 cell, row 4 cell, the ~17.4 s / ~18 s total, AND the ~25 min one-shot backfill bound. All four numbers are corrected below (Phase-3.5 corrections 1–3; correction 4 is the `signal_registry.cadence` rewrite landed by MIG-094 — see Registry truth bullet).
+
+| Step | Operation | Calls | Latency @ 5 rps |
 |---|---|---|---|
 | 1 | `company_tickers.json` (CIK map) | 1 | ~1.0 s |
-| 2 | Daily-index sweep (90 weekday-business-days) | ~64 | ~6.4 s @ 5 rps |
-| 3 | Per-accession `index.json` (qualifying accessions, ~50/fire S&P-900) | ~50 | ~5.0 s @ 5 rps |
-| 4 | Form 4 XML fetch + parse (post §(b) gate) | ~50 | ~5.0 s @ 5 rps |
-| **Total** | **incremental fire** | **~165 HTTPS** | **~17.4 s** (rounds to the DEC-058 §(i) ~18 s/fire seeded envelope) |
+| 2 | Daily-index sweep (1 weekday-business-day per fire — daily cadence ingests yesterday's index, not 90d worth) | ~1 | ~0.2 s |
+| 3 | Per-accession `index.json` (qualifying accessions — **Phase-0 measured ~1,667/day**, NOT the falsified ~50/fire estimate) | ~1,667 | ~333 s |
+| 4 | Form 4 XML fetch + parse (post §(b) acceptance gate) | ~1,667 | ~333 s |
+| **Total** | **incremental daily fire** | **~3,336 HTTPS** | **~667 s ≈ ~11.1 min** (well outside the 120 s queue-slice gate AND the 600 s edge-function timeout — REQUIRES queue-engine `work-list` drain, NOT single-invocation) |
 
-Backfill (one-shot, 90-trading-day cold start) bounds at ~25 min one-shot per DEC-058 §(i) — well within `timeout_seconds=600` budget at single-invocation cadence (operator-validated arithmetic in DEC-058 §(i) verbatim).
+**Backfill arithmetic (one-shot, 90 trading-day cold start, queue-drained):** 90 daily-index sweeps + 1 CIK map + ~1,667 × 90 = ~150,030 qualifying accessions × 2 (per-accession `index.json` + Form-4 XML) ≈ ~91k EDGAR HTTPS calls. At the 5 rps self-imposed cap = ~18,000 s ≈ **~5 hours wall-clock** drained across queue slices. The prior "~25 min one-shot within `timeout_seconds=600`" claim is FALSE under measured inputs and is retracted; the corrected backfill MUST complete before Phase 4 arm-up (the gate is encoded in the §(i) Phase-3.6b consumer; the manual handler's backfill-seed flag is the operator's trigger — design lands in FP-050 Phase 3.6b.ii).
 
 **Registry truth (live-DB §22.5.1 post-MIG-093 reads, 2026-06-12).**
 
 - `job_registry.longshort.insider.compute = {schedule:'15 21 * * 1-5', handler_path:'supabase/functions/longshort-insider-compute/index.ts', enabled:false, status:'registered'}` — schedule retuned from FP-042-era `0 19 * * 1-5`; `enabled` STAYS FALSE through Phase 3.
-- `signal_registry.insider_transactions_90d = {status:'live', cadence:'daily (after-close; single-invocation ~18s/fire incremental; acceptance-gated per DEC-058 §(b) — late-accepted filings carried to next fire; interim per DEC-048 — §4.4.4 30-min intraday revisit is a future enhancement-FP, Phase 7 picks final cadence)', job_registry_id:'longshort.insider.compute', planned_phase:NULL}`.
+- `signal_registry.insider_transactions_90d = {status:'live', cadence:'daily (after-close; queue-drained ingest + finalize per FP-050 Phase 3.6b work-list consumer — Phase-0 measured ~1,667 in-universe Form-4 accessions/day; per-fire ~3,425 EDGAR HTTPS calls (1 CIK map + 90 daily-index sweep + 1,667 per-accession index.json + 1,667 Form-4 XML) drained across queue slices at 5 rps self-imposed cap (~11.4 min wall-clock); acceptance-gated per DEC-058 §(b); table-keyed §(h) read-time preference at finalize; backfill ~91k calls / ~5 hours queue-drained one-shot, MUST complete before Phase 4 arm-up; interim per DEC-048 — §4.4.4 30-min intraday revisit is a future enhancement-FP, Phase 7 picks final cadence)', job_registry_id:'longshort.insider.compute', planned_phase:NULL}` (rewritten by MIG-094 per Phase-3.5 correction 4).
 - `JOB_ID_TO_SIGNAL_ID['longshort.insider.compute'] = 'insider_transactions_90d'` already present at `supabase/functions/_shared/longshort-signals/shared/job-signal-mapping.ts:47` (NO duplication — Constitution Rule 5).
 
 **What's NOT decided at Phase 3.** Phase 4 arm-up (deploy + operator validation fire + DEC-040 byte-match against operator-applied `cron.job` + DEC-043-pattern first-natural-fire wall-clock signature) follows supervisor verification of this commit. Signal #4 STAYS DISARMED through the end of Phase 3.
+
+---
+
+## FP-050 Phase 3.6b.i — work-list persistence layer (schema-and-docs only; shell preview of 3.6b.ii consumer)
+
+**Status: schema landed at MIG-094 + four Phase-3.5 corrections; consumer wiring is 3.6b.ii; orchestrator refactor is 3.6b.iii. Signal #4 STAYS DISARMED throughout.**
+
+**Why the prior single-invocation framing failed.** §(i) was authored against an unmeasured ~50-qualifying-accessions-per-fire estimate. The Phase-0 probe-window measurement of ~1,667 in-universe Form-4 accessions/day (S&P-900 universe, real daily indexes, filer CIKs resolved against the universe CIK map) makes the per-fire wall-clock budget ~11 min — past both the 120 s queue-slice gate and the 600 s edge-function timeout. The Phase-2 single-invocation orchestrator cannot survive this measurement; the FP-045 queue engine `work-list` mode (FP-050 Phase 3.6a) is the load-bearing substrate.
+
+**`insider_form4_rows` table (MIG-094, this commit).**
+
+- **PK = DEC-058 §(h) idempotency triple**: `(issuer_cik, accession_number, transaction_seq)`. **Keep-all-versions, NO write-time merge.** Form 4 and Form 4/A are treated identically by the schema; the §(h) most-recent-accession preference is a READ-TIME operation applied by `loadAndCompute` at finalize.
+- **§(b) dual-date axis — BOTH dates persisted**: `transaction_date` (decay anchor, `age_days / 14`) and `acceptance_datetime timestamptz` (look-ahead gate, `acceptance_datetime ≤ as_of` timestamp comparison).
+- **Row contract** = the byte-preserved Phase-1 parser output (`form4-row-types.ts`) + boundary attribution (`ticker`, `filing_form_type`, `ingested_at`, `ingested_run_id`).
+- **RLS family** = service-role write + `longshort.view` read + deny-write triad on `authenticated` (mirrors `signal_queue_*` + `signal_observations`).
+- **90-day window read index**: `idx_insider_form4_rows_ticker_acceptance (ticker, acceptance_datetime DESC)` — covers the §(b) gated scan ordered for §(h) recency.
+- **Late-amendment-out-of-window counter**: NOT a column on this table. It is RUN-META on `signal_queue_runs`, written by the consumer at finalize when a 4/A amendment's `acceptance_datetime` falls inside the run's 90-day window but its underlying `transaction_date` falls outside.
+
+**Two-ledger note (Phase-3.6a Q4 binding, surfaced here for the insider consumer).** Item-level skips (per-accession permanent failures, e.g. unparseable XML, 4/A amendment to a non-extant 4) land in `signal_queue_skips` written by the engine — the engine's item-scope ledger. Consumer-level name-level mass balance lives in the `signal_compute_log.skips` array via the §4.4.4-style `kind:'permanent_skip'` taxonomy returned by `loadAndCompute` — the consumer's name-scope ledger. The two ledgers are NOT reconciled; they answer different questions (engine: did this work item ever succeed? consumer: did this universe ticker contribute to the 839 mass balance?).
+
+**Backfill gate (Phase 4 prerequisite).** The backfill is the same `work-list` consumer with a seed-parameter for the 90-day accession sweep. Operator triggers via `longshort-insider-compute-manual` with an explicit `backfill: true` flag (design + flag wiring land in Phase 3.6b.ii). The arm-up choreography is: deploy → operator backfill drain (~91k calls, ~5 h queue-drained, idempotent under §(h) triple) → validation fire → operator-approved arm-up. **Backfill MUST complete before Phase 4 arm-up** — the validation fire's signal output is undefined without the historical 90-day window populated.
+
+**3.6b.ii (next sub-commit) preview.** `insider-work-list-registration.ts`: `seedWorkItems = yesterday's daily index → in-universe qualifying accessions` (CIK map + §22.3-style acceptance look-ahead); `processItem = accession index.json → typed primary-doc selection → Form-4 fetch+parse → INC-74-pattern batch-dedupe → upsert insider_form4_rows` with the Q3 typed-permanent vs transient classification; `loadAndCompute = the table's 90-day window → §(b) acceptance gate → §(h) read-time preference → the PRESERVED FP-042 compute → 839 mass balance → values+skips`. `accessionsPerSlice` arithmetic and drift sentinels pin both the items-per-slice budget and the call-id surface structurally.
+
+**3.6b.iii (third sub-commit) preview.** Refactor the Phase-2 single-invocation `insider-orchestrator.ts` to the consumer's `loadAndCompute` core (universe/z/persist pipeline survives; the in-line 90-day fetch loop is DELETED, no commented-out corpses); handlers become queue-init shims (the news-handler pattern). The §22.8.4 STOP-on-sprawl clause stays armed mid-flight — if the extraction reveals entanglement beyond the universe/z/persist core, STOP and surface rather than completion-theater.
 
 ---
 
