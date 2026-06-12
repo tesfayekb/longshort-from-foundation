@@ -23,7 +23,11 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { QueueSignalConfig } from './queue-config.ts';
+import {
+  FEED_SYNTHETIC_TICKER,
+  isFeedMode,
+  type QueueSignalConfig,
+} from './queue-config.ts';
 
 export interface QueueInitContext {
   supabase: SupabaseClient;
@@ -116,6 +120,13 @@ export async function initQueueRun(ctx: QueueInitContext): Promise<QueueInitResu
   }
 
   // ── 3. Insert run row (RETURNING run_id).
+  //      Feed mode (FP-048 Phase 3a) carries the same run row + the new
+  //      `feed_cursor` / `feed_pages_fetched` columns (MIG-089a; default
+  //      NULL / 0 at insert time). The mode discriminator goes in
+  //      `metadata.mode` for telemetry-side diagnosability.
+  const mode: 'per-ticker' | 'sequential-feed' = isFeedMode(config)
+    ? 'sequential-feed'
+    : 'per-ticker';
   const { data: runRow, error: runErr } = await supabase
     .from('signal_queue_runs')
     .insert({
@@ -125,7 +136,7 @@ export async function initQueueRun(ctx: QueueInitContext): Promise<QueueInitResu
       status: 'running',
       universe_size: universe.length,
       heartbeat_at: as_of_iso,
-      metadata: { as_of: as_of_iso, job_id: config.jobId },
+      metadata: { as_of: as_of_iso, job_id: config.jobId, mode },
     })
     .select('run_id')
     .single();
@@ -134,16 +145,33 @@ export async function initQueueRun(ctx: QueueInitContext): Promise<QueueInitResu
   }
   const run_id = (runRow as { run_id: string }).run_id;
 
-  // ── 4. Bulk-insert cursor rows. PK (run_id, ticker) means duplicates
-  //      within the same universe snapshot would conflict — they shouldn't
-  //      occur (universe_membership PK includes ticker) but use ignoreDuplicates
-  //      defensively rather than letting one stray dupe abort the whole insert.
-  const cursorRows = universe.map((u) => ({
-    run_id,
-    signal_id: config.signalId,
-    ticker: u.ticker,
-    gics_sector: u.gics_sector,
-  }));
+  // ── 4. Seed the cursor.
+  //      per-ticker mode: one row per universe ticker (claimed across many
+  //        slices via SKIP LOCKED).
+  //      sequential-feed mode: ONE synthetic-ticker row holding the
+  //        run-level feed claim. The actual pagination token lives in
+  //        signal_queue_runs.feed_cursor; this cursor row exists only
+  //        so the existing claim/release/CAS-on-cursor-empty primitives
+  //        work unmodified (the CAS predicate fires the moment this
+  //        single row is DELETEd at feed exhaustion).
+  //      The `signal_queue_cursor.gics_sector` column is nullable in
+  //      MIG-082 (line 93: `gics_sector text` — no NOT NULL); MIG-089a
+  //      re-asserts this as an idempotent precondition. NO sentinel
+  //      string is invented for the feed row's sector (that would be a
+  //      banned anti-phantom fake-numeric's string cousin).
+  const cursorRows = isFeedMode(config)
+    ? [{
+        run_id,
+        signal_id: config.signalId,
+        ticker: FEED_SYNTHETIC_TICKER,
+        gics_sector: null,
+      }]
+    : universe.map((u) => ({
+        run_id,
+        signal_id: config.signalId,
+        ticker: u.ticker,
+        gics_sector: u.gics_sector,
+      }));
   const { error: cursorErr } = await supabase
     .from('signal_queue_cursor')
     .upsert(cursorRows, { onConflict: 'run_id,ticker', ignoreDuplicates: true });
