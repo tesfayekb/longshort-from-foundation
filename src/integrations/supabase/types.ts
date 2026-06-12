@@ -951,6 +951,7 @@ export type Database = {
           operator_id: string
           run_id: string
           signal_id: string
+          slice_failure_count: number
           status: string
           universe_size: number
           updated_at: string
@@ -967,6 +968,7 @@ export type Database = {
           operator_id: string
           run_id?: string
           signal_id: string
+          slice_failure_count?: number
           status: string
           universe_size: number
           updated_at?: string
@@ -983,6 +985,7 @@ export type Database = {
           operator_id?: string
           run_id?: string
           signal_id?: string
+          slice_failure_count?: number
           status?: string
           universe_size?: number
           updated_at?: string
