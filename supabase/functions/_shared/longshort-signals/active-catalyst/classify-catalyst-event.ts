@@ -70,9 +70,20 @@ export interface ClassifyResult {
   future_event_excluded: number;
 }
 
+/**
+ * Word-boundary substring match. Required (NOT substring) because the
+ * verb "partners" is a substring of the noun "partnership" — a plain
+ * `String#includes` test would let every "partnership" text trivially
+ * pass the verb gate. Multi-word phrases ("chief executive", "strategic
+ * alliance") match naturally because `\b` anchors only at the outer
+ * edges of the phrase. Terms are escaped to avoid regex-meta surprises.
+ */
+const RE_ESCAPE = /[.*+?^${}()|[\]\\]/g;
 function containsAny(haystackLower: string, needles: ReadonlyArray<string>): boolean {
   for (const n of needles) {
-    if (haystackLower.includes(n)) return true;
+    const escaped = n.replace(RE_ESCAPE, '\\$&');
+    const re = new RegExp(`\\b${escaped}\\b`);
+    if (re.test(haystackLower)) return true;
   }
   return false;
 }
