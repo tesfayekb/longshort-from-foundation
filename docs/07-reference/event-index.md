@@ -2277,6 +2277,32 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Lifecycle** | active (preserved across FP-045 Phase 4 manual-shim gut — emitted on `initQueueRun` throw with `stage:'queue_init'`). |
 | **Added by** | FP-043 |
 
+## Long-Short News-Sentiment Signal Events (FP-048 Phase 3b / Signal #8)
+
+Signal #8 (`news_sentiment_7d`) is the FIRST sequential-feed consumer on the FP-045 cursor-drain queue engine. The cron + manual handlers emit the same `longshort.signal_queue.run.*` family the engine standardized in FP-045 Phase 2 (so monitoring + diagnostics need no per-signal special-casing); the two manual-shim-specific events below mirror the FP-043/FP-044 dual-trail discipline (`manual_triggered` BEFORE init, `manual_failed` on init throw). The per-run completion signal is the finalizer's `QUEUE_AUDIT_EVENTS.RUN_COMPLETED` — same as PEAD + options-flow.
+
+### `longshort.news.compute.manual_triggered`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-news-compute-manual/index.ts` BEFORE `initQueueRun` (dual-trail discipline) |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, signal_id, as_of, mode:'sequential-feed', trigger:'manual' }`; `actor_id` = `auth.uid()`; carries `ip_address` + `user_agent` |
+| **Lifecycle** | active. Paired with `QUEUE_AUDIT_EVENTS.RUN_STARTED` on success. |
+| **Added by** | FP-048 Phase 3b |
+
+### `longshort.news.compute.manual_failed`
+
+| Field | Value |
+|---|---|
+| **Emitted by** | `supabase/functions/longshort-news-compute-manual/index.ts` on `initQueueRun` throw |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, signal_id, as_of, error, stage:'queue_init', mode:'sequential-feed', trigger:'manual' }` |
+| **Lifecycle** | active. |
+| **Added by** | FP-048 Phase 3b |
+
+(The cron handler `longshort-news-compute/index.ts` emits `QUEUE_AUDIT_EVENTS.RUN_STARTED` / `.RUN_FAILED` from the shared queue-engine vocabulary — registered in this index under the queue-engine section; the news handler simply adds `mode:'sequential-feed'` and `handler:'longshort-news-compute'` to the metadata.)
+
 ## Long-Short PEAD Signal Events (FP-044 / Signal #2)
 
 The six events below mirror the short-interest signal's event family exactly, with `short_interest` → `pead` and `short_interest_change_30d` → `pead_sue_20d`. Same target table (`public.longshort_audit_logs`), same payload shapes, same lifecycle semantics. NON-CRITICAL signal: degraded runs (`subscription_gated` / `pead_panel_below_floor` / `zero_dispersion` / `no_recent_earnings`) still emit `.completed` with appropriate `skip_counts` and a low (or zero) `persisted_count`.
