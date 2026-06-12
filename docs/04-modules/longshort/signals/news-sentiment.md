@@ -190,7 +190,8 @@ rather than silently dropped (axiom 3).
 ## 8. Migration ledger entries
 
 - **MIG-089a** (FP-048 Phase 3a) — substrate: `signal_queue_feed_items` table + `signal_queue_runs.feed_cursor` / `feed_pages_fetched` columns + nullability precondition assertion. RLS deny-write to authenticated, read via `longshort.view`.
-- **MIG-089b** (FP-048 Phase 3b — this PR) — registry truth: inserts `longshort.news.compute` into `job_registry` (DISARMED, schedule `30 21 * * 1-5`); flips `signal_registry.news_sentiment_7d` from `planned`/`intraday (5 min)`/`Phase 2.8` to `live` with truth-in-telemetry cadence. Metadata-only DML; no DDL; no new slice/sweeper job rows (MIG-084 rows are shared engine rows, signal-agnostic by design).
+- **MIG-089b** (FP-048 Phase 3b) — registry truth: inserts `longshort.news.compute` into `job_registry` (DISARMED, schedule `30 21 * * 1-5`); flips `signal_registry.news_sentiment_7d` from `planned`/`intraday (5 min)`/`Phase 2.8` to `live` with truth-in-telemetry cadence. Metadata-only DML; no DDL; no new slice/sweeper job rows (MIG-084 rows are shared engine rows, signal-agnostic by design).
+- **MIG-090** (FP-048 arm-up — this PR) — flips `job_registry.longshort.news.compute.enabled` `false`→`true`, paired with operator-applied `cron.job` jobid 90 at `30 21 * * 1-5` UTC. DEC-040 byte-match (cron.job.schedule == job_registry.schedule == `30 21 * * 1-5`, byte-identical). DEC-043-pattern attestation OPEN — pending first natural cron-fire wall-clock signature at next weekday 21:30 UTC. Metadata-only `UPDATE`; no DDL; no GRANT/RLS/policy changes.
 
 ## 9. Cross-references
 
