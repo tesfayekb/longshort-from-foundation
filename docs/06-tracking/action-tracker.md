@@ -15,7 +15,34 @@
 | **Evidence (DEC-043)** | Four-gate canonical attestation pending post-edit HEAD; expected: Gate 1 `check-wall-clock: CLEAN — 0 violations`; Gate 2 unchanged (the 7 new tests live under `scripts/`, OUTSIDE `supabase/functions/_shared/`); Gate 2b unchanged at the supabase/functions invocation; the new script tests execute under the project-root `deno test scripts/` invocation already wired into CI Gate at `.github/workflows/strong-evidence.yml`; Gate 3 expected parity at 15 warnings (0/0 contribution from the additive script files). Attestation block to be appended at commit time per ai-failure-modes #41 canonical-line requirement. |
 | **Out-of-scope guarantees** | Zero migration; zero RBAC/permission/role/RLS change; zero `job_registry` / `cron.job` / `signal_registry` mutation; zero secret added; zero new dependency; zero touch to F2.a queue table (lands at F2.a); zero touch to discovery script or GHA workflow (lands at F2.b); zero touch to `insider-work-list-registration` seedWorkItems or to the R1 heartbeat-or-distinction or R2 concurrency-safety regression test (all land at F2.c); zero touch to module docs (lands at F2.d). |
 | **ROI Impact** | **Zero on current ROI** (verifier infrastructure — no signal logic / threshold / fetcher / orchestrator surface changes). **Positive evidence-trust impact:** the source-vs-runtime gap exploited by the F1 stale-bundle false start is now mechanically closeable per-attestation; downstream F2 sub-commits inherit the protection. **Anti-ROI guardrail:** the header-stamp on every response path is unconditional when `BUILD_SHA` is set and a no-op when unset — there is no path where deployment of this commit reduces the runtime's prediction surface, monitoring surface, or response shape (header addition is additive). |
-| **Status** | Execution pending commit; four-gate attestation block to be appended verbatim at the post-edit HEAD. STOP after F2-pre per the operator's four-sub-commit ruling; operator binds F2.a next. |
+| **Status** | Execution complete at HEAD `3777f138b91e5051163f430ae1e60fc95c6c6e7e`; four-gate attestation block ALL GREEN (verbatim below). STOP after F2-pre per the operator's four-sub-commit ruling; operator binds F2.a next. |
+
+**Attestation block (ACT-201)** — produced verbatim by `scripts/check-gate-evidence.ts` at HEAD `3777f138b91e5051163f430ae1e60fc95c6c6e7e`:
+
+```
+=== check-gate-evidence ATTESTATION (paste verbatim) ===
+HEAD: 3777f138b91e5051163f430ae1e60fc95c6c6e7e
+Generated: 2026-06-13T04:01:53.627Z
+
+Gate 1: deno run --allow-read scripts/check-wall-clock.ts
+  exit=0  duration_ms=299
+  final-line: check-wall-clock: CLEAN — 0 violations
+
+Gate 2: cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/
+  exit=0  duration_ms=32534
+  final-line: ok | 1045 passed | 0 failed (28s)
+
+Gate 2b: cd supabase/functions && deno test --allow-net --allow-env --allow-read
+  exit=0  duration_ms=34224
+  final-line: ok | 1262 passed | 0 failed (31s)
+
+Gate 3: npx eslint .
+  exit=0  duration_ms=9426
+  final-line: ✖ 15 problems (0 errors, 15 warnings)
+
+Verdict: ALL GREEN
+=== end attestation ===
+```
 
 STOP — F2-pre landed; deployed-SHA verifier is the load-bearing interface check between source-HEAD attestation and runtime-HEAD attestation; every F2 verification step downstream gates on a MATCH outcome from this verifier; Signal #4 STAYS DISARMED.
 
