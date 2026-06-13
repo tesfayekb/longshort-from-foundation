@@ -596,8 +596,112 @@ async function loadCurrentUniverse(
 // ─── processItem factory ───────────────────────────────────────────────
 
 function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
+  // ── ENGINE-↔-CONSUMER SEAM (ACT-211, FP-050 Phase 4) ──────────────
+  // `signal_queue_cursor` carries NO `payload` column (schema verified
+  // 2026-06-13: run_id, signal_id, ticker, gics_sector, claimed_at,
+  // created_at). The work-list mode engine at
+  // `queue-slice-worker.ts:808-810` invokes the consumer with a
+  // hardcoded `payload: {}` and the documented contract that the
+  // consumer reconstructs the payload from `item.id` (the cursor's
+  // ticker, which IS the accession number for this signal) via its
+  // own persistence-table read path. The earlier reading
+  // `item.payload as Readonly<InsiderWorkItemPayload>` followed by
+  // `payload.filer_cik_padded.replace(...)` collapsed to
+  // `undefined.replace(...)` on every claimed item, tripping the Q3
+  // 3-strikes deadlock guard with the literal
+  // `Cannot read properties of undefined (reading 'replace')` stamp
+  // recorded against run `aadb1329-…c2d`. The reconstruction below
+  // honors the engine contract verbatim: one indexed SELECT per
+  // processed item (~14k SELECTs across a full 63-day backfill,
+  // negligible against the 5 rps SEC fair-access floor that already
+  // bounds the queue drain). The universe→padded-CIK map is memoized
+  // per-isolate so the per-item cost is exactly one queue read.
+  let universeByPaddedCik: Map<string, UniverseRowWithCik> | null = null;
+  const ensureUniverseMap = async (): Promise<Map<string, UniverseRowWithCik>> => {
+    if (universeByPaddedCik !== null) return universeByPaddedCik;
+    const universe = await loadCurrentUniverse(deps);
+    const lookup = await deps.cikMapper.loadMap();
+    const m = new Map<string, UniverseRowWithCik>();
+    for (const u of universe) {
+      const r: CikLookupResult = lookup(u.ticker);
+      if (r.kind === 'unresolved') continue;
+      m.set(r.cik10, { ticker: u.ticker, gics_sector: u.gics_sector, cik10: r.cik10 });
+    }
+    universeByPaddedCik = m;
+    return m;
+  };
+
   return async ({ item, asOf }): Promise<WorkListItemResult> => {
-    const payload = item.payload as Readonly<InsiderWorkItemPayload>;
+    // ── Payload reconstruction (engine contract: cursor carries no
+    //    payload; consumer rebuilds from item.id). ───────────────────
+    const accession = item.id;
+    const { data: queueRows, error: queueErr } = await deps.supabase
+      .from('insider_accession_discovery_queue')
+      .select('issuer_cik, form_type')
+      .eq('accession_number', accession)
+      .limit(1);
+    if (queueErr) {
+      // Transient — Postgres temporal failures (lock contention,
+      // network blip). Engine cursor preserved; the 3-strikes guard
+      // handles repeated failure exactly like any other transient throw.
+      throw new SignalComputationError(
+        INSIDER_SIGNAL_ID,
+        accession,
+        `discovery-queue lookup failed (acc=${accession}): ${queueErr.message}`,
+      );
+    }
+    const queueRow = (queueRows ?? [])[0] as
+      | { issuer_cik: string; form_type: string }
+      | undefined;
+    if (queueRow === undefined) {
+      // No discovery-queue row for this accession (e.g., row pruned
+      // between seed and process, or a manual cursor-row insert that
+      // bypassed the producer). Typed-permanent skip — re-claiming
+      // won't fix it.
+      return {
+        kind: 'permanent_skip',
+        reason: 'data_unavailable',
+        detail: `discovery-queue row absent for accession ${accession}`,
+      };
+    }
+    if (queueRow.form_type !== '4' && queueRow.form_type !== '4/A') {
+      return {
+        kind: 'permanent_skip',
+        reason: 'data_unavailable',
+        detail: `unexpected form_type=${queueRow.form_type} for accession ${accession}`,
+      };
+    }
+    const issuerCikPadded = queueRow.issuer_cik;
+    if (typeof issuerCikPadded !== 'string' || issuerCikPadded.length === 0) {
+      return {
+        kind: 'permanent_skip',
+        reason: 'data_unavailable',
+        detail: `missing issuer_cik on discovery-queue row for accession ${accession}`,
+      };
+    }
+    const byPaddedCik = await ensureUniverseMap();
+    const universeRow = byPaddedCik.get(issuerCikPadded);
+    if (universeRow === undefined) {
+      // Universe drift since the producer ran — the issuer is no
+      // longer in the current S&P-900 cut. Typed-permanent skip; the
+      // §22.8.5 sub-class B redeploy discipline already covers the
+      // alternative interpretation (stale worker bundle).
+      return {
+        kind: 'permanent_skip',
+        reason: 'data_unavailable',
+        detail: `universe drift: issuer_cik=${issuerCikPadded} no longer in-universe (acc=${accession})`,
+      };
+    }
+    const payload: InsiderWorkItemPayload = {
+      filer_cik_raw: issuerCikPadded.replace(/^0+/, '') || '0',
+      filer_cik_padded: issuerCikPadded,
+      ticker: universeRow.ticker,
+      // date_filed is diagnostic only and not consumed downstream;
+      // populated from asOf to keep the type total without inventing
+      // a wall-clock read (DEC-034 clause 4).
+      date_filed: isoDate(asOf),
+      form_type: queueRow.form_type as '4' | '4/A',
+    };
 
     // Step P.1: accession `index.json` discovery.
     const idx: EdgarAccessionIndexResult = await deps.accessionIndex.fetchIndex({

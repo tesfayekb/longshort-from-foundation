@@ -248,7 +248,21 @@ function makeStubSupabase(opts: {
             return Promise.resolve({ data: projected, error: null })
               .then(onF as never, onR as never);
           }
-          // SELECT distinct dates path (backfill).
+          // SELECT path — two shapes:
+          //   (i) backfill distinct-dates (gte/lte; projects as_of_date)
+          //   (ii) ACT-211 processItem by-accession reconstruction
+          //        (eq accession_number; projects issuer_cik, form_type)
+          if (typeof eqs['accession_number'] === 'string') {
+            const acc = eqs['accession_number'] as string;
+            const matches = queueRows.filter((r) => r.accession_number === acc);
+            const projected = matches.map((r) => ({
+              issuer_cik: r.issuer_cik,
+              form_type: r.form_type,
+            }));
+            void selectCols;
+            return Promise.resolve({ data: projected, error: null })
+              .then(onF as never, onR as never);
+          }
           const rows = queueRows.filter((r) => {
             if (isConsumedNull && r.consumed_at !== null) return false;
             if (gtes['as_of_date'] && r.as_of_date < (gtes['as_of_date'] as string)) return false;
@@ -257,6 +271,7 @@ function makeStubSupabase(opts: {
           }).map((r) => ({ as_of_date: r.as_of_date }));
           return Promise.resolve({ data: rows, error: null }).then(onF as never, onR as never);
         },
+        limit(_n: number) { return b; },
       };
       return b;
     }
@@ -477,6 +492,23 @@ const ITEM: { id: string; payload: InsiderWorkItemPayload } = {
   },
 };
 
+// ACT-211 seam fix: the engine passes `payload: {}` verbatim per
+// `queue-slice-worker.ts:808-810`; the consumer reconstructs payload
+// from the discovery-queue. (E.*)/(F.*) tests now exercise the
+// reconstruction by providing a discovery-queue fixture row that
+// matches ITEM.id and the universe IN-set.
+const ITEM_ENGINE: { id: string; payload: Record<string, unknown> } = {
+  id: ITEM.id,
+  payload: {}, // verbatim engine shape — see queue-slice-worker.ts:808-810
+};
+const ITEM_QUEUE_ROW: QueueRowFixture = {
+  as_of_date: '2026-06-11',
+  issuer_cik: '0000320193',
+  accession_number: ITEM.id,
+  form_type: '4',
+  consumed_at: AS_OF_FRI.toISOString(),
+};
+
 function makeAccessionIndex(behavior: { kind: string; primary_document?: string; acceptance_datetime?: string; filenames?: string[]; eligible_count?: number }) {
   return { async fetchIndex() { return behavior as never; } };
 }
@@ -488,11 +520,11 @@ Deno.test('(E.1) processItem: index 404 → permanent_skip data_unavailable', as
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({ kind: 'unavailable', reason: 'data_unavailable' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') assertEquals(out.reason, 'data_unavailable');
 });
@@ -501,7 +533,7 @@ Deno.test('(E.2) processItem: index ambiguous → permanent_skip no_primary_doc 
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'ambiguous',
       filenames: ['a.xml', 'b.xml'],
@@ -510,7 +542,7 @@ Deno.test('(E.2) processItem: index ambiguous → permanent_skip no_primary_doc 
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') {
     assertEquals(out.reason, 'no_primary_doc');
@@ -522,18 +554,18 @@ Deno.test('(E.3) processItem: index 429 → THROW (transient — engine cursor p
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({ kind: 'rate_limited' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  await assertRejects(() => cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI }));
+  await assertRejects(() => cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI }));
 });
 
 Deno.test('(E.4) processItem: form4 xml 404 → permanent_skip data_unavailable', async () => {
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -543,7 +575,7 @@ Deno.test('(E.4) processItem: form4 xml 404 → permanent_skip data_unavailable'
     form4Fetcher: makeForm4Fetcher({ kind: 'unavailable', reason: 'data_unavailable' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') assertEquals(out.reason, 'data_unavailable');
 });
@@ -552,7 +584,7 @@ Deno.test('(E.5) processItem: form4 xml unparseable → permanent_skip data_unav
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -565,7 +597,7 @@ Deno.test('(E.5) processItem: form4 xml unparseable → permanent_skip data_unav
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') {
     assertEquals(out.reason, 'data_unavailable');
@@ -578,7 +610,7 @@ Deno.test('(F.1) processItem: rows path → upsert quotes M5 PK verbatim + owner
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -602,7 +634,7 @@ Deno.test('(F.1) processItem: rows path → upsert quotes M5 PK verbatim + owner
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'processed');
   const upsert = deps._stub.upserts[0];
   assertEquals(upsert.table, 'insider_form4_rows');
@@ -611,7 +643,7 @@ Deno.test('(F.1) processItem: rows path → upsert quotes M5 PK verbatim + owner
   const row = (upsert.payload as Array<Record<string, unknown>>)[0];
   // MIG-095 dual-write: owner_cik present + non-empty.
   assertEquals(row.owner_cik, '0001111111');
-  // ticker threaded from work-item payload.
+  // ticker threaded from reconstructed payload (universe AAPL ↔ CIK 320193).
   assertEquals(row.ticker, 'AAPL');
   // filing_form_type threaded.
   assertEquals(row.filing_form_type, '4');
@@ -627,7 +659,7 @@ Deno.test('(F.2) processItem: rows empty (derivative-only filing) → processed,
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -637,7 +669,7 @@ Deno.test('(F.2) processItem: rows empty (derivative-only filing) → processed,
     form4Fetcher: makeForm4Fetcher({ kind: 'rows', rows: [] }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'processed');
   assertEquals(deps._stub.upserts.length, 0);
 });
@@ -646,7 +678,7 @@ Deno.test('(F.3) processItem: upsert DB error → THROW (transient)', async () =
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -668,7 +700,7 @@ Deno.test('(F.3) processItem: upsert DB error → THROW (transient)', async () =
   });
   deps._stub.upsertResults.push({ error: { message: 'serialization_failure' } });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  await assertRejects(() => cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI }));
+  await assertRejects(() => cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI }));
 });
 
 // ── (H) loadAndCompute adapter (M3 — runStaged seam) ───────────────────
@@ -778,4 +810,178 @@ Deno.test('(R.1) createInsiderWorkListConfig: daily vs backfill choose distinct 
   assertEquals(daily.mode, 'work-list');
   assertEquals(daily.itemsPerSlice, 50);
   assertEquals(daily.callsPerItem, 2);
+});
+
+// ─── (S) ACT-211 engine-↔-consumer seam regression suite ─────────────
+//
+// Locks the FP-050 Phase 4 ACT-211 fix: the work-list engine at
+// `queue-slice-worker.ts:808-810` passes a verbatim `payload: {}` to
+// the consumer (cursor schema has no payload column). The consumer
+// MUST reconstruct from `item.id` via the discovery-queue, never
+// dereference `item.payload.*`. Failure mode pre-fix: every claimed
+// item threw `Cannot read properties of undefined (reading 'replace')`
+// at `edgar-accession-index-fetcher.ts:87` (stripCikPadding of
+// undefined CIK) → Q3 3-strikes terminal deadlock with the verbatim
+// failure_reason stamped against run `aadb1329-…c2d`.
+
+Deno.test('(S.1) processItem: empty engine payload + matching queue row → no throw on undefined access', async () => {
+  // The engine-seam contract: payload: {} verbatim. The consumer must
+  // reconstruct from item.id. This test exists specifically to fail
+  // loudly if anyone ever re-introduces an `item.payload.x.replace(...)`
+  // dereference into processItem.
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
+    cikMap: { AAPL: 320193 },
+    queueRows: [ITEM_QUEUE_ROW],
+    accessionIndex: makeAccessionIndex({ kind: 'unavailable', reason: 'data_unavailable' }),
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  // The literal engine shape — NOT the pre-fix `ITEM` that carried a
+  // seeded payload (which would have masked the bug).
+  const result = await cfg.processItem!({
+    item: { id: '0000320193-26-000010', payload: {} as unknown as Readonly<Record<string, unknown>> },
+    asOf: AS_OF_FRI,
+  });
+  // No throw. Routes to the index-404 typed-permanent skip. The skip
+  // detail must NOT include the pre-fix throw string.
+  assertEquals(result.kind, 'permanent_skip');
+  if (result.kind === 'permanent_skip') {
+    assert(!result.detail.includes("Cannot read properties of undefined"));
+  }
+});
+
+Deno.test('(S.2) processItem: discovery-queue row absent → typed-permanent skip data_unavailable', async () => {
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
+    cikMap: { AAPL: 320193 },
+    queueRows: [], // no row for the accession
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  const out = await cfg.processItem!({
+    item: { id: '9999999999-99-999999', payload: {} as unknown as Readonly<Record<string, unknown>> },
+    asOf: AS_OF_FRI,
+  });
+  assertEquals(out.kind, 'permanent_skip');
+  if (out.kind === 'permanent_skip') {
+    assertEquals(out.reason, 'data_unavailable');
+    assert(out.detail.includes('discovery-queue row absent'));
+  }
+});
+
+Deno.test('(S.3) processItem: universe-drift (CIK absent from current universe) → typed-permanent skip', async () => {
+  const deps = makeBaselineDeps({
+    // Universe carries MSFT only; the queue row carries an AAPL-shaped
+    // CIK that is no longer in-universe.
+    universe: [{ ticker: 'MSFT', gics_sector: 'Tech' }],
+    cikMap: { MSFT: 789019 },
+    queueRows: [ITEM_QUEUE_ROW],
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  const out = await cfg.processItem!({
+    item: { id: ITEM_QUEUE_ROW.accession_number, payload: {} as unknown as Readonly<Record<string, unknown>> },
+    asOf: AS_OF_FRI,
+  });
+  assertEquals(out.kind, 'permanent_skip');
+  if (out.kind === 'permanent_skip') {
+    assertEquals(out.reason, 'data_unavailable');
+    assert(out.detail.includes('universe drift'));
+    assert(out.detail.includes('0000320193'));
+  }
+});
+
+Deno.test('(S.4) processItem: Chipotle accession 0001058090-26-000045 (run aadb1329 exact failure path) — empty payload, real-shaped queue row, NO throw', async () => {
+  // ACT-211 named fixture: the lex-first claimed item from run
+  // `aadb1329-437f-4e67-8ee8-c53ad3a29c2d`, whose name was stamped
+  // verbatim into `failure_reason='work_list_slice_deadlock_3x: item
+  // ''0001058090-26-000045'' threw: Cannot read properties of undefined
+  // (reading ''replace'')''`. Pre-fix, this exact shape produced the
+  // throw on the first await inside processItem; post-fix it routes
+  // cleanly to a typed terminal outcome (here: index.json `ambiguous`
+  // — the latent §(b) accept-without-acceptanceDateTime gap from the
+  // live EDGAR response, which is split off to ACT-212).
+  const queueRow: QueueRowFixture = {
+    as_of_date: '2026-06-12',
+    issuer_cik: '0001058090', // CMG / Chipotle padded
+    accession_number: '0001058090-26-000045',
+    form_type: '4',
+    consumed_at: AS_OF_FRI.toISOString(),
+  };
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'CMG', gics_sector: 'Consumer Discretionary' }],
+    cikMap: { CMG: 1058090 },
+    queueRows: [queueRow],
+    // Mirrors the live `index.json` response observed at investigation
+    // (acceptanceDateTime absent on the modern Form-4 index.json shape
+    // for this filer; ambiguous-route per §(b) Option-A contract).
+    accessionIndex: makeAccessionIndex({
+      kind: 'ambiguous',
+      filenames: [
+        '0001058090-26-000045-index-headers.html',
+        '0001058090-26-000045-index.html',
+        '0001058090-26-000045.txt',
+        'doc1.txt',
+        'form4.xml',
+      ],
+      eligible_count: 1,
+      acceptance_datetime: null as unknown as string,
+    }),
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  const out = await cfg.processItem!({
+    item: { id: '0001058090-26-000045', payload: {} as unknown as Readonly<Record<string, unknown>> },
+    asOf: AS_OF_FRI,
+  });
+  // No throw. Routes to the typed-permanent skip. Crucially, the skip
+  // detail does NOT carry the pre-fix throw string.
+  assertEquals(out.kind, 'permanent_skip');
+  if (out.kind === 'permanent_skip') {
+    assertEquals(out.reason, 'no_primary_doc');
+    assert(!out.detail.includes("Cannot read properties of undefined"));
+  }
+});
+
+Deno.test('(S.5) processItem: reconstructed payload ticker comes from universe map, NOT from item.payload', async () => {
+  // Pin the reconstruction direction. Even if a future engine change
+  // started threading a payload, the discovery-queue + universe-map
+  // path is the consumer's truth source; an item.payload.ticker that
+  // disagrees with the queue's issuer_cik → universe ticker mapping
+  // MUST NOT be honoured.
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
+    cikMap: { AAPL: 320193 },
+    queueRows: [ITEM_QUEUE_ROW],
+    accessionIndex: makeAccessionIndex({
+      kind: 'resolved',
+      primary_document: 'primary_doc.xml',
+      acceptance_datetime: '2026-06-11T16:00:00.000Z',
+      filenames: ['primary_doc.xml'],
+    }),
+    form4Fetcher: makeForm4Fetcher({
+      kind: 'rows',
+      rows: [{
+        issuer_cik: '0000320193', owner_cik: '0001111111',
+        accession_number: ITEM_QUEUE_ROW.accession_number, transaction_seq: 0,
+        transaction_code: 'P', shares: 1000, price_per_share: 50,
+        acquired_disposed: 'A', ownership_type: 'D', officer_title: 'CEO',
+        is_director: false, is_officer: true, is_ten_percent_owner: false,
+        has_10b5_1_mention: false,
+        transaction_date: '2026-06-10', acceptance_datetime: '2026-06-11T16:00:00.000Z',
+      }],
+    }),
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  const out = await cfg.processItem!({
+    item: {
+      id: ITEM_QUEUE_ROW.accession_number,
+      // Adversarial: a wrong-ticker payload that, if read, would land
+      // 'WRONG' on the persisted row. Reconstruction ignores this.
+      payload: { ticker: 'WRONG', filer_cik_padded: '9999999999' } as unknown as Readonly<Record<string, unknown>>,
+    },
+    asOf: AS_OF_FRI,
+  });
+  assertEquals(out.kind, 'processed');
+  const upsert = deps._stub.upserts[0];
+  const row = (upsert.payload as Array<Record<string, unknown>>)[0];
+  assertEquals(row.ticker, 'AAPL', 'ticker MUST come from universe-map reconstruction, not item.payload');
+  assertEquals(row.issuer_cik, '0000320193');
 });
