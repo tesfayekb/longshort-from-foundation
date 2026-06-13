@@ -308,48 +308,52 @@ function makeBaselineDeps(
   };
 }
 
-// ── (D) seedWorkItems — in-universe filter is the load-bearing design ──
-Deno.test('(D.1) seedWorkItems daily: in-universe filter drops out-of-universe filers, keeps universe filers', async () => {
+// ── (D) seedWorkItems — F2.c queue-claim contract ──────────────────────
+//
+// F2.c switches the seed from EDGAR daily-index fetch to a Supabase
+// claim against `insider_accession_discovery_queue` (rows pre-populated
+// by the GHA-egress producer). The (D.*) tests pin: in-universe filter,
+// empty-universe Q5, no-rows-for-day cleanly empty, backfill cross-day
+// dedupe, AND the R1 heartbeat-exclusion structural predicate.
+
+Deno.test('(D.1) seedWorkItems daily: in-universe IN-filter drops out-of-universe queue rows', async () => {
   const deps = makeBaselineDeps({
     universe: [
       { ticker: 'AAPL', gics_sector: 'Tech' },
       { ticker: 'MSFT', gics_sector: 'Tech' },
     ],
     cikMap: { AAPL: 320193, MSFT: 789019 },
-    daily: {
-      '2026-06-11': [
-        // In-universe — KEPT
-        { filer_cik: '320193', accession_number: '0000320193-26-000010', form_type: '4' },
-        { filer_cik: '789019', accession_number: '0000789019-26-000020', form_type: '4/A' },
-        // Out-of-universe — DROPPED (TSLA not in cikMap)
-        { filer_cik: '1318605', accession_number: '0001318605-26-000030', form_type: '4' },
-        // Out-of-universe — DROPPED (CIK not in inverse map)
-        { filer_cik: '999999', accession_number: '0000999999-26-000040', form_type: '4' },
-      ],
-    },
+    queueRows: [
+      { as_of_date: '2026-06-11', issuer_cik: '0000320193', accession_number: '0000320193-26-000010', form_type: '4', consumed_at: null },
+      { as_of_date: '2026-06-11', issuer_cik: '0000789019', accession_number: '0000789019-26-000020', form_type: '4/A', consumed_at: null },
+      // Out-of-universe row (TSLA-shaped CIK) — DROPPED by .in('issuer_cik', universe).
+      { as_of_date: '2026-06-11', issuer_cik: '0001318605', accession_number: '0001318605-26-000030', form_type: '4', consumed_at: null },
+    ],
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
   const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
   assertEquals(items.length, 2, 'only the two in-universe accessions survive');
   const ids = items.map((i) => i.id).sort();
   assertEquals(ids, ['0000320193-26-000010', '0000789019-26-000020']);
-  // Payload threading
   const aapl = items.find((i) => i.id === '0000320193-26-000010')!;
   const payload = aapl.payload as Readonly<InsiderWorkItemPayload>;
   assertEquals(payload.ticker, 'AAPL');
   assertEquals(payload.filer_cik_padded, '0000320193');
   assertEquals(payload.form_type, '4');
+  // Claim flipped consumed_at on the two universe rows; left the
+  // out-of-universe row unconsumed.
+  const remainingUnconsumed = deps._stub._queueRows.filter((r) => r.consumed_at === null);
+  assertEquals(remainingUnconsumed.length, 1);
+  assertEquals(remainingUnconsumed[0].issuer_cik, '0001318605');
 });
 
-Deno.test('(D.1b) seedWorkItems daily: real NVDA master.idx CIK operand matches padded universe CIK', async () => {
+Deno.test('(D.1b) seedWorkItems daily: real NVDA CIK operand matches padded universe CIK', async () => {
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'NVDA', gics_sector: 'Tech' }],
     cikMap: { NVDA: 1045810 },
-    daily: {
-      '2026-06-11': [
-        { filer_cik: '1045810', accession_number: '0001768670-26-000002', form_type: '4' },
-      ],
-    },
+    queueRows: [
+      { as_of_date: '2026-06-11', issuer_cik: '0001045810', accession_number: '0001768670-26-000002', form_type: '4', consumed_at: null },
+    ],
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
   const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
@@ -365,18 +369,20 @@ Deno.test('(D.2) seedWorkItems daily: empty universe → empty items (Q5 VALID e
   const deps = makeBaselineDeps({
     universe: [],
     cikMap: {},
-    daily: { '2026-06-11': [{ filer_cik: '320193', accession_number: '0000320193-26-000001', form_type: '4' }] },
+    queueRows: [
+      { as_of_date: '2026-06-11', issuer_cik: '0000320193', accession_number: '0000320193-26-000001', form_type: '4', consumed_at: null },
+    ],
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
   const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
   assertEquals(items.length, 0);
 });
 
-Deno.test('(D.3) seedWorkItems daily: holiday/unavailable day → empty items (NOT a throw)', async () => {
+Deno.test('(D.3) seedWorkItems daily: no queue rows for the target day → empty items (NOT a throw)', async () => {
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {}, // no entries → fetcher returns 'unavailable'
+    queueRows: [],
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
   const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
@@ -384,23 +390,61 @@ Deno.test('(D.3) seedWorkItems daily: holiday/unavailable day → empty items (N
 });
 
 Deno.test('(D.4) seedWorkItems backfill: dedupes overlapping accessions across days', async () => {
-  // Backfill sweeps 63 trading days; this test verifies the
-  // `seenAccession` invariant (item-id uniqueness within ONE seed call
-  // per queue-work-list-mode_test.ts:275-292) by placing the same
-  // accession on two days the sweep covers.
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {
-      '2026-06-12': [{ filer_cik: '320193', accession_number: 'DUP-ACC', form_type: '4' }],
-      '2026-06-11': [{ filer_cik: '320193', accession_number: 'DUP-ACC', form_type: '4' }],
-    },
+    queueRows: [
+      { as_of_date: '2026-06-12', issuer_cik: '0000320193', accession_number: 'DUP-ACC', form_type: '4', consumed_at: null },
+      { as_of_date: '2026-06-11', issuer_cik: '0000320193', accession_number: 'DUP-ACC', form_type: '4', consumed_at: null },
+    ],
   });
   const cfg = createInsiderWorkListConfig(deps, 'backfill');
   const items = await cfg.seedWorkItems!({ asOf: AS_OF_MON });
-  // Backfill includes both days; the dedupe collapses the duplicate.
   const dupCount = items.filter((i) => i.id === 'DUP-ACC').length;
-  assertEquals(dupCount, 1, 'duplicate accession across days collapses to 1 item');
+  assertEquals(dupCount, 1, 'duplicate accession across days collapses to 1 item via seenAccession set');
+});
+
+Deno.test('(D.5) seedWorkItems daily: R1 heartbeat row never reaches work-items (structural exclusion)', async () => {
+  // Pin: producer + consumer use the SAME heartbeat sentinel literals
+  // (re-imported from the producer module). Drift would silently let
+  // heartbeat rows leak into the cursor.
+  assertEquals(INSIDER_HEARTBEAT_ISSUER_CIK, PRODUCER_HEARTBEAT_ISSUER_CIK);
+  assertEquals(INSIDER_HEARTBEAT_ACCESSION_NUMBER, PRODUCER_HEARTBEAT_ACCESSION_NUMBER);
+
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
+    cikMap: { AAPL: 320193 },
+    queueRows: [
+      // R1 heartbeat (producer's empty-day sentinel; CIK + accession both
+      // = '__heartbeat__'). The 63 inert pre-hardening rows from run
+      // `658b8070-…` exercised this filter on first use (ACT-205 a).
+      {
+        as_of_date: '2026-06-11',
+        issuer_cik: INSIDER_HEARTBEAT_ISSUER_CIK,
+        accession_number: INSIDER_HEARTBEAT_ACCESSION_NUMBER,
+        form_type: '4',
+        consumed_at: null,
+      },
+      // Real in-universe row alongside the heartbeat.
+      { as_of_date: '2026-06-11', issuer_cik: '0000320193', accession_number: '0000320193-26-000010', form_type: '4', consumed_at: null },
+    ],
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
+  assertEquals(items.length, 1, 'heartbeat sentinel excluded; only the real row claimed');
+  assertEquals(items[0].id, '0000320193-26-000010');
+  // Claim predicate carried the operator-verbatim heartbeat-exclusion OR.
+  const claim = deps._stub.claimCalls[0];
+  assert(claim.or_filter.includes(`issuer_cik.neq.${INSIDER_HEARTBEAT_ISSUER_CIK}`));
+  assert(claim.or_filter.includes(`accession_number.neq.${INSIDER_HEARTBEAT_ACCESSION_NUMBER}`));
+  // Heartbeat row remained unconsumed in the queue (the IN-filter
+  // dropped it before the heartbeat predicate even applied; both layers
+  // independently keep it out).
+  const hbRow = deps._stub._queueRows.find((r) =>
+    r.issuer_cik === INSIDER_HEARTBEAT_ISSUER_CIK &&
+    r.accession_number === INSIDER_HEARTBEAT_ACCESSION_NUMBER,
+  )!;
+  assertEquals(hbRow.consumed_at, null);
 });
 
 // ── (E) processItem typed-permanent skips ──────────────────────────────
