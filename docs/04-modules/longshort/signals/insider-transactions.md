@@ -476,3 +476,33 @@ Signal #4 STAYS DISARMED through γ commit-3 and across the Phase 4 choreography
 **Cross-references:** ACT-195 / ACT-196 / ACT-197 / ACT-198. Signal #4 STAYS DISARMED.
 
 **Cross-references:** ACT-193 (crosswalk), ACT-194 (M1-M5 pre-work + M4 RE-RULE), ACT-195 (γ commit-1 producer module), ACT-196 (this entry).
+
+## FP-050 Phase 4 F1 — master.idx pivot (ACT-199)
+
+**Pivot trigger (two-observation §22.8.4 STOP-and-conclude bar met):** two distinct daily-index files were blocked from the Supabase Edge egress with HTTP 403 + SEC `AccessDenied` XML under varied conditions (different file date, different run window, ~80 min apart, identical UA + identical egress + identical `/Archives/edgar/daily-index/{YYYY}/QTR{n}/` path root):
+
+| Observation | File | Run / window | Egress | UA | Result |
+|---|---|---|---|---|---|
+| #1 | `form.20260612.idx` | initial backfill probe (~80 min before #2) | Supabase Edge `eu-central-1` | `Lovable-Crosswind/fp-050-insider/0.1 (contact: ...)` | HTTP 403 + `AccessDenied` XML |
+| #2 | `form.20260525.idx` | run `cbc3a090-84d8-4b65-9132-39397f725384` | Supabase Edge `eu-central-1` | identical | HTTP 403 + `AccessDenied` XML |
+
+The single-observation inversion from the ACT-198-window diagnostic (one positive probe of `form.20260612.idx` returning 200 under paced re-probe) does NOT generalize — it was the over-generalization of a single observation that the ai-failure-modes #41 symmetric-form forward-binding rule binds against (ACT-199 records the second phantom-defect observation and codifies the rule: *negative existence claims under §22.8.4 STOPs require ≥2 corroborating observations under varied conditions*).
+
+**F1.a — code (ACT-199, this commit):**
+
+- **URL pivot:** `dailyIndexUrl(date)` now returns `…/daily-index/{YYYY}/QTR{n}/master.{YYYYMMDD}.idx` (NOT `form.{YYYYMMDD}.idx`). Same path-family root; sibling file. master.idx ships the identical set of accessions for the same date/quarter as form.idx; the difference is format (master = pipe-delimited, ~471 KB; form = fixed-width pre-partitioned by form-type, ~1 MB).
+- **Parser rewrite:** `parseDailyIndexBody(body)` now parses pipe-delimited 5-column rows (`CIK|Company Name|Form Type|Date Filed|Filename`), splits on `|`, drops rows with !=5 columns, and applies a post-parse filter `Form Type IN ('4','4/A')` to recover the partitioning that form.idx provided structurally. Header literal pinned to the verbatim `CIK|Company Name|Form Type|Date Filed|Filename` string.
+- **Operation id renamed:** `MASTER_INDEX_OPERATION_ID = 'edgar_master_index'` is the new canonical tag; `DAILY_INDEX_OPERATION_ID` is preserved as a back-compat alias pointing at the same value.
+- **INC-73-family telemetry:** new shared module `edgar-fetch-telemetry.ts` defines `EdgarFetchTelemetry`, `EdgarFetchTelemetryEvent` (`{op, path_family, status, url, correlation_id, duration_ms}`), and `defaultEdgarFetchTelemetry` (single-line structured JSON via `console.log`). All four fetcher classes (`EdgarCikMapper`, `EdgarDailyIndexFetcher`, `EdgarAccessionIndexFetcher`, `EdgarForm4Fetcher`) accept optional `telemetry` + `correlationId` constructor parameters (additive, backward-compatible defaults) and emit a per-fetch event on response receipt AND on network-throw (status=0 sentinel for pre-response failures). Telemetry callback is defensively try/catched — MUST NOT break the fetch path. Path-family tags: `'company_tickers'` (cik-mapper), `'master_index'` (daily-index), `'accession_index'` (accession-index fetcher), `'form4_xml'` (form4 fetcher). This is the surface that makes future F1-class pivots evidence-based.
+- **Drift sentinel:** `edgar-daily-index-fetcher_test.ts` test `(2b) DRIFT SENTINEL` asserts `dailyIndexUrl(d)` matches `/master\.\d{8}\.idx$/` AND does NOT match `/form\.\d{8}\.idx$/` across 5 sample dates spanning all four quarters. Both assertions are load-bearing: a regression that reverts to `form.YYYYMMDD.idx` fails the `assertNotMatch`; a typo introducing a third variant fails the `assertMatch`. Paired with test `(5)` which feeds the legacy form.idx fixed-width header into `parseDailyIndexBody` and asserts `[]` — guards against silent misread of the prior format.
+- **Fixture pair:** `FIXTURE_MASTER_MIXED` (7 input rows: 3× '4' + 1× '4/A' + 1× '8-K' + 1× '10-K' + 1× '3'; 4 surviving post-filter) proves the post-parse Form-Type filter; `FIXTURE_MASTER_FORM4_ONLY` (3 input rows: all '4' or '4/A'; 3 surviving) proves filter identity (no row dropped when every input already passes).
+
+**F1.b — docs (ACT-199, this commit):**
+
+- `docs/ai-failure-modes.md` #41 Status row — second phantom-defect observation joining the ACT-197 TS2307 retraction; forward-binding rule codified at catalog level.
+- This section.
+- `docs/06-tracking/action-tracker.md` ACT-199 entry.
+
+**Phase-4 next step:** operator re-fires the backfill init against the deployed `longshort-insider-compute-manual` at the F1.a-bearing HEAD. The master.idx-bearing fetcher is expected to clear the egress block on the discovery layer; the per-accession `index.json` + form4 XML paths were already 200 from the same egress per the ACT-197 path-probe matrix (rows e + f). Signal #4 STAYS DISARMED through F1.a + F1.b; arm-up follows the backfill-before-arm gate at ~5.3 h overnight drain + validation fire per the γ commit-3 Phase 4 runway.
+
+**Cross-references:** ACT-197 (#41 symmetric-form first observation), ACT-198 (γ arc closure + ACT-198-window diagnostic that surfaced the single-point inversion), ACT-199 (this section's landing ACT).
