@@ -86,15 +86,21 @@
  *     vs 120 s STOP gate ≈ 65-85 s headroom — SAFE
  *     vs 150 s HTTP wall ≈ 95-115 s headroom — SAFE
  *
- *   Daily-fire drain estimate (M4 RE-RULE corrected band):
- *     typical ~253 in-universe accessions → ⌈253/50⌉ = 6 slices ≈ 3-6 min
- *     measured-max ~352 → ⌈352/50⌉ = 8 slices ≈ 5-7 min
- *     post-earnings cluster ceiling (variance robustness — engine absorbs
- *     overflow by design): ~500 → ⌈500/50⌉ = 10 slices ≈ 6-9 min
+ *   Daily-fire drain estimate (F2.c queue-evidence update — Catalog #43
+ *   recursive application; supersedes the M4 RE-RULE ~352 estimate;
+ *   ACT-205):
+ *     typical ~225 in-universe accessions (F2.b backfill
+ *       `discovery_correlation_id=aad615ab-…` drained 14,172 rows across
+ *       63 days ≈ 225/day) → ⌈225/50⌉ = 5 slices ≈ 3-5 min
+ *     measured-max post-earnings-cluster ceiling = 800 (real evidence:
+ *       770 on 2026-04-02; 522 on 2026-03-17 — both above the prior soft
+ *       500 band; 800 pads the empirically-measured top by ~4% for
+ *       variance robustness) → ⌈800/50⌉ = 16 slices ≈ 9-15 min,
+ *       inside the ~21:15→pre-market window with hours of headroom.
  *
- *   Backfill-fire drain estimate (M4 RE-RULE corrected band):
- *     63 trading days × ~253 accessions/day ≈ ~16k accessions
- *     ⌈16000/50⌉ = 320 slices × ~35-55 s ≈ ~3.1-4.9 hours queue-drained
+ *   Backfill-fire drain estimate (F2.c queue-evidence update):
+ *     63 trading days × ~225 accessions/day ≈ 14,172 accessions
+ *     ⌈14172/50⌉ = 284 slices × ~35-55 s ≈ ~2.8-4.3 hours queue-drained
  *     (fits comfortably in the single overnight window between US close
  *     21:00 UTC and pre-market 13:00 UTC with ~7-9 h headroom).
  *
