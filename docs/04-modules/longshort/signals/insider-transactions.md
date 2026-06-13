@@ -785,4 +785,52 @@ Produced verbatim by `scripts/check-gate-evidence.ts` at HEAD `<set by operator 
 **Files touched:** `supabase/functions/_shared/longshort-signals/insider-transactions/insider-work-list-registration.ts` (header rewrite + seed switch + constants); `…/insider-queue-bootstrap.ts` (`EdgarDailyIndexFetcher` removed from deps construction); `…/insider-cross-mode-contamination_test.ts` (drop `dailyIndex` stub); `…/insider-work-list-registration_test.ts` (rewrite (D.*) tests against queue stub; add (A.2) work-budget drift sentinel; add (D.5) heartbeat-exclusion regression); NEW `…/insider-r2-concurrent-claim_test.ts` (forward-binding pattern); this module doc; `docs/06-tracking/action-tracker.md`; `docs/07-reference/function-index.md`.
 
 **What this commit does NOT do:** no `cron.job` change; no `enabled` flip; no `signal_registry` touch; no `job_registry` touch; no migration (queue schema is F2.a / MIG-096 — UNCHANGED); no `event-index.md` / `permission-index.md` / `route-index.md` touch (no new shared events / permissions / routes); no `feature-proposals.md` Status touch (folds into F2.d closure); no producer change (`scripts/insider-discovery-egress.ts` is unchanged at F2.c). Signal #4 STAYS DISARMED through F2.c, F2.d, and operator validation. Arms ONLY after validation reads clean.
+
+---
+
+## FP-050 Phase 4 closure (F2.d build-arc roll-up)
+
+ACT-208 (2026-06-13) lands the docs-only build-closure for the F2 arc. The codepath is frozen at HEAD `bb74cbce`; this section is the canonical narrative companion to the per-commit ledger rows (ACT-199 through ACT-207).
+
+### F2 architecture as-landed (queue-based discovery)
+
+The FP-050 Phase 4 architecture is a strict producer/consumer split across two boundaries:
+
+1. **Producer** — `scripts/insider-discovery-egress.ts` (Deno CLI; GHA-scheduled `15 20 * * 1-5` UTC) is the sole on-EDGAR `master.{YYYYMMDD}.idx` caller. Modes: `gha-daily` (one trading day) / `backfill-oneshot` (date range). Writes via Supabase REST with `Prefer: resolution=ignore-duplicates`. Emits semantic counters (`entries_parsed`, `entries_after_universe_filter`) and exits non-zero on structural-only success per Catalog #44. F1 master.idx-pivot drift sentinels (`/master\.\d{8}\.idx$/` accept, `/form\.\d{8}\.idx$/` reject) travel with the producer and are NEVER relaxed.
+2. **Consumer** — `_shared/longshort-signals/insider-transactions/insider-work-list-registration.ts seedWorkItems` (cron-fired) claims atomically from `public.insider_accession_discovery_queue` via one `UPDATE … SET consumed_at=$asOf WHERE … RETURNING …` per day. No EDGAR access in the consumer path; `EdgarDailyIndexFetcher` removed from the consumer's import graph at F2.c (ACT-205).
+
+### F2-pre BUILD_SHA gate (§22.8.5 verifier)
+
+`scripts/check-deployed-sha.ts` is the four-outcome F2-pre verifier (MATCH / MISMATCH / HEADER_MISSING / SCRIPT_ERROR; exit codes 0/1/2/3). Every money-path edge-function deploy under FP-050 must converge to MATCH before any validation fire. The verifier first bound at ACT-206 against `longshort-insider-compute` and `longshort-insider-compute-manual` at HEAD `65f2e0fd` (verbatim MATCH lines in the ACT-206 Deploy-gate row). HEADER_MISSING vs MISMATCH separation surfaced the **§22.8.5 sub-class A "BUILD_SHA-threading gap"**: a Dashboard-resident secret is necessary-but-not-sufficient; the deploy step must inject `BUILD_SHA=${GITHUB_SHA}` per-deploy. Closed by `.github/workflows/deploy-insider-edge-functions.yml` (secrets-set strictly BEFORE `supabase functions deploy`).
+
+### Catalog #41 third-firing — Gate 2c (`scripts/` scope-gap)
+
+ACT-207 closed the third firing of Catalog #41 (CI-red on a path not covered by any local gate) by adding **Gate 2c** to `scripts/check-gate-evidence.ts`: `deno test --allow-net --allow-env --allow-read scripts/`. Structural sentinels in `check-gate-evidence_test.ts` pin `GATES.length === 5`, `argv MUST include 'scripts/'`, and `cwd MUST be '.'`. The binding catalog-rule addendum: **local gate coverage must mirror every CI test path**; any commit landing without an ALL GREEN five-gate block (Gate 1 / Gate 2 / Gate 2b / Gate 2c / Gate 3) is auto-NEEDS-REVISION.
+
+### Catalog #44 — semantic-success-without-data
+
+First-firing at GHA run `658b8070` (63 days fetched / 63 heartbeats / 0 real rows) — every structural counter green, zero semantic payload. Codified in `docs/ai-failure-modes.md` and operationalised in the producer via `entries_parsed` / `entries_after_universe_filter` counters and a non-zero exit on structural-only success. Forward-binding rule: **structural-success metrics (fetches, exits) without semantic-success metrics (actual data rows) are not evidence of correctness**.
+
+### Five-gate evidence convention (binding from ACT-207 forward)
+
+Every commit on the FP-050 arc lands with a `check-gate-evidence.ts` attestation block (Gate 1 wall-clock + Gate 2 `_shared/` + Gate 2b full edge-tree + Gate 2c `scripts/` + Gate 3 eslint). Docs-only commits skip the deploy verifier explicitly (no bundle change → no BUILD_SHA fire → no MATCH check required); code commits to the money path land with both the five-gate block AND the §22.8.5 MATCH attestation.
+
+### Phase-4 runway (DISARMED → ARMED choreography)
+
+1. **operator validation curl** — `longshort-insider-compute-manual` with `backfill: true`; expect cleared queue drain, conservation accounting, zero 429s on the EDGAR egress.
+2. **temp-cron arm** — operator-applied `cron.job` matching `job_registry.longshort.insider.compute.schedule = '15 21 * * 1-5'` UTC for a single trading-day fire; `job_registry.enabled` STAYS FALSE during the temp-cron window.
+3. **DEC-043-pattern attestation** — first natural cron-fire `signal_compute_log` row carrying 21:15 UTC wall-clock proximity (distinct from the manual-fire `as_of`-derived midnight signature; mirrors the FP-049 ACT-180 catalyst-arm pattern).
+4. **restore to production schedule** — MIG flipping `job_registry.longshort.insider.compute.enabled false→true`; operator restores the permanent `cron.job` at the canonical schedule; Signal #4 ARMS.
+
+Signal #4 STAYS DISARMED through steps 1-3; arms at step 4 only after the DEC-043-pattern row lands clean.
+
+### Discovery-queue verbatim shape (canonical reference)
+
+`public.insider_accession_discovery_queue` (F2.a / MIG-096, UNCHANGED through F2.b/c/d):
+
+- **Primary key** — `(as_of_date, issuer_cik, accession_number)` — the triple that makes producer re-fires + cross-day SEC double-listings ON-CONFLICT-DO-NOTHING no-ops.
+- **RLS family** — service-role-only writes via the producer's REST POST and the consumer's `UPDATE … RETURNING` claim; no `anon` or `authenticated` grant; admin reads via `service_role`.
+- **Heartbeat sentinel semantics** — empty-Form-4 day OR 404 unavailable day inserts exactly one row with `issuer_cik = '__heartbeat__'`, `accession_number = '__heartbeat__'`, `form_type = '4'`. The PK shape lets producer and consumer re-fires coexist. The consumer's claim-predicate `NOT (issuer_cik = '__heartbeat__' AND accession_number = '__heartbeat__')` is the **R1 contract**: heartbeats are forensic evidence of producer reach, never work items. Pinned by `(D.5)` regression in `insider-work-list-registration_test.ts` against producer-side `INSIDER_HEARTBEAT_*` literals.
+- **Backfill provenance (F2.b correlation `aad615ab-1b58-40d4-b989-7ecc64e16e5a`)** — 14,172 rows persisted across 63 trading days; top day 770 (2026-04-02 post-earnings cluster); 2-row attempted-vs-persisted delta (sub-noise-floor, named in ACT-205); 63 inert pre-hardening heartbeats from the broken-parser run `658b8070` remain inert per R1.
+- **R2 contract (concurrency-safety, ratified narrowing)** — single-statement atomicity via Postgres row-level locking on the `UPDATE … RETURNING` claim. Property: "one claimer succeeds with N items, one gets zero, never both half." Forward-binding test pattern at `insider-r2-concurrent-claim_test.ts` (Deno-driven two-client concurrent fire; env-guarded ignore when service-role key absent).
 **Deploy gate:** no edge-function deploy required for the GHA producer hardening itself; however the shared parser file is consumed by edge code, so F2.c deploy-SHA MATCH remains the binding deployment proof before the consumer can be attested. Signal #4 STAYS DISARMED.
