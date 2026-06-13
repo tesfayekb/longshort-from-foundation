@@ -580,3 +580,121 @@ Verdict: ALL GREEN
 The post-edit HEAD adds only this section, the MIG-096 ledger row, the ACT-202 tracker entry, and `sql/16_insider_accession_discovery_queue.sql`. No test surface moves; the block re-runs to the same final lines at the post-edit HEAD.
 
 **Cross-references:** ACT-201 (F2-pre deployed-SHA verifier — the load-bearing interface check this F2.a does NOT need to invoke, since migration-only); ACT-199 (F1 master.idx pivot — the prior Phase-4 commit); MIG-095 (the prior migration on this table family); DEC-058 §(h) (idempotency triple); FP-050 Phase 4 F2 architecture proposal (ratified — recommendation F2-a / GitHub Actions adopted for F2.b).
+
+## FP-050 Phase 4 F2.b — producer (GHA-egress discovery script + workflow + operator secrets) (ACT-203)
+
+**Sub-commit position:** F2.b in the four-sub-commit F2 sequence (F2-pre ACT-201 → F2.a ACT-202 → **F2.b ACT-203 — this commit** → F2.c (`seedWorkItems` switch + R1 heartbeat-consumption semantics + R2 concurrency-safety regression) → F2.d module-doc + final ACT + FP-050 Status). This commit ships the producer ONLY; consumption is F2.c. Until F2.c lands, the insider seed path remains broken (and DISARMED — no harm); F2.b populates the queue, F2.c reads it.
+
+**Deploy gate:** NO deploy required. F2.b touches no Supabase edge-function code; the entire producer runs on GitHub Actions egress. The F2-pre `check-deployed-sha` MATCH contract binds only on deploy steps and re-enters at F2.c when the consumer edge-function changes.
+
+### Producer architecture
+
+| Layer | File | Purpose |
+|---|---|---|
+| Script | `scripts/insider-discovery-egress.ts` | Deno CLI. Reuses `EdgarDailyIndexFetcher` (F1 master.idx parser — UNCHANGED, single source of parsing truth; the existing drift sentinels — `assertMatch(/master\.\d{8}\.idx$/)` + `assertNotMatch(/form\.\d{8}\.idx$/)` — protect BOTH call sites). Reuses `isTradingDay` + `iterateTradingDays` shape from `longshort-universe/shared/trading-days.ts` (the shared NYSE-holiday calendar — DO NOT re-implement). Writes via Supabase REST `POST /rest/v1/insider_accession_discovery_queue` with `Prefer: resolution=ignore-duplicates,return=minimal` (ON CONFLICT DO NOTHING on the natural PK). Stamps `discovered_by` per mode + `discovery_correlation_id` per invocation (one UUID for the whole run). Structured JSON logs to stdout on every event (start / day-start / day-complete / day-empty / day-unavailable / run-complete / failure). |
+| Tests | `scripts/insider-discovery-egress_test.ts` | 14 hermetic tests covering all five operator-mandated fixtures: (a) master.idx parse → REST payload shape (Form 4 + 4/A surviving the post-parse filter; rowFromEntry parity); (b) multi-day backfill weekday + NYSE-holiday iteration (Memorial Day 2026-05-25 verified skipped); (c) empty-day + 404 heartbeat insert (two cases); (d) SEC HTTP 403 + network throw → `EdgarFetchError` surfaced (no Supabase insert on SEC failure); (e) arg validation — daily, backfill, mode-mixing rejection, missing-flags rejection, malformed-date rejection, inverted-range rejection, unknown-arg rejection. Fully injectable via `RunDeps`; no network, no real EDGAR, no Supabase. |
+| Workflow | `.github/workflows/insider-discovery.yml` | `schedule: '15 20 * * 1-5'` UTC daily (30-min buffer before the 21:15 UTC `longshort.insider.compute` cron — buffer absorbs GHA scheduler jitter ~5-15 min typical) + `workflow_dispatch` with `backfill_from` / `backfill_to` inputs. `concurrency: insider-discovery` serializes runs. Deno v1.x (parity with `strong-evidence.yml`). 30-min `timeout-minutes`. On failure → GHA's native email alert (no bespoke alerting wiring). |
+
+**Modes (mutually exclusive — parseArgs rejects mixing):**
+
+- `--as-of=YYYY-MM-DD` — single-trading-day daily mode. `discovered_by='gha-daily'`.
+- `--backfill-from=YYYY-MM-DD --backfill-to=YYYY-MM-DD` — one-shot bulk mode; iterates trading days inclusive (~63 trading days for the 2026-03-15 → 2026-06-13 window per the backfill arithmetic in §FP-050 Phase 3.6b.iii′ pre-work). `discovered_by='backfill-oneshot'`.
+
+**Exit codes** (mirrored by GHA's pass/fail surface):
+
+| Code | Meaning |
+|---|---|
+| 0 | success — all days processed and persisted |
+| 1 | SEC API failure — `EdgarFetchError` surfaced on any day |
+| 2 | Supabase API failure — non-2xx from PostgREST on any insert |
+| 3 | arguments / env error |
+
+### R1 heartbeat-at-write-seam (per F2 ratification refinement R1)
+
+For any trading day where the parsed Form-4 set is empty (legitimate-but-quiet day OR master.idx 404 → `kind:'unavailable'`), the script inserts ONE sentinel row:
+
+```
+as_of_date            = <the trading day>
+issuer_cik            = '__heartbeat__'
+accession_number      = '__heartbeat__'
+form_type             = '4'                   -- CHECK form_type IN ('4','4/A')
+company_name          = '__heartbeat__'
+filename              = '__heartbeat__'
+discovered_by         = 'gha-daily' | 'backfill-oneshot'
+discovery_correlation_id = <run UUID>
+```
+
+This makes **"discovery ran with zero Form-4s"** structurally distinguishable from **"discovery did not run."** The F2.c consumer's `seedWorkItems` will read the heartbeat row, mark it consumed (claim-and-skip), and proceed without seeding any work — a non-empty-day signal that consumes-and-skips. The `'__heartbeat__'` CIK + accession-number sentinels are distinguishable from any real row at consumer time (real CIKs are integer strings; real accessions are `NNNNNNNNNN-NN-NNNNNN`).
+
+### Operator secrets guidance (verbatim — DO NOT abbreviate; the previous EDGAR_CONTACT_EMAIL UA-format slip cost a round)
+
+Three GitHub Actions **repository** secrets MUST be set before the workflow can run. Click sequence and value format are LITERAL — paste shapes exactly as specified.
+
+**Click path:** GitHub repo → **Settings** (top nav) → **Secrets and variables** (left sidebar) → **Actions** → **New repository secret** (top-right button) → fill **Name** + **Secret** → **Add secret**. Repeat for each of the three secrets below.
+
+| GHA secret name | Format / shape | Where to find the value |
+|---|---|---|
+| `SUPABASE_URL` | EXACT shape `https://<project-ref>.supabase.co` (no trailing slash, no `/rest/v1`, no anon-key fragment). For this project: `https://sftatlxatbdrotivxcip.supabase.co`. | Supabase Dashboard → Project Settings → **API** → **Project URL** (copy the exact string shown). |
+| `SUPABASE_SERVICE_ROLE_KEY` | A long `eyJ…` JWT string (typically ~200 chars; three dot-separated base64url segments). **NEVER** paste the `anon` / `publishable` key here — the producer needs RLS-bypass for the discovery-queue write, and the anon key cannot insert. | Supabase Dashboard → Project Settings → **API** → **Project API keys** → **service_role** → **Reveal** → copy. Treat as production-equivalent credential. |
+| `EDGAR_CONTACT_EMAIL` | A **plain RFC-5322 email address ONLY**, e.g. `crosswind-ops@example.com`. Do **NOT** wrap in `<…>`, do **NOT** prefix `mailto:`, do **NOT** include any "Crosswind <…>" framing — the script composes the SEC User-Agent header from this raw email via `buildEdgarUserAgent(contactEmail, moduleId)`; any extra characters land verbatim in the UA and trip SEC's UA-format reject (the round-cost incident this row references). | The CROSSWIND ops contact email used in `EDGAR_CONTACT_EMAIL` for the Supabase edge runtime (mirror that value exactly). |
+
+After all three secrets are set, the workflow will fire on the next 20:15 UTC weekday slot automatically. No `git push` is required to "activate" it — GHA reads workflow files from `main` HEAD at each scheduled tick.
+
+### One-shot backfill invocation (copy-paste, NOT described)
+
+The backfill is what tonight's drain depends on; the invocation MUST be copy-pasteable.
+
+**Click path** (preferred, no `gh` CLI required):
+
+1. GitHub repo → **Actions** tab → left sidebar **insider-discovery** workflow → **Run workflow** dropdown (top-right of the runs list).
+2. **Use workflow from:** `main` (default).
+3. **Backfill start date:** `2026-03-15`
+4. **Backfill end date:** `2026-06-13`
+5. Click **Run workflow** (green button).
+
+**`gh` CLI equivalent** (paste verbatim, replacing `<owner>/<repo>` with the actual GitHub slug):
+
+```bash
+gh workflow run insider-discovery.yml \
+  --repo <owner>/<repo> \
+  --ref main \
+  -f backfill_from=2026-03-15 \
+  -f backfill_to=2026-06-13
+```
+
+Single invocation iterates ~63 trading days (Mar 15 → Jun 13 inclusive, weekends + Memorial Day 2026-05-25 + Juneteenth 2026-06-19 skipped by the shared trading-days iterator). At the producer's ~1.5 s/day median (SEC fetch + PostgREST insert), wall-clock is ~95 s; well inside the workflow's 30-min `timeout-minutes`. After the bulk lands, operator fires `longshort-insider-compute-manual` for the window. Scheduled daily mode then takes over.
+
+### What this commit does NOT do
+
+No `seedWorkItems` edit (lands at F2.c — the consumer switch + heartbeat-row consumption semantics + R2 concurrency-safety regression test); no `cron.job` change; no `enabled` flip; no `signal_registry` touch; no `job_registry` touch; no migration (no schema change); no `event-index.md` / `permission-index.md` / `route-index.md` touch; no `feature-proposals.md` Status touch (folds into F2.d closure); no edge-function code change; no deploy.
+
+### Four-gate attestation block (ACT-203) — produced verbatim by `scripts/check-gate-evidence.ts` at HEAD `8bd990d88f851c2bddf65e6c8b877e9bf0875a19`
+
+```
+=== check-gate-evidence ATTESTATION (paste verbatim) ===
+HEAD: 8bd990d88f851c2bddf65e6c8b877e9bf0875a19
+Generated: 2026-06-13T04:46:01.040Z
+
+Gate 1: deno run --allow-read scripts/check-wall-clock.ts
+  exit=0  duration_ms=188
+  final-line: check-wall-clock: CLEAN — 0 violations
+
+Gate 2: cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/
+  exit=0  duration_ms=29593
+  final-line: ok | 1045 passed | 0 failed (29s)
+
+Gate 2b: cd supabase/functions && deno test --allow-net --allow-env --allow-read
+  exit=0  duration_ms=31558
+  final-line: ok | 1262 passed | 0 failed (31s)
+
+Gate 3: npx eslint .
+  exit=0  duration_ms=7648
+  final-line: ✖ 15 problems (0 errors, 15 warnings)
+
+Verdict: ALL GREEN
+=== end attestation ===
+```
+
+**Scope note on Gate 2 / 2b:** the new tests live under `scripts/insider-discovery-egress_test.ts`, which falls under the CI strong-evidence Gate 2 (`deno test --allow-read --allow-net --allow-env scripts/`), not the supabase/functions Gates 2 / 2b sweep. The 14 new tests were run directly at HEAD via `deno test --allow-net --allow-env --allow-read scripts/insider-discovery-egress_test.ts` → `ok | 14 passed | 0 failed (11ms)` before this attestation block was captured. Gate-2 supabase counts are unchanged because no `_shared/` test surface moved.
+
+**Cross-references:** ACT-202 (F2.a queue table — the write target this producer fills); ACT-201 (F2-pre verifier — re-enters at F2.c); ACT-199 (F1 master.idx pivot — single-source-of-parsing-truth invariant); DEC-058 §(h) (PK idempotency); `scripts/insider-discovery-egress.ts` (the producer); `scripts/insider-discovery-egress_test.ts` (the 14-test hermetic suite); `.github/workflows/insider-discovery.yml` (the cron + dispatch surface); `docs/07-reference/function-index.md` (entry added this commit). NO migration, NO `MIG-NNN` ledger touch (no schema change). F2.c next.

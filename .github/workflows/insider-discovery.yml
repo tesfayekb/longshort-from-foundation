@@ -1,0 +1,101 @@
+# insider-discovery — FP-050 Phase 4 F2.b producer for Signal #4.
+#
+# Runs the off-Supabase-Edge daily-index discovery probe from GitHub
+# Actions' egress (free IP family; the project's Supabase Edge eu-central-1
+# egress is 403'd on the daily-index family by SEC fair-access since
+# ACT-199 — two-observation §22.8.5 STOP-and-conclude bar met). Writes
+# qualifying Form 4 / 4-A accessions into public.insider_accession_-
+# discovery_queue (MIG-096 / ACT-202). The on-Supabase-Edge consumer
+# (F2.c — seedWorkItems switch) drains the queue.
+#
+# CRON SLOT: 20:15 UTC weekdays. 30-minute buffer before the 21:15 UTC
+# daily-insider-compute cron (DEC-058 §(k) — `15 21 * * 1-5`). The
+# buffer absorbs GHA scheduler jitter (~5-15 min typical) so the queue
+# is populated before the consumer fires.
+#
+# Per F2-pre forward-binding rule: this workflow runs entirely outside
+# the Supabase Edge runtime, so no `check-deployed-sha` MATCH gate
+# binds on its execution. The MATCH gate re-enters at F2.c when the
+# consumer edge-function changes.
+#
+# Failure: GHA's native email alert (workflow run failure) is the
+# operator-touch surface. The script's structured stdout JSON is the
+# forensic trace (correlation_id joins to discovery-queue rows).
+
+name: insider-discovery
+
+on:
+  # Daily mode — 20:15 UTC weekdays, 30-min buffer before the 21:15 UTC
+  # consumer cron (cron(longshort.insider.compute) per DEC-058 §(k)).
+  schedule:
+    - cron: '15 20 * * 1-5'
+  # Manual one-shot backfill — operator drives via workflow_dispatch with
+  # explicit from/to ISO dates. Inputs default to empty so a misclick can
+  # NEVER trigger a many-day egress storm.
+  workflow_dispatch:
+    inputs:
+      backfill_from:
+        description: 'Backfill start date (YYYY-MM-DD, inclusive). Leave empty for daily mode.'
+        required: false
+        type: string
+        default: ''
+      backfill_to:
+        description: 'Backfill end date (YYYY-MM-DD, inclusive). Required if backfill_from is set.'
+        required: false
+        type: string
+        default: ''
+
+# Concurrency guard — never run two discovery passes in parallel; the
+# §(h) PK + ON CONFLICT DO NOTHING handles the race safely, but the SEC
+# fair-access stance is happier with serialized fetches.
+concurrency:
+  group: insider-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          # Same minor as .github/workflows/strong-evidence.yml — single
+          # Deno version pinned across all CI workflows.
+          deno-version: v1.x
+
+      - name: Determine mode
+        id: mode
+        env:
+          BACKFILL_FROM: ${{ inputs.backfill_from }}
+          BACKFILL_TO: ${{ inputs.backfill_to }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BACKFILL_FROM}" ] && [ -n "${BACKFILL_TO}" ]; then
+            echo "args=--backfill-from=${BACKFILL_FROM} --backfill-to=${BACKFILL_TO}" >> "$GITHUB_OUTPUT"
+            echo "mode=backfill" >> "$GITHUB_OUTPUT"
+          elif [ -n "${BACKFILL_FROM}" ] || [ -n "${BACKFILL_TO}" ]; then
+            echo "::error::backfill_from and backfill_to must both be set or both empty"
+            exit 3
+          else
+            # Daily mode — yesterday in UTC (the master.idx for D is published
+            # after the close, typically late-evening UTC; the 20:15 UTC
+            # daily slot consumes today's index, which is the as_of date for
+            # the 21:15 UTC daily-insider-compute fire).
+            ASOF="$(date -u +%Y-%m-%d)"
+            echo "args=--as-of=${ASOF}" >> "$GITHUB_OUTPUT"
+            echo "mode=daily" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run insider-discovery-egress
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EDGAR_CONTACT_EMAIL: ${{ secrets.EDGAR_CONTACT_EMAIL }}
+        run: |
+          set -euo pipefail
+          deno run --allow-net --allow-env --allow-read --allow-run \
+            scripts/insider-discovery-egress.ts ${{ steps.mode.outputs.args }}

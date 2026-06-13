@@ -1,3 +1,53 @@
+### ACT-203: FP-050 Phase 4 F2.b — producer ships (GHA-egress discovery script + 14-test hermetic suite + GHA workflow with `15 20 * * 1-5` UTC schedule + `workflow_dispatch` backfill; R1 heartbeat-at-write-seam codified; verbatim operator secrets guidance + verbatim one-shot backfill invocation in the module doc); NO `seedWorkItems` edit (lands F2.c); NO deploy required, F2-pre verifier contract does NOT bind on GHA-egress code
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-203 (next-free after ACT-202; grep-verified at HEAD via `grep -oE "ACT-[0-9]+" docs/06-tracking/action-tracker.md \| sort -u -V \| tail` → ACT-202 latest at allocation). |
+| **Mode** | execution (F2.b, third of four sub-commits in the operator's F2 sequencing: F2-pre ACT-201 → F2.a ACT-202 → **F2.b ACT-203 — this commit** → F2.c → F2.d). |
+| **Tier** | A — restores Signal #4 discovery coverage that has been 403'd on Supabase Edge since ACT-199. The producer is the ONLY component standing between the F2.a queue table (empty) and the F2.c consumer drain. |
+| **Branch** | feature/FP-050-PHASE4-F2-b-producer-gha-egress (per project branching memory `feature/PLAN-{MODULE}-{NNN}-{desc}`). |
+| **Authority** | Operator 2026-06-13 F2.b greenlight ("the producer (GHA-egress discovery script + workflow + operator secrets guidance)"); F2-a (GitHub Actions) runner selection ratified at F2-pre; the four-sub-commit sequencing. Signal #4 STAYS DISARMED through F2.b → F2.d. |
+| **Scope (F2.b)** | (1) NEW `scripts/insider-discovery-egress.ts` — Deno CLI producer; reuses `EdgarDailyIndexFetcher` (F1 master.idx parser — UNCHANGED, single source of parsing truth) + shared `isTradingDay`/`iterateTradingDays` helper from `longshort-universe/shared/trading-days.ts`; writes via Supabase REST with `Prefer: resolution=ignore-duplicates`; stamps `discovered_by ∈ {gha-daily, backfill-oneshot}` per mode + per-invocation UUID `discovery_correlation_id`; structured JSON stdout logs at every event boundary; R1 heartbeat-at-write-seam (empty-day OR 404 unavailable → ONE sentinel row `('__heartbeat__','__heartbeat__', form_type='4', …)`). Exit codes 0/1/2/3 per the operator's contract. (2) NEW `scripts/insider-discovery-egress_test.ts` — 14 hermetic Deno tests (all five operator-mandated fixtures: master.idx parse → REST payload shape; multi-day backfill weekday + Memorial Day holiday iteration; empty-day + 404 heartbeat; SEC 403 + network throw bubble as `EdgarFetchError`; arg validation full surface). (3) NEW `.github/workflows/insider-discovery.yml` — `schedule: '15 20 * * 1-5'` UTC (30-min buffer before `15 21 * * 1-5` consumer cron) + `workflow_dispatch` with `backfill_from` / `backfill_to` string inputs (both required when either present; daily otherwise); Deno v1.x parity with `strong-evidence.yml`; `concurrency: insider-discovery`; 30-min `timeout-minutes`; GHA-native email alert on failure. (4) EDITED `docs/04-modules/longshort/signals/insider-transactions.md` — new F2.b section with producer architecture table, mode descriptions, exit-code table, R1 heartbeat shape (verbatim row), operator secrets guidance (three-secret click-sequence table with format/shape for each + value source + the EDGAR_CONTACT_EMAIL "do NOT wrap in `<…>`" caveat referencing the round-cost incident), one-shot backfill invocation (click path AND `gh workflow run` CLI equivalent — copy-pasteable, not described), out-of-scope list, four-gate attestation block. (5) EDITED `docs/07-reference/function-index.md` — new entry for `scripts/insider-discovery-egress.ts` (exports + tests + single-source-of-parsing-truth invariant + modes + R1 heartbeat semantics + exit codes + REST write contract + CI gate + required GHA secrets + deploy gate). (6) This entry. |
+| **Files Touched (planned vs actual)** | NEW: `scripts/insider-discovery-egress.ts`; `scripts/insider-discovery-egress_test.ts`; `.github/workflows/insider-discovery.yml`. EDITED: `docs/04-modules/longshort/signals/insider-transactions.md`; `docs/07-reference/function-index.md`; `docs/06-tracking/action-tracker.md`. DELETED: none. NO migration (no schema change — F2.a already landed `insider_accession_discovery_queue` at MIG-096). NO `MIG-NNN` ledger touch. NO RBAC/permission/role change. NO secret added (operator sets the three GHA secrets out-of-band per the click sequence). NO new npm dependency. NO `job_registry` / `cron.job` / `signal_registry` mutation. NO touch to any edge function / fetcher / orchestrator / handler (the producer is GHA-only; the F2.a `EdgarDailyIndexFetcher` is imported READ-ONLY as the single-source-of-parsing-truth). NO touch to `insider-work-list-registration` (`seedWorkItems` switch lands at F2.c, paired with R1 heartbeat-row consumption semantics + R2 concurrency-safety regression test). NO `event-index.md` / `permission-index.md` / `route-index.md` touch. NO `feature-proposals.md` Status touch (folds into F2.d closure). |
+| **Deploy gate** | NO deploy required. F2.b is GHA-egress code only; no Supabase edge-function bundle changes. The F2-pre `check-deployed-sha` MATCH contract binds only on deploy steps and re-enters at F2.c when the consumer edge-function changes. This is explicitly named per the operator's instruction "F2.b touches no edge-function code, so no deploy step → no MATCH check binds; state this explicitly." |
+| **R1 codification (heartbeat-at-write-seam)** | The R1 heartbeat row lands at the WRITE seam (this producer), NOT at the consumer. For any trading day with zero qualifying Form-4s OR a 404 `kind:'unavailable'`, the script inserts ONE sentinel: `(as_of_date, '__heartbeat__', '__heartbeat__', form_type='4', company_name='__heartbeat__', filename='__heartbeat__', discovered_by, correlation_id)`. F2.c consumer treats `('__heartbeat__','__heartbeat__')` as a non-empty-day signal that consumes-and-skips. This makes "discovery ran with zero Form-4s" structurally distinguishable from "discovery did not run" — the operator-binding R1 requirement codified per the F2 ratification refinement. |
+| **R2 carry-forward (codified for F2.c — not implemented at F2.b)** | R2 (concurrency-safety: consume-and-claim UPDATE predicate `WHERE as_of_date = $1 AND consumed_at IS NULL RETURNING accession_number` driving the work-item INSERT inside one BEGIN/COMMIT; regression test for two concurrent `seedWorkItems` against the same `as_of_date` → one succeeds with N items, one gets zero, never both half) is operator-binding for F2.c per the F2 ratification ruling. F2.b does not touch `seedWorkItems`; R2 recorded here so the F2.c executor cannot drop it. |
+| **Evidence (four-gate)** | Four-gate canonical attestation at HEAD `8bd990d88f851c2bddf65e6c8b877e9bf0875a19` — **ALL GREEN**. Gate 1 `check-wall-clock: CLEAN — 0 violations`; Gate 2 `ok \| 1045 passed \| 0 failed (29s)` (unchanged — no `_shared/` test surface moved); Gate 2b `ok \| 1262 passed \| 0 failed (31s)` (unchanged); Gate 3 `✖ 15 problems (0 errors, 15 warnings)` (parity with ACT-202; 15 pre-existing React-UI warnings; ACT-203 contributes 0/0). The 14 NEW `scripts/insider-discovery-egress_test.ts` tests fall under the CI strong-evidence Gate 2 (`deno test --allow-read --allow-net --allow-env scripts/`) and were run directly at HEAD via `deno test --allow-net --allow-env --allow-read scripts/insider-discovery-egress_test.ts` → `ok \| 14 passed \| 0 failed (11ms)` before the attestation block was captured. Attestation block pasted verbatim below. |
+| **Out-of-scope guarantees** | Zero `seedWorkItems` edit (F2.c); zero R2 concurrency-safety regression test (F2.c); zero F2.d module-doc closure (F2.d); zero `cron.job` change; zero `enabled` flip; zero `signal_registry` touch; zero `job_registry` touch; zero migration; zero edge-function code change; zero deploy; zero RBAC change. |
+| **ROI Impact** | **Zero on current ROI** (Signal #4 remains DISARMED per design; the producer fills the queue but the consumer at F2.c is what wires the seed path back together). **Positive enabling impact:** the producer is the ONLY component standing between the F2.a queue table (empty) and the F2.c consumer; once it runs, the queue can be populated and the bulk backfill becomes possible. **Anti-ROI guardrail:** the R1 heartbeat-at-write-seam structurally prevents a "silent-zero-day" surface — a missing discovery upload between 20:15 and 21:15 UTC will be the absence of ANY row for `as_of_date`, distinguishable from a quiet-but-completed day's single heartbeat sentinel. |
+| **Status** | Execution complete at HEAD `8bd990d88f851c2bddf65e6c8b877e9bf0875a19`; four-gate attestation block ALL GREEN (verbatim below); 14 new hermetic tests passing locally. STOP after F2.b per the operator's four-sub-commit ruling. **Operator next:** clone the branch, set the three GHA repo secrets per the verbatim click sequence in the module doc, fire `workflow_dispatch` with `backfill_from=2026-03-15` / `backfill_to=2026-06-13` for the one-shot bulk seed. Then F2.c (`seedWorkItems` switch + R1 heartbeat-row consumption semantics + R2 concurrency-safety regression test). |
+
+**Attestation block (ACT-203)** — produced verbatim by `scripts/check-gate-evidence.ts` at HEAD `8bd990d88f851c2bddf65e6c8b877e9bf0875a19`:
+
+```
+=== check-gate-evidence ATTESTATION (paste verbatim) ===
+HEAD: 8bd990d88f851c2bddf65e6c8b877e9bf0875a19
+Generated: 2026-06-13T04:46:01.040Z
+
+Gate 1: deno run --allow-read scripts/check-wall-clock.ts
+  exit=0  duration_ms=188
+  final-line: check-wall-clock: CLEAN — 0 violations
+
+Gate 2: cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/
+  exit=0  duration_ms=29593
+  final-line: ok | 1045 passed | 0 failed (29s)
+
+Gate 2b: cd supabase/functions && deno test --allow-net --allow-env --allow-read
+  exit=0  duration_ms=31558
+  final-line: ok | 1262 passed | 0 failed (31s)
+
+Gate 3: npx eslint .
+  exit=0  duration_ms=7648
+  final-line: ✖ 15 problems (0 errors, 15 warnings)
+
+Verdict: ALL GREEN
+=== end attestation ===
+```
+
+STOP — F2.b landed; producer is the ONLY path between the empty queue and the consumer; awaits operator's clone + three-secret setup + bulk backfill workflow_dispatch. Signal #4 STAYS DISARMED.
+
+---
+
 ### ACT-202: FP-050 Phase 4 F2.a — `insider_accession_discovery_queue` table lands (MIG-096 + `sql/16_insider_accession_discovery_queue.sql` companion); discovery-layer egress relocation persistence boundary; producer (F2.b GHA) and consumer (F2.c `seedWorkItems` switch) hand off through this table; migration-only — no deploy required, F2-pre verifier contract does NOT bind on this commit
 
 | Field | Value |
