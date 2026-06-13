@@ -21,6 +21,48 @@ export interface HandlerOptions {
 }
 
 /**
+ * Deployed build SHA — read once at module init from the `BUILD_SHA` env var.
+ * Stamped onto every Response as the `x-build-sha` header so the
+ * `scripts/check-deployed-sha.ts` verifier (F2-pre, ACT-201) can prove
+ * deployed-HEAD == source-HEAD before any F2 verification step downstream
+ * is trusted. Closes the §22.8.5 deploy-replay-lag class catalogued in
+ * ai-failure-modes after the FP-050 Phase 4 stale-bundle false start
+ * (run `bbe882e3`, served pre-F1 `form.idx` code at post-F1 source HEAD).
+ *
+ * Value semantics — typed-Optional discipline (anti-phantom-defaults):
+ *   - `null` when `BUILD_SHA` is unset (header is OMITTED, never stamped
+ *     with a sentinel "unknown" string that the verifier could mistake
+ *     for a real SHA mismatch). The verifier treats a missing header as
+ *     "deployment did not declare a build SHA" — a FAIL distinct from a
+ *     known-divergent SHA.
+ *   - The non-empty trimmed string when set.
+ */
+const BUILD_SHA: string | null = (() => {
+  try {
+    const raw = Deno.env.get('BUILD_SHA')
+    if (typeof raw !== 'string') return null
+    const trimmed = raw.trim()
+    return trimmed.length > 0 ? trimmed : null
+  } catch {
+    // Edge runtimes without env-read permission — header is simply omitted.
+    return null
+  }
+})()
+
+/** Stamp `x-build-sha` onto a Response (in place). No-op when BUILD_SHA is unset. */
+function stampBuildSha(response: Response): Response {
+  if (BUILD_SHA !== null && !response.headers.has('x-build-sha')) {
+    response.headers.set('x-build-sha', BUILD_SHA)
+  }
+  return response
+}
+
+/** Test-only accessor for the resolved BUILD_SHA. Exported for sentinel tests. */
+export function __getBuildShaForTesting(): string | null {
+  return BUILD_SHA
+}
+
+/**
  * Wraps an edge function handler with CORS + rate limiting + error classification.
  * Propagates correlation IDs into all error responses when available.
  * Centralized denial audit logging: intercepts PermissionDeniedError and
@@ -37,13 +79,13 @@ export function createHandler(
     const cors = getCorsHeaders(origin)
 
     if (req.method === 'OPTIONS') {
-      return new Response('ok', { headers: cors })
+      return stampBuildSha(new Response('ok', { headers: cors }))
     }
 
     // Rate limit check (before any auth or processing)
     const rateLimitResponse = checkRateLimit(req, rateLimitClass)
     if (rateLimitResponse) {
-      return rateLimitResponse
+      return stampBuildSha(rateLimitResponse)
     }
 
     // Generate a correlation ID for the request lifecycle
@@ -53,7 +95,7 @@ export function createHandler(
     const MAX_BODY_BYTES = 64 * 1024
     const contentLength = req.headers.get('content-length')
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
-      return apiError(413, 'Request body too large', { correlationId, _cors: cors })
+      return stampBuildSha(apiError(413, 'Request body too large', { correlationId, _cors: cors }))
     }
 
     try {
@@ -64,21 +106,21 @@ export function createHandler(
         response.headers.set(key, value)
       }
 
-      return response
+      return stampBuildSha(response)
     } catch (err) {
       // Extract correlation ID from authenticated context if available
       const cid = (err as Record<string, unknown>)?.correlationId as string ?? correlationId
 
       if (err instanceof AuthError) {
-        return apiError(401, err.message, { correlationId: cid, _cors: cors })
+        return stampBuildSha(apiError(401, err.message, { correlationId: cid, _cors: cors }))
       }
       if (err instanceof ValidationError) {
-        return apiError(400, err.message, {
+        return stampBuildSha(apiError(400, err.message, {
           code: 'VALIDATION_ERROR',
           field: Object.keys(err.fieldErrors)[0],
           correlationId: cid,
           _cors: cors,
-        })
+        }))
       }
       if (err instanceof PermissionDeniedError) {
         // ── Centralized denial audit logging (fire-and-forget) ──
@@ -94,18 +136,18 @@ export function createHandler(
 
         // Distinguish re-auth requirement from permission denial
         if (err.reason === 'recent_auth_required') {
-          return apiError(403, 'Session too old for this action — please re-authenticate', {
+          return stampBuildSha(apiError(403, 'Session too old for this action — please re-authenticate', {
             code: 'RECENT_AUTH_REQUIRED',
             correlationId: cid,
             _cors: cors,
-          })
+          }))
         }
 
-        return apiError(403, 'Permission denied', { correlationId: cid, _cors: cors })
+        return stampBuildSha(apiError(403, 'Permission denied', { correlationId: cid, _cors: cors }))
       }
 
       console.error('[HANDLER] Unhandled error:', err, { correlationId: cid })
-      return apiError(500, 'Internal server error', { correlationId: cid, _cors: cors })
+      return stampBuildSha(apiError(500, 'Internal server error', { correlationId: cid, _cors: cors }))
     }
   }
 }
