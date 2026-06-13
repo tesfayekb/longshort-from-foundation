@@ -173,11 +173,6 @@ import {
   type CikLookupResult,
 } from './edgar-cik-mapper.ts';
 import {
-  EdgarDailyIndexFetcher,
-  type DailyIndexEntry,
-  type DailyIndexResult,
-} from './edgar-daily-index-fetcher.ts';
-import {
   EdgarAccessionIndexFetcher,
   type EdgarAccessionIndexResult,
 } from './edgar-accession-index-fetcher.ts';
