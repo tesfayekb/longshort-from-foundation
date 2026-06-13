@@ -359,7 +359,6 @@ export interface InsiderWorkListDeps {
   supabase: SupabaseClient;
   operator_id: string;
   cikMapper: EdgarCikMapper;
-  dailyIndex: EdgarDailyIndexFetcher;
   accessionIndex: EdgarAccessionIndexFetcher;
   form4Fetcher: EdgarForm4Fetcher;
   /** The same context shape `createInsiderLoadAndCompute` takes; passed
