@@ -218,6 +218,24 @@ export const INSIDER_STAGING_TTL_SEC = 86_400;
  *  daily-index fetcher's v1 trading-day rule). */
 export const INSIDER_BACKFILL_TRADING_DAYS = 63;
 
+/** R1 heartbeat sentinel (producer-side: `scripts/insider-discovery-
+ *  egress.ts` → `HEARTBEAT_ISSUER_CIK` / `HEARTBEAT_ACCESSION_NUMBER`).
+ *  Re-declared here so the consumer's claim predicate doesn't import
+ *  from `scripts/`; the test (D.5) pins string equality across both
+ *  modules so producer/consumer cannot drift. */
+export const INSIDER_HEARTBEAT_ISSUER_CIK = '__heartbeat__';
+export const INSIDER_HEARTBEAT_ACCESSION_NUMBER = '__heartbeat__';
+
+/** F2.c per-day work-budget ceiling (queue-evidence update; ACT-205).
+ *  Real-evidence max measured at 770 on 2026-04-02 (post-earnings
+ *  cluster); 800 pads by ~4% for variance robustness. Supersedes the
+ *  prior ~352 M4 RE-RULE estimate per Catalog #43. The (A.2) drift
+ *  sentinel converts this to a slice-count derived against
+ *  `INSIDER_ITEMS_PER_SLICE` so any future tightening that would
+ *  breach the daily window fails the test rather than silently
+ *  sliding past pre-market. */
+export const INSIDER_PER_DAY_WORK_BUDGET_CEILING = 800;
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // ─── Universe-row shape (mirrors insider-load-and-compute.ts) ──────────
