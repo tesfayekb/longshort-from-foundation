@@ -248,7 +248,21 @@ function makeStubSupabase(opts: {
             return Promise.resolve({ data: projected, error: null })
               .then(onF as never, onR as never);
           }
-          // SELECT distinct dates path (backfill).
+          // SELECT path — two shapes:
+          //   (i) backfill distinct-dates (gte/lte; projects as_of_date)
+          //   (ii) ACT-211 processItem by-accession reconstruction
+          //        (eq accession_number; projects issuer_cik, form_type)
+          if (typeof eqs['accession_number'] === 'string') {
+            const acc = eqs['accession_number'] as string;
+            const matches = queueRows.filter((r) => r.accession_number === acc);
+            const projected = matches.map((r) => ({
+              issuer_cik: r.issuer_cik,
+              form_type: r.form_type,
+            }));
+            void selectCols;
+            return Promise.resolve({ data: projected, error: null })
+              .then(onF as never, onR as never);
+          }
           const rows = queueRows.filter((r) => {
             if (isConsumedNull && r.consumed_at !== null) return false;
             if (gtes['as_of_date'] && r.as_of_date < (gtes['as_of_date'] as string)) return false;
@@ -257,6 +271,7 @@ function makeStubSupabase(opts: {
           }).map((r) => ({ as_of_date: r.as_of_date }));
           return Promise.resolve({ data: rows, error: null }).then(onF as never, onR as never);
         },
+        limit(_n: number) { return b; },
       };
       return b;
     }
