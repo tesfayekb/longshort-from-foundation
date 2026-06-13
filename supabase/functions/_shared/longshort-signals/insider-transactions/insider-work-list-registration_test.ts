@@ -471,7 +471,7 @@ Deno.test('(E.1) processItem: index 404 → permanent_skip data_unavailable', as
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({ kind: 'unavailable', reason: 'data_unavailable' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
@@ -484,7 +484,7 @@ Deno.test('(E.2) processItem: index ambiguous → permanent_skip no_primary_doc 
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'ambiguous',
       filenames: ['a.xml', 'b.xml'],
@@ -505,7 +505,7 @@ Deno.test('(E.3) processItem: index 429 → THROW (transient — engine cursor p
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({ kind: 'rate_limited' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
@@ -516,7 +516,7 @@ Deno.test('(E.4) processItem: form4 xml 404 → permanent_skip data_unavailable'
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -535,7 +535,7 @@ Deno.test('(E.5) processItem: form4 xml unparseable → permanent_skip data_unav
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -561,7 +561,7 @@ Deno.test('(F.1) processItem: rows path → upsert quotes M5 PK verbatim + owner
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -610,7 +610,7 @@ Deno.test('(F.2) processItem: rows empty (derivative-only filing) → processed,
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -629,7 +629,7 @@ Deno.test('(F.3) processItem: upsert DB error → THROW (transient)', async () =
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -704,7 +704,7 @@ Deno.test('(H.1) loadAndCompute: maps staged per_ticker (value + skip) to engine
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     loadAndComputeCtx,
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
@@ -742,7 +742,7 @@ Deno.test('(H.2) loadAndCompute: empty universe → short-circuit throws (failur
   const deps = makeBaselineDeps({
     universe: [],
     cikMap: {},
-    daily: {},
+    queueRows: [],
     loadAndComputeCtx,
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
@@ -751,7 +751,7 @@ Deno.test('(H.2) loadAndCompute: empty universe → short-circuit throws (failur
 
 // ── Registry shape sanity ─────────────────────────────────────────────
 Deno.test('(R.1) createInsiderWorkListConfig: daily vs backfill choose distinct jobIds', () => {
-  const deps = makeBaselineDeps({ universe: [], cikMap: {}, daily: {} });
+  const deps = makeBaselineDeps({ universe: [], cikMap: {} });
   const daily = createInsiderWorkListConfig(deps, 'daily');
   const backfill = createInsiderWorkListConfig(deps, 'backfill');
   assertEquals(daily.signalId, INSIDER_SIGNAL_ID);
