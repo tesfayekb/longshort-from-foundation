@@ -33,6 +33,17 @@
  *   2b. cd supabase/functions && deno test --allow-net --allow-env --allow-read
  *       (repo-wide; mirrors CI Gate 11 — `.github/workflows/strong-evidence.yml`
  *       — verbatim, no `_shared/` filter)
+ *   2c. deno test --allow-net --allow-env --allow-read scripts/
+ *       (mirrors CI Gate 2 — `deno test … scripts/`. Added at ACT-207
+ *       to close the third-firing Catalog #41 scope-gap surfaced by
+ *       the F2.c REVISION: a `scripts/` test failed in CI under
+ *       `check-supabase-client-specifier_test.ts` while every local
+ *       gate read GREEN, because neither Gate 2 (`_shared/` filter)
+ *       nor Gate 2b (`supabase/functions/` cwd) sweeps `scripts/`.
+ *       Gate-coverage rule made explicit by this addition: gate
+ *       coverage MUST include every test path CI runs; a CI-red on a
+ *       test path not exercised by any local gate is a Catalog #41
+ *       violation by construction.)
  *   3. npx eslint .
  *
  * For each command, the attestation captures: the literal command line, the
@@ -119,6 +130,38 @@ const GATES: readonly GateSpec[] = [
       '--allow-read',
     ],
     cwd: 'supabase/functions',
+    canonicalSummary: /^(ok|FAILED)\s*\|\s*\d+\s+passed\s*\|\s*\d+\s+failed/,
+  },
+  {
+    // Gate 2c — scripts/ deno test (mirrors CI Gate 2 in
+    // `.github/workflows/strong-evidence.yml`:
+    //   `deno test --allow-read --allow-net --allow-env scripts/`).
+    // Added at ACT-207 to close the third-firing Catalog #41 scope-gap
+    // surfaced by F2.c's REVISION: `scripts/check-supabase-client-
+    // specifier_test.ts` flagged an `esm.sh` import in
+    // `supabase/functions/_shared/longshort-signals/insider-transactions/
+    // insider-r2-concurrent-claim_test.ts` that Gate 2 and Gate 2b BOTH
+    // missed — Gate 2 because the offending import path was in `_shared/`
+    // but the FAILING test was in `scripts/`, Gate 2b because the
+    // failing scanner lives in `scripts/`, outside `supabase/functions/`.
+    // The structural fix: Gate 2c sweeps `scripts/` with NO scope filter
+    // beyond cwd, so any `scripts/`-tree test failure surfaces in the
+    // local attestation block before CI sees it.
+    //
+    // Display index 2.75 sorts between 2.5 (Gate 2b) and 3 (Gate 3);
+    // `renderAttestation` renders this as the literal 'Gate 2c' label.
+    index: 2.75,
+    displayCommand:
+      'deno test --allow-net --allow-env --allow-read scripts/',
+    argv: [
+      'deno',
+      'test',
+      '--allow-net',
+      '--allow-env',
+      '--allow-read',
+      'scripts/',
+    ],
+    cwd: '.',
     canonicalSummary: /^(ok|FAILED)\s*\|\s*\d+\s+passed\s*\|\s*\d+\s+failed/,
   },
   {
@@ -212,8 +255,9 @@ function renderAttestation(headSha: string, results: readonly GateResult[]): str
   lines.push(`Generated: ${new Date().toISOString()}`);
   lines.push('');
   for (const r of results) {
-    // Render Gate 2b with the literal 'b' suffix the doc comment uses.
-    const label = r.index === 2.5 ? '2b' : String(r.index);
+    // Render Gate 2b / Gate 2c with literal letter suffixes the doc
+    // comments use; index float is sort-order only.
+    const label = r.index === 2.5 ? '2b' : r.index === 2.75 ? '2c' : String(r.index);
     lines.push(`Gate ${label}: ${r.command}`);
     lines.push(`  exit=${r.exitCode}  duration_ms=${r.durationMs}`);
     lines.push(`  final-line: ${r.finalLine}`);
