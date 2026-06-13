@@ -73,6 +73,23 @@ Deno.test('(A.1) accessionsPerSlice arithmetic — rate-bound < 60s (drift senti
   assertEquals(INSIDER_RATE_PER_SEC, 4.25);
 });
 
+// ── (A.2) F2.c per-day work-budget ceiling drift sentinel ─────────────
+Deno.test('(A.2) INSIDER_PER_DAY_WORK_BUDGET_CEILING = 800 (queue-evidence top + ~4% pad)', () => {
+  // Real-evidence max measured at 770 (2026-04-02, post-earnings cluster)
+  // per the F2.c backfill verification; 800 pads for variance robustness.
+  // Supersedes the prior ~352 M4 RE-RULE estimate (Catalog #43 recursive
+  // application). Any future relaxation that drives this past the daily
+  // window MUST fail this test rather than silently sliding past
+  // pre-market.
+  assertEquals(INSIDER_PER_DAY_WORK_BUDGET_CEILING, 800);
+  const slicesAtCeiling = Math.ceil(INSIDER_PER_DAY_WORK_BUDGET_CEILING / INSIDER_ITEMS_PER_SLICE);
+  assertEquals(slicesAtCeiling, 16, '800 / 50 → 16 slices');
+  // Each slice ~35-55s; 16 slices → 9.3-14.7 min, well inside the
+  // ~21:15-UTC → next-day pre-market window.
+  const worstCaseDrainSec = slicesAtCeiling * 55;
+  assert(worstCaseDrainSec < 60 * 60, `worst-case drain ${worstCaseDrainSec}s must fit within 1h`);
+});
+
 // ── (B) Daily date math — weekend skip ─────────────────────────────────
 Deno.test('(B.1) previousTradingDay: Friday asOf → Thursday', () => {
   const t = previousTradingDay(AS_OF_FRI);
