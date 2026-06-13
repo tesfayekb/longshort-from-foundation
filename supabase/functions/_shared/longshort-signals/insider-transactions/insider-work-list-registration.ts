@@ -593,11 +593,6 @@ async function loadCurrentUniverse(
   return (data ?? []) as Array<{ ticker: string; gics_sector: string | null }>;
 }
 
-function padFilerCik(raw: string): string | null {
-  if (!/^\d+$/.test(raw)) return null;
-  return raw.padStart(10, '0');
-}
-
 // ─── processItem factory ───────────────────────────────────────────────
 
 function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
