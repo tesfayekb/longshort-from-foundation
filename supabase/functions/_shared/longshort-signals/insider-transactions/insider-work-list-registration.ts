@@ -86,15 +86,21 @@
  *     vs 120 s STOP gate ≈ 65-85 s headroom — SAFE
  *     vs 150 s HTTP wall ≈ 95-115 s headroom — SAFE
  *
- *   Daily-fire drain estimate (M4 RE-RULE corrected band):
- *     typical ~253 in-universe accessions → ⌈253/50⌉ = 6 slices ≈ 3-6 min
- *     measured-max ~352 → ⌈352/50⌉ = 8 slices ≈ 5-7 min
- *     post-earnings cluster ceiling (variance robustness — engine absorbs
- *     overflow by design): ~500 → ⌈500/50⌉ = 10 slices ≈ 6-9 min
+ *   Daily-fire drain estimate (F2.c queue-evidence update — Catalog #43
+ *   recursive application; supersedes the M4 RE-RULE ~352 estimate;
+ *   ACT-205):
+ *     typical ~225 in-universe accessions (F2.b backfill
+ *       `discovery_correlation_id=aad615ab-…` drained 14,172 rows across
+ *       63 days ≈ 225/day) → ⌈225/50⌉ = 5 slices ≈ 3-5 min
+ *     measured-max post-earnings-cluster ceiling = 800 (real evidence:
+ *       770 on 2026-04-02; 522 on 2026-03-17 — both above the prior soft
+ *       500 band; 800 pads the empirically-measured top by ~4% for
+ *       variance robustness) → ⌈800/50⌉ = 16 slices ≈ 9-15 min,
+ *       inside the ~21:15→pre-market window with hours of headroom.
  *
- *   Backfill-fire drain estimate (M4 RE-RULE corrected band):
- *     63 trading days × ~253 accessions/day ≈ ~16k accessions
- *     ⌈16000/50⌉ = 320 slices × ~35-55 s ≈ ~3.1-4.9 hours queue-drained
+ *   Backfill-fire drain estimate (F2.c queue-evidence update):
+ *     63 trading days × ~225 accessions/day ≈ 14,172 accessions
+ *     ⌈14172/50⌉ = 284 slices × ~35-55 s ≈ ~2.8-4.3 hours queue-drained
  *     (fits comfortably in the single overnight window between US close
  *     21:00 UTC and pre-market 13:00 UTC with ~7-9 h headroom).
  *
@@ -103,6 +109,40 @@
  * tightening of the rate cap or loosening of the slice size fails the
  * test rather than silently breaching the 120s/150s walls (drift
  * sentinel discipline per FP-045 Phase 2 addendum §6).
+ *
+ * ─── F2.c queue switch (R1 + R2 contract) ───────────────────────────
+ *
+ * `seedWorkItems` no longer hits EDGAR. It claims pre-discovered rows
+ * from `public.insider_accession_discovery_queue` (F2.a / MIG-096),
+ * populated by the GHA-egress producer (`scripts/insider-discovery-
+ * egress.ts` / F2.b). The on-EDGAR daily-index call site is the
+ * producer's exclusive surface; the F1 drift sentinels travel with
+ * the producer (parser/fetcher), never relaxed.
+ *
+ * R1 (heartbeat-at-write-seam, codified F2.b): the producer writes a
+ * single sentinel row for empty/unavailable days using `issuer_cik =
+ * accession_number = '__heartbeat__'`. The claim query STRUCTURALLY
+ * excludes the sentinel via the operator-verbatim predicate
+ * `NOT (issuer_cik='__heartbeat__' AND accession_number='__heartbeat__')`.
+ * The 63 inert pre-hardening heartbeats from run `658b8070-…` exercised
+ * this filter on first use (ACT-205 finding (a)).
+ *
+ * R2 (concurrency safety — ratified narrowing from "same TX" to
+ * single-statement atomicity, per operator F2.c ruling; supervisor
+ * brief defect catalogued under recursive #43): the claim is one
+ * `UPDATE ... WHERE consumed_at IS NULL ... RETURNING ...` statement.
+ * Two concurrent calls against the same `as_of_date` serialize at
+ * Postgres row-level locks; the second update returns zero rows; the
+ * engine's downstream cursor INSERT inherits atomicity from per-run_id
+ * uniqueness. Pinned by `insider-r2-concurrent-claim_test.ts`, the
+ * project's FIRST transactional-contention test pattern (Deno-driven
+ * two-client concurrent fire); pattern is forward-binding for future
+ * signals.
+ *
+ * Backfill iterates the queue's distinct `as_of_date`s (bounded by
+ * `INSIDER_BACKFILL_TRADING_DAYS`), each claimed in its own UPDATE
+ * statement; concurrent backfill+daily on overlapping dates is
+ * structurally prevented by the same row-lock atomicity.
  *
  * ─── Heartbeat / staging-TTL sizing ─────────────────────────────────
  *
@@ -132,11 +172,6 @@ import {
   EdgarCikMapper,
   type CikLookupResult,
 } from './edgar-cik-mapper.ts';
-import {
-  EdgarDailyIndexFetcher,
-  type DailyIndexEntry,
-  type DailyIndexResult,
-} from './edgar-daily-index-fetcher.ts';
 import {
   EdgarAccessionIndexFetcher,
   type EdgarAccessionIndexResult,
@@ -182,6 +217,24 @@ export const INSIDER_STAGING_TTL_SEC = 86_400;
  *  for the backfill seed sweep (weekends-only-skip; identical to the
  *  daily-index fetcher's v1 trading-day rule). */
 export const INSIDER_BACKFILL_TRADING_DAYS = 63;
+
+/** R1 heartbeat sentinel (producer-side: `scripts/insider-discovery-
+ *  egress.ts` → `HEARTBEAT_ISSUER_CIK` / `HEARTBEAT_ACCESSION_NUMBER`).
+ *  Re-declared here so the consumer's claim predicate doesn't import
+ *  from `scripts/`; the test (D.5) pins string equality across both
+ *  modules so producer/consumer cannot drift. */
+export const INSIDER_HEARTBEAT_ISSUER_CIK = '__heartbeat__';
+export const INSIDER_HEARTBEAT_ACCESSION_NUMBER = '__heartbeat__';
+
+/** F2.c per-day work-budget ceiling (queue-evidence update; ACT-205).
+ *  Real-evidence max measured at 770 on 2026-04-02 (post-earnings
+ *  cluster); 800 pads by ~4% for variance robustness. Supersedes the
+ *  prior ~352 M4 RE-RULE estimate per Catalog #43. The (A.2) drift
+ *  sentinel converts this to a slice-count derived against
+ *  `INSIDER_ITEMS_PER_SLICE` so any future tightening that would
+ *  breach the daily window fails the test rather than silently
+ *  sliding past pre-market. */
+export const INSIDER_PER_DAY_WORK_BUDGET_CEILING = 800;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -306,7 +359,6 @@ export interface InsiderWorkListDeps {
   supabase: SupabaseClient;
   operator_id: string;
   cikMapper: EdgarCikMapper;
-  dailyIndex: EdgarDailyIndexFetcher;
   accessionIndex: EdgarAccessionIndexFetcher;
   form4Fetcher: EdgarForm4Fetcher;
   /** The same context shape `createInsiderLoadAndCompute` takes; passed
@@ -350,67 +402,166 @@ export function createInsiderWorkListConfig(
 
 function makeSeedWorkItems(deps: InsiderWorkListDeps, mode: InsiderWorkListMode): WorkListSeedFn {
   return async ({ asOf }): Promise<ReadonlyArray<WorkListItem>> => {
-    // Step S.1: load the current universe membership (latest as_of_date).
+    // Step S.1: load universe (latest as_of_date). Empty universe →
+    // VALID empty seed (Q5; engine finalizes cleanly).
     const universe = await loadCurrentUniverse(deps);
-    if (universe.length === 0) {
-      // Empty universe = VALID empty seed (Q5: empty seed proceeds to
-      // finalize cleanly; the consumer's mass-balance is 0 = 0 + 0).
-      return [];
-    }
+    if (universe.length === 0) return [];
 
-    // Step S.2: build the ticker→CIK lookup (fetch-per-fire per DEC-058
-    // §(f1)). Throws on network/UA/JSON failure → propagated as Q5
-    // `seed_failed` by the engine (`failure_reason='seed_failed:
-    // <masked verbatim>'`, NEVER half-seeded).
+    // Step S.2: ticker → padded CIK lookup (fetch-per-fire per
+    // DEC-058 §(f1)). Throws → Q5 `seed_failed` (engine inserts the
+    // terminal failed-run row; never half-seeded).
     const lookup = await deps.cikMapper.loadMap();
-
-    // Step S.3: build the inverse CIK→universe-row map. Unresolved
-    // tickers are dropped silently HERE (the consumer-side typed skip
-    // `ticker_to_cik_unresolved` is finalize-time, per the §22.5.1
-    // ledger pattern — seed-time we only enumerate work).
     const byPaddedCik = new Map<string, UniverseRowWithCik>();
+    const paddedUniverseCiks: string[] = [];
     for (const u of universe) {
       const r: CikLookupResult = lookup(u.ticker);
       if (r.kind === 'unresolved') continue;
       byPaddedCik.set(r.cik10, { ticker: u.ticker, gics_sector: u.gics_sector, cik10: r.cik10 });
+      paddedUniverseCiks.push(r.cik10);
     }
+    if (paddedUniverseCiks.length === 0) return [];
 
-    // Step S.4: enumerate target trading days.
-    const targetDays =
-      mode === 'backfill'
-        ? trailingTradingDays(asOf, INSIDER_BACKFILL_TRADING_DAYS)
-        : [previousTradingDay(asOf)];
+    // Step S.3: enumerate target trading days. Daily = yesterday's
+    // trading day (weekends-only-skip). Backfill = the queue's own
+    // distinct unconsumed `as_of_date`s within the 63-trading-day
+    // window (most-recent first) — the queue is the source of truth
+    // for which days have producer-discovery rows; gaps stay gaps.
+    const targetDays: string[] = mode === 'backfill'
+      ? await loadDistinctBackfillDates(deps, asOf)
+      : [isoDate(previousTradingDay(asOf))];
 
-    // Step S.5: fetch each daily index, filter to in-universe rows,
-    // accumulate items. Holiday days return `unavailable` cleanly →
-    // contribute zero items (not a throw, per the fetcher contract).
+    // Step S.4 — R2 atomic claim (single-statement row-lock atomicity;
+    // see module-doc §R2 contract narrowing). Per-day UPDATE …
+    // RETURNING; per-run_id uniqueness on the downstream cursor INSERT
+    // closes the disjoint-outcome property end-to-end.
+    const consumedAtIso = asOf.toISOString();
     const items: WorkListItem[] = [];
-    const seenAccession = new Set<string>(); // item-id uniqueness invariant
+    const seenAccession = new Set<string>(); // backfill cross-day defense
     for (const day of targetDays) {
-      const result: DailyIndexResult = await deps.dailyIndex.fetchDay(day);
-      if (result.kind === 'unavailable') continue;
-      for (const entry of result.entries) {
-        const padded = padFilerCik(entry.filer_cik);
-        if (padded === null) continue;
-        const u = byPaddedCik.get(padded);
-        if (u === undefined) continue; // out-of-universe
-        if (seenAccession.has(entry.accession_number)) continue; // backfill overlap defense
-        seenAccession.add(entry.accession_number);
+      const claimed = await claimDiscoveryRowsForDay(deps, day, paddedUniverseCiks, consumedAtIso);
+      for (const row of claimed) {
+        if (seenAccession.has(row.accession_number)) continue;
+        seenAccession.add(row.accession_number);
+        const u = byPaddedCik.get(row.issuer_cik);
+        if (u === undefined) continue; // defensive (universe drift since producer)
         const payload: InsiderWorkItemPayload = {
-          filer_cik_raw: entry.filer_cik,
-          filer_cik_padded: padded,
+          filer_cik_raw: row.issuer_cik.replace(/^0+/, '') || '0',
+          filer_cik_padded: row.issuer_cik,
           ticker: u.ticker,
-          date_filed: entry.date_filed,
-          form_type: entry.form_type,
+          date_filed: day,
+          form_type: row.form_type,
         };
         items.push({
-          id: entry.accession_number,
+          id: row.accession_number,
           payload: payload as unknown as Readonly<Record<string, unknown>>,
         });
       }
     }
     return items;
   };
+}
+
+interface ClaimedDiscoveryRow {
+  issuer_cik: string;
+  accession_number: string;
+  form_type: '4' | '4/A';
+}
+
+/**
+ * R2 atomic claim — one PostgREST UPDATE-with-RETURNING. The WHERE
+ * conjunction is:
+ *
+ *   as_of_date            = $1
+ *   AND consumed_at       IS NULL
+ *   AND issuer_cik        = ANY($paddedUniverseCiks)     -- in-universe
+ *   AND NOT (issuer_cik='__heartbeat__'
+ *            AND accession_number='__heartbeat__')      -- R1 heartbeat exclusion
+ *
+ * The heartbeat exclusion is the operator-verbatim predicate. It is
+ * redundant given the in-universe IN-filter (no universe CIK equals
+ * '__heartbeat__'), but kept as a defense-in-depth structural pin —
+ * if a future change widens the in-universe set or relaxes the
+ * IN-filter, the heartbeat exclusion remains the structural barrier.
+ *
+ * Concurrency (R2): two concurrent UPDATEs against overlapping rows
+ * serialize at row-lock; the second sees `consumed_at IS NOT NULL`
+ * (already set by the first commit) and updates zero rows. RETURNING
+ * is empty for the loser. The engine's downstream cursor INSERT is
+ * keyed by `(run_id, ticker)` PK with unique `run_id` per init, so
+ * double-insert is structurally impossible.
+ */
+async function claimDiscoveryRowsForDay(
+  deps: InsiderWorkListDeps,
+  asOfDate: string,
+  paddedUniverseCiks: ReadonlyArray<string>,
+  consumedAtIso: string,
+): Promise<ClaimedDiscoveryRow[]> {
+  const heartbeatExclusion =
+    `issuer_cik.neq.${INSIDER_HEARTBEAT_ISSUER_CIK},` +
+    `accession_number.neq.${INSIDER_HEARTBEAT_ACCESSION_NUMBER}`;
+  const { data, error } = await deps.supabase
+    .from('insider_accession_discovery_queue')
+    .update({ consumed_at: consumedAtIso })
+    .eq('as_of_date', asOfDate)
+    .is('consumed_at', null)
+    .in('issuer_cik', paddedUniverseCiks as string[])
+    .or(heartbeatExclusion)
+    .select('issuer_cik, accession_number, form_type');
+  if (error) {
+    throw new Error(
+      `insider-work-list-registration: discovery-queue claim failed ` +
+        `(as_of_date=${asOfDate}): ${error.message}`,
+    );
+  }
+  const rows = (data ?? []) as Array<{
+    issuer_cik: string;
+    accession_number: string;
+    form_type: string;
+  }>;
+  const out: ClaimedDiscoveryRow[] = [];
+  for (const r of rows) {
+    if (r.form_type !== '4' && r.form_type !== '4/A') continue;
+    out.push({
+      issuer_cik: r.issuer_cik,
+      accession_number: r.accession_number,
+      form_type: r.form_type,
+    });
+  }
+  return out;
+}
+
+/**
+ * Backfill seed helper — read the queue's distinct unconsumed
+ * `as_of_date`s within the 63-trading-day window bounded by
+ * `previousTradingDay(asOf)` and the oldest trailing day. The queue
+ * is authoritative for which days have producer-discovery rows; gaps
+ * (days the producer did not run for) stay gaps and are not
+ * synthesized here. Most-recent first to match the trailing-days
+ * ordering used in unit tests.
+ */
+async function loadDistinctBackfillDates(
+  deps: InsiderWorkListDeps,
+  asOf: Date,
+): Promise<string[]> {
+  const window = trailingTradingDays(asOf, INSIDER_BACKFILL_TRADING_DAYS);
+  const oldestIso = isoDate(window[window.length - 1]);
+  const newestIso = isoDate(window[0]);
+  const { data, error } = await deps.supabase
+    .from('insider_accession_discovery_queue')
+    .select('as_of_date')
+    .gte('as_of_date', oldestIso)
+    .lte('as_of_date', newestIso)
+    .is('consumed_at', null);
+  if (error) {
+    throw new Error(
+      `insider-work-list-registration: backfill distinct-dates read failed: ${error.message}`,
+    );
+  }
+  const seen = new Set<string>();
+  for (const r of (data ?? []) as Array<{ as_of_date: string }>) {
+    seen.add(r.as_of_date);
+  }
+  return Array.from(seen).sort().reverse();
 }
 
 async function loadCurrentUniverse(
@@ -440,11 +591,6 @@ async function loadCurrentUniverse(
     );
   }
   return (data ?? []) as Array<{ ticker: string; gics_sector: string | null }>;
-}
-
-function padFilerCik(raw: string): string | null {
-  if (!/^\d+$/.test(raw)) return null;
-  return raw.padStart(10, '0');
 }
 
 // ─── processItem factory ───────────────────────────────────────────────

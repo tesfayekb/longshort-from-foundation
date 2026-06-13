@@ -29,7 +29,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../../supabase-admin.ts';
 import { productionQueueRegistry, type QueueSignalConfig } from '../shared/queue-worker/queue-config.ts';
 import { EdgarCikMapper } from './edgar-cik-mapper.ts';
-import { EdgarDailyIndexFetcher } from './edgar-daily-index-fetcher.ts';
 import { EdgarAccessionIndexFetcher } from './edgar-accession-index-fetcher.ts';
 import { EdgarForm4Fetcher } from './edgar-form4-fetcher.ts';
 import { PolygonSharesOutstandingFetcher } from '../shared/polygon-shares-outstanding-fetcher.ts';
@@ -68,7 +67,6 @@ export function buildInsiderDepsFromEnv(
   const contactEmail = readEnv('EDGAR_CONTACT_EMAIL');
   const polygonKey = readEnv('POLYGON_API_KEY');
   const cikMapper = new EdgarCikMapper(contactEmail);
-  const dailyIndex = new EdgarDailyIndexFetcher(contactEmail);
   const accessionIndex = new EdgarAccessionIndexFetcher(contactEmail);
   const form4Fetcher = new EdgarForm4Fetcher(contactEmail);
   const sharesOutstanding = new PolygonSharesOutstandingFetcher(polygonKey);
@@ -77,7 +75,6 @@ export function buildInsiderDepsFromEnv(
     supabase,
     operator_id,
     cikMapper,
-    dailyIndex,
     accessionIndex,
     form4Fetcher,
     loadAndComputeCtx: { supabase, operator_id, priceHistory, sharesOutstanding },
@@ -177,7 +174,6 @@ function placeholderDeps(): InsiderWorkListDeps {
     supabase: stub,
     operator_id: DEFAULT_OPERATOR_ID,
     cikMapper: stub,
-    dailyIndex: stub,
     accessionIndex: stub,
     form4Fetcher: stub,
     loadAndComputeCtx: stub,

@@ -40,7 +40,10 @@ import {
   INSIDER_BACKFILL_TRADING_DAYS,
   INSIDER_CALLS_PER_ITEM,
   INSIDER_DAILY_JOB_ID,
+  INSIDER_HEARTBEAT_ACCESSION_NUMBER,
+  INSIDER_HEARTBEAT_ISSUER_CIK,
   INSIDER_ITEMS_PER_SLICE,
+  INSIDER_PER_DAY_WORK_BUDGET_CEILING,
   INSIDER_RATE_PER_SEC,
   INSIDER_SIGNAL_ID,
   previousTradingDay,
@@ -48,6 +51,10 @@ import {
   type InsiderWorkItemPayload,
   type InsiderWorkListDeps,
 } from './insider-work-list-registration.ts';
+import {
+  HEARTBEAT_ACCESSION_NUMBER as PRODUCER_HEARTBEAT_ACCESSION_NUMBER,
+  HEARTBEAT_ISSUER_CIK as PRODUCER_HEARTBEAT_ISSUER_CIK,
+} from '../../../../../scripts/insider-discovery-egress.ts';
 
 const AS_OF_FRI = new Date('2026-06-12T21:00:00.000Z'); // Friday
 const AS_OF_MON = new Date('2026-06-15T21:00:00.000Z'); // Monday
@@ -64,6 +71,23 @@ Deno.test('(A.1) accessionsPerSlice arithmetic — rate-bound < 60s (drift senti
   assertEquals(INSIDER_ITEMS_PER_SLICE, 50);
   assertEquals(INSIDER_CALLS_PER_ITEM, 2);
   assertEquals(INSIDER_RATE_PER_SEC, 4.25);
+});
+
+// ── (A.2) F2.c per-day work-budget ceiling drift sentinel ─────────────
+Deno.test('(A.2) INSIDER_PER_DAY_WORK_BUDGET_CEILING = 800 (queue-evidence top + ~4% pad)', () => {
+  // Real-evidence max measured at 770 (2026-04-02, post-earnings cluster)
+  // per the F2.c backfill verification; 800 pads for variance robustness.
+  // Supersedes the prior ~352 M4 RE-RULE estimate (Catalog #43 recursive
+  // application). Any future relaxation that drives this past the daily
+  // window MUST fail this test rather than silently sliding past
+  // pre-market.
+  assertEquals(INSIDER_PER_DAY_WORK_BUDGET_CEILING, 800);
+  const slicesAtCeiling = Math.ceil(INSIDER_PER_DAY_WORK_BUDGET_CEILING / INSIDER_ITEMS_PER_SLICE);
+  assertEquals(slicesAtCeiling, 16, '800 / 50 → 16 slices');
+  // Each slice ~35-55s; 16 slices → 9.3-14.7 min, well inside the
+  // ~21:15-UTC → next-day pre-market window.
+  const worstCaseDrainSec = slicesAtCeiling * 55;
+  assert(worstCaseDrainSec < 60 * 60, `worst-case drain ${worstCaseDrainSec}s must fit within 1h`);
 });
 
 // ── (B) Daily date math — weekend skip ─────────────────────────────────
@@ -105,36 +129,141 @@ Deno.test('(G.1) dedupeFormRowsByPk: same PK collapses, dropped counted', () => 
 
 // ─── Stubs for the IO surfaces (each axis independently swappable) ────
 
-function makeUniverseSupabase(universe: Array<{ ticker: string; gics_sector: string | null }>) {
+/**
+ * Per-test Supabase stub. Serves:
+ *  - `universe_membership`: latest-as_of_date probe + row read.
+ *  - `insider_accession_discovery_queue`: F2.c claim
+ *      UPDATE … RETURNING (filtered by .eq/.is/.in/.or chain) AND the
+ *      backfill distinct-dates SELECT.
+ *  - `insider_form4_rows`: upsert capture for the (F.*) tests.
+ *
+ * Queue stub semantics:
+ *  - Initial state = `queueRows` (the test's "discovery rows in the
+ *    table"). Each row carries as_of_date / issuer_cik / accession_
+ *    number / form_type / consumed_at.
+ *  - `.update({consumed_at}).eq('as_of_date', d).is('consumed_at',
+ *    null).in('issuer_cik', list).or(headerExclusion).select(...)`
+ *    atomically flips consumed_at on matching rows and RETURNs them
+ *    (mirrors Postgres UPDATE … RETURNING; mirrors the production
+ *    single-statement atomicity claim).
+ */
+interface QueueRowFixture {
+  as_of_date: string;
+  issuer_cik: string;
+  accession_number: string;
+  form_type: '4' | '4/A';
+  consumed_at: string | null;
+}
+
+function makeStubSupabase(opts: {
+  universe: Array<{ ticker: string; gics_sector: string | null }>;
+  queueRows?: QueueRowFixture[];
+}) {
+  const queueRows: QueueRowFixture[] = (opts.queueRows ?? []).map((r) => ({ ...r }));
   const upserts: { table: string; payload: unknown[]; onConflict: string | undefined }[] = [];
   const upsertResults: Array<{ error: { message: string } | null }> = [];
+  const claimCalls: Array<{ as_of_date: string; in_list: string[]; or_filter: string }> = [];
+
   function from(table: string) {
     if (table === 'universe_membership') {
-      let mode: 'latest' | 'rows' = 'rows';
       const b: Record<string, unknown> = {
-        select(cols: string) { mode = cols === 'as_of_date' ? 'latest' : 'rows'; return b; },
+        select() { return b; },
         eq() { return b; },
         order() { return b; },
         limit() {
           return Promise.resolve(
-            universe.length > 0
+            opts.universe.length > 0
               ? { data: [{ as_of_date: '2026-06-12' }], error: null }
               : { data: [], error: null },
           );
         },
         then(onF: unknown, onR: unknown) {
-          return Promise.resolve({ data: universe, error: null }).then(onF as never, onR as never);
+          return Promise.resolve({ data: opts.universe, error: null })
+            .then(onF as never, onR as never);
         },
       };
-      // `mode` is unused below — the test stub returns universe rows
-      // for the non-`limit()` path via the `then` thunk.
-      void mode;
+      return b;
+    }
+    if (table === 'insider_accession_discovery_queue') {
+      // Two shapes: (a) UPDATE…RETURNING claim, (b) SELECT distinct dates.
+      let kind: 'update' | 'select' = 'select';
+      let updateConsumedAt: string | null = null;
+      const eqs: Record<string, unknown> = {};
+      const gtes: Record<string, unknown> = {};
+      const ltes: Record<string, unknown> = {};
+      let isConsumedNull = false;
+      let inIssuerCiks: string[] = [];
+      let orFilter = '';
+      let selectCols = '';
+
+      const b: Record<string, unknown> = {
+        update(payload: { consumed_at: string }) {
+          kind = 'update';
+          updateConsumedAt = payload.consumed_at;
+          return b;
+        },
+        select(cols: string) { selectCols = cols; return b; },
+        eq(col: string, v: unknown) { eqs[col] = v; return b; },
+        gte(col: string, v: unknown) { gtes[col] = v; return b; },
+        lte(col: string, v: unknown) { ltes[col] = v; return b; },
+        is(col: string, v: unknown) {
+          if (col === 'consumed_at' && v === null) isConsumedNull = true;
+          return b;
+        },
+        in(col: string, list: unknown[]) {
+          if (col === 'issuer_cik') inIssuerCiks = list as string[];
+          return b;
+        },
+        or(filter: string) { orFilter = filter; return b; },
+        then(onF: unknown, onR: unknown) {
+          if (kind === 'update') {
+            claimCalls.push({
+              as_of_date: String(eqs['as_of_date']),
+              in_list: inIssuerCiks.slice(),
+              or_filter: orFilter,
+            });
+            const inSet = new Set(inIssuerCiks);
+            const heartbeatExcl = orFilter.includes(
+              `issuer_cik.neq.${PRODUCER_HEARTBEAT_ISSUER_CIK}`,
+            );
+            const claimed: QueueRowFixture[] = [];
+            for (const r of queueRows) {
+              if (r.as_of_date !== eqs['as_of_date']) continue;
+              if (isConsumedNull && r.consumed_at !== null) continue;
+              if (inSet.size > 0 && !inSet.has(r.issuer_cik)) continue;
+              if (heartbeatExcl &&
+                  r.issuer_cik === PRODUCER_HEARTBEAT_ISSUER_CIK &&
+                  r.accession_number === PRODUCER_HEARTBEAT_ACCESSION_NUMBER) {
+                continue;
+              }
+              r.consumed_at = updateConsumedAt; // atomic flip
+              claimed.push({ ...r });
+            }
+            void selectCols;
+            const projected = claimed.map((r) => ({
+              issuer_cik: r.issuer_cik,
+              accession_number: r.accession_number,
+              form_type: r.form_type,
+            }));
+            return Promise.resolve({ data: projected, error: null })
+              .then(onF as never, onR as never);
+          }
+          // SELECT distinct dates path (backfill).
+          const rows = queueRows.filter((r) => {
+            if (isConsumedNull && r.consumed_at !== null) return false;
+            if (gtes['as_of_date'] && r.as_of_date < (gtes['as_of_date'] as string)) return false;
+            if (ltes['as_of_date'] && r.as_of_date > (ltes['as_of_date'] as string)) return false;
+            return true;
+          }).map((r) => ({ as_of_date: r.as_of_date }));
+          return Promise.resolve({ data: rows, error: null }).then(onF as never, onR as never);
+        },
+      };
       return b;
     }
     if (table === 'insider_form4_rows') {
       return {
-        upsert(payload: unknown[], opts: { onConflict?: string } = {}) {
-          upserts.push({ table, payload, onConflict: opts.onConflict });
+        upsert(payload: unknown[], optsU: { onConflict?: string } = {}) {
+          upserts.push({ table, payload, onConflict: optsU.onConflict });
           const r = upsertResults.shift() ?? { error: null };
           return Promise.resolve(r);
         },
@@ -142,7 +271,7 @@ function makeUniverseSupabase(universe: Array<{ ticker: string; gics_sector: str
     }
     throw new Error(`unexpected table ${table}`);
   }
-  return { from, upserts, upsertResults };
+  return { from, upserts, upsertResults, claimCalls, _queueRows: queueRows };
 }
 
 function makeCikMapper(map: Record<string, number>) {
@@ -163,43 +292,22 @@ function makeCikMapper(map: Record<string, number>) {
   };
 }
 
-function makeDailyIndex(
-  byDate: Record<string, Array<{ filer_cik: string; accession_number: string; form_type: '4' | '4/A' }>>,
-) {
-  return {
-    async fetchDay(date: Date) {
-      const iso = date.toISOString().slice(0, 10);
-      const entries = byDate[iso];
-      if (entries === undefined) {
-        return { kind: 'unavailable' as const, reason: 'data_unavailable' as const, date: iso };
-      }
-      return {
-        kind: 'rows' as const,
-        date: iso,
-        entries: entries.map((e) => ({
-          form_type: e.form_type,
-          filer_cik: e.filer_cik,
-          company_name: 'ACME CORP',
-          date_filed: iso,
-          filename: `edgar/data/${e.filer_cik}/${e.accession_number.replace(/-/g, '')}/0000-index.htm`,
-          accession_number: e.accession_number,
-        })),
-      };
-    },
-  };
-}
+// `makeDailyIndex` removed at F2.c — `seedWorkItems` no longer hits
+// EDGAR; the on-EDGAR call site is the GHA-egress producer
+// (`scripts/insider-discovery-egress.ts`). The consumer tests now
+// fixture the discovery queue directly via `makeStubSupabase`.
 
 function makeBaselineDeps(
   opts: {
     universe: Array<{ ticker: string; gics_sector: string | null }>;
     cikMap: Record<string, number>;
-    daily: Record<string, Array<{ filer_cik: string; accession_number: string; form_type: '4' | '4/A' }>>;
+    queueRows?: QueueRowFixture[];
     accessionIndex?: unknown;
     form4Fetcher?: unknown;
     loadAndComputeCtx?: unknown;
   },
-): InsiderWorkListDeps & { _stub: ReturnType<typeof makeUniverseSupabase> } {
-  const supa = makeUniverseSupabase(opts.universe);
+): InsiderWorkListDeps & { _stub: ReturnType<typeof makeStubSupabase> } {
+  const supa = makeStubSupabase({ universe: opts.universe, queueRows: opts.queueRows });
   const noop = {
     async fetchIndex() { throw new Error('accessionIndex stub not configured'); },
   };
@@ -211,55 +319,58 @@ function makeBaselineDeps(
     supabase: supa as never,
     operator_id: OPERATOR_ID,
     cikMapper: makeCikMapper(opts.cikMap) as never,
-    dailyIndex: makeDailyIndex(opts.daily) as never,
     accessionIndex: (opts.accessionIndex ?? noop) as never,
     form4Fetcher: (opts.form4Fetcher ?? noopForm4) as never,
     loadAndComputeCtx: (opts.loadAndComputeCtx ?? {}) as never,
   };
 }
 
-// ── (D) seedWorkItems — in-universe filter is the load-bearing design ──
-Deno.test('(D.1) seedWorkItems daily: in-universe filter drops out-of-universe filers, keeps universe filers', async () => {
+// ── (D) seedWorkItems — F2.c queue-claim contract ──────────────────────
+//
+// F2.c switches the seed from EDGAR daily-index fetch to a Supabase
+// claim against `insider_accession_discovery_queue` (rows pre-populated
+// by the GHA-egress producer). The (D.*) tests pin: in-universe filter,
+// empty-universe Q5, no-rows-for-day cleanly empty, backfill cross-day
+// dedupe, AND the R1 heartbeat-exclusion structural predicate.
+
+Deno.test('(D.1) seedWorkItems daily: in-universe IN-filter drops out-of-universe queue rows', async () => {
   const deps = makeBaselineDeps({
     universe: [
       { ticker: 'AAPL', gics_sector: 'Tech' },
       { ticker: 'MSFT', gics_sector: 'Tech' },
     ],
     cikMap: { AAPL: 320193, MSFT: 789019 },
-    daily: {
-      '2026-06-11': [
-        // In-universe — KEPT
-        { filer_cik: '320193', accession_number: '0000320193-26-000010', form_type: '4' },
-        { filer_cik: '789019', accession_number: '0000789019-26-000020', form_type: '4/A' },
-        // Out-of-universe — DROPPED (TSLA not in cikMap)
-        { filer_cik: '1318605', accession_number: '0001318605-26-000030', form_type: '4' },
-        // Out-of-universe — DROPPED (CIK not in inverse map)
-        { filer_cik: '999999', accession_number: '0000999999-26-000040', form_type: '4' },
-      ],
-    },
+    queueRows: [
+      { as_of_date: '2026-06-11', issuer_cik: '0000320193', accession_number: '0000320193-26-000010', form_type: '4', consumed_at: null },
+      { as_of_date: '2026-06-11', issuer_cik: '0000789019', accession_number: '0000789019-26-000020', form_type: '4/A', consumed_at: null },
+      // Out-of-universe row (TSLA-shaped CIK) — DROPPED by .in('issuer_cik', universe).
+      { as_of_date: '2026-06-11', issuer_cik: '0001318605', accession_number: '0001318605-26-000030', form_type: '4', consumed_at: null },
+    ],
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
   const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
   assertEquals(items.length, 2, 'only the two in-universe accessions survive');
   const ids = items.map((i) => i.id).sort();
   assertEquals(ids, ['0000320193-26-000010', '0000789019-26-000020']);
-  // Payload threading
   const aapl = items.find((i) => i.id === '0000320193-26-000010')!;
   const payload = aapl.payload as Readonly<InsiderWorkItemPayload>;
   assertEquals(payload.ticker, 'AAPL');
   assertEquals(payload.filer_cik_padded, '0000320193');
   assertEquals(payload.form_type, '4');
+  // Claim flipped consumed_at on the two universe rows; left the
+  // out-of-universe row unconsumed.
+  const remainingUnconsumed = deps._stub._queueRows.filter((r) => r.consumed_at === null);
+  assertEquals(remainingUnconsumed.length, 1);
+  assertEquals(remainingUnconsumed[0].issuer_cik, '0001318605');
 });
 
-Deno.test('(D.1b) seedWorkItems daily: real NVDA master.idx CIK operand matches padded universe CIK', async () => {
+Deno.test('(D.1b) seedWorkItems daily: real NVDA CIK operand matches padded universe CIK', async () => {
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'NVDA', gics_sector: 'Tech' }],
     cikMap: { NVDA: 1045810 },
-    daily: {
-      '2026-06-11': [
-        { filer_cik: '1045810', accession_number: '0001768670-26-000002', form_type: '4' },
-      ],
-    },
+    queueRows: [
+      { as_of_date: '2026-06-11', issuer_cik: '0001045810', accession_number: '0001768670-26-000002', form_type: '4', consumed_at: null },
+    ],
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
   const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
@@ -275,18 +386,20 @@ Deno.test('(D.2) seedWorkItems daily: empty universe → empty items (Q5 VALID e
   const deps = makeBaselineDeps({
     universe: [],
     cikMap: {},
-    daily: { '2026-06-11': [{ filer_cik: '320193', accession_number: '0000320193-26-000001', form_type: '4' }] },
+    queueRows: [
+      { as_of_date: '2026-06-11', issuer_cik: '0000320193', accession_number: '0000320193-26-000001', form_type: '4', consumed_at: null },
+    ],
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
   const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
   assertEquals(items.length, 0);
 });
 
-Deno.test('(D.3) seedWorkItems daily: holiday/unavailable day → empty items (NOT a throw)', async () => {
+Deno.test('(D.3) seedWorkItems daily: no queue rows for the target day → empty items (NOT a throw)', async () => {
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {}, // no entries → fetcher returns 'unavailable'
+    queueRows: [],
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
   const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
@@ -294,23 +407,61 @@ Deno.test('(D.3) seedWorkItems daily: holiday/unavailable day → empty items (N
 });
 
 Deno.test('(D.4) seedWorkItems backfill: dedupes overlapping accessions across days', async () => {
-  // Backfill sweeps 63 trading days; this test verifies the
-  // `seenAccession` invariant (item-id uniqueness within ONE seed call
-  // per queue-work-list-mode_test.ts:275-292) by placing the same
-  // accession on two days the sweep covers.
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {
-      '2026-06-12': [{ filer_cik: '320193', accession_number: 'DUP-ACC', form_type: '4' }],
-      '2026-06-11': [{ filer_cik: '320193', accession_number: 'DUP-ACC', form_type: '4' }],
-    },
+    queueRows: [
+      { as_of_date: '2026-06-12', issuer_cik: '0000320193', accession_number: 'DUP-ACC', form_type: '4', consumed_at: null },
+      { as_of_date: '2026-06-11', issuer_cik: '0000320193', accession_number: 'DUP-ACC', form_type: '4', consumed_at: null },
+    ],
   });
   const cfg = createInsiderWorkListConfig(deps, 'backfill');
   const items = await cfg.seedWorkItems!({ asOf: AS_OF_MON });
-  // Backfill includes both days; the dedupe collapses the duplicate.
   const dupCount = items.filter((i) => i.id === 'DUP-ACC').length;
-  assertEquals(dupCount, 1, 'duplicate accession across days collapses to 1 item');
+  assertEquals(dupCount, 1, 'duplicate accession across days collapses to 1 item via seenAccession set');
+});
+
+Deno.test('(D.5) seedWorkItems daily: R1 heartbeat row never reaches work-items (structural exclusion)', async () => {
+  // Pin: producer + consumer use the SAME heartbeat sentinel literals
+  // (re-imported from the producer module). Drift would silently let
+  // heartbeat rows leak into the cursor.
+  assertEquals(INSIDER_HEARTBEAT_ISSUER_CIK, PRODUCER_HEARTBEAT_ISSUER_CIK);
+  assertEquals(INSIDER_HEARTBEAT_ACCESSION_NUMBER, PRODUCER_HEARTBEAT_ACCESSION_NUMBER);
+
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
+    cikMap: { AAPL: 320193 },
+    queueRows: [
+      // R1 heartbeat (producer's empty-day sentinel; CIK + accession both
+      // = '__heartbeat__'). The 63 inert pre-hardening rows from run
+      // `658b8070-…` exercised this filter on first use (ACT-205 a).
+      {
+        as_of_date: '2026-06-11',
+        issuer_cik: INSIDER_HEARTBEAT_ISSUER_CIK,
+        accession_number: INSIDER_HEARTBEAT_ACCESSION_NUMBER,
+        form_type: '4',
+        consumed_at: null,
+      },
+      // Real in-universe row alongside the heartbeat.
+      { as_of_date: '2026-06-11', issuer_cik: '0000320193', accession_number: '0000320193-26-000010', form_type: '4', consumed_at: null },
+    ],
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
+  assertEquals(items.length, 1, 'heartbeat sentinel excluded; only the real row claimed');
+  assertEquals(items[0].id, '0000320193-26-000010');
+  // Claim predicate carried the operator-verbatim heartbeat-exclusion OR.
+  const claim = deps._stub.claimCalls[0];
+  assert(claim.or_filter.includes(`issuer_cik.neq.${INSIDER_HEARTBEAT_ISSUER_CIK}`));
+  assert(claim.or_filter.includes(`accession_number.neq.${INSIDER_HEARTBEAT_ACCESSION_NUMBER}`));
+  // Heartbeat row remained unconsumed in the queue (the IN-filter
+  // dropped it before the heartbeat predicate even applied; both layers
+  // independently keep it out).
+  const hbRow = deps._stub._queueRows.find((r) =>
+    r.issuer_cik === INSIDER_HEARTBEAT_ISSUER_CIK &&
+    r.accession_number === INSIDER_HEARTBEAT_ACCESSION_NUMBER,
+  )!;
+  assertEquals(hbRow.consumed_at, null);
 });
 
 // ── (E) processItem typed-permanent skips ──────────────────────────────
@@ -337,7 +488,7 @@ Deno.test('(E.1) processItem: index 404 → permanent_skip data_unavailable', as
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({ kind: 'unavailable', reason: 'data_unavailable' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
@@ -350,7 +501,7 @@ Deno.test('(E.2) processItem: index ambiguous → permanent_skip no_primary_doc 
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'ambiguous',
       filenames: ['a.xml', 'b.xml'],
@@ -371,7 +522,7 @@ Deno.test('(E.3) processItem: index 429 → THROW (transient — engine cursor p
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({ kind: 'rate_limited' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
@@ -382,7 +533,7 @@ Deno.test('(E.4) processItem: form4 xml 404 → permanent_skip data_unavailable'
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -401,7 +552,7 @@ Deno.test('(E.5) processItem: form4 xml unparseable → permanent_skip data_unav
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -427,7 +578,7 @@ Deno.test('(F.1) processItem: rows path → upsert quotes M5 PK verbatim + owner
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -476,7 +627,7 @@ Deno.test('(F.2) processItem: rows empty (derivative-only filing) → processed,
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -495,7 +646,7 @@ Deno.test('(F.3) processItem: upsert DB error → THROW (transient)', async () =
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -570,7 +721,7 @@ Deno.test('(H.1) loadAndCompute: maps staged per_ticker (value + skip) to engine
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    daily: {},
+    queueRows: [],
     loadAndComputeCtx,
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
@@ -608,7 +759,7 @@ Deno.test('(H.2) loadAndCompute: empty universe → short-circuit throws (failur
   const deps = makeBaselineDeps({
     universe: [],
     cikMap: {},
-    daily: {},
+    queueRows: [],
     loadAndComputeCtx,
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
@@ -617,7 +768,7 @@ Deno.test('(H.2) loadAndCompute: empty universe → short-circuit throws (failur
 
 // ── Registry shape sanity ─────────────────────────────────────────────
 Deno.test('(R.1) createInsiderWorkListConfig: daily vs backfill choose distinct jobIds', () => {
-  const deps = makeBaselineDeps({ universe: [], cikMap: {}, daily: {} });
+  const deps = makeBaselineDeps({ universe: [], cikMap: {} });
   const daily = createInsiderWorkListConfig(deps, 'daily');
   const backfill = createInsiderWorkListConfig(deps, 'backfill');
   assertEquals(daily.signalId, INSIDER_SIGNAL_ID);
