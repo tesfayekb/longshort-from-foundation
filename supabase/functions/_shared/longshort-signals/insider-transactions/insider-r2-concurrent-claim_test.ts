@@ -42,7 +42,16 @@
 
 import 'https://deno.land/std@0.224.0/dotenv/load.ts';
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+// SPECIFIER (REVISION ACT-207 — Catalog #41 third-firing fix): canonical
+// npm specifier via the `supabase/functions/deno.json` import map
+// (`@supabase/supabase-js` → `npm:@supabase/supabase-js@^2.105.4`). The
+// initial F2.c draft used `https://esm.sh/@supabase/supabase-js@2.39.7`,
+// which is banned by `scripts/check-supabase-client-specifier.ts` per
+// FP-008.4 Commit 7.5 / DW-082 A1.b (dual-type-identity TS2322 class).
+// CI Gate 3 (scripts/) caught it; local Gate-attestation set missed it
+// because no local gate exercised `scripts/` test files until Gate 2c
+// landed alongside this fix.
+import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = Deno.env.get('VITE_SUPABASE_URL') ?? Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
