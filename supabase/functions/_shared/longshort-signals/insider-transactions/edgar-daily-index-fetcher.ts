@@ -15,9 +15,11 @@
  * Form 4 (same XML schema; idempotency by accession_number).
  *
  * Format: pipe-delimited 5-column rows (NOT fixed-width):
- *   CIK|Company Name|Form Type|Date Filed|Filename
- * Header row is literally `CIK|Company Name|Form Type|Date Filed|Filename`
- * followed by a dashed delimiter line. Post-parse filter:
+ *   CIK|Company Name|Form Type|Date Filed|File Name
+ * Real SEC master.idx files spell the last header `File Name` and use
+ * compact `YYYYMMDD` dates; historical synthetic fixtures used `Filename`
+ * and ISO dates. Both header/date shapes are accepted, but parsing remains
+ * POSITIONAL by the five columns. Post-parse filter:
  * `Form Type IN ('4','4/A')` — the index is form-type-mixed (3, 4, 5,
  * 8-K, 10-K, ...), unlike the legacy `form.idx` which was already
  * partitioned by form type.
@@ -141,12 +143,20 @@ function isForm4(formType: string): formType is '4' | '4/A' {
   return formType === '4' || formType === '4/A';
 }
 
+function normalizeDateFiled(raw: string): string | null {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const m = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m === null) return null;
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
 /**
  * Parse the SEC master.idx body (F1.a pivot, ACT-199). Format is
- * **pipe-delimited 5-column** (NOT fixed-width), header verbatim:
- *   CIK|Company Name|Form Type|Date Filed|Filename
- * Header is followed by a dashed delimiter line. Each data row is
- * split on `|`; rows with !=5 fields are skipped silently. Post-parse
+ * **pipe-delimited 5-column** (NOT fixed-width), header:
+ *   CIK|Company Name|Form Type|Date Filed|File Name
+ * Historical synthetic fixtures used `Filename`; both spellings are
+ * accepted. Rows are parsed POSITIONALLY as `[0]=CIK`, `[1]=Company Name`,
+ * `[2]=Form Type`, `[3]=Date Filed`, `[4]=File Name`. Post-parse
  * filter: Form Type ∈ ('4','4/A') — master.idx is form-type-mixed,
  * unlike the legacy form.idx which was already partitioned.
  *
@@ -155,13 +165,16 @@ function isForm4(formType: string): formType is '4' | '4/A' {
  */
 export function parseDailyIndexBody(body: string): DailyIndexEntry[] {
   const lines = body.split(/\r?\n/);
-  // Locate the master.idx header line — exact verbatim string match
-  // (no leading whitespace, no partial). The next non-blank line is a
-  // dashed delimiter we skip.
-  const HEADER_LINE = 'CIK|Company Name|Form Type|Date Filed|Filename';
+  // Locate the master.idx header line. Real SEC files use `File Name`;
+  // historical synthetic fixtures used `Filename`. Accept both, then parse
+  // rows POSITIONALLY by the same five columns.
+  const HEADER_LINES = new Set([
+    'CIK|Company Name|Form Type|Date Filed|File Name',
+    'CIK|Company Name|Form Type|Date Filed|Filename',
+  ]);
   let headerIdx = -1;
   for (let i = 0; i < lines.length; i += 1) {
-    if (lines[i].trim() === HEADER_LINE) { headerIdx = i; break; }
+    if (HEADER_LINES.has(lines[i].trim())) { headerIdx = i; break; }
   }
   if (headerIdx === -1) return [];
   // Skip past the dashed delimiter line(s) — one or more lines of `-`.
@@ -188,12 +201,13 @@ export function parseDailyIndexBody(body: string): DailyIndexEntry[] {
     const accession = parseAccessionFromFilename(filename);
     if (accession === null) continue; // malformed row, skip silently
     if (!/^\d+$/.test(cik)) continue;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFiled)) continue;
+    const normalizedDateFiled = normalizeDateFiled(dateFiled);
+    if (normalizedDateFiled === null) continue;
     out.push({
       form_type: formType,
       filer_cik: cik,
       company_name: companyName,
-      date_filed: dateFiled,
+      date_filed: normalizedDateFiled,
       filename,
       accession_number: accession,
     });

@@ -70,6 +70,16 @@ CIK|Company Name|Form Type|Date Filed|Filename
 1953967|NEXTRACKER INC|4/A|2026-06-12|edgar/data/1953967/000195396726000046/0001953967-26-000046-index.htm
 `;
 
+const FIXTURE_MASTER_REAL_20260605_NVDA = `Description:           Daily Index of EDGAR Dissemination Feed
+Last Data Received:    Jun 5, 2026
+Comments:              webmaster@sec.gov
+Anonymous FTP:         ftp://ftp.sec.gov/edgar/
+ 
+CIK|Company Name|Form Type|Date Filed|File Name
+--------------------------------------------------------------------------------
+1045810|NVIDIA CORP|4|20260605|edgar/data/1045810/0001768670-26-000002.txt
+`;
+
 Deno.test('(1) quarterOf maps months 1-3=Q1, 4-6=Q2, 7-9=Q3, 10-12=Q4', () => {
   assertEquals(quarterOf(new Date('2026-01-15T00:00:00Z')), 1);
   assertEquals(quarterOf(new Date('2026-03-31T00:00:00Z')), 1);
@@ -162,6 +172,19 @@ Deno.test('(4b) parseDailyIndexBody (Form-4-only fixture) — filter identity: e
   assertEquals(entries[1].filer_cik, '1018724');
   assertEquals(entries[2].filer_cik, '1953967');
   assertEquals(entries[2].accession_number, '0001953967-26-000046');
+});
+
+Deno.test('(4c) parseDailyIndexBody real master.idx header/date shape — NVDA 2026-06-05 Form 4 survives', () => {
+  const entries = parseDailyIndexBody(FIXTURE_MASTER_REAL_20260605_NVDA);
+  assertEquals(entries.length, 1);
+  assertEquals(entries[0], {
+    form_type: '4',
+    filer_cik: '1045810',
+    company_name: 'NVIDIA CORP',
+    date_filed: '2026-06-05',
+    filename: 'edgar/data/1045810/0001768670-26-000002.txt',
+    accession_number: '0001768670-26-000002',
+  });
 });
 
 Deno.test('(5) parseDailyIndexBody returns [] on a body lacking the expected header', () => {

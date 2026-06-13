@@ -697,4 +697,29 @@ Verdict: ALL GREEN
 
 **Scope note on Gate 2 / 2b:** the new tests live under `scripts/insider-discovery-egress_test.ts`, which falls under the CI strong-evidence Gate 2 (`deno test --allow-read --allow-net --allow-env scripts/`), not the supabase/functions Gates 2 / 2b sweep. The 14 new tests were run directly at HEAD via `deno test --allow-net --allow-env --allow-read scripts/insider-discovery-egress_test.ts` → `ok | 14 passed | 0 failed (11ms)` before this attestation block was captured. Gate-2 supabase counts are unchanged because no `_shared/` test surface moved.
 
-**Cross-references:** ACT-202 (F2.a queue table — the write target this producer fills); ACT-201 (F2-pre verifier — re-enters at F2.c); ACT-199 (F1 master.idx pivot — single-source-of-parsing-truth invariant); DEC-058 §(h) (PK idempotency); `scripts/insider-discovery-egress.ts` (the producer); `scripts/insider-discovery-egress_test.ts` (the 14-test hermetic suite); `.github/workflows/insider-discovery.yml` (the cron + dispatch surface); `docs/07-reference/function-index.md` (entry added this commit). NO migration, NO `MIG-NNN` ledger touch (no schema change). F2.c next.
+**Cross-references:** ACT-202 (F2.a queue table — the write target this producer fills); ACT-201 (F2-pre verifier — re-enters at F2.c); ACT-199 (F1 master.idx pivot — single-source-of-parsing-truth invariant); DEC-058 §(h) (PK idempotency); `scripts/insider-discovery-egress.ts` (the producer); `scripts/insider-discovery-egress_test.ts` (17-test hermetic suite after ACT-204 hardening); `.github/workflows/insider-discovery.yml` (the cron + dispatch surface); `docs/07-reference/function-index.md` (entry added this commit). NO migration, NO `MIG-NNN` ledger touch (no schema change). F2.c next.
+
+## FP-050 Phase 4 F2.b-hardening — parse/filter semantic-success gate (ACT-204)
+
+**Diagnosis from one real row.** GHA run #3 (`discovery_correlation_id=658b8070-dba7-44f9-881e-cd12b4c81f8b`) returned `days:63`, `rows_inserted:0`, `heartbeats_inserted:63` despite EDGAR fetches returning 200. The failure was NOT CIK normalization: master.idx raw `1045810` pads to `0001045810`, matching the SEC `company_tickers.json` / universe operand for NVDA. The failure was parser shape drift: the F1 parser accepted only the synthetic header `CIK|Company Name|Form Type|Date Filed|Filename` plus ISO `YYYY-MM-DD`; real SEC `master.idx` uses `CIK|Company Name|Form Type|Date Filed|File Name` plus compact `YYYYMMDD`.
+
+**Real-row evidence (2026-06-05 NVDA).**
+
+```text
+raw line: 1045810|NVIDIA CORP|4|20260605|edgar/data/1045810/0001768670-26-000002.txt
+parsed: { filer_cik:'1045810', company_name:'NVIDIA CORP', form_type:'4', date_filed:'2026-06-05', filename:'edgar/data/1045810/0001768670-26-000002.txt', accession_number:'0001768670-26-000002' }
+master operand: 1045810 → 0001045810
+universe operand: NVDA → 0001045810
+predicate: 0001045810 === 0001045810
+verdict: parser header/date mismatch; CIK normalization is correct.
+```
+
+**Hardening landed.** `edgar-daily-index-fetcher.ts` now accepts BOTH real `File Name` and historical `Filename` header spellings, normalizes compact `YYYYMMDD` to ISO `YYYY-MM-DD`, and keeps the positional five-column parser + exact `form_type in ('4','4/A')` predicate. `scripts/insider-discovery-egress.ts` now loads current universe tickers, resolves them through `EdgarCikMapper`, filters to in-universe padded CIKs before queue writes, stores real queue `issuer_cik` as padded 10-digit CIK, emits `entries_parsed` + `entries_after_universe_filter`, and refuses green exit when parsed entries exist but semantic in-universe rows are zero.
+
+**External-write verification gate.** Each PostgREST insert logs `event:'insider_discovery_supabase_insert'` with REST path, attempted row count, HTTP status, `Preference-Applied`, as_of date, and correlation ID. Run completion performs a read-back count by `discovery_correlation_id` and includes `persisted_rows_by_correlation_id`; expected writes with zero persisted rows now throw instead of returning success.
+
+**Regression tests.** Added real-row sentinels at all three seams: parser (`edgar-daily-index-fetcher_test.ts` real NVDA row), producer (`scripts/insider-discovery-egress_test.ts` real NVDA row + in-universe predicate + external-write evidence), and consumer seed seam (`insider-work-list-registration_test.ts` padded NVDA CIK operand). Focused evidence: producer suite `ok | 17 passed | 0 failed`; parser+consumer focused suite `ok | 39 passed | 0 failed`.
+
+**Catalog entry.** `docs/ai-failure-modes.md` Catalog #44 records the structural-success-without-semantic-success class: fetches, exits, heartbeats, and attempted writes are not evidence of correctness unless paired with semantic payload counters and persisted-by-correlation verification.
+
+**Deploy gate:** no edge-function deploy required for the GHA producer hardening itself; however the shared parser file is consumed by edge code, so F2.c deploy-SHA MATCH remains the binding deployment proof before the consumer can be attested. Signal #4 STAYS DISARMED.

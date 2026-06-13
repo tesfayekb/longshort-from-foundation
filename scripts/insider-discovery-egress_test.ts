@@ -21,7 +21,10 @@ import {
   buildHeartbeatRow,
   HEARTBEAT_ACCESSION_NUMBER,
   HEARTBEAT_ISSUER_CIK,
+  buildUniverseEntryPredicate,
   iterateTradingDays,
+  makeRestInserter,
+  normalizeFilerCikForUniverse,
   parseArgs,
   rowFromEntry,
   runDiscoveryDay,
@@ -45,6 +48,21 @@ function fixtureMasterBody(): string {
     '789019|MICROSOFT CORP|4/A|2026-06-12|edgar/data/789019/000078901926000044/0000789019-26-000044-index.htm',
     '1000045|NICHOLAS FINANCIAL INC|10-K|2026-06-12|edgar/data/1000045/000100004526000099/0001000045-26-000099-index.htm',
     '1018724|AMAZON COM INC|8-K|2026-06-12|edgar/data/1018724/000101872426000111/0001018724-26-000111-index.htm',
+  ].join('\n');
+}
+
+/** Real SEC master.20260605.idx row shape: `File Name` header + compact date. */
+function fixtureRealMasterNvdaBody(): string {
+  return [
+    'Description:           Daily Index of EDGAR Dissemination Feed',
+    'Last Data Received:    Jun 5, 2026',
+    'Comments:              webmaster@sec.gov',
+    'Anonymous FTP:         ftp://ftp.sec.gov/edgar/',
+    ' ',
+    'CIK|Company Name|Form Type|Date Filed|File Name',
+    '--------------------------------------------------------------------------------',
+    '1045810|NVIDIA CORP|4|20260605|edgar/data/1045810/0001768670-26-000002.txt',
+    '320193|APPLE INC|8-K|20260605|edgar/data/320193/0000320193-26-000099.txt',
   ].join('\n');
 }
 
@@ -106,7 +124,7 @@ Deno.test('(a) parses master.idx and emits exactly the Form-4/4-A rows in the RE
   // Form 4 — AAPL
   assertEquals(payload[0], {
     as_of_date: '2026-06-12',
-    issuer_cik: '320193',
+    issuer_cik: '0000320193',
     accession_number: '0000320193-26-000077',
     form_type: '4',
     company_name: 'APPLE INC',
@@ -115,7 +133,7 @@ Deno.test('(a) parses master.idx and emits exactly the Form-4/4-A rows in the RE
     discovery_correlation_id: 'corr-test-0001',
   });
   // Form 4/A — MSFT
-  assertEquals(payload[1].issuer_cik, '789019');
+  assertEquals(payload[1].issuer_cik, '0000789019');
   assertEquals(payload[1].form_type, '4/A');
   assertEquals(payload[1].accession_number, '0000789019-26-000044');
 
@@ -129,6 +147,44 @@ Deno.test('(a) parses master.idx and emits exactly the Form-4/4-A rows in the RE
     accession_number: '0000320193-26-000077',
   };
   assertEquals(rowFromEntry(e, '2026-06-12', 'gha-daily', 'corr-test-0001'), payload[0]);
+});
+
+Deno.test('(a2) real master.idx NVDA row: File Name header + YYYYMMDD date parse, CIK normalized to universe 10-digit operand', async () => {
+  const cap = captureInserter();
+  const universeCik10 = new Set(['0001045810']);
+  const deps = makeDeps({ fetcher: fetcherReturning(fixtureRealMasterNvdaBody()), insertRows: cap.insertRows });
+  deps.isUniverseEntry = buildUniverseEntryPredicate(universeCik10);
+
+  const outcome = await runDiscoveryDay('2026-06-05', deps);
+
+  assertEquals(outcome.entries_parsed, 1);
+  assertEquals(outcome.entries_after_universe_filter, 1);
+  assertEquals(outcome.rows_inserted, 1);
+  assertEquals(cap.calls[0][0], {
+    as_of_date: '2026-06-05',
+    issuer_cik: '0001045810',
+    accession_number: '0001768670-26-000002',
+    form_type: '4',
+    company_name: 'NVIDIA CORP',
+    filename: 'edgar/data/1045810/0001768670-26-000002.txt',
+    discovered_by: 'gha-daily',
+    discovery_correlation_id: 'corr-test-0001',
+  });
+  assertEquals(normalizeFilerCikForUniverse('1045810'), '0001045810');
+});
+
+Deno.test('(a3) in-universe predicate compares padded master.idx filer CIK to padded universe CIKs', async () => {
+  const cap = captureInserter();
+  const deps = makeDeps({ fetcher: fetcherReturning(fixtureRealMasterNvdaBody()), insertRows: cap.insertRows });
+  deps.isUniverseEntry = buildUniverseEntryPredicate(new Set(['0000320193']));
+
+  const outcome = await runDiscoveryDay('2026-06-05', deps);
+
+  assertEquals(outcome.entries_parsed, 1);
+  assertEquals(outcome.entries_after_universe_filter, 0);
+  assertEquals(outcome.rows_inserted, 0);
+  assertEquals(outcome.heartbeat_inserted, true);
+  assertEquals(cap.calls[0][0].issuer_cik, HEARTBEAT_ISSUER_CIK);
 });
 
 // ---------------------------------------------------------------------------
@@ -208,6 +264,41 @@ Deno.test('(c3) buildHeartbeatRow shape — sentinels + CHECK-valid form_type', 
   assertEquals(hb.discovery_correlation_id, 'corr-xyz');
   // The CHECK constraint allows only '4' | '4/A' — assert literal-typed.
   assert(hb.form_type === '4' || hb.form_type === '4/A');
+});
+
+Deno.test('(c4) makeRestInserter logs and returns structural write evidence for external-write verification', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalLog = console.log;
+  const logs: string[] = [];
+  console.log = (line: string) => { logs.push(line); };
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    assertEquals(init?.method, 'POST');
+    assertEquals((init?.headers as Record<string, string>)?.Prefer, 'resolution=ignore-duplicates,return=minimal');
+    return Promise.resolve(new Response('', {
+      status: 201,
+      headers: { 'Preference-Applied': 'resolution=ignore-duplicates, return=minimal' },
+    }));
+  }) as never;
+  try {
+    const insertRows = makeRestInserter({ supabaseUrl: 'https://example.supabase.co', serviceRoleKey: 'service-role' });
+    const result = await insertRows([rowFromEntry({
+      form_type: '4',
+      filer_cik: '1045810',
+      company_name: 'NVIDIA CORP',
+      date_filed: '2026-06-05',
+      filename: 'edgar/data/1045810/0001768670-26-000002.txt',
+      accession_number: '0001768670-26-000002',
+    }, '2026-06-05', 'gha-daily', 'corr-verify')]);
+    assertEquals(result, {
+      attempted: 1,
+      status: 201,
+      preferenceApplied: 'resolution=ignore-duplicates, return=minimal',
+    });
+    assertEquals(JSON.parse(logs[0]).event, 'insider_discovery_supabase_insert');
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.log = originalLog;
+  }
 });
 
 // ---------------------------------------------------------------------------
