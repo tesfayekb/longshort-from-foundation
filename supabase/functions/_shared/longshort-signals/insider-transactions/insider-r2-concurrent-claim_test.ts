@@ -32,6 +32,10 @@
 // ENV REQUIREMENTS (test skips when absent — no spurious CI failures):
 //   VITE_SUPABASE_URL              — Supabase project URL
 //   SUPABASE_SERVICE_ROLE_KEY      — service-role secret
+//   R2_LIVE=1                      — explicit opt-in, gates the live fire
+//                                    against accidental batch-run inclusion
+//                                    when a sibling test happens to load
+//                                    `.env` into the same Deno process.
 //
 // Locally: `.env` is auto-loaded via the dotenv import below (Lovable
 // edge-function-testing convention).
@@ -42,8 +46,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 const SUPABASE_URL = Deno.env.get('VITE_SUPABASE_URL') ?? Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const LIVE_OPT_IN = Deno.env.get('R2_LIVE') === '1';
 
-const ENV_READY = SUPABASE_URL.length > 0 && SERVICE_ROLE_KEY.length > 0;
+const ENV_READY = LIVE_OPT_IN && SUPABASE_URL.length > 0 && SERVICE_ROLE_KEY.length > 0;
 
 const HEARTBEAT_ISSUER_CIK = '__heartbeat__';
 const HEARTBEAT_ACCESSION_NUMBER = '__heartbeat__';
