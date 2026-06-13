@@ -68,8 +68,8 @@ Deno.test('extractFinalLine — strips ANSI SGR escape codes from captured line'
   assertEquals(extractFinalLine(raw, denoSummary), 'ok | 985 passed | 0 failed (29s)');
 });
 
-Deno.test('GATES — exactly four canonical gates in fixed order (Gate 2b added at ACT-197)', () => {
-  assertEquals(GATES.length, 4);
+Deno.test('GATES — exactly five canonical gates in fixed order (Gate 2b added at ACT-197; Gate 2c added at ACT-207)', () => {
+  assertEquals(GATES.length, 5);
   assertEquals(GATES[0].index, 1);
   assertStringIncludes(GATES[0].displayCommand, 'check-wall-clock.ts');
   // Gate 2 — `_shared/`-scoped deno test.
@@ -85,8 +85,25 @@ Deno.test('GATES — exactly four canonical gates in fixed order (Gate 2b added 
     'Gate 2b MUST NOT carry a _shared/ filter — it mirrors CI Gate 11 verbatim');
   assert(!GATES[2].argv.includes('_shared/'),
     'Gate 2b argv MUST NOT carry _shared/');
+  // Gate 2c — scripts/ deno test (CI Gate 2 parity). Critical
+  // structural invariant: cwd is repo-root '.' and argv carries the
+  // literal 'scripts/' path filter — NOT a `_shared/` filter, NOT
+  // `supabase/functions` cwd. Gate 2c's failure mode is exactly what
+  // BOTH Gate 2 and Gate 2b miss (a `scripts/`-tree test failing under
+  // a CI sweep that no local gate exercises). A regression that drops
+  // the `scripts/` argv OR moves cwd into `supabase/functions/` would
+  // re-open the ACT-207 third-firing Catalog #41 scope-gap.
+  assertEquals(GATES[3].index, 2.75);
+  assertStringIncludes(GATES[3].displayCommand, 'deno test');
+  assertStringIncludes(GATES[3].displayCommand, 'scripts/');
+  assert(!GATES[3].displayCommand.includes('_shared/'),
+    'Gate 2c MUST NOT carry a _shared/ filter');
+  assert(GATES[3].argv.includes('scripts/'),
+    'Gate 2c argv MUST include the literal scripts/ path filter');
+  assertEquals(GATES[3].cwd, '.',
+    'Gate 2c MUST run from repo-root cwd — moving into supabase/functions/ would skip scripts/');
   // Gate 3 — eslint.
-  assertEquals(GATES[3].displayCommand, 'npx eslint .');
+  assertEquals(GATES[4].displayCommand, 'npx eslint .');
 });
 
 Deno.test('renderAttestation — includes HEAD, each gate final-line, and ALL GREEN verdict on all-zero', () => {
@@ -94,17 +111,20 @@ Deno.test('renderAttestation — includes HEAD, each gate final-line, and ALL GR
     { index: 1, command: GATES[0].displayCommand, cwd: '.', finalLine: 'check-wall-clock: CLEAN — 0 violations', exitCode: 0, durationMs: 100 },
     { index: 2, command: GATES[1].displayCommand, cwd: 'supabase/functions', finalLine: 'ok | 985 passed | 0 failed (29s)', exitCode: 0, durationMs: 29000 },
     { index: 2.5, command: GATES[2].displayCommand, cwd: 'supabase/functions', finalLine: 'ok | 1254 passed | 0 failed (31s)', exitCode: 0, durationMs: 31000 },
-    { index: 3, command: GATES[3].displayCommand, cwd: '.', finalLine: '✖ 15 problems (0 errors, 15 warnings)', exitCode: 0, durationMs: 5000 },
+    { index: 2.75, command: GATES[3].displayCommand, cwd: '.', finalLine: 'ok | 47 passed | 0 failed (2s)', exitCode: 0, durationMs: 2000 },
+    { index: 3, command: GATES[4].displayCommand, cwd: '.', finalLine: '✖ 15 problems (0 errors, 15 warnings)', exitCode: 0, durationMs: 5000 },
   ];
   const block = renderAttestation('abc123', results);
   assertStringIncludes(block, 'HEAD: abc123');
   assertStringIncludes(block, 'Gate 1:');
   assertStringIncludes(block, 'Gate 2:');
   assertStringIncludes(block, 'Gate 2b:');
+  assertStringIncludes(block, 'Gate 2c:');
   assertStringIncludes(block, 'Gate 3:');
   assertStringIncludes(block, 'check-wall-clock: CLEAN — 0 violations');
   assertStringIncludes(block, 'ok | 985 passed | 0 failed (29s)');
   assertStringIncludes(block, 'ok | 1254 passed | 0 failed (31s)');
+  assertStringIncludes(block, 'ok | 47 passed | 0 failed (2s)');
   assertStringIncludes(block, '✖ 15 problems (0 errors, 15 warnings)');
   assertStringIncludes(block, 'Verdict: ALL GREEN');
 });
@@ -114,7 +134,8 @@ Deno.test('renderAttestation — FAILURE verdict when any gate non-zero', () => 
     { index: 1, command: GATES[0].displayCommand, cwd: '.', finalLine: 'check-wall-clock: CLEAN — 0 violations', exitCode: 0, durationMs: 100 },
     { index: 2, command: GATES[1].displayCommand, cwd: 'supabase/functions', finalLine: 'error: Test failed', exitCode: 1, durationMs: 29000 },
     { index: 2.5, command: GATES[2].displayCommand, cwd: 'supabase/functions', finalLine: 'ok | 1254 passed | 0 failed (31s)', exitCode: 0, durationMs: 31000 },
-    { index: 3, command: GATES[3].displayCommand, cwd: '.', finalLine: '✖ 15 problems (0 errors, 15 warnings)', exitCode: 0, durationMs: 5000 },
+    { index: 2.75, command: GATES[3].displayCommand, cwd: '.', finalLine: 'ok | 47 passed | 0 failed (2s)', exitCode: 0, durationMs: 2000 },
+    { index: 3, command: GATES[4].displayCommand, cwd: '.', finalLine: '✖ 15 problems (0 errors, 15 warnings)', exitCode: 0, durationMs: 5000 },
   ];
   const block = renderAttestation('abc123', results);
   assertStringIncludes(block, 'FAILURE');
