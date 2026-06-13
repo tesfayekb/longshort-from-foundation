@@ -762,7 +762,7 @@ The claim is one `UPDATE … WHERE consumed_at IS NULL … RETURNING …` statem
 4. Assert disjoint outcome: exactly one resolved with N > 0, the other with 0; the sum equals the fixture size; the sequential follow-up against the now-empty pool returns 0.
 5. Cleanup keyed by `discovery_correlation_id` — idempotent across runs.
 
-The file ignores cleanly when `VITE_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are absent (no spurious CI failures); it RUNS against the live DB whenever the env is present (CI + GHA + operator-local).
+The file ignores cleanly unless ALL THREE are set: `VITE_SUPABASE_URL` (or `SUPABASE_URL`), `SUPABASE_SERVICE_ROLE_KEY`, AND `R2_LIVE=1` (explicit opt-in — guards against accidental batch-run inclusion when a sibling test loads `.env` into the same Deno process). Operator validation fire sets all three before running.
 
 ### Per-day work-budget ceiling — 800 (queue-evidence update)
 
