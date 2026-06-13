@@ -1,4 +1,14 @@
-# deploy-insider-edge-functions — FP-050 Phase 4 F2.c BUILD_SHA pipeline-fix (ACT-206).
+# deploy-edge-functions — canonical Tier-A deploy workflow.
+#
+# RENAMED at ACT-209 from `deploy-insider-edge-functions.yml` per the
+# §22.8.5 sub-class B closure (Registration-Dependency Deploy Gap):
+# naming-by-current-scope drifts as new Tier-A functions land; naming
+# by canonical-role (this IS the deploy pipeline for every function
+# whose runtime contract requires BUILD_SHA threading OR depends on the
+# shared signal-registry state) does not. Operator preference: this
+# workflow is the canonical deploy path for all current and future
+# Tier-A edge functions; the Lovable auto-deploy continues to cover
+# the rest of the function surface unchanged.
 #
 # WHY THIS WORKFLOW EXISTS
 # ------------------------
@@ -12,18 +22,27 @@
 # absent (`HEADER_MISSING`) or pins to a stale SHA (`MISMATCH`) — both
 # auto-NEEDS-REVISION outcomes for any Tier-A money-path attestation.
 #
-# This workflow is the canonical fix: on every push to `main` it
-#   (1) sets the runtime `BUILD_SHA` env var on the connected Supabase
-#       project to the exact `$GITHUB_SHA` of the pushed commit, then
-#   (2) re-deploys the two insider edge functions whose import graph
-#       includes the F2.c-changed `insider-work-list-registration.ts`,
-# in that order. Step (1) before step (2) is load-bearing: the deployed
-# isolate reads `BUILD_SHA` once at module init (`_shared/handler.ts`),
-# so the secret MUST be in place before the new bundle starts.
+# ACT-209 ADDS the four generic queue-worker functions (init, init-
+# manual, slice, sweeper) to this workflow. Rationale: the runtime
+# signal-registry state lives in each deployed worker's bundle, not in
+# the source `production-registrations.ts`. A new signal registration
+# (FP-050 F2.c `registerInsiderDailyConsumer()`) is INVISIBLE to a
+# queue-worker isolate whose bundle pre-dates the registration call —
+# the slice's `pickOldestRunningRun` filters by `registry.listSignalIds()`
+# and silently noops on every cron tick, stranding the run forever
+# under `status='running'` because the sweeper is symmetrically blind.
+# This is §22.8.5 deploy-replay-lag sub-class B (Registration-Dependency
+# Deploy Gap). The forward-binding rule (see ai-failure-modes.md §22.8.5
+# sub-class B): any commit modifying `production-registrations.ts` or
+# the registry-construction surface in `queue-config.ts` MUST redeploy
+# ALL four registry-reading workers atomically with the source change.
+# The `paths:` filter below enforces this — absence of those deploys
+# in the same commit is a sub-class B violation by construction.
 #
-# This workflow REPLACES Lovable's auto-deploy for these two functions
-# only — all other edge functions continue to deploy via the Lovable
-# harness. Adding a function here = explicit ACT entry, never silent.
+# This workflow REPLACES Lovable's auto-deploy for the six functions
+# listed below — all other edge functions continue to deploy via the
+# Lovable harness. Adding a function here = explicit ACT entry, never
+# silent.
 #
 # OPERATOR ACTION REQUIRED BEFORE FIRST FIRE
 # ------------------------------------------
@@ -43,27 +62,48 @@
 # FAILURE SEMANTICS
 # -----------------
 # - Missing secret → fail fast at "Verify required secrets" (exit 2).
-# - `supabase secrets set` failure → fail; deploy step is gated on it.
-# - `supabase functions deploy` failure → fail; the secret update from
-#   step (1) is harmless on its own (no isolate restart was triggered).
-# - Success → operator runs `scripts/check-deployed-sha.ts` against both
-#   function URLs and pastes the MATCH outcomes into the ACT entry.
+# - `supabase secrets set` failure → fail; deploy steps are gated on it.
+# - `supabase functions deploy` failure on any step → fail; partial
+#   redeploys are tolerated because the secret-set has already run, so
+#   any subsequent re-fire of the workflow will retry the failed deploys
+#   with the same `$GITHUB_SHA` (idempotent in BUILD_SHA terms).
+# - Success → operator runs `scripts/check-deployed-sha.ts` against
+#   ALL SIX function URLs and pastes the six MATCH outcomes into the
+#   triggering ACT entry.
 
-name: deploy-insider-edge-functions
+name: deploy-edge-functions
 
 on:
   push:
     branches: [main]
     paths:
-      # Re-deploy only when something in the insider compute import graph
-      # or the shared handler envelope changes. The handler is here
-      # because `BUILD_SHA` is read in it — a handler edit can change the
-      # header semantics even when no function-local file changes.
+      # Insider compute import graph (original ACT-206 scope).
       - 'supabase/functions/longshort-insider-compute/**'
       - 'supabase/functions/longshort-insider-compute-manual/**'
       - 'supabase/functions/_shared/longshort-signals/insider-transactions/**'
+      # Generic queue-worker functions (ACT-209 sub-class B scope).
+      - 'supabase/functions/longshort-queue-init/**'
+      - 'supabase/functions/longshort-queue-init-manual/**'
+      - 'supabase/functions/longshort-queue-slice/**'
+      - 'supabase/functions/longshort-queue-sweeper/**'
+      # Registry surface — any change here changes the in-bundle
+      # registry state of every worker that reads it (init, init-manual,
+      # slice, sweeper). Atomic redeploy is mandatory (sub-class B).
+      - 'supabase/functions/_shared/longshort-signals/shared/queue-worker/production-registrations.ts'
+      - 'supabase/functions/_shared/longshort-signals/shared/queue-worker/queue-config.ts'
+      # Shared engine surface that every worker links (slice/finalizer/
+      # sweeper). A bug-fix here that ships only via Lovable auto-deploy
+      # would split-brain the engine across worker isolates.
+      - 'supabase/functions/_shared/longshort-signals/shared/queue-worker/queue-init.ts'
+      - 'supabase/functions/_shared/longshort-signals/shared/queue-worker/queue-slice-worker.ts'
+      - 'supabase/functions/_shared/longshort-signals/shared/queue-worker/queue-finalizer.ts'
+      - 'supabase/functions/_shared/longshort-signals/shared/queue-worker/queue-sweeper.ts'
+      # Shared handler — reads BUILD_SHA at module init; an edit can
+      # change the header semantics even when no function-local file
+      # changes.
       - 'supabase/functions/_shared/handler.ts'
-      - '.github/workflows/deploy-insider-edge-functions.yml'
+      # The workflow file itself.
+      - '.github/workflows/deploy-edge-functions.yml'
   # Operator-driven re-fire after secret rotation or recovery from a
   # transient Supabase API error. Inputs intentionally absent — the
   # deploying SHA is always `${{ github.sha }}` of the workflow run.
@@ -71,7 +111,7 @@ on:
 
 concurrency:
   # Serialize deploys; never overlap two deploys onto the same function.
-  group: deploy-insider-edge-functions
+  group: deploy-edge-functions
   cancel-in-progress: false
 
 jobs:
@@ -106,14 +146,57 @@ jobs:
         with:
           version: latest
 
-      - name: Thread BUILD_SHA into runtime secrets
+      - name: Thread BUILD_SHA into runtime secrets (pre-deploy, ALL functions)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
           set -euo pipefail
           echo "Threading BUILD_SHA=${GITHUB_SHA} into project ${SUPABASE_PROJECT_REF}"
+          # Single project-level secret — applies to every deployed
+          # function. Must precede ALL deploy steps below (the deployed
+          # isolate reads BUILD_SHA once at module init).
           supabase secrets set "BUILD_SHA=${GITHUB_SHA}" --project-ref "${SUPABASE_PROJECT_REF}"
+
+      - name: Deploy longshort-queue-init
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase functions deploy longshort-queue-init \
+            --project-ref "${SUPABASE_PROJECT_REF}" \
+            --no-verify-jwt
+
+      - name: Deploy longshort-queue-init-manual
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase functions deploy longshort-queue-init-manual \
+            --project-ref "${SUPABASE_PROJECT_REF}" \
+            --no-verify-jwt
+
+      - name: Deploy longshort-queue-slice
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase functions deploy longshort-queue-slice \
+            --project-ref "${SUPABASE_PROJECT_REF}" \
+            --no-verify-jwt
+
+      - name: Deploy longshort-queue-sweeper
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase functions deploy longshort-queue-sweeper \
+            --project-ref "${SUPABASE_PROJECT_REF}" \
+            --no-verify-jwt
 
       - name: Deploy longshort-insider-compute
         env:
@@ -137,8 +220,9 @@ jobs:
 
       - name: Summary
         run: |
-          echo "Deployed both insider edge functions with BUILD_SHA=${GITHUB_SHA}."
-          echo "Operator next: run scripts/check-deployed-sha.ts against:"
-          echo "  https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/longshort-insider-compute"
-          echo "  https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/longshort-insider-compute-manual"
-          echo "Contract: both must report MATCH deployed=${GITHUB_SHA} source=${GITHUB_SHA} (exit 0)."
+          echo "Deployed six edge functions with BUILD_SHA=${GITHUB_SHA}."
+          echo "Operator next: run scripts/check-deployed-sha.ts against ALL SIX URLs:"
+          for fn in longshort-queue-init longshort-queue-init-manual longshort-queue-slice longshort-queue-sweeper longshort-insider-compute longshort-insider-compute-manual; do
+            echo "  https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/$fn"
+          done
+          echo "Contract: all six must report MATCH deployed=${GITHUB_SHA} source=${GITHUB_SHA} (exit 0)."
