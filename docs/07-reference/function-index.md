@@ -3041,6 +3041,18 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/insider-cross-mode-contamination_test.ts` |
 | **Added by** | FP-050 Phase 3.6b.iii′ γ commit-2 (ACT-196) |
 
+#### `supabase/functions/_shared/longshort-signals/insider-transactions/insider-r2-concurrent-claim_test.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-050 Phase 4 F2.c — ACT-205) |
+| **Classification** | Deno integration test — project's **first** transactional-contention test pattern. Forward-binding for ALL future signal-queue concurrency regressions. |
+| **Pattern** | Two independent `SupabaseClient` instances (service-role); seed N synthetic discovery rows on `as_of_date = '1990-01-02'` with a unique `discovery_correlation_id`; `Promise.allSettled([claim(A), claim(B)])` fires the exact `UPDATE … RETURNING` shape `seedWorkItems` uses; assert disjoint outcome (one wins N, other wins 0; sum = N; sequential follow-up returns 0); cleanup keyed by correlation id (idempotent). |
+| **Coverage** | `(R2.1)` — proves single-statement atomicity satisfies the R2 disjoint-outcome property at the Postgres row-lock level. |
+| **Env gate** | Ignores cleanly when `VITE_SUPABASE_URL` (or `SUPABASE_URL`) or `SUPABASE_SERVICE_ROLE_KEY` are absent (CI/dev without secrets). RUNS against the live DB whenever both are present. |
+| **File** | `supabase/functions/_shared/longshort-signals/insider-transactions/insider-r2-concurrent-claim_test.ts` |
+| **Added by** | FP-050 Phase 4 F2.c (ACT-205) |
+
 ### FP-043 — Signal #3 (Options Flow Imbalance) shared functions
 
 | Symbol | File | Purpose | Added by |
