@@ -506,3 +506,77 @@ The single-observation inversion from the ACT-198-window diagnostic (one positiv
 **Phase-4 next step:** operator re-fires the backfill init against the deployed `longshort-insider-compute-manual` at the F1.a-bearing HEAD. The master.idx-bearing fetcher is expected to clear the egress block on the discovery layer; the per-accession `index.json` + form4 XML paths were already 200 from the same egress per the ACT-197 path-probe matrix (rows e + f). Signal #4 STAYS DISARMED through F1.a + F1.b; arm-up follows the backfill-before-arm gate at ~5.3 h overnight drain + validation fire per the γ commit-3 Phase 4 runway.
 
 **Cross-references:** ACT-197 (#41 symmetric-form first observation), ACT-198 (γ arc closure + ACT-198-window diagnostic that surfaced the single-point inversion), ACT-199 (this section's landing ACT).
+
+## FP-050 Phase 4 F2.a — discovery-queue table (ACT-202, MIG-096)
+
+**Sub-commit position:** F2.a in the four-sub-commit F2 sequence (F2-pre deployed-SHA verifier ACT-201 → **F2.a queue table — this commit** → F2.b discovery script + GHA workflow + operator secrets guidance → F2.c `seedWorkItems` switch + R1 heartbeat-or-distinction + R2 concurrency-safety regression test → F2.d module doc + final ACT + FP-050 Status). Migration-only; no edge-function code changes; the F2-pre deploy-SHA verifier contract binds only on deploy steps and does NOT gate this commit.
+
+**Schema (MIG-096 / `sql/16_insider_accession_discovery_queue.sql`):**
+
+| Column | Type | Notes |
+|---|---|---|
+| `as_of_date` | `date NOT NULL` | trading-day key (matches signal `as_of`) |
+| `issuer_cik` | `text NOT NULL` | zero-padded, parser-canon |
+| `accession_number` | `text NOT NULL` | EDGAR accession |
+| `form_type` | `text NOT NULL` | `CHECK form_type IN ('4','4/A')` |
+| `company_name` | `text NOT NULL` | from `master.idx` row |
+| `filename` | `text NOT NULL` | relative path from `master.idx` row |
+| `discovered_at` | `timestamptz NOT NULL DEFAULT now()` | row write time |
+| `discovered_by` | `text NOT NULL` | egress tag (`'github-actions'`, `'cloudflare-worker'`, `'operator-cli'`) — lets reconciliation distinguish runner families during cutovers |
+| `discovery_correlation_id` | `text NOT NULL` | joins back to producer-fire telemetry |
+| `consumed_at` | `timestamptz NULL` | set by `seedWorkItems` claim-and-mark at F2.c |
+| `consumed_run_id` | `uuid NULL` | the `signal_compute_log` `run_id` that drained the row (FK-shaped, NOT enforced) |
+
+**PK:** `(as_of_date, issuer_cik, accession_number)` — locks the §(h) idempotency triple at the discovery layer: an accession can be surfaced AT MOST ONCE per `as_of_date` per `issuer_cik`. F2-b producer's reseed of the same trading day is `ON CONFLICT DO NOTHING` and safe under retry.
+
+**RLS family** (mirrors `signal_queue_*` / `signal_observations` / sql/13 deny-write triad — five policies):
+
+1. `iadq_service_role_all` — PERMISSIVE ALL to `service_role` (producer + consumer both run service-role).
+2. `iadq_longshort_view_select` — PERMISSIVE SELECT to `authenticated` gated by `public.has_permission(auth.uid(), 'longshort.view')` (admin tooling renders discovery coverage; queue is NOT exposed to every authenticated user).
+3. `iadq_deny_authenticated_insert` — RESTRICTIVE INSERT `WITH CHECK (false)`.
+4. `iadq_deny_authenticated_update` — RESTRICTIVE UPDATE `USING (false) WITH CHECK (false)`.
+5. `iadq_deny_authenticated_delete` — RESTRICTIVE DELETE `USING (false)`.
+
+RESTRICTIVE policies AND-combine and cannot be OR-defeated by any future PERMISSIVE policy — the deny triad makes discovery-row forgery (silent-zero-day exposure) and discovery-row drops structurally impossible for any non-service-role caller.
+
+**Indexes:**
+
+- PK `(as_of_date, issuer_cik, accession_number)` — point lookups + `as_of_date` range scans.
+- `idx_iadq_unconsumed_by_day` — partial `(as_of_date) WHERE consumed_at IS NULL`. Covers the F2.c consumer's hot path `WHERE as_of_date = $1 AND consumed_at IS NULL`; partial keeps the index small (most days drain to empty within minutes of the cron fire).
+
+**§22.5.1 live-read precondition + post-apply evidence:** pre-apply read via `supabase--read_query` returned `{table_present_pre: 0, policy_count_pre: 0, index_count_pre: 0}` (the safety-claim evidence: the table is being created from nothing, the `count(*) = 0` precondition holds trivially). Post-apply evidence pasted into MIG-096 ledger row once the operator confirms the migration applied (or applies `sql/16_insider_accession_discovery_queue.sql` via Dashboard as the OOB companion path — empty-table safety makes the operator-applied path equivalent).
+
+**What this commit does NOT do:** no producer script (F2.b), no GHA workflow (F2.b), no `seedWorkItems` switch (F2.c), no heartbeat/concurrency-safety regression test (F2.c), no `cron.job` change, no `enabled` flip, no `signal_registry` touch, no `job_registry` touch, no `function-index.md` / `event-index.md` / `permission-index.md` touch (no new shared functions / events / permissions — table-only). Signal #4 STAYS DISARMED through F2.a → F2.d.
+
+**Deploy gate:** NO deploy required for this commit. F2.a is migration-only; the F2-pre `check-deployed-sha` MATCH gate binds at F2.b and F2.c when the edge-function bundle changes.
+
+**Four-gate attestation block (ACT-202)** — produced verbatim by `scripts/check-gate-evidence.ts` at HEAD `6e7cdea4943b820bb22790f4ab8ca9f22ea5e0ff`:
+
+```
+=== check-gate-evidence ATTESTATION (paste verbatim) ===
+HEAD: 6e7cdea4943b820bb22790f4ab8ca9f22ea5e0ff
+Generated: 2026-06-13T04:34:40.975Z
+
+Gate 1: deno run --allow-read scripts/check-wall-clock.ts
+  exit=0  duration_ms=311
+  final-line: check-wall-clock: CLEAN — 0 violations
+
+Gate 2: cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/
+  exit=0  duration_ms=33775
+  final-line: ok | 1045 passed | 0 failed (29s)
+
+Gate 2b: cd supabase/functions && deno test --allow-net --allow-env --allow-read
+  exit=0  duration_ms=35742
+  final-line: ok | 1262 passed | 0 failed (33s)
+
+Gate 3: npx eslint .
+  exit=0  duration_ms=9553
+  final-line: ✖ 15 problems (0 errors, 15 warnings)
+
+Verdict: ALL GREEN
+=== end attestation ===
+```
+
+The post-edit HEAD adds only this section, the MIG-096 ledger row, the ACT-202 tracker entry, and `sql/16_insider_accession_discovery_queue.sql`. No test surface moves; the block re-runs to the same final lines at the post-edit HEAD.
+
+**Cross-references:** ACT-201 (F2-pre deployed-SHA verifier — the load-bearing interface check this F2.a does NOT need to invoke, since migration-only); ACT-199 (F1 master.idx pivot — the prior Phase-4 commit); MIG-095 (the prior migration on this table family); DEC-058 §(h) (idempotency triple); FP-050 Phase 4 F2 architecture proposal (ratified — recommendation F2-a / GitHub Actions adopted for F2.b).
