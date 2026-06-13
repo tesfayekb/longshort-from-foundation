@@ -392,6 +392,8 @@ The dedicated `longshort-insider-compute-manual` handler, when the operator pass
 
 **Auth ordering.** Cron handler: POST → `verifyCronSecret` → drift sentinel → `initQueueRun` → audit emit. Manual handler: POST → `authenticateRequest` (operator JWT) → `checkPermissionOrThrow('longshort.manage')` → body parse (optional `backfill`) → config resolution (drift-checked for daily, build-then-bypass for backfill) → `initQueueRun` → audit emit.
 
+**`body.as_of` honored (ACT-210, 2026-06-13 evening).** The manual handler now accepts an optional `body.as_of: 'YYYY-MM-DD'` field — absent → defaults to `productionClock.getWallClockTs()` (pre-ACT-210 behavior preserved as the default branch); present → routed through `parseAsOfDate` with the same future-date guard the sibling `longshort-queue-init-manual` uses. The implementation is byte-equivalent to the sibling's lines 46-59. Unblocks operator-driven re-targeting of a specific `as_of_date` after a missing GHA daily-discovery fire (the first-fire trigger: 2026-06-13 GHA non-fire → operator re-target to `2026-06-12` against the reset queue rows). Catalog #43 supervisor-side addendum binds: contract asymmetries surfaced during signal builds DO NOT defer past the validation gate they touch.
+
 **Audit events.** RUN_STARTED on `kind:'started'`; RUN_FAILED on init throw. Both via `QUEUE_AUDIT_EVENTS` symbols (no string literals). Metadata includes `trigger:'cron'|'manual'` and `mode:'daily'|'backfill'` so operators can disambiguate cleanly in the audit stream.
 
 **Backfill drain derivation correction (M4 ACT-194 → γ commit-2 reconciliation).**
