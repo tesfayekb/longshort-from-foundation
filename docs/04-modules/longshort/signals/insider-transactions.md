@@ -722,4 +722,67 @@ verdict: parser header/date mismatch; CIK normalization is correct.
 
 **Catalog entry.** `docs/ai-failure-modes.md` Catalog #44 records the structural-success-without-semantic-success class: fetches, exits, heartbeats, and attempted writes are not evidence of correctness unless paired with semantic payload counters and persisted-by-correlation verification.
 
+## FP-050 Phase 4 F2.c — consumer queue switch + R1/R2 contracts + work-budget update (ACT-205)
+
+**Sub-commit position:** F2.c in the four-sub-commit F2 sequence (F2-pre ACT-201 → F2.a ACT-202 → F2.b ACT-203 (+ ACT-204 hardening) → **F2.c ACT-205 — this commit** → F2.d closure). This commit switches `seedWorkItems` from on-EDGAR daily-index fetches to a Supabase claim against `insider_accession_discovery_queue` (populated by the F2.b GHA-egress producer), codifies the R1 heartbeat-exclusion structural predicate at the consumer, ratifies the R2 single-statement-atomicity concurrency contract, and updates the per-day work-budget ceiling from the prior ~352 M4-RE-RULE estimate to the empirically-measured 800.
+
+**Deploy gate (BINDS HERE for the first time).** This commit changes the `longshort-insider-compute` and `longshort-insider-compute-manual` edge-function bundles (shared module `supabase/functions/_shared/longshort-signals/insider-transactions/insider-work-list-registration.ts` is in the bundle's import graph). Per the F2-pre `check-deployed-sha` four-outcome contract (ACT-201, `docs/ai-failure-modes.md` §22.8.5), the work-complete report MUST paste a MATCH attestation against both deployed functions at the F2.c HEAD SHA. Without the MATCH attestation the commit is auto-NEEDS-REVISION.
+
+### Consumer switch — `seedWorkItems` no longer hits EDGAR
+
+The on-EDGAR daily-index call site is exclusively the GHA-egress producer (`scripts/insider-discovery-egress.ts`); `EdgarDailyIndexFetcher` is no longer constructed or referenced from `insider-work-list-registration.ts` or `insider-queue-bootstrap.ts`. The F1 master.idx drift sentinels (ACT-199 / ACT-204) travel with the producer's parser+fetcher and are never relaxed.
+
+Daily mode reads exactly one `as_of_date` (yesterday's trading day under the weekends-only-skip approximation); backfill mode iterates the queue's own distinct unconsumed `as_of_date`s within the 63-trading-day window bounded by `previousTradingDay(asOf)` and the oldest trailing day. The queue is authoritative for which days have producer rows — gaps stay gaps.
+
+### R1 heartbeat-exclusion (claim-predicate level)
+
+The producer writes a single sentinel row for empty/unavailable days with `issuer_cik = accession_number = '__heartbeat__'`. The consumer's claim predicate STRUCTURALLY excludes the sentinel via the operator-verbatim conjunction:
+
+```sql
+NOT (issuer_cik = '__heartbeat__' AND accession_number = '__heartbeat__')
+```
+
+The 63 inert pre-hardening heartbeats from run `658b8070-dba7-44f9-881e-cd12b4c81f8b` exercised this filter on first use (ACT-205 finding (a)). They remain inert in the queue forever — the heartbeat predicate paired with the universe-CIK IN-filter independently keeps them out of every claim. The constants `INSIDER_HEARTBEAT_ISSUER_CIK` / `INSIDER_HEARTBEAT_ACCESSION_NUMBER` are re-exported from the consumer module and pinned equal to the producer's `HEARTBEAT_ISSUER_CIK` / `HEARTBEAT_ACCESSION_NUMBER` by test `(D.5)` so producer/consumer cannot silently drift.
+
+### R2 concurrency contract — single-statement atomicity (ratified narrowing)
+
+The original F2.c brief specified "consume-UPDATE + work-item-INSERT in ONE explicit BEGIN/COMMIT transaction". That wording was a supervisor-brief defect: the engine's `WorkListSeedFn` returns an array, and the cursor INSERT into `signal_queue_cursor` is engine-owned (`queue-init.ts`) — after `seedWorkItems` returns — so the literal "same TX" requirement is architecturally incompatible without re-ordering engine internals (out of F2.c scope). The operator ruling (F2.c) ratified the narrowing to **single-statement atomicity**:
+
+> "Row-level lock atomicity replaces same-TX bracketing — the consume-UPDATE alone is the concurrency barrier; the engine's downstream cursor INSERT inherits atomicity from per-run_id uniqueness."
+
+The claim is one `UPDATE … WHERE consumed_at IS NULL … RETURNING …` statement. Two concurrent calls against overlapping rows serialize at Postgres row-level locks; the second update sees `consumed_at IS NOT NULL` (already set by the first commit) and returns zero rows. The engine's downstream `signal_queue_cursor` INSERT is keyed by `(run_id, ticker)` with a unique `run_id` per init, so double-insert is structurally impossible end-to-end. The narrowing is catalogued as a Catalog #43 recursive supervisor-brief-defect ("over-specified without checking the engine's seed contract") — the SAME failure shape FP-050 has firing in prior rounds. The lesson is not "be more careful with brief language" but "verify the engine surface before binding the brief".
+
+### Forward-binding test pattern — Deno two-client concurrent fire
+
+`supabase/functions/_shared/longshort-signals/insider-transactions/insider-r2-concurrent-claim_test.ts` is the project's **first** transactional-contention test pattern. Forward-binding for every future signal-queue concurrency regression. Pattern:
+
+1. Two independent `SupabaseClient` instances (service-role key — production claim runs under service-role via `supabaseAdmin`; row-lock is what gates the contention, not auth identity).
+2. Seed a fixture: N synthetic discovery rows on `as_of_date = '1990-01-02'` (far outside any real window so the test cannot collide with production drain) with a unique `discovery_correlation_id`.
+3. `Promise.allSettled([claim(A), claim(B)])` — both fire the exact `UPDATE … RETURNING` shape `seedWorkItems` uses.
+4. Assert disjoint outcome: exactly one resolved with N > 0, the other with 0; the sum equals the fixture size; the sequential follow-up against the now-empty pool returns 0.
+5. Cleanup keyed by `discovery_correlation_id` — idempotent across runs.
+
+The file ignores cleanly when `VITE_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are absent (no spurious CI failures); it RUNS against the live DB whenever the env is present (CI + GHA + operator-local).
+
+### Per-day work-budget ceiling — 800 (queue-evidence update)
+
+The prior `accessionsPerSlice` sizing band was ~253 typical / ~352 measured-max from the Phase-3.5 forensic table (three daily indexes, 2026-06-03/04/05). The F2.b backfill (correlation `aad615ab-1b58-40d4-b989-7ecc64e16e5a`) landed real evidence on 63 days totalling 14,172 rows — distribution top: **770 on 2026-04-02** (post-earnings cluster), **522 on 2026-03-17**, both above the prior soft 500 band. The new ceiling `INSIDER_PER_DAY_WORK_BUDGET_CEILING = 800` pads the empirical top by ~4% for variance robustness. ⌈800/50⌉ = 16 slices × ~35-55 s ≈ 9-15 min per day — inside the daily window with hours of headroom. Backfill drain at 14,172 accessions: ⌈14172/50⌉ = 284 slices × 35-55 s ≈ 2.8-4.3 h overnight. Drift sentinel test `(A.2)` pins the constant.
+
+### ACT-205 findings inventory
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| (a) | 63 inert pre-hardening heartbeat rows from broken-parser run `658b8070-…` remain in the queue. PK shape `(as_of_date, '__heartbeat__', '__heartbeat__')` lets prior and current heartbeat runs coexist. | Inert per R1 — the structural claim-predicate exclusion (`NOT (cik='__heartbeat__' AND acc='__heartbeat__')`) plus the universe-CIK IN-filter independently keep them out of every claim. No cleanup required; one-shot service-role DELETE is an option but not necessary. |
+| (b) | 2-row attempted-vs-persisted delta in the F2.b backfill (14,174 attempted vs 14,172 persisted across 63 days). | Sub-noise-floor (1.4×10⁻⁴). Most-likely cause: SEC double-listing of two accessions on the master.idx (same `(as_of_date, issuer_cik, accession_number)` triple → second insert is the F2.a PK ON-CONFLICT-DO-NOTHING no-op). Named for the record; no further investigation. |
+| (c) | Work-budget ceiling updated from ~352 (M4 RE-RULE estimate) to 800 (empirical max + ~4% pad). | Codified in `INSIDER_PER_DAY_WORK_BUDGET_CEILING`; drift-sentinel test `(A.2)` pins it; arithmetic comment block in `insider-work-list-registration.ts` updated. |
+| (d) | R2 contract narrowed from "same TX" to single-statement atomicity per operator ruling. | Catalog #43 recursive supervisor-brief-defect logged; ratified narrowing documented in this section and in the module file header. |
+| (e) | First transactional-contention test pattern (Deno two-client concurrent fire against live DB). | Forward-binding for all future signal-queue concurrency regressions. Referenced from this section; pattern lives at `insider-r2-concurrent-claim_test.ts`. |
+
+### Four-gate attestation block (ACT-205)
+
+Produced verbatim by `scripts/check-gate-evidence.ts` at HEAD `<set by operator after commit>`. The deployed-SHA MATCH proof against both `longshort-insider-compute` and `longshort-insider-compute-manual` is reproduced in the work-complete report alongside the four-gate attestation. Without MATCH = NEEDS-REVISION.
+
+**Files touched:** `supabase/functions/_shared/longshort-signals/insider-transactions/insider-work-list-registration.ts` (header rewrite + seed switch + constants); `…/insider-queue-bootstrap.ts` (`EdgarDailyIndexFetcher` removed from deps construction); `…/insider-cross-mode-contamination_test.ts` (drop `dailyIndex` stub); `…/insider-work-list-registration_test.ts` (rewrite (D.*) tests against queue stub; add (A.2) work-budget drift sentinel; add (D.5) heartbeat-exclusion regression); NEW `…/insider-r2-concurrent-claim_test.ts` (forward-binding pattern); this module doc; `docs/06-tracking/action-tracker.md`; `docs/07-reference/function-index.md`.
+
+**What this commit does NOT do:** no `cron.job` change; no `enabled` flip; no `signal_registry` touch; no `job_registry` touch; no migration (queue schema is F2.a / MIG-096 — UNCHANGED); no `event-index.md` / `permission-index.md` / `route-index.md` touch (no new shared events / permissions / routes); no `feature-proposals.md` Status touch (folds into F2.d closure); no producer change (`scripts/insider-discovery-egress.ts` is unchanged at F2.c). Signal #4 STAYS DISARMED through F2.c, F2.d, and operator validation. Arms ONLY after validation reads clean.
 **Deploy gate:** no edge-function deploy required for the GHA producer hardening itself; however the shared parser file is consumed by edge code, so F2.c deploy-SHA MATCH remains the binding deployment proof before the consumer can be attested. Signal #4 STAYS DISARMED.
