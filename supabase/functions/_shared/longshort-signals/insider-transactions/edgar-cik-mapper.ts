@@ -26,6 +26,10 @@
  * Owner: longshort (FP-050 — Signal #4 EDGAR rebuild / Phase 1)
  */
 import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
+import {
+  defaultEdgarFetchTelemetry,
+  type EdgarFetchTelemetry,
+} from './edgar-fetch-telemetry.ts';
 
 /** SEC ticker→CIK snapshot endpoint. */
 export const COMPANY_TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json';
@@ -102,14 +106,36 @@ export function buildEdgarUserAgent(
 
 export class EdgarCikMapper {
   private readonly userAgent: string;
+  private readonly telemetry: EdgarFetchTelemetry;
+  private readonly correlationId: string;
 
   constructor(
     contactEmail: string | null | undefined,
     private readonly httpFetch: HttpFetch = fetch as HttpFetch,
     moduleId = 'fp-050-insider/0.1',
+    telemetry: EdgarFetchTelemetry = defaultEdgarFetchTelemetry,
+    correlationId = '',
   ) {
     // buildEdgarUserAgent throws EdgarConfigurationError if email missing.
     this.userAgent = buildEdgarUserAgent(contactEmail, moduleId);
+    this.telemetry = telemetry;
+    this.correlationId = correlationId;
+  }
+
+  /** INC-73-family telemetry emit (ACT-199 F1.a) — never throws. */
+  private emit(status: number): void {
+    try {
+      this.telemetry({
+        op: CIK_MAPPER_OPERATION_ID,
+        path_family: 'company_tickers',
+        status,
+        url: COMPANY_TICKERS_URL,
+        correlation_id: this.correlationId,
+        duration_ms: -1,
+      });
+    } catch {
+      // Telemetry MUST NOT throw — swallow.
+    }
   }
 
   /**
@@ -124,12 +150,14 @@ export class EdgarCikMapper {
         headers: { 'User-Agent': this.userAgent, 'Accept': 'application/json' },
       });
     } catch (e) {
+      this.emit(0);
       throw new EdgarFetchError(
         CIK_MAPPER_OPERATION_ID,
         `network error fetching ${COMPANY_TICKERS_URL}`,
         e,
       );
     }
+    this.emit(resp.status);
     if (!resp.ok) {
       // 403 here = UA rejected; surface as fetch error (operator-actionable).
       throw new EdgarFetchError(
