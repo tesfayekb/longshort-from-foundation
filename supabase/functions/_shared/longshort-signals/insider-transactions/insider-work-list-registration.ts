@@ -110,6 +110,40 @@
  * test rather than silently breaching the 120s/150s walls (drift
  * sentinel discipline per FP-045 Phase 2 addendum §6).
  *
+ * ─── F2.c queue switch (R1 + R2 contract) ───────────────────────────
+ *
+ * `seedWorkItems` no longer hits EDGAR. It claims pre-discovered rows
+ * from `public.insider_accession_discovery_queue` (F2.a / MIG-096),
+ * populated by the GHA-egress producer (`scripts/insider-discovery-
+ * egress.ts` / F2.b). The on-EDGAR daily-index call site is the
+ * producer's exclusive surface; the F1 drift sentinels travel with
+ * the producer (parser/fetcher), never relaxed.
+ *
+ * R1 (heartbeat-at-write-seam, codified F2.b): the producer writes a
+ * single sentinel row for empty/unavailable days using `issuer_cik =
+ * accession_number = '__heartbeat__'`. The claim query STRUCTURALLY
+ * excludes the sentinel via the operator-verbatim predicate
+ * `NOT (issuer_cik='__heartbeat__' AND accession_number='__heartbeat__')`.
+ * The 63 inert pre-hardening heartbeats from run `658b8070-…` exercised
+ * this filter on first use (ACT-205 finding (a)).
+ *
+ * R2 (concurrency safety — ratified narrowing from "same TX" to
+ * single-statement atomicity, per operator F2.c ruling; supervisor
+ * brief defect catalogued under recursive #43): the claim is one
+ * `UPDATE ... WHERE consumed_at IS NULL ... RETURNING ...` statement.
+ * Two concurrent calls against the same `as_of_date` serialize at
+ * Postgres row-level locks; the second update returns zero rows; the
+ * engine's downstream cursor INSERT inherits atomicity from per-run_id
+ * uniqueness. Pinned by `insider-r2-concurrent-claim_test.ts`, the
+ * project's FIRST transactional-contention test pattern (Deno-driven
+ * two-client concurrent fire); pattern is forward-binding for future
+ * signals.
+ *
+ * Backfill iterates the queue's distinct `as_of_date`s (bounded by
+ * `INSIDER_BACKFILL_TRADING_DAYS`), each claimed in its own UPDATE
+ * statement; concurrent backfill+daily on overlapping dates is
+ * structurally prevented by the same row-lock atomicity.
+ *
  * ─── Heartbeat / staging-TTL sizing ─────────────────────────────────
  *
  * `heartbeatTimeoutSec = 600` — 10 min, parity with PEAD/options/news.
