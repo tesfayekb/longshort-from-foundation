@@ -40,7 +40,10 @@ import {
   INSIDER_BACKFILL_TRADING_DAYS,
   INSIDER_CALLS_PER_ITEM,
   INSIDER_DAILY_JOB_ID,
+  INSIDER_HEARTBEAT_ACCESSION_NUMBER,
+  INSIDER_HEARTBEAT_ISSUER_CIK,
   INSIDER_ITEMS_PER_SLICE,
+  INSIDER_PER_DAY_WORK_BUDGET_CEILING,
   INSIDER_RATE_PER_SEC,
   INSIDER_SIGNAL_ID,
   previousTradingDay,
@@ -48,6 +51,10 @@ import {
   type InsiderWorkItemPayload,
   type InsiderWorkListDeps,
 } from './insider-work-list-registration.ts';
+import {
+  HEARTBEAT_ACCESSION_NUMBER as PRODUCER_HEARTBEAT_ACCESSION_NUMBER,
+  HEARTBEAT_ISSUER_CIK as PRODUCER_HEARTBEAT_ISSUER_CIK,
+} from '../../../../../scripts/insider-discovery-egress.ts';
 
 const AS_OF_FRI = new Date('2026-06-12T21:00:00.000Z'); // Friday
 const AS_OF_MON = new Date('2026-06-15T21:00:00.000Z'); // Monday
