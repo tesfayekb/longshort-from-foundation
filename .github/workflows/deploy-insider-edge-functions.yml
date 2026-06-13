@@ -1,0 +1,144 @@
+# deploy-insider-edge-functions — FP-050 Phase 4 F2.c BUILD_SHA pipeline-fix (ACT-206).
+#
+# WHY THIS WORKFLOW EXISTS
+# ------------------------
+# Lovable's auto-deploy harness deploys edge functions on every push to
+# `main`, but it has NO env-injection seam visible from the codebase: a
+# Dashboard `BUILD_SHA` secret can hold a value, but the value cannot be
+# updated per-deploy to the deploying commit SHA from inside the Lovable
+# pipeline. F2-pre (ACT-201 / docs/ai-failure-modes.md §22.8.5) requires
+# the deployed `x-build-sha` header to equal `git rev-parse HEAD` at the
+# attested commit; with a static Dashboard secret, the header is either
+# absent (`HEADER_MISSING`) or pins to a stale SHA (`MISMATCH`) — both
+# auto-NEEDS-REVISION outcomes for any Tier-A money-path attestation.
+#
+# This workflow is the canonical fix: on every push to `main` it
+#   (1) sets the runtime `BUILD_SHA` env var on the connected Supabase
+#       project to the exact `$GITHUB_SHA` of the pushed commit, then
+#   (2) re-deploys the two insider edge functions whose import graph
+#       includes the F2.c-changed `insider-work-list-registration.ts`,
+# in that order. Step (1) before step (2) is load-bearing: the deployed
+# isolate reads `BUILD_SHA` once at module init (`_shared/handler.ts`),
+# so the secret MUST be in place before the new bundle starts.
+#
+# This workflow REPLACES Lovable's auto-deploy for these two functions
+# only — all other edge functions continue to deploy via the Lovable
+# harness. Adding a function here = explicit ACT entry, never silent.
+#
+# OPERATOR ACTION REQUIRED BEFORE FIRST FIRE
+# ------------------------------------------
+# Add the following GitHub Actions secrets to the repository
+# (Settings → Secrets and variables → Actions):
+#   - SUPABASE_ACCESS_TOKEN  — Personal access token from
+#     https://supabase.com/dashboard/account/tokens (scope: project
+#     admin). NOT the project's anon or service-role key.
+#   - SUPABASE_PROJECT_REF   — `sftatlxatbdrotivxcip` (already the
+#     visible ref in the Supabase URL). Stored as a secret rather than
+#     hard-coded so a future project-ref change is single-touch.
+#
+# Until both secrets are present, this workflow exits non-zero at the
+# "Verify required secrets" step and Lovable's auto-deploy continues
+# unchanged (no regression — just no BUILD_SHA threading yet).
+#
+# FAILURE SEMANTICS
+# -----------------
+# - Missing secret → fail fast at "Verify required secrets" (exit 2).
+# - `supabase secrets set` failure → fail; deploy step is gated on it.
+# - `supabase functions deploy` failure → fail; the secret update from
+#   step (1) is harmless on its own (no isolate restart was triggered).
+# - Success → operator runs `scripts/check-deployed-sha.ts` against both
+#   function URLs and pastes the MATCH outcomes into the ACT entry.
+
+name: deploy-insider-edge-functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # Re-deploy only when something in the insider compute import graph
+      # or the shared handler envelope changes. The handler is here
+      # because `BUILD_SHA` is read in it — a handler edit can change the
+      # header semantics even when no function-local file changes.
+      - 'supabase/functions/longshort-insider-compute/**'
+      - 'supabase/functions/longshort-insider-compute-manual/**'
+      - 'supabase/functions/_shared/longshort-signals/insider-transactions/**'
+      - 'supabase/functions/_shared/handler.ts'
+      - '.github/workflows/deploy-insider-edge-functions.yml'
+  # Operator-driven re-fire after secret rotation or recovery from a
+  # transient Supabase API error. Inputs intentionally absent — the
+  # deploying SHA is always `${{ github.sha }}` of the workflow run.
+  workflow_dispatch:
+
+concurrency:
+  # Serialize deploys; never overlap two deploys onto the same function.
+  group: deploy-insider-edge-functions
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify required secrets
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${SUPABASE_ACCESS_TOKEN}" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN GHA secret is not set — see workflow header for setup instructions"
+            missing=1
+          fi
+          if [ -z "${SUPABASE_PROJECT_REF}" ]; then
+            echo "::error::SUPABASE_PROJECT_REF GHA secret is not set — see workflow header for setup instructions"
+            missing=1
+          fi
+          if [ "${missing}" -ne 0 ]; then
+            exit 2
+          fi
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Thread BUILD_SHA into runtime secrets
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          echo "Threading BUILD_SHA=${GITHUB_SHA} into project ${SUPABASE_PROJECT_REF}"
+          supabase secrets set "BUILD_SHA=${GITHUB_SHA}" --project-ref "${SUPABASE_PROJECT_REF}"
+
+      - name: Deploy longshort-insider-compute
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase functions deploy longshort-insider-compute \
+            --project-ref "${SUPABASE_PROJECT_REF}" \
+            --no-verify-jwt
+
+      - name: Deploy longshort-insider-compute-manual
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase functions deploy longshort-insider-compute-manual \
+            --project-ref "${SUPABASE_PROJECT_REF}" \
+            --no-verify-jwt
+
+      - name: Summary
+        run: |
+          echo "Deployed both insider edge functions with BUILD_SHA=${GITHUB_SHA}."
+          echo "Operator next: run scripts/check-deployed-sha.ts against:"
+          echo "  https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/longshort-insider-compute"
+          echo "  https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/longshort-insider-compute-manual"
+          echo "Contract: both must report MATCH deployed=${GITHUB_SHA} source=${GITHUB_SHA} (exit 0)."
