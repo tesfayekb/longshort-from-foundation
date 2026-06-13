@@ -492,6 +492,23 @@ const ITEM: { id: string; payload: InsiderWorkItemPayload } = {
   },
 };
 
+// ACT-211 seam fix: the engine passes `payload: {}` verbatim per
+// `queue-slice-worker.ts:808-810`; the consumer reconstructs payload
+// from the discovery-queue. (E.*)/(F.*) tests now exercise the
+// reconstruction by providing a discovery-queue fixture row that
+// matches ITEM.id and the universe IN-set.
+const ITEM_ENGINE: { id: string; payload: Record<string, unknown> } = {
+  id: ITEM.id,
+  payload: {}, // verbatim engine shape — see queue-slice-worker.ts:808-810
+};
+const ITEM_QUEUE_ROW: QueueRowFixture = {
+  as_of_date: '2026-06-11',
+  issuer_cik: '0000320193',
+  accession_number: ITEM.id,
+  form_type: '4',
+  consumed_at: AS_OF_FRI.toISOString(),
+};
+
 function makeAccessionIndex(behavior: { kind: string; primary_document?: string; acceptance_datetime?: string; filenames?: string[]; eligible_count?: number }) {
   return { async fetchIndex() { return behavior as never; } };
 }
@@ -503,11 +520,11 @@ Deno.test('(E.1) processItem: index 404 → permanent_skip data_unavailable', as
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({ kind: 'unavailable', reason: 'data_unavailable' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') assertEquals(out.reason, 'data_unavailable');
 });
@@ -516,7 +533,7 @@ Deno.test('(E.2) processItem: index ambiguous → permanent_skip no_primary_doc 
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'ambiguous',
       filenames: ['a.xml', 'b.xml'],
@@ -525,7 +542,7 @@ Deno.test('(E.2) processItem: index ambiguous → permanent_skip no_primary_doc 
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') {
     assertEquals(out.reason, 'no_primary_doc');
@@ -537,18 +554,18 @@ Deno.test('(E.3) processItem: index 429 → THROW (transient — engine cursor p
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({ kind: 'rate_limited' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  await assertRejects(() => cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI }));
+  await assertRejects(() => cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI }));
 });
 
 Deno.test('(E.4) processItem: form4 xml 404 → permanent_skip data_unavailable', async () => {
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -558,7 +575,7 @@ Deno.test('(E.4) processItem: form4 xml 404 → permanent_skip data_unavailable'
     form4Fetcher: makeForm4Fetcher({ kind: 'unavailable', reason: 'data_unavailable' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') assertEquals(out.reason, 'data_unavailable');
 });
@@ -567,7 +584,7 @@ Deno.test('(E.5) processItem: form4 xml unparseable → permanent_skip data_unav
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -580,7 +597,7 @@ Deno.test('(E.5) processItem: form4 xml unparseable → permanent_skip data_unav
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') {
     assertEquals(out.reason, 'data_unavailable');
@@ -593,7 +610,7 @@ Deno.test('(F.1) processItem: rows path → upsert quotes M5 PK verbatim + owner
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -617,7 +634,7 @@ Deno.test('(F.1) processItem: rows path → upsert quotes M5 PK verbatim + owner
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'processed');
   const upsert = deps._stub.upserts[0];
   assertEquals(upsert.table, 'insider_form4_rows');
@@ -626,7 +643,7 @@ Deno.test('(F.1) processItem: rows path → upsert quotes M5 PK verbatim + owner
   const row = (upsert.payload as Array<Record<string, unknown>>)[0];
   // MIG-095 dual-write: owner_cik present + non-empty.
   assertEquals(row.owner_cik, '0001111111');
-  // ticker threaded from work-item payload.
+  // ticker threaded from reconstructed payload (universe AAPL ↔ CIK 320193).
   assertEquals(row.ticker, 'AAPL');
   // filing_form_type threaded.
   assertEquals(row.filing_form_type, '4');
@@ -642,7 +659,7 @@ Deno.test('(F.2) processItem: rows empty (derivative-only filing) → processed,
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -652,7 +669,7 @@ Deno.test('(F.2) processItem: rows empty (derivative-only filing) → processed,
     form4Fetcher: makeForm4Fetcher({ kind: 'rows', rows: [] }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
   assertEquals(out.kind, 'processed');
   assertEquals(deps._stub.upserts.length, 0);
 });
@@ -661,7 +678,7 @@ Deno.test('(F.3) processItem: upsert DB error → THROW (transient)', async () =
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [],
+    queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
       kind: 'resolved',
       primary_document: 'primary_doc.xml',
@@ -683,7 +700,7 @@ Deno.test('(F.3) processItem: upsert DB error → THROW (transient)', async () =
   });
   deps._stub.upsertResults.push({ error: { message: 'serialization_failure' } });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  await assertRejects(() => cfg.processItem!({ item: ITEM, asOf: AS_OF_FRI }));
+  await assertRejects(() => cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI }));
 });
 
 // ── (H) loadAndCompute adapter (M3 — runStaged seam) ───────────────────
