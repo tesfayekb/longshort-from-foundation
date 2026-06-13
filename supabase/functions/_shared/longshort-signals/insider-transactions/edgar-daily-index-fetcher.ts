@@ -1,14 +1,26 @@
 /**
  * edgar-daily-index-fetcher.ts — FP-050 Phase 1 / DEC-058 §(i) daily-feed
- * primary branch (architecture-fork arithmetic favors this for incremental
- * cadence: ~18 s/fire vs ~174 s/fire per-CIK).
+ * primary branch.
  *
- * Reads `https://www.sec.gov/Archives/edgar/daily-index/{YYYY}/QTR{n}/form.{YYYYMMDD}.idx`
- * (the Phase-0-corrected path — NOT `/full-index/`, which only carries
- * the current-quarter rollup) and parses the fixed-width pipe-aligned
- * form-type index for Form 4 and 4/A rows. Per §(h) Form 4/A amendments
- * flow identically to Form 4 (same XML schema; idempotency by
- * accession_number).
+ * Reads `https://www.sec.gov/Archives/edgar/daily-index/{YYYY}/QTR{n}/master.{YYYYMMDD}.idx`
+ * — the **master.idx** discovery file (Phase-4 F1 pivot, ACT-199). The
+ * prior `form.{YYYYMMDD}.idx` family was blocked from the Supabase Edge
+ * egress (two distinct files, ~90 min apart, under varied conditions —
+ * durability bar for the §22.8.4 STOP-and-conclude met; ruling pivoted
+ * to F1: same path root, sibling index file). master.idx carries the
+ * identical set of accessions for the same date/quarter (per the
+ * fixture-pair `master.20260612.idx` ~471 KB vs `form.20260612.idx`
+ * ~1 MB — master is denser pipe-delimited; form is fixed-width sorted
+ * by form-type). Per §(h) Form 4/A amendments flow identically to
+ * Form 4 (same XML schema; idempotency by accession_number).
+ *
+ * Format: pipe-delimited 5-column rows (NOT fixed-width):
+ *   CIK|Company Name|Form Type|Date Filed|Filename
+ * Header row is literally `CIK|Company Name|Form Type|Date Filed|Filename`
+ * followed by a dashed delimiter line. Post-parse filter:
+ * `Form Type IN ('4','4/A')` — the index is form-type-mixed (3, 4, 5,
+ * 8-K, 10-K, ...), unlike the legacy `form.idx` which was already
+ * partitioned by form type.
  *
  * Iterates trading-day dates. v1 trading-day approximation = weekends-only
  * (per the §(f) v1-approximation precedent in DEC-057; bounded shortfall
@@ -22,13 +34,30 @@
  *    no published index — holiday or far-past archive boundary)
  *  - All other failures throw EdgarFetchError
  *
- * Owner: longshort (FP-050 — Signal #4 EDGAR rebuild / Phase 1)
+ * Telemetry (INC-73-family, ACT-199 F1.a): every fetch emits an
+ * `EdgarFetchTelemetryEvent` with `path_family:'master_index'`,
+ * `status`, `url`, and the caller-threaded `correlation_id`. Default
+ * impl logs structured JSON; consumers MAY pass an accumulator to
+ * surface in the run row's audit trail.
+ *
+ * Owner: longshort (FP-050 — Signal #4 EDGAR rebuild / Phase 1 + Phase 4 F1.a)
  */
 import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
 import { buildEdgarUserAgent, EdgarFetchError } from './edgar-cik-mapper.ts';
+import {
+  defaultEdgarFetchTelemetry,
+  type EdgarFetchTelemetry,
+} from './edgar-fetch-telemetry.ts';
 
 export const DAILY_INDEX_BASE = 'https://www.sec.gov/Archives/edgar/daily-index';
-export const DAILY_INDEX_OPERATION_ID = 'edgar_daily_index';
+/**
+ * Operation tag — renamed to reflect the master.idx pivot. The legacy
+ * alias `DAILY_INDEX_OPERATION_ID` is preserved for any external doc
+ * reference but new code MUST use `MASTER_INDEX_OPERATION_ID`.
+ */
+export const MASTER_INDEX_OPERATION_ID = 'edgar_master_index';
+/** @deprecated Use MASTER_INDEX_OPERATION_ID — retained for back-compat. */
+export const DAILY_INDEX_OPERATION_ID = MASTER_INDEX_OPERATION_ID;
 
 /** A single Form-4 (or 4/A) entry surfaced from a daily form.idx. */
 export interface DailyIndexEntry {
@@ -75,12 +104,18 @@ export function quarterOf(d: Date): 1 | 2 | 3 | 4 {
 }
 
 /**
- * Build the daily-index URL for a date. Includes the QTR{n} path segment
- * derived from the date's month — quarter boundaries are deterministic.
+ * Build the master.idx URL for a date (F1.a pivot, ACT-199). Includes
+ * the QTR{n} path segment derived from the date's month — quarter
+ * boundaries are deterministic.
+ *
+ * DRIFT INVARIANT (pinned by `edgar-daily-index-fetcher_test.ts`): the
+ * returned URL MUST match `/master\.\d{8}\.idx$/`; NEVER `/form\./`. A
+ * regression that re-introduces `form.{YYYYMMDD}.idx` would re-open
+ * the Phase-4 F1 blocker. The sentinel test pins this verbatim.
  */
 export function dailyIndexUrl(d: Date): string {
   const y = d.getUTCFullYear().toString().padStart(4, '0');
-  return `${DAILY_INDEX_BASE}/${y}/QTR${quarterOf(d)}/form.${compactDate(d)}.idx`;
+  return `${DAILY_INDEX_BASE}/${y}/QTR${quarterOf(d)}/master.${compactDate(d)}.idx`;
 }
 
 /**
@@ -107,35 +142,29 @@ function isForm4(formType: string): formType is '4' | '4/A' {
 }
 
 /**
- * Parse the SEC daily form-type index body. The file is fixed-width with
- * a 11-line header (delimiter line of `-`s separates header from data).
- * Columns (verbatim from header):
- *   Form Type   Company Name   CIK   Date Filed   Filename
- * Parsing strategy: column positions are derived from the dashed
- * delimiter line; this is what the SEC's own tooling does.
+ * Parse the SEC master.idx body (F1.a pivot, ACT-199). Format is
+ * **pipe-delimited 5-column** (NOT fixed-width), header verbatim:
+ *   CIK|Company Name|Form Type|Date Filed|Filename
+ * Header is followed by a dashed delimiter line. Each data row is
+ * split on `|`; rows with !=5 fields are skipped silently. Post-parse
+ * filter: Form Type ∈ ('4','4/A') — master.idx is form-type-mixed,
+ * unlike the legacy form.idx which was already partitioned.
+ *
+ * Returns [] (NOT throws) when the body lacks the expected header —
+ * matches the v1 holiday/malformed contract.
  */
 export function parseDailyIndexBody(body: string): DailyIndexEntry[] {
   const lines = body.split(/\r?\n/);
-  // Locate the header line ("Form Type ... Filename") and use its column
-  // positions to derive fixed-width column starts. The next line is a
-  // dashed delimiter (real EDGAR ships it as one continuous run of `-`,
-  // so we rely on the HEADER for column starts, not the delimiter).
+  // Locate the master.idx header line — exact verbatim string match
+  // (no leading whitespace, no partial). The next non-blank line is a
+  // dashed delimiter we skip.
+  const HEADER_LINE = 'CIK|Company Name|Form Type|Date Filed|Filename';
   let headerIdx = -1;
   for (let i = 0; i < lines.length; i += 1) {
-    if (lines[i].startsWith('Form Type')) { headerIdx = i; break; }
+    if (lines[i].trim() === HEADER_LINE) { headerIdx = i; break; }
   }
   if (headerIdx === -1) return [];
-  const header = lines[headerIdx];
-  // Locate the five known column-name start positions.
-  const colNames = ['Form Type', 'Company Name', 'CIK', 'Date Filed', 'Filename'];
-  const starts: number[] = [];
-  for (const name of colNames) {
-    const idx = header.indexOf(name);
-    if (idx === -1) return [];
-    starts.push(idx);
-  }
-  const [s0, s1, s2, s3, s4] = starts;
-  // Skip past the dashed delimiter line (one or more lines of `-`).
+  // Skip past the dashed delimiter line(s) — one or more lines of `-`.
   let dataIdx = headerIdx + 1;
   while (dataIdx < lines.length && /^[-\s]+$/.test(lines[dataIdx]) && lines[dataIdx].includes('-')) {
     dataIdx += 1;
@@ -144,12 +173,18 @@ export function parseDailyIndexBody(body: string): DailyIndexEntry[] {
   for (let i = dataIdx; i < lines.length; i += 1) {
     const line = lines[i];
     if (line.length === 0) continue;
-    const formType = line.slice(s0, s1).trim();
+    // Pipe-delimited split — EXACTLY 5 columns. The Filename column is
+    // the trailing element and may legitimately contain no embedded
+    // pipes (SEC filenames are restricted-charset). Rows with !=5
+    // columns are malformed; skip silently.
+    const parts = line.split('|');
+    if (parts.length !== 5) continue;
+    const cik = parts[0].trim();
+    const companyName = parts[1].trim();
+    const formType = parts[2].trim();
+    const dateFiled = parts[3].trim();
+    const filename = parts[4].trim();
     if (!isForm4(formType)) continue;
-    const companyName = line.slice(s1, s2).trim();
-    const cik = line.slice(s2, s3).trim();
-    const dateFiled = line.slice(s3, s4).trim();
-    const filename = line.slice(s4).trim();
     const accession = parseAccessionFromFilename(filename);
     if (accession === null) continue; // malformed row, skip silently
     if (!/^\d+$/.test(cik)) continue;
@@ -168,13 +203,34 @@ export function parseDailyIndexBody(body: string): DailyIndexEntry[] {
 
 export class EdgarDailyIndexFetcher {
   private readonly userAgent: string;
+  private readonly telemetry: EdgarFetchTelemetry;
+  private readonly correlationId: string;
 
   constructor(
     contactEmail: string | null | undefined,
     private readonly httpFetch: HttpFetch = fetch as HttpFetch,
     moduleId = 'fp-050-insider/0.1',
+    telemetry: EdgarFetchTelemetry = defaultEdgarFetchTelemetry,
+    correlationId = '',
   ) {
     this.userAgent = buildEdgarUserAgent(contactEmail, moduleId);
+    this.telemetry = telemetry;
+    this.correlationId = correlationId;
+  }
+
+  private emit(status: number, url: string): void {
+    try {
+      this.telemetry({
+        op: MASTER_INDEX_OPERATION_ID,
+        path_family: 'master_index',
+        status,
+        url,
+        correlation_id: this.correlationId,
+        duration_ms: -1,
+      });
+    } catch {
+      // Telemetry MUST NOT throw — swallow silently.
+    }
   }
 
   async fetchDay(date: Date): Promise<DailyIndexResult> {
@@ -187,19 +243,21 @@ export class EdgarDailyIndexFetcher {
         headers: { 'User-Agent': this.userAgent, 'Accept-Encoding': 'identity' },
       });
     } catch (e) {
+      this.emit(0, url);
       throw new EdgarFetchError(
-        DAILY_INDEX_OPERATION_ID,
+        MASTER_INDEX_OPERATION_ID,
         `network error on ${url}`,
         e,
       );
     }
+    this.emit(resp.status, url);
     if (resp.status === 404) {
       // Holiday / archive-boundary / no-index-published. Typed, never error.
       return { kind: 'unavailable', reason: 'data_unavailable', date: iso };
     }
     if (!resp.ok) {
       throw new EdgarFetchError(
-        DAILY_INDEX_OPERATION_ID,
+        MASTER_INDEX_OPERATION_ID,
         `HTTP ${resp.status} ${resp.statusText} on ${url}`,
       );
     }
@@ -208,7 +266,7 @@ export class EdgarDailyIndexFetcher {
       body = await resp.text();
     } catch (e) {
       throw new EdgarFetchError(
-        DAILY_INDEX_OPERATION_ID,
+        MASTER_INDEX_OPERATION_ID,
         `text read error on ${url}`,
         e,
       );
