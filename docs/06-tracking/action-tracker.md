@@ -1,3 +1,53 @@
+### ACT-202: FP-050 Phase 4 F2.a — `insider_accession_discovery_queue` table lands (MIG-096 + `sql/16_insider_accession_discovery_queue.sql` companion); discovery-layer egress relocation persistence boundary; producer (F2.b GHA) and consumer (F2.c `seedWorkItems` switch) hand off through this table; migration-only — no deploy required, F2-pre verifier contract does NOT bind on this commit
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-202 (next-free after ACT-201; grep-verified at HEAD via `grep -oE "ACT-[0-9]+" docs/06-tracking/action-tracker.md \| sort -u -V \| tail` → ACT-201 latest at allocation). |
+| **Mode** | execution (F2.a, second of four sub-commits in the operator's F2 sequencing: F2-pre ACT-201 → **F2.a ACT-202 — this commit** → F2.b → F2.c → F2.d). |
+| **Tier** | A — discovery hand-off boundary between the off-Supabase-Edge producer (F2.b) and the on-Supabase-Edge consumer (F2.c); the table's PK/RLS/index shape is load-bearing for the §(h) idempotency triple and the R2 concurrency-safety regression test at F2.c. |
+| **Branch** | feature/FP-050-PHASE4-F2-a-discovery-queue-table (per project branching memory `feature/PLAN-{MODULE}-{NNN}-{desc}`). |
+| **Authority** | Operator 2026-06-13 F2 architecture ratification + F2.a greenlight ("the discovery-queue table"); the four-sub-commit sequencing from the F2-pre ratification (F2-pre → F2.a → F2.b → F2.c → F2.d). Signal #4 STAYS DISARMED through F2.a → F2.d. |
+| **Scope (F2.a)** | (1) NEW `sql/16_insider_accession_discovery_queue.sql` — operator-OOB-apply companion (the `sql/`-family precedent; empty-table safety makes the operator-applied path equivalent to the Lovable migration path). (2) MIG-096 via the Lovable migration tool — same DDL. (3) EDITED `docs/04-modules/longshort/signals/insider-transactions.md` — new FP-050 Phase 4 F2.a section (schema table + PK note + 5-policy RLS family + index rationale + deploy-gate note + four-gate block + sub-commit-position diagram). (4) EDITED `docs/07-reference/database-migration-ledger.md` — MIG-096 row (Pattern / Purpose / Dependency / Sub-step authority / AC evidence / Cross-references). (5) This entry. |
+| **Schema (verbatim — see `sql/16_insider_accession_discovery_queue.sql`)** | TABLE `public.insider_accession_discovery_queue` with columns `as_of_date date NOT NULL`, `issuer_cik text NOT NULL`, `accession_number text NOT NULL`, `form_type text NOT NULL CHECK form_type IN ('4','4/A')`, `company_name text NOT NULL`, `filename text NOT NULL`, `discovered_at timestamptz NOT NULL DEFAULT now()`, `discovered_by text NOT NULL`, `discovery_correlation_id text NOT NULL`, `consumed_at timestamptz NULL`, `consumed_run_id uuid NULL`. PK `(as_of_date, issuer_cik, accession_number)`. RLS family (5 policies): `iadq_service_role_all` PERMISSIVE ALL TO service_role; `iadq_longshort_view_select` PERMISSIVE SELECT TO authenticated USING `has_permission(auth.uid(),'longshort.view')`; `iadq_deny_authenticated_insert` RESTRICTIVE INSERT WITH CHECK (false); `iadq_deny_authenticated_update` RESTRICTIVE UPDATE USING/WITH CHECK (false); `iadq_deny_authenticated_delete` RESTRICTIVE DELETE USING (false). Indexes: PK + `idx_iadq_unconsumed_by_day` partial `(as_of_date) WHERE consumed_at IS NULL`. GRANTs: SELECT to authenticated; ALL to service_role; none to anon. |
+| **§22.5.1 live-read precondition** | Pre-apply via `supabase--read_query`: `SELECT (SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='insider_accession_discovery_queue') AS table_present_pre, (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='insider_accession_discovery_queue') AS policy_count_pre, (SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND tablename='insider_accession_discovery_queue') AS index_count_pre` → `{table_present_pre: 0, policy_count_pre: 0, index_count_pre: 0}`. The `count(*) = 0` precondition on the table-being-created holds trivially because the table is absent pre-apply — the operator-OOB-apply path via `sql/16_...` is safe under empty-table semantics. |
+| **Files Touched (planned vs actual)** | NEW: `sql/16_insider_accession_discovery_queue.sql`. MIG: `supabase/migrations/<timestamp>_<slug>.sql` via the Lovable migration tool (same DDL as `sql/16`). EDITED: `docs/04-modules/longshort/signals/insider-transactions.md`; `docs/07-reference/database-migration-ledger.md`; `docs/06-tracking/action-tracker.md`. DELETED: none. NO RBAC/permission/role change (the policy uses the existing `longshort.view` permission — no new permission key). NO secret added. NO new dependency. NO `job_registry` / `cron.job` / `signal_registry` mutation. NO touch to any edge function / fetcher / orchestrator / handler. NO `function-index.md` / `event-index.md` / `permission-index.md` touch (table-only — no new shared functions / events / permissions; the consumer at F2.c is a schema-internal read against this table via service-role). NO `feature-proposals.md` Status touch (out of scope; folds into F2.d closure). |
+| **Deploy gate** | NO deploy required. F2.a is migration-only; the F2-pre `check-deployed-sha` MATCH gate binds on deploy steps only (F2.b and F2.c when the edge-function bundle changes). This is explicitly named per the operator's instruction "the contract binds only on deploy steps; this is migration-only." |
+| **Evidence (four-gate)** | Four-gate canonical attestation at HEAD `6e7cdea4943b820bb22790f4ab8ca9f22ea5e0ff` — **ALL GREEN**. Gate 1 `check-wall-clock: CLEAN — 0 violations`; Gate 2 `ok \| 1045 passed \| 0 failed (29s)` (unchanged from ACT-201 — sql + docs-only commit, no test surface moves); Gate 2b `ok \| 1262 passed \| 0 failed (33s)` (unchanged from ACT-201); Gate 3 `✖ 15 problems (0 errors, 15 warnings)` (parity with ACT-201; 15 pre-existing React-UI warnings; ACT-202 contributes 0/0). Attestation block pasted verbatim below. The post-edit HEAD adds only this entry plus the ledger row + module-doc section + sql/16 file — no test surface moves; the block re-runs to the same final lines at the post-edit HEAD. |
+| **Out-of-scope guarantees** | Zero edge-function code change; zero RBAC/permission/role/RLS change to any other table; zero `job_registry` / `cron.job` / `signal_registry` mutation; zero `enabled` flip; zero secret added; zero new dependency; zero touch to F2.b producer script or GHA workflow (lands at F2.b); zero touch to F2.c `seedWorkItems` switch / R1 heartbeat-or-distinction / R2 concurrency-safety regression test (lands at F2.c); zero touch to F2.d module-doc closure (lands at F2.d). |
+| **ROI Impact** | **Zero on current ROI** (table schema lands empty; no signal logic / threshold / fetcher / orchestrator surface changes). **Positive enabling impact:** unblocks the F2.b producer write target and the F2.c consumer read source, which together restore Signal #4 discovery coverage that has been blocked by SEC fair-access on the Supabase Edge `eu-central-1` egress since ACT-199 (two-observation §22.8.5 STOP-and-conclude bar met). **Anti-ROI guardrail:** RLS family denies all authenticated writes structurally (RESTRICTIVE AND-combines), making silent-zero-day exposure and discovery-row drops impossible for any non-service-role caller. |
+| **Status** | Execution complete at HEAD `6e7cdea4943b820bb22790f4ab8ca9f22ea5e0ff`; four-gate attestation block ALL GREEN (verbatim below); migration tool invocation pending operator approval. STOP after F2.a per the operator's four-sub-commit ruling; operator binds F2.b next. |
+
+**Attestation block (ACT-202)** — produced verbatim by `scripts/check-gate-evidence.ts` at HEAD `6e7cdea4943b820bb22790f4ab8ca9f22ea5e0ff`:
+
+```
+=== check-gate-evidence ATTESTATION (paste verbatim) ===
+HEAD: 6e7cdea4943b820bb22790f4ab8ca9f22ea5e0ff
+Generated: 2026-06-13T04:34:40.975Z
+
+Gate 1: deno run --allow-read scripts/check-wall-clock.ts
+  exit=0  duration_ms=311
+  final-line: check-wall-clock: CLEAN — 0 violations
+
+Gate 2: cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/
+  exit=0  duration_ms=33775
+  final-line: ok | 1045 passed | 0 failed (29s)
+
+Gate 2b: cd supabase/functions && deno test --allow-net --allow-env --allow-read
+  exit=0  duration_ms=35742
+  final-line: ok | 1262 passed | 0 failed (33s)
+
+Gate 3: npx eslint .
+  exit=0  duration_ms=9553
+  final-line: ✖ 15 problems (0 errors, 15 warnings)
+
+Verdict: ALL GREEN
+=== end attestation ===
+```
+
+STOP — F2.a landed; discovery-queue table is the persistence hand-off boundary between F2.b producer (off-Supabase-Edge GHA runner) and F2.c consumer (`seedWorkItems` switch); no deploy required for this commit; Signal #4 STAYS DISARMED.
+
+---
+
 ### ACT-201: FP-050 Phase 4 F2-pre — deployed-SHA verifier ships standalone (handler `x-build-sha` envelope + `scripts/check-deployed-sha.ts` + ai-failure-modes §22.8.5 deploy-replay-lag entry); load-bearing interface check that protects every F2 verification step downstream — F2.a (queue table), F2.b (discovery script + GHA), F2.c (seedWorkItems switch + R1 heartbeat-or-distinction + R2 concurrency-safety regression test), F2.d (module doc + final ACT) all gate on a MATCH outcome from this verifier at the function being attested
 
 | Field | Value |

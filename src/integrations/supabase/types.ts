@@ -201,6 +201,48 @@ export type Database = {
           },
         ]
       }
+      insider_accession_discovery_queue: {
+        Row: {
+          accession_number: string
+          as_of_date: string
+          company_name: string
+          consumed_at: string | null
+          consumed_run_id: string | null
+          discovered_at: string
+          discovered_by: string
+          discovery_correlation_id: string
+          filename: string
+          form_type: string
+          issuer_cik: string
+        }
+        Insert: {
+          accession_number: string
+          as_of_date: string
+          company_name: string
+          consumed_at?: string | null
+          consumed_run_id?: string | null
+          discovered_at?: string
+          discovered_by: string
+          discovery_correlation_id: string
+          filename: string
+          form_type: string
+          issuer_cik: string
+        }
+        Update: {
+          accession_number?: string
+          as_of_date?: string
+          company_name?: string
+          consumed_at?: string | null
+          consumed_run_id?: string | null
+          discovered_at?: string
+          discovered_by?: string
+          discovery_correlation_id?: string
+          filename?: string
+          form_type?: string
+          issuer_cik?: string
+        }
+        Relationships: []
+      }
       insider_form4_rows: {
         Row: {
           acceptance_datetime: string
