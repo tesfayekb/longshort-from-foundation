@@ -42,6 +42,10 @@
  */
 import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
 import { buildEdgarUserAgent, EdgarFetchError } from './edgar-cik-mapper.ts';
+import {
+  defaultEdgarFetchTelemetry,
+  type EdgarFetchTelemetry,
+} from './edgar-fetch-telemetry.ts';
 
 export const ARCHIVES_BASE = 'https://www.sec.gov/Archives/edgar/data';
 export const ACCESSION_INDEX_OPERATION_ID = 'edgar_accession_index';
@@ -179,13 +183,35 @@ export function selectPrimaryDocument(filenames: ReadonlyArray<string>): {
 
 export class EdgarAccessionIndexFetcher {
   private readonly userAgent: string;
+  private readonly telemetry: EdgarFetchTelemetry;
+  private readonly correlationId: string;
 
   constructor(
     contactEmail: string | null | undefined,
     private readonly httpFetch: HttpFetch = fetch as HttpFetch,
     moduleId = 'fp-050-insider/0.1',
+    telemetry: EdgarFetchTelemetry = defaultEdgarFetchTelemetry,
+    correlationId = '',
   ) {
     this.userAgent = buildEdgarUserAgent(contactEmail, moduleId);
+    this.telemetry = telemetry;
+    this.correlationId = correlationId;
+  }
+
+  /** INC-73-family telemetry emit (ACT-199 F1.a) — never throws. */
+  private emit(status: number, url: string): void {
+    try {
+      this.telemetry({
+        op: ACCESSION_INDEX_OPERATION_ID,
+        path_family: 'accession_index',
+        status,
+        url,
+        correlation_id: this.correlationId,
+        duration_ms: -1,
+      });
+    } catch {
+      // swallow
+    }
   }
 
   async fetchIndex(input: EdgarAccessionIndexInput): Promise<EdgarAccessionIndexResult> {
@@ -197,12 +223,14 @@ export class EdgarAccessionIndexFetcher {
         headers: { 'User-Agent': this.userAgent, 'Accept': 'application/json' },
       });
     } catch (e) {
+      this.emit(0, url);
       throw new EdgarFetchError(
         ACCESSION_INDEX_OPERATION_ID,
         `network error on ${url}`,
         e,
       );
     }
+    this.emit(resp.status, url);
     if (resp.status === 404) return { kind: 'unavailable', reason: 'data_unavailable' };
     if (resp.status === 429) return { kind: 'rate_limited' };
     if (!resp.ok) {
