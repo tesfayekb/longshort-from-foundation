@@ -25,7 +25,7 @@ row is the first `signal_compute_log` with a real wall-duration
 reading. **FP-047 formally CLOSED:** probe → semantic-drift catch /
 Option-2 → DEC-055 → Phases 1–4 (compute / identity / orchestrator /
 handlers) → MIG-088 arm-up → natural-fire attestation `3f58a03e` →
-FOLLOWUP (this commit). No remaining open items.)
+FOLLOWUP (this commit). No remaining open items. **First-natural-fire wall-clock reading under the d066c890 entry-stamp fix (2026-06-13 / FP-047 closure-row append, ACT-200):** 2026-06-12 21:00 UTC fire — `cron.job_run_details` `{jobid:89, runid:154700, start_time:'2026-06-12 21:00:00.382304+00', status:'succeeded'}`; cron-attributable `signal_compute_log` row `{run_id:'0e7b3a43-d56b-4308-a2e6-395f32c3cc36', as_of_date:'2026-06-12', started_at:'2026-06-12 21:00:02.134+00', completed_at:'2026-06-12 21:00:55.062+00', wall_s:52.928, outcome:'completed', universe_size:839, persisted_count:209, skip_counts.no_revisions_in_window:338, skip_counts.revision_prior_unavailable:292}` — conservation `209+338+292=839 ✓`; wall = **52.928 s** vs 82.4 s worst-case budget (64 % of budget, ≥ 29.4 s headroom); `started_at !== completed_at` ✓ (the `as_of`-collision defect the FOLLOWUP fixed is structurally absent); `started_at` is the orchestrator-ENTRY liveClock stamp, distinct from `as_of`. z (n=209, is_present): mean 0.0078, std 0.9206, min/max ±3.0000. FP-047 stays CLOSED; this reading discharges the FOLLOWUP-CLOSED row's "recorded post-fire on the analyst-revision module doc" promise.)
 **Vendor:** FMP Premium `/stable/price-target-latest-news` (discovery) +
 `/stable/price-target-news?symbol={t}` (per-symbol history). Split-vendor
 lock per DEC-053.

@@ -1,15 +1,6 @@
 # Signal #8 — News Sentiment Momentum (CROSSWIND §4.4.8)
 
-**Status:** live (REGISTERED, **ARMED** — MIG-090 flipped
-`job_registry.longshort.news.compute.enabled=true` 2026-06-12 paired
-with operator-applied `cron.job` jobid 90 at `30 21 * * 1-5` UTC
-(DEC-040 byte-match verified). DEC-043-pattern wall-clock attestation
-**OPEN** — pending the first natural cron fire at the next weekday
-21:30 UTC slot, distinguished from manual fires by completed_at
-wall-clock-proximity to 21:30 UTC vs the as_of-derived midnight
-signature of manual fires). **Schedule slot:** `30 21 * * 1-5` UTC
-(after analyst 21:00, before options 22:00; non-overlapping init
-triggers).
+**Status:** live (**ARMED + DEC-043-pattern attestation CLOSED 2026-06-13 / FP-048 / ACT-200**). First natural cron fire 2026-06-12 21:30 UTC: `cron.job_run_details` `{jobid:90, runid:154838, start_time:'2026-06-12 21:30:00.215439+00', status:'succeeded'}`; cron-attributable `signal_compute_log` row `{run_id:'fd797bf9-1f5a-484f-8ec5-9ee10d765ec9', as_of_date:'2026-06-12', started_at:'2026-06-12 21:30:02.040814+00', completed_at:'2026-06-12 21:31:01.036+00', wall_s:58.995, outcome:'completed', universe_size:839, persisted_count:97, skip_counts.no_articles_in_window:742}` — conservation `97+742=839 ✓`; signature distinct from the prior `9e8395a7` 02:11 UTC hand-fire. Queue-engine drain (mode `sequential-feed`, single slice, correlation_id `8e94a115-c365-4946-9de7-52a82e600103`): `succeeded=3410`, `skipped=0`, `duplicate_conflicts=0`, `duplicate_tuples_dropped=0`, `empty=false`, `finalizer_kind='finalized'`, `cas_won=true`, `claimed=1` — INC-74 dedupe contract honoured on natural data. End-to-end wall ≈ 59 s vs 102 s structural sentinel (under-the-budget; binding number remains the worst case). z-distribution (n=105, is_present=true): `z_mean=-0.0389`, `z_std=0.9018`, `z_min=-3.0000`, `z_max=3.0000` — ~N(0,1) shape sane (DEC-056 ±3 clip active). Coverage 97/839 = 11.6 % at the v1 4-publisher entitlement (DEC-056 §(coverage) reaffirmed; presence-aware combiner contract unchanged). Cross-checks (21:00-22:00 UTC): sweeper actions = 0; vendor 429 markers = 0. Slot-non-overlap live proof: news drain wrap at 21:31:04 < catalyst entry at 21:45:01 — gap ≥ 13m57s. Previous: REGISTERED + ARMED — MIG-090 flipped `job_registry.longshort.news.compute.enabled=true` 2026-06-12 paired with operator-applied `cron.job` jobid 90 at `30 21 * * 1-5` UTC (DEC-040 byte-match verified); preserved per Rule 8. **Schedule slot:** `30 21 * * 1-5` UTC (after analyst 21:00, before options 22:00; non-overlapping init triggers).
 **Architecture:** SEQUENTIAL-FEED consumer on the FP-045 cursor-drain
 queue engine — first of its kind. Operator ratification 2026-06-11
 (Option 1 in the Phase-3 fork) after Phase-0 evidence (35–70 pages ×
