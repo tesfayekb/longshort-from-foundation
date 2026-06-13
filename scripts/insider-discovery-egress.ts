@@ -66,7 +66,11 @@ import {
   EdgarDailyIndexFetcher,
   type DailyIndexEntry,
 } from '../supabase/functions/_shared/longshort-signals/insider-transactions/edgar-daily-index-fetcher.ts';
-import { EdgarFetchError } from '../supabase/functions/_shared/longshort-signals/insider-transactions/edgar-cik-mapper.ts';
+import {
+  EdgarCikMapper,
+  EdgarFetchError,
+  type CikLookupResult,
+} from '../supabase/functions/_shared/longshort-signals/insider-transactions/edgar-cik-mapper.ts';
 import {
   isoDate,
   isTradingDay,
@@ -104,10 +108,13 @@ export const HEARTBEAT_ISSUER_CIK = '__heartbeat__';
 export const HEARTBEAT_ACCESSION_NUMBER = '__heartbeat__';
 export const HEARTBEAT_COMPANY_NAME = '__heartbeat__';
 export const HEARTBEAT_FILENAME = '__heartbeat__';
+export const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
 /** Outcome per day — surfaced into the run summary for forensics. */
 export interface DayOutcome {
   as_of_date: string;
+  entries_parsed: number;
+  entries_after_universe_filter: number;
   rows_inserted: number;
   heartbeat_inserted: boolean;
   /** master.idx returned 404 (kind:'unavailable'). Still writes a heartbeat. */
@@ -117,11 +124,13 @@ export interface DayOutcome {
 /** Injectable deps — every IO surface goes through here so the test suite is hermetic. */
 export interface RunDeps {
   fetcher: EdgarDailyIndexFetcher;
-  insertRows: (rows: readonly DiscoveryRow[]) => Promise<void>;
+  insertRows: (rows: readonly DiscoveryRow[]) => Promise<unknown>;
   correlationId: string;
   discoveredBy: DiscoveredBy;
   /** Single source of truth for the trading-day iterator (NYSE holidays via shared/). */
   isTradingDay?: (d: Date) => boolean;
+  /** Optional in-universe predicate; real CLI supplies the SEC ticker→CIK map inverse. */
+  isUniverseEntry?: (entry: DailyIndexEntry) => boolean;
   /** Stamp emitted on every structured-log line so reconciliation can join the GHA run URL. */
   log?: (event: Record<string, unknown>) => void;
 }
@@ -203,6 +212,19 @@ export function iterateTradingDays(
   return out;
 }
 
+export function normalizeFilerCikForUniverse(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  return trimmed.padStart(10, '0');
+}
+
+export function buildUniverseEntryPredicate(universeCik10: ReadonlySet<string>) {
+  return (entry: DailyIndexEntry): boolean => {
+    const padded = normalizeFilerCikForUniverse(entry.filer_cik);
+    return padded !== null && universeCik10.has(padded);
+  };
+}
+
 /** Build a `DiscoveryRow` from a parsed `DailyIndexEntry`. */
 export function rowFromEntry(
   e: DailyIndexEntry,
@@ -210,9 +232,10 @@ export function rowFromEntry(
   discoveredBy: DiscoveredBy,
   correlationId: string,
 ): DiscoveryRow {
+  const padded = normalizeFilerCikForUniverse(e.filer_cik);
   return {
     as_of_date: asOf,
-    issuer_cik: e.filer_cik,
+    issuer_cik: padded ?? e.filer_cik,
     accession_number: e.accession_number,
     form_type: e.form_type,
     company_name: e.company_name,
@@ -244,6 +267,44 @@ export function buildHeartbeatRow(
   };
 }
 
+export async function loadCurrentUniverseTickers(env: SupabaseRestEnv): Promise<string[]> {
+  const base = env.supabaseUrl.replace(/\/+$/, '');
+  const latestUrl = `${base}/rest/v1/universe_membership?select=as_of_date&operator_id=eq.${DEFAULT_OPERATOR_ID}&order=as_of_date.desc&limit=1`;
+  const headers = {
+    'apikey': env.serviceRoleKey,
+    'Authorization': `Bearer ${env.serviceRoleKey}`,
+  };
+  const latestResp = await fetch(latestUrl, { method: 'GET', headers });
+  if (!latestResp.ok) {
+    const body = await latestResp.text().catch(() => '<body unreadable>');
+    throw new Error(`supabase REST universe latest-date read failed: HTTP ${latestResp.status} ${latestResp.statusText} — ${body.slice(0, 512)}`);
+  }
+  const latest = await latestResp.json().catch(() => null) as Array<{ as_of_date?: string }> | null;
+  const asOfDate = latest?.[0]?.as_of_date;
+  if (typeof asOfDate !== 'string' || asOfDate.length === 0) return [];
+  const rowsUrl = `${base}/rest/v1/universe_membership?select=ticker&operator_id=eq.${DEFAULT_OPERATOR_ID}&as_of_date=eq.${asOfDate}`;
+  const rowsResp = await fetch(rowsUrl, { method: 'GET', headers });
+  if (!rowsResp.ok) {
+    const body = await rowsResp.text().catch(() => '<body unreadable>');
+    throw new Error(`supabase REST universe_membership read failed: HTTP ${rowsResp.status} ${rowsResp.statusText} — ${body.slice(0, 512)}`);
+  }
+  const rows = await rowsResp.json().catch(() => null) as Array<{ ticker?: string }> | null;
+  return (rows ?? [])
+    .map((r) => r.ticker)
+    .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+    .map((t) => t.toUpperCase().trim());
+}
+
+export async function loadUniverseCikSet(tickers: readonly string[], mapper: EdgarCikMapper): Promise<Set<string>> {
+  const lookup = await mapper.loadMap();
+  const out = new Set<string>();
+  for (const ticker of tickers) {
+    const r: CikLookupResult = lookup(ticker);
+    if (r.kind === 'resolved') out.add(r.cik10);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Core engine — pure modulo `RunDeps`
 // ---------------------------------------------------------------------------
@@ -256,6 +317,7 @@ export function buildHeartbeatRow(
  */
 export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayOutcome> {
   const log = deps.log ?? ((e) => console.log(JSON.stringify(e)));
+  const isUniverseEntry = deps.isUniverseEntry ?? (() => true);
   const date = parseIsoDate(asOf);
   log({
     event: 'insider_discovery_day_start',
@@ -273,9 +335,12 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
       discovered_by: deps.discoveredBy,
       correlation_id: deps.correlationId,
     });
-    return { as_of_date: asOf, rows_inserted: 0, heartbeat_inserted: true, data_unavailable: true };
+    return { as_of_date: asOf, entries_parsed: 0, entries_after_universe_filter: 0, rows_inserted: 0, heartbeat_inserted: true, data_unavailable: true };
   }
-  if (result.entries.length === 0) {
+  const rows = result.entries
+    .filter((entry) => isUniverseEntry(entry))
+    .map((e) => rowFromEntry(e, asOf, deps.discoveredBy, deps.correlationId));
+  if (rows.length === 0) {
     const heartbeat = buildHeartbeatRow(asOf, deps.discoveredBy, deps.correlationId);
     await deps.insertRows([heartbeat]);
     log({
@@ -283,25 +348,28 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
       as_of: asOf,
       discovered_by: deps.discoveredBy,
       correlation_id: deps.correlationId,
+      entries_parsed: result.entries.length,
+      entries_after_universe_filter: 0,
       rows_inserted: 0,
       heartbeat_inserted: true,
     });
-    return { as_of_date: asOf, rows_inserted: 0, heartbeat_inserted: true, data_unavailable: false };
+    return { as_of_date: asOf, entries_parsed: result.entries.length, entries_after_universe_filter: 0, rows_inserted: 0, heartbeat_inserted: true, data_unavailable: false };
   }
-  const rows = result.entries.map((e) =>
-    rowFromEntry(e, asOf, deps.discoveredBy, deps.correlationId),
-  );
   await deps.insertRows(rows);
   log({
     event: 'insider_discovery_day_complete',
     as_of: asOf,
     discovered_by: deps.discoveredBy,
     correlation_id: deps.correlationId,
+    entries_parsed: result.entries.length,
+    entries_after_universe_filter: rows.length,
     rows_inserted: rows.length,
     heartbeat_inserted: false,
   });
   return {
     as_of_date: asOf,
+    entries_parsed: result.entries.length,
+    entries_after_universe_filter: rows.length,
     rows_inserted: rows.length,
     heartbeat_inserted: false,
     data_unavailable: false,
@@ -330,6 +398,12 @@ export interface SupabaseRestEnv {
   serviceRoleKey: string;
 }
 
+export interface RestInsertResult {
+  attempted: number;
+  status: number;
+  preferenceApplied: string | null;
+}
+
 /**
  * Insert rows into `public.insider_accession_discovery_queue` via the
  * Supabase REST API. `Prefer: resolution=ignore-duplicates` implements the
@@ -338,8 +412,8 @@ export interface SupabaseRestEnv {
  */
 export function makeRestInserter(env: SupabaseRestEnv) {
   const url = `${env.supabaseUrl.replace(/\/+$/, '')}/rest/v1/insider_accession_discovery_queue`;
-  return async function insertRows(rows: readonly DiscoveryRow[]): Promise<void> {
-    if (rows.length === 0) return;
+  return async function insertRows(rows: readonly DiscoveryRow[]): Promise<RestInsertResult | undefined> {
+    if (rows.length === 0) return undefined;
     const resp = await fetch(url, {
       method: 'POST',
       headers: {
@@ -350,6 +424,7 @@ export function makeRestInserter(env: SupabaseRestEnv) {
       },
       body: JSON.stringify(rows),
     });
+    const preferenceApplied = resp.headers.get('Preference-Applied');
     if (!resp.ok) {
       const body = await resp.text().catch(() => '<body unreadable>');
       throw new Error(
@@ -358,7 +433,44 @@ export function makeRestInserter(env: SupabaseRestEnv) {
     }
     // Drain body so Deno releases the response resource (return=minimal → empty).
     await resp.text().catch(() => undefined);
+    console.log(JSON.stringify({
+      event: 'insider_discovery_supabase_insert',
+      table: 'insider_accession_discovery_queue',
+      rest_path: '/rest/v1/insider_accession_discovery_queue',
+      attempted_rows: rows.length,
+      status: resp.status,
+      preference_applied: preferenceApplied,
+      correlation_id: rows[0]?.discovery_correlation_id ?? '',
+      as_of_date: rows[0]?.as_of_date ?? '',
+    }));
+    return { attempted: rows.length, status: resp.status, preferenceApplied };
   };
+}
+
+export async function verifyPersistedCount(env: SupabaseRestEnv, correlationId: string): Promise<number> {
+  const url = `${env.supabaseUrl.replace(/\/+$/, '')}/rest/v1/insider_accession_discovery_queue?select=discovery_correlation_id&discovery_correlation_id=eq.${encodeURIComponent(correlationId)}`;
+  const resp = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'apikey': env.serviceRoleKey,
+      'Authorization': `Bearer ${env.serviceRoleKey}`,
+      'Prefer': 'count=exact',
+      'Range': '0-0',
+    },
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '<body unreadable>');
+    throw new Error(
+      `supabase REST post-write verification failed: HTTP ${resp.status} ${resp.statusText} — ${body.slice(0, 512)}`,
+    );
+  }
+  const range = resp.headers.get('Content-Range');
+  await resp.text().catch(() => undefined);
+  const m = range?.match(/\/(\d+)$/);
+  if (m === null || m === undefined) {
+    throw new Error(`supabase REST post-write verification missing Content-Range exact count (got ${range ?? '<absent>'})`);
+  }
+  return Number(m[1]);
 }
 
 // ---------------------------------------------------------------------------
@@ -393,34 +505,67 @@ if (import.meta.main) {
   }
   const correlationId = crypto.randomUUID();
   const discoveredBy: DiscoveredBy = parsed.mode.kind === 'daily' ? 'gha-daily' : 'backfill-oneshot';
-  const fetcher = new EdgarDailyIndexFetcher(contactEmail);
-  const deps: RunDeps = {
-    fetcher,
-    insertRows: makeRestInserter(env),
-    correlationId,
-    discoveredBy,
-  };
-  console.log(
-    JSON.stringify({
-      event: 'insider_discovery_run_start',
-      mode: parsed.mode,
-      discovered_by: discoveredBy,
-      correlation_id: correlationId,
-    }),
-  );
   try {
+    const fetcher = new EdgarDailyIndexFetcher(contactEmail);
+    const cikMapper = new EdgarCikMapper(contactEmail);
+    const universeTickers = await loadCurrentUniverseTickers(env);
+    const universeCik10 = await loadUniverseCikSet(universeTickers, cikMapper);
+    console.log(JSON.stringify({
+      event: 'insider_discovery_universe_loaded',
+      operator_id: DEFAULT_OPERATOR_ID,
+      universe_tickers: universeTickers.length,
+      universe_cik10_resolved: universeCik10.size,
+      correlation_id: correlationId,
+    }));
+    if (universeTickers.length === 0 || universeCik10.size === 0) {
+      throw new Error(
+        `universe filter unavailable: universe_tickers=${universeTickers.length}, universe_cik10_resolved=${universeCik10.size}`,
+      );
+    }
+    const deps: RunDeps = {
+      fetcher,
+      insertRows: makeRestInserter(env),
+      correlationId,
+      discoveredBy,
+      isUniverseEntry: buildUniverseEntryPredicate(universeCik10),
+    };
+    console.log(
+      JSON.stringify({
+        event: 'insider_discovery_run_start',
+        mode: parsed.mode,
+        discovered_by: discoveredBy,
+        correlation_id: correlationId,
+      }),
+    );
     const outcomes = await runMode(parsed.mode, deps);
+    const entriesParsed = outcomes.reduce((s, o) => s + o.entries_parsed, 0);
+    const entriesAfterUniverseFilter = outcomes.reduce((s, o) => s + o.entries_after_universe_filter, 0);
     const rowsTotal = outcomes.reduce((s, o) => s + o.rows_inserted, 0);
     const heartbeats = outcomes.filter((o) => o.heartbeat_inserted).length;
     const unavailable = outcomes.filter((o) => o.data_unavailable).length;
+    const persistedByCorrelation = await verifyPersistedCount(env, correlationId);
+    const expectedWrites = rowsTotal + heartbeats;
+    if (entriesParsed > 0 && entriesAfterUniverseFilter === 0) {
+      throw new Error(
+        `semantic-success verification failed: entries_parsed=${entriesParsed} but entries_after_universe_filter=0; refusing green exit with structural-only success`,
+      );
+    }
+    if (expectedWrites > 0 && persistedByCorrelation === 0) {
+      throw new Error(
+        `post-write verification found zero rows for discovery_correlation_id=${correlationId} after expected_writes=${expectedWrites}`,
+      );
+    }
     console.log(
       JSON.stringify({
         event: 'insider_discovery_run_complete',
         correlation_id: correlationId,
         days: outcomes.length,
+        entries_parsed: entriesParsed,
+        entries_after_universe_filter: entriesAfterUniverseFilter,
         rows_inserted: rowsTotal,
         heartbeats_inserted: heartbeats,
         days_unavailable: unavailable,
+        persisted_rows_by_correlation_id: persistedByCorrelation,
       }),
     );
     Deno.exit(0);

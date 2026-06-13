@@ -251,6 +251,26 @@ Deno.test('(D.1) seedWorkItems daily: in-universe filter drops out-of-universe f
   assertEquals(payload.form_type, '4');
 });
 
+Deno.test('(D.1b) seedWorkItems daily: real NVDA master.idx CIK operand matches padded universe CIK', async () => {
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'NVDA', gics_sector: 'Tech' }],
+    cikMap: { NVDA: 1045810 },
+    daily: {
+      '2026-06-11': [
+        { filer_cik: '1045810', accession_number: '0001768670-26-000002', form_type: '4' },
+      ],
+    },
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  const items = await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
+  assertEquals(items.length, 1);
+  assertEquals(items[0].id, '0001768670-26-000002');
+  const payload = items[0].payload as Readonly<InsiderWorkItemPayload>;
+  assertEquals(payload.filer_cik_raw, '1045810');
+  assertEquals(payload.filer_cik_padded, '0001045810');
+  assertEquals(payload.ticker, 'NVDA');
+});
+
 Deno.test('(D.2) seedWorkItems daily: empty universe → empty items (Q5 VALID empty seed)', async () => {
   const deps = makeBaselineDeps({
     universe: [],

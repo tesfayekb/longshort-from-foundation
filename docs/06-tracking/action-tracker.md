@@ -1,3 +1,20 @@
+### ACT-204: FP-050 Phase 4 F2.b-hardening — real master.idx parser/header-date fix + in-universe semantic-success gate + external-write verification; GHA run #3 100%-heartbeat outcome diagnosed as parser shape drift, not CIK normalization; Signal #4 remains DISARMED
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-204 (next-free after ACT-203). |
+| **Mode** | investigation → hardening execution, per operator instruction. |
+| **Authority** | Operator 2026-06-13 GHA run #3 diagnostic/hardening brief; consolidation of F2.b-hardening external-write verification with parse/filter fix. |
+| **Diagnosis** | GHA run #3 (`discovery_correlation_id=658b8070-dba7-44f9-881e-cd12b4c81f8b`) produced `days:63`, `rows_inserted:0`, `heartbeats_inserted:63` with EDGAR 200s. Source inspection showed the parser was positional but gated on synthetic header `CIK\|Company Name\|Form Type\|Date Filed\|Filename` and ISO dates; real SEC master.idx uses `CIK\|Company Name\|Form Type\|Date Filed\|File Name` and compact `YYYYMMDD`, causing 0 parsed Form-4 rows before the in-universe predicate. Live row proof: `1045810\|NVIDIA CORP\|4\|20260605\|edgar/data/1045810/0001768670-26-000002.txt`; hardened parser output has `date_filed='2026-06-05'`, `accession_number='0001768670-26-000002'`; master operand `1045810 → 0001045810`; universe operand `NVDA → 0001045810`; predicate operands match. Verdict: parser header/date mismatch; NOT CIK normalization mismatch, NOT form-type literal mismatch, NOT column-index off-by-one. |
+| **Changes** | `edgar-daily-index-fetcher.ts` accepts real `File Name` header + compact dates while preserving historical fixture compatibility; `scripts/insider-discovery-egress.ts` loads current universe tickers, resolves ticker→CIK via `EdgarCikMapper`, filters to in-universe padded CIKs, writes padded `issuer_cik`, emits semantic counters (`entries_parsed`, `entries_after_universe_filter`), fails green exit on structural-only success, logs PostgREST insert status/path/attempted rows/`Preference-Applied`, and verifies persisted count by `discovery_correlation_id`. |
+| **Tests** | Focused producer suite: `deno test --allow-net --allow-env --allow-read scripts/insider-discovery-egress_test.ts` → `ok \| 17 passed \| 0 failed (15ms)`. Focused parser+consumer suite: `cd supabase/functions && deno test --allow-net --allow-env --allow-read _shared/longshort-signals/insider-transactions/edgar-daily-index-fetcher_test.ts _shared/longshort-signals/insider-transactions/insider-work-list-registration_test.ts` → `ok \| 39 passed \| 0 failed (173ms)`. |
+| **Docs / references** | Updated `docs/04-modules/longshort/signals/insider-transactions.md`; updated `docs/07-reference/function-index.md`; added `docs/ai-failure-modes.md` Catalog #44 (structural-success metrics without semantic-success metrics). No migration / no MIG ledger entry. |
+| **Deploy gate** | F2.b hardening itself is GHA producer + shared parser/test/doc work; no edge-function deploy is required for the GHA script. Shared parser is consumed by edge code, so the F2-pre deployed-SHA MATCH proof re-enters at F2.c before consumer attestation. |
+| **ROI Impact** | Positive enabling impact only; Signal #4 remains DISARMED, so no live trading output changes. The change restores the producer's ability to populate actual in-universe discovery rows and prevents a future green-but-zero semantic backfill. |
+| **Status** | Complete; operator should re-fire the workflow with explicit `Run workflow` inputs after this commit. Signal #4 STAYS DISARMED. |
+
+---
+
 ### ACT-203: FP-050 Phase 4 F2.b — producer ships (GHA-egress discovery script + 14-test hermetic suite + GHA workflow with `15 20 * * 1-5` UTC schedule + `workflow_dispatch` backfill; R1 heartbeat-at-write-seam codified; verbatim operator secrets guidance + verbatim one-shot backfill invocation in the module doc); NO `seedWorkItems` edit (lands F2.c); NO deploy required, F2-pre verifier contract does NOT bind on GHA-egress code
 
 | Field | Value |
