@@ -402,67 +402,166 @@ export function createInsiderWorkListConfig(
 
 function makeSeedWorkItems(deps: InsiderWorkListDeps, mode: InsiderWorkListMode): WorkListSeedFn {
   return async ({ asOf }): Promise<ReadonlyArray<WorkListItem>> => {
-    // Step S.1: load the current universe membership (latest as_of_date).
+    // Step S.1: load universe (latest as_of_date). Empty universe →
+    // VALID empty seed (Q5; engine finalizes cleanly).
     const universe = await loadCurrentUniverse(deps);
-    if (universe.length === 0) {
-      // Empty universe = VALID empty seed (Q5: empty seed proceeds to
-      // finalize cleanly; the consumer's mass-balance is 0 = 0 + 0).
-      return [];
-    }
+    if (universe.length === 0) return [];
 
-    // Step S.2: build the ticker→CIK lookup (fetch-per-fire per DEC-058
-    // §(f1)). Throws on network/UA/JSON failure → propagated as Q5
-    // `seed_failed` by the engine (`failure_reason='seed_failed:
-    // <masked verbatim>'`, NEVER half-seeded).
+    // Step S.2: ticker → padded CIK lookup (fetch-per-fire per
+    // DEC-058 §(f1)). Throws → Q5 `seed_failed` (engine inserts the
+    // terminal failed-run row; never half-seeded).
     const lookup = await deps.cikMapper.loadMap();
-
-    // Step S.3: build the inverse CIK→universe-row map. Unresolved
-    // tickers are dropped silently HERE (the consumer-side typed skip
-    // `ticker_to_cik_unresolved` is finalize-time, per the §22.5.1
-    // ledger pattern — seed-time we only enumerate work).
     const byPaddedCik = new Map<string, UniverseRowWithCik>();
+    const paddedUniverseCiks: string[] = [];
     for (const u of universe) {
       const r: CikLookupResult = lookup(u.ticker);
       if (r.kind === 'unresolved') continue;
       byPaddedCik.set(r.cik10, { ticker: u.ticker, gics_sector: u.gics_sector, cik10: r.cik10 });
+      paddedUniverseCiks.push(r.cik10);
     }
+    if (paddedUniverseCiks.length === 0) return [];
 
-    // Step S.4: enumerate target trading days.
-    const targetDays =
-      mode === 'backfill'
-        ? trailingTradingDays(asOf, INSIDER_BACKFILL_TRADING_DAYS)
-        : [previousTradingDay(asOf)];
+    // Step S.3: enumerate target trading days. Daily = yesterday's
+    // trading day (weekends-only-skip). Backfill = the queue's own
+    // distinct unconsumed `as_of_date`s within the 63-trading-day
+    // window (most-recent first) — the queue is the source of truth
+    // for which days have producer-discovery rows; gaps stay gaps.
+    const targetDays: string[] = mode === 'backfill'
+      ? await loadDistinctBackfillDates(deps, asOf)
+      : [isoDate(previousTradingDay(asOf))];
 
-    // Step S.5: fetch each daily index, filter to in-universe rows,
-    // accumulate items. Holiday days return `unavailable` cleanly →
-    // contribute zero items (not a throw, per the fetcher contract).
+    // Step S.4 — R2 atomic claim (single-statement row-lock atomicity;
+    // see module-doc §R2 contract narrowing). Per-day UPDATE …
+    // RETURNING; per-run_id uniqueness on the downstream cursor INSERT
+    // closes the disjoint-outcome property end-to-end.
+    const consumedAtIso = asOf.toISOString();
     const items: WorkListItem[] = [];
-    const seenAccession = new Set<string>(); // item-id uniqueness invariant
+    const seenAccession = new Set<string>(); // backfill cross-day defense
     for (const day of targetDays) {
-      const result: DailyIndexResult = await deps.dailyIndex.fetchDay(day);
-      if (result.kind === 'unavailable') continue;
-      for (const entry of result.entries) {
-        const padded = padFilerCik(entry.filer_cik);
-        if (padded === null) continue;
-        const u = byPaddedCik.get(padded);
-        if (u === undefined) continue; // out-of-universe
-        if (seenAccession.has(entry.accession_number)) continue; // backfill overlap defense
-        seenAccession.add(entry.accession_number);
+      const claimed = await claimDiscoveryRowsForDay(deps, day, paddedUniverseCiks, consumedAtIso);
+      for (const row of claimed) {
+        if (seenAccession.has(row.accession_number)) continue;
+        seenAccession.add(row.accession_number);
+        const u = byPaddedCik.get(row.issuer_cik);
+        if (u === undefined) continue; // defensive (universe drift since producer)
         const payload: InsiderWorkItemPayload = {
-          filer_cik_raw: entry.filer_cik,
-          filer_cik_padded: padded,
+          filer_cik_raw: row.issuer_cik.replace(/^0+/, '') || '0',
+          filer_cik_padded: row.issuer_cik,
           ticker: u.ticker,
-          date_filed: entry.date_filed,
-          form_type: entry.form_type,
+          date_filed: day,
+          form_type: row.form_type,
         };
         items.push({
-          id: entry.accession_number,
+          id: row.accession_number,
           payload: payload as unknown as Readonly<Record<string, unknown>>,
         });
       }
     }
     return items;
   };
+}
+
+interface ClaimedDiscoveryRow {
+  issuer_cik: string;
+  accession_number: string;
+  form_type: '4' | '4/A';
+}
+
+/**
+ * R2 atomic claim — one PostgREST UPDATE-with-RETURNING. The WHERE
+ * conjunction is:
+ *
+ *   as_of_date            = $1
+ *   AND consumed_at       IS NULL
+ *   AND issuer_cik        = ANY($paddedUniverseCiks)     -- in-universe
+ *   AND NOT (issuer_cik='__heartbeat__'
+ *            AND accession_number='__heartbeat__')      -- R1 heartbeat exclusion
+ *
+ * The heartbeat exclusion is the operator-verbatim predicate. It is
+ * redundant given the in-universe IN-filter (no universe CIK equals
+ * '__heartbeat__'), but kept as a defense-in-depth structural pin —
+ * if a future change widens the in-universe set or relaxes the
+ * IN-filter, the heartbeat exclusion remains the structural barrier.
+ *
+ * Concurrency (R2): two concurrent UPDATEs against overlapping rows
+ * serialize at row-lock; the second sees `consumed_at IS NOT NULL`
+ * (already set by the first commit) and updates zero rows. RETURNING
+ * is empty for the loser. The engine's downstream cursor INSERT is
+ * keyed by `(run_id, ticker)` PK with unique `run_id` per init, so
+ * double-insert is structurally impossible.
+ */
+async function claimDiscoveryRowsForDay(
+  deps: InsiderWorkListDeps,
+  asOfDate: string,
+  paddedUniverseCiks: ReadonlyArray<string>,
+  consumedAtIso: string,
+): Promise<ClaimedDiscoveryRow[]> {
+  const heartbeatExclusion =
+    `issuer_cik.neq.${INSIDER_HEARTBEAT_ISSUER_CIK},` +
+    `accession_number.neq.${INSIDER_HEARTBEAT_ACCESSION_NUMBER}`;
+  const { data, error } = await deps.supabase
+    .from('insider_accession_discovery_queue')
+    .update({ consumed_at: consumedAtIso })
+    .eq('as_of_date', asOfDate)
+    .is('consumed_at', null)
+    .in('issuer_cik', paddedUniverseCiks as string[])
+    .or(heartbeatExclusion)
+    .select('issuer_cik, accession_number, form_type');
+  if (error) {
+    throw new Error(
+      `insider-work-list-registration: discovery-queue claim failed ` +
+        `(as_of_date=${asOfDate}): ${error.message}`,
+    );
+  }
+  const rows = (data ?? []) as Array<{
+    issuer_cik: string;
+    accession_number: string;
+    form_type: string;
+  }>;
+  const out: ClaimedDiscoveryRow[] = [];
+  for (const r of rows) {
+    if (r.form_type !== '4' && r.form_type !== '4/A') continue;
+    out.push({
+      issuer_cik: r.issuer_cik,
+      accession_number: r.accession_number,
+      form_type: r.form_type,
+    });
+  }
+  return out;
+}
+
+/**
+ * Backfill seed helper — read the queue's distinct unconsumed
+ * `as_of_date`s within the 63-trading-day window bounded by
+ * `previousTradingDay(asOf)` and the oldest trailing day. The queue
+ * is authoritative for which days have producer-discovery rows; gaps
+ * (days the producer did not run for) stay gaps and are not
+ * synthesized here. Most-recent first to match the trailing-days
+ * ordering used in unit tests.
+ */
+async function loadDistinctBackfillDates(
+  deps: InsiderWorkListDeps,
+  asOf: Date,
+): Promise<string[]> {
+  const window = trailingTradingDays(asOf, INSIDER_BACKFILL_TRADING_DAYS);
+  const oldestIso = isoDate(window[window.length - 1]);
+  const newestIso = isoDate(window[0]);
+  const { data, error } = await deps.supabase
+    .from('insider_accession_discovery_queue')
+    .select('as_of_date')
+    .gte('as_of_date', oldestIso)
+    .lte('as_of_date', newestIso)
+    .is('consumed_at', null);
+  if (error) {
+    throw new Error(
+      `insider-work-list-registration: backfill distinct-dates read failed: ${error.message}`,
+    );
+  }
+  const seen = new Set<string>();
+  for (const r of (data ?? []) as Array<{ as_of_date: string }>) {
+    seen.add(r.as_of_date);
+  }
+  return Array.from(seen).sort().reverse();
 }
 
 async function loadCurrentUniverse(
