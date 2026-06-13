@@ -42,6 +42,18 @@ Deno.test('(c) backfill flag opt-in: defaults false; true → buildInsiderBackfi
   assert(HANDLER_SOURCE.includes('insider_backfill_config_build_failed'));
 });
 
+Deno.test('(c.2) ACT-210 — body.as_of honored: parseAsOfDate + future-date guard; default wall-clock', () => {
+  // Mirrors longshort-queue-init-manual sibling lines 46-59.
+  assert(HANDLER_SOURCE.includes('parseAsOfDate(obj.as_of)'));
+  assert(HANDLER_SOURCE.includes("'as_of_invalid_format_expected_YYYY_MM_DD'"));
+  assert(HANDLER_SOURCE.includes("'as_of_in_future'"));
+  // Default branch: wall-clock when as_of absent.
+  assert(/obj\.as_of === undefined \|\| obj\.as_of === null/.test(HANDLER_SOURCE));
+  assert(HANDLER_SOURCE.includes('productionClock.getWallClockTs()'));
+  // The old single-line wall-clock assignment is GONE.
+  assert(!/const as_of = productionClock\.getWallClockTs\(\);/.test(HANDLER_SOURCE));
+});
+
 Deno.test('(d) daily path: drift sentinel + registry-resolved config', () => {
   assert(HANDLER_SOURCE.includes('productionQueueRegistry.has(INSIDER_SIGNAL_ID)'));
   assert(HANDLER_SOURCE.includes("apiError(500, 'insider_registry_drift'"));

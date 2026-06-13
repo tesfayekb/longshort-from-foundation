@@ -34,6 +34,7 @@ import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
+import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 import { productionQueueRegistry, type QueueSignalConfig } from '../_shared/longshort-signals/shared/queue-worker/queue-config.ts';
 import { initQueueRun } from '../_shared/longshort-signals/shared/queue-worker/queue-init.ts';
 import { QUEUE_AUDIT_EVENTS } from '../_shared/longshort-signals/shared/queue-worker/queue-audit-events.ts';
@@ -84,7 +85,23 @@ Deno.serve(createHandler(async (req: Request) => {
     config = productionQueueRegistry.get(INSIDER_SIGNAL_ID);
   }
 
-  const as_of = productionClock.getWallClockTs();
+  // ACT-210 — honor body.as_of with parse + future-date guard.
+  // Pattern copied verbatim from longshort-queue-init-manual/index.ts
+  // lines 46-59 (see sibling for canonical shape).
+  let as_of: Date;
+  if (obj.as_of === undefined || obj.as_of === null) {
+    as_of = productionClock.getWallClockTs();
+  } else {
+    const parsed = parseAsOfDate(obj.as_of);
+    if (!parsed) {
+      return apiError(400, 'as_of_invalid_format_expected_YYYY_MM_DD', { correlationId });
+    }
+    const now = productionClock.getWallClockTs();
+    if (parsed.getTime() > now.getTime()) {
+      return apiError(400, 'as_of_in_future', { correlationId });
+    }
+    as_of = parsed;
+  }
 
   try {
     const result = await initQueueRun({
