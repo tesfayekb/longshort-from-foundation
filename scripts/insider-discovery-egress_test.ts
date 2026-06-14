@@ -18,7 +18,12 @@ import {
 } from '../supabase/functions/_shared/longshort-signals/insider-transactions/edgar-daily-index-fetcher.ts';
 import { EdgarFetchError } from '../supabase/functions/_shared/longshort-signals/insider-transactions/edgar-cik-mapper.ts';
 import {
+  EdgarSubmissionsFetcher,
+  type EdgarSubmissionsResult,
+} from '../supabase/functions/_shared/longshort-signals/insider-transactions/edgar-submissions-fetcher.ts';
+import {
   buildHeartbeatRow,
+  EPOCH_ACCEPTANCE,
   HEARTBEAT_ACCESSION_NUMBER,
   HEARTBEAT_ISSUER_CIK,
   buildUniverseEntryPredicate,
@@ -91,13 +96,55 @@ function captureInserter(): { insertRows: (r: readonly DiscoveryRow[]) => Promis
   };
 }
 
+/**
+ * ACT-215: stub submissions fetcher. Returns a `resolved` result keyed
+ * by accession_number — the producer cross-walks acceptance from this
+ * map onto each `DiscoveryRow`. Per-issuer fetches are invoked once per
+ * unique padded CIK; the stub is keyed by CIK and emits the rows
+ * relevant to that CIK from `accessionToAcceptance`.
+ */
+function stubSubmissions(
+  accessionToAcceptance: Record<string, { acceptance: string; primary: string; form: '4' | '4/A' }>,
+  byCik?: Record<string, string[]>,
+): EdgarSubmissionsFetcher {
+  const fake = {
+    async fetchSubmissions({ cik }: { cik: string | number }): Promise<EdgarSubmissionsResult> {
+      const raw = typeof cik === 'number' ? String(cik) : cik;
+      const padded = (raw.replace(/^0+/, '') || '0').padStart(10, '0');
+      const accs = byCik?.[padded] ?? Object.keys(accessionToAcceptance);
+      const rows = accs
+        .filter((a) => accessionToAcceptance[a] !== undefined)
+        .map((a) => ({
+          accession_number: a,
+          form: accessionToAcceptance[a].form,
+          acceptance_datetime: accessionToAcceptance[a].acceptance,
+          primary_document: accessionToAcceptance[a].primary,
+        }));
+      return { kind: 'resolved', cik10: padded, rows };
+    },
+  };
+  return fake as unknown as EdgarSubmissionsFetcher;
+}
+
+/** A submissions stub that ALWAYS reports the issuer's feed as 404. */
+function stubSubmissionsUnavailable(): EdgarSubmissionsFetcher {
+  const fake = {
+    async fetchSubmissions(): Promise<EdgarSubmissionsResult> {
+      return { kind: 'unavailable', reason: 'data_unavailable' };
+    },
+  };
+  return fake as unknown as EdgarSubmissionsFetcher;
+}
+
 function makeDeps(opts: {
   fetcher: EdgarDailyIndexFetcher;
+  submissions?: EdgarSubmissionsFetcher;
   insertRows?: (r: readonly DiscoveryRow[]) => Promise<void>;
   discoveredBy?: 'gha-daily' | 'backfill-oneshot';
 }): RunDeps {
   return {
     fetcher: opts.fetcher,
+    submissions: opts.submissions ?? stubSubmissions({}, {}),
     insertRows: opts.insertRows ?? (() => Promise.resolve()),
     correlationId: 'corr-test-0001',
     discoveredBy: opts.discoveredBy ?? 'gha-daily',
@@ -111,12 +158,20 @@ function makeDeps(opts: {
 
 Deno.test('(a) parses master.idx and emits exactly the Form-4/4-A rows in the REST payload shape', async () => {
   const cap = captureInserter();
-  const deps = makeDeps({ fetcher: fetcherReturning(fixtureMasterBody()), insertRows: cap.insertRows });
+  const submissions = stubSubmissions({
+    '0000320193-26-000077': { acceptance: '2026-06-12T20:01:00.000Z', primary: 'wk-form4_aapl.xml', form: '4' },
+    '0000789019-26-000044': { acceptance: '2026-06-12T20:02:00.000Z', primary: 'wk-form4_msft.xml', form: '4/A' },
+  }, {
+    '0000320193': ['0000320193-26-000077'],
+    '0000789019': ['0000789019-26-000044'],
+  });
+  const deps = makeDeps({ fetcher: fetcherReturning(fixtureMasterBody()), insertRows: cap.insertRows, submissions });
 
   const outcome = await runDiscoveryDay('2026-06-12', deps);
 
   assertEquals(outcome.rows_inserted, 2, 'only Form 4 + Form 4/A survive the post-parse filter');
   assertEquals(outcome.heartbeat_inserted, false);
+  assertEquals(outcome.accessions_missing_acceptance, 0);
   assertEquals(cap.calls.length, 1, 'exactly one batch INSERT');
   const payload = cap.calls[0];
   assertEquals(payload.length, 2);
@@ -131,11 +186,13 @@ Deno.test('(a) parses master.idx and emits exactly the Form-4/4-A rows in the RE
     filename: 'edgar/data/320193/000032019326000077/0000320193-26-000077-index.htm',
     discovered_by: 'gha-daily',
     discovery_correlation_id: 'corr-test-0001',
+    acceptance_datetime: '2026-06-12T20:01:00.000Z',
   });
   // Form 4/A — MSFT
   assertEquals(payload[1].issuer_cik, '0000789019');
   assertEquals(payload[1].form_type, '4/A');
   assertEquals(payload[1].accession_number, '0000789019-26-000044');
+  assertEquals(payload[1].acceptance_datetime, '2026-06-12T20:02:00.000Z');
 
   // Pure-helper parity (rowFromEntry produces the same shape — drift sentinel).
   const e = {
@@ -146,13 +203,19 @@ Deno.test('(a) parses master.idx and emits exactly the Form-4/4-A rows in the RE
     filename: 'edgar/data/320193/000032019326000077/0000320193-26-000077-index.htm',
     accession_number: '0000320193-26-000077',
   };
-  assertEquals(rowFromEntry(e, '2026-06-12', 'gha-daily', 'corr-test-0001'), payload[0]);
+  assertEquals(
+    rowFromEntry(e, '2026-06-12', 'gha-daily', 'corr-test-0001', '2026-06-12T20:01:00.000Z'),
+    payload[0],
+  );
 });
 
 Deno.test('(a2) real master.idx NVDA row: File Name header + YYYYMMDD date parse, CIK normalized to universe 10-digit operand', async () => {
   const cap = captureInserter();
   const universeCik10 = new Set(['0001045810']);
-  const deps = makeDeps({ fetcher: fetcherReturning(fixtureRealMasterNvdaBody()), insertRows: cap.insertRows });
+  const submissions = stubSubmissions({
+    '0001768670-26-000002': { acceptance: '2026-06-05T21:12:55.000Z', primary: 'wk-form4_nvda.xml', form: '4' },
+  }, { '0001045810': ['0001768670-26-000002'] });
+  const deps = makeDeps({ fetcher: fetcherReturning(fixtureRealMasterNvdaBody()), insertRows: cap.insertRows, submissions });
   deps.isUniverseEntry = buildUniverseEntryPredicate(universeCik10);
 
   const outcome = await runDiscoveryDay('2026-06-05', deps);
@@ -169,6 +232,7 @@ Deno.test('(a2) real master.idx NVDA row: File Name header + YYYYMMDD date parse
     filename: 'edgar/data/1045810/0001768670-26-000002.txt',
     discovered_by: 'gha-daily',
     discovery_correlation_id: 'corr-test-0001',
+    acceptance_datetime: '2026-06-05T21:12:55.000Z',
   });
   assertEquals(normalizeFilerCikForUniverse('1045810'), '0001045810');
 });
@@ -185,6 +249,48 @@ Deno.test('(a3) in-universe predicate compares padded master.idx filer CIK to pa
   assertEquals(outcome.rows_inserted, 0);
   assertEquals(outcome.heartbeat_inserted, true);
   assertEquals(cap.calls[0][0].issuer_cik, HEARTBEAT_ISSUER_CIK);
+  // ACT-215: heartbeat carries epoch acceptance sentinel.
+  assertEquals(cap.calls[0][0].acceptance_datetime, EPOCH_ACCEPTANCE);
+});
+
+// ---------------------------------------------------------------------------
+// (a4) ACT-215 acceptance cross-walk: missing-acceptance drops + counter
+// ---------------------------------------------------------------------------
+
+Deno.test('(a4) ACT-215 — in-universe accession with NO acceptance in submissions feed is DROPPED + counted (MIG-097 §(b) enqueue gate)', async () => {
+  const cap = captureInserter();
+  // Submissions feed returns ZERO matching rows for the issuer →
+  // accession→acceptance map is empty → the AAPL row is dropped.
+  const deps = makeDeps({
+    fetcher: fetcherReturning(fixtureMasterBody()),
+    insertRows: cap.insertRows,
+    submissions: stubSubmissions({}, {}),
+  });
+  const outcome = await runDiscoveryDay('2026-06-12', deps);
+  assertEquals(outcome.entries_after_universe_filter, 2);
+  assertEquals(outcome.rows_inserted, 0, 'rows dropped — no enqueue without acceptance');
+  assertEquals(outcome.accessions_missing_acceptance, 2);
+  // After-xwalk emptiness still inserts the heartbeat (a day with
+  // in-universe entries but zero acceptance is a producer-visible
+  // gap; the heartbeat keeps "discovery ran" structurally distinct
+  // from "discovery did not run").
+  assertEquals(outcome.heartbeat_inserted, true);
+  assertEquals(cap.calls[0][0].issuer_cik, HEARTBEAT_ISSUER_CIK);
+});
+
+Deno.test('(a5) ACT-215 — submissions feed 404 surfaces in submissions_fetch_status counter; affected accessions drop', async () => {
+  const cap = captureInserter();
+  const deps = makeDeps({
+    fetcher: fetcherReturning(fixtureMasterBody()),
+    insertRows: cap.insertRows,
+    submissions: stubSubmissionsUnavailable(),
+  });
+  const outcome = await runDiscoveryDay('2026-06-12', deps);
+  assertEquals(outcome.rows_inserted, 0);
+  assertEquals(outcome.accessions_missing_acceptance, 2);
+  const status = outcome.submissions_fetch_status ?? {};
+  // Two unique issuers (AAPL CIK + MSFT CIK) → two 404s recorded.
+  assertEquals(status['404'], 2);
 });
 
 // ---------------------------------------------------------------------------
@@ -200,10 +306,15 @@ Deno.test('(b) iterateTradingDays skips weekends and the 2026-05-25 Memorial Day
 
 Deno.test('(b) backfill mode drives runDiscoveryDay per iterated trading day', async () => {
   const cap = captureInserter();
+  const submissions = stubSubmissions({
+    '0000320193-26-000077': { acceptance: '2026-06-10T20:01:00.000Z', primary: 'wk-form4_aapl.xml', form: '4' },
+    '0000789019-26-000044': { acceptance: '2026-06-10T20:02:00.000Z', primary: 'wk-form4_msft.xml', form: '4/A' },
+  });
   const deps = makeDeps({
     fetcher: fetcherReturning(fixtureMasterBody()),
     insertRows: cap.insertRows,
     discoveredBy: 'backfill-oneshot',
+    submissions,
   });
   // Wed 2026-06-10 → Fri 2026-06-12 (three trading days, no holiday).
   const outcomes = await runMode(
@@ -262,6 +373,10 @@ Deno.test('(c3) buildHeartbeatRow shape — sentinels + CHECK-valid form_type', 
   assertEquals(hb.form_type, '4');
   assertEquals(hb.discovered_by, 'backfill-oneshot');
   assertEquals(hb.discovery_correlation_id, 'corr-xyz');
+  // ACT-215: heartbeat carries the epoch acceptance sentinel so the
+  // MIG-097 NOT NULL invariant is satisfied without inventing a
+  // future-shaped timestamp.
+  assertEquals(hb.acceptance_datetime, EPOCH_ACCEPTANCE);
   // The CHECK constraint allows only '4' | '4/A' — assert literal-typed.
   assert(hb.form_type === '4' || hb.form_type === '4/A');
 });
@@ -288,7 +403,7 @@ Deno.test('(c4) makeRestInserter logs and returns structural write evidence for 
       date_filed: '2026-06-05',
       filename: 'edgar/data/1045810/0001768670-26-000002.txt',
       accession_number: '0001768670-26-000002',
-    }, '2026-06-05', 'gha-daily', 'corr-verify')]);
+    }, '2026-06-05', 'gha-daily', 'corr-verify', '2026-06-05T21:12:55.000Z')]);
     assertEquals(result, {
       attempted: 1,
       status: 201,
