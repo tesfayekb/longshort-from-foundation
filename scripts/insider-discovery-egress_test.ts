@@ -713,15 +713,22 @@ function countingSubmissions(
 }
 
 /**
- * (p5) ACT-222 dedup sentinel: across a multi-day backfill where issuer
- * CIK 0001045810 (NVDA exemplar) appears in 3 distinct day partitions,
- * the producer fetches submissions/CIK0001045810.json EXACTLY ONCE.
+ * (p5) ACT-222 dedup sentinel — within a backfill envelope where issuer
+ * CIK 0001045810 (NVDA exemplar) appears in 3 distinct day partitions
+ * driven by `runModeWithSummary({kind:'backfill',...})`, the producer
+ * fetches `submissions/CIK0001045810.json` EXACTLY ONCE.
  *
- * Surfaced by GHA run 27504513965 (cancelled at ~1h45m): the legacy
- * per-day shape refetched each issuer N times across the backfill window
- * — Path-Q restructures `runMode` into a two-pass dedup orchestrator
- * that collects the UNIQUE issuer set across all days before issuing
- * any submissions fetches.
+ * SCOPE NOTE (ACT-223 docstring correction): (p5) exercises the
+ * cross-day dedup ONLY inasmuch as the test entry point is the
+ * backfill orchestrator. The narrower per-call dedup-within-a-single-
+ * `runDiscoveryDay`-invocation contract is no longer the failure mode
+ * Catalog #48 (subsequent firing #2/#3) binds; the architectural
+ * contract is the GLOBAL unique-issuer set across the entire fire
+ * envelope. (p7) and (p8) are the canonical regression sentinels for
+ * that wider contract per ACT-223 / Catalog #43 fixture-scope-mismatch
+ * subsequent firing: a "fetch once" contract MUST be exercised at the
+ * contract's WIDEST scope, not its narrowest. (p5) is retained as a
+ * thin smoke check on the orchestrator dispatch path.
  */
 Deno.test('(p5) ACT-222 — NVDA in 3 day partitions ⇒ submissions/CIK0001045810.json fetched EXACTLY ONCE', async () => {
   const cap = captureInserter();
@@ -851,4 +858,203 @@ Deno.test('(p6) ACT-222 — cross-walk hits all 3 NVDA accessions across 3 day p
   assertEquals(byAccession.get('0001768670-26-000012')?.as_of_date, '2026-06-12');
   // Ticker stamped on every row.
   for (const r of byAccession.values()) assertEquals(r.ticker, 'NVDA');
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// ACT-223 / cross-day cross-call dedup correction (Catalog #43
+// fixture-scope-mismatch subsequent firing; Catalog #48 subsequent
+// firing #3). The shipped Path-Q architecture in `runBackfillDedup`
+// collects the GLOBAL unique-issuer set across all days BEFORE Pass 2
+// fires; (p7) and (p8) lock that contract at the orchestrator's
+// widest scope so a future regression to a per-day or per-iteration
+// unique set fails at the test gate rather than at the next GHA fire.
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * (p7) ACT-223 — cross-day cross-call dedup proof. `runBackfillDedup`
+ * fans Pass 1 across N distinct days; each day surfaces the SAME issuer
+ * CIK with a DIFFERENT accession. Pass 2 MUST issue exactly ONE
+ * submissions fetch for that CIK (not N, not "once per day"); Pass 3
+ * MUST cross-walk all N accessions onto their respective per-day insert
+ * batches from the single fetched feed.
+ *
+ * Failure mode this catches: a regression that re-scopes Pass-2 dedup
+ * to per-day (or to within a single `runDiscoveryDay` invocation)
+ * would issue N submissions calls and would surface as the cancelled-
+ * GHA-run class the live evidence trail in the ACT-223 ledger entry
+ * documents.
+ */
+Deno.test('(p7) ACT-223 — cross-day cross-call dedup: ONE submissions fetch across N runDiscoveryDay-equivalent passes inside a single runBackfill envelope', async () => {
+  const cap = captureInserter();
+  const nvdaDay = (ymd: string, acc: string): string =>
+    [
+      'Description: Daily Index',
+      '',
+      'CIK|Company Name|Form Type|Date Filed|File Name',
+      '----------------------------------------------------',
+      `1045810|NVIDIA CORP|4|${ymd}|edgar/data/1045810/${acc}.txt`,
+    ].join('\n');
+  const fetcher = fetcherByDay({
+    '20260610': nvdaDay('20260610', '0001045810-26-000001'),
+    '20260611': nvdaDay('20260611', '0001045810-26-000002'),
+    '20260612': nvdaDay('20260612', '0001045810-26-000003'),
+  });
+  const { fetcher: submissions, callsByCik } = countingSubmissions(
+    {
+      '0001045810-26-000001': { acceptance: '2026-06-10T20:01:00.000Z', primary: 'p.xml', form: '4' },
+      '0001045810-26-000002': { acceptance: '2026-06-11T20:02:00.000Z', primary: 'p.xml', form: '4' },
+      '0001045810-26-000003': { acceptance: '2026-06-12T20:03:00.000Z', primary: 'p.xml', form: '4' },
+    },
+    {
+      '0001045810': [
+        '0001045810-26-000001',
+        '0001045810-26-000002',
+        '0001045810-26-000003',
+      ],
+    },
+  );
+  const deps: RunDeps = {
+    ...makeDeps({
+      fetcher,
+      insertRows: cap.insertRows,
+      submissions,
+      discoveredBy: 'backfill-oneshot',
+      tickerForPaddedCik: (cik) => (cik === '0001045810' ? 'NVDA' : null),
+    }),
+    sleep: () => Promise.resolve(),
+    submissionsPacingMs: 0,
+  };
+  deps.isUniverseEntry = buildUniverseEntryPredicate(new Set(['0001045810']));
+
+  const summary = await runModeWithSummary(
+    { kind: 'backfill', from: '2026-06-10', to: '2026-06-12' },
+    deps,
+  );
+
+  // Architectural invariant: ONE fetch for the single global unique CIK,
+  // NOT three (one-per-day) — the cross-day cross-call dedup contract.
+  assertEquals(
+    callsByCik.get('0001045810'),
+    1,
+    'cross-day cross-call dedup: submissions fetcher MUST be invoked exactly ONCE across all 3 day partitions',
+  );
+  assertEquals(callsByCik.size, 1, 'no spurious fetches against any other CIK');
+  assertEquals(summary.unique_issuers_fetched, 1);
+  assertEquals(summary.total_accessions_processed, 3);
+  assertEquals(summary.dedup_ratio, 3);
+
+  // All 3 accessions land in their respective day's insert batch with
+  // the correct per-day acceptance value drawn from the single feed.
+  const seenByAccession = new Map<string, DiscoveryRow>();
+  for (const batch of cap.calls) {
+    for (const r of batch) seenByAccession.set(r.accession_number, r);
+  }
+  assertEquals(seenByAccession.size, 3);
+  assertEquals(seenByAccession.get('0001045810-26-000001')?.acceptance_datetime, '2026-06-10T20:01:00.000Z');
+  assertEquals(seenByAccession.get('0001045810-26-000002')?.acceptance_datetime, '2026-06-11T20:02:00.000Z');
+  assertEquals(seenByAccession.get('0001045810-26-000003')?.acceptance_datetime, '2026-06-12T20:03:00.000Z');
+});
+
+/**
+ * (p8) ACT-223 — global unique-set ceiling proof. Across an N-day
+ * backfill where M distinct issuer CIKs appear (with heavy day-over-day
+ * overlap), `unique_issuers_fetched` MUST equal the set-cardinality of
+ * actually-stubbed CIKs (proving Pass 2 iterates the GLOBAL set, not a
+ * per-day set), AND MUST NOT exceed the configured universe-size ceiling
+ * (proving the in-universe filter built the same map both predicates
+ * derive from — Catalog #48 SEC-Dependency Producer-Relocation rule).
+ *
+ * Fixture: 5 day partitions, 30 distinct CIKs total, each issuer filing
+ * on multiple days (so per-day-scoped dedup would over-count). Universe
+ * cap set to 40 (≥ 30 — the cap is structural, not numeric).
+ */
+Deno.test('(p8) ACT-223 — global unique-set ceiling: unique_issuers_fetched === |distinct stubbed CIKs| AND ≤ universe.size', async () => {
+  const cap = captureInserter();
+  // Build 30 padded CIKs: 0000010001..0000010030.
+  const cikSet: string[] = [];
+  for (let i = 1; i <= 30; i++) {
+    cikSet.push(String(i + 10000).padStart(10, '0'));
+  }
+  // Universe cap of 40 distinct padded CIKs (30 used + 10 unused — the
+  // ceiling-not-floor proof: unique_issuers_fetched must be ≤ this).
+  const universeCik10 = new Set<string>(cikSet);
+  for (let i = 31; i <= 40; i++) {
+    universeCik10.add(String(i + 10000).padStart(10, '0'));
+  }
+  // 5 day partitions; each day filings come from a heavily-overlapping
+  // subset of the 30 CIKs so per-day-scoped dedup would over-count.
+  const days: Array<{ ymd: string; iso: string }> = [
+    { ymd: '20260608', iso: '2026-06-08' },
+    { ymd: '20260609', iso: '2026-06-09' },
+    { ymd: '20260610', iso: '2026-06-10' },
+    { ymd: '20260611', iso: '2026-06-11' },
+    { ymd: '20260612', iso: '2026-06-12' },
+  ];
+  const bodyByYmd: Record<string, string> = {};
+  const accessionToAcceptance: Record<string, { acceptance: string; primary: string; form: '4' | '4/A' }> = {};
+  const byCik: Record<string, string[]> = {};
+  for (const { ymd, iso } of days) {
+    const lines: string[] = [
+      'Description: Daily Index',
+      '',
+      'CIK|Company Name|Form Type|Date Filed|File Name',
+      '----------------------------------------------------',
+    ];
+    for (const padded of cikSet) {
+      const cikInt = padded.replace(/^0+/, '');
+      // Each (cik, day) gets a unique accession so per-day batches are distinct.
+      const acc = `${padded}-${ymd}`;
+      lines.push(`${cikInt}|TESTCO ${cikInt}|4|${ymd}|edgar/data/${cikInt}/${acc}.txt`);
+      accessionToAcceptance[acc] = {
+        acceptance: `${iso}T20:00:00.000Z`,
+        primary: 'p.xml',
+        form: '4',
+      };
+      (byCik[padded] ??= []).push(acc);
+    }
+    bodyByYmd[ymd] = lines.join('\n');
+  }
+  const fetcher = fetcherByDay(bodyByYmd);
+  const { fetcher: submissions, callsByCik } = countingSubmissions(accessionToAcceptance, byCik);
+  const deps: RunDeps = {
+    ...makeDeps({
+      fetcher,
+      insertRows: cap.insertRows,
+      submissions,
+      discoveredBy: 'backfill-oneshot',
+      tickerForPaddedCik: (cik) =>
+        universeCik10.has(cik) ? `T${cik.replace(/^0+/, '') || '0'}` : null,
+    }),
+    sleep: () => Promise.resolve(),
+    submissionsPacingMs: 0,
+  };
+  deps.isUniverseEntry = buildUniverseEntryPredicate(universeCik10);
+
+  const summary = await runModeWithSummary(
+    { kind: 'backfill', from: '2026-06-08', to: '2026-06-12' },
+    deps,
+  );
+
+  // Ceiling proof — Pass 2 iterates the GLOBAL unique-issuer set, never
+  // exceeding the universe size and never doubling on per-day overlap.
+  assertEquals(
+    summary.unique_issuers_fetched,
+    cikSet.length,
+    'unique_issuers_fetched MUST equal the set-cardinality of actually-stubbed CIKs (proves Pass 2 iterates the GLOBAL set)',
+  );
+  assert(
+    summary.unique_issuers_fetched <= universeCik10.size,
+    `unique_issuers_fetched (${summary.unique_issuers_fetched}) MUST NOT exceed universe.size (${universeCik10.size})`,
+  );
+  // Each CIK was fetched exactly ONCE across the entire backfill envelope.
+  for (const padded of cikSet) {
+    assertEquals(
+      callsByCik.get(padded),
+      1,
+      `cross-day cross-call dedup: CIK ${padded} fetched exactly once across 5 day partitions`,
+    );
+  }
+  // Total accessions = 30 CIKs × 5 days = 150; dedup_ratio = 150/30 = 5.
+  assertEquals(summary.total_accessions_processed, cikSet.length * days.length);
+  assertEquals(summary.dedup_ratio, days.length);
 });
