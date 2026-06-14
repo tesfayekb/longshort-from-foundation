@@ -1103,7 +1103,8 @@ if (import.meta.main) {
         correlation_id: correlationId,
       }),
     );
-    const outcomes = await runMode(parsed.mode, deps);
+    const summary = await runModeWithSummary(parsed.mode, deps);
+    const outcomes = summary.outcomes;
     const entriesParsed = outcomes.reduce((s, o) => s + o.entries_parsed, 0);
     const entriesAfterUniverseFilter = outcomes.reduce((s, o) => s + o.entries_after_universe_filter, 0);
     const rowsTotal = outcomes.reduce((s, o) => s + o.rows_inserted, 0);
@@ -1113,13 +1114,14 @@ if (import.meta.main) {
       (s, o) => s + (o.accessions_missing_acceptance ?? 0),
       0,
     );
-    const submissionsFetchStatusTotal: Record<string, number> = {};
-    for (const o of outcomes) {
-      const sub = o.submissions_fetch_status ?? {};
-      for (const k of Object.keys(sub)) {
-        submissionsFetchStatusTotal[k] = (submissionsFetchStatusTotal[k] ?? 0) + sub[k];
-      }
-    }
+    // ACT-222: per-issuer fetch status is now a single global counter
+    // emitted at Pass-2 (dedup'd) for backfill, or aggregated from the
+    // single day's outcome for daily mode. The legacy per-day-aggregation
+    // path is preserved as a defense-in-depth fallback that simply sums
+    // to the same total for daily mode.
+    const submissionsFetchStatusTotal: Record<string, number> = {
+      ...summary.submissions_fetch_status,
+    };
     const persistedByCorrelation = await verifyPersistedCount(env, correlationId);
     const expectedWrites = rowsTotal + heartbeats;
     if (entriesParsed > 0 && entriesAfterUniverseFilter === 0) {
@@ -1147,6 +1149,17 @@ if (import.meta.main) {
         // not surface their acceptance value (operator-visible).
         submissions_fetch_status: submissionsFetchStatusTotal,
         accessions_missing_acceptance: accessionsMissingAcceptanceTotal,
+        // ACT-222: dedup telemetry. `unique_issuers_fetched` is the
+        // count of distinct padded issuer CIKs fetched ONCE in Pass 2
+        // (vs. the legacy per-day-per-issuer shape that surfaced the
+        // ~6× redundancy under the cancelled 2026-06-14 drain).
+        // Forward-binding: any future signal whose producer iterates a
+        // rate-limited reference resource MUST surface its dedup ratio
+        // here (Catalog #48 amendment, subsequent firing #2).
+        total_accessions_processed: summary.total_accessions_processed,
+        unique_issuers_fetched: summary.unique_issuers_fetched,
+        dedup_ratio: summary.dedup_ratio,
+        acceptance_xwalk_misses: summary.acceptance_xwalk_misses,
         persisted_rows_by_correlation_id: persistedByCorrelation,
       }),
     );
