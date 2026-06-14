@@ -390,7 +390,7 @@ async function buildWorkListAggregates(
   ctx: QueueFinalizerContext,
   _runRow: RunRow,
 ): Promise<
-  | { kind: 'ok'; staging: StagingRow[]; skips: SkipRow[] }
+  | { kind: 'ok'; staging: StagingRow[]; skips: SkipRow[]; universe_size: number }
   | { kind: 'failed'; reason: string }
 > {
   const { config, as_of } = ctx;
@@ -430,7 +430,14 @@ async function buildWorkListAggregates(
     }
   }
 
-  return { kind: 'ok', staging, skips };
+  // Conservation invariant (Path (ii) ACT-218): every universe-membership
+  // ticker yields exactly one PerTickerResult (value OR typed skip), so
+  // results.length === staging.length + skips.length is the consumer-
+  // owned mass-balance ledger. This is the value written into
+  // signal_compute_log.universe_size for work-list mode — replacing the
+  // accession-count ledger (which remains the producer-side
+  // signal_queue_runs.universe_size for sweeper/budget arithmetic).
+  return { kind: 'ok', staging, skips, universe_size: results.length };
 }
 
 async function transitionToFailed(
