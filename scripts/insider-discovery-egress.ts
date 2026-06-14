@@ -144,6 +144,33 @@ export const HEARTBEAT_TICKER = '__heartbeat__';
 export const EPOCH_ACCEPTANCE = '1970-01-01T00:00:00.000Z';
 export const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
+/**
+ * ACT-221: minimum inter-call pacing for the per-issuer submissions-feed
+ * fetch loop. Surfaced by GHA run 2026-06-14 (88% 429-rate on
+ * `data.sec.gov/submissions/CIK*.json` — 3939/4451 calls), the
+ * post-ACT-220-B repopulation drain. SEC's published rate ceiling on
+ * data.sec.gov is 10 req/sec; observed throttle behavior under burst is
+ * much tighter. 1100ms matches the SEC-acceptable floor already
+ * exercised by the master.idx call cadence (one fetch per day; ~1 day per
+ * trading day in a backfill).
+ *
+ * Pacing + `fetchWithTimeoutAndRetry` (added to `EdgarSubmissionsFetcher`
+ * in the same commit) together absorb both the steady rate ceiling AND
+ * transient burst rejections.
+ *
+ * Per Catalog #48 forward-binding rule (amended ACT-221): moving a SEC
+ * dependency from consumer-runtime to producer-time eliminates the
+ * cross-isolate concurrency problem but does NOT eliminate the
+ * rate-ceiling problem; producer-side fetches that target the same
+ * rate-limited vendor MUST honor the vendor's documented pacing floor.
+ */
+export const SUBMISSIONS_PACING_FLOOR_MS = 1100;
+
+/** Default sleep primitive — injectable via `RunDeps.sleep` for hermetic tests. */
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Outcome per day — surfaced into the run summary for forensics. */
 export interface DayOutcome {
   as_of_date: string;
@@ -189,6 +216,13 @@ export interface RunDeps {
   tickerForPaddedCik?: (paddedCik: string) => string | null;
   /** Stamp emitted on every structured-log line so reconciliation can join the GHA run URL. */
   log?: (event: Record<string, unknown>) => void;
+  /** ACT-221: sleep primitive injected so tests can assert paced timing
+   *  without paying the wall-clock cost. Production uses `defaultSleep`. */
+  sleep?: (ms: number) => Promise<void>;
+  /** ACT-221: inter-call pacing floor (ms) for the per-issuer
+   *  submissions-feed loop. Override at test-time to assert the
+   *  paced-loop contract; production reads `SUBMISSIONS_PACING_FLOOR_MS`. */
+  submissionsPacingMs?: number;
 }
 
 // ---------------------------------------------------------------------------
