@@ -645,6 +645,8 @@ if (import.meta.main) {
   const discoveredBy: DiscoveredBy = parsed.mode.kind === 'daily' ? 'gha-daily' : 'backfill-oneshot';
   try {
     const fetcher = new EdgarDailyIndexFetcher(contactEmail);
+    // ACT-215: per-issuer submissions feed — acceptance source-of-truth.
+    const submissions = new EdgarSubmissionsFetcher(contactEmail);
     const cikMapper = new EdgarCikMapper(contactEmail);
     const universeTickers = await loadCurrentUniverseTickers(env);
     const universeCik10 = await loadUniverseCikSet(universeTickers, cikMapper);
@@ -662,6 +664,7 @@ if (import.meta.main) {
     }
     const deps: RunDeps = {
       fetcher,
+      submissions,
       insertRows: makeRestInserter(env),
       correlationId,
       discoveredBy,
@@ -681,6 +684,17 @@ if (import.meta.main) {
     const rowsTotal = outcomes.reduce((s, o) => s + o.rows_inserted, 0);
     const heartbeats = outcomes.filter((o) => o.heartbeat_inserted).length;
     const unavailable = outcomes.filter((o) => o.data_unavailable).length;
+    const accessionsMissingAcceptanceTotal = outcomes.reduce(
+      (s, o) => s + (o.accessions_missing_acceptance ?? 0),
+      0,
+    );
+    const submissionsFetchStatusTotal: Record<string, number> = {};
+    for (const o of outcomes) {
+      const sub = o.submissions_fetch_status ?? {};
+      for (const k of Object.keys(sub)) {
+        submissionsFetchStatusTotal[k] = (submissionsFetchStatusTotal[k] ?? 0) + sub[k];
+      }
+    }
     const persistedByCorrelation = await verifyPersistedCount(env, correlationId);
     const expectedWrites = rowsTotal + heartbeats;
     if (entriesParsed > 0 && entriesAfterUniverseFilter === 0) {
@@ -703,6 +717,11 @@ if (import.meta.main) {
         rows_inserted: rowsTotal,
         heartbeats_inserted: heartbeats,
         days_unavailable: unavailable,
+        // ACT-215: per-issuer submissions-feed status histogram + the
+        // count of in-universe accessions dropped because the feed did
+        // not surface their acceptance value (operator-visible).
+        submissions_fetch_status: submissionsFetchStatusTotal,
+        accessions_missing_acceptance: accessionsMissingAcceptanceTotal,
         persisted_rows_by_correlation_id: persistedByCorrelation,
       }),
     );
