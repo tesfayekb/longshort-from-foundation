@@ -546,7 +546,6 @@ Deno.test('(E.2) processItem: index no_primary_doc (>1 eligible xml) → permane
       kind: 'no_primary_doc',
       filenames: ['a.xml', 'b.xml'],
       eligible_count: 2,
-      acceptance_datetime: '2026-06-11T16:00:00.000Z',
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
@@ -558,28 +557,47 @@ Deno.test('(E.2) processItem: index no_primary_doc (>1 eligible xml) → permane
   }
 });
 
-Deno.test('(E.2b) processItem: index no_acceptance_datetime (primary resolved, acceptance absent) → permanent_skip no_acceptance_datetime (ACT-213 split)', async () => {
+// ACT-215: (E.2b) `no_acceptance_datetime` skip path REMOVED.
+// The fetcher no longer returns that kind; acceptance is now read from
+// the queue row (MIG-097 NOT NULL invariant) and threaded directly to
+// the form4 fetcher input. The runtime gate is unreachable post-
+// amendment. See (E.2c) below for the queue-acceptance threading test.
+
+Deno.test('(E.2c) processItem: acceptance from queue row is threaded into form4 fetcher input (ACT-215 §(b) source-of-truth)', async () => {
+  // Pins the §(b) amendment: the consumer reads acceptance_datetime
+  // from the discovery queue row and passes it verbatim to
+  // EdgarForm4Fetcher.fetchAndParse — NOT from any per-accession
+  // `index.json` field. The fetcher stub captures its input so the
+  // assertion can prove the threading direction.
+  let capturedInput: { acceptance_datetime?: string } | null = null;
+  const form4Fetcher = {
+    async fetchAndParse(input: { acceptance_datetime: string }) {
+      capturedInput = input;
+      return { kind: 'rows', rows: [] } as never;
+    },
+  };
+  const queueRow: QueueRowFixture = {
+    ...ITEM_QUEUE_ROW,
+    acceptance_datetime: '2026-06-11T18:42:17.000Z',
+  };
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
-    queueRows: [ITEM_QUEUE_ROW],
+    queueRows: [queueRow],
     accessionIndex: makeAccessionIndex({
-      kind: 'no_acceptance_datetime',
-      primary_document: 'wf-form4_1.xml',
-      filenames: ['wf-form4_1.xml'],
-      eligible_count: 1,
+      kind: 'resolved',
+      primary_document: 'wk-form4_1.xml',
+      filenames: ['wk-form4_1.xml'],
     }),
+    form4Fetcher,
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
   const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
-  assertEquals(out.kind, 'permanent_skip');
-  if (out.kind === 'permanent_skip') {
-    assertEquals(out.reason, 'no_acceptance_datetime');
-    // Path B detail MUST carry the resolved primary as evidence —
-    // the audit-side discriminator from Path A.
-    assert(out.detail.includes('primary_document=wf-form4_1.xml'));
-    assert(out.detail.includes('eligible=1'));
-  }
+  assertEquals(out.kind, 'processed');
+  assert(capturedInput !== null, 'form4 fetcher must have been called');
+  // The captured input's acceptance_datetime is the QUEUE row's value,
+  // proving the source-of-truth is the queue (ACT-215 amendment).
+  assertEquals(capturedInput!.acceptance_datetime, '2026-06-11T18:42:17.000Z');
 });
 
 Deno.test('(E.3) processItem: index 429 → THROW (transient — engine cursor preserved)', async () => {
@@ -921,35 +939,39 @@ Deno.test('(S.3) processItem: universe-drift (CIK absent from current universe) 
   }
 });
 
-Deno.test('(S.4) processItem: Chipotle accession 0001058090-26-000045 (run aadb1329 exact failure path) — empty payload, real-shaped queue row, NO throw; routes to no_acceptance_datetime (ACT-213 split)', async () => {
+Deno.test('(S.4) processItem: Chipotle accession 0001058090-26-000045 — ACT-211 seam + ACT-215 acceptance-from-queue cohabit cleanly', async () => {
   // ACT-211 named fixture: the lex-first claimed item from run
-  // `aadb1329-437f-4e67-8ee8-c53ad3a29c2d`, whose name was stamped
-  // verbatim into `failure_reason='work_list_slice_deadlock_3x: item
-  // ''0001058090-26-000045'' threw: Cannot read properties of undefined
-  // (reading ''replace'')''`. Pre-fix, this exact shape produced the
-  // throw on the first await inside processItem; post-fix it routes
-  // cleanly to a typed terminal outcome. Post ACT-213, the fetcher
-  // surfaces this exact live-EDGAR shape as `kind:'no_acceptance_datetime'`
-  // (primary resolved = `form4.xml`; acceptanceDateTime absent — the
-  // latent §(b) gap still deferred to ACT-212 for the SGML-header
-  // fallback, but now visible at audit under the correct skip reason
-  // instead of being mislabeled as `no_primary_doc`).
+  // `aadb1329-437f-4e67-8ee8-c53ad3a29c2d`. Pre-ACT-211 this exact
+  // shape produced an undefined-read throw on the first await inside
+  // processItem. Pre-ACT-215, the same shape routed to
+  // `no_acceptance_datetime` because the fetcher could not read
+  // acceptance from `index.json` (a non-truth source). Post-ACT-215
+  // the fetcher returns `resolved` (primary=form4.xml) and the
+  // consumer reads acceptance from the queue row (MIG-097 NOT NULL).
+  // The fixture pins both the seam AND the acceptance-from-queue
+  // threading: a real-world filing routes to `processed`, never to
+  // a skip path manufactured by a non-truth-source read.
+  let capturedAcceptance: string | null = null;
+  const form4Fetcher = {
+    async fetchAndParse(input: { acceptance_datetime: string }) {
+      capturedAcceptance = input.acceptance_datetime;
+      return { kind: 'rows', rows: [] } as never;
+    },
+  };
   const queueRow: QueueRowFixture = {
     as_of_date: '2026-06-12',
     issuer_cik: '0001058090', // CMG / Chipotle padded
     accession_number: '0001058090-26-000045',
     form_type: '4',
     consumed_at: AS_OF_FRI.toISOString(),
+    acceptance_datetime: '2026-06-12T19:30:00.000Z',
   };
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'CMG', gics_sector: 'Consumer Discretionary' }],
     cikMap: { CMG: 1058090 },
     queueRows: [queueRow],
-    // Mirrors the live `index.json` response observed at investigation
-    // (acceptanceDateTime absent on the modern Form-4 index.json shape
-    // for this filer; ambiguous-route per §(b) Option-A contract).
     accessionIndex: makeAccessionIndex({
-      kind: 'no_acceptance_datetime',
+      kind: 'resolved',
       primary_document: 'form4.xml',
       filenames: [
         '0001058090-26-000045-index-headers.html',
@@ -958,22 +980,17 @@ Deno.test('(S.4) processItem: Chipotle accession 0001058090-26-000045 (run aadb1
         'doc1.txt',
         'form4.xml',
       ],
-      eligible_count: 1,
     }),
+    form4Fetcher,
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
   const out = await cfg.processItem!({
     item: { id: '0001058090-26-000045', payload: {} as unknown as Readonly<Record<string, unknown>> },
     asOf: AS_OF_FRI,
   });
-  // No throw. Routes to the typed-permanent skip. Crucially, the skip
-  // detail does NOT carry the pre-fix throw string.
-  assertEquals(out.kind, 'permanent_skip');
-  if (out.kind === 'permanent_skip') {
-    assertEquals(out.reason, 'no_acceptance_datetime');
-    assert(out.detail.includes('primary_document=form4.xml'));
-    assert(!out.detail.includes("Cannot read properties of undefined"));
-  }
+  assertEquals(out.kind, 'processed');
+  assertEquals(capturedAcceptance, '2026-06-12T19:30:00.000Z',
+    'ACT-215: consumer threaded acceptance from queue row, NOT from index.json');
 });
 
 Deno.test('(S.5) processItem: reconstructed payload ticker comes from universe map, NOT from item.payload', async () => {
