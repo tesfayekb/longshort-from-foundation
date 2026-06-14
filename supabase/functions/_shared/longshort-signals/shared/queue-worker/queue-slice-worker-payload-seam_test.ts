@@ -75,3 +75,34 @@ Deno.test('(SEAM.3) cursor-schema columns recorded in this sentinel (documented 
   assert(documented.length === 6, 'six-column cursor schema invariant');
   assert(!documented.includes('payload'), 'cursor schema MUST NOT carry a payload column');
 });
+
+Deno.test('(SEAM.4) work-list invocation threads `run_id` to processItem — Fix B audit-attribution pin', () => {
+  // Fix B (ACT-216, post-run 2ac77620-…): the slice-worker MUST thread
+  // its `run_id` into the processItem call args so consumers can stamp
+  // attribution onto their persisted rows (insider: insider_form4_rows
+  // .ingested_run_id; future consumers: their own per-run-id columns).
+  //
+  // Failure mode this sentinel prevents (recorded against the verdict
+  // on signal_queue_runs.run_id='2ac77620-9f23-461d-84e8-6ec58167646b'):
+  //   - 2,364 rows persisted with ingested_run_id=NULL because the
+  //     engine called processItem({item, asOf}) without run_id, leaving
+  //     the consumer with nothing to stamp.
+  //   - MIG-095 added the column; the slice-worker contract didn't
+  //     thread the value; the consumer's upsert payload couldn't stamp
+  //     what the contract didn't pass.
+  //
+  // Companion sentinel at the INSERT site: insider-work-list-
+  // registration_test.ts (F.1) — `row.ingested_run_id === TEST_RUN_ID`.
+  // A future "helpful" removal of the run_id thread here must fail
+  // BOTH this test AND F.1, forcing a paired update.
+  assert(
+    /run_id,?\s*\}\s*\);/m.test(SLICE_SRC),
+    'queue-slice-worker.ts work-list invocation MUST thread `run_id` to ' +
+      'processItem (Fix B audit-attribution contract). Removing this thread ' +
+      'reintroduces the run 2ac77620 regression class (ingested_run_id=NULL ' +
+      'on every persisted row). If you are intentionally changing the ' +
+      'attribution contract, update both this sentinel AND the consumer-side ' +
+      'INSERT-site pin (insider-work-list-registration_test.ts F.1) in the ' +
+      'same PR with an explicit catalog entry.',
+  );
+});

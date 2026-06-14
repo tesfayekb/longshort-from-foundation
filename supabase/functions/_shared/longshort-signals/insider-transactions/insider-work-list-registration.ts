@@ -645,7 +645,7 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
     return m;
   };
 
-  return async ({ item, asOf }): Promise<WorkListItemResult> => {
+  return async ({ item, asOf, run_id }): Promise<WorkListItemResult> => {
     // ── Payload reconstruction (engine contract: cursor carries no
     //    payload; consumer rebuilds from item.id). ───────────────────
     const accession = item.id;
@@ -832,6 +832,14 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
         // wall-clock. The DB-side default `now()` would otherwise inject
         // a non-deterministic timestamp that breaks replay-determinism.
         ingested_at: asOf.toISOString(),
+        // Fix B (MIG-095 §(c) audit attribution): stamp the queue
+        // run_id on every persisted row. Required-by-contract: the
+        // engine guarantees a non-null run_id via WorkListProcessItemFn.
+        // Without this, post-hoc forensics cannot tie a Form-4 row back
+        // to the discovery run that produced it — the verdict from run
+        // 2ac77620-… surfaced 2,364 rows with ingested_run_id=NULL
+        // because this column was added by MIG-095 but never wired in.
+        ingested_run_id: run_id,
       };
     });
 
