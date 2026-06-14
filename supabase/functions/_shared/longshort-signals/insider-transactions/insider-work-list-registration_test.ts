@@ -509,7 +509,7 @@ const ITEM_QUEUE_ROW: QueueRowFixture = {
   consumed_at: AS_OF_FRI.toISOString(),
 };
 
-function makeAccessionIndex(behavior: { kind: string; primary_document?: string; acceptance_datetime?: string; filenames?: string[]; eligible_count?: number }) {
+function makeAccessionIndex(behavior: { kind: string; primary_document?: string; acceptance_datetime?: string; filenames?: string[]; eligible_count?: number; reason?: string }) {
   return { async fetchIndex() { return behavior as never; } };
 }
 function makeForm4Fetcher(behavior: { kind: string; rows?: unknown[]; reason?: string }) {
@@ -529,13 +529,13 @@ Deno.test('(E.1) processItem: index 404 → permanent_skip data_unavailable', as
   if (out.kind === 'permanent_skip') assertEquals(out.reason, 'data_unavailable');
 });
 
-Deno.test('(E.2) processItem: index ambiguous → permanent_skip no_primary_doc (M2)', async () => {
+Deno.test('(E.2) processItem: index no_primary_doc (>1 eligible xml) → permanent_skip no_primary_doc (M2)', async () => {
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
     queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
-      kind: 'ambiguous',
+      kind: 'no_primary_doc',
       filenames: ['a.xml', 'b.xml'],
       eligible_count: 2,
       acceptance_datetime: '2026-06-11T16:00:00.000Z',
@@ -547,6 +547,30 @@ Deno.test('(E.2) processItem: index ambiguous → permanent_skip no_primary_doc 
   if (out.kind === 'permanent_skip') {
     assertEquals(out.reason, 'no_primary_doc');
     assert(out.detail.includes('eligible=2'));
+  }
+});
+
+Deno.test('(E.2b) processItem: index no_acceptance_datetime (primary resolved, acceptance absent) → permanent_skip no_acceptance_datetime (ACT-213 split)', async () => {
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
+    cikMap: { AAPL: 320193 },
+    queueRows: [ITEM_QUEUE_ROW],
+    accessionIndex: makeAccessionIndex({
+      kind: 'no_acceptance_datetime',
+      primary_document: 'wf-form4_1.xml',
+      filenames: ['wf-form4_1.xml'],
+      eligible_count: 1,
+    }),
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
+  assertEquals(out.kind, 'permanent_skip');
+  if (out.kind === 'permanent_skip') {
+    assertEquals(out.reason, 'no_acceptance_datetime');
+    // Path B detail MUST carry the resolved primary as evidence —
+    // the audit-side discriminator from Path A.
+    assert(out.detail.includes('primary_document=wf-form4_1.xml'));
+    assert(out.detail.includes('eligible=1'));
   }
 });
 
@@ -889,16 +913,19 @@ Deno.test('(S.3) processItem: universe-drift (CIK absent from current universe) 
   }
 });
 
-Deno.test('(S.4) processItem: Chipotle accession 0001058090-26-000045 (run aadb1329 exact failure path) — empty payload, real-shaped queue row, NO throw', async () => {
+Deno.test('(S.4) processItem: Chipotle accession 0001058090-26-000045 (run aadb1329 exact failure path) — empty payload, real-shaped queue row, NO throw; routes to no_acceptance_datetime (ACT-213 split)', async () => {
   // ACT-211 named fixture: the lex-first claimed item from run
   // `aadb1329-437f-4e67-8ee8-c53ad3a29c2d`, whose name was stamped
   // verbatim into `failure_reason='work_list_slice_deadlock_3x: item
   // ''0001058090-26-000045'' threw: Cannot read properties of undefined
   // (reading ''replace'')''`. Pre-fix, this exact shape produced the
   // throw on the first await inside processItem; post-fix it routes
-  // cleanly to a typed terminal outcome (here: index.json `ambiguous`
-  // — the latent §(b) accept-without-acceptanceDateTime gap from the
-  // live EDGAR response, which is split off to ACT-212).
+  // cleanly to a typed terminal outcome. Post ACT-213, the fetcher
+  // surfaces this exact live-EDGAR shape as `kind:'no_acceptance_datetime'`
+  // (primary resolved = `form4.xml`; acceptanceDateTime absent — the
+  // latent §(b) gap still deferred to ACT-212 for the SGML-header
+  // fallback, but now visible at audit under the correct skip reason
+  // instead of being mislabeled as `no_primary_doc`).
   const queueRow: QueueRowFixture = {
     as_of_date: '2026-06-12',
     issuer_cik: '0001058090', // CMG / Chipotle padded
@@ -914,7 +941,8 @@ Deno.test('(S.4) processItem: Chipotle accession 0001058090-26-000045 (run aadb1
     // (acceptanceDateTime absent on the modern Form-4 index.json shape
     // for this filer; ambiguous-route per §(b) Option-A contract).
     accessionIndex: makeAccessionIndex({
-      kind: 'ambiguous',
+      kind: 'no_acceptance_datetime',
+      primary_document: 'form4.xml',
       filenames: [
         '0001058090-26-000045-index-headers.html',
         '0001058090-26-000045-index.html',
@@ -923,7 +951,6 @@ Deno.test('(S.4) processItem: Chipotle accession 0001058090-26-000045 (run aadb1
         'form4.xml',
       ],
       eligible_count: 1,
-      acceptance_datetime: null as unknown as string,
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
@@ -935,7 +962,8 @@ Deno.test('(S.4) processItem: Chipotle accession 0001058090-26-000045 (run aadb1
   // detail does NOT carry the pre-fix throw string.
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') {
-    assertEquals(out.reason, 'no_primary_doc');
+    assertEquals(out.reason, 'no_acceptance_datetime');
+    assert(out.detail.includes('primary_document=form4.xml'));
     assert(!out.detail.includes("Cannot read properties of undefined"));
   }
 });

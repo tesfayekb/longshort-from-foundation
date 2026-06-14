@@ -109,7 +109,7 @@ Deno.test('(10) fetchIndex — 403 throws EdgarFetchError (UA reject is operator
   );
 });
 
-Deno.test('(11) fetchIndex — >1 eligible xml → ambiguous (NO tiebreak)', async () => {
+Deno.test('(11) fetchIndex — >1 eligible xml → no_primary_doc (NO tiebreak)', async () => {
   const fetcher = new EdgarAccessionIndexFetcher(CONTACT, async () =>
     makeResp(200, {
       directory: {
@@ -118,23 +118,83 @@ Deno.test('(11) fetchIndex — >1 eligible xml → ambiguous (NO tiebreak)', asy
       },
     }));
   const r = await fetcher.fetchIndex({ cik: 1, accession_number: '0000000001-00-000001' });
-  assertEquals(r.kind, 'ambiguous');
-  if (r.kind === 'ambiguous') {
+  assertEquals(r.kind, 'no_primary_doc');
+  if (r.kind === 'no_primary_doc') {
     assertEquals(r.eligible_count, 2);
     assertEquals(r.filenames.length, 2);
   }
 });
 
-Deno.test('(12) fetchIndex — acceptance missing → ambiguous (§(b) non-defaultable)', async () => {
+Deno.test('(12) fetchIndex — acceptance missing (primary resolved) → no_acceptance_datetime (§(b) non-defaultable; ACT-213 split)', async () => {
   const fetcher = new EdgarAccessionIndexFetcher(CONTACT, async () =>
     makeResp(200, {
       directory: { item: [{ name: 'wf-form4_1.xml' }] },
     }));
   const r = await fetcher.fetchIndex({ cik: 1, accession_number: '0000000001-00-000001' });
-  assertEquals(r.kind, 'ambiguous');
-  if (r.kind === 'ambiguous') {
-    assertEquals(r.acceptance_datetime, null);
+  assertEquals(r.kind, 'no_acceptance_datetime');
+  if (r.kind === 'no_acceptance_datetime') {
+    assertEquals(r.primary_document, 'wf-form4_1.xml');
+    assertEquals(r.eligible_count, 1);
   }
+});
+
+Deno.test('(12b) fetchIndex — zero eligible xml → no_primary_doc (Path A boundary at 0)', async () => {
+  const fetcher = new EdgarAccessionIndexFetcher(CONTACT, async () =>
+    makeResp(200, {
+      directory: {
+        acceptanceDateTime: '2026-06-10T16:30:00.000Z',
+        item: [{ name: 'foo.txt' }, { name: 'bar.htm' }],
+      },
+    }));
+  const r = await fetcher.fetchIndex({ cik: 1, accession_number: '0000000001-00-000001' });
+  assertEquals(r.kind, 'no_primary_doc');
+  if (r.kind === 'no_primary_doc') {
+    assertEquals(r.eligible_count, 0);
+  }
+});
+
+Deno.test('(12c) fetchIndex — ACT-213 worked example: accession 0000100885-26-000182 verbatim index.json → no_acceptance_datetime, primary=edgardoc.xml', async () => {
+  // Verbatim body captured live from EDGAR during the ACT-213
+  // investigation — confirms the live-EDGAR shape routes Path B
+  // (resolved primary `edgardoc.xml`, acceptance absent).
+  const fetcher = new EdgarAccessionIndexFetcher(CONTACT, async () =>
+    makeResp(200, {
+      directory: {
+        name: '/Archives/edgar/data/100885/000010088526000182',
+        'parent-dir': '/Archives/edgar/data/100885',
+        item: [
+          { 'last-modified': '2026-06-11 17:45:03', name: '0000100885-26-000182-index-headers.html', type: 'text.gif', size: '' },
+          { 'last-modified': '2026-06-11 17:45:03', name: '0000100885-26-000182-index.html', type: 'text.gif', size: '' },
+          { 'last-modified': '2026-06-11 17:45:03', name: '0000100885-26-000182.txt', type: 'text.gif', size: '' },
+          { 'last-modified': '2026-06-11 17:45:03', name: 'edgardoc.xml', type: 'text.gif', size: '3293' },
+        ],
+      },
+    }));
+  const r = await fetcher.fetchIndex({ cik: 100885, accession_number: '0000100885-26-000182' });
+  assertEquals(r.kind, 'no_acceptance_datetime');
+  if (r.kind === 'no_acceptance_datetime') {
+    assertEquals(r.primary_document, 'edgardoc.xml');
+    assertEquals(r.eligible_count, 1);
+    assertEquals(r.filenames.length, 4);
+  }
+});
+
+Deno.test('(12d) source-sentinel — fetcher never returns kind:"ambiguous" (ACT-213 union split is not aliased)', async () => {
+  // Protect against a "helpful" backward-compat alias re-emerging.
+  // Reads the fetcher source verbatim and asserts the old union
+  // member is gone, not aliased through any return path.
+  const src = await Deno.readTextFile(
+    new URL('./edgar-accession-index-fetcher.ts', import.meta.url),
+  );
+  // Strip block + line comments so the documentation references to
+  // the historical 'ambiguous' name don't fire the sentinel.
+  const code = src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^[ \t]*\/\/.*$/gm, '');
+  assert(
+    !/kind:\s*['"]ambiguous['"]/.test(code),
+    'fetcher source must not return kind:"ambiguous" — ACT-213 split must remain (no_primary_doc / no_acceptance_datetime).',
+  );
 });
 
 Deno.test('(13) constructor requires contact email (UA discipline §(g))', () => {

@@ -186,7 +186,7 @@ export type SignalSkipReason =
                              // malformed event rows; a single Tier-3 event
                              // always yields a value per FP-049 Phase 2 ruling
                              // (a) — presence-intensity, never a skip.
-  | 'no_primary_doc';        // FP-050 / Signal #4 EDGAR rebuild — per-
+  | 'no_primary_doc'         // FP-050 / Signal #4 EDGAR rebuild — per-
                              // accession `index.json` (DEC-058 §(i) (A))
                              // returned no primary-document filename (no
                              // `.xml` candidate, or the candidate did not
@@ -201,6 +201,21 @@ export type SignalSkipReason =
                              // close. The TICKER row is still ranked by
                              // other signals; a single accession with
                              // no primary doc never poisons the name.
+  | 'no_acceptance_datetime';// FP-050 / Signal #4 — ACT-213 split-at-
+                             // source. Per-accession `index.json` HAS a
+                             // single eligible primary `.xml` but the
+                             // DEC-058 §(b) non-defaultable
+                             // `acceptanceDateTime` field is absent.
+                             // Previously union-folded under
+                             // `no_primary_doc` via the fetcher's
+                             // `kind:'ambiguous'` member; the
+                             // mislabel hid the §(b) gap as if it were
+                             // a primary-doc problem. Distinct typed-
+                             // permanent reason so monitoring and
+                             // future SGML-header-fallback work
+                             // (ACT-212) can target the right
+                             // population. Non-critical; ticker is
+                             // still ranked by other signals.
 
 export interface SignalSkip {
   ticker: string;

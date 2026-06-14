@@ -38,6 +38,16 @@
  *     prevent this; surfaced typed so the orchestrator can backoff)
  *   - HTTP 403 / other non-OK → throws EdgarFetchError
  *
+ * Discriminated-union discipline (ACT-213): each non-resolved kind
+ * encodes ONE semantic failure mode. The prior `kind:'ambiguous'`
+ * member union-folded two distinct modes (no-primary AND no-
+ * acceptance) which the consumer's `kind === 'ambiguous'` predicate
+ * then collapsed into a single `no_primary_doc` skip reason — hiding
+ * the §(b) acceptance-missing population as if it were a primary-doc
+ * problem. The split is `no_primary_doc` (Path A) and
+ * `no_acceptance_datetime` (Path B); the consumer MUST branch on each
+ * explicitly.
+ *
  * Owner: longshort (FP-050 Phase 2 — Signal #4 EDGAR rebuild)
  */
 import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
@@ -69,17 +79,37 @@ export type EdgarAccessionIndexResult =
   | { kind: 'unavailable'; reason: 'data_unavailable' }
   | { kind: 'rate_limited' }
   | {
-      kind: 'ambiguous';
+      /** Path A — `selectPrimaryDocument` returned 0 or >1 eligible
+       *  `.xml` candidates. INC-70 anti-heuristic rule: never guess a
+       *  filename. Consumer routes to a typed-permanent skip; the
+       *  ticker is still ranked by other signals. */
+      kind: 'no_primary_doc';
       /** Verbatim file list — surfaced into the orchestrator skip detail
        *  so an operator can see WHICH names were eligible / excluded. */
       filenames: string[];
       /** Eligible-candidate count after exclusions: 0 or >1 (never 1 —
-       *  that path returns `resolved`). */
+       *  that path routes to `resolved` OR `no_acceptance_datetime`). */
       eligible_count: number;
-      /** Whether acceptance_datetime was readable (defensive — the
-       *  ambiguous branch still includes it when present, but does not
-       *  fail-the-fetch on its absence). */
+      /** Acceptance datetime if readable (diagnostic only on this
+       *  branch — the gating predicate here is the primary-doc count,
+       *  not the acceptance presence). */
       acceptance_datetime: string | null;
+    }
+  | {
+      /** Path B — primary document WAS resolved (single eligible xml)
+       *  BUT `acceptanceDateTime` was absent from `index.json` per the
+       *  DEC-058 §(b) non-defaultable contract. Distinct failure mode
+       *  from `no_primary_doc`; mislabeling these as no-primary hides
+       *  the real coverage gap (latent §(b) gap deferred to ACT-212). */
+      kind: 'no_acceptance_datetime';
+      /** The resolved primary — carried as evidence that primary
+       *  resolution succeeded; the skip detail surfaces this so the
+       *  drift between the two failure modes is visible at audit. */
+      primary_document: string;
+      /** Verbatim file list (diagnostic). */
+      filenames: string[];
+      /** Always 1 on this branch (resolved-primary precondition). */
+      eligible_count: number;
     };
 
 function stripCikPadding(cik: string | number): string {
@@ -254,7 +284,7 @@ export class EdgarAccessionIndexFetcher {
     const { primary, eligible } = selectPrimaryDocument(filenames);
     if (primary === null) {
       return {
-        kind: 'ambiguous',
+        kind: 'no_primary_doc',
         filenames,
         eligible_count: eligible.length,
         acceptance_datetime: acceptance,
@@ -262,14 +292,17 @@ export class EdgarAccessionIndexFetcher {
     }
     if (acceptance === null) {
       // §(b) dual-date contract — acceptance MUST be present and is
-      // non-defaultable. Surface the same ambiguous-class skip; the
-      // alternative (silent default) is exactly the failure mode the
-      // FP-050 rebuild exists to close.
+      // non-defaultable. Distinct typed kind from `no_primary_doc` so
+      // the consumer routes to a distinct `skip_reason` (the prior
+      // single `ambiguous` kind conflated this with the no-primary
+      // path; ACT-213 split-at-source fix). The resolved primary is
+      // carried as evidence — its presence is what discriminates Path
+      // B from Path A at audit time.
       return {
-        kind: 'ambiguous',
+        kind: 'no_acceptance_datetime',
+        primary_document: primary,
         filenames,
         eligible_count: eligible.length,
-        acceptance_datetime: null,
       };
     }
     return { kind: 'resolved', primary_document: primary, acceptance_datetime: acceptance, filenames };
