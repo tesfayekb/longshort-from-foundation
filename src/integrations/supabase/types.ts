@@ -203,6 +203,7 @@ export type Database = {
       }
       insider_accession_discovery_queue: {
         Row: {
+          acceptance_datetime: string
           accession_number: string
           as_of_date: string
           company_name: string
@@ -216,6 +217,7 @@ export type Database = {
           issuer_cik: string
         }
         Insert: {
+          acceptance_datetime: string
           accession_number: string
           as_of_date: string
           company_name: string
@@ -229,6 +231,7 @@ export type Database = {
           issuer_cik: string
         }
         Update: {
+          acceptance_datetime?: string
           accession_number?: string
           as_of_date?: string
           company_name?: string
