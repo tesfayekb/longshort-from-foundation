@@ -111,6 +111,14 @@ export interface DiscoveryRow {
    *  column; producer-side §(b) enforcement (DEC-058 §(b) amendment).
    *  Heartbeat rows carry the Unix epoch sentinel (`EPOCH_ACCEPTANCE`). */
   acceptance_datetime: string;
+  /** ACT-220 / MIG-098: universe ticker resolved at producer-time
+   *  from `company_tickers.json` (loaded ONCE per fire — see
+   *  `loadUniverseCikToTicker`). NOT NULL on the queue column;
+   *  producer-side enforcement closes the runtime SEC dependency the
+   *  consumer's CIK-mapper previously incurred per cron-spawned
+   *  isolate (surfaced by runs `e5907bfb-…` and `937cc59c-…`).
+   *  Heartbeat rows carry the `HEARTBEAT_TICKER` sentinel. */
+  ticker: string;
 }
 
 /** Sentinel constants for the R1 heartbeat row. */
@@ -118,6 +126,15 @@ export const HEARTBEAT_ISSUER_CIK = '__heartbeat__';
 export const HEARTBEAT_ACCESSION_NUMBER = '__heartbeat__';
 export const HEARTBEAT_COMPANY_NAME = '__heartbeat__';
 export const HEARTBEAT_FILENAME = '__heartbeat__';
+/** ACT-220 / MIG-098: heartbeat ticker sentinel. Symmetric with the
+ *  existing CIK + accession heartbeat sentinels; satisfies the new
+ *  `ticker NOT NULL` queue invariant without inventing a universe
+ *  ticker that would collide with a real symbol. The consumer's claim
+ *  predicate is unchanged (issuer_cik + accession_number sentinel
+ *  match drives the heartbeat exclusion); this constant lets the
+ *  producer satisfy the column NOT NULL invariant on the empty-day
+ *  heartbeat write. */
+export const HEARTBEAT_TICKER = '__heartbeat__';
 /** ACT-215: heartbeat acceptance sentinel — Unix epoch. The R1
  *  heartbeat row is structurally excluded by the consumer's
  *  `(issuer_cik='__heartbeat__', accession_number='__heartbeat__')`
@@ -162,6 +179,14 @@ export interface RunDeps {
   isTradingDay?: (d: Date) => boolean;
   /** Optional in-universe predicate; real CLI supplies the SEC ticker→CIK map inverse. */
   isUniverseEntry?: (entry: DailyIndexEntry) => boolean;
+  /** ACT-220: padded-CIK → universe ticker resolver. The CLI builds
+   *  this from `loadUniverseCikToTicker` (one `company_tickers.json`
+   *  fetch per fire, NOT per day) and threads it here; tests inject
+   *  a hermetic map. Entries whose padded CIK is absent from the map
+   *  are DROPPED with a `tickers_missing_for_cik` counter — the
+   *  isUniverseEntry filter and this resolver MUST agree by
+   *  construction in production (built from the same map). */
+  tickerForPaddedCik?: (paddedCik: string) => string | null;
   /** Stamp emitted on every structured-log line so reconciliation can join the GHA run URL. */
   log?: (event: Record<string, unknown>) => void;
 }
@@ -263,6 +288,7 @@ export function rowFromEntry(
   discoveredBy: DiscoveredBy,
   correlationId: string,
   acceptanceDatetime: string,
+  ticker: string,
 ): DiscoveryRow {
   const padded = normalizeFilerCikForUniverse(e.filer_cik);
   return {
@@ -275,6 +301,7 @@ export function rowFromEntry(
     discovered_by: discoveredBy,
     discovery_correlation_id: correlationId,
     acceptance_datetime: acceptanceDatetime,
+    ticker,
   };
 }
 
@@ -299,6 +326,10 @@ export function buildHeartbeatRow(
     discovery_correlation_id: correlationId,
     // ACT-215: epoch sentinel — see EPOCH_ACCEPTANCE doc.
     acceptance_datetime: EPOCH_ACCEPTANCE,
+    // ACT-220 / MIG-098: heartbeat ticker sentinel — satisfies the
+    // new `ticker NOT NULL` queue invariant without inventing a
+    // universe ticker that would collide with a real symbol.
+    ticker: HEARTBEAT_TICKER,
   };
 }
 
@@ -336,6 +367,31 @@ export async function loadUniverseCikSet(tickers: readonly string[], mapper: Edg
   for (const ticker of tickers) {
     const r: CikLookupResult = lookup(ticker);
     if (r.kind === 'resolved') out.add(r.cik10);
+  }
+  return out;
+}
+
+/**
+ * ACT-220 / Path-Y producer-relocation: build the padded-CIK → ticker
+ * inverse of the universe map. Loaded ONCE per fire (the mapper itself
+ * issues a SINGLE `company_tickers.json` fetch under
+ * `EdgarCikMapper.loadMap()` — see the cik-mapper module doc).
+ *
+ * Drift sentinel (codified in the producer-test suite): production
+ * callers MUST invoke this ONCE per CLI entry, not per day or per
+ * issuer. The returned map is passed into `RunDeps.tickerForPaddedCik`
+ * and read per-row inside `runDiscoveryDay` — the per-row cost is a
+ * pure Map lookup, never a fresh fetch.
+ */
+export async function loadUniverseCikToTicker(
+  tickers: readonly string[],
+  mapper: EdgarCikMapper,
+): Promise<Map<string, string>> {
+  const lookup = await mapper.loadMap();
+  const out = new Map<string, string>();
+  for (const ticker of tickers) {
+    const r: CikLookupResult = lookup(ticker);
+    if (r.kind === 'resolved') out.set(r.cik10, r.ticker);
   }
   return out;
 }
@@ -454,6 +510,7 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
   }
 
   let accessionsMissingAcceptance = 0;
+  let tickersMissingForCik = 0;
   const rows: DiscoveryRow[] = [];
   for (const e of inUniverseEntries) {
     const acceptance = acceptanceByAccession.get(e.accession_number);
@@ -461,7 +518,19 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
       accessionsMissingAcceptance += 1;
       continue;
     }
-    rows.push(rowFromEntry(e, asOf, deps.discoveredBy, deps.correlationId, acceptance));
+    // ACT-220: resolve ticker at producer-time from the pre-loaded
+    // padded-CIK → ticker map. By construction in production, an
+    // entry that passed `isUniverseEntry` (built from the same map)
+    // ALWAYS resolves here — the missing-counter is a defense-in-
+    // depth diagnostic against a future divergence between the two
+    // map-derived predicates.
+    const padded = normalizeFilerCikForUniverse(e.filer_cik) ?? e.filer_cik;
+    const ticker = deps.tickerForPaddedCik?.(padded) ?? null;
+    if (ticker === null || ticker.length === 0) {
+      tickersMissingForCik += 1;
+      continue;
+    }
+    rows.push(rowFromEntry(e, asOf, deps.discoveredBy, deps.correlationId, acceptance, ticker));
   }
   if (rows.length === 0) {
     const heartbeat = buildHeartbeatRow(asOf, deps.discoveredBy, deps.correlationId);
@@ -475,6 +544,7 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
       entries_after_universe_filter: inUniverseEntries.length,
       submissions_fetch_status: submissionsStatus,
       accessions_missing_acceptance: accessionsMissingAcceptance,
+      tickers_missing_for_cik: tickersMissingForCik,
       rows_inserted: 0,
       heartbeat_inserted: true,
     });
@@ -501,6 +571,7 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
     heartbeat_inserted: false,
     submissions_fetch_status: submissionsStatus,
     accessions_missing_acceptance: accessionsMissingAcceptance,
+    tickers_missing_for_cik: tickersMissingForCik,
   });
   return {
     as_of_date: asOf,
@@ -649,7 +720,13 @@ if (import.meta.main) {
     const submissions = new EdgarSubmissionsFetcher(contactEmail);
     const cikMapper = new EdgarCikMapper(contactEmail);
     const universeTickers = await loadCurrentUniverseTickers(env);
-    const universeCik10 = await loadUniverseCikSet(universeTickers, cikMapper);
+    // ACT-220 / Path-Y: load the padded-CIK → ticker map ONCE per CLI
+    // entry (the underlying `company_tickers.json` fetch is issued
+    // exactly once via the mapper's in-isolate memo). Both the
+    // in-universe filter and the producer-time ticker stamp derive
+    // from this single map — no second fetch, no per-day re-load.
+    const cikToTicker = await loadUniverseCikToTicker(universeTickers, cikMapper);
+    const universeCik10 = new Set(cikToTicker.keys());
     console.log(JSON.stringify({
       event: 'insider_discovery_universe_loaded',
       operator_id: DEFAULT_OPERATOR_ID,
@@ -669,6 +746,7 @@ if (import.meta.main) {
       correlationId,
       discoveredBy,
       isUniverseEntry: buildUniverseEntryPredicate(universeCik10),
+      tickerForPaddedCik: (paddedCik) => cikToTicker.get(paddedCik) ?? null,
     };
     console.log(
       JSON.stringify({
