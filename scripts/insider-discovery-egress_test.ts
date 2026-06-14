@@ -573,3 +573,91 @@ Deno.test('(p2) ACT-220 producer-relocation: missing-ticker entry is dropped + c
   assertEquals(outcome.rows_inserted, 1, 'AAPL enqueued, MSFT dropped (missing ticker)');
   assertEquals(cap.calls[0][0].ticker, 'AAPL');
 });
+
+/**
+ * ACT-221 pacing sentinel: the per-issuer submissions-feed loop MUST
+ * sleep ≥ SUBMISSIONS_PACING_FLOOR_MS (1100ms) between consecutive
+ * calls. Surfaced by the post-ACT-220-B repopulation drain
+ * (2026-06-14 GHA run; 88% 429-rate on `data.sec.gov/submissions/`
+ * — 3939/4451 calls). The pacing call sites is the first call fires
+ * immediately; every subsequent call sleeps `pacingMs` BEFORE issuing.
+ *
+ * Test contract: with 3 unique issuer CIKs the loop MUST issue exactly
+ * 2 sleep calls (between calls 1↔2 and 2↔3), each ≥ 1100 ms.
+ */
+Deno.test('(p3) ACT-221 — per-issuer submissions loop paces consecutive calls at SUBMISSIONS_PACING_FLOOR_MS (1100ms)', async () => {
+  const cap = captureInserter();
+  const sleepCalls: number[] = [];
+  const sleep = (ms: number): Promise<void> => {
+    sleepCalls.push(ms);
+    return Promise.resolve();
+  };
+  // Three unique issuer CIKs → three submissions calls → exactly 2 sleeps.
+  const masterBody = [
+    'Description: Master Index',
+    '',
+    'CIK|Company Name|Form Type|Date Filed|Filename',
+    '----------------------------------------------------',
+    '320193|APPLE INC|4|2026-06-12|edgar/data/320193/000032019326000077/0000320193-26-000077-index.htm',
+    '789019|MICROSOFT CORP|4|2026-06-12|edgar/data/789019/000078901926000044/0000789019-26-000044-index.htm',
+    '1045810|NVIDIA CORP|4|2026-06-12|edgar/data/1045810/0001768670-26-000002-index.htm',
+  ].join('\n');
+  const submissions = stubSubmissions({
+    '0000320193-26-000077': { acceptance: '2026-06-12T20:01:00.000Z', primary: 'p.xml', form: '4' },
+    '0000789019-26-000044': { acceptance: '2026-06-12T20:02:00.000Z', primary: 'p.xml', form: '4' },
+    '0001768670-26-000002': { acceptance: '2026-06-12T20:03:00.000Z', primary: 'p.xml', form: '4' },
+  }, {
+    '0000320193': ['0000320193-26-000077'],
+    '0000789019': ['0000789019-26-000044'],
+    '0001045810': ['0001768670-26-000002'],
+  });
+  const deps: RunDeps = {
+    ...makeDeps({
+      fetcher: fetcherReturning(masterBody),
+      insertRows: cap.insertRows,
+      submissions,
+      tickerForPaddedCik: (cik) => ({
+        '0000320193': 'AAPL',
+        '0000789019': 'MSFT',
+        '0001045810': 'NVDA',
+      }[cik] ?? null),
+    }),
+    sleep,
+  };
+  const outcome = await runDiscoveryDay('2026-06-12', deps);
+  assertEquals(outcome.rows_inserted, 3, 'all three issuers enqueued');
+  // Pacing contract: N-1 sleeps for N unique issuers, each ≥ 1100 ms.
+  assertEquals(sleepCalls.length, 2, 'exactly 2 inter-call sleeps for 3 unique issuers');
+  assert(sleepCalls[0] >= 1100, `sleep[0]=${sleepCalls[0]} must be >= 1100ms (SEC rate-ceiling floor)`);
+  assert(sleepCalls[1] >= 1100, `sleep[1]=${sleepCalls[1]} must be >= 1100ms (SEC rate-ceiling floor)`);
+});
+
+/** ACT-221 zero-pacing override: when `submissionsPacingMs=0` the loop
+ *  fires back-to-back (test-only escape hatch; production never sets 0). */
+Deno.test('(p4) ACT-221 — submissionsPacingMs=0 disables pacing (escape hatch for hermetic suites)', async () => {
+  const cap = captureInserter();
+  const sleepCalls: number[] = [];
+  const sleep = (ms: number): Promise<void> => {
+    sleepCalls.push(ms);
+    return Promise.resolve();
+  };
+  const submissions = stubSubmissions({
+    '0000320193-26-000077': { acceptance: '2026-06-12T20:01:00.000Z', primary: 'p.xml', form: '4' },
+    '0000789019-26-000044': { acceptance: '2026-06-12T20:02:00.000Z', primary: 'p.xml', form: '4/A' },
+  }, {
+    '0000320193': ['0000320193-26-000077'],
+    '0000789019': ['0000789019-26-000044'],
+  });
+  const deps: RunDeps = {
+    ...makeDeps({
+      fetcher: fetcherReturning(fixtureMasterBody()),
+      insertRows: cap.insertRows,
+      submissions,
+      tickerForPaddedCik: (cik) => ({ '0000320193': 'AAPL', '0000789019': 'MSFT' }[cik] ?? null),
+    }),
+    sleep,
+    submissionsPacingMs: 0,
+  };
+  await runDiscoveryDay('2026-06-12', deps);
+  assertEquals(sleepCalls.length, 0, 'no sleeps when pacing disabled');
+});

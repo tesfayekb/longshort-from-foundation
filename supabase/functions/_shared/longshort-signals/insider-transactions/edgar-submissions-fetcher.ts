@@ -54,6 +54,11 @@ import {
   defaultEdgarFetchTelemetry,
   type EdgarFetchTelemetry,
 } from './edgar-fetch-telemetry.ts';
+import {
+  fetchWithTimeoutAndRetry,
+  type FetchWithRetryOptions,
+  type MinimalHttpFetch,
+} from '../../longshort-universe/shared/fetch-with-timeout.ts';
 
 /** Submissions-feed endpoint base. The 10-digit padded CIK is appended. */
 export const SUBMISSIONS_BASE = 'https://data.sec.gov/submissions';
@@ -122,6 +127,7 @@ export class EdgarSubmissionsFetcher {
   private readonly userAgent: string;
   private readonly telemetry: EdgarFetchTelemetry;
   private readonly correlationId: string;
+  private readonly retryOptions: FetchWithRetryOptions;
 
   constructor(
     contactEmail: string | null | undefined,
@@ -129,10 +135,22 @@ export class EdgarSubmissionsFetcher {
     moduleId = 'fp-050-insider/0.1',
     telemetry: EdgarFetchTelemetry = defaultEdgarFetchTelemetry,
     correlationId = '',
+    retryOptions: FetchWithRetryOptions = {},
   ) {
     this.userAgent = buildEdgarUserAgent(contactEmail, moduleId);
     this.telemetry = telemetry;
     this.correlationId = correlationId;
+    // ACT-221 hardening: per-issuer submissions feed (data.sec.gov)
+    // shares the same SEC fair-access rate-ceiling family as
+    // `company_tickers.json`. Adopt the canonical
+    // `fetchWithTimeoutAndRetry` helper verbatim — defaults: 3 attempts
+    // / [1s, 2s, 4s] backoff / 15s timeout. Retries fire on 429 / 5xx
+    // / AbortError / TypeError. Pacing between calls is enforced at the
+    // CALLER (producer loop in `scripts/insider-discovery-egress.ts`)
+    // because the burst surface is N submissions calls per day, not a
+    // single fetch. Pacing + retry together absorb both the steady
+    // rate ceiling AND transient burst rejections.
+    this.retryOptions = retryOptions;
   }
 
   /** INC-73-family telemetry emit (ACT-199 F1.a) — never throws. */
@@ -155,12 +173,33 @@ export class EdgarSubmissionsFetcher {
     const url = submissionsUrl(input);
     let resp: Awaited<ReturnType<HttpFetch>>;
     try {
-      resp = await this.httpFetch(url, {
-        method: 'GET',
-        headers: { 'User-Agent': this.userAgent, 'Accept': 'application/json' },
-      });
+      resp = await fetchWithTimeoutAndRetry(
+        this.httpFetch as unknown as MinimalHttpFetch,
+        url,
+        {
+          method: 'GET',
+          headers: { 'User-Agent': this.userAgent, 'Accept': 'application/json' },
+        },
+        this.retryOptions,
+      );
     } catch (e) {
       this.emit(0, url);
+      // `fetchWithTimeoutAndRetry` re-throws `HTTP <code> …` as Error
+      // after exhausting attempts. Preserve the typed `rate_limited`
+      // surface for 429 (caller counts it in `submissions_fetch_status`
+      // and proceeds — does NOT abort the run); other HTTP failures
+      // surface verbatim under our fetch-error taxonomy
+      // (mirrors `edgar-cik-mapper.ts`).
+      if (e instanceof Error && /^HTTP\s+429\b/.test(e.message)) {
+        return { kind: 'rate_limited' };
+      }
+      if (e instanceof Error && /^HTTP\s+\d+/.test(e.message)) {
+        throw new EdgarFetchError(
+          SUBMISSIONS_OPERATION_ID,
+          `${e.message} on ${url} (after retry exhaustion)`,
+          e,
+        );
+      }
       throw new EdgarFetchError(
         SUBMISSIONS_OPERATION_ID,
         `network error on ${url}`,
