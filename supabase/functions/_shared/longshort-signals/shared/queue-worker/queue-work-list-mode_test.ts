@@ -746,6 +746,6 @@ Deno.test('finalizer work-list ACT-218: signal_compute_log.universe_size = stagi
   // The mock z-score keeps both values present (sector "Tech" has σ>0;
   // singleton "Energy" yields no degenerate; XOM was a typed skip).
   const persisted = written.persisted_count as number;
-  const skipped = (written.skipped as unknown[]).length;
-  assertEquals((written.universe_size as number), persisted + skipped, 'mass balance: universe_size = persisted_count + skipped.length');
+  const skipped = (written.skipped_detail as unknown[]).length;
+  assertEquals((written.universe_size as number), persisted + skipped, 'mass balance: universe_size = persisted_count + skipped_detail.length');
 });
