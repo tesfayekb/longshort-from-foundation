@@ -730,6 +730,16 @@ async function runBackfillDedup(
   const days = iterateTradingDays(mode.from, mode.to, deps.isTradingDay);
 
   // ── Pass 1: discovery enumeration ────────────────────────────────
+  // ACT-223 cross-day-dedup contract (Catalog #48 subsequent firing #3
+  // / Catalog #43 fixture-scope-mismatch subsequent firing): the
+  // `uniqueIssuerCiks` Set is the GLOBAL accumulator across every day
+  // in [from..to]. Pass 1 issues ZERO submissions-feed fetches and
+  // simply collects the in-universe entries + the global unique-CIK
+  // set. Pass 2 then iterates that single global set once. ANY future
+  // refactor that re-scopes this Set to per-day (or re-fetches inside
+  // a per-day inner loop) is a Catalog #48 violation by construction;
+  // sentinels (p7) and (p8) in `insider-discovery-egress_test.ts`
+  // bind this contract at the test gate.
   type DayParsed =
     | { asOf: string; kind: 'unavailable' }
     | { asOf: string; kind: 'parsed'; entriesParsed: number; inUniverseEntries: DailyIndexEntry[] };
