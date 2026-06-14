@@ -703,6 +703,12 @@ Deno.test('(F.1) processItem: rows path → upsert quotes M5 PK verbatim + owner
   assertEquals(row.filing_form_type, '4');
   // DEC-034 clause 4: ingested_at = asOf (no wall-clock).
   assertEquals(row.ingested_at, AS_OF_FRI.toISOString());
+  // Fix B (MIG-095 §(c) audit attribution): ingested_run_id stamped
+  // from the engine-threaded run_id. Line-level source sentinel — any
+  // future schema column added to insider_form4_rows that requires
+  // attribution should be pinned in this same shape (Catalog #41/
+  // Gate-2c pattern: per-column upsert-payload presence assertion).
+  assertEquals(row.ingested_run_id, TEST_RUN_ID);
   // PK fields.
   assertEquals(row.issuer_cik, '0000320193');
   assertEquals(row.accession_number, '0000320193-26-000010');
