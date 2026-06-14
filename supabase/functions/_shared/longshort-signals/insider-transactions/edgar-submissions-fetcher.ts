@@ -184,9 +184,15 @@ export class EdgarSubmissionsFetcher {
       );
     } catch (e) {
       this.emit(0, url);
-      // `fetchWithTimeoutAndRetry` re-throws `HTTP 429 ...` as Error
-      // after exhausting attempts — surface verbatim under our
-      // fetch-error taxonomy (mirrors `edgar-cik-mapper.ts`).
+      // `fetchWithTimeoutAndRetry` re-throws `HTTP <code> …` as Error
+      // after exhausting attempts. Preserve the typed `rate_limited`
+      // surface for 429 (caller counts it in `submissions_fetch_status`
+      // and proceeds — does NOT abort the run); other HTTP failures
+      // surface verbatim under our fetch-error taxonomy
+      // (mirrors `edgar-cik-mapper.ts`).
+      if (e instanceof Error && /^HTTP\s+429\b/.test(e.message)) {
+        return { kind: 'rate_limited' };
+      }
       if (e instanceof Error && /^HTTP\s+\d+/.test(e.message)) {
         throw new EdgarFetchError(
           SUBMISSIONS_OPERATION_ID,
