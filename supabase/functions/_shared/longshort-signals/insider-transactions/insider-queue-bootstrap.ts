@@ -28,7 +28,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../../supabase-admin.ts';
 import { productionQueueRegistry, type QueueSignalConfig } from '../shared/queue-worker/queue-config.ts';
-import { EdgarCikMapper } from './edgar-cik-mapper.ts';
+// ACT-220 / Path-Y: `EdgarCikMapper` is no longer constructed at the
+// consumer. Ticker resolution moved to the producer
+// (`scripts/insider-discovery-egress.ts`) and is persisted onto every
+// `insider_accession_discovery_queue` row via MIG-098.
 import { EdgarAccessionIndexFetcher } from './edgar-accession-index-fetcher.ts';
 import { EdgarForm4Fetcher } from './edgar-form4-fetcher.ts';
 import { PolygonSharesOutstandingFetcher } from '../shared/polygon-shares-outstanding-fetcher.ts';
@@ -66,7 +69,6 @@ export function buildInsiderDepsFromEnv(
 ): InsiderWorkListDeps {
   const contactEmail = readEnv('EDGAR_CONTACT_EMAIL');
   const polygonKey = readEnv('POLYGON_API_KEY');
-  const cikMapper = new EdgarCikMapper(contactEmail);
   const accessionIndex = new EdgarAccessionIndexFetcher(contactEmail);
   const form4Fetcher = new EdgarForm4Fetcher(contactEmail);
   const sharesOutstanding = new PolygonSharesOutstandingFetcher(polygonKey);
@@ -74,7 +76,6 @@ export function buildInsiderDepsFromEnv(
   return {
     supabase,
     operator_id,
-    cikMapper,
     accessionIndex,
     form4Fetcher,
     loadAndComputeCtx: { supabase, operator_id, priceHistory, sharesOutstanding },
@@ -173,7 +174,6 @@ function placeholderDeps(): InsiderWorkListDeps {
   return {
     supabase: stub,
     operator_id: DEFAULT_OPERATOR_ID,
-    cikMapper: stub,
     accessionIndex: stub,
     form4Fetcher: stub,
     loadAndComputeCtx: stub,
