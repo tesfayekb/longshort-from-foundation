@@ -470,6 +470,13 @@ interface ClaimedDiscoveryRow {
   issuer_cik: string;
   accession_number: string;
   form_type: '4' | '4/A';
+  /** ACT-215 / MIG-097: §(b) acceptance is now an enqueue-time schema
+   *  invariant on `insider_accession_discovery_queue` (NOT NULL). The
+   *  consumer reads it from the queue row and passes it directly to
+   *  `EdgarForm4Fetcher.fetchAndParse`, eliminating the prior
+   *  `EdgarAccessionIndexFetcher` Path-B `no_acceptance_datetime`
+   *  runtime gate (which read from a non-truth-source layer). */
+  acceptance_datetime: string;
 }
 
 /**
@@ -511,7 +518,7 @@ async function claimDiscoveryRowsForDay(
     .is('consumed_at', null)
     .in('issuer_cik', paddedUniverseCiks as string[])
     .or(heartbeatExclusion)
-    .select('issuer_cik, accession_number, form_type');
+    .select('issuer_cik, accession_number, form_type, acceptance_datetime');
   if (error) {
     throw new Error(
       `insider-work-list-registration: discovery-queue claim failed ` +
@@ -522,6 +529,7 @@ async function claimDiscoveryRowsForDay(
     issuer_cik: string;
     accession_number: string;
     form_type: string;
+    acceptance_datetime: string;
   }>;
   const out: ClaimedDiscoveryRow[] = [];
   for (const r of rows) {
@@ -530,6 +538,7 @@ async function claimDiscoveryRowsForDay(
       issuer_cik: r.issuer_cik,
       accession_number: r.accession_number,
       form_type: r.form_type,
+      acceptance_datetime: r.acceptance_datetime,
     });
   }
   return out;
