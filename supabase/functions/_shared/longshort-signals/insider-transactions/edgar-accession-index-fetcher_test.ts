@@ -74,7 +74,6 @@ Deno.test('(7) fetchIndex — resolved happy path', async () => {
     makeResp(200, {
       directory: {
         name: '0000320193-26-000077',
-        acceptanceDateTime: '2026-06-10T16:30:00.000Z',
         item: [
           { name: 'wk-form4_1.xml', type: 'text/xml' },
           { name: '0000320193-26-000077-index.htm', type: 'text/html' },
@@ -85,7 +84,6 @@ Deno.test('(7) fetchIndex — resolved happy path', async () => {
   assertEquals(r.kind, 'resolved');
   if (r.kind === 'resolved') {
     assertEquals(r.primary_document, 'wk-form4_1.xml');
-    assertEquals(r.acceptance_datetime, '2026-06-10T16:30:00.000Z');
   }
 });
 
@@ -113,7 +111,6 @@ Deno.test('(11) fetchIndex — >1 eligible xml → no_primary_doc (NO tiebreak)'
   const fetcher = new EdgarAccessionIndexFetcher(CONTACT, async () =>
     makeResp(200, {
       directory: {
-        acceptanceDateTime: '2026-06-10T16:30:00.000Z',
         item: [{ name: 'a.xml' }, { name: 'b.xml' }],
       },
     }));
@@ -125,16 +122,19 @@ Deno.test('(11) fetchIndex — >1 eligible xml → no_primary_doc (NO tiebreak)'
   }
 });
 
-Deno.test('(12) fetchIndex — acceptance missing (primary resolved) → no_acceptance_datetime (§(b) non-defaultable; ACT-213 split)', async () => {
+Deno.test('(12) fetchIndex — single eligible xml, no acceptance read attempted → resolved (ACT-215: §(b) moved to producer/queue)', async () => {
+  // ACT-215: index.json never carries acceptanceDateTime for any
+  // observed Form-4 shape; the fetcher post-amendment does NOT read
+  // acceptance at all. Single-eligible-xml + no acceptance still
+  // returns `resolved` (was `no_acceptance_datetime` under ACT-214).
   const fetcher = new EdgarAccessionIndexFetcher(CONTACT, async () =>
     makeResp(200, {
       directory: { item: [{ name: 'wf-form4_1.xml' }] },
     }));
   const r = await fetcher.fetchIndex({ cik: 1, accession_number: '0000000001-00-000001' });
-  assertEquals(r.kind, 'no_acceptance_datetime');
-  if (r.kind === 'no_acceptance_datetime') {
+  assertEquals(r.kind, 'resolved');
+  if (r.kind === 'resolved') {
     assertEquals(r.primary_document, 'wf-form4_1.xml');
-    assertEquals(r.eligible_count, 1);
   }
 });
 
@@ -142,7 +142,6 @@ Deno.test('(12b) fetchIndex — zero eligible xml → no_primary_doc (Path A bou
   const fetcher = new EdgarAccessionIndexFetcher(CONTACT, async () =>
     makeResp(200, {
       directory: {
-        acceptanceDateTime: '2026-06-10T16:30:00.000Z',
         item: [{ name: 'foo.txt' }, { name: 'bar.htm' }],
       },
     }));
@@ -153,10 +152,13 @@ Deno.test('(12b) fetchIndex — zero eligible xml → no_primary_doc (Path A bou
   }
 });
 
-Deno.test('(12c) fetchIndex — ACT-213 worked example: accession 0000100885-26-000182 verbatim index.json → no_acceptance_datetime, primary=edgardoc.xml', async () => {
-  // Verbatim body captured live from EDGAR during the ACT-213
-  // investigation — confirms the live-EDGAR shape routes Path B
-  // (resolved primary `edgardoc.xml`, acceptance absent).
+Deno.test('(12c) fetchIndex — ACT-215 forensic fixture: accession 0000100885-26-000182 verbatim index.json → resolved, primary=edgardoc.xml (post-amendment)', async () => {
+  // Same verbatim body captured live during the ACT-213 investigation.
+  // Pre-ACT-215 this routed to `no_acceptance_datetime` (Path B);
+  // post-ACT-215 the fetcher returns `resolved` because acceptance is
+  // no longer this layer's responsibility. The fixture is preserved to
+  // pin that the LIVE-EDGAR shape (no acceptanceDateTime present)
+  // still resolves cleanly through the primary-doc-only contract.
   const fetcher = new EdgarAccessionIndexFetcher(CONTACT, async () =>
     makeResp(200, {
       directory: {
@@ -171,29 +173,41 @@ Deno.test('(12c) fetchIndex — ACT-213 worked example: accession 0000100885-26-
       },
     }));
   const r = await fetcher.fetchIndex({ cik: 100885, accession_number: '0000100885-26-000182' });
-  assertEquals(r.kind, 'no_acceptance_datetime');
-  if (r.kind === 'no_acceptance_datetime') {
+  assertEquals(r.kind, 'resolved');
+  if (r.kind === 'resolved') {
     assertEquals(r.primary_document, 'edgardoc.xml');
-    assertEquals(r.eligible_count, 1);
     assertEquals(r.filenames.length, 4);
   }
 });
 
-Deno.test('(12d) source-sentinel — fetcher never returns kind:"ambiguous" (ACT-213 union split is not aliased)', async () => {
-  // Protect against a "helpful" backward-compat alias re-emerging.
-  // Reads the fetcher source verbatim and asserts the old union
-  // member is gone, not aliased through any return path.
+Deno.test('(12d) source-sentinel — fetcher never returns kind:"ambiguous" OR kind:"no_acceptance_datetime" (ACT-213 split + ACT-215 collapse remain pinned)', async () => {
+  // Compound drift guard:
+  //   - ACT-213 split: the old `kind:'ambiguous'` MUST stay gone.
+  //   - ACT-215 collapse: the sibling `kind:'no_acceptance_datetime'`
+  //     also MUST stay gone (acceptance moved to producer/queue).
+  // A "helpful" backslide that resurrects either name re-opens the
+  // architectural drift this fetcher was reshaped to close.
   const src = await Deno.readTextFile(
     new URL('./edgar-accession-index-fetcher.ts', import.meta.url),
   );
-  // Strip block + line comments so the documentation references to
-  // the historical 'ambiguous' name don't fire the sentinel.
+  // Strip block + line comments so documentation references to the
+  // historical names don't fire the sentinel.
   const code = src
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^[ \t]*\/\/.*$/gm, '');
   assert(
     !/kind:\s*['"]ambiguous['"]/.test(code),
     'fetcher source must not return kind:"ambiguous" — ACT-213 split must remain (no_primary_doc / no_acceptance_datetime).',
+  );
+  assert(
+    !/kind:\s*['"]no_acceptance_datetime['"]/.test(code),
+    'fetcher source must not return kind:"no_acceptance_datetime" — ACT-215 collapse moved acceptance to the producer/queue layer.',
+  );
+  // The fetcher must also not READ acceptanceDateTime from the index
+  // payload — that was the architectural mismatch ACT-215 closed.
+  assert(
+    !/\bacceptanceDateTime\b/.test(code),
+    'fetcher source must not read acceptanceDateTime — the field is not present on per-accession index.json (live-verified 2026-06-14); acceptance lives in the submissions feed.',
   );
 });
 
