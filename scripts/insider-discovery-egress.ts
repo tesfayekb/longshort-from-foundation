@@ -349,6 +349,16 @@ export async function loadUniverseCikSet(tickers: readonly string[], mapper: Edg
  * the queue. Empty-day → heartbeat row. 404 → heartbeat row + data_unavailable.
  * SEC failure → throws `EdgarFetchError` (caller maps to exit 1).
  * Supabase failure → throws `Error` (caller maps to exit 2).
+ *
+ * ACT-215 acceptance cross-walk: after the in-universe filter, the entries
+ * are batched by `issuer_cik` and one `EdgarSubmissionsFetcher` fetch is
+ * issued per unique issuer; the parallel-array members
+ * `filings.recent.{accessionNumber, acceptanceDateTime}` are folded into a
+ * `Map<accession_number, acceptance_datetime>` and stamped onto each
+ * `DiscoveryRow`. Entries whose accession is absent from the feed (issuer
+ * feed lagging master.idx, or a fresh-enough accession) are DROPPED with
+ * an `accessions_missing_acceptance` counter — MIG-097's NOT NULL queue
+ * column makes enqueue impossible without acceptance.
  */
 export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayOutcome> {
   const log = deps.log ?? ((e) => console.log(JSON.stringify(e)));
@@ -372,10 +382,8 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
     });
     return { as_of_date: asOf, entries_parsed: 0, entries_after_universe_filter: 0, rows_inserted: 0, heartbeat_inserted: true, data_unavailable: true };
   }
-  const rows = result.entries
-    .filter((entry) => isUniverseEntry(entry))
-    .map((e) => rowFromEntry(e, asOf, deps.discoveredBy, deps.correlationId));
-  if (rows.length === 0) {
+  const inUniverseEntries = result.entries.filter((entry) => isUniverseEntry(entry));
+  if (inUniverseEntries.length === 0) {
     const heartbeat = buildHeartbeatRow(asOf, deps.discoveredBy, deps.correlationId);
     await deps.insertRows([heartbeat]);
     log({
@@ -390,6 +398,97 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
     });
     return { as_of_date: asOf, entries_parsed: result.entries.length, entries_after_universe_filter: 0, rows_inserted: 0, heartbeat_inserted: true, data_unavailable: false };
   }
+
+  // ── ACT-215 acceptance cross-walk ───────────────────────────────────
+  // Group entries by padded issuer CIK; one submissions fetch per
+  // unique issuer (rate-budget: ~14× cheaper than the alternative
+  // per-accession `index.json` re-fetch architecture).
+  const submissionsStatus: Record<string, number> = {};
+  const acceptanceByAccession = new Map<string, string>();
+  const uniqueIssuerCiks = new Set<string>();
+  for (const e of inUniverseEntries) {
+    const padded = normalizeFilerCikForUniverse(e.filer_cik);
+    if (padded !== null) uniqueIssuerCiks.add(padded);
+  }
+  for (const cik10 of uniqueIssuerCiks) {
+    let sub: EdgarSubmissionsResult;
+    try {
+      sub = await deps.submissions.fetchSubmissions({ cik: cik10 });
+    } catch (e) {
+      // EdgarFetchError or network throw — surface in counter, leave
+      // accession→acceptance map empty for this issuer (its accessions
+      // will be dropped + counted, NOT enqueued).
+      submissionsStatus['0'] = (submissionsStatus['0'] ?? 0) + 1;
+      log({
+        event: 'insider_discovery_submissions_error',
+        as_of: asOf,
+        cik10,
+        message: (e as Error).message,
+        correlation_id: deps.correlationId,
+      });
+      continue;
+    }
+    if (sub.kind === 'unavailable') {
+      submissionsStatus['404'] = (submissionsStatus['404'] ?? 0) + 1;
+      continue;
+    }
+    if (sub.kind === 'rate_limited') {
+      submissionsStatus['429'] = (submissionsStatus['429'] ?? 0) + 1;
+      continue;
+    }
+    if (sub.kind === 'malformed') {
+      submissionsStatus['-1'] = (submissionsStatus['-1'] ?? 0) + 1;
+      log({
+        event: 'insider_discovery_submissions_malformed',
+        as_of: asOf,
+        cik10,
+        reason: sub.reason,
+        correlation_id: deps.correlationId,
+      });
+      continue;
+    }
+    submissionsStatus['200'] = (submissionsStatus['200'] ?? 0) + 1;
+    for (const r of sub.rows as SubmissionsRecentRow[]) {
+      acceptanceByAccession.set(r.accession_number, r.acceptance_datetime);
+    }
+  }
+
+  let accessionsMissingAcceptance = 0;
+  const rows: DiscoveryRow[] = [];
+  for (const e of inUniverseEntries) {
+    const acceptance = acceptanceByAccession.get(e.accession_number);
+    if (acceptance === undefined) {
+      accessionsMissingAcceptance += 1;
+      continue;
+    }
+    rows.push(rowFromEntry(e, asOf, deps.discoveredBy, deps.correlationId, acceptance));
+  }
+  if (rows.length === 0) {
+    const heartbeat = buildHeartbeatRow(asOf, deps.discoveredBy, deps.correlationId);
+    await deps.insertRows([heartbeat]);
+    log({
+      event: 'insider_discovery_day_empty_after_acceptance_xwalk',
+      as_of: asOf,
+      discovered_by: deps.discoveredBy,
+      correlation_id: deps.correlationId,
+      entries_parsed: result.entries.length,
+      entries_after_universe_filter: inUniverseEntries.length,
+      submissions_fetch_status: submissionsStatus,
+      accessions_missing_acceptance: accessionsMissingAcceptance,
+      rows_inserted: 0,
+      heartbeat_inserted: true,
+    });
+    return {
+      as_of_date: asOf,
+      entries_parsed: result.entries.length,
+      entries_after_universe_filter: inUniverseEntries.length,
+      rows_inserted: 0,
+      heartbeat_inserted: true,
+      data_unavailable: false,
+      submissions_fetch_status: submissionsStatus,
+      accessions_missing_acceptance: accessionsMissingAcceptance,
+    };
+  }
   await deps.insertRows(rows);
   log({
     event: 'insider_discovery_day_complete',
@@ -397,17 +496,21 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
     discovered_by: deps.discoveredBy,
     correlation_id: deps.correlationId,
     entries_parsed: result.entries.length,
-    entries_after_universe_filter: rows.length,
+    entries_after_universe_filter: inUniverseEntries.length,
     rows_inserted: rows.length,
     heartbeat_inserted: false,
+    submissions_fetch_status: submissionsStatus,
+    accessions_missing_acceptance: accessionsMissingAcceptance,
   });
   return {
     as_of_date: asOf,
     entries_parsed: result.entries.length,
-    entries_after_universe_filter: rows.length,
+    entries_after_universe_filter: inUniverseEntries.length,
     rows_inserted: rows.length,
     heartbeat_inserted: false,
     data_unavailable: false,
+    submissions_fetch_status: submissionsStatus,
+    accessions_missing_acceptance: accessionsMissingAcceptance,
   };
 }
 
