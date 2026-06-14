@@ -13,6 +13,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type {
   SignalRegistryRowWithFire,
 } from '@/features/longshort/hooks/useSignalRegistry';
@@ -220,7 +221,9 @@ async function renderTab() {
   return render(
     <MemoryRouter>
       <QueryClientProvider client={qc}>
-        <AllSignalsTab />
+        <TooltipProvider>
+          <AllSignalsTab />
+        </TooltipProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );
