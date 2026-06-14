@@ -30,6 +30,11 @@ import {
   defaultEdgarFetchTelemetry,
   type EdgarFetchTelemetry,
 } from './edgar-fetch-telemetry.ts';
+import {
+  fetchWithTimeoutAndRetry,
+  type FetchWithRetryOptions,
+  type MinimalHttpFetch,
+} from '../../../longshort-universe/shared/fetch-with-timeout.ts';
 
 /** SEC ticker→CIK snapshot endpoint. */
 export const COMPANY_TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json';
@@ -108,6 +113,7 @@ export class EdgarCikMapper {
   private readonly userAgent: string;
   private readonly telemetry: EdgarFetchTelemetry;
   private readonly correlationId: string;
+  private readonly retryOptions: FetchWithRetryOptions;
 
   constructor(
     contactEmail: string | null | undefined,
@@ -115,11 +121,13 @@ export class EdgarCikMapper {
     moduleId = 'fp-050-insider/0.1',
     telemetry: EdgarFetchTelemetry = defaultEdgarFetchTelemetry,
     correlationId = '',
+    retryOptions: FetchWithRetryOptions = {},
   ) {
     // buildEdgarUserAgent throws EdgarConfigurationError if email missing.
     this.userAgent = buildEdgarUserAgent(contactEmail, moduleId);
     this.telemetry = telemetry;
     this.correlationId = correlationId;
+    this.retryOptions = retryOptions;
   }
 
   /** INC-73-family telemetry emit (ACT-199 F1.a) — never throws. */
@@ -140,17 +148,76 @@ export class EdgarCikMapper {
 
   /**
    * Fetch the SEC ticker→CIK snapshot, apply overrides, return the lookup
-   * function bound over a normalized Map. Fetch-per-fire (§(f1)).
+   * function bound over a normalized Map.
+   *
+   * ACT-219 hardening (surfaced by run `e5907bfb-...`, 1× HTTP 429 against
+   * `company_tickers.json` mid-drain):
+   *   (a) Polite-throttle + exponential backoff via
+   *       `fetchWithTimeoutAndRetry` — the canonical retry helper used by
+   *       `polygon-news-feed-fetcher.ts`, `polygon-dividends-fetcher.ts`,
+   *       and `tradier-corporate-actions-fetcher.ts`. Adopting that
+   *       fetcher's pattern verbatim (no reinvention) — defaults are
+   *       3 attempts / [1s, 2s, 4s] backoff / 15s timeout. Retries fire
+   *       on 429 / 5xx / AbortError / TypeError.
+   *   (b) In-isolate memoization of the parsed snapshot keyed by the
+   *       `httpFetch` reference — once `company_tickers.json` lands in a
+   *       slice-worker isolate, the next 1000+ slices in that isolate
+   *       reuse the same parsed map. Per-cold-start scope (no TTL — the
+   *       Date.now/performance.now wall-clock surface is DEC-034 §(4)
+   *       banned in this tree; cold-start churn is the natural refresh
+   *       boundary, and daily isolate cycling keeps the snapshot
+   *       fresh enough for §(f1) staleness purposes). Tests reset via
+   *       `resetCikMapperMemo()`.
+   *
+   * The fetch-per-fire promise (§(f1)) is preserved for the FIRST call
+   * in each isolate; subsequent calls in the same isolate hit the memo.
    */
   async loadMap(): Promise<(ticker: string) => CikLookupResult> {
+    const memo = snapshotMemo;
+    if (memo !== null && memo.httpFetch === this.httpFetch) {
+      const snapshot = await memo.promise;
+      return this.buildLookup(snapshot);
+    }
+    const promise = this.fetchAndParseSnapshot();
+    snapshotMemo = { promise, httpFetch: this.httpFetch };
+    let snapshot: Map<string, string>;
+    try {
+      snapshot = await promise;
+    } catch (e) {
+      // Don't poison the memo with a failed fetch — the next call
+      // should be free to retry from scratch.
+      if (snapshotMemo !== null && snapshotMemo.promise === promise) {
+        snapshotMemo = null;
+      }
+      throw e;
+    }
+    return this.buildLookup(snapshot);
+  }
+
+  private async fetchAndParseSnapshot(): Promise<Map<string, string>> {
     let resp: Awaited<ReturnType<HttpFetch>>;
     try {
-      resp = await this.httpFetch(COMPANY_TICKERS_URL, {
-        method: 'GET',
-        headers: { 'User-Agent': this.userAgent, 'Accept': 'application/json' },
-      });
+      resp = await fetchWithTimeoutAndRetry(
+        this.httpFetch as unknown as MinimalHttpFetch,
+        COMPANY_TICKERS_URL,
+        {
+          method: 'GET',
+          headers: { 'User-Agent': this.userAgent, 'Accept': 'application/json' },
+        },
+        this.retryOptions,
+      );
     } catch (e) {
       this.emit(0);
+      // `fetchWithTimeoutAndRetry` re-throws `HTTP 429 ...` as Error
+      // after exhausting attempts — surface verbatim under our fetch-
+      // error taxonomy.
+      if (e instanceof Error && /^HTTP\s+\d+/.test(e.message)) {
+        throw new EdgarFetchError(
+          CIK_MAPPER_OPERATION_ID,
+          `${e.message} on ${COMPANY_TICKERS_URL} (after retry exhaustion)`,
+          e,
+        );
+      }
       throw new EdgarFetchError(
         CIK_MAPPER_OPERATION_ID,
         `network error fetching ${COMPANY_TICKERS_URL}`,
@@ -197,7 +264,10 @@ export class EdgarCikMapper {
       if (!Number.isInteger(cikInt) || cikInt <= 0) continue;
       snapshot.set(t, padCik(cikInt));
     }
+    return snapshot;
+  }
 
+  private buildLookup(snapshot: Map<string, string>): (ticker: string) => CikLookupResult {
     return (rawTicker: string): CikLookupResult => {
       const ticker = (rawTicker ?? '').toUpperCase().trim();
       if (ticker.length === 0) return { kind: 'unresolved', ticker: rawTicker ?? '' };
@@ -212,4 +282,22 @@ export class EdgarCikMapper {
       return { kind: 'unresolved', ticker };
     };
   }
+}
+
+/**
+ * Module-level memo for the parsed ticker→CIK snapshot. Keyed by the
+ * `httpFetch` reference so production callers (sharing the default
+ * `fetch`) collapse to a single underlying request per isolate, while
+ * tests injecting bespoke fetchers each get their own slot.
+ */
+interface SnapshotMemoEntry {
+  readonly promise: Promise<Map<string, string>>;
+  readonly httpFetch: HttpFetch;
+}
+let snapshotMemo: SnapshotMemoEntry | null = null;
+
+/** Test helper — clear the in-isolate snapshot memo. Production code
+ *  never calls this; the natural refresh boundary is cold-start. */
+export function resetCikMapperMemo(): void {
+  snapshotMemo = null;
 }
