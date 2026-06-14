@@ -808,6 +808,10 @@ async function runWorkListSlice(
         result = await processItem({
           item: { id: itemCtx.ticker, payload: {} },
           asOf: as_of,
+          // Fix B: thread run_id so the consumer can stamp it on
+          // persisted rows (insider: insider_form4_rows.ingested_run_id).
+          // Required field per WorkListProcessItemFn contract.
+          run_id,
         });
       } catch (e) {
         // Q3 transient: leave cursor claimed-but-not-deleted; release the

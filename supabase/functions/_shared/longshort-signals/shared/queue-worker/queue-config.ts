@@ -257,10 +257,19 @@ export type WorkListSeedFn = (args: {
  * Consumers MUST persist successful work into their own private table
  * BEFORE returning `{kind:'processed'}` so the CAS barrier (Q1) holds:
  * process → upsert → engine-delete cursor row.
+ *
+ * `run_id` is threaded by the engine so consumers can stamp the run
+ * attribution onto their persisted rows (Fix B / MIG-095 §(c)).
+ * Required field — every persisted row MUST carry run_id attribution
+ * (no silent NULL allowed; this is the institutional-grade audit
+ * contract for any consumer dual-writing to its own persistence
+ * table). New consumers that don't persist may ignore the field via
+ * destructuring; the contract is still encoded as required.
  */
 export type WorkListProcessItemFn = (args: {
   item: WorkListItem;
   asOf: Date;
+  run_id: string;
 }) => Promise<WorkListItemResult>;
 
 /**

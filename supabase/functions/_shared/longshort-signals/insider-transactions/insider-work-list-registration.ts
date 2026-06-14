@@ -645,7 +645,7 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
     return m;
   };
 
-  return async ({ item, asOf }): Promise<WorkListItemResult> => {
+  return async ({ item, asOf, run_id }): Promise<WorkListItemResult> => {
     // ── Payload reconstruction (engine contract: cursor carries no
     //    payload; consumer rebuilds from item.id). ───────────────────
     const accession = item.id;
