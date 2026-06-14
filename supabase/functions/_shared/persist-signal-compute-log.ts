@@ -45,7 +45,11 @@ export function aggregateSkipCounts(
     no_catalyst_events_in_window: 0,
     ticker_to_cik_unresolved: 0,
     no_primary_doc: 0,
-    no_acceptance_datetime: 0,
+    // ACT-215 (DEC-058 §(b) amendment): `no_acceptance_datetime` removed
+    // from the enum and from this seed. Acceptance is now a discovery-time
+    // NOT NULL schema invariant on `insider_accession_discovery_queue`
+    // (MIG-097); the runtime skip path that fired it cannot reach the
+    // consumer post-amendment.
   };
   for (const s of skips) counts[s.reason] += 1;
   return counts;
