@@ -210,3 +210,30 @@ Deno.test('finalizer: upstream skips merged into compute_log alongside z-score s
   assert(logPayload.includes('zero_dispersion'));
   assert(logPayload.includes('fetch_error'));
 });
+
+Deno.test('finalizer: ACT-219 — completed terminal CAS explicitly clears failure_reason (sticky-state-on-recovery fix)', async () => {
+  const { supabase, updates } = makeMock({
+    runStatus: 'finalizing',
+    staging: [
+      { ticker: 'A', gics_sector: 'Tech', raw_signal: 1 },
+      { ticker: 'B', gics_sector: 'Tech', raw_signal: 2 },
+    ],
+  });
+  const out = await runQueueFinalizer({
+    supabase, config: cfg(), operator_id: 'op-1',
+    as_of: new Date('2026-06-09T20:00:00Z'), run_id: 'r-1',
+  });
+  assertEquals(out.kind, 'finalized');
+  const cas = updates.find((u) =>
+    u.table === 'signal_queue_runs' &&
+    (u.payload as Record<string, unknown>).status === 'completed',
+  );
+  assert(cas, 'expected a completed-terminal CAS update');
+  const payload = cas!.payload as Record<string, unknown>;
+  assert(
+    'failure_reason' in payload,
+    'completed CAS MUST explicitly write failure_reason (sticky-state-on-recovery clear)',
+  );
+  assertEquals(payload.failure_reason, null,
+    'completed CAS MUST clear failure_reason to NULL');
+});
