@@ -173,10 +173,16 @@ import {
   type WorkListSeedFn,
   type TickerComputeResult,
 } from '../shared/queue-worker/queue-config.ts';
-import {
-  EdgarCikMapper,
-  type CikLookupResult,
-} from './edgar-cik-mapper.ts';
+// ACT-220 / Path-Y: `EdgarCikMapper` is NOT imported here. CIK→ticker
+// resolution was relocated to the producer (`scripts/insider-discovery-
+// egress.ts`) and persisted onto every `insider_accession_discovery_
+// queue` row as the `ticker` column (MIG-098). The consumer reads
+// ticker directly from the claimed row — eliminating the per-cron-
+// isolate `company_tickers.json` fetch and the SEC fair-access 429
+// class observed against runs `e5907bfb-…` and `937cc59c-…`.
+// Source sentinel (D.6 below): the literal string `EdgarCikMapper`
+// MUST NOT appear in this file post-ACT-220 — a regression test
+// reads the source and asserts absence.
 import {
   EdgarAccessionIndexFetcher,
   type EdgarAccessionIndexResult,
@@ -248,7 +254,14 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 interface UniverseRowWithCik {
   ticker: string;
   gics_sector: string | null;
-  /** Padded 10-digit CIK resolved via `EdgarCikMapper.loadMap()`. */
+  /** Padded 10-digit CIK — historically resolved via the consumer's
+   *  cik-mapper; post-ACT-220 the consumer NO LONGER resolves CIKs
+   *  at runtime. The producer stamps `ticker` directly onto the
+   *  queue row; this interface field is retained ONLY as the
+   *  per-isolate universe descriptor (ticker, gics_sector) used by
+   *  `loadCurrentUniverse` consumers downstream of `processItem`.
+   *  The `cik10` axis is unused post-ACT-220 and is dropped from the
+   *  consumer's universe load below. */
   cik10: string;
 }
 
@@ -363,7 +376,10 @@ export function dedupeFormRowsByPk<T extends {
 export interface InsiderWorkListDeps {
   supabase: SupabaseClient;
   operator_id: string;
-  cikMapper: EdgarCikMapper;
+  // ACT-220 / Path-Y: `cikMapper` field REMOVED. CIK→ticker resolution
+  // is producer-time (`scripts/insider-discovery-egress.ts` →
+  // `insider_accession_discovery_queue.ticker`). The consumer no
+  // longer constructs or injects an `EdgarCikMapper`.
   accessionIndex: EdgarAccessionIndexFetcher;
   form4Fetcher: EdgarForm4Fetcher;
   /** The same context shape `createInsiderLoadAndCompute` takes; passed
@@ -412,19 +428,20 @@ function makeSeedWorkItems(deps: InsiderWorkListDeps, mode: InsiderWorkListMode)
     const universe = await loadCurrentUniverse(deps);
     if (universe.length === 0) return [];
 
-    // Step S.2: ticker → padded CIK lookup (fetch-per-fire per
-    // DEC-058 §(f1)). Throws → Q5 `seed_failed` (engine inserts the
-    // terminal failed-run row; never half-seeded).
-    const lookup = await deps.cikMapper.loadMap();
-    const byPaddedCik = new Map<string, UniverseRowWithCik>();
-    const paddedUniverseCiks: string[] = [];
+    // Step S.2 — ACT-220 / Path-Y: build the universe-TICKER set used
+    // as the in-universe filter for the claim. The CIK axis is no
+    // longer consulted at the consumer — `ticker` is stamped on every
+    // queue row by the producer (MIG-098). The universe-ticker set
+    // serves the same role the padded-CIK list did pre-ACT-220.
+    const universeTickers: string[] = [];
+    const sectorByTicker = new Map<string, string | null>();
     for (const u of universe) {
-      const r: CikLookupResult = lookup(u.ticker);
-      if (r.kind === 'unresolved') continue;
-      byPaddedCik.set(r.cik10, { ticker: u.ticker, gics_sector: u.gics_sector, cik10: r.cik10 });
-      paddedUniverseCiks.push(r.cik10);
+      const t = u.ticker.toUpperCase().trim();
+      if (t.length === 0) continue;
+      universeTickers.push(t);
+      sectorByTicker.set(t, u.gics_sector);
     }
-    if (paddedUniverseCiks.length === 0) return [];
+    if (universeTickers.length === 0) return [];
 
     // Step S.3: enumerate target trading days. Daily = yesterday's
     // trading day (weekends-only-skip). Backfill = the queue's own
@@ -443,16 +460,21 @@ function makeSeedWorkItems(deps: InsiderWorkListDeps, mode: InsiderWorkListMode)
     const items: WorkListItem[] = [];
     const seenAccession = new Set<string>(); // backfill cross-day defense
     for (const day of targetDays) {
-      const claimed = await claimDiscoveryRowsForDay(deps, day, paddedUniverseCiks, consumedAtIso);
+      const claimed = await claimDiscoveryRowsForDay(deps, day, universeTickers, consumedAtIso);
       for (const row of claimed) {
         if (seenAccession.has(row.accession_number)) continue;
         seenAccession.add(row.accession_number);
-        const u = byPaddedCik.get(row.issuer_cik);
-        if (u === undefined) continue; // defensive (universe drift since producer)
+        // ACT-220: ticker is read from the queue row, not from a
+        // CIK→universe-map lookup. Defensive guard against universe
+        // drift between producer-run and consumer-claim (a ticker that
+        // left the universe after the producer enqueued it).
+        const ticker = (row.ticker ?? '').toUpperCase().trim();
+        if (ticker.length === 0) continue;
+        if (!sectorByTicker.has(ticker)) continue;
         const payload: InsiderWorkItemPayload = {
           filer_cik_raw: row.issuer_cik.replace(/^0+/, '') || '0',
           filer_cik_padded: row.issuer_cik,
-          ticker: u.ticker,
+          ticker,
           date_filed: day,
           form_type: row.form_type,
         };
@@ -477,23 +499,34 @@ interface ClaimedDiscoveryRow {
    *  `EdgarAccessionIndexFetcher` Path-B `no_acceptance_datetime`
    *  runtime gate (which read from a non-truth-source layer). */
   acceptance_datetime: string;
+  /** ACT-220 / MIG-098: universe ticker stamped at producer-time
+   *  (NOT NULL on the queue). The consumer reads it directly — no
+   *  CIK→ticker resolution remains anywhere on the runtime path. */
+  ticker: string;
 }
 
 /**
- * R2 atomic claim — one PostgREST UPDATE-with-RETURNING. The WHERE
- * conjunction is:
+ * R2 atomic claim — one PostgREST UPDATE-with-RETURNING. ACT-220
+ * Path-Y: the in-universe filter is now ticker-based (the producer
+ * stamps `ticker` on every queue row; the consumer no longer holds a
+ * padded-CIK list). The heartbeat exclusion predicate is unchanged
+ * — the producer's heartbeat sentinel still uses
+ * `(issuer_cik='__heartbeat__', accession_number='__heartbeat__')`
+ * and is additionally protected by `ticker='__heartbeat__'` not
+ * matching any real universe ticker. WHERE conjunction:
  *
  *   as_of_date            = $1
  *   AND consumed_at       IS NULL
- *   AND issuer_cik        = ANY($paddedUniverseCiks)     -- in-universe
+ *   AND ticker            = ANY($universeTickers)        -- in-universe
  *   AND NOT (issuer_cik='__heartbeat__'
- *            AND accession_number='__heartbeat__')      -- R1 heartbeat exclusion
+ *            AND accession_number='__heartbeat__')       -- R1 heartbeat exclusion
  *
  * The heartbeat exclusion is the operator-verbatim predicate. It is
- * redundant given the in-universe IN-filter (no universe CIK equals
- * '__heartbeat__'), but kept as a defense-in-depth structural pin —
- * if a future change widens the in-universe set or relaxes the
- * IN-filter, the heartbeat exclusion remains the structural barrier.
+ * redundant given the in-universe ticker IN-filter (no universe
+ * ticker equals '__heartbeat__'), but kept as a defense-in-depth
+ * structural pin — if a future change widens the in-universe set or
+ * relaxes the IN-filter, the heartbeat exclusion remains the
+ * structural barrier.
  *
  * Concurrency (R2): two concurrent UPDATEs against overlapping rows
  * serialize at row-lock; the second sees `consumed_at IS NOT NULL`
@@ -505,7 +538,7 @@ interface ClaimedDiscoveryRow {
 async function claimDiscoveryRowsForDay(
   deps: InsiderWorkListDeps,
   asOfDate: string,
-  paddedUniverseCiks: ReadonlyArray<string>,
+  universeTickers: ReadonlyArray<string>,
   consumedAtIso: string,
 ): Promise<ClaimedDiscoveryRow[]> {
   const heartbeatExclusion =
@@ -516,9 +549,9 @@ async function claimDiscoveryRowsForDay(
     .update({ consumed_at: consumedAtIso })
     .eq('as_of_date', asOfDate)
     .is('consumed_at', null)
-    .in('issuer_cik', paddedUniverseCiks as string[])
+    .in('ticker', universeTickers as string[])
     .or(heartbeatExclusion)
-    .select('issuer_cik, accession_number, form_type, acceptance_datetime');
+    .select('issuer_cik, accession_number, form_type, acceptance_datetime, ticker');
   if (error) {
     throw new Error(
       `insider-work-list-registration: discovery-queue claim failed ` +
@@ -530,6 +563,7 @@ async function claimDiscoveryRowsForDay(
     accession_number: string;
     form_type: string;
     acceptance_datetime: string;
+    ticker: string;
   }>;
   const out: ClaimedDiscoveryRow[] = [];
   for (const r of rows) {
@@ -539,6 +573,7 @@ async function claimDiscoveryRowsForDay(
       accession_number: r.accession_number,
       form_type: r.form_type,
       acceptance_datetime: r.acceptance_datetime,
+      ticker: r.ticker,
     });
   }
   return out;
@@ -612,38 +647,35 @@ async function loadCurrentUniverse(
 function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
   // ── ENGINE-↔-CONSUMER SEAM (ACT-211, FP-050 Phase 4) ──────────────
   // `signal_queue_cursor` carries NO `payload` column (schema verified
-  // 2026-06-13: run_id, signal_id, ticker, gics_sector, claimed_at,
-  // created_at). The work-list mode engine at
-  // `queue-slice-worker.ts:808-810` invokes the consumer with a
-  // hardcoded `payload: {}` and the documented contract that the
-  // consumer reconstructs the payload from `item.id` (the cursor's
-  // ticker, which IS the accession number for this signal) via its
-  // own persistence-table read path. The earlier reading
-  // `item.payload as Readonly<InsiderWorkItemPayload>` followed by
-  // `payload.filer_cik_padded.replace(...)` collapsed to
-  // `undefined.replace(...)` on every claimed item, tripping the Q3
-  // 3-strikes deadlock guard with the literal
-  // `Cannot read properties of undefined (reading 'replace')` stamp
-  // recorded against run `aadb1329-…c2d`. The reconstruction below
-  // honors the engine contract verbatim: one indexed SELECT per
-  // processed item (~14k SELECTs across a full 63-day backfill,
-  // negligible against the 5 rps SEC fair-access floor that already
-  // bounds the queue drain). The universe→padded-CIK map is memoized
-  // per-isolate so the per-item cost is exactly one queue read.
-  let universeByPaddedCik: Map<string, UniverseRowWithCik> | null = null;
-  const ensureUniverseMap = async (): Promise<Map<string, UniverseRowWithCik>> => {
-    if (universeByPaddedCik !== null) return universeByPaddedCik;
+  // 2026-06-13). The work-list mode engine at `queue-slice-worker.ts:
+  // 808-810` invokes the consumer with a hardcoded `payload: {}`; the
+  // consumer reconstructs from `item.id` (the accession number) via
+  // an indexed SELECT against `insider_accession_discovery_queue`.
+  //
+  // ACT-220 / Path-Y: the queue SELECT now also projects `ticker` (the
+  // producer-time stamp from MIG-098). The previous per-isolate
+  // universe→padded-CIK map is REPLACED with a universe-ticker
+  // membership Set — the consumer no longer holds a CIK axis at all.
+  let universeTickerSet: Set<string> | null = null;
+  let sectorByTicker: Map<string, string | null> | null = null;
+  const ensureUniverseTickerSet = async (): Promise<Set<string>> => {
+    if (universeTickerSet !== null) return universeTickerSet;
     const universe = await loadCurrentUniverse(deps);
-    const lookup = await deps.cikMapper.loadMap();
-    const m = new Map<string, UniverseRowWithCik>();
+    const s = new Set<string>();
+    const m = new Map<string, string | null>();
     for (const u of universe) {
-      const r: CikLookupResult = lookup(u.ticker);
-      if (r.kind === 'unresolved') continue;
-      m.set(r.cik10, { ticker: u.ticker, gics_sector: u.gics_sector, cik10: r.cik10 });
+      const t = u.ticker.toUpperCase().trim();
+      if (t.length === 0) continue;
+      s.add(t);
+      m.set(t, u.gics_sector);
     }
-    universeByPaddedCik = m;
-    return m;
+    universeTickerSet = s;
+    sectorByTicker = m;
+    return s;
   };
+  // silence unused-import warning post-ACT-220; UniverseRowWithCik
+  // retained for downstream consumers that haven't been migrated yet.
+  void sectorByTicker;
 
   return async ({ item, asOf, run_id }): Promise<WorkListItemResult> => {
     // ── Payload reconstruction (engine contract: cursor carries no
@@ -651,7 +683,7 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
     const accession = item.id;
     const { data: queueRows, error: queueErr } = await deps.supabase
       .from('insider_accession_discovery_queue')
-      .select('issuer_cik, form_type, acceptance_datetime')
+      .select('issuer_cik, form_type, acceptance_datetime, ticker')
       .eq('accession_number', accession)
       .limit(1);
     if (queueErr) {
@@ -665,7 +697,7 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
       );
     }
     const queueRow = (queueRows ?? [])[0] as
-      | { issuer_cik: string; form_type: string; acceptance_datetime: string }
+      | { issuer_cik: string; form_type: string; acceptance_datetime: string; ticker: string }
       | undefined;
     if (queueRow === undefined) {
       // No discovery-queue row for this accession (e.g., row pruned
@@ -706,9 +738,20 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
         detail: `missing acceptance_datetime on discovery-queue row for accession ${accession} (MIG-097 invariant breach — should be unreachable)`,
       };
     }
-    const byPaddedCik = await ensureUniverseMap();
-    const universeRow = byPaddedCik.get(issuerCikPadded);
-    if (universeRow === undefined) {
+    // ACT-220 / Path-Y: ticker comes from the queue row (MIG-098
+    // producer-time stamp). The runtime universe filter is now a
+    // ticker-membership check against `universe_membership` — no
+    // CIK→ticker resolution remains anywhere on this path.
+    const tickerFromQueue = (queueRow.ticker ?? '').toUpperCase().trim();
+    if (tickerFromQueue.length === 0) {
+      return {
+        kind: 'permanent_skip',
+        reason: 'data_unavailable',
+        detail: `missing ticker on discovery-queue row for accession ${accession} (MIG-098 invariant breach — should be unreachable)`,
+      };
+    }
+    const tickers = await ensureUniverseTickerSet();
+    if (!tickers.has(tickerFromQueue)) {
       // Universe drift since the producer ran — the issuer is no
       // longer in the current S&P-900 cut. Typed-permanent skip; the
       // §22.8.5 sub-class B redeploy discipline already covers the
@@ -716,13 +759,13 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
       return {
         kind: 'permanent_skip',
         reason: 'data_unavailable',
-        detail: `universe drift: issuer_cik=${issuerCikPadded} no longer in-universe (acc=${accession})`,
+        detail: `universe drift: ticker=${tickerFromQueue} (issuer_cik=${issuerCikPadded}) no longer in-universe (acc=${accession})`,
       };
     }
     const payload: InsiderWorkItemPayload = {
       filer_cik_raw: issuerCikPadded.replace(/^0+/, '') || '0',
       filer_cik_padded: issuerCikPadded,
-      ticker: universeRow.ticker,
+      ticker: tickerFromQueue,
       // date_filed is diagnostic only and not consumed downstream;
       // populated from asOf to keep the type total without inventing
       // a wall-clock read (DEC-034 clause 4).
