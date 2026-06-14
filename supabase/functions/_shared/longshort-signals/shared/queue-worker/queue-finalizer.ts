@@ -485,7 +485,22 @@ async function casToTerminal(
     finalized_at: ts,
     updated_at: ts,
   };
-  if (failure_reason !== null) update.failure_reason = failure_reason;
+  if (failure_reason !== null) {
+    update.failure_reason = failure_reason;
+  } else if (terminal === 'completed') {
+    // ACT-219 sticky-state-on-recovery fix: a slice that succeeds after
+    // a transient inner-loop failure (e.g. a vendor 429 that the
+    // backoff helper recovered from) leaves the run row's
+    // `failure_reason` populated from the slice-level stamp. Surfaced by
+    // run `e5907bfb-...` — status='completed' + slice_failure_count=0
+    // yet `failure_reason='... HTTP 429 ...'` sticky-populated. Clearing
+    // the field at terminal-success is the chosen path (vs. moving
+    // failure_reason writes to run-terminal only), because the audit
+    // envelope already captures the SLICE_FAILED transient event
+    // verbatim — the run-row column should reflect the run's terminal
+    // status, not the transient state of any single inner attempt.
+    update.failure_reason = null;
+  }
   const { error, count } = await supabase
     .from('signal_queue_runs')
     .update(update, { count: 'exact' })
