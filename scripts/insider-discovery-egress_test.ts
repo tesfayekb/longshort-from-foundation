@@ -662,3 +662,193 @@ Deno.test('(p4) ACT-221 — submissionsPacingMs=0 disables pacing (escape hatch 
   await runDiscoveryDay('2026-06-12', deps);
   assertEquals(sleepCalls.length, 0, 'no sleeps when pacing disabled');
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// ACT-222 / Path-Q producer-side per-issuer submissions DEDUPLICATION
+// ─────────────────────────────────────────────────────────────────────
+
+/** Build an `EdgarDailyIndexFetcher` whose response varies by master.idx
+ *  URL date suffix (`master.YYYYMMDD.idx`). Keyed by compact YYYYMMDD. */
+function fetcherByDay(bodyByYmd: Record<string, string>): EdgarDailyIndexFetcher {
+  const httpFetch = (url: string, _init?: unknown) => {
+    const m = String(url).match(/master\.(\d{8})\.idx/);
+    const ymd = m?.[1] ?? '';
+    const body = bodyByYmd[ymd] ?? '';
+    const status = body.length > 0 ? 200 : 404;
+    return Promise.resolve({
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: status === 200 ? 'OK' : 'NOT FOUND',
+      text: () => Promise.resolve(body),
+      json: () => Promise.resolve({}),
+    });
+  };
+  return new EdgarDailyIndexFetcher('test@example.com', httpFetch);
+}
+
+/** Submissions fetcher that COUNTS calls per padded CIK. */
+function countingSubmissions(
+  accessionToAcceptance: Record<string, { acceptance: string; primary: string; form: '4' | '4/A' }>,
+  byCik: Record<string, string[]>,
+): { fetcher: EdgarSubmissionsFetcher; callsByCik: Map<string, number> } {
+  const callsByCik = new Map<string, number>();
+  const fake = {
+    async fetchSubmissions({ cik }: { cik: string | number }): Promise<EdgarSubmissionsResult> {
+      const raw = typeof cik === 'number' ? String(cik) : cik;
+      const padded = (raw.replace(/^0+/, '') || '0').padStart(10, '0');
+      callsByCik.set(padded, (callsByCik.get(padded) ?? 0) + 1);
+      const accs = byCik[padded] ?? [];
+      const rows = accs
+        .filter((a) => accessionToAcceptance[a] !== undefined)
+        .map((a) => ({
+          accession_number: a,
+          form: accessionToAcceptance[a].form,
+          acceptance_datetime: accessionToAcceptance[a].acceptance,
+          primary_document: accessionToAcceptance[a].primary,
+        }));
+      return { kind: 'resolved', cik10: padded, rows };
+    },
+  };
+  return { fetcher: fake as unknown as EdgarSubmissionsFetcher, callsByCik };
+}
+
+/**
+ * (p5) ACT-222 dedup sentinel: across a multi-day backfill where issuer
+ * CIK 0001045810 (NVDA exemplar) appears in 3 distinct day partitions,
+ * the producer fetches submissions/CIK0001045810.json EXACTLY ONCE.
+ *
+ * Surfaced by GHA run 27504513965 (cancelled at ~1h45m): the legacy
+ * per-day shape refetched each issuer N times across the backfill window
+ * — Path-Q restructures `runMode` into a two-pass dedup orchestrator
+ * that collects the UNIQUE issuer set across all days before issuing
+ * any submissions fetches.
+ */
+Deno.test('(p5) ACT-222 — NVDA in 3 day partitions ⇒ submissions/CIK0001045810.json fetched EXACTLY ONCE', async () => {
+  const cap = captureInserter();
+  // Three trading days; NVDA filed on each (3 distinct accession numbers,
+  // same issuer CIK). Wed/Thu/Fri 2026-06-10..12.
+  const nvdaDay = (ymd: string, acc: string): string =>
+    [
+      'Description: Daily Index',
+      '',
+      'CIK|Company Name|Form Type|Date Filed|File Name',
+      '----------------------------------------------------',
+      `1045810|NVIDIA CORP|4|${ymd}|edgar/data/1045810/${acc}.txt`,
+    ].join('\n');
+  const fetcher = fetcherByDay({
+    '20260610': nvdaDay('20260610', '0001768670-26-000010'),
+    '20260611': nvdaDay('20260611', '0001768670-26-000011'),
+    '20260612': nvdaDay('20260612', '0001768670-26-000012'),
+  });
+  const { fetcher: submissions, callsByCik } = countingSubmissions(
+    {
+      '0001768670-26-000010': { acceptance: '2026-06-10T20:01:00.000Z', primary: 'p.xml', form: '4' },
+      '0001768670-26-000011': { acceptance: '2026-06-11T20:01:00.000Z', primary: 'p.xml', form: '4' },
+      '0001768670-26-000012': { acceptance: '2026-06-12T20:01:00.000Z', primary: 'p.xml', form: '4' },
+    },
+    {
+      '0001045810': [
+        '0001768670-26-000010',
+        '0001768670-26-000011',
+        '0001768670-26-000012',
+      ],
+    },
+  );
+  const deps: RunDeps = {
+    ...makeDeps({
+      fetcher,
+      insertRows: cap.insertRows,
+      submissions,
+      discoveredBy: 'backfill-oneshot',
+      tickerForPaddedCik: (cik) => (cik === '0001045810' ? 'NVDA' : null),
+    }),
+    sleep: () => Promise.resolve(),
+    submissionsPacingMs: 0,
+  };
+  deps.isUniverseEntry = buildUniverseEntryPredicate(new Set(['0001045810']));
+
+  const summary = await runModeWithSummary(
+    { kind: 'backfill', from: '2026-06-10', to: '2026-06-12' },
+    deps,
+  );
+
+  // Dedup contract: ONE submissions fetch for the single unique CIK,
+  // not three (one-per-day).
+  assertEquals(callsByCik.get('0001045810'), 1, 'NVDA submissions fetched EXACTLY ONCE across 3 day partitions');
+  assertEquals(summary.unique_issuers_fetched, 1);
+  assertEquals(summary.total_accessions_processed, 3);
+  assertEquals(summary.dedup_ratio, 3, 'dedup_ratio = total_accessions / unique_issuers = 3/1');
+  assertEquals(summary.acceptance_xwalk_misses, 0);
+  assertEquals(summary.submissions_fetch_status['200'], 1);
+});
+
+/**
+ * (p6) ACT-222 cross-walk hit-all sentinel: the global acceptance map
+ * built in Pass 2 cross-walks correctly across ALL day partitions —
+ * each of the 3 NVDA accessions lands in its own day's insert batch
+ * with the correct acceptance_datetime stamped on it.
+ */
+Deno.test('(p6) ACT-222 — cross-walk hits all 3 NVDA accessions across 3 day partitions; each row stamped with correct acceptance', async () => {
+  const cap = captureInserter();
+  const nvdaDay = (ymd: string, acc: string): string =>
+    [
+      'Description: Daily Index',
+      '',
+      'CIK|Company Name|Form Type|Date Filed|File Name',
+      '----------------------------------------------------',
+      `1045810|NVIDIA CORP|4|${ymd}|edgar/data/1045810/${acc}.txt`,
+    ].join('\n');
+  const fetcher = fetcherByDay({
+    '20260610': nvdaDay('20260610', '0001768670-26-000010'),
+    '20260611': nvdaDay('20260611', '0001768670-26-000011'),
+    '20260612': nvdaDay('20260612', '0001768670-26-000012'),
+  });
+  const { fetcher: submissions } = countingSubmissions(
+    {
+      '0001768670-26-000010': { acceptance: '2026-06-10T20:01:00.000Z', primary: 'p.xml', form: '4' },
+      '0001768670-26-000011': { acceptance: '2026-06-11T20:02:00.000Z', primary: 'p.xml', form: '4' },
+      '0001768670-26-000012': { acceptance: '2026-06-12T20:03:00.000Z', primary: 'p.xml', form: '4' },
+    },
+    {
+      '0001045810': [
+        '0001768670-26-000010',
+        '0001768670-26-000011',
+        '0001768670-26-000012',
+      ],
+    },
+  );
+  const deps: RunDeps = {
+    ...makeDeps({
+      fetcher,
+      insertRows: cap.insertRows,
+      submissions,
+      discoveredBy: 'backfill-oneshot',
+      tickerForPaddedCik: (cik) => (cik === '0001045810' ? 'NVDA' : null),
+    }),
+    sleep: () => Promise.resolve(),
+    submissionsPacingMs: 0,
+  };
+  deps.isUniverseEntry = buildUniverseEntryPredicate(new Set(['0001045810']));
+
+  await runModeWithSummary(
+    { kind: 'backfill', from: '2026-06-10', to: '2026-06-12' },
+    deps,
+  );
+
+  // 3 insert batches, one per day, each a single NVDA row stamped with
+  // the day's correct acceptance_datetime (no cross-day contamination).
+  assertEquals(cap.calls.length, 3, '3 per-day insert batches');
+  const byAccession = new Map<string, DiscoveryRow>();
+  for (const batch of cap.calls) {
+    assertEquals(batch.length, 1);
+    byAccession.set(batch[0].accession_number, batch[0]);
+  }
+  assertEquals(byAccession.get('0001768670-26-000010')?.acceptance_datetime, '2026-06-10T20:01:00.000Z');
+  assertEquals(byAccession.get('0001768670-26-000010')?.as_of_date, '2026-06-10');
+  assertEquals(byAccession.get('0001768670-26-000011')?.acceptance_datetime, '2026-06-11T20:02:00.000Z');
+  assertEquals(byAccession.get('0001768670-26-000011')?.as_of_date, '2026-06-11');
+  assertEquals(byAccession.get('0001768670-26-000012')?.acceptance_datetime, '2026-06-12T20:03:00.000Z');
+  assertEquals(byAccession.get('0001768670-26-000012')?.as_of_date, '2026-06-12');
+  // Ticker stamped on every row.
+  for (const r of byAccession.values()) assertEquals(r.ticker, 'NVDA');
+});
