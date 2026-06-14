@@ -129,6 +129,12 @@ export async function runQueueFinalizer(
   //      (those carry item-scope skips for telemetry only — Q4 two-ledger).
   let staging: StagingRow[];
   let skipsDb: SkipRow[];
+  // Work-list mode override: runRow.universe_size holds the producer-side
+  // accession-count ledger (correct for sweeper/budget contract). The
+  // consumer-owned mass-balance universe-membership count is derived from
+  // loadAndCompute's per-ticker result count and surfaced via
+  // buildWorkListAggregates. Path (ii) ACT-218.
+  let workListUniverseSize: number | null = null;
   if (isWorkListMode(config)) {
     const res = await buildWorkListAggregates(ctx, runRow);
     if (res.kind === 'failed') {
@@ -136,6 +142,7 @@ export async function runQueueFinalizer(
     }
     staging = res.staging;
     skipsDb = res.skips;
+    workListUniverseSize = res.universe_size;
   } else if (isFeedMode(config)) {
     const res = await buildFeedAggregates(ctx, runRow);
     if (res.kind === 'failed') {
@@ -220,7 +227,7 @@ export async function runQueueFinalizer(
     outcome: 'completed',
     signal_id: config.signalId,
     as_of_date,
-    universe_size: runRow.universe_size,
+    universe_size: workListUniverseSize ?? runRow.universe_size,
     persisted_count: capture.inserted,
     skipped: skippedAll,
     started_at: runRow.created_at,
@@ -383,7 +390,7 @@ async function buildWorkListAggregates(
   ctx: QueueFinalizerContext,
   _runRow: RunRow,
 ): Promise<
-  | { kind: 'ok'; staging: StagingRow[]; skips: SkipRow[] }
+  | { kind: 'ok'; staging: StagingRow[]; skips: SkipRow[]; universe_size: number }
   | { kind: 'failed'; reason: string }
 > {
   const { config, as_of } = ctx;
@@ -423,7 +430,14 @@ async function buildWorkListAggregates(
     }
   }
 
-  return { kind: 'ok', staging, skips };
+  // Conservation invariant (Path (ii) ACT-218): every universe-membership
+  // ticker yields exactly one PerTickerResult (value OR typed skip), so
+  // results.length === staging.length + skips.length is the consumer-
+  // owned mass-balance ledger. This is the value written into
+  // signal_compute_log.universe_size for work-list mode — replacing the
+  // accession-count ledger (which remains the producer-side
+  // signal_queue_runs.universe_size for sweeper/budget arithmetic).
+  return { kind: 'ok', staging, skips, universe_size: results.length };
 }
 
 async function transitionToFailed(
