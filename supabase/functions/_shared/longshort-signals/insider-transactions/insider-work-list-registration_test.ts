@@ -59,6 +59,10 @@ import {
 const AS_OF_FRI = new Date('2026-06-12T21:00:00.000Z'); // Friday
 const AS_OF_MON = new Date('2026-06-15T21:00:00.000Z'); // Monday
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
+// Fix B: hermetic run_id stamp for processItem invocations. Pins
+// the engine→consumer attribution contract (WorkListProcessItemFn
+// `run_id` is required). Asserted at F.1 to land on the upsert payload.
+const TEST_RUN_ID = '11111111-2222-3333-4444-555555555555';
 
 // ── (A) Drift sentinel ────────────────────────────────────────────────
 Deno.test('(A.1) accessionsPerSlice arithmetic — rate-bound < 60s (drift sentinel)', () => {
@@ -532,7 +536,7 @@ Deno.test('(E.1) processItem: index 404 → permanent_skip data_unavailable', as
     accessionIndex: makeAccessionIndex({ kind: 'unavailable', reason: 'data_unavailable' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI, run_id: TEST_RUN_ID });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') assertEquals(out.reason, 'data_unavailable');
 });
@@ -549,7 +553,7 @@ Deno.test('(E.2) processItem: index no_primary_doc (>1 eligible xml) → permane
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI, run_id: TEST_RUN_ID });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') {
     assertEquals(out.reason, 'no_primary_doc');
@@ -592,7 +596,7 @@ Deno.test('(E.2c) processItem: acceptance from queue row is threaded into form4 
     form4Fetcher,
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI, run_id: TEST_RUN_ID });
   assertEquals(out.kind, 'processed');
   assert(capturedInput !== null, 'form4 fetcher must have been called');
   // The captured input's acceptance_datetime is the QUEUE row's value,
@@ -608,7 +612,7 @@ Deno.test('(E.3) processItem: index 429 → THROW (transient — engine cursor p
     accessionIndex: makeAccessionIndex({ kind: 'rate_limited' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  await assertRejects(() => cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI }));
+  await assertRejects(() => cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI, run_id: TEST_RUN_ID }));
 });
 
 Deno.test('(E.4) processItem: form4 xml 404 → permanent_skip data_unavailable', async () => {
@@ -625,7 +629,7 @@ Deno.test('(E.4) processItem: form4 xml 404 → permanent_skip data_unavailable'
     form4Fetcher: makeForm4Fetcher({ kind: 'unavailable', reason: 'data_unavailable' }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI, run_id: TEST_RUN_ID });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') assertEquals(out.reason, 'data_unavailable');
 });
@@ -647,7 +651,7 @@ Deno.test('(E.5) processItem: form4 xml unparseable → permanent_skip data_unav
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI, run_id: TEST_RUN_ID });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') {
     assertEquals(out.reason, 'data_unavailable');
@@ -684,7 +688,7 @@ Deno.test('(F.1) processItem: rows path → upsert quotes M5 PK verbatim + owner
     }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI, run_id: TEST_RUN_ID });
   assertEquals(out.kind, 'processed');
   const upsert = deps._stub.upserts[0];
   assertEquals(upsert.table, 'insider_form4_rows');
@@ -719,7 +723,7 @@ Deno.test('(F.2) processItem: rows empty (derivative-only filing) → processed,
     form4Fetcher: makeForm4Fetcher({ kind: 'rows', rows: [] }),
   });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI, run_id: TEST_RUN_ID });
   assertEquals(out.kind, 'processed');
   assertEquals(deps._stub.upserts.length, 0);
 });
@@ -750,7 +754,7 @@ Deno.test('(F.3) processItem: upsert DB error → THROW (transient)', async () =
   });
   deps._stub.upsertResults.push({ error: { message: 'serialization_failure' } });
   const cfg = createInsiderWorkListConfig(deps, 'daily');
-  await assertRejects(() => cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI }));
+  await assertRejects(() => cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI, run_id: TEST_RUN_ID }));
 });
 
 // ── (H) loadAndCompute adapter (M3 — runStaged seam) ───────────────────
@@ -891,6 +895,7 @@ Deno.test('(S.1) processItem: empty engine payload + matching queue row → no t
   const result = await cfg.processItem!({
     item: { id: '0000320193-26-000010', payload: {} as unknown as Readonly<Record<string, unknown>> },
     asOf: AS_OF_FRI,
+    run_id: TEST_RUN_ID,
   });
   // No throw. Routes to the index-404 typed-permanent skip. The skip
   // detail must NOT include the pre-fix throw string.
@@ -910,6 +915,7 @@ Deno.test('(S.2) processItem: discovery-queue row absent → typed-permanent ski
   const out = await cfg.processItem!({
     item: { id: '9999999999-99-999999', payload: {} as unknown as Readonly<Record<string, unknown>> },
     asOf: AS_OF_FRI,
+    run_id: TEST_RUN_ID,
   });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') {
@@ -930,6 +936,7 @@ Deno.test('(S.3) processItem: universe-drift (CIK absent from current universe) 
   const out = await cfg.processItem!({
     item: { id: ITEM_QUEUE_ROW.accession_number, payload: {} as unknown as Readonly<Record<string, unknown>> },
     asOf: AS_OF_FRI,
+    run_id: TEST_RUN_ID,
   });
   assertEquals(out.kind, 'permanent_skip');
   if (out.kind === 'permanent_skip') {
@@ -987,6 +994,7 @@ Deno.test('(S.4) processItem: Chipotle accession 0001058090-26-000045 — ACT-21
   const out = await cfg.processItem!({
     item: { id: '0001058090-26-000045', payload: {} as unknown as Readonly<Record<string, unknown>> },
     asOf: AS_OF_FRI,
+    run_id: TEST_RUN_ID,
   });
   assertEquals(out.kind, 'processed');
   assertEquals(capturedAcceptance, '2026-06-12T19:30:00.000Z',
@@ -1031,6 +1039,7 @@ Deno.test('(S.5) processItem: reconstructed payload ticker comes from universe m
       payload: { ticker: 'WRONG', filer_cik_padded: '9999999999' } as unknown as Readonly<Record<string, unknown>>,
     },
     asOf: AS_OF_FRI,
+    run_id: TEST_RUN_ID,
   });
   assertEquals(out.kind, 'processed');
   const upsert = deps._stub.upserts[0];
