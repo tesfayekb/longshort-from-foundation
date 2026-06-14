@@ -1,19 +1,34 @@
 /**
- * edgar-accession-index-fetcher.ts — FP-050 Phase 2 / DEC-058 §(i)
- * discovery branch (ruling: per-accession `index.json`).
+ * edgar-accession-index-fetcher.ts — FP-050 Phase 4 / ACT-215 / DEC-058 §(b)
+ * amendment (was: Phase 2 discovery branch).
  *
- * Per-accession discovery layer. GETs
+ * Per-accession primary-document resolver. GETs
  *   `https://www.sec.gov/Archives/edgar/data/<cik>/<accession-no-dashes>/index.json`
- * which atomically returns BOTH the primary-document basename AND the
- * `acceptanceDateTime` for that accession (the Form-4 XML itself does
- * NOT carry acceptance; DEC-058 §(b) Option-A dual-date contract requires
- * acceptance to be threaded into the parser from this layer).
+ * to enumerate the accession's filenames and select the single eligible
+ * `.xml` primary document.
  *
- * Why per-accession (vs the rejected per-CIK submissions feed): one
- * truth-source per accession, zero join layers between the daily-index
- * discovery and the per-accession XML fetch. This closes the INC-70
- * failure family at the discovery layer: any cross-feed join is a place
- * to silently mis-resolve.
+ * ─── ACT-215 SCOPE NARROWING ────────────────────────────────────────
+ *
+ * Historical scope (Phase 2): this fetcher also read `acceptanceDateTime`
+ * from `index.json` to honor the DEC-058 §(b) dual-date contract.
+ * Live-EDGAR verification at ACT-215 (2026-06-14) confirmed that field
+ * is NEVER present in `index.json` for any observed Form-4 shape
+ * (modern Workiva `wk-form4_*.xml` or legacy paper `edgardoc.xml`); the
+ * §(b) gate consequently fired 100% on absence rather than on real
+ * acceptance absence. The DEC-058 §(b) amendment relocates the
+ * acceptance source to the per-issuer submissions feed
+ * (`data.sec.gov/submissions/CIK<padded10>.json`, the new
+ * `EdgarSubmissionsFetcher`) and writes the value onto every
+ * `insider_accession_discovery_queue.acceptance_datetime` NOT NULL row
+ * at producer-time (MIG-097). The consumer reads acceptance from the
+ * queue row; this fetcher no longer participates in §(b).
+ *
+ * This fetcher's RESPONSIBILITY post-ACT-215 is exclusively primary-doc
+ * resolution. The `resolved` kind returns `primary_document` +
+ * `filenames` (no `acceptance_datetime`). The `no_acceptance_datetime`
+ * kind added at ACT-214 is REMOVED because its semantic predicate
+ * (acceptance-absent at a non-truth-source layer) is no longer a
+ * meaningful condition.
  *
  * Primary-document selection is TYPED, never guessed:
  *   - Eligible candidates: items whose `name` matches `/\.xml$/i` AND
@@ -38,17 +53,14 @@
  *     prevent this; surfaced typed so the orchestrator can backoff)
  *   - HTTP 403 / other non-OK → throws EdgarFetchError
  *
- * Discriminated-union discipline (ACT-213): each non-resolved kind
- * encodes ONE semantic failure mode. The prior `kind:'ambiguous'`
- * member union-folded two distinct modes (no-primary AND no-
- * acceptance) which the consumer's `kind === 'ambiguous'` predicate
- * then collapsed into a single `no_primary_doc` skip reason — hiding
- * the §(b) acceptance-missing population as if it were a primary-doc
- * problem. The split is `no_primary_doc` (Path A) and
- * `no_acceptance_datetime` (Path B); the consumer MUST branch on each
- * explicitly.
+ * Discriminated-union discipline (ACT-213 → ACT-215): each non-resolved
+ * kind encodes ONE semantic failure mode. The ACT-213 split that added
+ * `no_acceptance_datetime` (Path B) is collapsed by ACT-215 because the
+ * acceptance-absent condition at this layer is no longer a meaningful
+ * predicate (the truth source moved). Only `no_primary_doc` (Path A,
+ * 0-or-more-than-1 eligible XML) survives as a non-resolved fail mode.
  *
- * Owner: longshort (FP-050 Phase 2 — Signal #4 EDGAR rebuild)
+ * Owner: longshort (FP-050 Phase 4 — Signal #4 EDGAR rebuild / ACT-215)
  */
 import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
 import { buildEdgarUserAgent, EdgarFetchError } from './edgar-cik-mapper.ts';
@@ -71,8 +83,6 @@ export type EdgarAccessionIndexResult =
   | {
       kind: 'resolved';
       primary_document: string;
-      /** ISO 8601 UTC acceptance datetime, verbatim from index.json. */
-      acceptance_datetime: string;
       /** Full filename list (for diagnostics). */
       filenames: string[];
     }
@@ -88,27 +98,7 @@ export type EdgarAccessionIndexResult =
        *  so an operator can see WHICH names were eligible / excluded. */
       filenames: string[];
       /** Eligible-candidate count after exclusions: 0 or >1 (never 1 —
-       *  that path routes to `resolved` OR `no_acceptance_datetime`). */
-      eligible_count: number;
-      /** Acceptance datetime if readable (diagnostic only on this
-       *  branch — the gating predicate here is the primary-doc count,
-       *  not the acceptance presence). */
-      acceptance_datetime: string | null;
-    }
-  | {
-      /** Path B — primary document WAS resolved (single eligible xml)
-       *  BUT `acceptanceDateTime` was absent from `index.json` per the
-       *  DEC-058 §(b) non-defaultable contract. Distinct failure mode
-       *  from `no_primary_doc`; mislabeling these as no-primary hides
-       *  the real coverage gap (latent §(b) gap deferred to ACT-212). */
-      kind: 'no_acceptance_datetime';
-      /** The resolved primary — carried as evidence that primary
-       *  resolution succeeded; the skip detail surfaces this so the
-       *  drift between the two failure modes is visible at audit. */
-      primary_document: string;
-      /** Verbatim file list (diagnostic). */
-      filenames: string[];
-      /** Always 1 on this branch (resolved-primary precondition). */
+       *  that path routes to `resolved`). */
       eligible_count: number;
     };
 
@@ -128,7 +118,10 @@ export function accessionIndexUrl(input: EdgarAccessionIndexInput): string {
 /**
  * EDGAR `index.json` shape (verbatim observed):
  *   { "directory": { "name": "...", "item": [ { "name": "...", "type": "...", "size": "...", "last-modified": "..." }, ... ] } }
- * Some shapes also expose `acceptanceDateTime` at the directory level.
+ *
+ * NOTE (ACT-215): `acceptanceDateTime` is NOT exposed by `index.json` for
+ * any observed Form-4 shape — verified live 2026-06-14. The submissions
+ * feed (`EdgarSubmissionsFetcher`) is the truth source for that field.
  */
 interface EdgarIndexJsonItem {
   name?: string;
@@ -138,29 +131,15 @@ interface EdgarIndexJsonItem {
 interface EdgarIndexJsonDirectory {
   name?: string;
   item?: EdgarIndexJsonItem[];
-  acceptanceDateTime?: string;
-  'acceptance-datetime'?: string;
 }
 interface EdgarIndexJson {
   directory?: EdgarIndexJsonDirectory;
-  acceptanceDateTime?: string;
-  'acceptance-datetime'?: string;
 }
 
-/** Read `acceptanceDateTime` defensively from the various observed keys. */
-function readAcceptance(body: EdgarIndexJson): string | null {
-  const dir = body.directory;
-  const candidates = [
-    body.acceptanceDateTime,
-    body['acceptance-datetime'],
-    dir?.acceptanceDateTime,
-    dir?.['acceptance-datetime'],
-  ];
-  for (const c of candidates) {
-    if (typeof c === 'string' && c.length > 0) return c;
-  }
-  return null;
-}
+// ACT-215: `readAcceptance` removed. The function previously read keys
+// that do not exist on the `index.json` payload for any observed
+// Form-4 shape; preserving it as dead code would invite a re-wire
+// regression. The submissions feed is the truth source for acceptance.
 
 /** Pull the file-name list defensively. */
 function readFilenames(body: EdgarIndexJson): string[] {
@@ -279,7 +258,6 @@ export class EdgarAccessionIndexFetcher {
         e,
       );
     }
-    const acceptance = readAcceptance(body);
     const filenames = readFilenames(body);
     const { primary, eligible } = selectPrimaryDocument(filenames);
     if (primary === null) {
@@ -287,24 +265,11 @@ export class EdgarAccessionIndexFetcher {
         kind: 'no_primary_doc',
         filenames,
         eligible_count: eligible.length,
-        acceptance_datetime: acceptance,
       };
     }
-    if (acceptance === null) {
-      // §(b) dual-date contract — acceptance MUST be present and is
-      // non-defaultable. Distinct typed kind from `no_primary_doc` so
-      // the consumer routes to a distinct `skip_reason` (the prior
-      // single `ambiguous` kind conflated this with the no-primary
-      // path; ACT-213 split-at-source fix). The resolved primary is
-      // carried as evidence — its presence is what discriminates Path
-      // B from Path A at audit time.
-      return {
-        kind: 'no_acceptance_datetime',
-        primary_document: primary,
-        filenames,
-        eligible_count: eligible.length,
-      };
-    }
-    return { kind: 'resolved', primary_document: primary, acceptance_datetime: acceptance, filenames };
+    // ACT-215: acceptance reading removed; the §(b) invariant is the
+    // queue's NOT NULL column (MIG-097), enforced at producer-enqueue
+    // time. The resolved primary is sufficient for this layer.
+    return { kind: 'resolved', primary_document: primary, filenames };
   }
 }

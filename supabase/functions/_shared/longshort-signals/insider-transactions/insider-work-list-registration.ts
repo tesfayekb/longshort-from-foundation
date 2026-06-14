@@ -470,6 +470,13 @@ interface ClaimedDiscoveryRow {
   issuer_cik: string;
   accession_number: string;
   form_type: '4' | '4/A';
+  /** ACT-215 / MIG-097: §(b) acceptance is now an enqueue-time schema
+   *  invariant on `insider_accession_discovery_queue` (NOT NULL). The
+   *  consumer reads it from the queue row and passes it directly to
+   *  `EdgarForm4Fetcher.fetchAndParse`, eliminating the prior
+   *  `EdgarAccessionIndexFetcher` Path-B `no_acceptance_datetime`
+   *  runtime gate (which read from a non-truth-source layer). */
+  acceptance_datetime: string;
 }
 
 /**
@@ -511,7 +518,7 @@ async function claimDiscoveryRowsForDay(
     .is('consumed_at', null)
     .in('issuer_cik', paddedUniverseCiks as string[])
     .or(heartbeatExclusion)
-    .select('issuer_cik, accession_number, form_type');
+    .select('issuer_cik, accession_number, form_type, acceptance_datetime');
   if (error) {
     throw new Error(
       `insider-work-list-registration: discovery-queue claim failed ` +
@@ -522,6 +529,7 @@ async function claimDiscoveryRowsForDay(
     issuer_cik: string;
     accession_number: string;
     form_type: string;
+    acceptance_datetime: string;
   }>;
   const out: ClaimedDiscoveryRow[] = [];
   for (const r of rows) {
@@ -530,6 +538,7 @@ async function claimDiscoveryRowsForDay(
       issuer_cik: r.issuer_cik,
       accession_number: r.accession_number,
       form_type: r.form_type,
+      acceptance_datetime: r.acceptance_datetime,
     });
   }
   return out;
@@ -642,7 +651,7 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
     const accession = item.id;
     const { data: queueRows, error: queueErr } = await deps.supabase
       .from('insider_accession_discovery_queue')
-      .select('issuer_cik, form_type')
+      .select('issuer_cik, form_type, acceptance_datetime')
       .eq('accession_number', accession)
       .limit(1);
     if (queueErr) {
@@ -656,7 +665,7 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
       );
     }
     const queueRow = (queueRows ?? [])[0] as
-      | { issuer_cik: string; form_type: string }
+      | { issuer_cik: string; form_type: string; acceptance_datetime: string }
       | undefined;
     if (queueRow === undefined) {
       // No discovery-queue row for this accession (e.g., row pruned
@@ -682,6 +691,19 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
         kind: 'permanent_skip',
         reason: 'data_unavailable',
         detail: `missing issuer_cik on discovery-queue row for accession ${accession}`,
+      };
+    }
+    // ACT-215 / DEC-058 §(b) amendment: acceptance is read from the
+    // queue row (MIG-097 NOT NULL invariant) and threaded directly into
+    // the Form-4 XML fetch input. Producer fail-fast at INSERT (23502)
+    // makes the empty-string defense below structurally unreachable;
+    // retained as belt-and-braces against future schema relaxations.
+    const acceptanceFromQueue = queueRow.acceptance_datetime;
+    if (typeof acceptanceFromQueue !== 'string' || acceptanceFromQueue.length === 0) {
+      return {
+        kind: 'permanent_skip',
+        reason: 'data_unavailable',
+        detail: `missing acceptance_datetime on discovery-queue row for accession ${accession} (MIG-097 invariant breach — should be unreachable)`,
       };
     }
     const byPaddedCik = await ensureUniverseMap();
@@ -733,17 +755,9 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
         detail: `eligible=${idx.eligible_count}; filenames=${idx.filenames.join(',')}`,
       };
     }
-    if (idx.kind === 'no_acceptance_datetime') {
-      // ACT-213: distinct typed-permanent reason. Path B: primary IS
-      // resolved, but §(b) `acceptanceDateTime` was absent. Detail
-      // carries the resolved primary as evidence so the audit trail
-      // makes the discrimination from Path A explicit.
-      return {
-        kind: 'permanent_skip',
-        reason: 'no_acceptance_datetime',
-        detail: `primary_document=${idx.primary_document}; eligible=${idx.eligible_count}; filenames=${idx.filenames.join(',')}`,
-      };
-    }
+    // ACT-215: `no_acceptance_datetime` (Path B) branch REMOVED. The
+    // fetcher no longer returns this kind — acceptance moved to the
+    // producer/queue layer and is read above from the queue row.
 
     // Step P.2: Form-4 XML fetch + parse (M1-hardened parser; absent
     // owner_cik is `unparseable` upstream so the consumer never sees
@@ -751,7 +765,10 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
     const fetched: EdgarForm4FetchResult = await deps.form4Fetcher.fetchAndParse({
       cik: payload.filer_cik_padded,
       accession_number: item.id,
-      acceptance_datetime: idx.acceptance_datetime,
+      // ACT-215: acceptance threaded from queue (MIG-097 NOT NULL),
+      // NOT from the per-accession `index.json` (the architectural
+      // mismatch closed at this commit).
+      acceptance_datetime: acceptanceFromQueue,
       primary_document: idx.primary_document,
     });
     if (fetched.kind === 'unavailable') {

@@ -201,21 +201,27 @@ export type SignalSkipReason =
                              // close. The TICKER row is still ranked by
                              // other signals; a single accession with
                              // no primary doc never poisons the name.
-  | 'no_acceptance_datetime';// FP-050 / Signal #4 — ACT-213 split-at-
-                             // source. Per-accession `index.json` HAS a
-                             // single eligible primary `.xml` but the
-                             // DEC-058 §(b) non-defaultable
-                             // `acceptanceDateTime` field is absent.
-                             // Previously union-folded under
-                             // `no_primary_doc` via the fetcher's
-                             // `kind:'ambiguous'` member; the
-                             // mislabel hid the §(b) gap as if it were
-                             // a primary-doc problem. Distinct typed-
-                             // permanent reason so monitoring and
-                             // future SGML-header-fallback work
-                             // (ACT-212) can target the right
-                             // population. Non-critical; ticker is
-                             // still ranked by other signals.
+                             // ACT-215 (DEC-058 §(b) amendment): the
+                             // sibling `no_acceptance_datetime` skip
+                             // reason added at ACT-214 is REMOVED in
+                             // this commit. Acceptance is now a
+                             // discovery-time schema invariant on
+                             // `insider_accession_discovery_queue.`
+                             // `acceptance_datetime` (NOT NULL, MIG-097)
+                             // sourced by the producer from the
+                             // per-issuer submissions feed
+                             // `data.sec.gov/submissions/CIK<padded10>.json`
+                             // — the runtime §(b) gate the consumer
+                             // used to fire is unreachable post-MIG-097
+                             // because rows missing acceptance fail at
+                             // INSERT (23502) and never enqueue.
+                             // Reintroducing the enum value here would
+                             // re-open the architectural mismatch
+                             // (per-accession `index.json` never
+                             // carries `acceptanceDateTime` for ANY
+                             // observed Form-4 shape; live-verified
+                             // 2026-06-14).
+  ;
 
 export interface SignalSkip {
   ticker: string;

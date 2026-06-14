@@ -72,6 +72,11 @@ import {
   type CikLookupResult,
 } from '../supabase/functions/_shared/longshort-signals/insider-transactions/edgar-cik-mapper.ts';
 import {
+  EdgarSubmissionsFetcher,
+  type EdgarSubmissionsResult,
+  type SubmissionsRecentRow,
+} from '../supabase/functions/_shared/longshort-signals/insider-transactions/edgar-submissions-fetcher.ts';
+import {
   isoDate,
   isTradingDay,
   parseIsoDate,
@@ -101,6 +106,11 @@ export interface DiscoveryRow {
   filename: string;
   discovered_by: DiscoveredBy;
   discovery_correlation_id: string;
+  /** ACT-215 / MIG-097: SEC `acceptanceDateTime` captured at discovery
+   *  from the per-issuer submissions feed. NOT NULL on the queue
+   *  column; producer-side §(b) enforcement (DEC-058 §(b) amendment).
+   *  Heartbeat rows carry the Unix epoch sentinel (`EPOCH_ACCEPTANCE`). */
+  acceptance_datetime: string;
 }
 
 /** Sentinel constants for the R1 heartbeat row. */
@@ -108,6 +118,13 @@ export const HEARTBEAT_ISSUER_CIK = '__heartbeat__';
 export const HEARTBEAT_ACCESSION_NUMBER = '__heartbeat__';
 export const HEARTBEAT_COMPANY_NAME = '__heartbeat__';
 export const HEARTBEAT_FILENAME = '__heartbeat__';
+/** ACT-215: heartbeat acceptance sentinel — Unix epoch. The R1
+ *  heartbeat row is structurally excluded by the consumer's
+ *  `(issuer_cik='__heartbeat__', accession_number='__heartbeat__')`
+ *  predicate; this epoch stamp is diagnostic-only and unreachable by
+ *  any real-row code path. Carrying epoch satisfies the MIG-097
+ *  NOT NULL invariant without inventing a future-shaped timestamp. */
+export const EPOCH_ACCEPTANCE = '1970-01-01T00:00:00.000Z';
 export const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
 /** Outcome per day — surfaced into the run summary for forensics. */
@@ -119,11 +136,25 @@ export interface DayOutcome {
   heartbeat_inserted: boolean;
   /** master.idx returned 404 (kind:'unavailable'). Still writes a heartbeat. */
   data_unavailable: boolean;
+  /** ACT-215: per-issuer submissions-feed status counter (status code →
+   *  count). 200 = resolved; 404 = unavailable; 429 = rate_limited;
+   *  -1 = malformed (parallel-array shape); 0 = thrown EdgarFetchError. */
+  submissions_fetch_status?: Record<string, number>;
+  /** ACT-215: count of in-universe Form-4 entries that could NOT be
+   *  cross-walked to a `(accession_number → acceptance_datetime)` from
+   *  the submissions feed. These rows are DROPPED (the §(b) NOT NULL
+   *  schema invariant on MIG-097 makes enqueue impossible without
+   *  acceptance). Non-zero counts surface a producer-side gap
+   *  (issuer feed lagging master.idx, or accession too fresh to be
+   *  in `filings.recent`); operator-visible at run-complete. */
+  accessions_missing_acceptance?: number;
 }
 
 /** Injectable deps — every IO surface goes through here so the test suite is hermetic. */
 export interface RunDeps {
   fetcher: EdgarDailyIndexFetcher;
+  /** ACT-215: per-issuer submissions-feed fetcher (acceptance source-of-truth). */
+  submissions: EdgarSubmissionsFetcher;
   insertRows: (rows: readonly DiscoveryRow[]) => Promise<unknown>;
   correlationId: string;
   discoveredBy: DiscoveredBy;
@@ -231,6 +262,7 @@ export function rowFromEntry(
   asOf: string,
   discoveredBy: DiscoveredBy,
   correlationId: string,
+  acceptanceDatetime: string,
 ): DiscoveryRow {
   const padded = normalizeFilerCikForUniverse(e.filer_cik);
   return {
@@ -242,6 +274,7 @@ export function rowFromEntry(
     filename: e.filename,
     discovered_by: discoveredBy,
     discovery_correlation_id: correlationId,
+    acceptance_datetime: acceptanceDatetime,
   };
 }
 
@@ -264,6 +297,8 @@ export function buildHeartbeatRow(
     filename: HEARTBEAT_FILENAME,
     discovered_by: discoveredBy,
     discovery_correlation_id: correlationId,
+    // ACT-215: epoch sentinel — see EPOCH_ACCEPTANCE doc.
+    acceptance_datetime: EPOCH_ACCEPTANCE,
   };
 }
 
@@ -314,6 +349,16 @@ export async function loadUniverseCikSet(tickers: readonly string[], mapper: Edg
  * the queue. Empty-day → heartbeat row. 404 → heartbeat row + data_unavailable.
  * SEC failure → throws `EdgarFetchError` (caller maps to exit 1).
  * Supabase failure → throws `Error` (caller maps to exit 2).
+ *
+ * ACT-215 acceptance cross-walk: after the in-universe filter, the entries
+ * are batched by `issuer_cik` and one `EdgarSubmissionsFetcher` fetch is
+ * issued per unique issuer; the parallel-array members
+ * `filings.recent.{accessionNumber, acceptanceDateTime}` are folded into a
+ * `Map<accession_number, acceptance_datetime>` and stamped onto each
+ * `DiscoveryRow`. Entries whose accession is absent from the feed (issuer
+ * feed lagging master.idx, or a fresh-enough accession) are DROPPED with
+ * an `accessions_missing_acceptance` counter — MIG-097's NOT NULL queue
+ * column makes enqueue impossible without acceptance.
  */
 export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayOutcome> {
   const log = deps.log ?? ((e) => console.log(JSON.stringify(e)));
@@ -337,10 +382,8 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
     });
     return { as_of_date: asOf, entries_parsed: 0, entries_after_universe_filter: 0, rows_inserted: 0, heartbeat_inserted: true, data_unavailable: true };
   }
-  const rows = result.entries
-    .filter((entry) => isUniverseEntry(entry))
-    .map((e) => rowFromEntry(e, asOf, deps.discoveredBy, deps.correlationId));
-  if (rows.length === 0) {
+  const inUniverseEntries = result.entries.filter((entry) => isUniverseEntry(entry));
+  if (inUniverseEntries.length === 0) {
     const heartbeat = buildHeartbeatRow(asOf, deps.discoveredBy, deps.correlationId);
     await deps.insertRows([heartbeat]);
     log({
@@ -355,6 +398,97 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
     });
     return { as_of_date: asOf, entries_parsed: result.entries.length, entries_after_universe_filter: 0, rows_inserted: 0, heartbeat_inserted: true, data_unavailable: false };
   }
+
+  // ── ACT-215 acceptance cross-walk ───────────────────────────────────
+  // Group entries by padded issuer CIK; one submissions fetch per
+  // unique issuer (rate-budget: ~14× cheaper than the alternative
+  // per-accession `index.json` re-fetch architecture).
+  const submissionsStatus: Record<string, number> = {};
+  const acceptanceByAccession = new Map<string, string>();
+  const uniqueIssuerCiks = new Set<string>();
+  for (const e of inUniverseEntries) {
+    const padded = normalizeFilerCikForUniverse(e.filer_cik);
+    if (padded !== null) uniqueIssuerCiks.add(padded);
+  }
+  for (const cik10 of uniqueIssuerCiks) {
+    let sub: EdgarSubmissionsResult;
+    try {
+      sub = await deps.submissions.fetchSubmissions({ cik: cik10 });
+    } catch (e) {
+      // EdgarFetchError or network throw — surface in counter, leave
+      // accession→acceptance map empty for this issuer (its accessions
+      // will be dropped + counted, NOT enqueued).
+      submissionsStatus['0'] = (submissionsStatus['0'] ?? 0) + 1;
+      log({
+        event: 'insider_discovery_submissions_error',
+        as_of: asOf,
+        cik10,
+        message: (e as Error).message,
+        correlation_id: deps.correlationId,
+      });
+      continue;
+    }
+    if (sub.kind === 'unavailable') {
+      submissionsStatus['404'] = (submissionsStatus['404'] ?? 0) + 1;
+      continue;
+    }
+    if (sub.kind === 'rate_limited') {
+      submissionsStatus['429'] = (submissionsStatus['429'] ?? 0) + 1;
+      continue;
+    }
+    if (sub.kind === 'malformed') {
+      submissionsStatus['-1'] = (submissionsStatus['-1'] ?? 0) + 1;
+      log({
+        event: 'insider_discovery_submissions_malformed',
+        as_of: asOf,
+        cik10,
+        reason: sub.reason,
+        correlation_id: deps.correlationId,
+      });
+      continue;
+    }
+    submissionsStatus['200'] = (submissionsStatus['200'] ?? 0) + 1;
+    for (const r of sub.rows as SubmissionsRecentRow[]) {
+      acceptanceByAccession.set(r.accession_number, r.acceptance_datetime);
+    }
+  }
+
+  let accessionsMissingAcceptance = 0;
+  const rows: DiscoveryRow[] = [];
+  for (const e of inUniverseEntries) {
+    const acceptance = acceptanceByAccession.get(e.accession_number);
+    if (acceptance === undefined) {
+      accessionsMissingAcceptance += 1;
+      continue;
+    }
+    rows.push(rowFromEntry(e, asOf, deps.discoveredBy, deps.correlationId, acceptance));
+  }
+  if (rows.length === 0) {
+    const heartbeat = buildHeartbeatRow(asOf, deps.discoveredBy, deps.correlationId);
+    await deps.insertRows([heartbeat]);
+    log({
+      event: 'insider_discovery_day_empty_after_acceptance_xwalk',
+      as_of: asOf,
+      discovered_by: deps.discoveredBy,
+      correlation_id: deps.correlationId,
+      entries_parsed: result.entries.length,
+      entries_after_universe_filter: inUniverseEntries.length,
+      submissions_fetch_status: submissionsStatus,
+      accessions_missing_acceptance: accessionsMissingAcceptance,
+      rows_inserted: 0,
+      heartbeat_inserted: true,
+    });
+    return {
+      as_of_date: asOf,
+      entries_parsed: result.entries.length,
+      entries_after_universe_filter: inUniverseEntries.length,
+      rows_inserted: 0,
+      heartbeat_inserted: true,
+      data_unavailable: false,
+      submissions_fetch_status: submissionsStatus,
+      accessions_missing_acceptance: accessionsMissingAcceptance,
+    };
+  }
   await deps.insertRows(rows);
   log({
     event: 'insider_discovery_day_complete',
@@ -362,17 +496,21 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
     discovered_by: deps.discoveredBy,
     correlation_id: deps.correlationId,
     entries_parsed: result.entries.length,
-    entries_after_universe_filter: rows.length,
+    entries_after_universe_filter: inUniverseEntries.length,
     rows_inserted: rows.length,
     heartbeat_inserted: false,
+    submissions_fetch_status: submissionsStatus,
+    accessions_missing_acceptance: accessionsMissingAcceptance,
   });
   return {
     as_of_date: asOf,
     entries_parsed: result.entries.length,
-    entries_after_universe_filter: rows.length,
+    entries_after_universe_filter: inUniverseEntries.length,
     rows_inserted: rows.length,
     heartbeat_inserted: false,
     data_unavailable: false,
+    submissions_fetch_status: submissionsStatus,
+    accessions_missing_acceptance: accessionsMissingAcceptance,
   };
 }
 
@@ -507,6 +645,8 @@ if (import.meta.main) {
   const discoveredBy: DiscoveredBy = parsed.mode.kind === 'daily' ? 'gha-daily' : 'backfill-oneshot';
   try {
     const fetcher = new EdgarDailyIndexFetcher(contactEmail);
+    // ACT-215: per-issuer submissions feed — acceptance source-of-truth.
+    const submissions = new EdgarSubmissionsFetcher(contactEmail);
     const cikMapper = new EdgarCikMapper(contactEmail);
     const universeTickers = await loadCurrentUniverseTickers(env);
     const universeCik10 = await loadUniverseCikSet(universeTickers, cikMapper);
@@ -524,6 +664,7 @@ if (import.meta.main) {
     }
     const deps: RunDeps = {
       fetcher,
+      submissions,
       insertRows: makeRestInserter(env),
       correlationId,
       discoveredBy,
@@ -543,6 +684,17 @@ if (import.meta.main) {
     const rowsTotal = outcomes.reduce((s, o) => s + o.rows_inserted, 0);
     const heartbeats = outcomes.filter((o) => o.heartbeat_inserted).length;
     const unavailable = outcomes.filter((o) => o.data_unavailable).length;
+    const accessionsMissingAcceptanceTotal = outcomes.reduce(
+      (s, o) => s + (o.accessions_missing_acceptance ?? 0),
+      0,
+    );
+    const submissionsFetchStatusTotal: Record<string, number> = {};
+    for (const o of outcomes) {
+      const sub = o.submissions_fetch_status ?? {};
+      for (const k of Object.keys(sub)) {
+        submissionsFetchStatusTotal[k] = (submissionsFetchStatusTotal[k] ?? 0) + sub[k];
+      }
+    }
     const persistedByCorrelation = await verifyPersistedCount(env, correlationId);
     const expectedWrites = rowsTotal + heartbeats;
     if (entriesParsed > 0 && entriesAfterUniverseFilter === 0) {
@@ -565,6 +717,11 @@ if (import.meta.main) {
         rows_inserted: rowsTotal,
         heartbeats_inserted: heartbeats,
         days_unavailable: unavailable,
+        // ACT-215: per-issuer submissions-feed status histogram + the
+        // count of in-universe accessions dropped because the feed did
+        // not surface their acceptance value (operator-visible).
+        submissions_fetch_status: submissionsFetchStatusTotal,
+        accessions_missing_acceptance: accessionsMissingAcceptanceTotal,
         persisted_rows_by_correlation_id: persistedByCorrelation,
       }),
     );
