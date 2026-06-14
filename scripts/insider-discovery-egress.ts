@@ -636,15 +636,313 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
 
 /** Top-level dispatcher: drive one or many trading days through `runDiscoveryDay`. */
 export async function runMode(mode: Mode, deps: RunDeps): Promise<DayOutcome[]> {
-  const days =
-    mode.kind === 'daily'
-      ? [mode.asOf]
-      : iterateTradingDays(mode.from, mode.to, deps.isTradingDay);
-  const outcomes: DayOutcome[] = [];
-  for (const d of days) {
-    outcomes.push(await runDiscoveryDay(d, deps));
+  const s = await runModeWithSummary(mode, deps);
+  return s.outcomes;
+}
+
+// ---------------------------------------------------------------------------
+// ACT-222 / Path-Q — two-pass per-issuer submissions dedup orchestrator.
+//
+// Background: the post-ACT-220-B repopulation drain (GHA run 27504513965,
+// cancelled at ~1h45m with `Error: The operation was canceled` after
+// status-200 across all observed fetches — pacing held). Queue state at
+// cancel: 4,697 real rows + 55 heartbeats + 0 null_acceptance + 0
+// null_ticker across as_of_dates 2026-03-16 → 2026-04-22 (~33% of the
+// intended 63-day window). ACT-215 acceptance contract and ACT-220 ticker
+// contract both held under load; the surfaced defect is the producer's
+// ITERATION SHAPE — day-then-accession-within-day refetched each issuer's
+// submissions feed once per day the issuer filed, ~14× redundant fetches
+// across the backfill window (4,451 fetches against ~700 unique issuers
+// → ~6× redundancy by the dedup-ratio arithmetic below; the operator's
+// estimate of ~20× was based on the upper-bound 14k-row population, not
+// the 4,451-call cancelled drain).
+//
+// Path-Q restructures `runMode` for backfill as TWO sequential passes:
+//   Pass 1 — Discovery enumeration: iterate days, parse master.idx, filter
+//            in-universe entries. NO submissions-feed fetches.
+//   Pass 2 — Per-issuer submissions enrichment: collect the UNIQUE set of
+//            issuer CIKs across all days; fetch submissions ONCE per CIK
+//            (paced + retried per ACT-219 / ACT-221 disciplines).
+//   Pass 3 — Cross-walk + insert per day, against the global acceptance map.
+//
+// Daily mode (single day) delegates to `runDiscoveryDay` unchanged — the
+// dedup ratio is structurally 1.0 for a single-day fire and the existing
+// per-day path is the right shape there.
+//
+// Catalog #48 (subsequent firing #2; ACT-222 amendment): producer-side
+// fetches against rate-limited vendor reference data MUST deduplicate by
+// the natural primary key of the upstream resource (issuer_cik for
+// submissions feeds; ticker for universe; etc.). Fetching the same
+// resource N times across a backfill window is a Catalog #48 violation
+// regardless of pacing being honored — pacing is necessary but not
+// sufficient; the additional rule is fetch-once-per-unique-resource-per-fire.
+// ---------------------------------------------------------------------------
+
+export interface RunModeSummary {
+  outcomes: DayOutcome[];
+  /** Sum of in-universe entries across all parsed days (the denominator
+   *  the producer would have fetched per-accession under the legacy
+   *  per-day shape; the numerator of dedup_ratio). */
+  total_accessions_processed: number;
+  /** Count of UNIQUE padded issuer CIKs across all parsed days for which
+   *  the producer issued exactly one submissions-feed fetch. */
+  unique_issuers_fetched: number;
+  /** total_accessions_processed / unique_issuers_fetched (0 if no
+   *  issuers). The producer's burst reduction vs. the legacy per-day
+   *  shape. */
+  dedup_ratio: number;
+  /** Count of in-universe accessions whose issuer's submissions feed
+   *  did NOT return an `acceptanceDateTime` for that accession
+   *  (Catalog #44 §(b) gate firing at xwalk time). Sum across days. */
+  acceptance_xwalk_misses: number;
+  /** Global per-issuer submissions-fetch status histogram across the
+   *  entire fire (not per-day). 200/404/429/-1/0 buckets as in
+   *  `DayOutcome.submissions_fetch_status`. */
+  submissions_fetch_status: Record<string, number>;
+}
+
+export async function runModeWithSummary(mode: Mode, deps: RunDeps): Promise<RunModeSummary> {
+  if (mode.kind === 'daily') {
+    const outcome = await runDiscoveryDay(mode.asOf, deps);
+    const status = outcome.submissions_fetch_status ?? {};
+    const uniq = Object.values(status).reduce((a, b) => a + b, 0);
+    const totalAcc = outcome.entries_after_universe_filter;
+    return {
+      outcomes: [outcome],
+      total_accessions_processed: totalAcc,
+      unique_issuers_fetched: uniq,
+      dedup_ratio: uniq > 0 ? Number((totalAcc / uniq).toFixed(2)) : 0,
+      acceptance_xwalk_misses: outcome.accessions_missing_acceptance ?? 0,
+      submissions_fetch_status: status,
+    };
   }
-  return outcomes;
+  return runBackfillDedup(mode, deps);
+}
+
+/** ACT-222 backfill orchestrator — Pass 1 (parse) → Pass 2 (per-issuer
+ *  dedup'd submissions) → Pass 3 (xwalk + insert per day). */
+async function runBackfillDedup(
+  mode: { kind: 'backfill'; from: string; to: string },
+  deps: RunDeps,
+): Promise<RunModeSummary> {
+  const log = deps.log ?? ((e) => console.log(JSON.stringify(e)));
+  const isUniverseEntry = deps.isUniverseEntry ?? (() => true);
+  const days = iterateTradingDays(mode.from, mode.to, deps.isTradingDay);
+
+  // ── Pass 1: discovery enumeration ────────────────────────────────
+  type DayParsed =
+    | { asOf: string; kind: 'unavailable' }
+    | { asOf: string; kind: 'parsed'; entriesParsed: number; inUniverseEntries: DailyIndexEntry[] };
+  const parsedDays: DayParsed[] = [];
+  const uniqueIssuerCiks = new Set<string>();
+  for (const asOf of days) {
+    const date = parseIsoDate(asOf);
+    log({
+      event: 'insider_discovery_day_start',
+      as_of: asOf,
+      discovered_by: deps.discoveredBy,
+      correlation_id: deps.correlationId,
+      pass: 1,
+    });
+    const result = await deps.fetcher.fetchDay(date);
+    if (result.kind === 'unavailable') {
+      parsedDays.push({ asOf, kind: 'unavailable' });
+      continue;
+    }
+    const inUniverse = result.entries.filter((e) => isUniverseEntry(e));
+    parsedDays.push({
+      asOf,
+      kind: 'parsed',
+      entriesParsed: result.entries.length,
+      inUniverseEntries: inUniverse,
+    });
+    for (const e of inUniverse) {
+      const padded = normalizeFilerCikForUniverse(e.filer_cik);
+      if (padded !== null) uniqueIssuerCiks.add(padded);
+    }
+  }
+
+  // ── Pass 2: per-issuer submissions enrichment (deduplicated) ─────
+  const sleep = deps.sleep ?? defaultSleep;
+  const pacingMs = deps.submissionsPacingMs ?? SUBMISSIONS_PACING_FLOOR_MS;
+  const acceptanceByAccession = new Map<string, string>();
+  const submissionsStatus: Record<string, number> = {};
+  let submissionsCallIndex = 0;
+  log({
+    event: 'insider_discovery_dedup_pass2_start',
+    unique_issuers: uniqueIssuerCiks.size,
+    pacing_ms: pacingMs,
+    correlation_id: deps.correlationId,
+  });
+  for (const cik10 of uniqueIssuerCiks) {
+    if (submissionsCallIndex > 0 && pacingMs > 0) {
+      await sleep(pacingMs);
+    }
+    submissionsCallIndex += 1;
+    let sub: EdgarSubmissionsResult;
+    try {
+      sub = await deps.submissions.fetchSubmissions({ cik: cik10 });
+    } catch (e) {
+      submissionsStatus['0'] = (submissionsStatus['0'] ?? 0) + 1;
+      log({
+        event: 'insider_discovery_submissions_error',
+        cik10,
+        message: (e as Error).message,
+        correlation_id: deps.correlationId,
+      });
+      continue;
+    }
+    if (sub.kind === 'unavailable') {
+      submissionsStatus['404'] = (submissionsStatus['404'] ?? 0) + 1;
+      continue;
+    }
+    if (sub.kind === 'rate_limited') {
+      submissionsStatus['429'] = (submissionsStatus['429'] ?? 0) + 1;
+      continue;
+    }
+    if (sub.kind === 'malformed') {
+      submissionsStatus['-1'] = (submissionsStatus['-1'] ?? 0) + 1;
+      log({
+        event: 'insider_discovery_submissions_malformed',
+        cik10,
+        reason: sub.reason,
+        correlation_id: deps.correlationId,
+      });
+      continue;
+    }
+    submissionsStatus['200'] = (submissionsStatus['200'] ?? 0) + 1;
+    for (const r of sub.rows as SubmissionsRecentRow[]) {
+      acceptanceByAccession.set(r.accession_number, r.acceptance_datetime);
+    }
+  }
+
+  // ── Pass 3: cross-walk + insert per day ──────────────────────────
+  const outcomes: DayOutcome[] = [];
+  let totalAccessions = 0;
+  let totalXwalkMisses = 0;
+  for (const p of parsedDays) {
+    if (p.kind === 'unavailable') {
+      const hb = buildHeartbeatRow(p.asOf, deps.discoveredBy, deps.correlationId);
+      await deps.insertRows([hb]);
+      log({
+        event: 'insider_discovery_day_unavailable',
+        as_of: p.asOf,
+        discovered_by: deps.discoveredBy,
+        correlation_id: deps.correlationId,
+      });
+      outcomes.push({
+        as_of_date: p.asOf,
+        entries_parsed: 0,
+        entries_after_universe_filter: 0,
+        rows_inserted: 0,
+        heartbeat_inserted: true,
+        data_unavailable: true,
+      });
+      continue;
+    }
+    if (p.inUniverseEntries.length === 0) {
+      const hb = buildHeartbeatRow(p.asOf, deps.discoveredBy, deps.correlationId);
+      await deps.insertRows([hb]);
+      log({
+        event: 'insider_discovery_day_empty',
+        as_of: p.asOf,
+        discovered_by: deps.discoveredBy,
+        correlation_id: deps.correlationId,
+        entries_parsed: p.entriesParsed,
+        entries_after_universe_filter: 0,
+        rows_inserted: 0,
+        heartbeat_inserted: true,
+      });
+      outcomes.push({
+        as_of_date: p.asOf,
+        entries_parsed: p.entriesParsed,
+        entries_after_universe_filter: 0,
+        rows_inserted: 0,
+        heartbeat_inserted: true,
+        data_unavailable: false,
+      });
+      continue;
+    }
+    totalAccessions += p.inUniverseEntries.length;
+    let missingAcc = 0;
+    let missingTicker = 0;
+    const rows: DiscoveryRow[] = [];
+    for (const e of p.inUniverseEntries) {
+      const acceptance = acceptanceByAccession.get(e.accession_number);
+      if (acceptance === undefined) {
+        missingAcc += 1;
+        continue;
+      }
+      const padded = normalizeFilerCikForUniverse(e.filer_cik) ?? e.filer_cik;
+      const ticker = deps.tickerForPaddedCik?.(padded) ?? null;
+      if (ticker === null || ticker.length === 0) {
+        missingTicker += 1;
+        continue;
+      }
+      rows.push(rowFromEntry(e, p.asOf, deps.discoveredBy, deps.correlationId, acceptance, ticker));
+    }
+    totalXwalkMisses += missingAcc;
+    if (rows.length === 0) {
+      const hb = buildHeartbeatRow(p.asOf, deps.discoveredBy, deps.correlationId);
+      await deps.insertRows([hb]);
+      log({
+        event: 'insider_discovery_day_empty_after_acceptance_xwalk',
+        as_of: p.asOf,
+        discovered_by: deps.discoveredBy,
+        correlation_id: deps.correlationId,
+        entries_parsed: p.entriesParsed,
+        entries_after_universe_filter: p.inUniverseEntries.length,
+        accessions_missing_acceptance: missingAcc,
+        tickers_missing_for_cik: missingTicker,
+        rows_inserted: 0,
+        heartbeat_inserted: true,
+      });
+      outcomes.push({
+        as_of_date: p.asOf,
+        entries_parsed: p.entriesParsed,
+        entries_after_universe_filter: p.inUniverseEntries.length,
+        rows_inserted: 0,
+        heartbeat_inserted: true,
+        data_unavailable: false,
+        accessions_missing_acceptance: missingAcc,
+      });
+      continue;
+    }
+    await deps.insertRows(rows);
+    log({
+      event: 'insider_discovery_day_complete',
+      as_of: p.asOf,
+      discovered_by: deps.discoveredBy,
+      correlation_id: deps.correlationId,
+      entries_parsed: p.entriesParsed,
+      entries_after_universe_filter: p.inUniverseEntries.length,
+      rows_inserted: rows.length,
+      heartbeat_inserted: false,
+      accessions_missing_acceptance: missingAcc,
+      tickers_missing_for_cik: missingTicker,
+    });
+    outcomes.push({
+      as_of_date: p.asOf,
+      entries_parsed: p.entriesParsed,
+      entries_after_universe_filter: p.inUniverseEntries.length,
+      rows_inserted: rows.length,
+      heartbeat_inserted: false,
+      data_unavailable: false,
+      accessions_missing_acceptance: missingAcc,
+    });
+  }
+
+  const dedupRatio = uniqueIssuerCiks.size > 0
+    ? Number((totalAccessions / uniqueIssuerCiks.size).toFixed(2))
+    : 0;
+  return {
+    outcomes,
+    total_accessions_processed: totalAccessions,
+    unique_issuers_fetched: uniqueIssuerCiks.size,
+    dedup_ratio: dedupRatio,
+    acceptance_xwalk_misses: totalXwalkMisses,
+    submissions_fetch_status: submissionsStatus,
+  };
 }
 
 // ---------------------------------------------------------------------------
