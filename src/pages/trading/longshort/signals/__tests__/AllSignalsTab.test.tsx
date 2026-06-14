@@ -13,6 +13,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type {
   SignalRegistryRowWithFire,
 } from '@/features/longshort/hooks/useSignalRegistry';
@@ -33,6 +34,7 @@ const FIXTURE: SignalRegistryRowWithFire[] = [
     lastFire: null,
     totalRuns: 0,
     distinctDates: 0,
+    cron_schedule: null,
   },
   {
     signal_id: 'pead',
@@ -49,6 +51,7 @@ const FIXTURE: SignalRegistryRowWithFire[] = [
     lastFire: null,
     totalRuns: 0,
     distinctDates: 0,
+    cron_schedule: null,
   },
   {
     signal_id: 'options_flow_imbalance_5d',
@@ -65,6 +68,7 @@ const FIXTURE: SignalRegistryRowWithFire[] = [
     lastFire: null,
     totalRuns: 0,
     distinctDates: 0,
+    cron_schedule: null,
   },
   {
     signal_id: 'insider_transactions_90d',
@@ -81,6 +85,7 @@ const FIXTURE: SignalRegistryRowWithFire[] = [
     lastFire: null,
     totalRuns: 0,
     distinctDates: 0,
+    cron_schedule: null,
   },
   {
     signal_id: 'short_interest_change_30d',
@@ -97,6 +102,7 @@ const FIXTURE: SignalRegistryRowWithFire[] = [
     lastFire: null,
     totalRuns: 0,
     distinctDates: 0,
+    cron_schedule: null,
   },
   {
     signal_id: 'cross_sectional_momentum_12_1',
@@ -119,6 +125,7 @@ const FIXTURE: SignalRegistryRowWithFire[] = [
     },
     totalRuns: 2,
     distinctDates: 1,
+    cron_schedule: null,
   },
   {
     signal_id: 'short_term_reversal_1w',
@@ -141,6 +148,7 @@ const FIXTURE: SignalRegistryRowWithFire[] = [
     },
     totalRuns: 1,
     distinctDates: 1,
+    cron_schedule: null,
   },
   {
     signal_id: 'news_sentiment_7d',
@@ -157,6 +165,7 @@ const FIXTURE: SignalRegistryRowWithFire[] = [
     lastFire: null,
     totalRuns: 0,
     distinctDates: 0,
+    cron_schedule: null,
   },
   {
     signal_id: 'active_catalyst_flag',
@@ -173,6 +182,7 @@ const FIXTURE: SignalRegistryRowWithFire[] = [
     lastFire: null,
     totalRuns: 0,
     distinctDates: 0,
+    cron_schedule: null,
   },
   {
     signal_id: 'composite',
@@ -189,6 +199,7 @@ const FIXTURE: SignalRegistryRowWithFire[] = [
     lastFire: null,
     totalRuns: 0,
     distinctDates: 0,
+    cron_schedule: null,
   },
 ];
 
@@ -210,7 +221,9 @@ async function renderTab() {
   return render(
     <MemoryRouter>
       <QueryClientProvider client={qc}>
-        <AllSignalsTab />
+        <TooltipProvider>
+          <AllSignalsTab />
+        </TooltipProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isSignalStale } from '@/features/longshort/utils/cron-staleness';
 
 /**
  * FP-038 — Read-only hooks for the All-Signals overview.
@@ -47,6 +48,8 @@ export interface SignalRegistryRowWithFire extends SignalRegistryRow {
   totalRuns: number;
   /** Distinct `as_of_date` count — drives the drift "insufficient history" gate. */
   distinctDates: number;
+  /** Cron schedule from `job_registry.schedule` (UTC). `null` for planned / derived rows. */
+  cron_schedule: string | null;
 }
 
 const KEY = ['longshort', 'signal-registry'] as const;
@@ -71,9 +74,31 @@ export function useSignalRegistry() {
       if (regErr) throw regErr;
       const rows = (registry ?? []) as SignalRegistryRow[];
 
+      // Pull cron schedules from job_registry for rows that have a job binding.
+      const jobIds = rows
+        .map((r) => r.job_registry_id)
+        .filter((x): x is string => !!x);
+      const scheduleByJob = new Map<string, string>();
+      if (jobIds.length > 0) {
+        const { data: jobs, error: jobErr } = await sb
+          .from('job_registry')
+          .select('id, schedule')
+          .in('id', jobIds);
+        if (jobErr) throw jobErr;
+        for (const j of (jobs ?? []) as Array<{ id: string; schedule: string | null }>) {
+          if (j.schedule) scheduleByJob.set(j.id, j.schedule);
+        }
+      }
+
       const liveIds = rows.filter((r) => r.status === 'live').map((r) => r.signal_id);
       if (liveIds.length === 0) {
-        return rows.map((r) => ({ ...r, lastFire: null, totalRuns: 0, distinctDates: 0 }));
+        return rows.map((r) => ({
+          ...r,
+          lastFire: null,
+          totalRuns: 0,
+          distinctDates: 0,
+          cron_schedule: r.job_registry_id ? scheduleByJob.get(r.job_registry_id) ?? null : null,
+        }));
       }
 
       // Pull recent compute-log rows for the live signals (bounded). Per-signal
@@ -118,6 +143,7 @@ export function useSignalRegistry() {
         lastFire: lastBySignal.get(r.signal_id) ?? null,
         totalRuns: totalBySignal.get(r.signal_id) ?? 0,
         distinctDates: datesBySignal.get(r.signal_id)?.size ?? 0,
+        cron_schedule: r.job_registry_id ? scheduleByJob.get(r.job_registry_id) ?? null : null,
       }));
     },
     staleTime: 60_000,
@@ -134,11 +160,16 @@ export function deriveStaleness(
   now: Date,
 ): 'fresh' | 'stale' | 'n/a' {
   if (row.status !== 'live') return 'n/a';
-  if (row.stale_after_hours == null) return 'n/a';
   if (!row.lastFire) return 'stale';
+  // UI-001 — Cron-aware verdict. When a cron schedule is bound, compute
+  // next-expected-fire from the mask itself (handles weekday-only,
+  // twice-monthly, intraday) and apply a 30-min drain slack. Fall back
+  // to the legacy hours threshold only when no cron is bound.
+  if (row.cron_schedule) {
+    const completed = new Date(row.lastFire.completed_at);
+    return isSignalStale(completed, row.cron_schedule, now) ? 'stale' : 'fresh';
+  }
+  if (row.stale_after_hours == null) return 'n/a';
   const ageHours = (now.getTime() - new Date(row.lastFire.completed_at).getTime()) / 3_600_000;
-  // Monday-of-week override — mirrors longshort-signal-monitor STALE_HOURS_MONDAY (72h).
-  const isMondayUtc = now.getUTCDay() === 1;
-  const threshold = isMondayUtc ? Math.max(row.stale_after_hours, 72) : row.stale_after_hours;
-  return ageHours <= threshold ? 'fresh' : 'stale';
+  return ageHours <= row.stale_after_hours ? 'fresh' : 'stale';
 }
