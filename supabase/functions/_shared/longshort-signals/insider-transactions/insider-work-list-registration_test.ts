@@ -531,6 +531,59 @@ Deno.test('(D.5) seedWorkItems daily: R1 heartbeat row never reaches work-items 
 
 // ── (E) processItem typed-permanent skips ──────────────────────────────
 
+// ── (D.6) ACT-220 source sentinel — EdgarCikMapper MUST NOT appear ─────
+//
+// Path-Y producer-relocation: the consumer no longer holds any runtime
+// reference to `EdgarCikMapper` / `edgar-cik-mapper`. The drift
+// sentinel reads the source file and asserts both string literals are
+// absent. Re-introduction would silently reopen the per-cron-isolate
+// `company_tickers.json` fetch + SEC fair-access 429 class. The
+// sentinel's regression assertion shape mirrors the Catalog #41 /
+// Gate-2c source-line pin pattern (line-level grep against the
+// consumer file; ANY future change that re-imports the cik-mapper
+// fails this test before it can ship).
+Deno.test('(D.6) ACT-220 source sentinel: consumer does NOT import EdgarCikMapper or edgar-cik-mapper', async () => {
+  const url = new URL('./insider-work-list-registration.ts', import.meta.url);
+  const src = await Deno.readTextFile(url);
+  // Strip block comments before scanning so the explanatory prose
+  // describing WHY the mapper is forbidden does not itself trigger
+  // the sentinel.
+  const stripped = src.replace(/\/\*[\s\S]*?\*\//g, '');
+  const noBlockComments = stripped
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+  assert(
+    !noBlockComments.includes('EdgarCikMapper'),
+    'EdgarCikMapper MUST NOT be referenced in non-comment code post-ACT-220',
+  );
+  assert(
+    !noBlockComments.includes("'./edgar-cik-mapper.ts'") &&
+      !noBlockComments.includes('"./edgar-cik-mapper.ts"'),
+    'edgar-cik-mapper.ts MUST NOT be imported in non-comment code post-ACT-220',
+  );
+});
+
+Deno.test('(D.7) ACT-220 producer-relocation: claim in-filter is on ticker, not issuer_cik', async () => {
+  // Pins the production claim shape post-Path-Y: the consumer's
+  // in-universe filter now reads `ticker` from the queue row (the
+  // producer-time stamp from MIG-098). Re-introduction of the pre-
+  // ACT-220 `issuer_cik` IN-filter would re-establish the dependency
+  // chain that required runtime CIK resolution.
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
+    cikMap: { AAPL: 320193 },
+    queueRows: [
+      { as_of_date: '2026-06-11', issuer_cik: '0000320193', accession_number: 'X-1', form_type: '4', consumed_at: null },
+    ],
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
+  const claim = deps._stub.claimCalls[0];
+  assertEquals(claim.in_column, 'ticker', 'ACT-220: claim must filter on ticker (not issuer_cik)');
+  assert(claim.in_list.includes('AAPL'), 'universe ticker in IN-list');
+});
+
 const ITEM: { id: string; payload: InsiderWorkItemPayload } = {
   id: '0000320193-26-000010',
   payload: {
