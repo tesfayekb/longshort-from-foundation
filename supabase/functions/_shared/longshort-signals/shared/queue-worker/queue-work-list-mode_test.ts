@@ -704,3 +704,48 @@ Deno.test('regression fence: WORK_LIST_HEARTBEAT_ITEM_INTERVAL is the named Q2 c
 Deno.test('regression fence: WORK_LIST_SLICE_FAILURE_THRESHOLD mirrors INC-73 (3 strikes)', () => {
   assertEquals(WORK_LIST_SLICE_FAILURE_THRESHOLD, 3);
 });
+
+// ════════════════════════════════════════════════════════════════════
+// 5) PATH-(ii) CONSERVATION INVARIANT — ACT-218 / Fix A
+// ════════════════════════════════════════════════════════════════════
+// Precedent: feed-mode buildFeedAggregates already enforces the
+// universe-membership mass balance (every universe ticker yields
+// exactly one value-or-typed-skip; the ruling-839 invariant). Work-list
+// mode now writes the analogous consumer-owned ledger into
+// signal_compute_log.universe_size — replacing the producer-side
+// accession-count ledger that was conflated into the same field
+// pre-ACT-218 (run 2ac77620 surfaced the gap: 1098 accessions − 839
+// universe tickers = 259 phantom drop).
+
+Deno.test('finalizer work-list ACT-218: signal_compute_log.universe_size = staging + skips (consumer ledger, NOT runRow.universe_size)', async () => {
+  // runRow.universe_size = 1098 simulates an accession-count seed
+  // (producer-side ledger preserved on signal_queue_runs for the
+  // sweeper/budget contract). loadAndCompute returns 3 per-ticker
+  // results = 2 values + 1 typed skip. The finalizer MUST write 3
+  // (consumer-owned mass-balance) into signal_compute_log.universe_size,
+  // not 1098.
+  const m = makeFinalizerMock({ runStatus: 'finalizing', universeSize: 1098 });
+  await runQueueFinalizer({
+    supabase: m.supabase,
+    config: workListCfg({
+      loadAndCompute: async () => [
+        { ticker: 'AAPL', gicsSector: 'Tech',   result: { kind: 'value' as const, raw: 1.0 } },
+        { ticker: 'MSFT', gicsSector: 'Tech',   result: { kind: 'value' as const, raw: -1.0 } },
+        { ticker: 'XOM',  gicsSector: 'Energy', result: { kind: 'skip'  as const, reason: 'no_qualifying_filings', detail: '' } },
+      ],
+    }),
+    operator_id: 'op-1',
+    as_of: new Date('2026-06-12T22:00:00Z'),
+    run_id: 'r-final-conservation',
+  });
+  const logWrites = (m.writes['signal_compute_log'] ?? []) as Array<Record<string, unknown>>;
+  assertEquals(logWrites.length, 1, 'finalizer must write exactly one signal_compute_log row');
+  const written = logWrites[0] as Record<string, unknown>;
+  assertEquals(written.universe_size, 3, 'work-list universe_size MUST equal loadAndCompute per-ticker count (consumer ledger), NOT runRow.universe_size accession count');
+  // Conservation invariant restated: universe_size === persisted + skips.
+  // The mock z-score keeps both values present (sector "Tech" has σ>0;
+  // singleton "Energy" yields no degenerate; XOM was a typed skip).
+  const persisted = written.persisted_count as number;
+  const skipped = (written.skipped as unknown[]).length;
+  assertEquals((written.universe_size as number), persisted + skipped, 'mass balance: universe_size = persisted_count + skipped.length');
+});
