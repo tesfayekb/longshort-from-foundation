@@ -162,16 +162,38 @@ interface QueueRowFixture {
    *  fetcher input — no per-accession `index.json` acceptance read
    *  remains anywhere in the data path. */
   acceptance_datetime?: string;
+  /** ACT-220 / MIG-098: producer-time ticker stamp (NOT NULL on the
+   *  queue). The consumer's claim filter is now ticker-based; the
+   *  per-accession reconstruction reads ticker directly from here. */
+  ticker?: string;
 }
 
 function makeStubSupabase(opts: {
   universe: Array<{ ticker: string; gics_sector: string | null }>;
   queueRows?: QueueRowFixture[];
+  cikMap?: Record<string, number>;
 }) {
-  const queueRows: QueueRowFixture[] = (opts.queueRows ?? []).map((r) => ({ ...r }));
+  // ACT-220: when a fixture row lacks `ticker`, infer it from the
+  // test's `cikMap` by inverting CIK→ticker. The legacy pre-ACT-220
+  // tests already specified cikMap; this defaulter lifts the inverse
+  // so existing fixtures stay green without a per-row ticker edit.
+  // Heartbeat sentinel rows always resolve to the heartbeat ticker;
+  // rows whose padded issuer_cik has no cikMap inverse default to
+  // `__OUT_OF_UNIVERSE__` so the production claim filter cleanly
+  // drops them (mirrors the pre-ACT-220 IN-on-issuer_cik shape).
+  const cikToTicker = new Map<string, string>();
+  for (const [t, cik] of Object.entries(opts.cikMap ?? {})) {
+    cikToTicker.set(String(cik).padStart(10, '0'), t);
+  }
+  const queueRows: QueueRowFixture[] = (opts.queueRows ?? []).map((r) => {
+    if (r.ticker !== undefined && r.ticker.length > 0) return { ...r };
+    if (r.issuer_cik === '__heartbeat__') return { ...r, ticker: '__heartbeat__' };
+    const inferred = cikToTicker.get(r.issuer_cik);
+    return { ...r, ticker: inferred ?? '__OUT_OF_UNIVERSE__' };
+  });
   const upserts: { table: string; payload: unknown[]; onConflict: string | undefined }[] = [];
   const upsertResults: Array<{ error: { message: string } | null }> = [];
-  const claimCalls: Array<{ as_of_date: string; in_list: string[]; or_filter: string }> = [];
+  const claimCalls: Array<{ as_of_date: string; in_list: string[]; in_column: string; or_filter: string }> = [];
 
   function from(table: string) {
     if (table === 'universe_membership') {
@@ -201,7 +223,8 @@ function makeStubSupabase(opts: {
       const gtes: Record<string, unknown> = {};
       const ltes: Record<string, unknown> = {};
       let isConsumedNull = false;
-      let inIssuerCiks: string[] = [];
+      let inList: string[] = [];
+      let inColumn = '';
       let orFilter = '';
       let selectCols = '';
 
@@ -220,7 +243,13 @@ function makeStubSupabase(opts: {
           return b;
         },
         in(col: string, list: unknown[]) {
-          if (col === 'issuer_cik') inIssuerCiks = list as string[];
+          // ACT-220: claim filter switched from `issuer_cik` (pre)
+          // to `ticker` (post). The stub honors whichever column the
+          // production code passes, and the claim-call trace records
+          // the column so tests can pin the producer-relocation
+          // direction (D.6 sentinel test).
+          inList = list as string[];
+          inColumn = col;
           return b;
         },
         or(filter: string) { orFilter = filter; return b; },
@@ -228,10 +257,11 @@ function makeStubSupabase(opts: {
           if (kind === 'update') {
             claimCalls.push({
               as_of_date: String(eqs['as_of_date']),
-              in_list: inIssuerCiks.slice(),
+              in_list: inList.slice(),
+              in_column: inColumn,
               or_filter: orFilter,
             });
-            const inSet = new Set(inIssuerCiks);
+            const inSet = new Set(inList);
             const heartbeatExcl = orFilter.includes(
               `issuer_cik.neq.${PRODUCER_HEARTBEAT_ISSUER_CIK}`,
             );
@@ -239,7 +269,17 @@ function makeStubSupabase(opts: {
             for (const r of queueRows) {
               if (r.as_of_date !== eqs['as_of_date']) continue;
               if (isConsumedNull && r.consumed_at !== null) continue;
-              if (inSet.size > 0 && !inSet.has(r.issuer_cik)) continue;
+              if (inSet.size > 0) {
+                // ACT-220: the claim's in-filter is on whichever
+                // column production passed (ticker post-relocation;
+                // issuer_cik pre-relocation). Look up the row's
+                // value at that column and filter.
+                const rowVal =
+                  inColumn === 'ticker'
+                    ? (r.ticker ?? '').toUpperCase()
+                    : r.issuer_cik;
+                if (!inSet.has(rowVal)) continue;
+              }
               if (heartbeatExcl &&
                   r.issuer_cik === PRODUCER_HEARTBEAT_ISSUER_CIK &&
                   r.accession_number === PRODUCER_HEARTBEAT_ACCESSION_NUMBER) {
@@ -254,6 +294,7 @@ function makeStubSupabase(opts: {
               accession_number: r.accession_number,
               form_type: r.form_type,
               acceptance_datetime: r.acceptance_datetime ?? '2026-06-11T16:00:00.000Z',
+              ticker: r.ticker ?? '',
             }));
             return Promise.resolve({ data: projected, error: null })
               .then(onF as never, onR as never);
@@ -262,7 +303,8 @@ function makeStubSupabase(opts: {
           //   (i) backfill distinct-dates (gte/lte; projects as_of_date)
           //   (ii) ACT-211 processItem by-accession reconstruction
           //        (eq accession_number; projects issuer_cik, form_type,
-          //        acceptance_datetime — ACT-215 amendment)
+          //        acceptance_datetime — ACT-215 amendment; + ticker
+          //        — ACT-220 amendment)
           if (typeof eqs['accession_number'] === 'string') {
             const acc = eqs['accession_number'] as string;
             const matches = queueRows.filter((r) => r.accession_number === acc);
@@ -270,6 +312,7 @@ function makeStubSupabase(opts: {
               issuer_cik: r.issuer_cik,
               form_type: r.form_type,
               acceptance_datetime: r.acceptance_datetime ?? '2026-06-11T16:00:00.000Z',
+              ticker: r.ticker ?? '',
             }));
             void selectCols;
             return Promise.resolve({ data: projected, error: null })
@@ -301,23 +344,12 @@ function makeStubSupabase(opts: {
   return { from, upserts, upsertResults, claimCalls, _queueRows: queueRows };
 }
 
-function makeCikMapper(map: Record<string, number>) {
-  return {
-    async loadMap() {
-      return (ticker: string) => {
-        const t = ticker.toUpperCase();
-        const v = map[t];
-        if (v === undefined) return { kind: 'unresolved' as const, ticker: t };
-        return {
-          kind: 'resolved' as const,
-          ticker: t,
-          cik10: String(v).padStart(10, '0'),
-          source: 'snapshot' as const,
-        };
-      };
-    },
-  };
-}
+// ACT-220 / Path-Y: `makeCikMapper` removed. The consumer no longer
+// resolves CIKs at runtime — ticker is producer-stamped on the queue
+// row (MIG-098). Fixtures that previously passed `cikMap` keep the
+// parameter shape for compatibility (it now backstops the per-row
+// `ticker` defaulting inside `makeStubSupabase`); the value is no
+// longer wired into any mapper construction.
 
 // `makeDailyIndex` removed at F2.c — `seedWorkItems` no longer hits
 // EDGAR; the on-EDGAR call site is the GHA-egress producer
@@ -334,7 +366,14 @@ function makeBaselineDeps(
     loadAndComputeCtx?: unknown;
   },
 ): InsiderWorkListDeps & { _stub: ReturnType<typeof makeStubSupabase> } {
-  const supa = makeStubSupabase({ universe: opts.universe, queueRows: opts.queueRows });
+  // ACT-220: cikMap is no longer used to construct a runtime mapper;
+  // instead it backstops per-row `ticker` defaulting inside the stub
+  // (legacy fixtures pre-date the producer-time ticker stamp).
+  const supa = makeStubSupabase({
+    universe: opts.universe,
+    queueRows: opts.queueRows,
+    cikMap: opts.cikMap,
+  });
   const noop = {
     async fetchIndex() { throw new Error('accessionIndex stub not configured'); },
   };
@@ -345,7 +384,6 @@ function makeBaselineDeps(
     _stub: supa,
     supabase: supa as never,
     operator_id: OPERATOR_ID,
-    cikMapper: makeCikMapper(opts.cikMap) as never,
     accessionIndex: (opts.accessionIndex ?? noop) as never,
     form4Fetcher: (opts.form4Fetcher ?? noopForm4) as never,
     loadAndComputeCtx: (opts.loadAndComputeCtx ?? {}) as never,
@@ -492,6 +530,59 @@ Deno.test('(D.5) seedWorkItems daily: R1 heartbeat row never reaches work-items 
 });
 
 // ── (E) processItem typed-permanent skips ──────────────────────────────
+
+// ── (D.6) ACT-220 source sentinel — EdgarCikMapper MUST NOT appear ─────
+//
+// Path-Y producer-relocation: the consumer no longer holds any runtime
+// reference to `EdgarCikMapper` / `edgar-cik-mapper`. The drift
+// sentinel reads the source file and asserts both string literals are
+// absent. Re-introduction would silently reopen the per-cron-isolate
+// `company_tickers.json` fetch + SEC fair-access 429 class. The
+// sentinel's regression assertion shape mirrors the Catalog #41 /
+// Gate-2c source-line pin pattern (line-level grep against the
+// consumer file; ANY future change that re-imports the cik-mapper
+// fails this test before it can ship).
+Deno.test('(D.6) ACT-220 source sentinel: consumer does NOT import EdgarCikMapper or edgar-cik-mapper', async () => {
+  const url = new URL('./insider-work-list-registration.ts', import.meta.url);
+  const src = await Deno.readTextFile(url);
+  // Strip block comments before scanning so the explanatory prose
+  // describing WHY the mapper is forbidden does not itself trigger
+  // the sentinel.
+  const stripped = src.replace(/\/\*[\s\S]*?\*\//g, '');
+  const noBlockComments = stripped
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+  assert(
+    !noBlockComments.includes('EdgarCikMapper'),
+    'EdgarCikMapper MUST NOT be referenced in non-comment code post-ACT-220',
+  );
+  assert(
+    !noBlockComments.includes("'./edgar-cik-mapper.ts'") &&
+      !noBlockComments.includes('"./edgar-cik-mapper.ts"'),
+    'edgar-cik-mapper.ts MUST NOT be imported in non-comment code post-ACT-220',
+  );
+});
+
+Deno.test('(D.7) ACT-220 producer-relocation: claim in-filter is on ticker, not issuer_cik', async () => {
+  // Pins the production claim shape post-Path-Y: the consumer's
+  // in-universe filter now reads `ticker` from the queue row (the
+  // producer-time stamp from MIG-098). Re-introduction of the pre-
+  // ACT-220 `issuer_cik` IN-filter would re-establish the dependency
+  // chain that required runtime CIK resolution.
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
+    cikMap: { AAPL: 320193 },
+    queueRows: [
+      { as_of_date: '2026-06-11', issuer_cik: '0000320193', accession_number: 'X-1', form_type: '4', consumed_at: null },
+    ],
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  await cfg.seedWorkItems!({ asOf: AS_OF_FRI });
+  const claim = deps._stub.claimCalls[0];
+  assertEquals(claim.in_column, 'ticker', 'ACT-220: claim must filter on ticker (not issuer_cik)');
+  assert(claim.in_list.includes('AAPL'), 'universe ticker in IN-list');
+});
 
 const ITEM: { id: string; payload: InsiderWorkItemPayload } = {
   id: '0000320193-26-000010',

@@ -26,8 +26,10 @@ import {
   EPOCH_ACCEPTANCE,
   HEARTBEAT_ACCESSION_NUMBER,
   HEARTBEAT_ISSUER_CIK,
+  HEARTBEAT_TICKER,
   buildUniverseEntryPredicate,
   iterateTradingDays,
+  loadUniverseCikToTicker,
   makeRestInserter,
   normalizeFilerCikForUniverse,
   parseArgs,
@@ -141,6 +143,7 @@ function makeDeps(opts: {
   submissions?: EdgarSubmissionsFetcher;
   insertRows?: (r: readonly DiscoveryRow[]) => Promise<void>;
   discoveredBy?: 'gha-daily' | 'backfill-oneshot';
+  tickerForPaddedCik?: (paddedCik: string) => string | null;
 }): RunDeps {
   return {
     fetcher: opts.fetcher,
@@ -148,6 +151,10 @@ function makeDeps(opts: {
     insertRows: opts.insertRows ?? (() => Promise.resolve()),
     correlationId: 'corr-test-0001',
     discoveredBy: opts.discoveredBy ?? 'gha-daily',
+    // ACT-220 default: every padded CIK gets a deterministic stub
+    // ticker so legacy fixtures don't need a per-row update. Tests
+    // that exercise the missing-ticker counter override this.
+    tickerForPaddedCik: opts.tickerForPaddedCik ?? ((cik) => `T${cik.replace(/^0+/, '') || '0'}`),
     log: () => {}, // silence test output
   };
 }
@@ -165,7 +172,12 @@ Deno.test('(a) parses master.idx and emits exactly the Form-4/4-A rows in the RE
     '0000320193': ['0000320193-26-000077'],
     '0000789019': ['0000789019-26-000044'],
   });
-  const deps = makeDeps({ fetcher: fetcherReturning(fixtureMasterBody()), insertRows: cap.insertRows, submissions });
+  const deps = makeDeps({
+    fetcher: fetcherReturning(fixtureMasterBody()),
+    insertRows: cap.insertRows,
+    submissions,
+    tickerForPaddedCik: (cik) => ({ '0000320193': 'AAPL', '0000789019': 'MSFT' }[cik] ?? null),
+  });
 
   const outcome = await runDiscoveryDay('2026-06-12', deps);
 
@@ -187,12 +199,14 @@ Deno.test('(a) parses master.idx and emits exactly the Form-4/4-A rows in the RE
     discovered_by: 'gha-daily',
     discovery_correlation_id: 'corr-test-0001',
     acceptance_datetime: '2026-06-12T20:01:00.000Z',
+    ticker: 'AAPL',
   });
   // Form 4/A — MSFT
   assertEquals(payload[1].issuer_cik, '0000789019');
   assertEquals(payload[1].form_type, '4/A');
   assertEquals(payload[1].accession_number, '0000789019-26-000044');
   assertEquals(payload[1].acceptance_datetime, '2026-06-12T20:02:00.000Z');
+  assertEquals(payload[1].ticker, 'MSFT');
 
   // Pure-helper parity (rowFromEntry produces the same shape — drift sentinel).
   const e = {
@@ -204,7 +218,7 @@ Deno.test('(a) parses master.idx and emits exactly the Form-4/4-A rows in the RE
     accession_number: '0000320193-26-000077',
   };
   assertEquals(
-    rowFromEntry(e, '2026-06-12', 'gha-daily', 'corr-test-0001', '2026-06-12T20:01:00.000Z'),
+    rowFromEntry(e, '2026-06-12', 'gha-daily', 'corr-test-0001', '2026-06-12T20:01:00.000Z', 'AAPL'),
     payload[0],
   );
 });
@@ -215,7 +229,12 @@ Deno.test('(a2) real master.idx NVDA row: File Name header + YYYYMMDD date parse
   const submissions = stubSubmissions({
     '0001768670-26-000002': { acceptance: '2026-06-05T21:12:55.000Z', primary: 'wk-form4_nvda.xml', form: '4' },
   }, { '0001045810': ['0001768670-26-000002'] });
-  const deps = makeDeps({ fetcher: fetcherReturning(fixtureRealMasterNvdaBody()), insertRows: cap.insertRows, submissions });
+  const deps = makeDeps({
+    fetcher: fetcherReturning(fixtureRealMasterNvdaBody()),
+    insertRows: cap.insertRows,
+    submissions,
+    tickerForPaddedCik: (cik) => ({ '0001045810': 'NVDA' }[cik] ?? null),
+  });
   deps.isUniverseEntry = buildUniverseEntryPredicate(universeCik10);
 
   const outcome = await runDiscoveryDay('2026-06-05', deps);
@@ -233,6 +252,7 @@ Deno.test('(a2) real master.idx NVDA row: File Name header + YYYYMMDD date parse
     discovered_by: 'gha-daily',
     discovery_correlation_id: 'corr-test-0001',
     acceptance_datetime: '2026-06-05T21:12:55.000Z',
+    ticker: 'NVDA',
   });
   assertEquals(normalizeFilerCikForUniverse('1045810'), '0001045810');
 });
@@ -377,6 +397,11 @@ Deno.test('(c3) buildHeartbeatRow shape — sentinels + CHECK-valid form_type', 
   // MIG-097 NOT NULL invariant is satisfied without inventing a
   // future-shaped timestamp.
   assertEquals(hb.acceptance_datetime, EPOCH_ACCEPTANCE);
+  // ACT-220 / MIG-098: heartbeat carries the ticker sentinel so the
+  // new `ticker NOT NULL` queue invariant is satisfied without
+  // inventing a universe ticker that would collide with a real symbol.
+  assertEquals(hb.ticker, HEARTBEAT_TICKER);
+  assertEquals(hb.ticker, '__heartbeat__');
   // The CHECK constraint allows only '4' | '4/A' — assert literal-typed.
   assert(hb.form_type === '4' || hb.form_type === '4/A');
 });
@@ -403,7 +428,7 @@ Deno.test('(c4) makeRestInserter logs and returns structural write evidence for 
       date_filed: '2026-06-05',
       filename: 'edgar/data/1045810/0001768670-26-000002.txt',
       accession_number: '0001768670-26-000002',
-    }, '2026-06-05', 'gha-daily', 'corr-verify', '2026-06-05T21:12:55.000Z')]);
+    }, '2026-06-05', 'gha-daily', 'corr-verify', '2026-06-05T21:12:55.000Z', 'NVDA')]);
     assertEquals(result, {
       attempted: 1,
       status: 201,
@@ -480,4 +505,71 @@ Deno.test('(e) parseArgs rejects malformed dates and inverted ranges', () => {
 Deno.test('(e) parseArgs rejects unknown args', () => {
   const r = parseArgs(['--as-of=2026-06-12', '--unknown=x']);
   assertEquals(r.kind, 'error');
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// ACT-220 / Path-Y producer-relocation: drift sentinels
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Drift sentinel: a single `EdgarCikMapper.loadMap()` call services
+ * the entire producer fire — the underlying `company_tickers.json`
+ * fetch is issued ONCE per CLI entry, not per day or per issuer.
+ * Re-introduction of a per-day or per-issuer mapper construction
+ * would silently re-establish the per-cron-isolate SEC dependency
+ * the relocation eliminates.
+ */
+Deno.test('(p1) ACT-220 producer-relocation: loadUniverseCikToTicker triggers exactly ONE underlying mapper.loadMap() call regardless of universe size', async () => {
+  let loadMapCalls = 0;
+  const stubMapper = {
+    async loadMap() {
+      loadMapCalls += 1;
+      return (ticker: string) => {
+        const t = ticker.toUpperCase();
+        const cikByTicker: Record<string, number> = { AAPL: 320193, MSFT: 789019, NVDA: 1045810 };
+        const cik = cikByTicker[t];
+        if (cik === undefined) return { kind: 'unresolved' as const, ticker: t };
+        return {
+          kind: 'resolved' as const,
+          ticker: t,
+          cik10: String(cik).padStart(10, '0'),
+          source: 'snapshot' as const,
+        };
+      };
+    },
+  };
+  const map = await loadUniverseCikToTicker(
+    ['AAPL', 'MSFT', 'NVDA', 'NOT_IN_SEC'],
+    stubMapper as never,
+  );
+  assertEquals(loadMapCalls, 1, 'loadUniverseCikToTicker MUST call mapper.loadMap() exactly once');
+  assertEquals(map.size, 3, 'three resolved tickers; the unresolved one is dropped');
+  assertEquals(map.get('0000320193'), 'AAPL');
+  assertEquals(map.get('0000789019'), 'MSFT');
+  assertEquals(map.get('0001045810'), 'NVDA');
+});
+
+/**
+ * Drift sentinel: tickerForPaddedCik resolver is consulted per row.
+ * An in-universe entry whose padded CIK is absent from the resolver
+ * is DROPPED + counted under `tickers_missing_for_cik` (defense-in-
+ * depth against producer-time isUniverseEntry / tickerForPaddedCik
+ * divergence).
+ */
+Deno.test('(p2) ACT-220 producer-relocation: missing-ticker entry is dropped + counted (not enqueued with empty ticker)', async () => {
+  const cap = captureInserter();
+  const submissions = stubSubmissions({
+    '0000320193-26-000077': { acceptance: '2026-06-12T20:01:00.000Z', primary: 'p.xml', form: '4' },
+    '0000789019-26-000044': { acceptance: '2026-06-12T20:02:00.000Z', primary: 'p.xml', form: '4/A' },
+  });
+  const deps = makeDeps({
+    fetcher: fetcherReturning(fixtureMasterBody()),
+    insertRows: cap.insertRows,
+    submissions,
+    // AAPL has a ticker; MSFT does NOT — should be dropped, not enqueued.
+    tickerForPaddedCik: (cik) => (cik === '0000320193' ? 'AAPL' : null),
+  });
+  const outcome = await runDiscoveryDay('2026-06-12', deps);
+  assertEquals(outcome.rows_inserted, 1, 'AAPL enqueued, MSFT dropped (missing ticker)');
+  assertEquals(cap.calls[0][0].ticker, 'AAPL');
 });

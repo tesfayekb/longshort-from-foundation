@@ -106,6 +106,13 @@ Deno.test({
       filename: `edgar/data/${cik}/${i}.txt`,
       discovered_by: 'r2-concurrent-claim-test',
       discovery_correlation_id: correlationId,
+      // ACT-215 / MIG-097 NOT NULL invariant on the queue.
+      acceptance_datetime: '2026-06-13T20:00:00.000Z',
+      // ACT-220 / MIG-098 NOT NULL invariant on the queue. The R2
+      // test pins atomic row-locking, not the in-universe filter,
+      // so any unique ticker suffices; we derive a deterministic
+      // stub from the synthetic CIK.
+      ticker: `R2T${i}`,
     }));
 
     try {
