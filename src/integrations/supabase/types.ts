@@ -215,6 +215,7 @@ export type Database = {
           filename: string
           form_type: string
           issuer_cik: string
+          ticker: string
         }
         Insert: {
           acceptance_datetime: string
@@ -229,6 +230,7 @@ export type Database = {
           filename: string
           form_type: string
           issuer_cik: string
+          ticker: string
         }
         Update: {
           acceptance_datetime?: string
@@ -243,6 +245,7 @@ export type Database = {
           filename?: string
           form_type?: string
           issuer_cik?: string
+          ticker?: string
         }
         Relationships: []
       }
