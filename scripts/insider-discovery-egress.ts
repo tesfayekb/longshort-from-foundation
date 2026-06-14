@@ -72,6 +72,11 @@ import {
   type CikLookupResult,
 } from '../supabase/functions/_shared/longshort-signals/insider-transactions/edgar-cik-mapper.ts';
 import {
+  EdgarSubmissionsFetcher,
+  type EdgarSubmissionsResult,
+  type SubmissionsRecentRow,
+} from '../supabase/functions/_shared/longshort-signals/insider-transactions/edgar-submissions-fetcher.ts';
+import {
   isoDate,
   isTradingDay,
   parseIsoDate,
@@ -101,6 +106,11 @@ export interface DiscoveryRow {
   filename: string;
   discovered_by: DiscoveredBy;
   discovery_correlation_id: string;
+  /** ACT-215 / MIG-097: SEC `acceptanceDateTime` captured at discovery
+   *  from the per-issuer submissions feed. NOT NULL on the queue
+   *  column; producer-side §(b) enforcement (DEC-058 §(b) amendment).
+   *  Heartbeat rows carry the Unix epoch sentinel (`EPOCH_ACCEPTANCE`). */
+  acceptance_datetime: string;
 }
 
 /** Sentinel constants for the R1 heartbeat row. */
@@ -108,6 +118,13 @@ export const HEARTBEAT_ISSUER_CIK = '__heartbeat__';
 export const HEARTBEAT_ACCESSION_NUMBER = '__heartbeat__';
 export const HEARTBEAT_COMPANY_NAME = '__heartbeat__';
 export const HEARTBEAT_FILENAME = '__heartbeat__';
+/** ACT-215: heartbeat acceptance sentinel — Unix epoch. The R1
+ *  heartbeat row is structurally excluded by the consumer's
+ *  `(issuer_cik='__heartbeat__', accession_number='__heartbeat__')`
+ *  predicate; this epoch stamp is diagnostic-only and unreachable by
+ *  any real-row code path. Carrying epoch satisfies the MIG-097
+ *  NOT NULL invariant without inventing a future-shaped timestamp. */
+export const EPOCH_ACCEPTANCE = '1970-01-01T00:00:00.000Z';
 export const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
 /** Outcome per day — surfaced into the run summary for forensics. */
@@ -119,11 +136,25 @@ export interface DayOutcome {
   heartbeat_inserted: boolean;
   /** master.idx returned 404 (kind:'unavailable'). Still writes a heartbeat. */
   data_unavailable: boolean;
+  /** ACT-215: per-issuer submissions-feed status counter (status code →
+   *  count). 200 = resolved; 404 = unavailable; 429 = rate_limited;
+   *  -1 = malformed (parallel-array shape); 0 = thrown EdgarFetchError. */
+  submissions_fetch_status?: Record<string, number>;
+  /** ACT-215: count of in-universe Form-4 entries that could NOT be
+   *  cross-walked to a `(accession_number → acceptance_datetime)` from
+   *  the submissions feed. These rows are DROPPED (the §(b) NOT NULL
+   *  schema invariant on MIG-097 makes enqueue impossible without
+   *  acceptance). Non-zero counts surface a producer-side gap
+   *  (issuer feed lagging master.idx, or accession too fresh to be
+   *  in `filings.recent`); operator-visible at run-complete. */
+  accessions_missing_acceptance?: number;
 }
 
 /** Injectable deps — every IO surface goes through here so the test suite is hermetic. */
 export interface RunDeps {
   fetcher: EdgarDailyIndexFetcher;
+  /** ACT-215: per-issuer submissions-feed fetcher (acceptance source-of-truth). */
+  submissions: EdgarSubmissionsFetcher;
   insertRows: (rows: readonly DiscoveryRow[]) => Promise<unknown>;
   correlationId: string;
   discoveredBy: DiscoveredBy;
@@ -231,6 +262,7 @@ export function rowFromEntry(
   asOf: string,
   discoveredBy: DiscoveredBy,
   correlationId: string,
+  acceptanceDatetime: string,
 ): DiscoveryRow {
   const padded = normalizeFilerCikForUniverse(e.filer_cik);
   return {
@@ -242,6 +274,7 @@ export function rowFromEntry(
     filename: e.filename,
     discovered_by: discoveredBy,
     discovery_correlation_id: correlationId,
+    acceptance_datetime: acceptanceDatetime,
   };
 }
 
@@ -264,6 +297,8 @@ export function buildHeartbeatRow(
     filename: HEARTBEAT_FILENAME,
     discovered_by: discoveredBy,
     discovery_correlation_id: correlationId,
+    // ACT-215: epoch sentinel — see EPOCH_ACCEPTANCE doc.
+    acceptance_datetime: EPOCH_ACCEPTANCE,
   };
 }
 
