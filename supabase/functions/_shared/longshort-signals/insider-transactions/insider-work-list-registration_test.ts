@@ -171,22 +171,25 @@ interface QueueRowFixture {
 function makeStubSupabase(opts: {
   universe: Array<{ ticker: string; gics_sector: string | null }>;
   queueRows?: QueueRowFixture[];
+  cikMap?: Record<string, number>;
 }) {
-  // ACT-220: when a fixture row lacks `ticker`, default it from the
-  // universe by matching the issuer_cik to the cikMap of the (now
-  // optional) test-universe ticker mapping. Tests that pre-date
-  // ACT-220 didn't supply `ticker`; we backfill it deterministically
-  // by lifting the first universe ticker (or '__heartbeat__' if the
-  // row's issuer_cik IS the heartbeat sentinel).
+  // ACT-220: when a fixture row lacks `ticker`, infer it from the
+  // test's `cikMap` by inverting CIK→ticker. The legacy pre-ACT-220
+  // tests already specified cikMap; this defaulter lifts the inverse
+  // so existing fixtures stay green without a per-row ticker edit.
+  // Heartbeat sentinel rows always resolve to the heartbeat ticker;
+  // rows whose padded issuer_cik has no cikMap inverse default to
+  // `__OUT_OF_UNIVERSE__` so the production claim filter cleanly
+  // drops them (mirrors the pre-ACT-220 IN-on-issuer_cik shape).
+  const cikToTicker = new Map<string, string>();
+  for (const [t, cik] of Object.entries(opts.cikMap ?? {})) {
+    cikToTicker.set(String(cik).padStart(10, '0'), t);
+  }
   const queueRows: QueueRowFixture[] = (opts.queueRows ?? []).map((r) => {
     if (r.ticker !== undefined && r.ticker.length > 0) return { ...r };
     if (r.issuer_cik === '__heartbeat__') return { ...r, ticker: '__heartbeat__' };
-    // Deterministic backfill from the test universe: the first ticker
-    // that the test declared. (The legacy tests that don't supply
-    // `ticker` are exercising in-universe filtering on a single-ticker
-    // universe; for multi-ticker fixtures, callers should set `ticker`
-    // explicitly — drift sentinel below pins both shapes.)
-    return { ...r, ticker: opts.universe[0]?.ticker ?? 'UNKNOWN' };
+    const inferred = cikToTicker.get(r.issuer_cik);
+    return { ...r, ticker: inferred ?? '__OUT_OF_UNIVERSE__' };
   });
   const upserts: { table: string; payload: unknown[]; onConflict: string | undefined }[] = [];
   const upsertResults: Array<{ error: { message: string } | null }> = [];
@@ -363,9 +366,14 @@ function makeBaselineDeps(
     loadAndComputeCtx?: unknown;
   },
 ): InsiderWorkListDeps & { _stub: ReturnType<typeof makeStubSupabase> } {
-  void opts.cikMap; // ACT-220: parameter retained for fixture shape
-  // compatibility; no longer used (CIK resolution moved to producer).
-  const supa = makeStubSupabase({ universe: opts.universe, queueRows: opts.queueRows });
+  // ACT-220: cikMap is no longer used to construct a runtime mapper;
+  // instead it backstops per-row `ticker` defaulting inside the stub
+  // (legacy fixtures pre-date the producer-time ticker stamp).
+  const supa = makeStubSupabase({
+    universe: opts.universe,
+    queueRows: opts.queueRows,
+    cikMap: opts.cikMap,
+  });
   const noop = {
     async fetchIndex() { throw new Error('accessionIndex stub not configured'); },
   };
