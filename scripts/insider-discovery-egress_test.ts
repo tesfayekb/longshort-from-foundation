@@ -36,6 +36,7 @@ import {
   rowFromEntry,
   runDiscoveryDay,
   runMode,
+  runModeWithSummary,
   type DiscoveryRow,
   type RunDeps,
 } from './insider-discovery-egress.ts';
