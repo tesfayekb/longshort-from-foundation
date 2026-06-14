@@ -129,6 +129,12 @@ export async function runQueueFinalizer(
   //      (those carry item-scope skips for telemetry only — Q4 two-ledger).
   let staging: StagingRow[];
   let skipsDb: SkipRow[];
+  // Work-list mode override: runRow.universe_size holds the producer-side
+  // accession-count ledger (correct for sweeper/budget contract). The
+  // consumer-owned mass-balance universe-membership count is derived from
+  // loadAndCompute's per-ticker result count and surfaced via
+  // buildWorkListAggregates. Path (ii) ACT-218.
+  let workListUniverseSize: number | null = null;
   if (isWorkListMode(config)) {
     const res = await buildWorkListAggregates(ctx, runRow);
     if (res.kind === 'failed') {
@@ -136,6 +142,7 @@ export async function runQueueFinalizer(
     }
     staging = res.staging;
     skipsDb = res.skips;
+    workListUniverseSize = res.universe_size;
   } else if (isFeedMode(config)) {
     const res = await buildFeedAggregates(ctx, runRow);
     if (res.kind === 'failed') {
@@ -220,7 +227,7 @@ export async function runQueueFinalizer(
     outcome: 'completed',
     signal_id: config.signalId,
     as_of_date,
-    universe_size: runRow.universe_size,
+    universe_size: workListUniverseSize ?? runRow.universe_size,
     persisted_count: capture.inserted,
     skipped: skippedAll,
     started_at: runRow.created_at,
