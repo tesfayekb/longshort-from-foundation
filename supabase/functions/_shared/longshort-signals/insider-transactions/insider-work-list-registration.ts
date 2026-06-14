@@ -36,9 +36,14 @@
  * The crosswalk pins the classification at each EDGAR call site; this
  * module honors it verbatim:
  *   - accession `index.json` 404 → permanent_skip `data_unavailable`
- *   - accession `index.json` ambiguous (0 or >1 primary docs) →
+ *   - accession `index.json` no-primary (0 or >1 eligible xml) →
  *     permanent_skip `no_primary_doc` (M2 union member; the INC-70
  *     anti-heuristic rule — never guess a filename)
+ *   - accession `index.json` no-acceptance (primary resolved, but
+ *     `acceptanceDateTime` absent per §(b) non-defaultable contract) →
+ *     permanent_skip `no_acceptance_datetime` (ACT-213 split-at-source;
+ *     previously mislabeled as `no_primary_doc` when the fetcher
+ *     conflated both modes under `kind:'ambiguous'`)
  *   - accession `index.json` 429 → THROW (transient — engine cursor
  *     preserved; the 5 rps bucket should prevent this in practice)
  *   - Form-4 XML 404 → permanent_skip `data_unavailable`
@@ -719,13 +724,24 @@ function makeProcessItem(deps: InsiderWorkListDeps): WorkListProcessItemFn {
         `accession index 429 (cik=${payload.filer_cik_padded} acc=${item.id})`,
       );
     }
-    if (idx.kind === 'ambiguous') {
+    if (idx.kind === 'no_primary_doc') {
       // M2: typed-permanent `no_primary_doc` — never guess a filename
-      // (the INC-70 anti-heuristic rule).
+      // (the INC-70 anti-heuristic rule). Path A: eligible_count ≠ 1.
       return {
         kind: 'permanent_skip',
         reason: 'no_primary_doc',
         detail: `eligible=${idx.eligible_count}; filenames=${idx.filenames.join(',')}`,
+      };
+    }
+    if (idx.kind === 'no_acceptance_datetime') {
+      // ACT-213: distinct typed-permanent reason. Path B: primary IS
+      // resolved, but §(b) `acceptanceDateTime` was absent. Detail
+      // carries the resolved primary as evidence so the audit trail
+      // makes the discrimination from Path A explicit.
+      return {
+        kind: 'permanent_skip',
+        reason: 'no_acceptance_datetime',
+        detail: `primary_document=${idx.primary_document}; eligible=${idx.eligible_count}; filenames=${idx.filenames.join(',')}`,
       };
     }
 
