@@ -307,6 +307,18 @@ async function initWorkListRun(
   //       count (the work-list analogue of universe size; consumer's
   //       loadAndCompute mass-balance still uses real universe_membership
   //       at finalize-time per Q4).
+  //
+  //       Rule-8 amendment (ACT-218 / Fix A): the two-ledger split is
+  //       now explicit. signal_queue_runs.universe_size = items.length
+  //       (producer-side accession count; sweeper/budget contract).
+  //       signal_compute_log.universe_size = loadAndCompute's per-ticker
+  //       result count (consumer-owned universe-membership mass balance,
+  //       written by buildWorkListAggregates in queue-finalizer.ts).
+  //       The pre-fix conflation surfaced as a 259-row gap in run
+  //       2ac77620 (1098 accessions − 839 universe tickers); resolved.
+  //       Catalog #43 recurrence rule: deferred design items routed via
+  //       source comments alone (no ACT/ADR entry) are themselves a
+  //       Catalog #43 violation by construction.
   const { data: runRow, error: runErr } = await supabase
     .from('signal_queue_runs')
     .insert({
