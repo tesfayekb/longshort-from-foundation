@@ -34,7 +34,7 @@ import {
   fetchWithTimeoutAndRetry,
   type FetchWithRetryOptions,
   type MinimalHttpFetch,
-} from '../../../longshort-universe/shared/fetch-with-timeout.ts';
+} from '../../longshort-universe/shared/fetch-with-timeout.ts';
 
 /** SEC ticker→CIK snapshot endpoint. */
 export const COMPANY_TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json';
