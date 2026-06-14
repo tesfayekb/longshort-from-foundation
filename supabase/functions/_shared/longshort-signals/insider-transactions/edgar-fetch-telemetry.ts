@@ -26,7 +26,8 @@ export type EdgarPathFamily =
   | 'company_tickers'
   | 'master_index'
   | 'accession_index'
-  | 'form4_xml';
+  | 'form4_xml'
+  | 'submissions';
 
 /** Single per-fetch event surfaced to the telemetry callback. */
 export interface EdgarFetchTelemetryEvent {
