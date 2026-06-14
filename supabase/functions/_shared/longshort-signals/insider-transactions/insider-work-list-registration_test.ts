@@ -162,16 +162,35 @@ interface QueueRowFixture {
    *  fetcher input — no per-accession `index.json` acceptance read
    *  remains anywhere in the data path. */
   acceptance_datetime?: string;
+  /** ACT-220 / MIG-098: producer-time ticker stamp (NOT NULL on the
+   *  queue). The consumer's claim filter is now ticker-based; the
+   *  per-accession reconstruction reads ticker directly from here. */
+  ticker?: string;
 }
 
 function makeStubSupabase(opts: {
   universe: Array<{ ticker: string; gics_sector: string | null }>;
   queueRows?: QueueRowFixture[];
 }) {
-  const queueRows: QueueRowFixture[] = (opts.queueRows ?? []).map((r) => ({ ...r }));
+  // ACT-220: when a fixture row lacks `ticker`, default it from the
+  // universe by matching the issuer_cik to the cikMap of the (now
+  // optional) test-universe ticker mapping. Tests that pre-date
+  // ACT-220 didn't supply `ticker`; we backfill it deterministically
+  // by lifting the first universe ticker (or '__heartbeat__' if the
+  // row's issuer_cik IS the heartbeat sentinel).
+  const queueRows: QueueRowFixture[] = (opts.queueRows ?? []).map((r) => {
+    if (r.ticker !== undefined && r.ticker.length > 0) return { ...r };
+    if (r.issuer_cik === '__heartbeat__') return { ...r, ticker: '__heartbeat__' };
+    // Deterministic backfill from the test universe: the first ticker
+    // that the test declared. (The legacy tests that don't supply
+    // `ticker` are exercising in-universe filtering on a single-ticker
+    // universe; for multi-ticker fixtures, callers should set `ticker`
+    // explicitly — drift sentinel below pins both shapes.)
+    return { ...r, ticker: opts.universe[0]?.ticker ?? 'UNKNOWN' };
+  });
   const upserts: { table: string; payload: unknown[]; onConflict: string | undefined }[] = [];
   const upsertResults: Array<{ error: { message: string } | null }> = [];
-  const claimCalls: Array<{ as_of_date: string; in_list: string[]; or_filter: string }> = [];
+  const claimCalls: Array<{ as_of_date: string; in_list: string[]; in_column: string; or_filter: string }> = [];
 
   function from(table: string) {
     if (table === 'universe_membership') {
@@ -201,7 +220,8 @@ function makeStubSupabase(opts: {
       const gtes: Record<string, unknown> = {};
       const ltes: Record<string, unknown> = {};
       let isConsumedNull = false;
-      let inIssuerCiks: string[] = [];
+      let inList: string[] = [];
+      let inColumn = '';
       let orFilter = '';
       let selectCols = '';
 
@@ -220,7 +240,13 @@ function makeStubSupabase(opts: {
           return b;
         },
         in(col: string, list: unknown[]) {
-          if (col === 'issuer_cik') inIssuerCiks = list as string[];
+          // ACT-220: claim filter switched from `issuer_cik` (pre)
+          // to `ticker` (post). The stub honors whichever column the
+          // production code passes, and the claim-call trace records
+          // the column so tests can pin the producer-relocation
+          // direction (D.6 sentinel test).
+          inList = list as string[];
+          inColumn = col;
           return b;
         },
         or(filter: string) { orFilter = filter; return b; },
@@ -228,10 +254,11 @@ function makeStubSupabase(opts: {
           if (kind === 'update') {
             claimCalls.push({
               as_of_date: String(eqs['as_of_date']),
-              in_list: inIssuerCiks.slice(),
+              in_list: inList.slice(),
+              in_column: inColumn,
               or_filter: orFilter,
             });
-            const inSet = new Set(inIssuerCiks);
+            const inSet = new Set(inList);
             const heartbeatExcl = orFilter.includes(
               `issuer_cik.neq.${PRODUCER_HEARTBEAT_ISSUER_CIK}`,
             );
@@ -239,7 +266,17 @@ function makeStubSupabase(opts: {
             for (const r of queueRows) {
               if (r.as_of_date !== eqs['as_of_date']) continue;
               if (isConsumedNull && r.consumed_at !== null) continue;
-              if (inSet.size > 0 && !inSet.has(r.issuer_cik)) continue;
+              if (inSet.size > 0) {
+                // ACT-220: the claim's in-filter is on whichever
+                // column production passed (ticker post-relocation;
+                // issuer_cik pre-relocation). Look up the row's
+                // value at that column and filter.
+                const rowVal =
+                  inColumn === 'ticker'
+                    ? (r.ticker ?? '').toUpperCase()
+                    : r.issuer_cik;
+                if (!inSet.has(rowVal)) continue;
+              }
               if (heartbeatExcl &&
                   r.issuer_cik === PRODUCER_HEARTBEAT_ISSUER_CIK &&
                   r.accession_number === PRODUCER_HEARTBEAT_ACCESSION_NUMBER) {
@@ -254,6 +291,7 @@ function makeStubSupabase(opts: {
               accession_number: r.accession_number,
               form_type: r.form_type,
               acceptance_datetime: r.acceptance_datetime ?? '2026-06-11T16:00:00.000Z',
+              ticker: r.ticker ?? '',
             }));
             return Promise.resolve({ data: projected, error: null })
               .then(onF as never, onR as never);
@@ -262,7 +300,8 @@ function makeStubSupabase(opts: {
           //   (i) backfill distinct-dates (gte/lte; projects as_of_date)
           //   (ii) ACT-211 processItem by-accession reconstruction
           //        (eq accession_number; projects issuer_cik, form_type,
-          //        acceptance_datetime — ACT-215 amendment)
+          //        acceptance_datetime — ACT-215 amendment; + ticker
+          //        — ACT-220 amendment)
           if (typeof eqs['accession_number'] === 'string') {
             const acc = eqs['accession_number'] as string;
             const matches = queueRows.filter((r) => r.accession_number === acc);
@@ -270,6 +309,7 @@ function makeStubSupabase(opts: {
               issuer_cik: r.issuer_cik,
               form_type: r.form_type,
               acceptance_datetime: r.acceptance_datetime ?? '2026-06-11T16:00:00.000Z',
+              ticker: r.ticker ?? '',
             }));
             void selectCols;
             return Promise.resolve({ data: projected, error: null })
@@ -301,23 +341,12 @@ function makeStubSupabase(opts: {
   return { from, upserts, upsertResults, claimCalls, _queueRows: queueRows };
 }
 
-function makeCikMapper(map: Record<string, number>) {
-  return {
-    async loadMap() {
-      return (ticker: string) => {
-        const t = ticker.toUpperCase();
-        const v = map[t];
-        if (v === undefined) return { kind: 'unresolved' as const, ticker: t };
-        return {
-          kind: 'resolved' as const,
-          ticker: t,
-          cik10: String(v).padStart(10, '0'),
-          source: 'snapshot' as const,
-        };
-      };
-    },
-  };
-}
+// ACT-220 / Path-Y: `makeCikMapper` removed. The consumer no longer
+// resolves CIKs at runtime — ticker is producer-stamped on the queue
+// row (MIG-098). Fixtures that previously passed `cikMap` keep the
+// parameter shape for compatibility (it now backstops the per-row
+// `ticker` defaulting inside `makeStubSupabase`); the value is no
+// longer wired into any mapper construction.
 
 // `makeDailyIndex` removed at F2.c — `seedWorkItems` no longer hits
 // EDGAR; the on-EDGAR call site is the GHA-egress producer
@@ -334,6 +363,8 @@ function makeBaselineDeps(
     loadAndComputeCtx?: unknown;
   },
 ): InsiderWorkListDeps & { _stub: ReturnType<typeof makeStubSupabase> } {
+  void opts.cikMap; // ACT-220: parameter retained for fixture shape
+  // compatibility; no longer used (CIK resolution moved to producer).
   const supa = makeStubSupabase({ universe: opts.universe, queueRows: opts.queueRows });
   const noop = {
     async fetchIndex() { throw new Error('accessionIndex stub not configured'); },
@@ -345,7 +376,6 @@ function makeBaselineDeps(
     _stub: supa,
     supabase: supa as never,
     operator_id: OPERATOR_ID,
-    cikMapper: makeCikMapper(opts.cikMap) as never,
     accessionIndex: (opts.accessionIndex ?? noop) as never,
     form4Fetcher: (opts.form4Fetcher ?? noopForm4) as never,
     loadAndComputeCtx: (opts.loadAndComputeCtx ?? {}) as never,
