@@ -153,6 +153,11 @@ interface QueueRowFixture {
   accession_number: string;
   form_type: '4' | '4/A';
   consumed_at: string | null;
+  /** ACT-215 / MIG-097: §(b) acceptance NOT NULL on the queue. The
+   *  consumer reads it from this column and threads to the form4
+   *  fetcher input — no per-accession `index.json` acceptance read
+   *  remains anywhere in the data path. */
+  acceptance_datetime?: string;
 }
 
 function makeStubSupabase(opts: {
@@ -244,6 +249,7 @@ function makeStubSupabase(opts: {
               issuer_cik: r.issuer_cik,
               accession_number: r.accession_number,
               form_type: r.form_type,
+              acceptance_datetime: r.acceptance_datetime ?? '2026-06-11T16:00:00.000Z',
             }));
             return Promise.resolve({ data: projected, error: null })
               .then(onF as never, onR as never);
@@ -251,13 +257,15 @@ function makeStubSupabase(opts: {
           // SELECT path — two shapes:
           //   (i) backfill distinct-dates (gte/lte; projects as_of_date)
           //   (ii) ACT-211 processItem by-accession reconstruction
-          //        (eq accession_number; projects issuer_cik, form_type)
+          //        (eq accession_number; projects issuer_cik, form_type,
+          //        acceptance_datetime — ACT-215 amendment)
           if (typeof eqs['accession_number'] === 'string') {
             const acc = eqs['accession_number'] as string;
             const matches = queueRows.filter((r) => r.accession_number === acc);
             const projected = matches.map((r) => ({
               issuer_cik: r.issuer_cik,
               form_type: r.form_type,
+              acceptance_datetime: r.acceptance_datetime ?? '2026-06-11T16:00:00.000Z',
             }));
             void selectCols;
             return Promise.resolve({ data: projected, error: null })
