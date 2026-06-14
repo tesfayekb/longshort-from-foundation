@@ -529,13 +529,13 @@ Deno.test('(E.1) processItem: index 404 → permanent_skip data_unavailable', as
   if (out.kind === 'permanent_skip') assertEquals(out.reason, 'data_unavailable');
 });
 
-Deno.test('(E.2) processItem: index ambiguous → permanent_skip no_primary_doc (M2)', async () => {
+Deno.test('(E.2) processItem: index no_primary_doc (>1 eligible xml) → permanent_skip no_primary_doc (M2)', async () => {
   const deps = makeBaselineDeps({
     universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
     cikMap: { AAPL: 320193 },
     queueRows: [ITEM_QUEUE_ROW],
     accessionIndex: makeAccessionIndex({
-      kind: 'ambiguous',
+      kind: 'no_primary_doc',
       filenames: ['a.xml', 'b.xml'],
       eligible_count: 2,
       acceptance_datetime: '2026-06-11T16:00:00.000Z',
@@ -547,6 +547,30 @@ Deno.test('(E.2) processItem: index ambiguous → permanent_skip no_primary_doc 
   if (out.kind === 'permanent_skip') {
     assertEquals(out.reason, 'no_primary_doc');
     assert(out.detail.includes('eligible=2'));
+  }
+});
+
+Deno.test('(E.2b) processItem: index no_acceptance_datetime (primary resolved, acceptance absent) → permanent_skip no_acceptance_datetime (ACT-213 split)', async () => {
+  const deps = makeBaselineDeps({
+    universe: [{ ticker: 'AAPL', gics_sector: 'Tech' }],
+    cikMap: { AAPL: 320193 },
+    queueRows: [ITEM_QUEUE_ROW],
+    accessionIndex: makeAccessionIndex({
+      kind: 'no_acceptance_datetime',
+      primary_document: 'wf-form4_1.xml',
+      filenames: ['wf-form4_1.xml'],
+      eligible_count: 1,
+    }),
+  });
+  const cfg = createInsiderWorkListConfig(deps, 'daily');
+  const out = await cfg.processItem!({ item: ITEM_ENGINE, asOf: AS_OF_FRI });
+  assertEquals(out.kind, 'permanent_skip');
+  if (out.kind === 'permanent_skip') {
+    assertEquals(out.reason, 'no_acceptance_datetime');
+    // Path B detail MUST carry the resolved primary as evidence —
+    // the audit-side discriminator from Path A.
+    assert(out.detail.includes('primary_document=wf-form4_1.xml'));
+    assert(out.detail.includes('eligible=1'));
   }
 });
 
