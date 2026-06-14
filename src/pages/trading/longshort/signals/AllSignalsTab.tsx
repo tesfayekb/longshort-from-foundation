@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ErrorState } from '@/components/dashboard/ErrorState';
 import { PhaseContextNote } from '@/components/dashboard/PhaseContextNote';
@@ -19,6 +20,7 @@ import {
   DRIFT_MIN_HISTORY,
   type SignalRegistryRowWithFire,
 } from '@/features/longshort/hooks/useSignalRegistry';
+import { cadenceLabel } from '@/features/longshort/utils/cron-staleness';
 
 /**
  * FP-038 — All Signals overview.
@@ -120,7 +122,9 @@ function SignalRow({ row, now }: { row: SignalRegistryRowWithFire; now: Date }) 
       <TableCell className="py-2 text-sm text-muted-foreground font-mono">
         {row.spec_ref ?? '—'}
       </TableCell>
-      <TableCell className="py-2 text-sm text-muted-foreground">{row.cadence ?? '—'}</TableCell>
+      <TableCell className="py-2 text-sm text-muted-foreground">
+        <CadenceCell cron={row.cron_schedule} cadence={row.cadence} />
+      </TableCell>
       <TableCell className="py-2">
         {row.status === 'live' ? (
           <Badge variant="success">Live</Badge>
@@ -164,6 +168,47 @@ function SignalRow({ row, now }: { row: SignalRegistryRowWithFire; now: Date }) 
 
 function Dash() {
   return <span className="text-muted-foreground">—</span>;
+}
+
+/**
+ * UI-001 — Compact cadence cell. Shows a short label derived from the
+ * bound cron schedule; the full operational cadence text (which can be
+ * a paragraph for queue-drained handlers) moves to a hover tooltip
+ * attached to an ℹ icon.
+ */
+function CadenceCell({
+  cron,
+  cadence,
+}: {
+  cron: string | null;
+  cadence: string | null;
+}) {
+  const short = cadenceLabel(cron) ?? (cadence ? cadence.split(/\s|\(/)[0] : null);
+  if (!short && !cadence) return <Dash />;
+  const label = short ?? cadence ?? '—';
+  const hasDetail = !!cadence && cadence.trim() !== label;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="font-mono text-xs">{label}</span>
+      {hasDetail && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Cadence details"
+              className="text-muted-foreground hover:text-foreground cursor-help"
+              tabIndex={0}
+            >
+              ⓘ
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-md whitespace-pre-wrap text-xs leading-snug">
+            {cadence}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </span>
+  );
 }
 
 function formatUtc(iso: string): string {
