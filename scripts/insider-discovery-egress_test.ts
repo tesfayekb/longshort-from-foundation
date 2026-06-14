@@ -993,7 +993,8 @@ Deno.test('(p8) ACT-223 — global unique-set ceiling: unique_issuers_fetched ==
   const bodyByYmd: Record<string, string> = {};
   const accessionToAcceptance: Record<string, { acceptance: string; primary: string; form: '4' | '4/A' }> = {};
   const byCik: Record<string, string[]> = {};
-  for (const { ymd, iso } of days) {
+  for (let d = 0; d < days.length; d++) {
+    const { ymd, iso } = days[d];
     const lines: string[] = [
       'Description: Daily Index',
       '',
@@ -1002,8 +1003,11 @@ Deno.test('(p8) ACT-223 — global unique-set ceiling: unique_issuers_fetched ==
     ];
     for (const padded of cikSet) {
       const cikInt = padded.replace(/^0+/, '');
-      // Each (cik, day) gets a unique accession so per-day batches are distinct.
-      const acc = `${padded}-${ymd}`;
+      // Each (cik, day) gets a unique accession in the canonical
+      // SEC 10-2-6 dashed form so `parseAccessionFromFilename`
+      // recognises it (the parser regex requires `\d{10}-\d{2}-\d{6}`).
+      const seq = String(d + 1).padStart(6, '0');
+      const acc = `${padded}-26-${seq}`;
       lines.push(`${cikInt}|TESTCO ${cikInt}|4|${ymd}|edgar/data/${cikInt}/${acc}.txt`);
       accessionToAcceptance[acc] = {
         acceptance: `${iso}T20:00:00.000Z`,
