@@ -500,7 +500,22 @@ export async function runDiscoveryDay(asOf: string, deps: RunDeps): Promise<DayO
     const padded = normalizeFilerCikForUniverse(e.filer_cik);
     if (padded !== null) uniqueIssuerCiks.add(padded);
   }
+  // ACT-221: pace consecutive submissions calls at SEC's documented
+  // rate-ceiling floor. The first call fires immediately; every
+  // subsequent call sleeps `pacingMs` BEFORE issuing. Combined with
+  // `EdgarSubmissionsFetcher`'s `fetchWithTimeoutAndRetry` integration
+  // (same commit), this absorbs both the steady rate ceiling AND
+  // transient burst rejections that the retry helper cannot prevent
+  // on its own (a backoff'd retry against an already-throttled bucket
+  // re-hits the throttle).
+  const sleep = deps.sleep ?? defaultSleep;
+  const pacingMs = deps.submissionsPacingMs ?? SUBMISSIONS_PACING_FLOOR_MS;
+  let submissionsCallIndex = 0;
   for (const cik10 of uniqueIssuerCiks) {
+    if (submissionsCallIndex > 0 && pacingMs > 0) {
+      await sleep(pacingMs);
+    }
+    submissionsCallIndex += 1;
     let sub: EdgarSubmissionsResult;
     try {
       sub = await deps.submissions.fetchSubmissions({ cik: cik10 });
