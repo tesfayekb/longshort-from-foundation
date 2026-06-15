@@ -2110,6 +2110,63 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
 
+### DW-100: Combiner — Multi-year feature-vector backfill (Phase-3-gated; consumer of FP-052 (3.0) closure)
+
+| Field | Value |
+|---|---|
+| **id** | DW-100 (next-free after DW-099; grep-verified at HEAD via `grep -nE "^### DW-(100\|101\|102)" docs/08-planning/deferred-work-register.md` — none present at allocation). |
+| **title** | Backfill `combiner_feature_vectors` across multi-year historical window for LambdaRank training data + missingness-profile baseline. |
+| **why_deferred** | At FP-052 (3.0) the combiner runs the §6.4 documented degraded path forward-only from the 3.0 deploy date; the count-normalized fallback ranker needs zero historical data to produce a sized book. Backfill is the prerequisite for FP-052.3 (LambdaRank training) — it does NOT block the 3.0 foundation. Mixing forward-fire schema landing + multi-year backfill in 3.0 would conflate two independently-failable surfaces; the §22.3(c) scope-discipline rule routes backfill to its own FP. |
+| **status** | logged (Phase-3-gated; activates at 3.1). |
+| **trigger_conditions** | FP-052 (3.0) CLOSED (schema landed + RLS + GRANTs + queryable exit-gate assertion both queries return zero rows) AND operator decision on backfill-provenance discipline (see scope_sketch §(d)). |
+| **scope_sketch** | (a) Determine target window (proposal: 5 years back from Phase 1 universe-component first refresh date, bounded by signal-data availability). (b) Per-(as_of_date, ticker) walk: load eligible universe at that date, assemble feature vector from `signal_observations` at that date, persist to `combiner_feature_vectors`. (c) Idempotent ON CONFLICT (operator_id, as_of_date, ticker) DO UPDATE per T8. (d) **Operator decision (load-bearing — drives §6.5.5 masking stress test viability):** how to handle missing `signal_compute_log` telemetry for backfilled dates — three candidate dispositions: (i) synthesize from metadata (run_id NULL, started_at = as_of_date 00:00 UTC sentinel, outcome='backfill_synthesized'); (ii) leave NULL and teach the missingness profile builder at 3.0 to distinguish `NULL compute_log row` from `compute_log present + value missing` (the more honest path; more code surface); (iii) require backfill to reconstruct same telemetry shape that natural fires produce (most expensive; not feasible without rerunning signals against historical vendor data). Default-recommendation pending operator decision is (ii) — masking stress test reads the missingness profile, so distinguishing the two NULL classes is load-bearing for §6.5.5 stress test fidelity. |
+| **estimated_complexity** | L (multi-year walk + provenance discipline + idempotent persistence + missingness-profile shape decision + integration tests; one MIG only if (d)(i) requires a `signal_compute_log.outcome` enum addition). |
+| **blocking_dependencies** | FP-052 (3.0) closure (schema + exit-gate assertion). Operator ratification of (d) provenance disposition. |
+| **related_decisions** | DEC-007 (retention — backfilled rows may exceed 90-day default; needs decision). DEC-054 (R1/R2/R3 independence — backfill includes any R-features that landed by 3.1 cutover). CROSSWIND §6.5.4 / §6.5.5 (missingness stress test reads the profile built from `compute_log`). |
+| **related_actions** | ACT-230 (DW-100 logged as part of FP-052 (3.0) authoring). |
+| **required_tests_for_closure** | (a) Backfill replay-determinism test: re-running the backfill against the same vendor snapshot produces byte-identical `combiner_feature_vectors` rows. (b) Provenance-discipline sentinel asserting the chosen (d) disposition is honored on every backfilled row. (c) §6.5.5 masking stress test passes with backfilled missingness profile within tolerance band per CROSSWIND Part 3a V2. |
+| **status** | open. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-101: Combiner — R4 market-index/SPY regime fetcher + features (Phase-3.2-gated; DEC-054 R4)
+
+| Field | Value |
+|---|---|
+| **id** | DW-101 (next-free after DW-100). |
+| **title** | Build R4 market-index/SPY regime fetcher and populate corresponding regime columns inside `combiner_feature_vectors.features` jsonb. |
+| **why_deferred** | DEC-054 R4 (market-index regime) is a NET-NEW external dependency with ZERO consumers at FP-052 (3.0). The 3.0 deliverable is the combiner foundation running the §6.4 documented degraded path; the fallback ranker does NOT consume regime features (formula is `score = Σ(z_i × is_present_i) / max(1, Σ is_present_i)` over the 9 live signals' z-scores). R4's first consumer is the LambdaRank feature vector at FP-052.3. Landing R4 at 3.0 would violate §22.3(c) scope-discipline (new external dependency with no current consumer) and add operational surface (a new vendor fetcher + cron + audit family) that the 3.0 build does not exercise. |
+| **status** | logged (Phase-3.2-gated; activates when FP-052.2 entry is authored). |
+| **trigger_conditions** | FP-052.2 entry authored AND operator-approved AND FP-052 (3.0) CLOSED. |
+| **scope_sketch** | (a) New vendor fetcher (`spy-regime-fetcher.ts` or successor) producing daily SPY-derived regime features per DEC-054 R4 specification. (b) New cron job `longshort.spy_regime.compute` via DEC-023 envelope (T7). (c) New `signal_registry.spy_regime` row tracking fetcher state. (d) Regime columns slot into existing `combiner_feature_vectors.features` jsonb shape WITHOUT migration (jsonb-shape decision at 3.0 is forward-compatible for this purpose). (e) Strategy-audit per T4. (f) Reference indexes updated same-PR (function-index + event-index + job_registry rows). |
+| **estimated_complexity** | M (one fetcher + one cron + one signal_registry seed + jsonb-payload extension + tests + module-doc update). |
+| **blocking_dependencies** | FP-052.2 entry authoring; FP-052 (3.0) closure. |
+| **related_decisions** | DEC-054 R4 (market-index regime spec). |
+| **related_actions** | ACT-230 (DW-101 logged as part of FP-052 (3.0) authoring). |
+| **required_tests_for_closure** | (a) Fetcher unit tests covering happy path + vendor-unavailable + stale-data sentinels. (b) Integration test asserting regime columns populate `combiner_feature_vectors.features` without schema migration. (c) Replay-determinism test for fetcher output against fixture. |
+| **status** | open. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-102: CROSSWIND_SPEC.md spec-internal mis-citation — "feature-vector construction layer per §6.5.6" anchor (correct = §6.5.1 / §6.5.3; §6.5.6 is SHAP attribution)
+
+| Field | Value |
+|---|---|
+| **id** | DW-102 (next-free after DW-101). |
+| **title** | Correct spec-internal mis-citations where the "feature-vector construction layer" / sentinel-introduction anchor is bound to §6.5.6 (SHAP attribution section); the correct anchor is §6.5.1 (feature-vector construction) and §6.5.3 (missingness companion). |
+| **why_deferred** | The CROSSWIND spec is the "never-edited" design-source root per project convention. Mis-citations are spec-internal text drift, not contract changes — the SHAP section (§6.5.6) is correctly bound everywhere it is referenced as SHAP; only the sentinel-introduction back-reference is wrong. Fixing the citations requires editing `docs/04-modules/longshort/design-source/CROSSWIND_SPEC.md` and the parallel `crosswind_spec_v09_part3a.md` / `_part3b.md` source files. The combiner build (FP-052 (3.0)) consumes the CORRECT §6.5.1 / §6.5.3 anchors per the FP entry + ADR-008; downstream code carries the right binding. The spec correction is therefore non-blocking for build correctness and routes through DW. |
+| **status** | logged (substrate non-blocking; surfaces at next spec-touch authorization). |
+| **trigger_conditions** | Operator authorization to edit the design-source spec (project convention: spec is "never edited" without explicit operator green-light). |
+| **scope_sketch** | Verbatim grep-locations at HEAD `f8758cae` (four instances of the mis-citation anchor):  (i) `docs/04-modules/longshort/design-source/CROSSWIND_SPEC.md:419` — "Emitting `Decimal('-999')` outside the §6.5.6 feature-vector construction layer" → correct to §6.5.1 (or §6.5.1/§6.5.3 if the missingness companion is co-load-bearing in context). (ii) `:1980` — "the sentinel value `Decimal('-999')` is introduced at exactly one place (the feature-vector construction layer per §6.5.6)" → correct to §6.5.1. (iii) `:2997` — "`Decimal('-999')` is the locked sentinel value per §6.5.2 introduced at exactly one place (feature-vector construction layer per §6.5.6)" → correct to §6.5.1 (§6.5.2 sentinel-introduction reference is already correct). (iv) `:3301` — "feature-vector construction layer); per-signal missingness profile capture (§6.5.3); count-normalized-average degraded fallback (§6.4 …)" — the §6.5.6 reference on the prior clause routes to §6.5.1; the §6.5.3 reference is already correct. Same correction applies to corresponding lines in `crosswind_spec_v09_part3a.md` / `_part3b.md` source files. |
+| **estimated_complexity** | XS (four text edits in the master spec + corresponding edits in source-part files; zero code; zero MIG). |
+| **blocking_dependencies** | Operator authorization to edit design-source spec. |
+| **related_decisions** | None (text-drift correction; no DEC change). |
+| **related_actions** | ACT-230 (DW-102 logged as part of FP-052 (3.0) authoring; correction routed here because FP-052 (3.0) is docs-only and operator did not authorize a spec edit in the same commit). |
+| **required_tests_for_closure** | (a) Grep at HEAD post-edit returns ZERO instances of "feature-vector construction layer per §6.5.6" across the entire `docs/04-modules/longshort/design-source/` tree. (b) §6.5.6 SHAP-section references remain intact wherever §6.5.6 is correctly bound as SHAP. (c) Parallel source-part files (`crosswind_spec_v09_part3a.md` / `_part3b.md`) are corrected in the same commit. |
+| **status** | open. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
 ### DW-098: Signal #9 — NYSE-calendar holiday-aware trading-day stepper for window arithmetic
 
 | Field | Value |
