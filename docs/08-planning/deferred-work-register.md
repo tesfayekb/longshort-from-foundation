@@ -2110,6 +2110,30 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
 
+### DW-103: Audit-trail integrity — MIG-098 (ACT-220-B `sql/18` `insider_accession_discovery_queue.ticker NOT NULL`) appears applied without a `database-migration-ledger.md` row (FP-050 residue)
+
+| Field | Value |
+|---|---|
+| **id** | DW-103 (next-free after DW-102; grep-verified at HEAD `31e3a134` via `grep -cE 'MIG-098' docs/07-reference/database-migration-ledger.md` → 0 — no ledger row present). |
+| **date_deferred** | 2026-06-15 (surfaced during ACT-231 dual-investigation Q3 anchor check). |
+| **source_plan_section** | FP-050 Phase 4 (Signal #4 EDGAR-direct rebuild). |
+| **source_phase** | Phase 4 (Path-Y CIK-resolution producer-relocation closure). |
+| **title** | Backfill `database-migration-ledger.md` entry for MIG-098 (`sql/18` `ticker NOT NULL` constraint on `insider_accession_discovery_queue`) which is referenced in ACT-220-B as applied but has no corresponding ledger row — violating the ART rule that applied migrations require both ledger + artifact-index entries. |
+| **reason_deferred** | Surfaced during ACT-231 read-only investigation; FP-050 is closed and the corrective is FP-050 residue, not FP-052 (3.0) scope. Silent backfill in the ACT-231 corrective was explicitly rejected per operator directive — backfill requires (a) live-DB confirmation `sql/18` is actually applied to production (column exists + NOT NULL constraint present), (b) verified ledger row content matching the actual applied state, (c) artifact-index parallel entry. Doing this inside a docs-only governance corrective without live-DB evidence would risk minting a fabricated ledger row. |
+| **blocking_dependencies** | (a) Operator-authorized live-DB introspection turn to confirm `sql/18` is applied (e.g., `\d+ insider_accession_discovery_queue` showing `ticker` NOT NULL); (b) verified ledger row content (date applied, dependency on MIG-096, AC evidence — paired TRUNCATE precedent from MIG-097); (c) parallel `docs/07-reference/artifact-index.md` entry if missing. |
+| **impact_on_source_phase** | None on FP-050 closure semantics (Signal #4 is ARMED and attested per DEC-043 at the 2026-06-14 20:40 UTC cron-attributable row). Impact is on AUDIT-TRAIL INTEGRITY only — future readers reconstructing the migration history will find a gap between MIG-097 and MIG-099 (when 099 lands at 3.0a build) unless MIG-098 is backfilled. |
+| **future_owner_phase** | Next FP-050 maintenance turn OR opportunistic backfill at any operator-authorized governance-corrective cycle. |
+| **future_owner_module** | longshort / insider-discovery (FP-050 surface). |
+| **status** | logged (substrate non-blocking; backfill scoped separately per operator directive). |
+| **trigger_conditions** | Any operator-authorized turn touching the migration ledger OR a Phase-3 build PR that would land MIG-099 (natural opportunity to backfill MIG-098 same-PR if live-DB introspection confirms the applied state). |
+| **scope_sketch** | Add `### MIG-098: FP-050 Phase 4 ACT-220-B — `insider_accession_discovery_queue.ticker` NOT NULL (producer-relocation Path-Y CIK-resolution support)` row to `docs/07-reference/database-migration-ledger.md` between MIG-097 (L1702) and MIG-099 (when present), with columns: Dependency = MIG-096 + MIG-097 + ACT-220-B; AC evidence = (a) producer (`scripts/insider-discovery-egress.ts`) loads `company_tickers.json` ONCE per fire and stamps `ticker` on every queue row; (b) consumer (`insider-work-list-registration.ts`) reads `ticker` directly from the queue row — `EdgarCikMapper` removed from consumer entirely; (c) constraint enforces the producer-side invariant at the DB level so a future producer-bug cannot silently insert null-ticker rows that the consumer would then fail on; (d) idempotent under re-apply via `IF NOT EXISTS` semantics; (e) NO RLS / GRANT change (column inherits MIG-096 access model). Add parallel `artifact-index.md` entry if missing. |
+| **estimated_complexity** | XS (one ledger row + possible artifact-index row; zero code; zero MIG). |
+| **related_decisions** | DEC-058 (Signal #4 EDGAR-direct rebuild — Path-Y producer-relocation context). |
+| **related_actions** | ACT-220-B (the producer-relocation commit that referenced `sql/18` as applied); ACT-231 (this DW logged here during the FP-052 (3.0) authoring-commit corrective). |
+| **required_tests_for_closure** | (a) Live-DB introspection evidence captured (e.g., `\d+ insider_accession_discovery_queue` output) showing `ticker` column is `NOT NULL`. (b) `grep -nE 'MIG-098' docs/07-reference/database-migration-ledger.md` returns ≥ 1 ledger row at HEAD post-backfill. (c) `grep -nE 'MIG-098' docs/07-reference/artifact-index.md` returns ≥ 1 entry if the artifact-index parallel row was missing. (d) Ledger row's "AC evidence" clause matches the actually-applied schema (no fabricated content). |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
 ### DW-100: Combiner — Multi-year feature-vector backfill (Phase-3-gated; consumer of FP-052 (3.0) closure)
 
 | Field | Value |
