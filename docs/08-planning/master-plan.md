@@ -607,7 +607,7 @@ The following 38 acceptance criteria (AC-01 through AC-38) decompose the 13-sub-
 
 ---
 
-### PLAN-TRADING-001-LONGSHORT-004 — Long-Short Strategy Module Phase 3: Combiner Foundation + Bootstrap Ranker
+### PLAN-TRADING-001-LONGSHORT-007 — Long-Short Strategy Module Phase 3: Combiner Foundation + Bootstrap Ranker
 **Parent Plan:** PLAN-TRADING-001
 **Status:** `authoring (2026-06-14 — FP-052 (3.0) entry landed this commit; build authorization gated on operator-approved execution prompt; 3.1/3.2/3.3 sub-step rows scaffolded only)`
 **Feature Proposal:** FP-052 (3.0); FP-052.1 (3.1, DW-100); FP-052.2 (3.2, DW-101); FP-052.3 (3.3 — LambdaRank promotion)
@@ -623,7 +623,7 @@ The following 38 acceptance criteria (AC-01 through AC-38) decompose the 13-sub-
 - DEC-054 R4 is a net-new external dependency landing at 3.2 (NOT a prerequisite for 3.0)
 
 **Sub-step inventory (4 — 3.0 only authored at this commit):**
-  - [ ] 3.0 — Combiner foundation + bootstrap ranker on the §6.4 documented degraded path (FP-052 (3.0); 5-table schema MIG-099; feature-assembler with §4.3.5 critical-exclusion gate; count-normalized fallback ranker; book builder with UNIQUE rank invariant; daily-post-signal cadence; ADR-008 sentinel-introduction authorization; queryable exit-gate assertion enforcing no `status='active'` rows in `combiner_model_registry` AND `ranker_source='count_normalized_fallback'` on every `combiner_rankings` row)
+  - [ ] 3.0 — Combiner foundation + bootstrap ranker on the §6.4 documented degraded path (FP-052 (3.0); 5-table schema under next-free MIG assigned at 3.0a build; feature-assembler with §4.3.5 critical-exclusion gate; count-normalized fallback ranker; book builder with UNIQUE rank invariant; daily-post-signal cadence; ADR-008 sentinel-introduction authorization; queryable exit-gate assertion enforcing no `status='active'` rows in `combiner_model_registry` AND `ranker_source='count_normalized_fallback'` on every `combiner_rankings` row)
   - [ ] 3.1 — Multi-year feature-vector backfill (DW-100; blocking dep = 3.0 closure + operator decision on `compute_log` backfill provenance per DW-100 question)
   - [ ] 3.2 — R4 market-index/SPY regime fetcher + jsonb feature columns (DW-101; FP-052.2 entry to be authored; first consumer = lambdarank feature vector at 3.3)
   - [ ] 3.3 — LambdaRank training + atomic promotion (FP-052.3; flips BOTH exit-gate queries to non-zero — first row with `status='active'` in `combiner_model_registry` + first ranking row with non-fallback `ranker_source` — giving a clean before/after diff against the 3.0 attestation surface)
@@ -634,7 +634,7 @@ The following 38 acceptance criteria (AC-01 through AC-38) decompose the 13-sub-
   - Gate 3.2 — R4 regime features populated in `combiner_feature_vectors.features` jsonb without migration
   - Gate 3.3 — LambdaRank atomic promotion; exit-gate queries flip; `signal_registry.composite.status` flips `planned`→`live`
 
-**Plan Version impact:** v13.32 → v13.33 (additive per Constitution Rule 10 Plan Merge Rule; Rule 8 5-point procedure satisfied for new plan-section creation — FP-052 (3.0) entry authored same-PR + DW-100/101/102 logged + ADR-008 landed + ACT-230 governance row).
+**Plan Version impact:** v13.32 → v13.33 (additive per Constitution Rule 10 Plan Merge Rule; Rule 8 5-point procedure satisfied for new plan-section creation — FP-052 (3.0) entry authored same-PR + DW-100/101/102 logged + ADR-008 landed + ACT-230 governance row). **Note (clarifier — added per ACT-231 reconciliation):** This is an IMPACT DECLARATION recording the version delta the future 3.0 build PR will carry. The authoritative `system-state.md` `current_plan_version` bump to `v13.33` is DEFERRED to FP-052 (3.0) build closure per ACT-230 (out-of-scope clause iv). `approved_plan_baseline` STAYS at the current baseline until the FP-052 (3.0) build is an approved executable baseline per Constitution Rule 9 (Execution Lock); bumping it pre-build would admit un-approved scope into the executable baseline. The `§4` gate value in `system-state.md` is therefore unchanged at this authoring commit by design, not by drift.
 
 ---
 
