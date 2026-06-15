@@ -8,7 +8,7 @@
 | **Cursor** | `.cursorrules` | Yes |
 | **Other** | Read `docs/00-governance/constitution.md` + `docs/00-governance/system-state.md` | Manual |
 
-**Current state:** `phase: documentation-only` · `code_generation: blocked` · Baseline: `v4`
+**Current state:** `phase: development` · `code_generation: allowed` · Baseline: `v4`
 
 - **Do NOT generate code** — phase is documentation-only
 - **Do NOT implement unplanned features** — log in `docs/08-planning/feature-proposals.md` and STOP
