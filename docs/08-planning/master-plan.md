@@ -607,6 +607,37 @@ The following 38 acceptance criteria (AC-01 through AC-38) decompose the 13-sub-
 
 ---
 
+### PLAN-TRADING-001-LONGSHORT-004 — Long-Short Strategy Module Phase 3: Combiner Foundation + Bootstrap Ranker
+**Parent Plan:** PLAN-TRADING-001
+**Status:** `authoring (2026-06-14 — FP-052 (3.0) entry landed this commit; build authorization gated on operator-approved execution prompt; 3.1/3.2/3.3 sub-step rows scaffolded only)`
+**Feature Proposal:** FP-052 (3.0); FP-052.1 (3.1, DW-100); FP-052.2 (3.2, DW-101); FP-052.3 (3.3 — LambdaRank promotion)
+**Risk Level:** HIGH (Constitution Rule 11 — financial-critical; combiner ranking drives sizing and book entry)
+**Module Doc:** combiner section to land in `docs/04-modules/longshort/longshort.md` at 3.0 build PR (no new module-doc file at this authoring commit)
+**CROSSWIND anchors:** §6 (combiner); §6.4 (count-normalized fallback — bootstrap ranker contract); §6.5.1 / §6.5.2 / §6.5.3 (feature-vector construction + sentinel introduction + missingness companion); §6.5.6 (SHAP attribution — NOT the sentinel site; spec-internal mis-citations tracked in DW-102); §4.3.5 critical-exclusion gate + coverage gate.
+
+**Dependencies:**
+- FP-008 closed — Phase 1 universe component operational (eligible universe consumed by feature assembler)
+- Phase 2 (signal stack) CLOSED 2026-06-14 — 9/9 signals attested on natural cron cadence with persisted `signal_compute_log` rows (per ACT-229)
+- FP-051 RESERVED for Path-Q' (NOT a prerequisite — orthogonal to combiner)
+- DEC-054 R1/R2/R3 are independently-scheduled enhancement build-FPs (NOT hard prerequisites)
+- DEC-054 R4 is a net-new external dependency landing at 3.2 (NOT a prerequisite for 3.0)
+
+**Sub-step inventory (4 — 3.0 only authored at this commit):**
+  - [ ] 3.0 — Combiner foundation + bootstrap ranker on the §6.4 documented degraded path (FP-052 (3.0); 5-table schema MIG-099; feature-assembler with §4.3.5 critical-exclusion gate; count-normalized fallback ranker; book builder with UNIQUE rank invariant; daily-post-signal cadence; ADR-008 sentinel-introduction authorization; queryable exit-gate assertion enforcing no `status='active'` rows in `combiner_model_registry` AND `ranker_source='count_normalized_fallback'` on every `combiner_rankings` row)
+  - [ ] 3.1 — Multi-year feature-vector backfill (DW-100; blocking dep = 3.0 closure + operator decision on `compute_log` backfill provenance per DW-100 question)
+  - [ ] 3.2 — R4 market-index/SPY regime fetcher + jsonb feature columns (DW-101; FP-052.2 entry to be authored; first consumer = lambdarank feature vector at 3.3)
+  - [ ] 3.3 — LambdaRank training + atomic promotion (FP-052.3; flips BOTH exit-gate queries to non-zero — first row with `status='active'` in `combiner_model_registry` + first ranking row with non-fallback `ranker_source` — giving a clean before/after diff against the 3.0 attestation surface)
+
+**Phase Gates:**
+  - Gate 3.0 — Schema landed + RLS-first + GRANTs + feature-assembler + fallback ranker + book builder + exit-gate assertion both queries return zero rows on live DB
+  - Gate 3.1 — Backfill complete with operator-ratified provenance discipline for `compute_log` shape
+  - Gate 3.2 — R4 regime features populated in `combiner_feature_vectors.features` jsonb without migration
+  - Gate 3.3 — LambdaRank atomic promotion; exit-gate queries flip; `signal_registry.composite.status` flips `planned`→`live`
+
+**Plan Version impact:** v13.32 → v13.33 (additive per Constitution Rule 10 Plan Merge Rule; Rule 8 5-point procedure satisfied for new plan-section creation — FP-052 (3.0) entry authored same-PR + DW-100/101/102 logged + ADR-008 landed + ACT-230 governance row).
+
+---
+
 ## Development Phases
 
 ### Phase 1 — Foundation (Auth + Infrastructure)
