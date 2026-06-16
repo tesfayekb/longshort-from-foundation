@@ -1,6 +1,7 @@
 # ADR-008: Combiner Sentinel-Introduction Layer
 
-**Status:** Accepted
+**Status:** Superseded by ADR-008a (2026-06-16, ACT-234)
+**Superseded-by:** [ADR-008a](./ADR-008a-combiner-sentinel-introduction-layer-repositioned.md) — Constitution Rule 8 supersession pointer. Authorized site moves from the 3.0b feature-assembler to the 3.2 in-process model-input construction function (typed-absence persistence at 3.0b per dual independent investigation R1: §6.5.3 + §6.5.4 + §2/L387 axiom 3; §6.4 fallback consumer never reads `-999`).
 **Date:** 2026-06-14 (FP-052 (3.0) authoring)
 **Deciders:** Crosswind operator (sole decision authority for v1 per §11.0.12.5)
 **Related:** ADR-003 (enforcement-as-scripts-not-prose — the `scripts/check-sentinel-patterns.ts` enforcement substrate codified there is the live mechanism that this ADR authorizes a single exception against); ADR-004 (live-DB verification discipline); CROSSWIND §4.3.5 (critical-exclusion + coverage gates); CROSSWIND §6.4 (count-normalized fallback ranker); CROSSWIND §6.5.1 (feature-vector construction — CORRECT sentinel-introduction anchor; spec-internal mis-citation routes to §6.5.6 tracked at DW-102); CROSSWIND §6.5.2 (sentinel-introduction locked value `Decimal('-999')`); CROSSWIND §6.5.3 (missingness companion); CROSSWIND §6.5.6 (SHAP attribution — NOT the sentinel site); FP-052 (3.0) feature-proposals entry; DW-102 (spec mis-citation correction); Constitution Rule 8 (approved-plan preservation — this ADR satisfies the documented-reason clause for a single banned-pattern exception); `docs/banned-patterns.md` override registry; `scripts/check-sentinel-patterns.ts` + `scripts/check-sentinel-patterns_test.ts`.
