@@ -498,6 +498,22 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Actions** | ACT-129 |
 | **Related Decisions** | DEC-040 |
 | **Notes** | Operator-applied out-of-band per MIG-031 precedent (file in `sql/` not `supabase/migrations/` because it carries operator-replaced secrets — `PROJECT_REF` / anon key / CRON_SECRET — never committed to VC). Canonical template = `sql/09_longshort_universe_cron_schedule.sql` (jobid:48). Schedule `0 20 * * 1-5` byte-matches `job_registry.schedule` for `longshort.momentum.compute`. Carries plaintext `X-Cron-Secret` in live `cron.job.command` post-apply (pg_cron design constraint — INC-63 class). Idempotent via `cron.schedule(jobname, ...)` upsert. Pointed to from `docs/07-reference/database-migration-ledger.md` under "Operator-applied cron schedules (non-migration)". |
+
+### ART-025: Combiner Foundation Schema Migration (MIG-099)
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-025 |
+| **Type** | migration (atomic create+apply per §22.5.1) |
+| **Title** | MIG-099 / FP-052 (3.0a) — Combiner foundation 5-table schema: `combiner_feature_vectors`, `combiner_rankings`, `combiner_book`, `combiner_model_registry`, `combiner_shap_attribution` |
+| **Source Path** | `supabase/migrations/20260616103102_5e6e2a80-4fbc-407d-b1fc-2beaebffde25.sql` |
+| **Created Date** | 2026-06-16 |
+| **Owning Phase** | Phase 3.0a (FP-052 schema apply) |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-007 |
+| **Status** | `active` (applied via Lovable supabase--migration tool 2026-06-16; live-DB §22.5.1 verification GREEN in-chat at ACT-233 — 5/5 tables exist with RLS=true, 20/20 policies present, partial-unique `(side) WHERE status='active'` enforced, SHAP→rankings FK CASCADE enforced, zero-row post-apply on all 5). |
+| **Related Actions** | ACT-233 (this apply commit); ACT-232 (schema-lock corrective); ACT-231 (MIG-099 de-pinning); ACT-230 (FP-052 (3.0) authoring) |
+| **Related Decisions** | DEC-023 (envelope — referenced for the 3.0b edge function, NOT applied by this migration); DEC-042 (RESTRICTIVE deny-write template); DEC-054 (combiner enhancement scheduling — independent FPs); ADR-008 (sentinel-introduction — 3.0b scope, NOT touched here). |
+| **Notes** | Atomic create+apply (single `BEGIN/COMMIT` file). RLS template cloned verbatim from MIG-075 (`signal_registry`): GRANT SELECT TO authenticated + GRANT ALL TO service_role + 1 PERMISSIVE SELECT on `longshort.view` + 3 RESTRICTIVE per-command deny-writes. No `anon`, no operator-scoped read (DEC-042). Idempotent: `CREATE TABLE/INDEX IF NOT EXISTS` + `DROP POLICY/TRIGGER IF EXISTS` before each `CREATE`. NO enum types (R3a — `status` is `text` + CHECK matching `signal_registry.status`). NO `model_version_*` columns on `combiner_rankings` at 3.0a (3.2 adds NULLable per-side without schema change). NO sentinel literal `-999`. NO `_shared/`, NO edge functions, NO `src/` (those are 3.0b–d). Two-ranking shape per CROSSWIND §1.4 + §6.1/§6.2: a name carries both `long_rank` AND `short_rank` on the same `as_of_date`. `combiner_book` has `UNIQUE(operator_id, as_of_date, ticker)` preventing double-side placement. `combiner_model_registry` has partial unique `(side) WHERE status='active'` enforcing single-active-per-side invariant. `combiner_shap_attribution` FK CASCADE to `combiner_rankings`; FK SET NULL to `combiner_model_registry.model_id`. Five tables registered as queryable Phase-4 portfolio-sizing surfaces. |
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
