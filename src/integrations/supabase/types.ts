@@ -133,6 +133,198 @@ export type Database = {
         }
         Relationships: []
       }
+      combiner_book: {
+        Row: {
+          as_of_date: string
+          computed_at: string
+          operator_id: string
+          rank_within_side: number
+          ranker_source: string
+          score: number
+          side: string
+          ticker: string
+        }
+        Insert: {
+          as_of_date: string
+          computed_at?: string
+          operator_id: string
+          rank_within_side: number
+          ranker_source: string
+          score: number
+          side: string
+          ticker: string
+        }
+        Update: {
+          as_of_date?: string
+          computed_at?: string
+          operator_id?: string
+          rank_within_side?: number
+          ranker_source?: string
+          score?: number
+          side?: string
+          ticker?: string
+        }
+        Relationships: []
+      }
+      combiner_feature_vectors: {
+        Row: {
+          as_of_date: string
+          computed_at: string
+          coverage_count: number
+          excluded_reason: string | null
+          features: Json
+          gics_sector: string | null
+          operator_id: string
+          ticker: string
+        }
+        Insert: {
+          as_of_date: string
+          computed_at?: string
+          coverage_count: number
+          excluded_reason?: string | null
+          features: Json
+          gics_sector?: string | null
+          operator_id: string
+          ticker: string
+        }
+        Update: {
+          as_of_date?: string
+          computed_at?: string
+          coverage_count?: number
+          excluded_reason?: string | null
+          features?: Json
+          gics_sector?: string | null
+          operator_id?: string
+          ticker?: string
+        }
+        Relationships: []
+      }
+      combiner_model_registry: {
+        Row: {
+          artifact_uri: string | null
+          created_at: string
+          metadata: Json
+          model_id: string
+          model_key: string
+          promoted_at: string | null
+          retired_at: string | null
+          side: string
+          status: string
+          trained_at: string | null
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          artifact_uri?: string | null
+          created_at?: string
+          metadata?: Json
+          model_id?: string
+          model_key: string
+          promoted_at?: string | null
+          retired_at?: string | null
+          side: string
+          status: string
+          trained_at?: string | null
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          artifact_uri?: string | null
+          created_at?: string
+          metadata?: Json
+          model_id?: string
+          model_key?: string
+          promoted_at?: string | null
+          retired_at?: string | null
+          side?: string
+          status?: string
+          trained_at?: string | null
+          updated_at?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      combiner_rankings: {
+        Row: {
+          as_of_date: string
+          computed_at: string
+          gics_sector: string | null
+          long_rank: number
+          long_score: number
+          operator_id: string
+          ranker_source: string
+          short_rank: number
+          short_score: number
+          ticker: string
+        }
+        Insert: {
+          as_of_date: string
+          computed_at?: string
+          gics_sector?: string | null
+          long_rank: number
+          long_score: number
+          operator_id: string
+          ranker_source: string
+          short_rank: number
+          short_score: number
+          ticker: string
+        }
+        Update: {
+          as_of_date?: string
+          computed_at?: string
+          gics_sector?: string | null
+          long_rank?: number
+          long_score?: number
+          operator_id?: string
+          ranker_source?: string
+          short_rank?: number
+          short_score?: number
+          ticker?: string
+        }
+        Relationships: []
+      }
+      combiner_shap_attribution: {
+        Row: {
+          as_of_date: string
+          attributions: Json
+          computed_at: string
+          model_id: string | null
+          operator_id: string
+          ticker: string
+        }
+        Insert: {
+          as_of_date: string
+          attributions: Json
+          computed_at?: string
+          model_id?: string | null
+          operator_id: string
+          ticker: string
+        }
+        Update: {
+          as_of_date?: string
+          attributions?: Json
+          computed_at?: string
+          model_id?: string | null
+          operator_id?: string
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combiner_shap_attribution_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "combiner_model_registry"
+            referencedColumns: ["model_id"]
+          },
+          {
+            foreignKeyName: "combiner_shap_attribution_operator_id_as_of_date_ticker_fkey"
+            columns: ["operator_id", "as_of_date", "ticker"]
+            isOneToOne: true
+            referencedRelation: "combiner_rankings"
+            referencedColumns: ["operator_id", "as_of_date", "ticker"]
+          },
+        ]
+      }
       feature_flags: {
         Row: {
           enabled: boolean
