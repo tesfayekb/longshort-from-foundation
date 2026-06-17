@@ -63,7 +63,8 @@ function makeSupabase(opts: {
     signalSelect: '' as string,
     upsertCalls: [] as Array<{ payload: unknown[]; onConflict: string }>,
   };
-  const floorDate = opts.floorDate ?? FLOOR_DATE;
+  // Distinguish "caller passed null → simulate no snapshot" from "caller omitted → default FLOOR_DATE".
+  const floorDate = 'floorDate' in opts ? opts.floorDate : FLOOR_DATE;
   const tickers = opts.universeTickers ?? ['AAPL', 'MSFT'];
   const signalRows = opts.signalRows ?? [];
 
