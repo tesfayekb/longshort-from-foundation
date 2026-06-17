@@ -1979,7 +1979,6 @@ The three events below are emitted by the manual feature-vector assembler edge f
 
 ---
 
-## Long-Short Short-Term Reversal Signal Events (FP-040 / Signal #7) — (continued below)
 
 The six events below mirror the momentum signal's event family exactly, with `momentum` → `reversal` and `cross_sectional_momentum_12_1` → `short_term_reversal_1w`. Same target table (`public.longshort_audit_logs`), same payload shapes, same lifecycle semantics.
 
