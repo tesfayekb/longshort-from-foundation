@@ -3671,11 +3671,27 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Exact-as_of signal load (no per-signal lookback)** | Each signal already encodes its own staleness rules per CROSSWIND_SPEC.md (e.g. PEAD L499 — carry-forward until >60 trading days stale, then `is_present=0`) and writes a per-as_of row reflecting that decision. A combiner-side latest-≤-as_of window would double-handle staleness and mask the cadence drift the signal already reasoned about. The orchestrator therefore queries `WHERE as_of_date = <as_of>` with no window, and filters `signal_id IN (<catalog 9>)` as F7 defense-in-depth. |
 | **Persistence** | `combiner_feature_vectors` UPSERT in `UPSERT_CHUNK_SIZE = 500` row chunks with `onConflict: 'operator_id,as_of_date,ticker'`. Persistence error returns `outcome:'failed'` with the partial `persisted_count` and a `failure_reason` citing the chunk offset (no partial-state claim). `computed_at = as_of.toISOString()` per DEC-034 (4) — no wall-clock anywhere in the orchestrator. |
 | **Failure modes** | `outcome:'failed'` with `failure_reason ∈ { 'no_universe_snapshot_on_or_before_as_of', 'empty_universe_snapshot', 'combiner_feature_vectors upsert failed at chunk offset <N>: <msg>' }`. Read errors on `universe_membership` / `signal_observations` THROW (consumed by the manual handler's catch → `manual_failed` event). |
+| **Paginated reads (FP-052 corrective)** | Both `universe_membership` (rows-mode) and `signal_observations` reads are paginated via `fetchAllRows(...)` from `paginated-read.ts` — pages of 1000 with short-read termination. Replaces the prior unbounded `.select()` that silently truncated at PostgREST's 1000-row default cap (root cause of the included_count=0 §22.5.1 smoke failure at as_of=2026-06-16). Errors propagate as thrown `Error` — no silent empty-result fallback. See DW-104 in `docs/08-planning/deferred-work-register.md` for the wider audit of unbounded reads elsewhere in `longshort-universe`. |
 | **File** | `supabase/functions/_shared/longshort-combiner/feature-assembler-orchestrator.ts` |
-| **Tests** | `feature-assembler-orchestrator_test.ts` — 7 Deno unit tests (DB-free in-memory mock SupabaseClient): floor query carries the `<= as_of` filter; signal load is exact-as_of with no range filter + catalog-9 `in()`; upsert ON CONFLICT keys + payload shape + `computed_at == as_of`; 1200-row chunking into 500/500/200; empty-floor → `no_universe_snapshot_on_or_before_as_of`; upsert error → `outcome:'failed'` with chunk-offset failure_reason; bucket-counts tally to universe_size across all 4 dispositions. |
+| **Tests** | `feature-assembler-orchestrator_test.ts` — 8 Deno unit tests (DB-free in-memory mock SupabaseClient): floor query carries the `<= as_of` filter; signal load is exact-as_of with no range filter + catalog-9 `in()`; upsert ON CONFLICT keys + payload shape + `computed_at == as_of`; 1200-row chunking into 500/500/200; empty-floor → `no_universe_snapshot_on_or_before_as_of`; upsert error → `outcome:'failed'` with chunk-offset failure_reason; bucket-counts tally to universe_size across all 4 dispositions; **(orch-8) pagination regression — 1800-row signal payload (>1000-cap) paginates into pages `[0,999]` + `[1000,1999]` (short-read terminates), and included_count equals universe_size (not 0).** |
 | **Purity boundary** | No `createClient`, no `service_role`, no wall-clock, no randomness in the orchestrator module. The injected `SupabaseClient` is the sole I/O surface; the manual handler injects `supabaseAdmin`. |
 | **Consumers** | `supabase/functions/longshort-combiner-assemble-manual/index.ts` (manual edge fn, FP-052 3.0b-ii). Future Phase-3.0d cron sibling will reuse the same orchestrator factory. |
-| **Added by** | FP-052 3.0b-ii (ACT-236) |
+| **Added by** | FP-052 3.0b-ii (ACT-236); paginated-read corrective (ACT-237) |
+
+#### `supabase/functions/_shared/longshort-combiner/paginated-read.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 corrective / ACT-237) |
+| **Classification** | Shared I/O helper — pages a PostgREST query past the project-wide 1000-row default cap. Pure with respect to Supabase (takes a `build(from, to)` factory; the caller chains `.range(from, to)` on a fresh builder). |
+| **Exports** | `function fetchAllRows<T>(build, pageSize?): Promise<T[]>`; const `POSTGREST_DEFAULT_PAGE_SIZE = 1000`; types `PostgrestPageResult<T>`, `PostgrestPageBuilder<T>`. |
+| **Termination contract** | Short-read termination — when a page returns fewer than `pageSize` rows, the loop exits. Hard ceiling of 10,000 pages defends against a buggy builder that never shrinks. Per-page errors are thrown (never swallowed to an empty result). |
+| **Page size** | Defaults to PostgREST's project-wide row cap (1000). Page size **must** match the cap so a short read unambiguously signals end-of-result; a smaller page would still hide truncation at the cap boundary. Override only in tests. |
+| **Why** | PostgREST applies a project-wide row cap (1000 in this project) to any `.select()` that omits both `.range()` and `.limit()`. Unbounded reads silently truncate to an arbitrary 1000-row slice. Root cause of the FP-052 §22.5.1 smoke failure (included_count=0 at as_of=2026-06-16 because the signal_observations load returned an arbitrary 1000-row slice of the ~7505-row expected payload). |
+| **File** | `supabase/functions/_shared/longshort-combiner/paginated-read.ts` |
+| **Consumers** | `feature-assembler-orchestrator.ts` (both the `universe_membership` rows load and the `signal_observations` load). DW-104 tracks broader adoption across `longshort-universe` unbounded reads. |
+| **Tests** | Exercised indirectly via `feature-assembler-orchestrator_test.ts` (orch-8) — 1800-row payload, 2-page paginate with short-read termination on page 1. |
+| **Added by** | FP-052 corrective (ACT-237) |
 
 #### `supabase/functions/longshort-combiner-assemble-manual/index.ts`
 

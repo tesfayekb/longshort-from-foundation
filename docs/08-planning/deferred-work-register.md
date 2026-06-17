@@ -2153,6 +2153,44 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
 
+### DW-104: Audit + paginate unbounded PostgREST reads across `longshort-universe` (companion to FP-052 corrective)
+
+| Field | Value |
+|---|---|
+| **id** | DW-104 (next-free after DW-103; grep-verified at HEAD `69a92b80`). |
+| **date_deferred** | 2026-06-17 (surfaced during FP-052 §22.5.1 smoke root-cause investigation). |
+| **source_plan_section** | FP-052 corrective (ACT-237) — sibling-area follow-up. |
+| **source_phase** | Phase 3.0b-ii (combiner orchestrator corrective). |
+| **title** | Audit every PostgREST `.select()` call across `supabase/functions/_shared/longshort-universe/` for unbounded reads and replace with `fetchAllRows(...)` (or an equivalent paginated read). Same root-cause class as the FP-052 §22.5.1 smoke failure: PostgREST silently caps unbounded `.select()` at the project-wide 1000-row default. Safe today at 839 tickers; breaks irreversibly the first time the universe grows past 1000. |
+| **reason_deferred** | Out of scope for the FP-052 corrective (operator-scoped to combiner). Per Constitution §9 escalating-fix: fix the in-scope manifestation now (combiner orchestrator both reads paginated, ACT-237), log the wider audit for a separately-scoped Phase-1 maintenance pass — do not silently sweep adjacent code in a corrective. |
+| **blocking_dependencies** | None — independently actionable. Naturally ordered AFTER ACT-237 lands the `paginated-read.ts` helper (consumers reuse the same helper for consistency). |
+| **impact_on_source_phase** | None on FP-052 closure. Latent risk on `longshort-universe` ops: any universe refresh / eligibility read / persistence verifier that scans `universe_membership` unbounded will silently truncate at 1000 rows once the universe exceeds 1000 names — could mis-classify eligibility, mis-count membership, or produce silently-incomplete writes that pass verification. |
+| **future_owner_phase** | Phase-1 maintenance (next operator-authorized longshort-universe touch) OR an opportunistic sweep at the next universe-refresh corrective. |
+| **future_owner_module** | longshort / universe (`supabase/functions/_shared/longshort-universe/`). |
+| **status** | logged (open; not in any active phase scope). |
+| **trigger_conditions** | (a) Any operator-authorized turn touching `longshort-universe` shared code; (b) the universe approaches 1000 names (currently 839 — DEC-002 caps S&P 500 + Russell-1000 ≤ 1500, so the cap will be crossed at the next universe-expansion DEC); (c) a related smoke-failure mode (eligibility mis-count, verifier false-pass). |
+| **scope_sketch** | Audit ~8 known `universe_membership` reads across `seeded-membership-fetcher` (×2), `universe-membership-fetcher`, `universe-service`, `get-eligibility`, `universe-membership-persister` (grep `from('universe_membership')` to enumerate precisely at execution time). For each: classify as (1) bounded — already `.range()` / `.limit()` / single-row `.maybeSingle()` (no change), (2) latent — unbounded `.select()` (replace with `fetchAllRows(...)`), (3) aggregate-suffices — rewrite to a server-side aggregate (`{ count: 'exact', head: true }`) where the caller only needs a count. Reuse `supabase/functions/_shared/longshort-combiner/paginated-read.ts` (ACT-237) — if a non-combiner consumer surfaces, promote the helper to `supabase/functions/_shared/paginated-read.ts`. Add a regression test per call site that exercises a >1000-row mock to fence the cap. |
+| **estimated_complexity** | M (audit + per-site decision + per-site test; ~6-8 sites; one helper relocation if non-combiner adoption). |
+| **related_decisions** | DEC-002 (universe cap defines when 1000-row truncation becomes a live bug, not a latent one). |
+| **related_actions** | ACT-237 (the FP-052 corrective that introduced `fetchAllRows` and surfaced the wider class). |
+| **required_tests_for_closure** | (a) `grep -nE "\.from\('universe_membership'\)" supabase/functions/_shared/longshort-universe/` enumerates 0 unbounded `.select()` calls post-audit (every site is either paginated, `.limit()`/`.range()`-bounded, single-row, or aggregate-only). (b) ≥1 Deno regression test per modified site exercising a >1000-row fixture and asserting full-payload load (mirrors `feature-assembler-orchestrator_test.ts` orch-8). (c) `fetchAllRows` consumers all import from the same module path (no duplicated helper). |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+| **id** | DW-100 (next-free after DW-099; grep-verified at HEAD via `grep -nE "^### DW-(100\|101\|102)" docs/08-planning/deferred-work-register.md` — none present at allocation). |
+| **title** | Backfill `combiner_feature_vectors` across multi-year historical window for LambdaRank training data + missingness-profile baseline. |
+| **why_deferred** | At FP-052 (3.0) the combiner runs the §6.4 documented degraded path forward-only from the 3.0 deploy date; the count-normalized fallback ranker needs zero historical data to produce a sized book. Backfill is the prerequisite for FP-052.3 (LambdaRank training) — it does NOT block the 3.0 foundation. Mixing forward-fire schema landing + multi-year backfill in 3.0 would conflate two independently-failable surfaces; the §22.3(c) scope-discipline rule routes backfill to its own FP. |
+| **status** | logged (Phase-3-gated; activates at 3.1). |
+| **trigger_conditions** | FP-052 (3.0) CLOSED (schema landed + RLS + GRANTs + queryable exit-gate assertion both queries return zero rows) AND operator decision on backfill-provenance discipline (see scope_sketch §(d)). |
+| **scope_sketch** | (a) Determine target window (proposal: 5 years back from Phase 1 universe-component first refresh date, bounded by signal-data availability). (b) Per-(as_of_date, ticker) walk: load eligible universe at that date, assemble feature vector from `signal_observations` at that date, persist to `combiner_feature_vectors`. (c) Idempotent ON CONFLICT (operator_id, as_of_date, ticker) DO UPDATE per T8. (d) **Operator decision (load-bearing — drives §6.5.5 masking stress test viability):** how to handle missing `signal_compute_log` telemetry for backfilled dates — three candidate dispositions: (i) synthesize from metadata (run_id NULL, started_at = as_of_date 00:00 UTC sentinel, outcome='backfill_synthesized'); (ii) leave NULL and teach the missingness profile builder at 3.0 to distinguish `NULL compute_log row` from `compute_log present + value missing` (the more honest path; more code surface); (iii) require backfill to reconstruct same telemetry shape that natural fires produce (most expensive; not feasible without rerunning signals against historical vendor data). Default-recommendation pending operator decision is (ii) — masking stress test reads the missingness profile, so distinguishing the two NULL classes is load-bearing for §6.5.5 stress test fidelity. |
+| **estimated_complexity** | L (multi-year walk + provenance discipline + idempotent persistence + missingness-profile shape decision + integration tests; one MIG only if (d)(i) requires a `signal_compute_log.outcome` enum addition). |
+| **blocking_dependencies** | FP-052 (3.0) closure (schema + exit-gate assertion). Operator ratification of (d) provenance disposition. |
+| **related_decisions** | DEC-007 (retention — backfilled rows may exceed 90-day default; needs decision). DEC-054 (R1/R2/R3 independence — backfill includes any R-features that landed by 3.1 cutover). CROSSWIND §6.5.4 / §6.5.5 (missingness stress test reads the profile built from `compute_log`). |
+| **related_actions** | ACT-230 (DW-100 logged as part of FP-052 (3.0) authoring). |
+| **required_tests_for_closure** | (a) Backfill replay-determinism test: re-running the backfill against the same vendor snapshot produces byte-identical `combiner_feature_vectors` rows. (b) Provenance-discipline sentinel asserting the chosen (d) disposition is honored on every backfilled row. (c) §6.5.5 masking stress test passes with backfilled missingness profile within tolerance band per CROSSWIND Part 3a V2. |
+| **status** | open. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
 ### DW-101: Combiner — R4 market-index/SPY regime fetcher + features (Phase-3.2-gated; DEC-054 R4)
 
 | Field | Value |

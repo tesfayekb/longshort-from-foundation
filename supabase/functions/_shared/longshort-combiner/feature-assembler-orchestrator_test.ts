@@ -31,6 +31,7 @@ const AS_OF_DATE = '2026-06-16';
 const FLOOR_DATE = '2026-06-05';
 
 type Filter = { op: string; col: string; val: unknown };
+type RangeWindow = { from: number; to: number };
 
 /**
  * Programmable mock that records every chained-builder call against
@@ -59,8 +60,10 @@ function makeSupabase(opts: {
     universeFloorLimit: 0,
     universeRowsFilters: [] as Filter[],
     universeRowsSelect: '' as string,
+    universeRowsRanges: [] as RangeWindow[],
     signalFilters: [] as Filter[],
     signalSelect: '' as string,
+    signalRanges: [] as RangeWindow[],
     upsertCalls: [] as Array<{ payload: unknown[]; onConflict: string }>,
   };
   // Distinguish "caller passed null → simulate no snapshot" from "caller omitted → default FLOOR_DATE".
@@ -71,15 +74,15 @@ function makeSupabase(opts: {
   function umBuilder() {
     const filters: Filter[] = [];
     let selectCols = '';
-    let order: Array<{ col: string; ascending: boolean }> = [];
-    let limitN = 0;
+    const order: Array<{ col: string; ascending: boolean }> = [];
+    let range: RangeWindow | null = null;
     const builder: Record<string, unknown> = {
       select(cols: string) { selectCols = cols; return builder; },
       eq(col: string, val: unknown) { filters.push({ op: 'eq', col, val }); return builder; },
       lte(col: string, val: unknown) { filters.push({ op: 'lte', col, val }); return builder; },
       order(col: string, o: { ascending: boolean }) { order.push({ col, ascending: o.ascending }); return builder; },
+      range(from: number, to: number) { range = { from, to }; return builder; },
       limit(n: number) {
-        limitN = n;
         calls.universeFloorFilters = filters;
         calls.universeFloorSelect = selectCols;
         calls.universeFloorOrder = order;
@@ -92,13 +95,17 @@ function makeSupabase(opts: {
       },
       then(onFul: unknown, onRej: unknown) {
         // Rows-mode (no `.limit()` call) — resolve as universe rows.
+        // Now paginated via `.range(from, to)` — slice tickers per window.
         calls.universeRowsFilters = filters;
         calls.universeRowsSelect = selectCols;
         if (opts.universeErr) {
           return Promise.resolve({ data: null, error: opts.universeErr }).then(onFul, onRej);
         }
+        const window = range ?? { from: 0, to: tickers.length - 1 };
+        calls.universeRowsRanges.push(window);
+        const slice = tickers.slice(window.from, window.to + 1);
         return Promise.resolve({
-          data: tickers.map((t) => ({ ticker: t })),
+          data: slice.map((t) => ({ ticker: t })),
           error: null,
         }).then(onFul, onRej);
       },
@@ -109,17 +116,22 @@ function makeSupabase(opts: {
   function sigBuilder() {
     const filters: Filter[] = [];
     let selectCols = '';
+    let range: RangeWindow | null = null;
     const builder: Record<string, unknown> = {
       select(cols: string) { selectCols = cols; return builder; },
       eq(col: string, val: unknown) { filters.push({ op: 'eq', col, val }); return builder; },
       in(col: string, val: unknown) { filters.push({ op: 'in', col, val }); return builder; },
+      range(from: number, to: number) { range = { from, to }; return builder; },
       then(onFul: unknown, onRej: unknown) {
         calls.signalFilters = filters;
         calls.signalSelect = selectCols;
         if (opts.signalErr) {
           return Promise.resolve({ data: null, error: opts.signalErr }).then(onFul, onRej);
         }
-        return Promise.resolve({ data: signalRows, error: null }).then(onFul, onRej);
+        const window = range ?? { from: 0, to: signalRows.length - 1 };
+        calls.signalRanges.push(window);
+        const slice = signalRows.slice(window.from, window.to + 1);
+        return Promise.resolve({ data: slice, error: null }).then(onFul, onRej);
       },
     };
     return builder;
@@ -283,5 +295,58 @@ Deno.test('(orch-7) tally: bucket counts sum to universe_size', async () => {
     assertEquals(res.excluded_by_reason[EXCLUDED_REASON.MISSING_CRITICAL_6], 1);
     assertEquals(res.excluded_by_reason[EXCLUDED_REASON.MISSING_CRITICAL_7], 1);
     assertEquals(res.excluded_by_reason[EXCLUDED_REASON.BELOW_COVERAGE], 1);
+  }
+});
+
+/**
+ * (orch-8) REGRESSION — PostgREST 1000-row default cap.
+ *
+ * Before the corrective, the orchestrator's unbounded `.select()` on
+ * `signal_observations` was silently truncated to 1000 rows. At
+ * as_of=2026-06-16 the expected payload was ~7,505 rows
+ * (839 tickers × 9 signals); the truncated slice missed critical-#7
+ * for every name and excluded 100% of the universe.
+ *
+ * Synthetic reproduction: 200 tickers × 9 signals = 1,800 signal rows
+ * (> 1000-cap). Assert the orchestrator paginates and assembles ALL
+ * rows, that the second page is a short read terminating the loop,
+ * and that the included_count matches the universe size (not 0).
+ */
+Deno.test('(orch-8) regression — pagination defeats PostgREST 1000-row default cap', async () => {
+  const N = 200;
+  const tickers = Array.from({ length: N }, (_, i) => `T${i.toString().padStart(4, '0')}`);
+  const signalRows = tickers.flatMap((t) =>
+    SIGNAL_IDS_ALL.map((sid) => ({
+      ticker: t,
+      signal_id: sid,
+      value: 0.5,
+      is_present: true,
+      gics_sector: 'IT',
+    })),
+  );
+  // Sanity: payload exceeds the 1000-row cap that caused the bug.
+  assertEquals(signalRows.length, 1800);
+  assert(signalRows.length > 1000, 'fixture must exceed cap to exercise pagination');
+
+  const { supabase, calls } = makeSupabase({ universeTickers: tickers, signalRows });
+  const res = await createFeatureAssemblyOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
+
+  // Pagination evidence: ≥2 signal pages, first page exactly 1000, final page short.
+  assert(calls.signalRanges.length >= 2, `expected ≥2 signal pages, got ${calls.signalRanges.length}`);
+  assertEquals(calls.signalRanges[0], { from: 0, to: 999 });
+  assertEquals(calls.signalRanges[1], { from: 1000, to: 1999 });
+  // 1800 total → page 0 returns 1000 (full), page 1 returns 800 (short → terminate).
+  assertEquals(calls.signalRanges.length, 2, 'short read on page 1 must terminate the loop');
+
+  // Outcome: NO mass-exclusion. Every ticker has all 9 signals present →
+  // all included (the bug previously yielded included_count: 0).
+  assertEquals(res.outcome, 'completed');
+  if (res.outcome === 'completed') {
+    assertEquals(res.universe_size, N);
+    assertEquals(res.persisted_count, N);
+    assertEquals(res.included_count, N, 'all tickers must be included after pagination fix');
+    assertEquals(res.excluded_by_reason[EXCLUDED_REASON.MISSING_CRITICAL_6], 0);
+    assertEquals(res.excluded_by_reason[EXCLUDED_REASON.MISSING_CRITICAL_7], 0);
+    assertEquals(res.excluded_by_reason[EXCLUDED_REASON.BELOW_COVERAGE], 0);
   }
 });
