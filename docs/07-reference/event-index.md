@@ -1931,6 +1931,56 @@ Same as soft_pause; `state_after='active'`. Only valid from `soft_paused`.
 
 ## Long-Short Short-Term Reversal Signal Events (FP-040 / Signal #7)
 
+## Long-Short Combiner Events (FP-052 / Phase 3.0b-ii)
+
+The three events below are emitted by the manual feature-vector assembler edge function `longshort-combiner-assemble-manual` (FP-052 3.0b-ii / ACT-236). Same target table as the signal manual events (`public.longshort_audit_logs`), same dual-trail discipline (FP-009 Bucket 0.2): `manual_triggered` BEFORE orchestrator → `manual_completed` or `manual_failed` AFTER. A 200 response with `outcome='failed'` body still emits `manual_failed` because the handler completed but the underlying assembly did not.
+
+#### `longshort.combiner.assemble.manual_triggered` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler BEFORE orchestrator invocation. Establishes a forensic trigger trail even when the orchestrator crashes. |
+| **Emitted by** | `supabase/functions/longshort-combiner-assemble-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, as_of, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0b-ii (ACT-236) |
+
+#### `longshort.combiner.assemble.manual_completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted after orchestrator returns `outcome='completed'`. Carries the queryable §4.3.5 bucket-counts as `excluded_by_reason` so audit-log consumers can verify the gate split without re-querying `combiner_feature_vectors`. |
+| **Emitted by** | `supabase/functions/longshort-combiner-assemble-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, as_of, as_of_date, outcome: 'completed', universe_size, persisted_count, included_count, excluded_by_reason: { missing_critical_signal_6, missing_critical_signal_7, below_coverage_threshold }, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0b-ii (ACT-236) |
+
+#### `longshort.combiner.assemble.manual_failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted on orchestrator-throw, `outcome='failed'` structured result, or persistence error. Dual-trail discipline: a 200 response with `outcome='failed'` body still emits this event because the underlying assembly did not succeed. `metadata.failure_reason` discriminates `'no_universe_snapshot_on_or_before_as_of'`, `'empty_universe_snapshot'`, or `'combiner_feature_vectors upsert failed at chunk offset <N>: <msg>'`. `metadata.stage='orchestrator_throw'` discriminates the throw-path (the structured-failure path omits `stage`). |
+| **Emitted by** | `supabase/functions/longshort-combiner-assemble-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, as_of, as_of_date?, outcome?, universe_size?, persisted_count?, included_count?, excluded_by_reason?, failure_reason?, error?, stage?, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0b-ii (ACT-236) |
+
+---
+
+## Long-Short Short-Term Reversal Signal Events (FP-040 / Signal #7) — (continued below)
+
 The six events below mirror the momentum signal's event family exactly, with `momentum` → `reversal` and `cross_sectional_momentum_12_1` → `short_term_reversal_1w`. Same target table (`public.longshort_audit_logs`), same payload shapes, same lifecycle semantics.
 
 #### `longshort.reversal.compute.started` — v1
