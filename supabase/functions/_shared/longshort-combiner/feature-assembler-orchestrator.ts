@@ -44,6 +44,7 @@ import {
   SIGNAL_IDS_ALL,
   type ExcludedReason,
 } from './signal-catalog.ts';
+import { fetchAllRows } from './paginated-read.ts';
 
 /** Per-row chunk size for the bulk UPSERT. ~500 keeps the URL/JSON payload
  * well under PostgREST limits while minimizing round-trips. */
@@ -121,19 +122,26 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         };
       }
 
-      const { data: universeRows, error: universeErr } = await ctx.supabase
-        .from('universe_membership')
-        .select('ticker')
-        .eq('operator_id', ctx.operator_id)
-        .eq('as_of_date', floor_as_of_date);
-
-      if (universeErr) {
+      // Paginated read — PostgREST's 1000-row default cap silently
+      // truncates unbounded `.select()`. 839-ticker universes work today
+      // but >1000 would break. Defensive even for current scale (DW-104).
+      let universeRows: Array<{ ticker: string }>;
+      try {
+        universeRows = await fetchAllRows<{ ticker: string }>((from, to) =>
+          ctx.supabase
+            .from('universe_membership')
+            .select('ticker')
+            .eq('operator_id', ctx.operator_id)
+            .eq('as_of_date', floor_as_of_date)
+            .range(from, to),
+        );
+      } catch (e) {
         throw new Error(
-          `feature-assembler-orchestrator: universe_membership rows read failed: ${universeErr.message}`,
+          `feature-assembler-orchestrator: universe_membership rows read failed: ${(e as Error).message}`,
         );
       }
 
-      const universe: UniverseMember[] = ((universeRows ?? []) as Array<{ ticker: string }>).map(
+      const universe: UniverseMember[] = universeRows.map(
         (r) => ({ operator_id: ctx.operator_id, ticker: r.ticker }),
       );
 
@@ -150,28 +158,37 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
       }
 
       // ── Step 2: signals — EXACT as_of, catalog-9 only (F7 defense-in-depth) ──
-      const { data: sigRows, error: sigErr } = await ctx.supabase
-        .from('signal_observations')
-        .select('ticker, signal_id, value, is_present, gics_sector')
-        .eq('operator_id', ctx.operator_id)
-        .eq('as_of_date', as_of_date)
-        .in('signal_id', [...SIGNAL_IDS_ALL]);
-
-      if (sigErr) {
+      // Paginated read — REGRESSION FIX. The prior unbounded `.select()`
+      // hit PostgREST's 1000-row default cap, returning an arbitrary slice
+      // of the ~7500 expected rows (universe × catalog-9). The pure
+      // assembler interpreted the missing rows as `is_present=false` and
+      // excluded every ticker. Root cause confirmed at as_of=2026-06-16
+      // (D1: signal #6 = 834 present, #7 = 838 present, 0 included).
+      type SigRow = {
+        ticker: string;
+        signal_id: string;
+        value: number | null;
+        is_present: boolean;
+        gics_sector: string | null;
+      };
+      let sigRows: SigRow[];
+      try {
+        sigRows = await fetchAllRows<SigRow>((from, to) =>
+          ctx.supabase
+            .from('signal_observations')
+            .select('ticker, signal_id, value, is_present, gics_sector')
+            .eq('operator_id', ctx.operator_id)
+            .eq('as_of_date', as_of_date)
+            .in('signal_id', [...SIGNAL_IDS_ALL])
+            .range(from, to),
+        );
+      } catch (e) {
         throw new Error(
-          `feature-assembler-orchestrator: signal_observations read failed: ${sigErr.message}`,
+          `feature-assembler-orchestrator: signal_observations read failed: ${(e as Error).message}`,
         );
       }
 
-      const observations: SignalObservationInput[] = (
-        (sigRows ?? []) as Array<{
-          ticker: string;
-          signal_id: string;
-          value: number | null;
-          is_present: boolean;
-          gics_sector: string | null;
-        }>
-      ).map((r) => ({
+      const observations: SignalObservationInput[] = sigRows.map((r) => ({
         operator_id: ctx.operator_id,
         ticker: r.ticker,
         signal_id: r.signal_id,
