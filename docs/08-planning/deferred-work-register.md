@@ -2138,6 +2138,20 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 
 | Field | Value |
 |---|---|
+| **id** | DW-100 (next-free after DW-099; grep-verified at HEAD via `grep -nE "^### DW-(100\|101\|102)" docs/08-planning/deferred-work-register.md` — none present at allocation). |
+| **title** | Backfill `combiner_feature_vectors` across multi-year historical window for LambdaRank training data + missingness-profile baseline. |
+| **why_deferred** | At FP-052 (3.0) the combiner runs the §6.4 documented degraded path forward-only from the 3.0 deploy date; the count-normalized fallback ranker needs zero historical data to produce a sized book. Backfill is the prerequisite for FP-052.3 (LambdaRank training) — it does NOT block the 3.0 foundation. Mixing forward-fire schema landing + multi-year backfill in 3.0 would conflate two independently-failable surfaces; the §22.3(c) scope-discipline rule routes backfill to its own FP. |
+| **status** | logged (Phase-3-gated; activates at 3.1). |
+| **trigger_conditions** | FP-052 (3.0) CLOSED (schema landed + RLS + GRANTs + queryable exit-gate assertion both queries return zero rows) AND operator decision on backfill-provenance discipline (see scope_sketch §(d)). |
+| **scope_sketch** | (a) Determine target window (proposal: 5 years back from Phase 1 universe-component first refresh date, bounded by signal-data availability). (b) Per-(as_of_date, ticker) walk: load eligible universe at that date, assemble feature vector from `signal_observations` at that date, persist to `combiner_feature_vectors`. (c) Idempotent ON CONFLICT (operator_id, as_of_date, ticker) DO UPDATE per T8. (d) **Operator decision (load-bearing — drives §6.5.5 masking stress test viability):** how to handle missing `signal_compute_log` telemetry for backfilled dates — three candidate dispositions: (i) synthesize from metadata (run_id NULL, started_at = as_of_date 00:00 UTC sentinel, outcome='backfill_synthesized'); (ii) leave NULL and teach the missingness profile builder at 3.0 to distinguish `NULL compute_log row` from `compute_log present + value missing` (the more honest path; more code surface); (iii) require backfill to reconstruct same telemetry shape that natural fires produce (most expensive; not feasible without rerunning signals against historical vendor data). Default-recommendation pending operator decision is (ii) — masking stress test reads the missingness profile, so distinguishing the two NULL classes is load-bearing for §6.5.5 stress test fidelity. |
+| **estimated_complexity** | L (multi-year walk + provenance discipline + idempotent persistence + missingness-profile shape decision + integration tests; one MIG only if (d)(i) requires a `signal_compute_log.outcome` enum addition). |
+| **blocking_dependencies** | FP-052 (3.0) closure (schema + exit-gate assertion). Operator ratification of (d) provenance disposition. |
+| **related_decisions** | DEC-007 (retention — backfilled rows may exceed 90-day default; needs decision). DEC-054 (R1/R2/R3 independence — backfill includes any R-features that landed by 3.1 cutover). CROSSWIND §6.5.4 / §6.5.5 (missingness stress test reads the profile built from `compute_log`). |
+| **related_actions** | ACT-230 (DW-100 logged as part of FP-052 (3.0) authoring). |
+| **required_tests_for_closure** | (a) Backfill replay-determinism test: re-running the backfill against the same vendor snapshot produces byte-identical `combiner_feature_vectors` rows. (b) Provenance-discipline sentinel asserting the chosen (d) disposition is honored on every backfilled row. (c) §6.5.5 masking stress test passes with backfilled missingness profile within tolerance band per CROSSWIND Part 3a V2. |
+| **status** | open. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
 
 ### DW-104: Audit + paginate unbounded PostgREST reads across `longshort-universe` (companion to FP-052 corrective)
 
