@@ -3631,3 +3631,31 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/longshort-catalyst-compute-manual/index.ts` |
 | **Tests** | `index_test.ts` — 7 source-sentinel tests (JWT + longshort.manage gating; parseAsOfDate + future-date guard; productionClock-only; three TokenBuckets; dual audit envelope; no queue-worker delegation; catalyst_meta surfaced). |
 | **Added by** | FP-049 (ACT-176) |
+
+#### `supabase/functions/_shared/longshort-combiner/signal-catalog.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.0b-i / ACT-235) |
+| **Classification** | shared constants — combiner signal catalog. Single source of truth for the 9 live `signal_id` literals, the §4.3.5 gate constants, and the `excluded_reason` literals consumed by the feature assembler. Catalog-not-discovery (F7) — assembler iterates this table rather than `SELECT DISTINCT signal_id` so missing observations are correctly classified as absent. |
+| **Exports** | `const SIGNAL_IDS_CRITICAL` (#6, #7 in precedence order); `const SIGNAL_IDS_NON_CRITICAL` (the 7); `const SIGNAL_IDS_ALL`; `const MIN_NON_CRITICAL_PRESENT = 3`; `const TOTAL_SIGNAL_COUNT = 9`; `const EXPECTED_FEATURE_KEY_COUNT = 16`; `const EXCLUDED_REASON = {MISSING_CRITICAL_6, MISSING_CRITICAL_7, BELOW_COVERAGE}` (verbatim MIG-099 CHECK values); `function nonCriticalValueKey(id)`; `function nonCriticalIsPresentKey(id)`; types `CriticalSignalId`, `NonCriticalSignalId`, `SignalId`, `ExcludedReason`. |
+| **File** | `supabase/functions/_shared/longshort-combiner/signal-catalog.ts` |
+| **Tests** | `signal-catalog_test.ts` — 8 Deno unit tests (critical IDs lock #6/#7 in precedence order / non-critical IDs lock 7 literals in stable order / total-count = 9 + ALL = critical ++ non-critical / no duplicates / MIN_NON_CRITICAL_PRESENT = 3 / EXPECTED_FEATURE_KEY_COUNT = 16 / excluded-reason literals byte-match MIG-099 CHECK values / feature-key helpers emit `<id>__value` and `<id>__is_present`). |
+| **Drift protection** | Literals MUST match the `SIGNAL_ID` exports under `supabase/functions/_shared/longshort-signals/<dir>/`. Excluded-reason literals MUST match `combiner_feature_vectors.excluded_reason` CHECK (MIG-099). The 8 catalog-drift sentinel tests fail loudly on either mismatch. |
+| **Purity** | Constants module — no I/O, no clock, no randomness. |
+| **Added by** | FP-052 3.0b-i (ACT-235) |
+
+#### `supabase/functions/_shared/longshort-combiner/feature-assembler.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.0b-i / ACT-235) |
+| **Classification** | pure-logic transform — typed-absence feature-vector assembler per CROSSWIND §4.3.5 (critical-exclusion + coverage gates) + §6.5 (16-feature representation). Consumed by the 3.0b-ii orchestrator (not in this commit) which handles the `signal_observations` SELECT, the universe-membership floor, and the `combiner_feature_vectors` UPSERT. |
+| **Exports** | `function assembleFeatureVectors(observations, universe, asOfDate): FeatureVectorRow[]`; `function applyGates(perTickerObs): GateOutcome`; interfaces `SignalObservationInput`, `UniverseMember`, `FeatureVectorRow`, `GateOutcome`. |
+| **Gate logic (§4.3.5, locked order)** | (1) Signal #6 absent → `missing_critical_signal_6`; else (2) Signal #7 absent → `missing_critical_signal_7` (when both absent, #6 precedence wins); else (3) non-critical-present `< MIN_NON_CRITICAL_PRESENT (3)` → `below_coverage_threshold`; else INCLUDED. `coverage_count = critical_present + non_critical_present`, populated for excluded names too (queryable audit surface per FP-052). |
+| **Typed-absence emission (ADR-008a)** | INCLUDED rows emit a 16-key `features` jsonb: 2 critical bare-numeric z-scores + 7×(`<id>__value`, `<id>__is_present`) pairs; absent non-critical → `__value: null`, `__is_present: 0`. EXCLUDED rows emit `features: {}` + `excluded_reason` + `coverage_count` + `gics_sector` (forensic-only). **NO `Decimal('-999')` written at any path** — ADR-008a locates that single construction site at the 3.2 in-process model-input builder. Stable key order (critical-first then non-critical, both in catalog order) makes `JSON.stringify` byte-deterministic for replay. |
+| **Defensive input validation** | Throws on malformed `(is_present=true, value=null)` or `(is_present=false, value!=null)` — DB CHECK on `signal_observations` already enforces this; re-enforcement here surfaces fixture/upstream regressions immediately. Observations with `signal_id` outside the catalog are ignored. |
+| **File** | `supabase/functions/_shared/longshort-combiner/feature-assembler.ts` |
+| **Tests** | `feature-assembler_test.ts` — 23 Deno unit tests (critical #6/#7 absence × 2 + both-absent precedence; coverage gate non-critical-present 0/1/2 excluded + 3/4/5/6/7 included; `is_present=false` doesn't count; INCLUDED 16-key shape with no -999; absent non-critical → `null` + `0` with no -999; EXCLUDED `features={}` + reason + coverage_count; malformed inputs throw × 2; deterministic key order — reversed input byte-identical output; all-null sector → INCLUDED with `gics_sector=null`; universe-member with zero observations → excluded coverage_count=0; universe iteration order preserved; unknown signal_id ignored; `as_of_date` threads through verbatim). |
+| **Purity** | No Supabase client, no `createClient`, no `service_role`, no wall-clock (`asOfDate` is an argument), no randomness. Mirrors the `compute-momentum.ts` pure-precedent. |
+| **Added by** | FP-052 3.0b-i (ACT-235) |
