@@ -1929,8 +1929,6 @@ Same as soft_pause; `state_after='active'`. Only valid from `soft_paused`.
 
 ---
 
-## Long-Short Short-Term Reversal Signal Events (FP-040 / Signal #7)
-
 ## Long-Short Combiner Events (FP-052 / Phase 3.0b-ii)
 
 The three events below are emitted by the manual feature-vector assembler edge function `longshort-combiner-assemble-manual` (FP-052 3.0b-ii / ACT-236). Same target table as the signal manual events (`public.longshort_audit_logs`), same dual-trail discipline (FP-009 Bucket 0.2): `manual_triggered` BEFORE orchestrator → `manual_completed` or `manual_failed` AFTER. A 200 response with `outcome='failed'` body still emits `manual_failed` because the handler completed but the underlying assembly did not.
@@ -1979,6 +1977,7 @@ The three events below are emitted by the manual feature-vector assembler edge f
 
 ---
 
+## Long-Short Short-Term Reversal Signal Events (FP-040 / Signal #7)
 
 The six events below mirror the momentum signal's event family exactly, with `momentum` → `reversal` and `cross_sectional_momentum_12_1` → `short_term_reversal_1w`. Same target table (`public.longshort_audit_logs`), same payload shapes, same lifecycle semantics.
 
