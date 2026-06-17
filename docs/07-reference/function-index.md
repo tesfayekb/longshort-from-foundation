@@ -3659,3 +3659,36 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Tests** | `feature-assembler_test.ts` — 23 Deno unit tests (critical #6/#7 absence × 2 + both-absent precedence; coverage gate non-critical-present 0/1/2 excluded + 3/4/5/6/7 included; `is_present=false` doesn't count; INCLUDED 16-key shape with no -999; absent non-critical → `null` + `0` with no -999; EXCLUDED `features={}` + reason + coverage_count; malformed inputs throw × 2; deterministic key order — reversed input byte-identical output; all-null sector → INCLUDED with `gics_sector=null`; universe-member with zero observations → excluded coverage_count=0; universe iteration order preserved; unknown signal_id ignored; `as_of_date` threads through verbatim). |
 | **Purity** | No Supabase client, no `createClient`, no `service_role`, no wall-clock (`asOfDate` is an argument), no randomness. Mirrors the `compute-momentum.ts` pure-precedent. |
 | **Added by** | FP-052 3.0b-i (ACT-235) |
+
+#### `supabase/functions/_shared/longshort-combiner/feature-assembler-orchestrator.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.0b-ii / ACT-236) |
+| **Classification** | I/O boundary — wraps the pure `feature-assembler.ts` with the three Supabase concerns the pure layer is forbidden to touch: (1) universe-membership floor ≤ as_of load, (2) exact-as_of signal_observations load (catalog-9 only), (3) chunked UPSERT into `combiner_feature_vectors`. |
+| **Exports** | `function createFeatureAssemblyOrchestrator(ctx: { supabase, operator_id }): { run(as_of: Date): Promise<FeatureAssemblyResult> }`; type `FeatureAssemblyContext`; type `FeatureAssemblyResult` (discriminated `{outcome:'completed', ...} \| {outcome:'failed', failure_reason, ...}`). |
+| **DIVERGENCE from signal orchestrators (documented in header)** | Universe load FLOORS to the latest snapshot `<= as_of` (`.lte('as_of_date', as_of_date).order('as_of_date', {ascending:false}).limit(1)`). The signal-side `cross-sectional-momentum/momentum-orchestrator.ts` loads the absolute-latest snapshot (no `<= as_of` filter); replaying a historical as_of through the signal orchestrators would pull a future universe snapshot — a latent T8 replay-determinism gap to be tracked separately. The combiner intentionally diverges to close that gap at the combiner layer. |
+| **Exact-as_of signal load (no per-signal lookback)** | Each signal already encodes its own staleness rules per CROSSWIND_SPEC.md (e.g. PEAD L499 — carry-forward until >60 trading days stale, then `is_present=0`) and writes a per-as_of row reflecting that decision. A combiner-side latest-≤-as_of window would double-handle staleness and mask the cadence drift the signal already reasoned about. The orchestrator therefore queries `WHERE as_of_date = <as_of>` with no window, and filters `signal_id IN (<catalog 9>)` as F7 defense-in-depth. |
+| **Persistence** | `combiner_feature_vectors` UPSERT in `UPSERT_CHUNK_SIZE = 500` row chunks with `onConflict: 'operator_id,as_of_date,ticker'`. Persistence error returns `outcome:'failed'` with the partial `persisted_count` and a `failure_reason` citing the chunk offset (no partial-state claim). `computed_at = as_of.toISOString()` per DEC-034 (4) — no wall-clock anywhere in the orchestrator. |
+| **Failure modes** | `outcome:'failed'` with `failure_reason ∈ { 'no_universe_snapshot_on_or_before_as_of', 'empty_universe_snapshot', 'combiner_feature_vectors upsert failed at chunk offset <N>: <msg>' }`. Read errors on `universe_membership` / `signal_observations` THROW (consumed by the manual handler's catch → `manual_failed` event). |
+| **File** | `supabase/functions/_shared/longshort-combiner/feature-assembler-orchestrator.ts` |
+| **Tests** | `feature-assembler-orchestrator_test.ts` — 7 Deno unit tests (DB-free in-memory mock SupabaseClient): floor query carries the `<= as_of` filter; signal load is exact-as_of with no range filter + catalog-9 `in()`; upsert ON CONFLICT keys + payload shape + `computed_at == as_of`; 1200-row chunking into 500/500/200; empty-floor → `no_universe_snapshot_on_or_before_as_of`; upsert error → `outcome:'failed'` with chunk-offset failure_reason; bucket-counts tally to universe_size across all 4 dispositions. |
+| **Purity boundary** | No `createClient`, no `service_role`, no wall-clock, no randomness in the orchestrator module. The injected `SupabaseClient` is the sole I/O surface; the manual handler injects `supabaseAdmin`. |
+| **Consumers** | `supabase/functions/longshort-combiner-assemble-manual/index.ts` (manual edge fn, FP-052 3.0b-ii). Future Phase-3.0d cron sibling will reuse the same orchestrator factory. |
+| **Added by** | FP-052 3.0b-ii (ACT-236) |
+
+#### `supabase/functions/longshort-combiner-assemble-manual/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.0b-ii / ACT-236) |
+| **Classification** | edge function — operator-triggered manual run of the feature-vector assembler. Sibling of `longshort-momentum-compute-manual` (FP-009 Bucket C Commit C1); same bare-`createHandler` skeleton, same `parseAsOfDate` body contract, same dual-audit envelope shape. |
+| **Method / body** | `POST { "as_of": "YYYY-MM-DD" }`. 405 on non-POST. 400 on missing/invalid as_of or future as_of. |
+| **Authz** | `authenticateRequest` → `checkPermissionOrThrow(authCtx.user.id, 'longshort.manage')`. No `verify_jwt` config override needed (default false; in-code validation). |
+| **Operator ID** | `DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001'` (mirrors momentum-manual pattern; not derived from `authCtx.user.id` — the operator concept is the longshort tenant, not the human invoker). |
+| **Audit envelope (dual-trail per FP-009 Bucket 0.2)** | BEFORE orchestrator: `longshort.combiner.assemble.manual_triggered`. AFTER: `manual_completed` (orchestrator `outcome='completed'`) or `manual_failed` (orchestrator `outcome='failed'` OR throws). A 200 response with `outcome='failed'` body still emits `manual_failed` — the handler completed but the underlying assembly did not. |
+| **No log table** | `combiner_compute_log` is intentionally NOT introduced at 3.0b (FP-052 F5). The strategy audit row + `combiner_feature_vectors.computed_at` + queryable `combiner_feature_vectors.excluded_reason` ARE the run-evidence surface. |
+| **No cron sibling, no job_registry row** | Manual-only at 3.0b. Phase 3.0d adds the cron sibling and the `job_registry` seed; deliberately deferred to keep 3.0b's smoke surface narrow. |
+| **File** | `supabase/functions/longshort-combiner-assemble-manual/index.ts` |
+| **Tests** | Unit-tested at the orchestrator layer (`feature-assembler-orchestrator_test.ts`). The handler itself is exercised by the §22.5.1 live-DB smoke at ACT-236 (E1–E5 queries). |
+| **Added by** | FP-052 3.0b-ii (ACT-236) |
