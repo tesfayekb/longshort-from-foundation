@@ -3708,3 +3708,49 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/longshort-combiner-assemble-manual/index.ts` |
 | **Tests** | Unit-tested at the orchestrator layer (`feature-assembler-orchestrator_test.ts`). The handler itself is exercised by the §22.5.1 live-DB smoke at ACT-236 (E1–E5 queries). |
 | **Added by** | FP-052 3.0b-ii (ACT-236) |
+
+#### `supabase/functions/_shared/longshort-combiner/ranker-constants.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.0c-i / ACT-238) |
+| **Classification** | shared constants — combiner fallback ranker. Pure constant module (no I/O, no clock, no randomness). |
+| **Exports** | `const RANKER_SOURCE_FALLBACK = 'count_normalized_fallback'`; `const BOOK_SEED_SIZE = 20`. |
+| **Drift protection** | `RANKER_SOURCE_FALLBACK` MUST match the partial-index predicate in `supabase/migrations/20260616103102_*.sql` (`WHERE ranker_source <> 'count_normalized_fallback'`). Ranker tests lock the literal as an exact string. |
+| **File** | `supabase/functions/_shared/longshort-combiner/ranker-constants.ts` |
+| **Consumers** | `ranker.ts`, `book-seeder.ts`, future 3.0c-ii orchestrator. |
+| **Added by** | FP-052 3.0c-i (ACT-238) |
+
+#### `supabase/functions/_shared/longshort-combiner/ranker.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.0c-i / ACT-238) |
+| **Classification** | pure-logic transform — count-normalized fallback ranker per CROSSWIND §6.4 (v0.9 documented degraded path). Reads INCLUDED-only typed-absence feature vectors from `feature-assembler.ts`; produces one `RankingRow` per ticker. No Supabase, no clock, no -999, no randomness. |
+| **Exports** | `function computeRankings(includedVectors: readonly FeatureVectorRow[]): RankingRow[]`; `function computeComposite(row): { composite, presentCount }`; `interface RankingRow`; `class IncludedRowInvariantError`. |
+| **Formula** | `composite = ( Σ_critical z_i + Σ_non_critical (is_present_i ? value_i : 0) ) / max(1, Σ is_present_i)`. Critical signals are bare numerics (gates guarantee presence on included rows). Non-critical signals contribute `value_i` only when `is_present_i === 1`; the missing half of the typed-absence pair is `null` and is GUARDED (never multiplied by `is_present`), preventing `null * 0 = NaN`-class drift. |
+| **Determinism contract** | (a) Summation iterates `SIGNAL_IDS_ALL` in catalog order — IEEE-754 float addition is non-associative; the catalog sequence is the determinism guarantee for byte-identical replay. (b) Ranks computed in TypeScript (NEVER via a Postgres `ORDER BY` — would couple replay determinism to PG collation). `long_rank` over `(composite DESC, ticker ASC)`; `short_rank` over `(composite ASC, ticker ASC)`. Ties break by ticker-ASC. |
+| **Score mapping** | `long_score = composite`; `short_score = -composite`. Symmetric by construction; the orchestrator UPSERT shape consumes both verbatim. |
+| **gics_sector** | Passed through verbatim from the input vector (string OR null). |
+| **`ranker_source`** | Stamped `'count_normalized_fallback'` on every emitted row — degraded-path attestation that excludes the row from the `combiner_rankings` model-active partial index. |
+| **Failure modes** | `IncludedRowInvariantError` (typed) thrown on: caller passing an excluded row; critical signal NaN / missing / non-finite; non-critical `is_present=1` with non-finite `value`; non-critical `is_present` not in `{0, 1}`. The pure layer THROWS rather than silently coercing — surfaces as an orchestrator failure path, not a NaN-poisoned ranking. |
+| **File** | `supabase/functions/_shared/longshort-combiner/ranker.ts` |
+| **Consumers** | `book-seeder.ts` (pure pipeline downstream); future 3.0c-ii orchestrator (boundary layer that reads `combiner_feature_vectors`, calls `computeRankings`, then UPSERTs `combiner_rankings`). |
+| **Tests** | `ranker_test.ts` — 13 DB-free unit tests (composite arithmetic, minimum-coverage row, full-coverage row, typed-absence skip discipline, throw-on-excluded, throw-on-NaN, throw-on-malformed-typed-absence, score symmetry + literal stamp, tie at rank-20 boundary, rank-permutation property, gics_sector passthrough incl. null, determinism, 140-name universe). |
+| **Added by** | FP-052 3.0c-i (ACT-238) |
+
+#### `supabase/functions/_shared/longshort-combiner/book-seeder.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.0c-i / ACT-238) |
+| **Classification** | pure-logic transform — seeds both sides of `combiner_book` from ranker output. Top-`BOOK_SEED_SIZE` by `long_rank` → long side; top-`BOOK_SEED_SIZE` by `short_rank` → short side. No Supabase, no clock, no -999. |
+| **Exports** | `function seedBook(rankings: readonly RankingRow[]): BookRow[]`; `interface BookRow`; `class BookOverlapError`. |
+| **Pre-persistence overlap assertion (load-bearing)** | THROWS `BookOverlapError` BEFORE returning if any ticker appears on both sides. Defense-in-depth against the `combiner_book.UNIQUE(operator_id, as_of_date, ticker)` constraint surfacing as a PG 23505 at UPSERT time (harder to diagnose; routes through orchestrator failure-path post-mortem-only). The pure-layer assert surfaces the violation as a typed error caught before any persistence side-effect. Overlap list is sorted for deterministic error messages. |
+| **Small-side rule** | If a side has fewer than `BOOK_SEED_SIZE` ranked names available (small-universe replay / degenerate as_of), seed what exists — do NOT pad with sentinel rows. The orchestrator surfaces undersized books as audit metadata. |
+| **Deferred state machine (3.0d)** | Hysteresis, cap-25, no-bumping, and 31-day-re-entry block are CROSSWIND §1.4 concerns deferred to 3.0d — see DW-105 in `docs/08-planning/deferred-work-register.md`. No `transition()` stub at 3.0c — explicit absence per the build prompt's anti-pattern discipline. |
+| **Score mapping** | `score` is side-oriented: `long_score` on long rows, `short_score` on short rows. `ranker_source` is passed through verbatim from the ranking. |
+| **File** | `supabase/functions/_shared/longshort-combiner/book-seeder.ts` |
+| **Consumers** | Future 3.0c-ii orchestrator (UPSERTs `combiner_book` from this output). |
+| **Tests** | `book-seeder_test.ts` — 9 DB-free unit tests (40-name → 20+20, 140-name → 20+20, `ranker_source` literal stamp on every row, score-side mapping, overlap-fires on 39-name contrived case, no-overlap on 40-name minimum, small-side rule contrived from constructed rankings, overlap-error carries sorted ticker list, empty input → empty book). |
+| **Added by** | FP-052 3.0c-i (ACT-238) |
