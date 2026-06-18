@@ -1977,6 +1977,54 @@ The three events below are emitted by the manual feature-vector assembler edge f
 
 ---
 
+## Long-Short Combiner Ranker Events (FP-052 / Phase 3.0c-ii)
+
+The three events below are emitted by the manual fallback-ranker edge function `longshort-combiner-rank-manual` (FP-052 3.0c-ii / ACT-239). Same target table as the assemble manual events (`public.longshort_audit_logs`), same dual-trail discipline (FP-009 Bucket 0.2): `manual_triggered` BEFORE orchestrator → `manual_completed` or `manual_failed` AFTER. A 200 response with `outcome='failed'` body still emits `manual_failed` because the handler completed but the ranker/book pipeline did not.
+
+#### `longshort.combiner.rank.manual_triggered` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual-trigger handler BEFORE orchestrator invocation. Establishes a forensic trigger trail even when the orchestrator crashes. |
+| **Emitted by** | `supabase/functions/longshort-combiner-rank-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, as_of, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0c-ii (ACT-239) |
+
+#### `longshort.combiner.rank.manual_completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted after orchestrator returns `outcome='completed'`. Carries the queryable ranker/book counts so audit-log consumers can verify the §22.5.1 smoke result without re-querying `combiner_rankings` / `combiner_book`. `ranker_source` is the degraded-path attestation literal (always `'count_normalized_fallback'` at 3.0c). |
+| **Emitted by** | `supabase/functions/longshort-combiner-rank-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, as_of, as_of_date, outcome: 'completed', vectors_read, rankings_written, book_size_long, book_size_short, ranker_source, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0c-ii (ACT-239) |
+
+#### `longshort.combiner.rank.manual_failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted on orchestrator-throw, `outcome='failed'` structured result, or persistence error. Dual-trail discipline: a 200 response with `outcome='failed'` body still emits this event because the underlying ranker/book pipeline did not succeed. `metadata.failure_reason` discriminates `'no_included_vectors'`, `'IncludedRowInvariantError: <msg>'`, `'BookOverlapError: <msg>'`, `'combiner_rankings upsert failed at chunk offset <N>: <msg>'`, or `'combiner_book upsert failed at chunk offset <N>: <msg>'`. `metadata.stage='orchestrator_throw'` discriminates the throw-path (the structured-failure path omits `stage`). |
+| **Emitted by** | `supabase/functions/longshort-combiner-rank-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, as_of, as_of_date?, outcome?, vectors_read?, rankings_written?, book_size_long?, book_size_short?, ranker_source?, failure_reason?, error?, stage?, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0c-ii (ACT-239) |
+
+---
+
 ## Long-Short Short-Term Reversal Signal Events (FP-040 / Signal #7)
 
 The six events below mirror the momentum signal's event family exactly, with `momentum` → `reversal` and `cross_sectional_momentum_12_1` → `short_term_reversal_1w`. Same target table (`public.longshort_audit_logs`), same payload shapes, same lifecycle semantics.
