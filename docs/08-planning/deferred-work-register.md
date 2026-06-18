@@ -2110,6 +2110,106 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
 
+### DW-105: Combiner — §1.4 book state machine (hysteresis / cap-25 / no-bumping / 31-day re-entry block)
+
+| Field | Value |
+|---|---|
+| **id** | DW-105 (next-free after DW-104; grep-verified at HEAD `fc277e5c`). |
+| **date_deferred** | 2026-06-18 (FP-052 3.0c-i / ACT-238). |
+| **source_plan_section** | FP-052 (3.0c) — fallback ranker + book seeder. |
+| **source_phase** | Phase 3.0c-i (pure ranker + seeder). |
+| **title** | Implement the CROSSWIND §1.4 book state machine: hysteresis bands, cap-25 active-side size, no-bumping rule (an in-book ticker is not displaced by a newly-qualifying ticker without crossing the exit hysteresis band), and 31-day re-entry block (a name exited from the book cannot re-enter for 31 calendar days). |
+| **reason_deferred** | 3.0c-i ships seed-only logic: top-`BOOK_SEED_SIZE` by `long_rank` / `short_rank`. The state machine requires DAY-OVER-DAY book state (yesterday's book read; transition decisions computed against today's rankings + exit-band crossings + per-ticker exit timestamps), which presupposes a daily cron firing the orchestrator. That cron lands at 3.0d. Implementing the transition logic at 3.0c would require either a stub `transition()` returning seed-only output (anti-pattern per the build prompt's STEP D — "NO transition() stub") OR fabricating yesterday's-book state from a non-existent persistence trail. The cleanest separation is: 3.0c seeds; 3.0d adds the cron AND the state machine atomically. |
+| **blocking_dependencies** | FP-052 3.0d daily cron sibling (`longshort-combiner-assemble` + `longshort-combiner-rank-and-book` cron) lands; `combiner_book` accumulates ≥ 1 day of prior-state history for the transition computation. |
+| **impact_on_source_phase** | None on 3.0c closure — the seed-only book is correct for the first-day operator-invoked smoke (no prior state to transition from). On day-2+ live operation, seed-only would re-seed from rankings every day with no continuity, producing churn the §1.4 hysteresis is designed to dampen. Acceptable for the 3.0c smoke window (single as_of replay); not acceptable for sustained operation. |
+| **future_owner_phase** | FP-052 3.0d (daily cron + state machine, atomic). |
+| **future_owner_module** | longshort / combiner (`supabase/functions/_shared/longshort-combiner/`). |
+| **status** | logged (3.0d-gated). |
+| **trigger_conditions** | FP-052 3.0d entry authored AND 3.0c closed AND ≥ 1 day of `combiner_book` history exists. |
+| **scope_sketch** | (a) New pure `state-machine.ts` consuming (yesterday's book rows, today's rankings, exit-band thresholds, per-ticker exit timestamps) → today's book + per-row transition reason (`'seeded'`, `'held'`, `'exited'`, `'re_entered'`). (b) Persistence shape: extend `combiner_book` with `entered_at timestamptz NOT NULL` + `transition_reason text` columns (migration; idempotent backfill = `entered_at := computed_at` for existing rows). (c) Cron orchestrator wires the state machine between ranker output and `combiner_book` UPSERT. (d) Unit tests covering each transition: hold-on-cap-25, no-bump (in-book stays), exit-on-band-crossing, 31-day-block on re-entry, seed-on-fresh-side. (e) Replay-determinism test: re-running over the same (yesterday-state, today-rankings) pair produces byte-identical today-book. |
+| **estimated_complexity** | M (one pure state machine + one migration + cron wiring + tests + reference-index updates). |
+| **related_decisions** | CROSSWIND §1.4 (book state machine — verbatim spec). |
+| **related_actions** | ACT-238 (this deferral). |
+| **required_tests_for_closure** | (a) State-machine unit tests cover all 5 transitions. (b) Day-2 cron smoke produces a book that holds ≥ 80% of day-1 names (hysteresis is doing its job; specific threshold tunable from CROSSWIND §1.4 bands at implementation time). (c) Replay determinism test passes. |
+| **status** | open. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-106: Combiner — per-signal carry-forward design (evidence-driven post-3.0c)
+
+| Field | Value |
+|---|---|
+| **id** | DW-106 (next-free after DW-105). |
+| **date_deferred** | 2026-06-18 (FP-052 3.0c-i / ACT-238). |
+| **source_plan_section** | FP-052 (3.0c) — coverage-lever follow-up. |
+| **source_phase** | Phase 3.0c-i (pure ranker + seeder). |
+| **title** | Design and implement per-signal carry-forward (last-value within a per-signal staleness bound) at the WRITER side, with reader-side as_of-resolution discipline + typed-absence contract uniform across all 9 live signals. Eliminates the silent coverage drop on twice-monthly / monthly cadences (currently: `short_interest_change_30d` at as_of=2026-06-16 contributes 0 to coverage because its last publication is 2026-06-15 with no exact-as_of row). |
+| **reason_deferred** | The real coverage lever — but the per-signal carry-forward bounds (e.g. PEAD ≈ 14d, short-interest ≈ 30d, fundamentals ≈ 90d, news ≈ 2d?) are SIGNAL-SPECIFIC decisions that need ranker-output evidence to set defensibly. Without a working ranker (lands 3.0c-ii), the trade-off `Δ(ranker quality) per Δ(coverage)` is unmeasurable. Picking bounds blind risks two invisible failure modes: (i) over-extending stale data into the ranker (silent ROI bleed); (ii) under-extending and gaining nothing. Both surface only against ranker output (information-ratio per included-name slice). |
+| **blocking_dependencies** | FP-052 3.0c-ii live smoke produces a ranked book at as_of=2026-06-16; T+1 information-ratio measurement infrastructure exists and has run ≥ 1 cycle on per-signal-coverage cohorts. |
+| **impact_on_source_phase** | None on 3.0c closure — 140 included names is comfortably above the 20+20 book floor at the current coverage. Carry-forward is a coverage-LIFT, not a coverage-FLOOR; absence is a missed opportunity, not a defect. |
+| **future_owner_phase** | Post-3.0c (3.0d or a dedicated FP-052.2.x sub-phase after T+1 measurement). |
+| **future_owner_module** | longshort / signals (per-signal writer) + longshort / combiner (reader-side as_of-resolution). |
+| **status** | logged (evidence-gated). |
+| **trigger_conditions** | 3.0c-ii closes AND ≥ 1 cycle of T+1 per-signal information-ratio measurement is available AND operator authorizes the per-signal bound decisions on evidence. |
+| **scope_sketch** | (a) WRITER side: each signal orchestrator emits an `is_present=1` row at as_of even when the underlying publication did not change, copying the last-published value (within the signal-specific staleness bound) and stamping `carried_forward=true` in `signal_observations.metadata`. (b) Per-signal bound table (single source of truth): one row per signal_id with `max_carry_forward_days`, defended by orchestrator-side check before writing. (c) READER side: the combiner orchestrator's exact-as_of query is unchanged (still `WHERE as_of_date = <as_of>`); the writer-side change makes the row exist. (d) Typed-absence contract uniformity: every signal writes EITHER a real-publication row OR a carried-forward row OR an `is_present=false` row at every as_of in the cadence — closes DW-108's cosmetic non-uniformity (`pead_sue_20d` writes is_present=false rows; momentum/short-interest currently silent-skip). (e) Migration adds `carried_forward boolean NOT NULL DEFAULT false` to `signal_observations`. |
+| **estimated_complexity** | L (per-signal writer changes × 9 signals + bound table + migration + uniformity sentinel test + 9 per-signal unit tests + integration test). |
+| **related_decisions** | CROSSWIND_SPEC.md L499 (per-signal staleness rules); DW-108 (typed-absence on-disk persistence uniformity — converges here). |
+| **related_actions** | ACT-238 (this deferral). |
+| **required_tests_for_closure** | (a) Per-signal writer unit test asserting carry-forward fires within bound + emits `is_present=false` past bound. (b) Combiner reader test asserting carried-forward rows are indistinguishable from real-publication rows in the assembler vector shape (`carried_forward` flag does NOT leak into the feature vector). (c) T+1 information-ratio measurement shows per-signal IR within tolerance of pre-carry-forward baseline (no silent ROI bleed). (d) Catalog-uniformity sentinel: every signal emits a row at every catalog as_of (no silent-skip). |
+| **status** | open. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-107: Insider-discovery SEC egress — non-blocked runner / proxy
+
+| Field | Value |
+|---|---|
+| **id** | DW-107 (next-free after DW-106). |
+| **date_deferred** | 2026-06-18 (FP-052 3.0c-i / ACT-238). |
+| **source_plan_section** | Signal-health pass during FP-052 3.0b-ii smoke. |
+| **source_phase** | Phase 3.0c-i (signal-health follow-up, not in this commit's scope). |
+| **title** | Move the insider-discovery SEC ingestion off the current egress (blocked by SEC) to a non-blocked egress: self-hosted runner OR fly.io worker OR a proxy with a stable IP. |
+| **reason_deferred** | Pure infra plumbing — zero ranker impact at the current as_of. Insider-discovery stale data does NOT move the 06-16 combiner coverage (insider contributes 123 of 140 included names; sufficient for the seed book). Promoting infra ahead of evidence trades certain near-term ranker shipping for speculative coverage gain. The trigger conditions below promote this item ahead of carry-forward IF insider proves load-bearing in T+1 measurement. |
+| **blocking_dependencies** | None for execution. Authorization for new infra surface (new secret rotation, new failure modes, new audit family) requires operator decision on runner choice. |
+| **impact_on_source_phase** | None on 3.0c closure. Latent: insider observation gap grows; once > 14d, insider's contribution to combiner coverage starts to drop noticeably for names whose only non-critical signal is insider. |
+| **future_owner_phase** | Promoted to active scope when trigger fires; otherwise parked. |
+| **future_owner_module** | longshort / signals / insider-transactions; CI/CD infrastructure. |
+| **status** | logged (parked; trigger-gated). |
+| **trigger_conditions** | (a) Insider observation gap > 14 calendar days (currently within tolerance); OR (b) Insider ranks top-quartile in 3.0c+ T+1 per-signal information-ratio (insider is load-bearing → fix infra urgently); OR (c) Combiner included-count drops below 80 names attributable to insider absence. |
+| **scope_sketch** | (a) Operator decision on runner: GitHub self-hosted runner (cheapest; ops-heaviest) vs fly.io worker (mid-cost; ops-medium) vs egress proxy with stable IP (cheapest if proxy already exists). (b) Reroute `.github/workflows/insider-discovery.yml` (or replacement) through the chosen egress. (c) SEC-rate-limit compliance preserved (existing throttling logic survives the egress change). (d) Secret rotation discipline added for the egress credentials. (e) Audit-family entry for the new runner (per RBAC two-segment + strategy-audit-table conventions). |
+| **estimated_complexity** | M (infra change; one workflow rewrite; one secret family; depends on operator's runner choice). |
+| **related_decisions** | None new (existing insider signal architecture unchanged). |
+| **related_actions** | ACT-238 (this deferral). |
+| **required_tests_for_closure** | (a) Insider discovery succeeds against SEC from the new egress for ≥ 7 consecutive scheduled runs. (b) Insider observation gap closes to within signal-defined tolerance. (c) No regression in insider data quality vs the last successful pre-block window. |
+| **status** | open. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-108: Typed-absence on-disk persistence uniformity across signals (cosmetic; combiner normalizes)
+
+| Field | Value |
+|---|---|
+| **id** | DW-108 (next-free after DW-107). |
+| **date_deferred** | 2026-06-18 (FP-052 3.0c-i / ACT-238). |
+| **source_plan_section** | FP-052 3.0b-ii signal-health observation. |
+| **source_phase** | Phase 3.0c-i (signal-health follow-up). |
+| **title** | Make typed-absence on-disk persistence uniform across all 9 live signals. Currently `pead_sue_20d` persists `is_present=false` rows at every as_of in its cadence (e.g. 834/835 at as_of=2026-06-16); `cross_sectional_momentum_12_1` and `short_interest_change_30d` SILENT-SKIP (no row written when absent). The combiner correctly normalizes no-row and `is_present=false` to the same absent state — this is purely a writer-side cosmetic non-uniformity, NOT a defect. |
+| **reason_deferred** | Pure cosmetic — the combiner's assembler reads no-row and `is_present=false` identically (`isPresent()` returns false in both cases), so the bucket counts and feature-vector shape are identical regardless. Auditability is preserved either way (`skip_counts` telemetry in `signal_compute_log` carries the absence reasoning). Fixing this is a low-priority cleanup that converges naturally with the carry-forward work (DW-106 §(d)) where every signal's writer becomes uniform by construction. |
+| **blocking_dependencies** | None for standalone execution. Converges with DW-106 if carry-forward lands first (DW-106 makes uniformity a side-effect of the new writer contract). |
+| **impact_on_source_phase** | None. Combiner output is byte-identical with or without the cleanup. |
+| **future_owner_phase** | Low-priority cleanup (folds into DW-106 at execution time, or runs independently if carry-forward is deferred indefinitely). |
+| **future_owner_module** | longshort / signals (per-signal writers). |
+| **status** | logged (low-priority; cosmetic). |
+| **trigger_conditions** | (a) DW-106 (carry-forward) execution — uniformity becomes a free by-product; OR (b) Operator authorizes a low-priority signal-health cleanup pass; OR (c) A future auditor flags the non-uniformity as confusing for forensic analysis. |
+| **scope_sketch** | Per signal that currently silent-skips (momentum, short-interest, possibly others — enumerate at execution time via writer-code grep): emit `is_present=false` rows at each cadence as_of when the underlying compute determines absence. Combiner reads are unchanged (already normalize). |
+| **estimated_complexity** | S (per-signal writer change × ~2–3 signals; per-signal unit test; no migration). |
+| **related_decisions** | CROSSWIND §4.3 Option E (typed-absence discipline). |
+| **related_actions** | ACT-238 (this deferral). |
+| **required_tests_for_closure** | (a) Catalog-uniformity sentinel test asserts every signal writes a row at every catalog as_of (either real, carried-forward, or `is_present=false`). (b) Combiner bucket counts unchanged across the cleanup (byte-identical pre/post). |
+| **status** | open. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
 ### DW-103: Audit-trail integrity — MIG-098 (ACT-220-B `sql/18` `insider_accession_discovery_queue.ticker NOT NULL`) appears applied without a `database-migration-ledger.md` row (FP-050 residue)
 
 | Field | Value |
