@@ -3835,7 +3835,7 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/_shared/longshort-combiner/shadow-ranker-orchestrator.ts` |
 | **Tests** | `shadow-ranker-orchestrator_test.ts` — 5 Deno unit tests (DB-free in-memory mock SupabaseClient): (sorch-1) paginated `.range()` + correct eq/lte filter chain on all three reads; (sorch-2) 40-ticker happy path → 12 variants × 40 rows = 480 book rows, single chunk, every row tagged `computed_at == as_of` + `ranker_source = RANKER_SOURCE_SHADOW` + correct onConflict; (sorch-3) `ShadowBookOverlapError` (21 tied tickers) → `outcome:'failed'` with ZERO UPSERTs; (sorch-4) empty active variants → `outcome:'failed'='no_active_variants'`; (sorch-5) non-universe ticker in `signal_observations` dropped by universe-intersection. |
 | **Purity boundary** | No `createClient`, no `service_role`, no wall-clock, no `-999`, no randomness in the orchestrator module. The injected `SupabaseClient` is the sole I/O surface; the manual handler injects `supabaseAdmin`. |
-| **Consumers** | `supabase/functions/longshort-combiner-shadow-rank-manual/index.ts` (manual edge fn, FP-052 3.M-iii). Future cron sibling (3.M-v phase-extension) will reuse the same orchestrator factory. |
+| **Consumers** | `supabase/functions/longshort-combiner-shadow-rank-manual/index.ts` (manual edge fn, FP-052 3.M-iii) + `supabase/functions/longshort-combiner-shadow-rank/index.ts` (cron sibling, FP-052 3.M-v / ACT-246). Both inject the same factory verbatim. |
 | **Added by** | FP-052 3.M-iii (ACT-243) |
 
 #### `supabase/functions/_shared/longshort-combiner/forward-return-constants.ts`
@@ -3878,7 +3878,7 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **`combiner_rankings_forward_returns` discipline** | NEVER touched (does not exist). The book-keyed FR row IS the 3.M-iv authoritative emission. |
 | **File** | `supabase/functions/_shared/longshort-combiner/forward-return-orchestrator.ts` |
 | **Tests** | `forward-return-orchestrator_test.ts` — 5 Deno unit tests (DB-free in-memory mock SupabaseClient + injected `PriceHistoryPort` fake): (forch-1) anti-join correctness (existing FR rows skipped); (forch-2) dedup (one fetch per distinct ticker across books × variants × horizons); (forch-3) partial-fail isolation (one ticker throws → that ticker's tuples become `fetch_error`; OTHER tickers still write `success`); (forch-4) idempotent re-run (second run writes ZERO new rows); (forch-5) maturation floor (immature tuples excluded BEFORE fetch). |
-| **Consumers** | `supabase/functions/longshort-combiner-forward-returns-manual/index.ts` (manual edge fn). Future cron sibling (3.M-v) will reuse the same orchestrator factory. |
+| **Consumers** | `supabase/functions/longshort-combiner-forward-returns-manual/index.ts` (manual edge fn) + `supabase/functions/longshort-combiner-forward-returns/index.ts` (cron sibling, FP-052 3.M-v / ACT-246). Both inject the same factory verbatim. |
 | **Added by** | FP-052 3.M-iv (ACT-244) |
 
 #### `supabase/functions/longshort-combiner-shadow-rank/index.ts`
