@@ -1871,3 +1871,20 @@ The two endpoints below were deployed as part of the auth + onboarding hardening
 | **Related events** | none |
 | **Lifecycle** | active |
 | **Added By** | Auth Phase 1 hardening (reconciled to index 2026-05-13) |
+
+### POST /longshort-combiner-shadow-rank-manual — Manual Shadow Ranker (FP-052 3.M-iii)
+
+| Field | Value |
+|-------|-------|
+| **Path** | `POST /longshort-combiner-shadow-rank-manual` |
+| **Classification** | privileged |
+| **Owner Module** | longshort (combiner — shadow-measurement harness) |
+| **Auth** | Bearer JWT required (`authenticateRequest`) |
+| **Permission** | `longshort.manage` (`checkPermissionOrThrow`) |
+| **Rate Limit** | default (DEC-023 envelope via `_shared/handler.ts`) |
+| **Request Body** | `{ "as_of": "YYYY-MM-DD" }` (parsed by `parseAsOfDate`; future `as_of` rejected via `productionClock` — sole sanctioned wall-clock site) |
+| **Response** | `{ status: 'ok', operator_id, as_of, as_of_date, outcome: 'completed'\|'failed', variants_active, variants_written, universe_size, observations_read, vectors_assembled, total_book_rows, per_variant_sizes: [{variant, inclusion_rule, k, long, short}], ranker_source: 'count_normalized_shadow', failure_reason?, correlation_id }` |
+| **Audit** | Dual envelope (FP-052 / DEC-033 strategy-audit): `longshort.combiner.shadow_rank.manual_triggered` BEFORE orchestrator → `longshort.combiner.shadow_rank.manual_completed` / `manual_failed` AFTER. Written to `longshort_audit_logs` (NEVER the platform `audit_logs` — T4). |
+| **Side effects** | UPSERTs into `combiner_book_shadow` only (chunked, onConflict on the 5-tuple PK). Does NOT touch `combiner_book`, `combiner_rankings`, `combiner_feature_vectors`, `combiner_model_registry`, or `job_registry` (operator-invoked smoke). |
+| **Lifecycle** | active |
+| **Added By** | FP-052 3.M-iii (ACT-243) |
