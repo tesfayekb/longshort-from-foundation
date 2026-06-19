@@ -143,7 +143,7 @@ Deno.test('(forch-1) anti-join: existing FR rows are not re-written', async () =
   ];
   // Already accrued T+1 for AAPL/live — only T+5 + T+20 should remain after anti-join.
   const existingFR: FRKey[] = [
-    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'AAPL', horizon_td: 1 },
+    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'AAPL', horizon_td: 1, price_source_status: 'success' },
   ];
   const bundles = new Map<string, Bar[]>([['AAPL', makeBars(1, 25, 100)]]);
   const { port } = makePriceHistory(bundles);
