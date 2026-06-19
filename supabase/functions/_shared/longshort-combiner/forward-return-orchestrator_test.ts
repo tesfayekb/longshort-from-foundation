@@ -143,8 +143,10 @@ Deno.test('(forch-1) anti-join: existing FR rows are not re-written', async () =
   assertEquals(res.tuples_after_anti_join, 2);
   assertEquals(res.rows_written, 2);
   // ONLY T+5 and T+20 rows in payload.
-  const horizons = calls.upsertChunks.flatMap((c) => c.payload.map((p) => p.horizon_td));
-  assertEquals(horizons.sort(), [5, 20]);
+  const horizons = calls.upsertChunks
+    .flatMap((c) => c.payload.map((p) => p.horizon_td))
+    .sort((a, b) => a - b);
+  assertEquals(horizons, [5, 20]);
 });
 
 Deno.test('(forch-2) dedup: one fetch per distinct ticker across books × variants × horizons', async () => {
