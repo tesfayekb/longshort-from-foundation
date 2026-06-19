@@ -2176,16 +2176,16 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **impact_on_source_phase** | None on 3.0c closure — 140 included names is comfortably above the 20+20 book floor at the current coverage. Carry-forward is a coverage-LIFT, not a coverage-FLOOR; absence is a missed opportunity, not a defect. |
 | **future_owner_phase** | Post-3.0c (3.0d or a dedicated FP-052.2.x sub-phase after T+1 measurement). |
 | **future_owner_module** | longshort / signals (per-signal writer) + longshort / combiner (reader-side as_of-resolution). |
-| **status** | logged (evidence-gated). |
+| **status** | in-progress — FP-053 / DW-106-a foundation LANDED 2026-06-19 (ACT-248): `signal_observations.carried_forward` schema + DEC-060 pre-registration. DW-106-b (pure carry function) + DW-106-c (cron + `heal_date` `system_config` upsert) pending. Re-scoped to **short_interest only** per DEC-060; the DW-108 silent-skip→`is_present=false` uniformity rewrite of the other 5 implicitly-carrying signals stays **separately deferred** (zero coverage benefit — the combiner reader treats no-row and `is_present=false` identically; see DW-108 entry below for the unchanged disposition). |
 | **trigger_conditions** | 3.0c-ii closes AND ≥ 1 cycle of T+1 per-signal information-ratio measurement is available AND operator authorizes the per-signal bound decisions on evidence. |
 | **scope_sketch** | (a) WRITER side: each signal orchestrator emits an `is_present=1` row at as_of even when the underlying publication did not change, copying the last-published value (within the signal-specific staleness bound) and stamping `carried_forward=true` in `signal_observations.metadata`. (b) Per-signal bound table (single source of truth): one row per signal_id with `max_carry_forward_days`, defended by orchestrator-side check before writing. (c) READER side: the combiner orchestrator's exact-as_of query is unchanged (still `WHERE as_of_date = <as_of>`); the writer-side change makes the row exist. (d) Typed-absence contract uniformity: every signal writes EITHER a real-publication row OR a carried-forward row OR an `is_present=false` row at every as_of in the cadence — closes DW-108's cosmetic non-uniformity (`pead_sue_20d` writes is_present=false rows; momentum/short-interest currently silent-skip). (e) Migration adds `carried_forward boolean NOT NULL DEFAULT false` to `signal_observations`. |
 | **estimated_complexity** | L (per-signal writer changes × 9 signals + bound table + migration + uniformity sentinel test + 9 per-signal unit tests + integration test). |
-| **related_decisions** | CROSSWIND_SPEC.md L499 (per-signal staleness rules); DW-108 (typed-absence on-disk persistence uniformity — converges here). |
-| **related_actions** | ACT-238 (this deferral). |
+| **related_decisions** | CROSSWIND_SPEC.md L499 (per-signal staleness rules); DEC-060 (pre-registered short-interest carry design — 22-calendar-day bound, hold-last-value, heal_date stamp, forward-only, `carried_forward` flag); DW-108 (typed-absence on-disk persistence uniformity — DECOUPLED from DW-106 per DEC-060 scope-narrowing; stays separately deferred). |
+| **related_actions** | ACT-238 (this deferral); ACT-248 (DW-106-a foundation LANDED — schema + DEC-060). |
 | **required_tests_for_closure** | (a) Per-signal writer unit test asserting carry-forward fires within bound + emits `is_present=false` past bound. (b) Combiner reader test asserting carried-forward rows are indistinguishable from real-publication rows in the assembler vector shape (`carried_forward` flag does NOT leak into the feature vector). (c) T+1 information-ratio measurement shows per-signal IR within tolerance of pre-carry-forward baseline (no silent ROI bleed). (d) Catalog-uniformity sentinel: every signal emits a row at every catalog as_of (no silent-skip). |
-| **status** | open. |
-| **implemented_by_action** | — |
-| **implemented_in_plan_version** | — |
+| **status** | in-progress (FP-053). |
+| **implemented_by_action** | DW-106-a → ACT-248 (foundation LANDED); DW-106-b → pending; DW-106-c → pending; DW-106-d → pending closure. |
+| **implemented_in_plan_version** | FP-053. |
 
 ### DW-107: Insider-discovery SEC egress — non-blocked runner / proxy
 
