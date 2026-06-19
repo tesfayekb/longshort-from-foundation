@@ -3880,3 +3880,39 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Tests** | `forward-return-orchestrator_test.ts` — 5 Deno unit tests (DB-free in-memory mock SupabaseClient + injected `PriceHistoryPort` fake): (forch-1) anti-join correctness (existing FR rows skipped); (forch-2) dedup (one fetch per distinct ticker across books × variants × horizons); (forch-3) partial-fail isolation (one ticker throws → that ticker's tuples become `fetch_error`; OTHER tickers still write `success`); (forch-4) idempotent re-run (second run writes ZERO new rows); (forch-5) maturation floor (immature tuples excluded BEFORE fetch). |
 | **Consumers** | `supabase/functions/longshort-combiner-forward-returns-manual/index.ts` (manual edge fn). Future cron sibling (3.M-v) will reuse the same orchestrator factory. |
 | **Added by** | FP-052 3.M-iv (ACT-244) |
+
+#### `supabase/functions/longshort-combiner-shadow-rank/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.M-v / ACT-246) |
+| **Classification** | edge function — daily cron handler for the shadow-ranker orchestrator. Cron sibling of `longshort-combiner-shadow-rank-manual` (3.M-iii / ACT-243); reuses `createShadowRankerOrchestrator` VERBATIM. |
+| **Auth** | cron-only — `verifyCronSecret` against `X-Cron-Secret` (401 on mismatch). NO `authenticateRequest` / `longshort.manage` — that path stays on the `-manual` sibling. |
+| **Wall-clock discipline** | `as_of = productionClock.getWallClockTs()` is the SOLE wall-clock site (DEC-034 clause 4); all downstream timestamps derive from `as_of.toISOString()`. No `new Date()` / `Date.now()` / `performance.now()` in the handler. |
+| **POLYGON_API_KEY** | NOT checked — the orchestrator reads `signal_observations` only (no price-history fetch). |
+| **Audit envelope** | Mirrors `longshort-momentum-compute/index.ts` shape: `longshort.combiner.shadow_rank.started` BEFORE orchestrator → `longshort.combiner.shadow_rank.completed` / `longshort.combiner.shadow_rank.failed` AFTER → catch path also writes `.failed` with `stage='orchestrator_throw'`. All three carry `trigger:'cron'` (distinct from the manual sibling's `manual_*`). Written to `longshort_audit_logs` via `writeStrategyAuditEvent` (NEVER the platform `audit_logs` — T4). |
+| **Failure handling** | 200 on `outcome='completed'` AND 200 on `outcome='failed'` (clean orchestrator failure with typed `failure_reason`; the cron run itself succeeded in invoking it). 500 ONLY on orchestrator throw — error code `cron_combiner_shadow_rank_failed`. |
+| **No `job_registry` row** | 3.M is the shadow-measurement harness (DEC-040 scoping — measurement, not live trading). Visibility comes from `combiner_book_shadow` + the audit envelope. |
+| **Schedule (operator-applied)** | `30 23 * * 1-5` (23:30 UTC weekdays). Applied via `sql/19_longshort_combiner_shadow_cron_schedule.sql` through the Supabase SQL Editor (§22.5.3, NOT the migration tool). REUSES the existing `CRON_SECRET` — no new secret minted. |
+| **File** | `supabase/functions/longshort-combiner-shadow-rank/index.ts` |
+| **Tests** | `index_test.ts` — 6 source-sentinel Deno tests mirroring `longshort-momentum-compute/index_test.ts`: (1) cron-auth via `verifyCronSecret`, no `authenticateRequest`; (2) `productionClock` sole wall-clock + no `new Date()` leak; (3) NO `POLYGON_API_KEY` / `PolygonPriceHistoryFetcher` import (code-only scan); (4) `createShadowRankerOrchestrator({supabase, operator_id})` + `orch.run(as_of)`; (5) `.started` / `.completed` / `.failed` + `trigger:'cron'` + `stage:'orchestrator_throw'` + no `manual_*`; (6) error code `cron_combiner_shadow_rank_failed` reserved for orchestrator throw. |
+| **Deploy + probe (ACT-246)** | `supabase--deploy_edge_functions(['longshort-combiner-shadow-rank'])` SUCCESS. No-auth POST probe (no `X-Cron-Secret`) returned **401 Unauthorized** — confirms deployed + cron-protected. |
+| **Added by** | FP-052 3.M-v (ACT-246) |
+
+#### `supabase/functions/longshort-combiner-forward-returns/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.M-v / ACT-246) |
+| **Classification** | edge function — daily cron handler for the forward-return accrual orchestrator. Cron sibling of `longshort-combiner-forward-returns-manual` (3.M-iv / ACT-244); reuses `createForwardReturnOrchestrator` VERBATIM. |
+| **Auth** | cron-only — `verifyCronSecret` against `X-Cron-Secret` (401 on mismatch). |
+| **Wall-clock discipline** | `as_of = productionClock.getWallClockTs()` (SOLE wall-clock site; DEC-034 clause 4). The orchestrator anchors maturation + Polygon lookback against this run-date; per-row `computed_at = as_of_run.toISOString()`. |
+| **POLYGON_API_KEY** | Checked — missing returns 500 `polygon_api_key_unset` (mirrors momentum-compute). |
+| **Audit envelope** | Mirrors `longshort-momentum-compute/index.ts`: `longshort.combiner.forward_returns.started` BEFORE → `.completed` / `.failed` AFTER → catch writes `.failed` with `stage='orchestrator_throw'`. All carry `trigger:'cron'`. Written to `longshort_audit_logs` (T4). |
+| **Failure handling** | 200 on `outcome='completed'` AND 200 on `outcome='failed'`. Per-ticker `fetch_error` / `polygon_404` rows are NORMAL typed-absence (reported in `by_status` metadata, retried by the next cron tick per the 3.M-iv corrective ACT-245). 500 ONLY on orchestrator throw — error code `cron_combiner_forward_returns_failed`. |
+| **No `job_registry` row** | 3.M shadow-measurement harness (DEC-040 scoping). |
+| **Schedule (operator-applied)** | `0 3 * * 2-6` (03:00 UTC Tue–Sat — morning after US trading; INDEPENDENT of shadow-rank — iterates PAST matured seeds). Applied via `sql/19_longshort_combiner_shadow_cron_schedule.sql` (§22.5.3 Dashboard). REUSES existing `CRON_SECRET`. |
+| **File** | `supabase/functions/longshort-combiner-forward-returns/index.ts` |
+| **Tests** | `index_test.ts` — 6 source-sentinel Deno tests: (1) cron-auth via `verifyCronSecret`; (2) `productionClock` sole wall-clock; (3) `POLYGON_API_KEY` check + `polygon_api_key_unset` code; (4) `createForwardReturnOrchestrator({supabase, operator_id, priceHistory})` with `new PolygonPriceHistoryFetcher(polygonApiKey)` + `orch.run(as_of)`; (5) `.started` / `.completed` / `.failed` + `trigger:'cron'` + `stage:'orchestrator_throw'`; (6) per-ticker `by_status` metadata present + error code `cron_combiner_forward_returns_failed` reserved for orchestrator throw. |
+| **Deploy + probe (ACT-246)** | `supabase--deploy_edge_functions(['longshort-combiner-forward-returns'])` SUCCESS. No-auth POST probe returned **401 Unauthorized** — confirms deployed + cron-protected. |
+| **Added by** | FP-052 3.M-v (ACT-246) |
