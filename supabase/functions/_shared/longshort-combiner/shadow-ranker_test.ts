@@ -260,11 +260,12 @@ Deno.test('shadow-ranker: REGRESSION TIE — identical ranks vs live computeRank
 });
 
 Deno.test('shadow-ranker: seedShadowBook stamps RANKER_SOURCE_SHADOW + throws on overlap', () => {
-  // 3 names, size=2 — top-2 long, top-2 short.
+  // 4 names, size=2 — top-2 long (A,B) disjoint from top-2 short (D,C).
   const ranked: ShadowRankingRow[] = [
-    { ticker: 'A', adjusted: 2.0, composite: 2.0, presentCount: 5, long_rank: 1, short_rank: 3, gics_sector: null },
-    { ticker: 'B', adjusted: 1.0, composite: 1.0, presentCount: 5, long_rank: 2, short_rank: 2, gics_sector: null },
-    { ticker: 'C', adjusted: 0.0, composite: 0.0, presentCount: 5, long_rank: 3, short_rank: 1, gics_sector: null },
+    { ticker: 'A', adjusted: 3.0, composite: 3.0, presentCount: 5, long_rank: 1, short_rank: 4, gics_sector: null },
+    { ticker: 'B', adjusted: 2.0, composite: 2.0, presentCount: 5, long_rank: 2, short_rank: 3, gics_sector: null },
+    { ticker: 'C', adjusted: 1.0, composite: 1.0, presentCount: 5, long_rank: 3, short_rank: 2, gics_sector: null },
+    { ticker: 'D', adjusted: 0.0, composite: 0.0, presentCount: 5, long_rank: 4, short_rank: 1, gics_sector: null },
   ];
   const book = seedShadowBook(ranked, 2);
   assertEquals(book.length, 4);
