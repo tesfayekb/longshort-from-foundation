@@ -3837,3 +3837,46 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Purity boundary** | No `createClient`, no `service_role`, no wall-clock, no `-999`, no randomness in the orchestrator module. The injected `SupabaseClient` is the sole I/O surface; the manual handler injects `supabaseAdmin`. |
 | **Consumers** | `supabase/functions/longshort-combiner-shadow-rank-manual/index.ts` (manual edge fn, FP-052 3.M-iii). Future cron sibling (3.M-v phase-extension) will reuse the same orchestrator factory. |
 | **Added by** | FP-052 3.M-iii (ACT-243) |
+
+#### `supabase/functions/_shared/longshort-combiner/forward-return-constants.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.M-iv / ACT-244) |
+| **Classification** | Shared leaf constants for the 3.M-iv forward-return accrual job. |
+| **Exports** | `LIVE_VARIANT_LABEL='live_gated'` (the `variant` value stamped on rows whose `source_table='combiner_book'` per DEC-059 §2/§pairing); `HORIZONS_TD=[1,5,20] as const` + `HorizonTd` type; `FR_LOOKBACK_DAYS=60`; `FR_CONCURRENCY=20`; `UPSERT_CHUNK_SIZE=500`; `MATURATION_FLOOR_CAL_DAYS={1:1,5:5,20:20}` (provably loose — H trading days always span ≥ H calendar days); `SOURCE_TABLE_LIVE='combiner_book'`, `SOURCE_TABLE_SHADOW='combiner_book_shadow'` + `SourceTable` type; `PRICE_STATUS_SUCCESS`/`POLYGON_404`/`FETCH_ERROR` + `PriceSourceStatus` type (mirror the `combiner_forward_returns_price_source_status_check` CHECK verbatim). |
+| **File** | `supabase/functions/_shared/longshort-combiner/forward-return-constants.ts` |
+| **Consumers** | `forward-return-accruer.ts`, `forward-return-orchestrator.ts`, `longshort-combiner-forward-returns-manual/index.ts`. |
+| **Added by** | FP-052 3.M-iv (ACT-244) |
+
+#### `supabase/functions/_shared/longshort-combiner/forward-return-accruer.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.M-iv / ACT-244) |
+| **Classification** | PURE accrual layer — DB-free, clock-free, network-free. Maps `(barsByTicker, tuples)` → `FRRow[]` ready for the orchestrator to stamp `computed_at` and UPSERT. |
+| **Exports** | `function accrueReturns(barsByTicker: Map<string, DailyBar[] \| null \| 'error'>, tuples: ReadonlyArray<FRTuple>): FRRow[]`; types `FRTuple`, `FRRow`, `BarBundle`. |
+| **Status mapping** | `bars===null` → `polygon_404`; `bars==='error'` → `fetch_error`; seed bar not found → `fetch_error`; `seed_idx+H >= bars.length` → `fetch_error`; else `success` + `raw_return = bars[h].close/bars[s].close − 1` and `side_signed_return = side==='short' ? −raw_return : raw_return`. NEVER `-999` — all non-success rows return `null` per the `combiner_forward_returns_typed_absence_chk` CHECK. |
+| **File** | `supabase/functions/_shared/longshort-combiner/forward-return-accruer.ts` |
+| **Tests** | `forward-return-accruer_test.ts` — 8 Deno unit tests: (acc-1) long T+5 success math; (acc-2) short side flips sign; (acc-3) all three horizons resolve independently; (acc-4) `null` bundle → `polygon_404` typed-absence; (acc-5) `'error'` bundle → `fetch_error` typed-absence; (acc-6) seed bar missing → `fetch_error`; (acc-7) horizon bar missing (immature) → `fetch_error`; (acc-8) never emits `-999` across all failure modes. |
+| **Consumers** | `forward-return-orchestrator.ts` (sole). |
+| **Added by** | FP-052 3.M-iv (ACT-244) |
+
+#### `supabase/functions/_shared/longshort-combiner/forward-return-orchestrator.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.M-iv / ACT-244) |
+| **Classification** | I/O boundary — wraps the pure accruer with the four concerns it is forbidden to touch: (1) paginated read of `combiner_book` + `combiner_book_shadow` via `fetchAllRows`, (2) paginated anti-join read of `combiner_forward_returns` keys for the candidate seed window, (3) dedup-by-ticker bounded-concurrency Polygon fetch via the injected `PriceHistoryPort` (mirrors `momentum-orchestrator.ts:140-186`), (4) chunked UPSERT into `combiner_forward_returns`. |
+| **Exports** | `function createForwardReturnOrchestrator(ctx: { supabase, operator_id, priceHistory, concurrency? }): { run(as_of_run: Date): Promise<ForwardReturnOrchestratorResult> }`; interfaces `ForwardReturnOrchestratorContext`, `PriceHistoryPort`; type `ForwardReturnOrchestratorResult` (discriminated `completed` / `failed`). |
+| **Mandatory pagination** | EVERY book + FR-key read goes through `fetchAllRows` (page size 1000, short-read termination). A raw `.select()` on either book would silently truncate to ≤1000 seeds (the 3.0b-ii defect — ACT-237 corrective). NON-NEGOTIABLE. |
+| **Per-ticker failure isolation** | `pLimitedMap` worker wraps `fetchPriceHistory` in `try/catch`; a thrown error stores `'error'` in the bar bundle (NEVER propagates). One bad ticker NEVER crashes the run (mirrors `momentum-orchestrator.ts`). |
+| **Dedup-by-ticker** | Survivors are deduped to distinct tickers BEFORE the Polygon fan-out — one fetch per ticker even when (live × 12 shadow × {1,5,20}) tuples reference it. ~12× Polygon spend savings vs per-tuple naïve. |
+| **Maturation floor** | Pre-fetch pruning at `run_date − seed_as_of_date ≥ MATURATION_FLOOR_CAL_DAYS[H]`. H trading days always span ≥ H calendar days, so the floor never excludes a matured tuple; the bar array is the AUTHORITATIVE maturation check. Explicitly NOT the `ceil(H × 1.45)` over-tight pre-filter. |
+| **Persistence** | Chunked UPSERT into `combiner_forward_returns` with `onConflict='operator_id,source_table,variant,seed_as_of_date,ticker,horizon_td'` (full PK). Every row carries `computed_at = as_of_run.toISOString()` per DEC-034 (4) — no wall-clock anywhere in the orchestrator. UPSERT error within a chunk → `outcome:'failed'` with `rows_written` counted to that point. |
+| **Live variant label** | Live-book rows are stamped with `variant=LIVE_VARIANT_LABEL='live_gated'` (DEC-059 §2 / §pairing). The `combiner_book` table has no `variant` column — `combiner_forward_returns.variant` is NOT NULL, so the orchestrator MUST supply the literal. |
+| **`combiner_rankings_forward_returns` discipline** | NEVER touched (does not exist). The book-keyed FR row IS the 3.M-iv authoritative emission. |
+| **File** | `supabase/functions/_shared/longshort-combiner/forward-return-orchestrator.ts` |
+| **Tests** | `forward-return-orchestrator_test.ts` — 5 Deno unit tests (DB-free in-memory mock SupabaseClient + injected `PriceHistoryPort` fake): (forch-1) anti-join correctness (existing FR rows skipped); (forch-2) dedup (one fetch per distinct ticker across books × variants × horizons); (forch-3) partial-fail isolation (one ticker throws → that ticker's tuples become `fetch_error`; OTHER tickers still write `success`); (forch-4) idempotent re-run (second run writes ZERO new rows); (forch-5) maturation floor (immature tuples excluded BEFORE fetch). |
+| **Consumers** | `supabase/functions/longshort-combiner-forward-returns-manual/index.ts` (manual edge fn). Future cron sibling (3.M-v) will reuse the same orchestrator factory. |
+| **Added by** | FP-052 3.M-iv (ACT-244) |
