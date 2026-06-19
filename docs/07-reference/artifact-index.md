@@ -598,6 +598,38 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Actions** | ACT-244 |
 | **Related Decisions** | DEC-023 (handler envelope), DEC-033 (per-strategy audit table — T4 trap), DEC-034 (4) (sole sanctioned wall-clock site = `productionClock` future-`as_of` reject), DEC-059 (DW-109 promotion rule the FR job feeds: paired `V.side_signed_return − live_gated.side_signed_return` at T+5). |
 | **Notes** | Permission: `longshort.manage`. Mirrors `longshort-combiner-shadow-rank-manual` (3.M-iii / ART-029) verbatim — `createHandler` + `authenticateRequest` + `checkPermissionOrThrow` + `parseAsOfDate` + `productionClock` future-`as_of` reject + dual `writeStrategyAuditEvent`. Invokes `createForwardReturnOrchestrator` which reads BOTH `combiner_book` (live; stamped `variant='live_gated'`) and `combiner_book_shadow` (12 variants) via `fetchAllRows`, crosses with `HORIZONS_TD=[1,5,20]`, applies the maturation-floor pre-filter (`{1:1,5:5,20:20}` calendar days — provably loose; bar array is authoritative), anti-joins against rows already in `combiner_forward_returns` (full PK), dedups survivors to distinct tickers, fetches Polygon adjusted-daily bars at `FR_CONCURRENCY=20` via the FP-009 `PolygonPriceHistoryFetcher` (re-used verbatim), then chunked-UPSERTs `combiner_forward_returns` with `computed_at = as_of_run.toISOString()` and `onConflict='operator_id,source_table,variant,seed_as_of_date,ticker,horizon_td'`. Per-ticker fetch failures become typed `fetch_error` rows with `raw_return=NULL`/`side_signed_return=NULL` — one bad ticker NEVER crashes the run (mirrors `momentum-orchestrator.ts`). NEVER `-999` — typed-absence per the `combiner_forward_returns_typed_absence_chk` CHECK. NO cron sibling at 3.M-iv (deferred to 3.M-v). NO write to `combiner_rankings_forward_returns` (does not exist). NO touch of any live combiner table, any shadow book, or `PolygonPriceHistoryFetcher` source. |
+
+### ART-031: Longshort Combiner Shadow-Rank Cron Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-031 |
+| **Type** | edge-function |
+| **Title** | longshort-combiner-shadow-rank — daily cron handler seeding `combiner_book_shadow` for all 12 active variants (FP-052 3.M-v) |
+| **Source Path** | `supabase/functions/longshort-combiner-shadow-rank/index.ts` |
+| **Created Date** | 2026-06-19 |
+| **Owning Phase** | Phase 3.M-v |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-007 |
+| **Status** | `active` (deployed 2026-06-19; no-auth probe returned 401 UNAUTHORIZED as expected; awaiting operator schedule-apply via `sql/19_*_shadow_cron_schedule.sql`) |
+| **Related Actions** | ACT-246 |
+| **Related Decisions** | DEC-023 (handler envelope), DEC-033 (T4 — per-strategy audit table), DEC-034 (4) (sole sanctioned wall-clock chokepoint), DEC-040 (cron.job evidence required for scheduled-execution attestations), DEC-059 (DW-109 promotion rule the daily series feeds). |
+| **Notes** | Cron sibling of `longshort-combiner-shadow-rank-manual` (ART-029) — mirrors `longshort-momentum-compute/index.ts` skeleton VERBATIM: `verifyCronSecret(req)` (401 path) → `as_of = productionClock.getWallClockTs()` → `createShadowRankerOrchestrator({supabase, operator_id}).run(as_of)` → three-event audit envelope `.started`/`.completed`/`.failed` with `trigger:'cron'`. NO `POLYGON_API_KEY` check (orchestrator reads `signal_observations` only). NO `job_registry` row (3.M is the shadow-measurement harness — DEC-040 scoping). 200-on-completed AND 200-on-failed (clean orchestrator failure); 500 ONLY on orchestrator throw (`cron_combiner_shadow_rank_failed`). Schedule `30 23 * * 1-5` (23:30 UTC weekdays) is operator-applied via `sql/19_longshort_combiner_shadow_cron_schedule.sql` (§22.5.3 Dashboard, NOT the migration tool); the existing `CRON_SECRET` is REUSED (no new secret minted; placeholder-substitution only). |
+
+### ART-032: Longshort Combiner Forward-Returns Cron Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-032 |
+| **Type** | edge-function |
+| **Title** | longshort-combiner-forward-returns — daily cron handler accruing T+1/T+5/T+20 returns across the live book + 12 shadow variants (FP-052 3.M-v) |
+| **Source Path** | `supabase/functions/longshort-combiner-forward-returns/index.ts` |
+| **Created Date** | 2026-06-19 |
+| **Owning Phase** | Phase 3.M-v |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-007 |
+| **Status** | `active` (deployed 2026-06-19; no-auth probe returned 401 UNAUTHORIZED as expected; awaiting operator schedule-apply via `sql/19_*_shadow_cron_schedule.sql`) |
+| **Related Actions** | ACT-246 |
+| **Related Decisions** | DEC-023, DEC-033, DEC-034 (4), DEC-040, DEC-059, ACT-245 (forward-return anti-join filtered to `price_source_status='success'` — typed-absence retries every cron run until bars settle; the correctness pre-condition for daily cadence). |
+| **Notes** | Cron sibling of `longshort-combiner-forward-returns-manual` (ART-030) — mirrors `longshort-momentum-compute/index.ts` skeleton VERBATIM: `verifyCronSecret(req)` → `as_of = productionClock.getWallClockTs()` → `POLYGON_API_KEY` check (500 `polygon_api_key_unset` on miss) → `createForwardReturnOrchestrator({supabase, operator_id, priceHistory: new PolygonPriceHistoryFetcher(polygonApiKey)}).run(as_of)` → three-event audit envelope `.started`/`.completed`/`.failed` with `trigger:'cron'`. 200-on-completed AND 200-on-failed; per-ticker `fetch_error`/`polygon_404` rows are NORMAL typed-absence (reported in `by_status` metadata, retried on next cron tick — the orchestrator-throw 500 path is reserved for true fatals — `cron_combiner_forward_returns_failed`). NO `job_registry` row (3.M scope). Schedule `0 3 * * 2-6` (03:00 UTC Tue–Sat) is INDEPENDENT of the shadow-rank schedule — the orchestrator iterates PAST matured seeds, not today's seed. Operator-applied via `sql/19_longshort_combiner_shadow_cron_schedule.sql` (§22.5.3 Dashboard). |
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
