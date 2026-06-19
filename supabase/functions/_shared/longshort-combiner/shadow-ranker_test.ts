@@ -54,8 +54,12 @@ function vec(
 ): ShadowVector {
   const m = new Map<string, number>();
   for (const [k, v] of present) m.set(k, v);
-  // deno-lint-ignore no-explicit-any
-  return { ticker, gics_sector, present: m as any, presentCount: m.size };
+  return {
+    ticker,
+    gics_sector,
+    present: m as ShadowVector['present'],
+    presentCount: m.size,
+  };
 }
 
 /**
