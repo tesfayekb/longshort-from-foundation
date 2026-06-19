@@ -566,6 +566,22 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Actions** | ACT-241 |
 | **Related Decisions** | (none superseded; first DEC on this axis) |
 | **Notes** | First standalone DEC file under `docs/decisions/` (prior DECs are tracked inline in `docs/08-planning/approved-decisions.md`; that file's DEC-059 row points here for the verbatim rule). The pre-registration is load-bearing: any change to the 15 bp threshold, n≥30 sample size, p<0.05 significance, T+5 primary horizon, corroboration requirement, tie-break order, or net-of-cost guard requires (a) an FP authored before the change is applied to any in-flight measurement, AND (b) a superseding DEC. |
+
+### ART-029: Longshort Combiner Shadow-Rank Manual Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-029 |
+| **Type** | edge-function |
+| **Title** | longshort-combiner-shadow-rank-manual — operator-triggered 12-variant shadow ranker (FP-052 3.M-iii) |
+| **Source Path** | `supabase/functions/longshort-combiner-shadow-rank-manual/index.ts` |
+| **Created Date** | 2026-06-19 |
+| **Owning Phase** | Phase 3.M-iii |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-007 |
+| **Status** | `active` (deployed 2026-06-19; no-auth probe returned 401 UNAUTHORIZED as expected; live §22.5.1 smoke pending operator JWT with `longshort.manage`) |
+| **Related Actions** | ACT-243 |
+| **Related Decisions** | DEC-023 (handler envelope), DEC-033 (per-strategy audit table — T4 trap), DEC-034 (4) (sole sanctioned wall-clock site = `productionClock` future-`as_of` reject), DEC-059 (DW-109 promotion rule the harness feeds). |
+| **Notes** | Permission: `longshort.manage`. Mirrors `longshort-combiner-rank-manual` (3.0c-ii / ART pending) verbatim in structure — `createHandler` + `authenticateRequest` + `checkPermissionOrThrow` + `parseAsOfDate` + `productionClock` future-`as_of` reject + dual `writeStrategyAuditEvent`. Invokes `createShadowRankerOrchestrator` which reads active variants from `combiner_shadow_variant_config`, floors universe `≤ as_of` from `universe_membership`, paginates `signal_observations` via `fetchAllRows` (MANDATORY — raw `.select()` would truncate at 1000 rows and silently collapse the shadow book per the 3.0b-ii defect), computes all 12 variants in memory, then chunked-UPSERTs `combiner_book_shadow` with `computed_at = as_of.toISOString()`. NO cron sibling at 3.M-iii (deferred to 3.M-v phase-extension). NO write to `combiner_rankings_shadow` (deferred; re-derivable from the book at forward-return read time). NO touch of any live combiner table. |
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
