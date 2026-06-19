@@ -26,10 +26,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from './paginated-read.ts';
 import { pLimitedMap } from '../longshort-signals/shared/p-limited-map.ts';
-import type {
-  DailyBar,
-  PolygonPriceHistoryFetcher,
-} from '../longshort-signals/shared/polygon-price-history-fetcher.ts';
+import type { DailyBar } from '../longshort-signals/shared/polygon-price-history-fetcher.ts';
 import {
   accrueReturns,
   type BarBundle,
@@ -351,7 +348,3 @@ export function createForwardReturnOrchestrator(
     },
   };
 }
-
-/** Re-export the constructor-arg type so consumers can build a real
- *  fetcher and pass it without duplicating the class import. */
-export type { PolygonPriceHistoryFetcher };
