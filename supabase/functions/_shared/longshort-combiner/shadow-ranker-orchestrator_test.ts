@@ -287,13 +287,12 @@ Deno.test('(sorch-4) empty active variants → outcome=failed=no_active_variants
 });
 
 Deno.test('(sorch-5) non-universe tickers in signal_observations are dropped', async () => {
-  const universe = ['AAA', 'BBB', 'CCC'];
-  // Non-universe ticker ZZZ should be dropped before assembly.
+  // Use 40 distinct-score universe tickers (avoids ShadowBookOverlapError;
+  // 40 ≥ 2 × BOOK_SEED_SIZE) + one non-universe ZZZ that must be dropped.
+  const universe = Array.from({ length: 40 }, (_, i) => `T${i.toString().padStart(3, '0')}`);
   const sig: SigRow[] = [
-    ...fullyPresentRows('AAA', 0.1),
-    ...fullyPresentRows('BBB', 0.2),
-    ...fullyPresentRows('CCC', 0.3),
-    ...fullyPresentRows('ZZZ', 0.9),
+    ...universe.flatMap((t, i) => fullyPresentRows(t, i * 0.1)),
+    ...fullyPresentRows('ZZZ', 99.0),
   ];
   const { supabase } = makeSupabase({
     universeTickers: universe,
@@ -302,6 +301,6 @@ Deno.test('(sorch-5) non-universe tickers in signal_observations are dropped', a
   const res = await createShadowRankerOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
   assertEquals(res.outcome, 'completed');
   if (res.outcome !== 'completed') return;
-  // 3 universe vectors assembled — ZZZ filtered out by intersection.
-  assertEquals(res.vectors_assembled, 3);
+  // 40 universe vectors assembled — ZZZ filtered out by intersection.
+  assertEquals(res.vectors_assembled, 40);
 });
