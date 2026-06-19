@@ -2828,6 +2828,31 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Pipeline** | auth → perm → body validation (`parseAsOfDate`) → future-`as_of` rejection via `productionClock` comparison → `POLYGON_API_KEY` check → `.manual_triggered` audit BEFORE → orchestrator → `persistSignalComputeLog` → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
 | **File** | `supabase/functions/longshort-short-interest-compute-manual/index.ts` |
 | **Tests** | `supabase/functions/longshort-short-interest-compute-manual/index_test.ts` — 9 source-sentinel tests (auth + permission + POST-only + body validation + parser + POLYGON_API_KEY + dual audit envelope ordering + wall-clock + new-fetcher orchestrator wiring + no momentum/reversal/price-fetcher import drift). |
+
+#### `supabase/functions/_shared/longshort-signals/short-interest-change/carry-orchestrator.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-053 / DW-106-c-i) |
+| **Classification** | shared orchestrator factory — Phase 2 short-interest carry-forward (coverage heal per DEC-060). Pure-DB (no Polygon, no wall-clock). Pipeline: (1) load latest universe snapshot (`universe_membership` latest-as_of pattern; mirrors `short-interest-orchestrator.ts:131-188`); (2) bulk-read 35-calendar-day priors from `signal_observations` via `fetchAllRows` (page-1000 short-read terminator — required because PostgREST silently caps unbounded reads); (3) per universe ticker call `decideShortInterestCarry(priors, as_of_date)` and map outcome to (row?, skip?): `skip_native_exists`→no row; `emit_carry`→`SignalRow{is_present:true,value:held,gics_sector:anchor,carried_forward:true}`; `emit_absence{past_bound}`→absence row + `SignalSkip{reason:'data_unavailable'}`; `emit_absence{no_prior_publication}`→absence row + `SignalSkip{reason:'insufficient_history'}`. Absence rows carry `gics_sector` = CURRENT universe value (not anchor). (4) Single-batch `captureSignalObservations` (zero-partial write); on persist error the entire run reports `outcome:'failed'`. (5) Return `CarryOrchestratorResult` with `carried_count`/`past_bound_count`/`no_publication_count`/`skipped_native_count`. NO `system_config.heal_date` stamp (reserved for the c-ii cron handler). |
+| **Exports** | `function createCarryOrchestrator(ctx: CarryOrchestratorContext): { run(as_of: Date): Promise<CarryOrchestratorResult> }`; `const SIGNAL_ID = 'short_interest_change_30d'`; `const CARRY_PRIORS_LOOKBACK_DAYS = 35`; `interface CarryOrchestratorContext { supabase, operator_id }`; `interface CarryOrchestratorResult`. |
+| **File** | `supabase/functions/_shared/longshort-signals/short-interest-change/carry-orchestrator.ts` |
+| **Tests** | `carry-orchestrator_test.ts` — 7 Deno tests (empty universe → failed `empty_universe`; 4-outcome mapping with batch-shape assertions across CARRY/PAST_BOUND/NO_PUB/SKIP_NATIVE; carry `gics_sector` passthrough from anchor; persistence error → failed with counts preserved; latest-snapshot empty → failed; bulk priors read uses `fetchAllRows` range; `computed_at == as_of.toISOString()` for every row). |
+| **Wall-clock** | All timestamps derive from injected `as_of` (DEC-034 clause 4). No `Date.now()` / `new Date()` (the orchestrator uses `Date.parse` + `new Date(ms).toISOString()` for the pure 35d window-start arithmetic — date construction from a deterministic ms value, never reading the wall clock). |
+| **Added by** | FP-053 / DW-106-c-i (ACT-250). DW-106-c-ii will add the cron sibling handler that reuses this factory verbatim + stamps `system_config.dw_106_short_interest_heal_date` on first emission. |
+
+#### `supabase/functions/longshort-short-interest-carry-compute-manual/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-053 / DW-106-c-i) |
+| **Classification** | edge function — operator-trigger sibling for the short-interest CARRY orchestrator. Mirrors `longshort-short-interest-compute-manual/index.ts` minus Polygon (carry is pure-DB) minus `POLYGON_API_KEY` check minus `persistSignalComputeLog` (carry result shape is custom; telemetry rides the audit envelope). DOES NOT stamp `heal_date` — the DEC-059 n≥30 measurement window opens at the c-ii cron's first emission, NOT on operator smoke runs. Recommended path for §22.5.1 smoke validation before the c-ii cron is armed. |
+| **Trigger** | `authenticateRequest` (operator JWT) + `checkPermissionOrThrow('longshort.manage')`. POST with `{ "as_of": "YYYY-MM-DD" }` body. Does NOT register in `job_registry`. 405 on non-POST; 401 on no auth (verified by deployment 401-probe at ACT-250). |
+| **Pipeline** | auth → perm → body validation (`parseAsOfDate`) → future-`as_of` rejection via `productionClock` comparison → `.manual_triggered` audit BEFORE → `createCarryOrchestrator(ctx).run(as_of)` → `.manual_completed` or `.manual_failed` audit (dual-trail discipline). |
+| **File** | `supabase/functions/longshort-short-interest-carry-compute-manual/index.ts` |
+| **Tests** | None in c-i (the orchestrator factory is fully covered by `carry-orchestrator_test.ts`; source-sentinel tests for the manual fn will land alongside the c-ii cron handler test file to avoid duplicating mock infra). 401 deployment probe documented at ACT-250 STEP D. |
+| **Wall-clock** | `productionClock.getWallClockTs()` is the sole chokepoint (future-`as_of` guard); all orchestrator telemetry timestamps derive from `as_of` (DEC-034 clause 4). |
+| **Added by** | FP-053 / DW-106-c-i (ACT-250). |
 | **Added by** | FP-041 |
 
 #### `supabase/functions/_shared/longshort-signals/short-term-reversal/reversal-orchestrator.ts`
