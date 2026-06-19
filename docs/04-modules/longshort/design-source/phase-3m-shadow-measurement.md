@@ -18,13 +18,15 @@ Resolve **DW-109** — the §4.3.5 exclusion gate vs. coverage-weighted shrinkag
 |-----------|-------------|--------|
 | **3.M-i** | Schema (MIG-100): `combiner_book_shadow`, `combiner_forward_returns`, `combiner_shadow_variant_config` + DEC-059 + this design doc | **LANDED (this commit)** |
 | 3.M-ii    | Shadow assembler: no-exclusion reader over `signal_observations`, criticals-symmetric composite, `adjusted = composite × n / (n + k)` shrinkage, 12-variant writer | **PURE LAYER LANDED** (ACT-242) — `shadow-constants.ts` / `shadow-assembler.ts` / `shadow-ranker.ts` + tests; orchestrator + writer pending 3.M-iii |
-| 3.M-iii   | Edge fn `longshort-combiner-shadow-rank` + cron (post-3.0c-rank, daily, strict ordering) | pending |
+| 3.M-iii   | Edge fn `longshort-combiner-shadow-rank-manual` + shadow-ranker orchestrator (12-variant in-memory compute → chunked UPSERT into `combiner_book_shadow`); cron sibling deferred to 3.M-v phase-extension | **ORCHESTRATOR + MANUAL EDGE FN LANDED** (ACT-243) — `shadow-ranker-orchestrator.ts` + manual handler; deployed; live §22.5.1 smoke pending operator JWT |
 | 3.M-iv    | Edge fn `longshort-combiner-forward-returns` + cron (post-close, daily, idempotent, trading-day-arithmetic) | pending |
 | 3.M-v     | DW-109 promotion read-model (per-variant T+1/T+5/T+20 mean edge + paired-t + turnover) | pending |
 
 > **Cross-ref:** the locked promotion criteria + §1a single-checkpoint evaluation rule live in [`docs/decisions/DEC-059-dw109-resolution-rule.md`](../../../decisions/DEC-059-dw109-resolution-rule.md) (first cross-ref under the ratified standalone-DEC convention).
 >
 > **3.M-ii pure-layer note (ACT-242):** the shadow ranker's composite is a deliberate, isolated fork of the live `computeComposite` — the live function THROWS on an absent critical (load-bearing §4.3.5 invariant) and that throw is preserved untouched; the shadow composite guards on presence instead (criticals-symmetric, never throws) so the gate-relaxed regimes can be measured. A regression-tie unit test in `shadow-ranker_test.ts` asserts that for fully-gated input at `{ inclusionRule: 'gated', k: 0 }` the two rankers produce identical `(ticker, long_rank, short_rank)` — the load-bearing guard against silent drift.
+>
+> **3.M-iii orchestrator note (ACT-243):** the shadow orchestrator floors the universe to the latest `universe_membership` snapshot ≤ `as_of` (verbatim with the live `feature-assembler-orchestrator.ts`), reads exact-`as_of` `signal_observations` via `fetchAllRows` (1000-row PostgREST cap defeat — same corrective as ACT-237), intersects signal rows with the floored universe set (drops non-universe tickers), then computes ALL 12 active variants from `combiner_shadow_variant_config` in memory BEFORE any UPSERT. Any `ShadowBookOverlapError` returns `outcome:'failed'` with ZERO partial write. Persistence is a chunked UPSERT into `combiner_book_shadow` with `onConflict='operator_id,as_of_date,variant,side,rank_within_side'`; every row carries `computed_at = as_of.toISOString()` (DEC-034 (4) — no wall-clock). NOT writing `combiner_rankings_shadow` at 3.M-iii (book-only; per-variant ranks table is deferred and re-derivable from the book at forward-return read time). NO cron in this sub-phase — operator-invoked smoke only.
 
 ## Architecture (3.M-ii…v scope; documented here for the build prompts that follow)
 
