@@ -33,7 +33,7 @@ function bars(prefix = '2026-06-', startDom = 15, closes: number[]) {
 Deno.test('(acc-1) success math: long T+5 raw_return = horizon/seed - 1; signed == raw', () => {
   const bundle = bars('2026-06-', 15, [100, 101, 102, 103, 104, 110]);
   const m = new Map<string, any>([['AAPL', bundle]]);
-  const out = accrueReturns(m, [baseTuple({ horizon_td: 5 })]);
+  const out = accrueReturns(m, [baseTuple({ seed_as_of_date: '2026-06-15', horizon_td: 5 })]);
   assertEquals(out.length, 1);
   const r = out[0];
   assertEquals(r.price_source_status, 'success');
@@ -45,7 +45,7 @@ Deno.test('(acc-1) success math: long T+5 raw_return = horizon/seed - 1; signed 
 Deno.test('(acc-2) short side flips sign', () => {
   const bundle = bars('2026-06-', 15, [100, 110]);
   const m = new Map<string, any>([['AAPL', bundle]]);
-  const out = accrueReturns(m, [baseTuple({ horizon_td: 1, side: 'short' })]);
+  const out = accrueReturns(m, [baseTuple({ seed_as_of_date: '2026-06-15', horizon_td: 1, side: 'short' })]);
   assertAlmostEquals(out[0].raw_return!, 0.1, 1e-12);
   assertAlmostEquals(out[0].side_signed_return!, -0.1, 1e-12);
 });
