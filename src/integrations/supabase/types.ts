@@ -1261,6 +1261,7 @@ export type Database = {
       signal_observations: {
         Row: {
           as_of_date: string
+          carried_forward: boolean
           computed_at: string
           gics_sector: string | null
           is_present: boolean
@@ -1271,6 +1272,7 @@ export type Database = {
         }
         Insert: {
           as_of_date: string
+          carried_forward?: boolean
           computed_at?: string
           gics_sector?: string | null
           is_present: boolean
@@ -1281,6 +1283,7 @@ export type Database = {
         }
         Update: {
           as_of_date?: string
+          carried_forward?: boolean
           computed_at?: string
           gics_sector?: string | null
           is_present?: boolean
