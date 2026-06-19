@@ -251,6 +251,10 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | ART-015 | reference | Trading Panel Module | Trading-Foundation | `active` |
 | ART-016 | reference | Strategy Module Pattern | Trading-Foundation | `active` |
 | ART-017 | reference | Long-Short Design Source | Trading-Foundation | `active` |
+| ART-025 | migration | MIG-099 Combiner foundation 5-table schema | Phase 3.0a | `active` |
+| ART-026 | migration | MIG-100 Combiner Phase-3.M shadow measurement 3-table schema | Phase 3.M-i | `active` |
+| ART-027 | reference | Phase 3.M shadow-measurement design doc | Phase 3.M-i | `active` |
+| ART-028 | reference | DEC-059 DW-109 resolution rule | Phase 3.M-i | `active` |
 
 ---
 

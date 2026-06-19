@@ -177,3 +177,21 @@ The orchestrator does NOT touch `combiner_model_registry`. The fallback ranker i
 The manual edge function mirrors the `longshort-combiner-assemble-manual` skeleton: bare `createHandler` envelope + inline `authenticateRequest` + `checkPermissionOrThrow(authCtx.user.id, 'longshort.manage')` + `parseAsOfDate` body parse + `productionClock` future-as_of rejection + dual `writeStrategyAuditEvent` envelope (`longshort.combiner.rank.manual_triggered` BEFORE orchestrator; `manual_completed` or `manual_failed` AFTER).
 
 The manual fn is the §22.5.1 live-DB smoke surface for the 3.0c-ii build. The seed-only book (top-20 long / top-20 short) is what 3.0c emits; CROSSWIND §1.4 hysteresis / cap-25 / no-bumping / 31-day-re-entry block is the state-machine concern deferred to 3.0d per DW-105 — no `transition()` stub at 3.0c.
+
+### Combiner — Phase 3.M (Shadow Measurement)
+
+Phase 3.M is the **measurement-only** harness that resolves DW-109 (gate-vs-shrinkage, ~90% of the book, sign-unknown) on **forward-return evidence**. The live 3.0c gated path stays byte-identical; 3.M runs a parallel shadow path over the same `signal_observations`.
+
+**MIG-100 (3.M-i, landed 2026-06-19) — three new tables:**
+
+- `combiner_book_shadow` — parallel `combiner_book`, PK `(operator_id, as_of_date, variant, side, rank_within_side)` + UNIQUE `(operator_id, as_of_date, variant, ticker)`. The `variant` discriminator lets all 12 shadow variants coexist on the same `as_of`.
+- `combiner_forward_returns` — per-(seed_as_of, ticker, horizon) forward returns for both `combiner_book` and `combiner_book_shadow`. Horizons are trading-day offsets `{1, 5, 20}`. **Typed-absence CHECK** (`combiner_forward_returns_typed_absence_chk`): price-fetch failures persist `price_source_status ∈ {polygon_404, fetch_error}` with `raw_return` / `side_signed_return` NULL — no `-999`, ever.
+- `combiner_shadow_variant_config` — config-driven family; seeded with the 12-variant cross-product `{gated, criticals_required, no_gate} × k∈{0, 3, 5, 10}`, all `active=true`. Adding `k=2` later is one INSERT.
+
+RLS on all three tables mirrors `combiner_rankings` verbatim (GRANT SELECT TO authenticated + GRANT ALL TO service_role + 1 PERMISSIVE SELECT on `longshort.view` + 3 RESTRICTIVE per-command deny-writes).
+
+**Design lock:** [`design-source/phase-3m-shadow-measurement.md`](design-source/phase-3m-shadow-measurement.md).
+
+**Pre-registered resolution rule:** [DEC-059](../../decisions/DEC-059-dw109-resolution-rule.md) (T+5 mean edge ≥ 15 bp, paired t p<0.05, n≥30 paired seed-days post-DW-106 coverage-heal, T+1+T+20 directional corroboration, net-of-cost guard at Phase-5 promotion gate). Numbers locked before any post-DW-106 data accrues — changes require an explicit FP + superseding DEC.
+
+**Sub-phase ladder:** 3.M-i schema (LANDED) → 3.M-ii shadow assembler (reads `signal_observations` directly — NOT `combiner_feature_vectors`, whose excluded rows persist `features={}`) → 3.M-iii shadow-rank edge fn + cron → 3.M-iv forward-returns edge fn + cron → 3.M-v DW-109 promotion read-model. Build prompts authored separately.
