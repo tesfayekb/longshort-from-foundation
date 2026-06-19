@@ -40,6 +40,20 @@ export interface SignalRow {
   is_present: boolean;        // true iff value !== null; redundant but explicit for combiner queries
   gics_sector: string | null; // captured at compute time for forensic stability
   computed_at: string;        // ISO timestamp
+  /**
+   * DW-106-c (FP-053) — optional carry-forward audit flag. Default semantics
+   * (`undefined` ≡ `false`) preserve byte-equivalent behavior for every
+   * existing signal orchestrator that does NOT set the field — the
+   * missingness-capture mapper coerces with `?? false`, which the
+   * `signal_observations.carried_forward boolean NOT NULL DEFAULT false`
+   * column (MIG-101) absorbs without diff. Only the short-interest
+   * carry orchestrator populates this with `true` on `emit_carry`. The
+   * combiner reader (`feature-assembler-orchestrator.ts:179`) does NOT
+   * project this column, so a carried row is structurally
+   * indistinguishable from a native row at the feature-vector layer
+   * (`feature-assembler_carry-flag-isolation_test.ts` pins this).
+   */
+  carried_forward?: boolean;
 }
 
 /**
