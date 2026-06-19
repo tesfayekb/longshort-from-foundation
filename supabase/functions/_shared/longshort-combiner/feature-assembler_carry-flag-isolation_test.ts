@@ -131,7 +131,7 @@ Deno.test('(G3) combiner reader .select strings do NOT contain "carried_forward"
     new URL('./feature-assembler-orchestrator.ts', import.meta.url),
     new URL('./shadow-ranker-orchestrator.ts', import.meta.url),
   ];
-  let source: string[] = [];
+  const source: string[] = [];
   try {
     for (const u of targets) {
       source.push(await Deno.readTextFile(u));
