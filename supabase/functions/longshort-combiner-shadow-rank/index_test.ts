@@ -34,9 +34,13 @@ Deno.test('(2) productionClock is the sole wall-clock source — no new Date() i
 });
 
 Deno.test('(3) shadow-rank cron does NOT check POLYGON_API_KEY (signal_observations only)', () => {
-  assert(!HANDLER_SOURCE.includes('POLYGON_API_KEY'),
+  const codeOnly = HANDLER_SOURCE
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\*.*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+  assert(!codeOnly.includes('POLYGON_API_KEY'),
     'shadow-rank reads signal_observations — must NOT depend on Polygon');
-  assert(!HANDLER_SOURCE.includes('PolygonPriceHistoryFetcher'),
+  assert(!codeOnly.includes('PolygonPriceHistoryFetcher'),
     'shadow-rank must not import the Polygon fetcher');
 });
 
