@@ -33,6 +33,9 @@ type FRKey = {
   seed_as_of_date: string;
   ticker: string;
   horizon_td: number;
+  /** Status drives the anti-join filter introduced by the
+   *  3.M-iv maturation-retry corrective: only `'success'` rows are terminal. */
+  price_source_status?: 'success' | 'fetch_error' | 'polygon_404';
 };
 type Bar = { ts: string; close: number };
 
@@ -50,16 +53,26 @@ function makeSupabase(opts: {
   const shadow = opts.shadowRows ?? [];
   const existing = opts.existingFR ?? [];
 
-  function pagedBuilder<T>(rows: T[]) {
+  function pagedBuilder<T>(rows: T[], opts: { applyEqFilters?: boolean } = {}) {
     let range: { from: number; to: number } | null = null;
+    const eqFilters: Array<[string, unknown]> = [];
     const b: any = {
       select() { return b; },
-      eq() { return b; },
+      eq(col: string, val: unknown) {
+        if (opts.applyEqFilters) eqFilters.push([col, val]);
+        return b;
+      },
       in(_col: string, val: unknown) { calls.sigInFilters.push(val); return b; },
       range(from: number, to: number) { range = { from, to }; return b; },
       then(onFul: any, onRej: any) {
-        const w = range ?? { from: 0, to: rows.length - 1 };
-        const slice = rows.slice(w.from, w.to + 1);
+        let filtered = rows as unknown as Array<Record<string, unknown>>;
+        if (opts.applyEqFilters && eqFilters.length > 0) {
+          filtered = filtered.filter((r) =>
+            eqFilters.every(([c, v]) => r[c] === v),
+          );
+        }
+        const w = range ?? { from: 0, to: filtered.length - 1 };
+        const slice = filtered.slice(w.from, w.to + 1);
         return Promise.resolve({ data: slice, error: null }).then(onFul, onRej);
       },
     };
@@ -72,11 +85,14 @@ function makeSupabase(opts: {
       if (table === 'combiner_book_shadow') return pagedBuilder(shadow);
       if (table === 'combiner_forward_returns') {
         return {
-          ...pagedBuilder(existing),
+          ...pagedBuilder(existing, { applyEqFilters: true }),
           upsert(payload: any[], options: { onConflict: string }) {
             calls.upsertChunks.push({ payload, onConflict: options.onConflict });
             if (opts.upsertErr) return Promise.resolve({ error: opts.upsertErr });
             // Mutate existing so a follow-up read sees these as present.
+            // Carry `price_source_status` through so the anti-join filter
+            // (`.eq('price_source_status','success')`) sees the right shape
+            // after a retry overwrite flips a fetch_error row → success.
             for (const r of payload) {
               existing.push({
                 source_table: r.source_table,
@@ -84,6 +100,7 @@ function makeSupabase(opts: {
                 seed_as_of_date: r.seed_as_of_date,
                 ticker: r.ticker,
                 horizon_td: r.horizon_td,
+                price_source_status: r.price_source_status,
               });
             }
             return Promise.resolve({ error: null });
