@@ -53,20 +53,20 @@ function makeSupabase(opts: {
   const shadow = opts.shadowRows ?? [];
   const existing = opts.existingFR ?? [];
 
-  function pagedBuilder<T>(rows: T[], opts: { applyEqFilters?: boolean } = {}) {
+  function pagedBuilder<T>(rows: T[], cfg: { applyEqFilters?: boolean } = {}) {
     let range: { from: number; to: number } | null = null;
     const eqFilters: Array<[string, unknown]> = [];
     const b: any = {
       select() { return b; },
       eq(col: string, val: unknown) {
-        if (opts.applyEqFilters) eqFilters.push([col, val]);
+        if (cfg.applyEqFilters) eqFilters.push([col, val]);
         return b;
       },
       in(_col: string, val: unknown) { calls.sigInFilters.push(val); return b; },
       range(from: number, to: number) { range = { from, to }; return b; },
       then(onFul: any, onRej: any) {
         let filtered = rows as unknown as Array<Record<string, unknown>>;
-        if (opts.applyEqFilters && eqFilters.length > 0) {
+        if (cfg.applyEqFilters && eqFilters.length > 0) {
           filtered = filtered.filter((r) =>
             eqFilters.every(([c, v]) => r[c] === v),
           );
