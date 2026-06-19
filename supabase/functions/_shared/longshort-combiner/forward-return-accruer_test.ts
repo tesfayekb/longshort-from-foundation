@@ -1,4 +1,5 @@
 // @ts-nocheck — Deno test file; runs via `deno test`, not Vite/tsc.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Tests for the FP-052 3.M-iv pure forward-return accruer (ACT-244).
  *
