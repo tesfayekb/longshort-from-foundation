@@ -3773,3 +3773,48 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Purity boundary** | No `createClient`, no `service_role`, no wall-clock, no `-999`, no randomness in the orchestrator module. The injected `SupabaseClient` is the sole I/O surface; the manual handler injects `supabaseAdmin`. |
 | **Consumers** | `supabase/functions/longshort-combiner-rank-manual/index.ts` (manual edge fn, FP-052 3.0c-ii). Future Phase-3.0d cron sibling will reuse the same orchestrator factory. |
 | **Added by** | FP-052 3.0c-ii (ACT-239) |
+
+#### `supabase/functions/_shared/longshort-combiner/shadow-constants.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.M-ii / ACT-242) |
+| **Classification** | shared constants — combiner shadow harness. Pure constant module (no I/O, no clock, no randomness). |
+| **Exports** | `const INCLUSION_RULES = ['gated','criticals_required','no_gate']`; type `InclusionRule`; `const RANKER_SOURCE_SHADOW = 'count_normalized_shadow'`. |
+| **Drift protection** | `INCLUSION_RULES` MUST match the MIG-100 `combiner_book_shadow_inclusion_rule_chk` set verbatim; the literal is also load-bearing for `combiner_shadow_variant_config.inclusion_rule`. |
+| **File** | `supabase/functions/_shared/longshort-combiner/shadow-constants.ts` |
+| **Consumers** | `shadow-ranker.ts`, future 3.M-iii shadow orchestrator. |
+| **Added by** | FP-052 3.M-ii (ACT-242) |
+
+#### `supabase/functions/_shared/longshort-combiner/shadow-assembler.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.M-ii / ACT-242) |
+| **Classification** | pure-logic transform — NO-EXCLUSION shadow vector assembler. Groups raw `signal_observations` projections by ticker into `ShadowVector { ticker, gics_sector, present: Map<SignalId, number>, presentCount }`. Inclusion is applied downstream by `shadow-ranker.ts` per the variant `inclusion_rule`. Deliberately separate from `feature-assembler.ts` — the live assembler enforces the §4.3.5 exclusion gate as a load-bearing pre-condition of the live ranker and that invariant must remain loud and untouched. |
+| **Exports** | `function assembleShadowVectors(observations): ShadowVector[]`; interfaces `ShadowObservationInput`, `ShadowVector`. |
+| **Typed absence (ADR-008a)** | A row with `is_present===false` / `value===null` (or NaN / non-finite) contributes nothing and is NEVER coerced — the `present` Map carries only finite-numeric, `is_present=true` observations. The missing half of the typed-absence pair is never read. Unknown `signal_id` is silently dropped (F7 defense-in-depth). |
+| **Determinism** | Output sorted by ticker ASC for byte-deterministic replay. First non-null `gics_sector` wins (matches the live assembler precedent). |
+| **File** | `supabase/functions/_shared/longshort-combiner/shadow-assembler.ts` |
+| **Tests** | `shadow-assembler_test.ts` — 5 Deno unit tests (all-ticker grouping with no exclusion; typed-absence skip with value never coerced; deterministic ticker-ASC emission; unknown signal_id ignored; first-non-null gics_sector wins). |
+| **Purity** | No Supabase, no clock, no -999, no randomness. |
+| **Added by** | FP-052 3.M-ii (ACT-242) |
+
+#### `supabase/functions/_shared/longshort-combiner/shadow-ranker.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.M-ii / ACT-242) |
+| **Classification** | pure-logic transform — gate-relaxed shadow ranker measuring `inclusion_rule × k` variants in parallel to the live §6.4 ranker. Criticals-symmetric composite + coverage-weighted shrinkage + reuse of the live `(score, ticker)` comparator semantics. |
+| **Exports** | `function passesInclusion(vector, rule): boolean`; `function computeCompositeShadow(vector): { composite, presentCount }`; `function applyShrinkage(composite, n, k): number`; `function computeRankingsShadow(vectors, params): ShadowRankingRow[]`; `function seedShadowBook(ranked, size?): ShadowBookRow[]`; interfaces `ShadowVariantParams`, `ShadowRankingRow`, `ShadowBookRow`; `class ShadowBookOverlapError`. |
+| **Composite formula** | `composite = ( Σ_{i ∈ present} v_i ) / max(1, |present|)` iterating `SIGNAL_IDS_ALL` in catalog order. Every signal (critical and non-critical alike) is guarded on presence — the absent half of the typed-absence pair is never read. **DELIBERATE FORK from `ranker.ts`:** the live `computeComposite` THROWS on an absent critical (load-bearing §4.3.5 invariant on the live path); the shadow composite guards instead so the gate-relaxed regimes can be measured. The two composites are intentionally separate; the live throw stays loud. |
+| **Shrinkage** | `adjusted = composite × n / (n + k)`; `k=0` ⇒ factor 1. `k < 0` THROWS. |
+| **Inclusion rules** | `gated` mirrors §4.3.5 (both criticals AND non-critical present count ≥ `MIN_NON_CRITICAL_PRESENT=3`); `criticals_required` drops the floor; `no_gate` admits any vector with ≥1 present signal. |
+| **Determinism contract** | (a) Composite iterates `SIGNAL_IDS_ALL` in catalog order (IEEE-754 non-associativity ⇒ catalog sequence is the byte-identical replay guarantee, same as the live ranker). (b) Ranks computed in TypeScript (NEVER via PG `ORDER BY`); `long_rank` over `(adjusted DESC, ticker ASC)`; `short_rank` over `(adjusted ASC, ticker ASC)`. Sorts operate on COPIES so the catalog-order included[] preserves iteration sequence. |
+| **Book seeder** | `seedShadowBook` mirrors `book-seeder.ts` (no-overlap pre-persistence assertion + sorted overlap list for deterministic error msg) but is typed against shadow shapes and stamps `RANKER_SOURCE_SHADOW`. Re-using `seedBook` directly would require either coercing shadow rows into `RankingRow` (lossy) or editing `book-seeder.ts` to a generic shape (forbidden by scope). |
+| **Regression-tie** | `shadow-ranker_test.ts` includes the load-bearing regression-tie unit test: for fully-gated input at `{ inclusionRule: 'gated', k: 0 }`, `computeRankingsShadow` yields identical `(ticker, long_rank, short_rank)` to the live `computeRankings`. Drift between the two surfaces fails Gate 2 loudly. |
+| **File** | `supabase/functions/_shared/longshort-combiner/shadow-ranker.ts` |
+| **Consumers** | Future 3.M-iii shadow orchestrator (boundary layer that reads `signal_observations`, iterates the 12 active `combiner_shadow_variant_config` rows, calls `computeRankingsShadow` + `seedShadowBook`, then UPSERTs `combiner_book_shadow`). |
+| **Tests** | `shadow-ranker_test.ts` — 8 DB-free unit tests (criticals-symmetric no-throw on absent critical; catalog-order summation determinism; is_present guard / null never coerced; shrinkage math hand-verified incl. `composite=1, n=4, k=3 ⇒ 4/7`; the three inclusion rules filter exactly; ticker-ASC tiebreak; REGRESSION TIE vs live `computeRankings` on 5 fully-gated tickers; `seedShadowBook` stamps `RANKER_SOURCE_SHADOW` + throws `ShadowBookOverlapError` on overlap). |
+| **Purity** | No Supabase, no clock, no -999, no randomness. |
+| **Added by** | FP-052 3.M-ii (ACT-242) |
