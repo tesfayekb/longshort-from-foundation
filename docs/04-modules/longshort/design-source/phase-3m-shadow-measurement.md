@@ -17,10 +17,14 @@ Resolve **DW-109** — the §4.3.5 exclusion gate vs. coverage-weighted shrinkag
 | Sub-phase | Deliverable | Status |
 |-----------|-------------|--------|
 | **3.M-i** | Schema (MIG-100): `combiner_book_shadow`, `combiner_forward_returns`, `combiner_shadow_variant_config` + DEC-059 + this design doc | **LANDED (this commit)** |
-| 3.M-ii    | Shadow assembler: no-exclusion reader over `signal_observations`, criticals-symmetric composite, `adjusted = composite × n / (n + k)` shrinkage, 12-variant writer | pending |
+| 3.M-ii    | Shadow assembler: no-exclusion reader over `signal_observations`, criticals-symmetric composite, `adjusted = composite × n / (n + k)` shrinkage, 12-variant writer | **PURE LAYER LANDED** (ACT-242) — `shadow-constants.ts` / `shadow-assembler.ts` / `shadow-ranker.ts` + tests; orchestrator + writer pending 3.M-iii |
 | 3.M-iii   | Edge fn `longshort-combiner-shadow-rank` + cron (post-3.0c-rank, daily, strict ordering) | pending |
 | 3.M-iv    | Edge fn `longshort-combiner-forward-returns` + cron (post-close, daily, idempotent, trading-day-arithmetic) | pending |
 | 3.M-v     | DW-109 promotion read-model (per-variant T+1/T+5/T+20 mean edge + paired-t + turnover) | pending |
+
+> **Cross-ref:** the locked promotion criteria + §1a single-checkpoint evaluation rule live in [`docs/decisions/DEC-059-dw109-resolution-rule.md`](../../../decisions/DEC-059-dw109-resolution-rule.md) (first cross-ref under the ratified standalone-DEC convention).
+>
+> **3.M-ii pure-layer note (ACT-242):** the shadow ranker's composite is a deliberate, isolated fork of the live `computeComposite` — the live function THROWS on an absent critical (load-bearing §4.3.5 invariant) and that throw is preserved untouched; the shadow composite guards on presence instead (criticals-symmetric, never throws) so the gate-relaxed regimes can be measured. A regression-tie unit test in `shadow-ranker_test.ts` asserts that for fully-gated input at `{ inclusionRule: 'gated', k: 0 }` the two rankers produce identical `(ticker, long_rank, short_rank)` — the load-bearing guard against silent drift.
 
 ## Architecture (3.M-ii…v scope; documented here for the build prompts that follow)
 

@@ -33,6 +33,8 @@ Does NOT apply to:
 
    "Paired" = same seed `as_of_date`, same horizon, signed by side. The two series are `V.side_signed_return` and `live_gated.side_signed_return`, both written to `combiner_forward_returns` by the 3.M-iv job.
 
+§1a Evaluation timing. The primary test is evaluated once, at the first scheduled monthly review after n ≥ 30 paired post-DW-106-heal seed-days have accrued for the variant under test. If the variant does not clear all primary + corroboration criteria at that checkpoint, it is rejected for promotion. Re-evaluation of the same variant requires a superseding DEC that (a) cites the empirical reason, (b) pre-specifies the new checkpoint, and (c) applies an alpha penalty (Bonferroni across all looks taken on that variant) to preserve the 5% family-wise rate.
+
 2. **Corroboration (directional, not magnitude).** The T+1 and T+20 mean edges (variant minus live gated) must be the **same sign** as the T+5 edge. A T+5 winner that flips sign at T+1 or T+20 indicates a horizon-mining artifact and is rejected even if it meets the primary criterion.
 
 3. **Tie-break across qualifying variants.** When two or more variants qualify on the primary + corroboration tests:
