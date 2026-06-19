@@ -33,6 +33,9 @@ type FRKey = {
   seed_as_of_date: string;
   ticker: string;
   horizon_td: number;
+  /** Status drives the anti-join filter introduced by the
+   *  3.M-iv maturation-retry corrective: only `'success'` rows are terminal. */
+  price_source_status?: 'success' | 'fetch_error' | 'polygon_404';
 };
 type Bar = { ts: string; close: number };
 
@@ -50,16 +53,32 @@ function makeSupabase(opts: {
   const shadow = opts.shadowRows ?? [];
   const existing = opts.existingFR ?? [];
 
-  function pagedBuilder<T>(rows: T[]) {
+  function pagedBuilder<T>(rows: T[], cfg: { applyEqFilters?: boolean } = {}) {
     let range: { from: number; to: number } | null = null;
+    const eqFilters: Array<[string, unknown]> = [];
     const b: any = {
       select() { return b; },
-      eq() { return b; },
+      eq(col: string, val: unknown) {
+        // Only honor the `price_source_status` filter — that's the contract
+        // under test for the 3.M-iv anti-join. Other .eq() calls (e.g.
+        // operator_id) are intentionally no-ops because the in-memory mock
+        // rows omit those columns.
+        if (cfg.applyEqFilters && col === 'price_source_status') {
+          eqFilters.push([col, val]);
+        }
+        return b;
+      },
       in(_col: string, val: unknown) { calls.sigInFilters.push(val); return b; },
       range(from: number, to: number) { range = { from, to }; return b; },
       then(onFul: any, onRej: any) {
-        const w = range ?? { from: 0, to: rows.length - 1 };
-        const slice = rows.slice(w.from, w.to + 1);
+        let filtered = rows as unknown as Array<Record<string, unknown>>;
+        if (cfg.applyEqFilters && eqFilters.length > 0) {
+          filtered = filtered.filter((r) =>
+            eqFilters.every(([c, v]) => r[c] === v),
+          );
+        }
+        const w = range ?? { from: 0, to: filtered.length - 1 };
+        const slice = filtered.slice(w.from, w.to + 1);
         return Promise.resolve({ data: slice, error: null }).then(onFul, onRej);
       },
     };
@@ -72,11 +91,14 @@ function makeSupabase(opts: {
       if (table === 'combiner_book_shadow') return pagedBuilder(shadow);
       if (table === 'combiner_forward_returns') {
         return {
-          ...pagedBuilder(existing),
+          ...pagedBuilder(existing, { applyEqFilters: true }),
           upsert(payload: any[], options: { onConflict: string }) {
             calls.upsertChunks.push({ payload, onConflict: options.onConflict });
             if (opts.upsertErr) return Promise.resolve({ error: opts.upsertErr });
             // Mutate existing so a follow-up read sees these as present.
+            // Carry `price_source_status` through so the anti-join filter
+            // (`.eq('price_source_status','success')`) sees the right shape
+            // after a retry overwrite flips a fetch_error row → success.
             for (const r of payload) {
               existing.push({
                 source_table: r.source_table,
@@ -84,6 +106,7 @@ function makeSupabase(opts: {
                 seed_as_of_date: r.seed_as_of_date,
                 ticker: r.ticker,
                 horizon_td: r.horizon_td,
+                price_source_status: r.price_source_status,
               });
             }
             return Promise.resolve({ error: null });
@@ -126,7 +149,7 @@ Deno.test('(forch-1) anti-join: existing FR rows are not re-written', async () =
   ];
   // Already accrued T+1 for AAPL/live — only T+5 + T+20 should remain after anti-join.
   const existingFR: FRKey[] = [
-    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'AAPL', horizon_td: 1 },
+    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'AAPL', horizon_td: 1, price_source_status: 'success' },
   ];
   const bundles = new Map<string, Bar[]>([['AAPL', makeBars(1, 25, 100)]]);
   const { port } = makePriceHistory(bundles);
@@ -244,4 +267,80 @@ Deno.test('(forch-5) maturation floor: immature tuples excluded before fetch', a
   const payload = calls.upsertChunks.flatMap((c) => c.payload);
   assertEquals(payload.length, 1);
   assertEquals(payload[0].horizon_td, 1);
+});
+
+Deno.test('(forch-6) maturation-retry contract: success rows anti-joined; fetch_error rows re-attempted and overwritten when bars catch up', async () => {
+  // Two seeds, both T+1:
+  //   - MSFT: prior `success` row — MUST be anti-joined / NOT re-fetched.
+  //   - AAPL: prior `fetch_error` row (typed-absence from an earlier cron
+  //           run at the maturation-floor boundary, when the horizon bar
+  //           had not yet settled on Polygon) — MUST NOT be anti-joined,
+  //           MUST be re-attempted, and with bars now including the D+1
+  //           bar the run MUST write a `success` row that overwrites the
+  //           prior typed-absence row (PK is identical; onConflict UPSERT).
+  //
+  // This closes the systemic return-loss the 3.M-iv corrective addresses:
+  // without `.eq('price_source_status','success')` on the anti-join, the
+  // AAPL fetch_error row would be treated as terminal and the matured T+1
+  // return would be permanently lost.
+  const liveRows: LiveBookRow[] = [
+    { as_of_date: '2026-06-01', ticker: 'AAPL', side: 'long', score: 0.9 },
+    { as_of_date: '2026-06-01', ticker: 'MSFT', side: 'long', score: 0.8 },
+  ];
+  const existingFR: FRKey[] = [
+    // Prior cron-run typed-absence — eligible for retry under the new contract.
+    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'AAPL', horizon_td: 1, price_source_status: 'fetch_error' },
+    // Already-realized return — terminal under the new contract.
+    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'MSFT', horizon_td: 1, price_source_status: 'success' },
+    // Pre-existing terminal coverage for the T+5/T+20 horizons of both
+    // tickers so this case isolates the T+1 retry behavior cleanly.
+    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'AAPL', horizon_td: 5, price_source_status: 'success' },
+    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'AAPL', horizon_td: 20, price_source_status: 'success' },
+    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'MSFT', horizon_td: 5, price_source_status: 'success' },
+    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'MSFT', horizon_td: 20, price_source_status: 'success' },
+  ];
+  // Bars now include D+1 → AAPL's T+1 horizon bar is available; retry succeeds.
+  const bundles = new Map<string, Bar[]>([
+    ['AAPL', makeBars(1, 25, 100)],
+    ['MSFT', makeBars(1, 25, 200)],
+  ]);
+  const ph = makePriceHistory(bundles);
+  const { supabase, calls } = makeSupabase({ liveRows, existingFR });
+
+  const res = await createForwardReturnOrchestrator({
+    supabase, operator_id: OPERATOR_ID, priceHistory: ph.port,
+  }).run(new Date('2026-07-15T00:00:00Z'));
+
+  assertEquals(res.outcome, 'completed');
+  if (res.outcome !== 'completed') return;
+
+  // 2 tickers × 3 horizons = 6 candidates; 5 already-success → anti-joined;
+  // only AAPL T+1 (the fetch_error row) survives.
+  assertEquals(res.tuples_considered, 6);
+  assertEquals(res.tuples_after_anti_join, 1);
+  assertEquals(res.rows_written, 1);
+
+  // MSFT was never fetched (its sole survivor candidate was anti-joined out
+  // before dedup-by-ticker). AAPL WAS fetched (the retry path).
+  assertEquals(ph.fetched, ['AAPL']);
+
+  const payload = calls.upsertChunks.flatMap((c) => c.payload);
+  assertEquals(payload.length, 1);
+  const overwrite = payload[0];
+  assertEquals(overwrite.ticker, 'AAPL');
+  assertEquals(overwrite.horizon_td, 1);
+  assertEquals(overwrite.source_table, 'combiner_book');
+  assertEquals(overwrite.variant, LIVE_VARIANT_LABEL);
+  assertEquals(overwrite.seed_as_of_date, '2026-06-01');
+  assertEquals(overwrite.price_source_status, 'success');
+  assert(overwrite.raw_return !== null);
+  assert(overwrite.side_signed_return !== null);
+
+  // PK-identical to the prior fetch_error row → onConflict UPSERT overwrites
+  // it in place. Confirm the conflict target includes every PK column the
+  // typed-absence row was written under.
+  assertEquals(
+    calls.upsertChunks[0].onConflict,
+    'operator_id,source_table,variant,seed_as_of_date,ticker,horizon_td',
+  );
 });

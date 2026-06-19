@@ -239,6 +239,17 @@ export function createForwardReturnOrchestrator(
             .from('combiner_forward_returns')
             .select('source_table, variant, seed_as_of_date, ticker, horizon_td')
             .eq('operator_id', ctx.operator_id)
+            // Only `success` rows are TERMINAL for the anti-join. Non-success
+            // typed-absence rows (fetch_error / polygon_404) MUST be re-attempted
+            // every run — the bar array is the authoritative maturation signal
+            // per forward-return-constants.ts, and the onConflict UPSERT below
+            // overwrites the prior typed-absence row in place the moment the
+            // horizon bar settles. Without this filter, the first cron run
+            // after seed lands at the maturation-floor boundary (run_date ==
+            // seed + H cal days) BEFORE Polygon has settled the H-th trading
+            // day's close, writes fetch_error, and is then permanently locked
+            // out of recomputation → systemic return-loss across all horizons.
+            .eq('price_source_status', 'success')
             .in('seed_as_of_date', seedDates)
             .range(from, to),
         );

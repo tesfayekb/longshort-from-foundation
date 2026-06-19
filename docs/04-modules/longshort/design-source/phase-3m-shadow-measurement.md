@@ -152,6 +152,12 @@ Phase 3.M-ii through 3.M-v can begin measurement immediately after they land, BU
 - PK `(variant)`. Seeded with 12 active rows (cross-product of `{gated, criticals_required, no_gate} × {0, 3, 5, 10}`).
 - Adding `k=2` (or any new variant) later is **one INSERT** — no migration, no code change. This is the config-driven family knob.
 
+## Maturation-retry semantics (3.M-iv corrective, ACT-245)
+
+The `combiner_forward_returns` anti-join treats ONLY `price_source_status='success'` rows as terminal. Non-success typed-absence rows (`fetch_error`, `polygon_404`) are re-attempted every run and overwritten in place by the `onConflict` UPSERT the moment the horizon trading day's close settles on Polygon. The bar array — NOT the calendar maturation floor (`MATURATION_FLOOR_CAL_DAYS[H]`) — is the authoritative maturation signal: the floor is a pre-fetch pruning optimization that admits the tuple as soon as `run_date − seed ≥ H` calendar days, which under the 3.M-v daily cron lands one calendar day before the H-th *trading* day's close has settled (e.g. a T+1 seed at 23:30 UTC on day D first fires the FR job at 03:00 UTC on D+1, when D+1's bar is still pre-market on Polygon). Without the retry semantics this would write `fetch_error` and the legacy anti-join would lock the now-computable return out forever; with them, the row flips to `success` on the next run and overwrites the typed-absence row by PK.
+
+Permanent gaps (delisted, halted long-term, ticker change) remain terminal typed-absence indefinitely — the correct DEC-059 outcome (the tuple drops out of both numerator and denominator of every (V − live_gated) pairing). DW-110 logs the optional observability split (`horizon_pending` enum) and Polygon-budget cap for permanent-gap retries — pure observability + budget, NOT correctness; the anti-join fix carries the measurement series through to DEC-059 resolution unaided.
+
 ## Dependencies
 
 - MIG-100 (this commit) — schema landing

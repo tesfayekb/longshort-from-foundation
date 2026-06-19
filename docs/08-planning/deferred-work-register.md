@@ -2356,6 +2356,30 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
 
+### DW-110: Forward-return retry observability + budget — `horizon_pending` status enum and optional permanent-gap retry bound
+
+| Field | Value |
+|---|---|
+| **id** | DW-110 (next-free after DW-109; grep-verified at HEAD `6ea29ad7`). |
+| **date_deferred** | 2026-06-19 (logged at the 3.M-iv maturation-retry corrective, ACT-245). |
+| **source_plan_section** | FP-052 — 3.M-iv maturation-retry corrective (ACT-245). |
+| **source_phase** | Phase 3.M-iv (combiner forward-return accrual). |
+| **title** | (a) Add a `horizon_pending` value to the `combiner_forward_returns.price_source_status` CHECK so "horizon trading day not yet settled" is distinguished from terminal typed-absence (`fetch_error`, `polygon_404`), letting the orchestrator stop re-fetching permanent gaps every run; (b) optionally bound permanent-gap retries (cap by `now - seed > MAX_RETRY_DAYS` or bump `MATURATION_FLOOR_CAL_DAYS[H]` from `H` to `H+1`) as a Polygon-call-budget tweak. |
+| **reason_deferred** | Correctness is ALREADY CLOSED by ACT-245's one-line anti-join filter (`.eq('price_source_status', 'success')`) — non-success rows are now retried every run and overwritten in place by the `onConflict` UPSERT the moment the horizon bar settles, while genuinely permanent gaps (delisted, halted-long, ticker-change) remain typed-absence indefinitely, which is the correct DEC-059 outcome. The `horizon_pending` enum is **observability** (dashboards can distinguish "we'll get it tomorrow" from "delisted"), and the retry cap is **Polygon-budget** (caps wasted calls on permanent gaps). Both require a CHECK-constraint migration and DEC-059 evidence-mapping review — out of scope for a one-line cron-arming corrective, properly routed here per §22.3(c) scope-discipline. |
+| **blocking_dependencies** | None — independently actionable. Naturally ordered AFTER 3.M-v (cron arming) lands so the daily Polygon retry volume can be empirically measured before deciding the budget-tweak shape. |
+| **impact_on_source_phase** | NONE on FP-052 3.M closure. The 3.M-iv anti-join fix carries the measurement series through to DEC-059 resolution unaided; this deferred item improves observability and bounds long-tail Polygon spend. Latent risk if deferred indefinitely: every permanently-delisted ticker in any book seed accrues a fixed-cost Polygon call per daily cron tick forever (bounded by typical delisting cadence × book size — small in practice, but unbounded over years). |
+| **future_owner_phase** | Post-measurement (after DW-109 promotion decision lands) OR opportunistic if Polygon call budget becomes a concern at the 3.M-v cron's natural cadence. |
+| **future_owner_module** | longshort / combiner (`supabase/functions/_shared/longshort-combiner/forward-return-{accruer,orchestrator,constants}.ts` + CHECK-constraint MIG). |
+| **status** | logged (open; observability + budget only — correctness closed at ACT-245). |
+| **trigger_conditions** | (a) Post-DW-109 promotion decision (no measurement-correctness risk from the change); OR (b) Polygon call-budget review flags permanent-gap retries as a non-trivial daily cost; OR (c) a forensic / monitoring need surfaces to distinguish pending-bar absence from terminal absence in the audit surface (e.g. health dashboards, reconciliation reports). |
+| **scope_sketch** | (a) New MIG widening `combiner_forward_returns_price_source_status_check` to include `'horizon_pending'`; same MIG updates the typed-absence CHECK to permit NULL returns under `'horizon_pending'`; ledger entry. (b) `forward-return-constants.ts` adds `PRICE_STATUS_HORIZON_PENDING`. (c) `forward-return-accruer.ts` distinguishes the `horizon_idx >= bars.length` branch (→ `horizon_pending`) from the `seed_idx < 0` / null bundle / 'error' bundle branches (unchanged → `fetch_error` / `polygon_404`). (d) `forward-return-orchestrator.ts` anti-join filter widens to `.in('price_source_status', ['success'])` (unchanged in effect — terminals remain anti-joined; pending rows continue to retry). (e) Optional: cap retries by `(run_date - seed_date) > H + MAX_RETRY_DAYS` upstream of the fetch, OR bump `MATURATION_FLOOR_CAL_DAYS[H]` to `H + 1` as a less-precise budget knob. (f) Regression tests: pending → success overwrite (already covered by `(forch-6)`; extend to assert the status transition); permanent gap stays terminal across N runs (new). (g) DEC-059 evidence-mapping addendum confirming `horizon_pending` rows are excluded from the pairing denominator the same way `fetch_error` / `polygon_404` are. |
+| **estimated_complexity** | S (one MIG + three small code edits + two test additions + DEC addendum; no orchestrator-shape change). |
+| **related_decisions** | DEC-059 (DW-109 resolution rule — evidence-mapping must explicitly bind `horizon_pending` to the same exclusion treatment as other typed-absence values). DEC-034 (4) (clock discipline — the retry bound, if expressed as a calendar window, MUST derive from `as_of_run` not wall-clock). |
+| **related_actions** | ACT-245 (the 3.M-iv anti-join corrective that closed the correctness hole and surfaced this as observability + budget). |
+| **required_tests_for_closure** | (a) Migration verifier asserts `combiner_forward_returns_price_source_status_check` admits `'horizon_pending'` and the typed-absence CHECK permits NULL returns under it. (b) Accruer test: bundle with seed but no horizon bar → emits `'horizon_pending'` with NULL returns. (c) Orchestrator test: `horizon_pending` row from run-N is overwritten by a `success` row at run-N+1 when bars catch up. (d) Orchestrator test: `fetch_error` / `polygon_404` rows remain terminal across ≥2 runs (no retry). (e) DEC-059 addendum committed in the same PR. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
 ### DW-098: Signal #9 — NYSE-calendar holiday-aware trading-day stepper for window arithmetic
 
 | Field | Value |
