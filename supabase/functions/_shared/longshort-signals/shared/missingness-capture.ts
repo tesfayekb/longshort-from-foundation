@@ -50,6 +50,12 @@ export async function captureSignalObservations(
     is_present: r.is_present,
     gics_sector: r.gics_sector,
     computed_at: r.computed_at,
+    // DW-106-c (FP-053): optional carry-forward audit flag. Default-false
+    // semantics — every existing signal orchestrator leaves
+    // `r.carried_forward` undefined, which coerces to `false` and matches
+    // the MIG-101 column DEFAULT (byte-equivalent vs pre-DW-106-c). Only
+    // the short-interest CARRY orchestrator sets `true` on `emit_carry`.
+    carried_forward: r.carried_forward ?? false,
   }));
 
   const { error, count } = await supabase
