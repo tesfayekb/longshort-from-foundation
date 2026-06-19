@@ -1,3 +1,15 @@
+### ACT-247: FP-052 (Phase 3.M-v hygiene) — sql/19 comment-only ASCII sweep + portable self-check
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-247 (next-free after ACT-246). |
+| **Mode** | execution (Tier-B hygiene). Comment-only edit in `sql/19_longshort_combiner_shadow_cron_schedule.sql`; executable bytes (the two `cron.schedule` calls, `net.http_post`, headers JSON, schedules, placeholders) unchanged. |
+| **Authority** | Operator-authorized supervisor session 2026-06-19 (Tier-B ASCII sweep prompt). |
+| **Scope** | EDIT: (1) `sql/19_longshort_combiner_shadow_cron_schedule.sql` (replace em-dashes and section signs in `--` comments only; upgrade ASCII self-check to the full `grep -nP '[^\x00-\x7F]'` portable scan); (2) EDIT this file (ACT-247). |
+| **Verification** | `grep -nP '[^\x00-\x7F]' sql/19_longshort_combiner_shadow_cron_schedule.sql` → 0 matches. `git diff` shows only comment-line changes. |
+| **Gates** | Gate 4 `npx eslint .` → 0 errors (15 pre-existing warnings unchanged). Gate 2 unchanged (112 passed). |
+| **Out-of-scope** | Zero change to placeholders, secrets, executable SQL, schema, edge functions, cron arming, or any other file. |
+
 ### ACT-243: FP-052 (Phase 3.M-iii) — Shadow-ranker orchestrator + manual edge fn (12-variant in-memory compute → `combiner_book_shadow` UPSERT)
 
 ### ACT-246: FP-052 (Phase 3.M-v) — Shadow-rank + forward-returns cron edge fns + operator-applied schedule template; Phase 3.M COMPLETE
