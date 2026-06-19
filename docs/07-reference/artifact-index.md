@@ -582,6 +582,22 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Actions** | ACT-243 |
 | **Related Decisions** | DEC-023 (handler envelope), DEC-033 (per-strategy audit table — T4 trap), DEC-034 (4) (sole sanctioned wall-clock site = `productionClock` future-`as_of` reject), DEC-059 (DW-109 promotion rule the harness feeds). |
 | **Notes** | Permission: `longshort.manage`. Mirrors `longshort-combiner-rank-manual` (3.0c-ii / ART pending) verbatim in structure — `createHandler` + `authenticateRequest` + `checkPermissionOrThrow` + `parseAsOfDate` + `productionClock` future-`as_of` reject + dual `writeStrategyAuditEvent`. Invokes `createShadowRankerOrchestrator` which reads active variants from `combiner_shadow_variant_config`, floors universe `≤ as_of` from `universe_membership`, paginates `signal_observations` via `fetchAllRows` (MANDATORY — raw `.select()` would truncate at 1000 rows and silently collapse the shadow book per the 3.0b-ii defect), computes all 12 variants in memory, then chunked-UPSERTs `combiner_book_shadow` with `computed_at = as_of.toISOString()`. NO cron sibling at 3.M-iii (deferred to 3.M-v phase-extension). NO write to `combiner_rankings_shadow` (deferred; re-derivable from the book at forward-return read time). NO touch of any live combiner table. |
+
+### ART-030: Longshort Combiner Forward-Returns Manual Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-030 |
+| **Type** | edge-function |
+| **Title** | longshort-combiner-forward-returns-manual — operator-triggered T+1/T+5/T+20 forward-return accrual over live + 12 shadow books (FP-052 3.M-iv) |
+| **Source Path** | `supabase/functions/longshort-combiner-forward-returns-manual/index.ts` |
+| **Created Date** | 2026-06-19 |
+| **Owning Phase** | Phase 3.M-iv |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-007 |
+| **Status** | `active` (deployed 2026-06-19 at HEAD `ea7b4b2c`; no-auth probe returned 401 UNAUTHORIZED as expected; live §22.5.1 smoke pending operator JWT with `longshort.manage`) |
+| **Related Actions** | ACT-244 |
+| **Related Decisions** | DEC-023 (handler envelope), DEC-033 (per-strategy audit table — T4 trap), DEC-034 (4) (sole sanctioned wall-clock site = `productionClock` future-`as_of` reject), DEC-059 (DW-109 promotion rule the FR job feeds: paired `V.side_signed_return − live_gated.side_signed_return` at T+5). |
+| **Notes** | Permission: `longshort.manage`. Mirrors `longshort-combiner-shadow-rank-manual` (3.M-iii / ART-029) verbatim — `createHandler` + `authenticateRequest` + `checkPermissionOrThrow` + `parseAsOfDate` + `productionClock` future-`as_of` reject + dual `writeStrategyAuditEvent`. Invokes `createForwardReturnOrchestrator` which reads BOTH `combiner_book` (live; stamped `variant='live_gated'`) and `combiner_book_shadow` (12 variants) via `fetchAllRows`, crosses with `HORIZONS_TD=[1,5,20]`, applies the maturation-floor pre-filter (`{1:1,5:5,20:20}` calendar days — provably loose; bar array is authoritative), anti-joins against rows already in `combiner_forward_returns` (full PK), dedups survivors to distinct tickers, fetches Polygon adjusted-daily bars at `FR_CONCURRENCY=20` via the FP-009 `PolygonPriceHistoryFetcher` (re-used verbatim), then chunked-UPSERTs `combiner_forward_returns` with `computed_at = as_of_run.toISOString()` and `onConflict='operator_id,source_table,variant,seed_as_of_date,ticker,horizon_td'`. Per-ticker fetch failures become typed `fetch_error` rows with `raw_return=NULL`/`side_signed_return=NULL` — one bad ticker NEVER crashes the run (mirrors `momentum-orchestrator.ts`). NEVER `-999` — typed-absence per the `combiner_forward_returns_typed_absence_chk` CHECK. NO cron sibling at 3.M-iv (deferred to 3.M-v). NO write to `combiner_rankings_forward_returns` (does not exist). NO touch of any live combiner table, any shadow book, or `PolygonPriceHistoryFetcher` source. |
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
