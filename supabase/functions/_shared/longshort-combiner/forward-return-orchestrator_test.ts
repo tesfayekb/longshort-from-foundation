@@ -59,7 +59,13 @@ function makeSupabase(opts: {
     const b: any = {
       select() { return b; },
       eq(col: string, val: unknown) {
-        if (cfg.applyEqFilters) eqFilters.push([col, val]);
+        // Only honor the `price_source_status` filter — that's the contract
+        // under test for the 3.M-iv anti-join. Other .eq() calls (e.g.
+        // operator_id) are intentionally no-ops because the in-memory mock
+        // rows omit those columns.
+        if (cfg.applyEqFilters && col === 'price_source_status') {
+          eqFilters.push([col, val]);
+        }
         return b;
       },
       in(_col: string, val: unknown) { calls.sigInFilters.push(val); return b; },
