@@ -2197,6 +2197,48 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Lifecycle** | active |
 | **Added by** | FP-041 |
 
+#### `longshort.short_interest_carry.compute.manual_triggered` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the short-interest CARRY manual-trigger handler immediately after auth + permission + body validation succeed, BEFORE the carry orchestrator runs. Pairs with `.manual_completed` or `.manual_failed`. Distinct from `longshort.short_interest.compute.manual_*` family: the carry handler is pure-DB (no Polygon), implements the DEC-060 hold-last-value coverage-heal, and does NOT stamp `system_config.dw_106_short_interest_heal_date` (cron-only — DW-106-c-ii). |
+| **Emitted by** | `supabase/functions/longshort-short-interest-carry-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id: 'short_interest_change_30d', as_of, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-053 (DW-106-c-i / ACT-250) |
+
+#### `longshort.short_interest_carry.compute.manual_completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the short-interest CARRY manual-trigger handler after a successful `CarryOrchestratorResult` with `outcome='completed'`. `metadata` carries the per-outcome counts (`carried_count`, `past_bound_count`, `no_publication_count`, `skipped_native_count`) needed for §22.5.1 smoke verification without re-reading the DB. No `signal_compute_log` row is written (carry result shape is custom; telemetry rides the audit envelope). |
+| **Emitted by** | `supabase/functions/longshort-short-interest-carry-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id: 'short_interest_change_30d', as_of, outcome, universe_size, persisted_count, carried_count, past_bound_count, no_publication_count, skipped_native_count, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-053 (DW-106-c-i / ACT-250) |
+
+#### `longshort.short_interest_carry.compute.manual_failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the short-interest CARRY manual-trigger handler on orchestrator-throw (universe read failure, priors read failure, etc.), `outcome='failed'` structured result (`empty_universe`, persistence error), or any other failure path. Dual-trail discipline: a 200 response with `outcome='failed'` body still emits this event. `metadata.stage` discriminates the throw path (`orchestrator_throw`) from the structured-failed path (`stage` absent; `failure_reason` populated). |
+| **Emitted by** | `supabase/functions/longshort-short-interest-carry-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id: 'short_interest_change_30d', as_of, error?, failure_reason?, stage?, outcome?, universe_size?, persisted_count?, carried_count?, past_bound_count?, no_publication_count?, skipped_native_count?, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-053 (DW-106-c-i / ACT-250) |
+
 #### `longshort.signal_monitor.started` — v1
 
 | Field | Value |

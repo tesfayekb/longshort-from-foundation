@@ -2181,10 +2181,10 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **scope_sketch** | (a) WRITER side: each signal orchestrator emits an `is_present=1` row at as_of even when the underlying publication did not change, copying the last-published value (within the signal-specific staleness bound) and stamping `carried_forward=true` in `signal_observations.metadata`. (b) Per-signal bound table (single source of truth): one row per signal_id with `max_carry_forward_days`, defended by orchestrator-side check before writing. (c) READER side: the combiner orchestrator's exact-as_of query is unchanged (still `WHERE as_of_date = <as_of>`); the writer-side change makes the row exist. (d) Typed-absence contract uniformity: every signal writes EITHER a real-publication row OR a carried-forward row OR an `is_present=false` row at every as_of in the cadence — closes DW-108's cosmetic non-uniformity (`pead_sue_20d` writes is_present=false rows; momentum/short-interest currently silent-skip). (e) Migration adds `carried_forward boolean NOT NULL DEFAULT false` to `signal_observations`. |
 | **estimated_complexity** | L (per-signal writer changes × 9 signals + bound table + migration + uniformity sentinel test + 9 per-signal unit tests + integration test). |
 | **related_decisions** | CROSSWIND_SPEC.md L499 (per-signal staleness rules); DEC-060 (pre-registered short-interest carry design — 22-calendar-day bound, hold-last-value, heal_date stamp, forward-only, `carried_forward` flag); DW-108 (typed-absence on-disk persistence uniformity — DECOUPLED from DW-106 per DEC-060 scope-narrowing; stays separately deferred). |
-| **related_actions** | ACT-238 (this deferral); ACT-248 (DW-106-a foundation LANDED — schema + DEC-060). |
+| **related_actions** | ACT-238 (this deferral); ACT-248 (DW-106-a foundation LANDED — schema + DEC-060); ACT-249 (DW-106-b pure decider + reader-isolation guards LANDED); ACT-250 (DW-106-c-i pure-DB carry orchestrator + manual edge fn + SignalRow `carried_forward` passthrough LANDED). |
 | **required_tests_for_closure** | (a) Per-signal writer unit test asserting carry-forward fires within bound + emits `is_present=false` past bound. (b) Combiner reader test asserting carried-forward rows are indistinguishable from real-publication rows in the assembler vector shape (`carried_forward` flag does NOT leak into the feature vector). (c) T+1 information-ratio measurement shows per-signal IR within tolerance of pre-carry-forward baseline (no silent ROI bleed). (d) Catalog-uniformity sentinel: every signal emits a row at every catalog as_of (no silent-skip). |
 | **status** | in-progress (FP-053). |
-| **implemented_by_action** | DW-106-a → ACT-248 (foundation LANDED); DW-106-b → pending; DW-106-c → pending; DW-106-d → pending closure. |
+| **implemented_by_action** | DW-106-a → ACT-248 (foundation LANDED); DW-106-b → ACT-249 (pure decider LANDED); DW-106-c-i → ACT-250 (carry orchestrator + manual edge fn LANDED — NO heal_date); DW-106-c-ii → pending (cron + schedule + `heal_date` `system_config` upsert; reconciled slot `30 22 * * 1-5`); DW-106-d → pending closure. |
 | **implemented_in_plan_version** | FP-053. |
 
 ### DW-107: Insider-discovery SEC egress — non-blocked runner / proxy
@@ -2413,5 +2413,26 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **related_actions** | ACT-177 (this deferral); ACT-176 (Phase 3a — orchestrator + stepper landing); ACT-175 (Phase 2 — pure compute consuming windowed events). |
 | **required_tests_for_closure** | (a) NYSE-calendar table unit tests (≥ 6 tests covering each named holiday + half-day Friday + weekend-adjacent observance + leap-year edge); (b) `nthPrecedingTradingDay` parity test asserting the new path returns the same date as the weekends-only path on holiday-free windows (regression fence); (c) divergence test asserting the new path adds ≥ 1 trading-day step on a known double-holiday week (e.g. Thanksgiving-week as_of); (d) IC-ablation comparison fixture showing the upgrade's window-floor age-weight shift matches the predicted ≤ 22% per-event envelope; (e) replay-determinism test asserting `signal_compute_log.metadata.window_start_at` matches across pre-upgrade and post-upgrade for non-holiday weeks. |
 | **status** | open (PARK pending Phase-7 evidence). |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-111: Consolidate `calendarDaysBetween` / `dateDiffCalDays` into a shared `_shared/date` util
+
+| Field | Value |
+|---|---|
+| **id** | DW-111 (next-free after DW-110). |
+| **date_deferred** | 2026-06-19 (FP-053 / DW-106-b ACT-249 + DW-106-c-i ACT-250). |
+| **title** | Two byte-identical UTC-midnight calendar-day diff helpers exist: `dateDiffCalDays` at `_shared/longshort-combiner/forward-return-orchestrator.ts:113-118` and `calendarDaysBetween` at `_shared/longshort-signals/short-interest-change/carry-decider.ts`. Plus a sibling UTC-midnight date-arithmetic helper `isoDateMinusDays` in `_shared/longshort-signals/short-interest-change/carry-orchestrator.ts`. Consolidate into `_shared/date/calendar-days.ts` (pure; no clock; no IO). |
+| **why_deferred** | Low-priority refactor. Today the two diff impls are byte-identical (the carry-decider comment pins this verbatim), so the duplication is documentation-debt rather than behavioral-drift risk. Consolidating now would force a touch of `forward-return-orchestrator.ts` (a Phase 3.M-iv financial-critical file) for purely-cosmetic benefit, expanding the DW-106 commit blast-radius. The cleanup converges naturally on the next call site (≥3 consumers triggers the consolidation per the existing helper-extraction precedent in this codebase). |
+| **future_owner_module** | longshort / shared infra. |
+| **status** | logged. |
+| **trigger_conditions** | (a) A third call site for calendar-day diff appears OR a fourth UTC-midnight ISO-date helper appears (then the consolidation pays for itself); OR (b) Either current file is touched for an unrelated reason (then the consolidation rides the same commit at marginal cost); OR (c) An auditor flags the duplication. |
+| **scope_sketch** | NEW file `supabase/functions/_shared/date/calendar-days.ts` exporting `calendarDaysBetween(later: string, earlier: string): number` + `isoDateMinusDays(as_of_date: string, days: number): string` + the `MS_PER_DAY` constant. Update both existing call sites to import. NEW unit-test file with boundary cases (DST-spanning windows, leap years, year boundaries). |
+| **estimated_complexity** | XS (≤30 lines net; ≤8 tests). |
+| **blocking_dependencies** | None. |
+| **related_decisions** | DEC-060 §(ii) (the 22d bound the carry-decider helper measures); DEC-034 clause 4 (no-wall-clock — both helpers preserve this). |
+| **related_actions** | ACT-249 (DW-106-b — carry-decider helper landed with the duplication note); ACT-250 (DW-106-c-i — orchestrator added a sibling `isoDateMinusDays`). |
+| **required_tests_for_closure** | (a) Byte-identical-result tests proving the consolidated helper matches BOTH pre-consolidation impls across the boundary case grid; (b) call-site grep proving both old impls are deleted (no dead-code drift). |
+| **future_owner_phase** | Low-priority cleanup (folds into the next touch of either file or the third consumer's commit). |
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
