@@ -2415,3 +2415,24 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **status** | open (PARK pending Phase-7 evidence). |
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
+
+### DW-111: Consolidate `calendarDaysBetween` / `dateDiffCalDays` into a shared `_shared/date` util
+
+| Field | Value |
+|---|---|
+| **id** | DW-111 (next-free after DW-110). |
+| **date_deferred** | 2026-06-19 (FP-053 / DW-106-b ACT-249 + DW-106-c-i ACT-250). |
+| **title** | Two byte-identical UTC-midnight calendar-day diff helpers exist: `dateDiffCalDays` at `_shared/longshort-combiner/forward-return-orchestrator.ts:113-118` and `calendarDaysBetween` at `_shared/longshort-signals/short-interest-change/carry-decider.ts`. Plus a sibling UTC-midnight date-arithmetic helper `isoDateMinusDays` in `_shared/longshort-signals/short-interest-change/carry-orchestrator.ts`. Consolidate into `_shared/date/calendar-days.ts` (pure; no clock; no IO). |
+| **why_deferred** | Low-priority refactor. Today the two diff impls are byte-identical (the carry-decider comment pins this verbatim), so the duplication is documentation-debt rather than behavioral-drift risk. Consolidating now would force a touch of `forward-return-orchestrator.ts` (a Phase 3.M-iv financial-critical file) for purely-cosmetic benefit, expanding the DW-106 commit blast-radius. The cleanup converges naturally on the next call site (≥3 consumers triggers the consolidation per the existing helper-extraction precedent in this codebase). |
+| **future_owner_module** | longshort / shared infra. |
+| **status** | logged. |
+| **trigger_conditions** | (a) A third call site for calendar-day diff appears OR a fourth UTC-midnight ISO-date helper appears (then the consolidation pays for itself); OR (b) Either current file is touched for an unrelated reason (then the consolidation rides the same commit at marginal cost); OR (c) An auditor flags the duplication. |
+| **scope_sketch** | NEW file `supabase/functions/_shared/date/calendar-days.ts` exporting `calendarDaysBetween(later: string, earlier: string): number` + `isoDateMinusDays(as_of_date: string, days: number): string` + the `MS_PER_DAY` constant. Update both existing call sites to import. NEW unit-test file with boundary cases (DST-spanning windows, leap years, year boundaries). |
+| **estimated_complexity** | XS (≤30 lines net; ≤8 tests). |
+| **blocking_dependencies** | None. |
+| **related_decisions** | DEC-060 §(ii) (the 22d bound the carry-decider helper measures); DEC-034 clause 4 (no-wall-clock — both helpers preserve this). |
+| **related_actions** | ACT-249 (DW-106-b — carry-decider helper landed with the duplication note); ACT-250 (DW-106-c-i — orchestrator added a sibling `isoDateMinusDays`). |
+| **required_tests_for_closure** | (a) Byte-identical-result tests proving the consolidated helper matches BOTH pre-consolidation impls across the boundary case grid; (b) call-site grep proving both old impls are deleted (no dead-code drift). |
+| **future_owner_phase** | Low-priority cleanup (folds into the next touch of either file or the third consumer's commit). |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
