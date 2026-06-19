@@ -1905,3 +1905,40 @@ The two endpoints below were deployed as part of the auth + onboarding hardening
 | **Side effects** | UPSERTs into `combiner_forward_returns` only (chunked, full-PK onConflict). Does NOT touch `combiner_book`, `combiner_book_shadow`, `combiner_rankings`, `combiner_feature_vectors`, `combiner_model_registry`, or `job_registry` (operator-invoked smoke). Per-ticker Polygon fetch failures become typed `fetch_error` rows — they NEVER crash the run. |
 | **Lifecycle** | active |
 | **Added By** | FP-052 3.M-iv (ACT-244) |
+
+### POST /longshort-combiner-shadow-rank — Cron Shadow Ranker (FP-052 3.M-v)
+
+| Field | Value |
+|-------|-------|
+| **Path** | `POST /longshort-combiner-shadow-rank` |
+| **Classification** | privileged (cron-only) |
+| **Owner Module** | longshort (combiner — shadow-measurement harness cron arm) |
+| **Auth** | `X-Cron-Secret` header (`verifyCronSecret`) — NOT JWT. 401 on missing/bad header. |
+| **Permission** | n/a (cron-only path) |
+| **Rate Limit** | default (DEC-023 envelope via `_shared/handler.ts`) |
+| **Request Body** | ignored (cron `body := concat('{"time": …}')` payload) — `as_of` derives from `productionClock.getWallClockTs()` per DEC-034 (4). |
+| **Response** | identical to the `-manual` sibling minus `manual_*` audit, i.e. `{ status:'ok', operator_id, as_of, as_of_date, outcome, variants_active, variants_written, universe_size, observations_read, vectors_assembled, total_book_rows, per_variant_sizes, ranker_source, failure_reason?, correlation_id }`. |
+| **Audit** | Three-event envelope mirroring `longshort-momentum-compute`: `longshort.combiner.shadow_rank.started` → `.completed`/`.failed` → catch `.failed` with `stage='orchestrator_throw'`. All carry `trigger:'cron'`. Written to `longshort_audit_logs` (T4). |
+| **Side effects** | UPSERTs into `combiner_book_shadow` only (orchestrator verbatim). |
+| **Schedule (operator-applied)** | `30 23 * * 1-5` (23:30 UTC weekdays) via `sql/19_longshort_combiner_shadow_cron_schedule.sql` (§22.5.3 Dashboard). |
+| **Lifecycle** | active — deployed at ACT-246; 401 probe green; awaiting operator schedule-apply. |
+| **Added By** | FP-052 3.M-v (ACT-246) |
+
+### POST /longshort-combiner-forward-returns — Cron Forward-Return Accrual (FP-052 3.M-v)
+
+| Field | Value |
+|-------|-------|
+| **Path** | `POST /longshort-combiner-forward-returns` |
+| **Classification** | privileged (cron-only) |
+| **Owner Module** | longshort (combiner — DEC-059 evidence surface, daily accrual) |
+| **Auth** | `X-Cron-Secret` header (`verifyCronSecret`). 401 on missing/bad. |
+| **Permission** | n/a (cron-only path) |
+| **Rate Limit** | default (DEC-023 envelope) |
+| **Request Body** | ignored — `as_of_run = productionClock.getWallClockTs()` (DEC-034 (4)). |
+| **Response** | identical to the `-manual` sibling minus `manual_*` audit: `{ status:'ok', operator_id, as_of, as_of_date, outcome, tuples_considered, tuples_after_anti_join, distinct_tickers_fetched, rows_written, by_horizon, by_status, failure_reason?, correlation_id }`. Per-ticker `fetch_error`/`polygon_404` rows are NORMAL (typed-absence reported in `by_status`, retried on next cron tick per ACT-245 corrective). |
+| **Audit** | Three-event envelope (mirrors momentum-compute): `.started` → `.completed`/`.failed` → catch `.failed` with `stage='orchestrator_throw'`. All carry `trigger:'cron'`. Written to `longshort_audit_logs`. |
+| **POLYGON_API_KEY** | Required — missing returns 500 `polygon_api_key_unset`. |
+| **Side effects** | UPSERTs into `combiner_forward_returns` only. |
+| **Schedule (operator-applied)** | `0 3 * * 2-6` (03:00 UTC Tue–Sat). INDEPENDENT of shadow-rank — iterates PAST matured seeds. Applied via `sql/19_*_shadow_cron_schedule.sql` (§22.5.3 Dashboard). |
+| **Lifecycle** | active — deployed at ACT-246; 401 probe green; awaiting operator schedule-apply. |
+| **Added By** | FP-052 3.M-v (ACT-246) |

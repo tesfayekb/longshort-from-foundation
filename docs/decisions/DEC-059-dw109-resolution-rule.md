@@ -72,6 +72,30 @@ Does NOT apply to:
 
 Operator-authorized supervisor session 2026-06-19. Locked at MIG-100 / ACT-241.
 
+## Baseline-arm clarification (operator-ratified, pre-data, ACT-246)
+
+The operative baseline-arm referenced as `live_gated` in §1 is **`gated_k0`** —
+the byte-identical daily-accruing in-harness shadow mirror of the live gated
+combiner (inclusion_rule=`gated`, k=0). The 3.M-ii regression-tie test (E4 at
+ACT-242 proved 40/40 byte-identical against `live_gated`) is the load-bearing
+guarantee that `gated_k0` IS `live_gated` for measurement purposes. The
+`source_table='combiner_book'` arm (stamped `variant='live_gated'`) accrues
+daily **only when the live-rank cron is armed** — currently deferred as
+Phase-5-prep (not 3.M scope).
+
+Operative implication for DW-109 evaluation: the §1 paired comparison
+`mean(V.side_signed_return − live_gated.side_signed_return)` reads
+`gated_k0` as the baseline-arm series whenever the live-book arm is absent
+for a seed-day. The regression-tie test guards byte-identity; no threshold,
+horizon, sample-size, p-value, corroboration rule, tie-break, or net-of-cost
+clause is altered by this clarification. The §1 pre-registration discipline
+stands verbatim.
+
+This clarification is a **pre-data baseline operational definition** (not a
+threshold change); it completes §1 before the 3.M-v cron-driven measurement
+series begins accruing under operator schedule-apply. Authored at ACT-246
+pre-arm.
+
 ## Dependencies
 
 - [DW-109](../08-planning/deferred-work-register.md) — the question being resolved

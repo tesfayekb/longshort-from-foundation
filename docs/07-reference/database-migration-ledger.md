@@ -1304,6 +1304,20 @@ This subsection records `sql/NN_*_cron_schedule.sql` artifacts that are applied 
 | Linked Actions | ACT-129 |
 | Linked Decisions | DEC-040 |
 
+### sql/19 — `longshort-combiner-shadow-rank` + `longshort-combiner-forward-returns` cron schedules (FP-052 3.M-v / ART-031 + ART-032)
+
+| Field | Value |
+|-------|-------|
+| File | `sql/19_longshort_combiner_shadow_cron_schedule.sql` |
+| Source Dir | `sql/` (per MIG-031 precedent — operator-replaced secrets must not be committed) |
+| Applied | pending (authored 2026-06-19 at ACT-246; operator applies via Supabase SQL Editor with placeholder substitution + ASCII-quote self-check) |
+| Purpose | Arms the two shadow-measurement cron edge fns (FP-052 3.M-v): `longshort-combiner-shadow-rank` at `30 23 * * 1-5` (23:30 UTC weekdays — seeds `combiner_book_shadow` for all 12 active variants daily) and `longshort-combiner-forward-returns` at `0 3 * * 2-6` (03:00 UTC Tue–Sat — accrues matured T+1/T+5/T+20 returns into `combiner_forward_returns`). The DEC-059 measurement window for DW-109 opens on schedule-apply (n≥30 paired post-DW-106-heal seed-days starts accruing here). |
+| Pattern | Mirrors `sql/09_longshort_universe_cron_schedule.sql` + `sql/14_longshort_signal_cron_schedule.sql` canonical placeholder-and-shape pattern: dual-header authentication (`Authorization: Bearer` + `X-Cron-Secret`), MANUAL-STEP placeholder discipline (`PROJECT_REF` / `YOUR_ANON_KEY` / `YOUR_CRON_SECRET_VALUE`), three post-apply verification queries embedded as SQL comments (DEC-040 clauses 1–3). Idempotent re-apply via `cron.schedule()` `(jobname, username)` upsert. Header carries the **ASCII-quote self-check** `grep -P '[\x{2018}\x{2019}\x{201C}\x{201D}]'` (the jobid:78 curly-quote crash class). Existing `CRON_SECRET` is REUSED — no new secret minted. |
+| Verification | Post-apply: (a) exactly 2 rows in `cron.job` for the new jobnames, both `active=true`, schedules byte-match; (b) `PROJECT_REF`-literal sweep returns 0 rows for the new jobnames (INC-64 defense); (c) freshness gate — after one weekday 23:30 UTC tick `combiner_book_shadow` carries 12 variants for today's `as_of_date` with `latest_computed_at` within minutes of the cron slot, and after one Tue–Sat 03:00 UTC tick `combiner_forward_returns` carries a fresh `computed_at` row (T+1 cohort `success`-status; T+5/T+20 fill in as bars settle per ACT-245 retry semantics). PASTE all three verbatim into the ACT-246 closure record. |
+| Notes | Operator-applied out-of-band per MIG-031 precedent (operator-replaced secrets must not be committed). Carries plaintext `X-Cron-Secret` in live `cron.job.command` post-apply (INC-63 — pg_cron design constraint; rotation queued as separate platform hygiene). NEITHER fn has a `job_registry` row — 3.M is the shadow-measurement harness (DEC-040 scoping), visibility comes from `combiner_book_shadow` + `combiner_forward_returns` + `longshort_audit_logs`. Authoritative metadata: `docs/07-reference/artifact-index.md` ART-031 + ART-032. |
+| Linked Actions | ACT-246 |
+| Linked Decisions | DEC-040, DEC-059 |
+
 
 ### MIG-071: FP-022 / C-F4 Phase 2.1+ — `signal_compute_log.skipped_detail` additive `jsonb` column (per-ticker skip attribution)
 
