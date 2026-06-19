@@ -1093,6 +1093,17 @@ If any field is missing → the decision is **INVALID**.
 
 **Convention:** standalone files `docs/decisions/DEC-NNN-<slug>.md` for DEC-059 onward; this file is the canonical index (one entry per DEC). DEC-001–058 remain inline (not backfilled).
 
+## DEC-060 Index Entry
+
+| Field | Value |
+|---|---|
+| **ID** | DEC-060 |
+| **Title** | Short-interest carry-forward pre-registered design (hold-last-value, 22-calendar-day bound, heal_date stamped on first emission, forward-only, `carried_forward` audit flag) |
+| **Status** | active (pre-registered 2026-06-19, DW-106-a foundation) |
+| **Date** | 2026-06-19 |
+| **Summary** | Locks the writer-side short-interest carry design before the DW-106-c cron lands: hold-last-value (no decay — SI is a state), 22-calendar-day staleness bound (covers FINRA ~15d cadence + missed-publication slack; trips to typed-absence only on a genuinely missed cycle), `heal_date` upserted to `system_config` on the first carry-emitting cron fire (downstream consumer = DEC-059 §1 n≥30 cutoff), forward-only (backfill explicitly forbidden — buys zero clock acceleration and corrupts the cutoff), `carried_forward` boolean (audit-only; MUST NOT leak into the feature vector). Re-tuning any parameter requires an FP + superseding DEC per §(vi). |
+| **Link** | [`docs/decisions/DEC-060-short-interest-carry-forward.md`](../decisions/DEC-060-short-interest-carry-forward.md) (verbatim body — load-bearing; read in full before any DW-106-b/c authoring) |
+
 ## Enforcement Rule (CRITICAL)
 
 - AI MUST read this document before any plan revision or execution
