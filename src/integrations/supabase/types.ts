@@ -166,6 +166,48 @@ export type Database = {
         }
         Relationships: []
       }
+      combiner_book_shadow: {
+        Row: {
+          as_of_date: string
+          computed_at: string
+          inclusion_rule: string
+          k: number
+          operator_id: string
+          rank_within_side: number
+          ranker_source: string
+          score: number
+          side: string
+          ticker: string
+          variant: string
+        }
+        Insert: {
+          as_of_date: string
+          computed_at?: string
+          inclusion_rule: string
+          k: number
+          operator_id: string
+          rank_within_side: number
+          ranker_source: string
+          score: number
+          side: string
+          ticker: string
+          variant: string
+        }
+        Update: {
+          as_of_date?: string
+          computed_at?: string
+          inclusion_rule?: string
+          k?: number
+          operator_id?: string
+          rank_within_side?: number
+          ranker_source?: string
+          score?: number
+          side?: string
+          ticker?: string
+          variant?: string
+        }
+        Relationships: []
+      }
       combiner_feature_vectors: {
         Row: {
           as_of_date: string
@@ -196,6 +238,54 @@ export type Database = {
           gics_sector?: string | null
           operator_id?: string
           ticker?: string
+        }
+        Relationships: []
+      }
+      combiner_forward_returns: {
+        Row: {
+          computed_at: string
+          horizon_close_date: string | null
+          horizon_td: number
+          operator_id: string
+          price_source_status: string
+          raw_return: number | null
+          seed_as_of_date: string
+          seed_score: number | null
+          side: string
+          side_signed_return: number | null
+          source_table: string
+          ticker: string
+          variant: string
+        }
+        Insert: {
+          computed_at?: string
+          horizon_close_date?: string | null
+          horizon_td: number
+          operator_id: string
+          price_source_status: string
+          raw_return?: number | null
+          seed_as_of_date: string
+          seed_score?: number | null
+          side: string
+          side_signed_return?: number | null
+          source_table: string
+          ticker: string
+          variant: string
+        }
+        Update: {
+          computed_at?: string
+          horizon_close_date?: string | null
+          horizon_td?: number
+          operator_id?: string
+          price_source_status?: string
+          raw_return?: number | null
+          seed_as_of_date?: string
+          seed_score?: number | null
+          side?: string
+          side_signed_return?: number | null
+          source_table?: string
+          ticker?: string
+          variant?: string
         }
         Relationships: []
       }
@@ -280,6 +370,30 @@ export type Database = {
           short_rank?: number
           short_score?: number
           ticker?: string
+        }
+        Relationships: []
+      }
+      combiner_shadow_variant_config: {
+        Row: {
+          active: boolean
+          created_at: string
+          inclusion_rule: string
+          k: number
+          variant: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          inclusion_rule: string
+          k: number
+          variant: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          inclusion_rule?: string
+          k?: number
+          variant?: string
         }
         Relationships: []
       }

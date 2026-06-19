@@ -251,6 +251,10 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | ART-015 | reference | Trading Panel Module | Trading-Foundation | `active` |
 | ART-016 | reference | Strategy Module Pattern | Trading-Foundation | `active` |
 | ART-017 | reference | Long-Short Design Source | Trading-Foundation | `active` |
+| ART-025 | migration | MIG-099 Combiner foundation 5-table schema | Phase 3.0a | `active` |
+| ART-026 | migration | MIG-100 Combiner Phase-3.M shadow measurement 3-table schema | Phase 3.M-i | `active` |
+| ART-027 | reference | Phase 3.M shadow-measurement design doc | Phase 3.M-i | `active` |
+| ART-028 | reference | DEC-059 DW-109 resolution rule | Phase 3.M-i | `active` |
 
 ---
 
@@ -514,6 +518,54 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Actions** | ACT-233 (this apply commit); ACT-232 (schema-lock corrective); ACT-231 (MIG-099 de-pinning); ACT-230 (FP-052 (3.0) authoring) |
 | **Related Decisions** | DEC-023 (envelope — referenced for the 3.0b edge function, NOT applied by this migration); DEC-042 (RESTRICTIVE deny-write template); DEC-054 (combiner enhancement scheduling — independent FPs); ADR-008 (sentinel-introduction — 3.0b scope, NOT touched here). |
 | **Notes** | Atomic create+apply (single `BEGIN/COMMIT` file). RLS template cloned verbatim from MIG-075 (`signal_registry`): GRANT SELECT TO authenticated + GRANT ALL TO service_role + 1 PERMISSIVE SELECT on `longshort.view` + 3 RESTRICTIVE per-command deny-writes. No `anon`, no operator-scoped read (DEC-042). Idempotent: `CREATE TABLE/INDEX IF NOT EXISTS` + `DROP POLICY/TRIGGER IF EXISTS` before each `CREATE`. NO enum types (R3a — `status` is `text` + CHECK matching `signal_registry.status`). NO `model_version_*` columns on `combiner_rankings` at 3.0a (3.2 adds NULLable per-side without schema change). NO sentinel literal `-999`. NO `_shared/`, NO edge functions, NO `src/` (those are 3.0b–d). Two-ranking shape per CROSSWIND §1.4 + §6.1/§6.2: a name carries both `long_rank` AND `short_rank` on the same `as_of_date`. `combiner_book` has `UNIQUE(operator_id, as_of_date, ticker)` preventing double-side placement. `combiner_model_registry` has partial unique `(side) WHERE status='active'` enforcing single-active-per-side invariant. `combiner_shap_attribution` FK CASCADE to `combiner_rankings`; FK SET NULL to `combiner_model_registry.model_id`. Five tables registered as queryable Phase-4 portfolio-sizing surfaces. |
+
+### ART-026: Combiner Phase-3.M Shadow Measurement Schema Migration (MIG-100)
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-026 |
+| **Type** | migration (atomic create+apply per §22.5.1) |
+| **Title** | MIG-100 / FP-052 (Phase 3.M-i) — Shadow-measurement 3-table schema: `combiner_book_shadow`, `combiner_forward_returns`, `combiner_shadow_variant_config` (seeded 12 variants) |
+| **Source Path** | `supabase/migrations/20260619014910_6516fc22-d169-4ca5-b7d4-e3a20f26fba0.sql` |
+| **Created Date** | 2026-06-19 |
+| **Owning Phase** | Phase 3.M-i (FP-052 shadow-measurement harness foundation) |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-007 |
+| **Status** | `active` (applied via Lovable supabase--migration tool 2026-06-19; live-DB §22.5.1 verification GREEN at ACT-241 — 3/3 tables present, `combiner_shadow_variant_config` rows=12 / active=12, typed-absence CHECK `combiner_forward_returns_typed_absence_chk` enforced on the forward-returns table) |
+| **Related Actions** | ACT-241 (this apply commit); ACT-240 (DW-109 ROI promotion + composition analysis); ACT-239 (3.0c-ii close) |
+| **Related Decisions** | DEC-059 (pre-registered DW-109 resolution rule); DEC-042 (RESTRICTIVE deny-write template); DEC-054 (combiner enhancement scheduling). |
+| **Notes** | Strictly additive. The live 3.0c gated path (`combiner_book`, `combiner_rankings`, `combiner_feature_vectors`, `combiner_model_registry`, `combiner_shap_attribution`) is byte-untouched. RLS template cloned verbatim from MIG-099 (`combiner_rankings`/`combiner_book`): GRANT SELECT TO authenticated + GRANT ALL TO service_role + 1 PERMISSIVE SELECT on `longshort.view` + 3 RESTRICTIVE per-command deny-writes. No anon, no operator-scoped read. Idempotent (`CREATE TABLE/INDEX IF NOT EXISTS`, `DROP POLICY IF EXISTS`, `INSERT … ON CONFLICT DO NOTHING` on the variant seed). `combiner_book_shadow` adds `variant` to BOTH the PK and the per-day UNIQUE so 12 variants coexist on the same `as_of_date`. `combiner_forward_returns` enforces typed-absence via a single CHECK constraint: `price_source_status='success'` ⇒ all return fields NOT NULL; non-success ⇒ `raw_return` + `side_signed_return` NULL. **NO `-999` literal anywhere.** `combiner_shadow_variant_config` is the config-driven family knob (variant labels `<inclusion_rule>_k<k>`; adding `k=2` later is one INSERT). |
+
+### ART-027: Phase 3.M Shadow-Measurement Design Doc
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-027 |
+| **Type** | reference |
+| **Title** | Phase 3.M shadow-measurement harness design — architecture + live-path invariance + source-of-truth note + criticals-symmetric composite + DW-109 promotion ladder |
+| **Source Path** | `docs/04-modules/longshort/design-source/phase-3m-shadow-measurement.md` |
+| **Created Date** | 2026-06-19 |
+| **Owning Phase** | Phase 3.M-i |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-007 |
+| **Status** | `active` |
+| **Related Actions** | ACT-241 |
+| **Related Decisions** | DEC-059 |
+| **Notes** | Documents the 3.M sub-phase ladder (i schema LANDED → ii shadow assembler → iii shadow-rank edge fn + cron → iv forward-returns edge fn + cron → v DW-109 promotion read-model). Locks the load-bearing source-of-truth rule (shadow assembler MUST read `signal_observations`, NOT `combiner_feature_vectors` whose excluded rows persist `features={}`). Locks the criticals-symmetric composite under `no_gate`. Documents trading-day horizon arithmetic (no `Date.now()`). Documents the turnover-jaccard byproduct metric for the Phase-5 net-of-cost guard. |
+
+### ART-028: DEC-059 DW-109 Resolution Rule
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-028 |
+| **Type** | reference (decision record) |
+| **Title** | DEC-059 — Pre-registered DW-109 resolution rule (T+5 ≥ 15bp, paired t p<0.05, n≥30 post-DW-106 paired seed-days, T+1/T+20 directional corroboration, net-of-cost guard) |
+| **Source Path** | `docs/decisions/DEC-059-dw109-resolution-rule.md` |
+| **Created Date** | 2026-06-19 |
+| **Owning Phase** | Phase 3.M-i (pre-registration before any post-DW-106 evidence accrues) |
+| **Owning Plan Section** | PLAN-TRADING-001-LONGSHORT-007 |
+| **Status** | `active` |
+| **Related Actions** | ACT-241 |
+| **Related Decisions** | (none superseded; first DEC on this axis) |
+| **Notes** | First standalone DEC file under `docs/decisions/` (prior DECs are tracked inline in `docs/08-planning/approved-decisions.md`; that file's DEC-059 row points here for the verbatim rule). The pre-registration is load-bearing: any change to the 15 bp threshold, n≥30 sample size, p<0.05 significance, T+5 primary horizon, corroboration requirement, tie-break order, or net-of-cost guard requires (a) an FP authored before the change is applied to any in-flight measurement, AND (b) a superseding DEC. |
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)

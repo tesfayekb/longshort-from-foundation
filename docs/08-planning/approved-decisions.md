@@ -1080,6 +1080,15 @@ If any field is missing → the decision is **INVALID**.
 - Superseded decisions MUST reference the original decision ID
 - New decisions that replace existing ones MUST include a `superseded-by` link
 
+## DEC-059 — Pre-registered DW-109 resolution rule (T+5 ≥ 15 bp, paired t p<0.05, n≥30, post-DW-106)
+
+- **Status:** active (pre-registered 2026-06-19)
+- **Authority:** Operator-authorized supervisor session 2026-06-19; ACT-241; MIG-100.
+- **Full text:** [`docs/decisions/DEC-059-dw109-resolution-rule.md`](../decisions/DEC-059-dw109-resolution-rule.md) (verbatim, load-bearing — read in full before any DW-109 promotion review).
+- **Summary:** Promote a relaxed shadow variant to live ONLY IF mean (variant − live_gated) `side_signed_return` at T+5 ≥ 15 bp, paired t p<0.05, n≥30 paired seed-days **after** DW-106 coverage-heal; T+1 and T+20 same-sign corroboration required; tie-break on highest T+5 edge then lower daily-edge variance; net-of-cost guard at Phase-5 promotion gate (turnover jaccard from `combiner_book_shadow`). Numbers locked before any post-DW-106 data accrues — changes require an explicit FP + superseding DEC (pre-registration clause).
+- **Pairs with:** DW-109, FP-052 (Phase 3.M), MIG-100 (ART-026), Phase 3.M design doc (ART-027).
+- **Note on file location:** This is the first standalone DEC under `docs/decisions/` (prior DECs are recorded inline in this file). Future DECs may follow either convention; index entries here remain the canonical roll-up.
+
 ## Enforcement Rule (CRITICAL)
 
 - AI MUST read this document before any plan revision or execution
