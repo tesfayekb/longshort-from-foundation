@@ -158,6 +158,28 @@ The `combiner_forward_returns` anti-join treats ONLY `price_source_status='succe
 
 Permanent gaps (delisted, halted long-term, ticker change) remain terminal typed-absence indefinitely — the correct DEC-059 outcome (the tuple drops out of both numerator and denominator of every (V − live_gated) pairing). DW-110 logs the optional observability split (`horizon_pending` enum) and Polygon-budget cap for permanent-gap retries — pure observability + budget, NOT correctness; the anti-join fix carries the measurement series through to DEC-059 resolution unaided.
 
+## 3.M-v — daily cron arming (ACT-246)
+
+Two cron edge fns mirror the `longshort-momentum-compute` skeleton VERBATIM (cron-only `verifyCronSecret`; sole-wall-clock `productionClock.getWallClockTs()`; `.started`/`.completed`/`.failed` audit envelope with `trigger:'cron'`):
+
+- **`longshort-combiner-shadow-rank`** at `30 23 * * 1-5` (23:30 UTC weekdays) — reuses `createShadowRankerOrchestrator` to seed `combiner_book_shadow` for all 12 active variants daily. No `POLYGON_API_KEY` check (orchestrator reads `signal_observations` only).
+- **`longshort-combiner-forward-returns`** at `0 3 * * 2-6` (03:00 UTC Tue–Sat — morning after US trading) — reuses `createForwardReturnOrchestrator` to accrue matured T+1/T+5/T+20 returns into `combiner_forward_returns`. `POLYGON_API_KEY` checked → 500 `polygon_api_key_unset`. INDEPENDENT of shadow-rank — iterates PAST matured seeds (today's seed gets accrued tomorrow at the T+1 boundary, then again at T+5/T+20 as bars settle, per the ACT-245 retry corrective).
+
+Neither fn carries a `job_registry` row — 3.M is the shadow-measurement harness (DEC-040 scoping; visibility = the shadow tables + `longshort_audit_logs`). Both 200-on-completed AND 200-on-failed (clean orchestrator failure path with typed `failure_reason`); per-ticker `fetch_error` / `polygon_404` rows are NORMAL typed-absence (the retry semantics flip them to `success` once bars settle). 500 reserved for orchestrator throw.
+
+The schedule is **operator-applied** via `sql/19_longshort_combiner_shadow_cron_schedule.sql` through the Supabase SQL Editor (§22.5.3, NOT the migration tool). Existing `CRON_SECRET` is REUSED — no new secret minted. The template carries an ASCII-quote self-check (`grep -P '[\x{2018}…]'`) defending against the jobid:78 curly-quote crash class, plus the canonical post-apply verification block (DEC-040 clauses 1–3). The DEC-059 measurement window for DW-109 opens on operator schedule-apply.
+
+## Phase 3.M COMPLETE (closure summary)
+
+- **3.M-i (MIG-100 / ART-026)** — 3-table schema (`combiner_book_shadow`, `combiner_forward_returns`, `combiner_shadow_variant_config`) + 12 active variants seeded.
+- **3.M-ii (ACT-242)** — pure no-exclusion shadow ranker (criticals-symmetric composite + coverage shrinkage) + regression-tie test against the live ranker on fully-gated input (E4: 40/40 byte-identical) + DEC-059 §1a single-checkpoint clause.
+- **3.M-iii (ACT-243 / ART-029)** — `shadow-ranker-orchestrator.ts` (universe-floored, paginated `signal_observations` read, all-12-variants in-memory compute → chunked UPSERT) + `longshort-combiner-shadow-rank-manual` edge fn.
+- **3.M-iv (ACT-244 / ART-030)** — `forward-return-orchestrator.ts` + `forward-return-accruer.ts` (dedup-by-ticker bounded-concurrency Polygon fetch, anti-join idempotent UPSERT, typed-absence per the CHECK — never -999) + `longshort-combiner-forward-returns-manual` edge fn.
+- **3.M-iv corrective (ACT-245 / DW-110)** — anti-join filtered to `price_source_status='success'` so non-success typed-absence rows retry every run until the horizon bar settles (closes latent cron-timing systemic return-loss; pairs with 3.M-v cron arming).
+- **3.M-v (ACT-246 / ART-031 + ART-032)** — two cron edge fns deployed + 401-probed + Deno-tested (combiner suite 100 → 112 PASS) + operator-applied schedule template `sql/19_*_shadow_cron_schedule.sql`. **DEC-059 measurement window opens on operator schedule-apply**.
+
+Phase 3.M is closed at ACT-246 from the code-and-deploy side. The remaining gate is operator schedule-apply + the 30-paired-seed-day accrual window (DEC-059 §1a). DW-109 resolution and any DW-110 observability work (horizon_pending enum, permanent-gap retry bound) are out of 3.M scope.
+
 ## Dependencies
 
 - MIG-100 (this commit) — schema landing
