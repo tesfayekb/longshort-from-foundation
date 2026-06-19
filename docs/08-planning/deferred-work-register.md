@@ -2135,6 +2135,31 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
 
+### DW-109: Combiner — replace exclusion-based §4.3.5 coverage gate with coverage-weighted shrinkage (ROI-CRITICAL)
+
+| Field | Value |
+|---|---|
+| **id** | DW-109 (next-free after DW-108). |
+| **date_deferred** | 2026-06-19 (FP-052 3.0c close-out signal-health review / ACT-240). |
+| **source_plan_section** | FP-052 (3.0c) — post-close ROI review of the §4.3.5 inclusion gate. |
+| **source_phase** | Phase 3.0c (closed) — promotion target = post-3.0c T+1 information-ratio measurement window. |
+| **title** | The §4.3.5 coverage gate is exclusion-based (requires both criticals + ≥3 non-criticals; ≥5 of 9) — it drops names with sparse-but-strong signals, an ROI leak (signal count ≠ move potential). Replace with coverage-weighted shrinkage: `adjusted = composite × n / (n + k)`, so thin-coverage names are discounted continuously, not excluded — a lone extreme signal can still reach the book if loud enough. `k` set empirically on forward-return evidence; whether the two criticals stay required is part of the open question. This is the **HEADLINE** question of the post-3.0c information-ratio measurement, not a footnote. |
+| **reason_deferred** | ROI-critical, but the choice of `k` (and the criticals-required sub-question) must be defended on forward-return evidence the live system has not yet accumulated — the §22.5.1 smoke (2026-06-16) is one as_of; book P&L over the carry-forward / measurement window does not yet exist. Picking `k` blind risks two failure modes: (i) `k` too small → ungated overrun of thin-coverage extremes (volatility / noise into the book); (ii) `k` too large → indistinguishable from the current exclusion gate (no ROI lift). Snapshot composition analysis (ACT-240 STEP B) shows the variance-by-coverage curve is NOT monotonic (n=3 bucket has the highest σ at this as_of, not the thinnest buckets), so the variance argument cannot stand in for forward-return evidence. |
+| **blocking_dependencies** | (a) Post-3.0c information-ratio measurement infrastructure exists and has run ≥ 1 T+1 cycle producing per-coverage-bucket forward returns; (b) operator decision on whether criticals-required survives the shrinkage rewrite (CROSSWIND §4.3.5 L393 currently mandates both); (c) `k` calibration evidence (grid over `k ∈ {3,5,10,20}` with IR + turnover + Sharpe per book against the same as_of cohort). |
+| **impact_on_source_phase** | None on 3.0c closure (140 included is comfortably above the 20+20 book floor). Latent ROI cost: ACT-240 STEP B shows that at this single as_of, Variant A (criticals-required + k=3 shrinkage) overturns 18/20 long-side and 16/20 short-side names vs the gated baseline — i.e. the current exclusion gate is choosing a substantially different book than any continuous-coverage discount would. The forward-return delta is unknown until measured. |
+| **future_owner_phase** | Post-3.0c T+1 measurement → new FP entry (FP-052.4 or successor) authoring the shrinkage rewrite + `k` calibration + criticals-required revisit. |
+| **future_owner_module** | longshort / combiner (ranker formula). |
+| **status** | logged (ROI-CRITICAL, high-priority). |
+| **trigger_conditions** | Post-3.0c information-ratio measurement (T+1) — promote to active scope on the first cycle that has per-coverage-bucket forward-return evidence sufficient to defend a `k` choice. |
+| **scope_sketch** | (a) Replace `score = Σ(z_i × is_present_i) / max(1, Σ is_present_i)` with `adjusted = composite × n / (n + k)` in `ranker.ts` (pure layer). (b) Operator decision on criticals-required: keep (Variant A) vs drop (Variant B). (c) `k` calibration grid against post-3.0c book P&L cohorts. (d) Reference indexes updated same-PR (function-index + module-doc + replay-fixture if formula change forces fixture regen). (e) Replay-determinism preserved: shrinkage is pure arithmetic, no clock / no -999 / no Supabase. (f) Migration: NONE (formula change only; persisted vectors untouched). |
+| **estimated_complexity** | S (formula change + unit tests + calibration script) once evidence is in; M including the measurement infrastructure if that has to land first. |
+| **related_decisions** | CROSSWIND §4.3.5 (current exclusion gate definition — would be amended or superseded); DW-106 (carry-forward is a complementary coverage lever — operates on the WRITER side, this operates on the RANKER side). |
+| **related_actions** | ACT-240 (this deferral + the snapshot composition analysis that established the magnitude). |
+| **required_tests_for_closure** | (a) Calibration evidence: per-`k` IR + turnover + Sharpe table over ≥ N as_of cohorts (N set at promotion time per measurement-infrastructure capability). (b) Replay-determinism test for the new ranker formula. (c) Operator-signed decision on criticals-required disposition. (d) Reference-index parity (function-index + module-doc + replay-fixture). |
+| **status** | open. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
 ### DW-106: Combiner — per-signal carry-forward design (evidence-driven post-3.0c)
 
 | Field | Value |
