@@ -68,6 +68,9 @@ Deno.test('(2) single row → UPSERT called with correct shape + correct conflic
     is_present: r.is_present,
     gics_sector: r.gics_sector,
     computed_at: r.computed_at,
+    // DW-106-c-i passthrough: SignalRow without `carried_forward` coerces
+    // to `false` in the payload (matches MIG-101 column DEFAULT).
+    carried_forward: false,
   }]);
   assertEquals(calls[0].opts, {
     onConflict: 'operator_id,signal_id,as_of_date,ticker',
@@ -152,4 +155,13 @@ Deno.test('(8) type-level: SignalRow forces value/is_present consistency at the 
   assertEquals(present.is_present, true);
   assertEquals(absent.is_present, false);
   assertEquals(absent.value, null);
+});
+
+Deno.test('(9) DW-106-c-i: carried_forward:true passes through verbatim into upsert payload', async () => {
+  const { supabase, calls } = makeMock({ error: null, count: 1 });
+  const r = row({ carried_forward: true });
+  const out = await captureSignalObservations(supabase, [r]);
+  assertEquals(out.error, null);
+  const payload = calls[0].payload as Array<Record<string, unknown>>;
+  assertEquals(payload[0].carried_forward, true);
 });

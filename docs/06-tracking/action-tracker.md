@@ -1,3 +1,23 @@
+### ACT-251: FP-053 / DW-106-c-i corrective — `missingness-capture_test.ts` exact-payload assertion updated for `carried_forward` passthrough + full-suite gate learning
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-251 (next-free after ACT-250). |
+| **Mode** | execution (Tier-A — test corrective; payload behavior in `missingness-capture.ts` is intentional per ACT-250 and untouched). |
+| **Authority** | Operator-authorized supervisor session 2026-06-19 (DW-106-c-i test-corrective build prompt). |
+| **HEAD before** | ACT-250 commit. |
+| **HEAD after** | (Lovable commit at execution close). |
+| **Regression** | ACT-250 added `carried_forward: r.carried_forward ?? false` to `captureSignalObservations`'s upsert payload (intended passthrough). `missingness-capture_test.ts` test `(2) single row → UPSERT called with correct shape` pins the **exact** payload object and was not updated, so the assertion fails (`payload[0].carried_forward === false` vs expected-object without the key). Missed because ACT-250's Gate 2 was scoped to `_shared/longshort-signals/short-interest-change` sub-dir, excluding the shared helper's own test file. |
+| **Fix** | (1) `missingness-capture_test.ts` test `(2)` expected-object adds `carried_forward: false` (the only exact-payload-shape assertion in the file — tests `(3)/(4)/(5)/(7)` assert length/field-subsets, not full shape). (2) NEW test `(9)`: `SignalRow` with `carried_forward: true` → assert `payload[0].carried_forward === true` (pins the carried-row passthrough explicitly, not just the default-false coercion). |
+| **Forward learning (binding)** | A sub-step that edits ANY shared helper under `supabase/functions/_shared/longshort-signals/shared/*` (or any `_shared/**` consumed by ≥2 orchestrators) MUST run Gate 2 over the FULL `supabase/functions/` tree, NOT the changed signal's sub-dir. Sub-dir scoping is acceptable only when the diff is wholly contained within that sub-dir. |
+| **Scope (2 files, strict)** | EDIT: (1) `supabase/functions/_shared/longshort-signals/shared/missingness-capture_test.ts`. (2) this file (ACT-251). Zero other code touched. |
+| **Gates** | **Gate 2 (FULL suite)** — `cd supabase/functions && deno test --allow-net --allow-env --allow-read` → (results pending run). **Gate 4** — `npx eslint .` → 0 errors. |
+| **Out-of-scope guarantees** | Zero edit to `missingness-capture.ts` (payload behavior is correct). Zero edit to orchestrators, decider, or any non-test code. Zero `-999`. |
+| **ROI Impact** | Neutral — corrects test expectations to match intended shared-helper behavior; unblocks DW-106-c-ii. |
+| **Risks / Follow-up** | None. Forward learning above is the durable mitigation. |
+
+---
+
 ### ACT-250: FP-053 / DW-106-c-i — short-interest carry orchestrator (pure-DB) + manual edge fn + SignalRow `carried_forward` passthrough
 
 | Field | Value |
