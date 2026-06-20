@@ -20,6 +20,18 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useUserRoles } from '@/hooks/useUserRoles';
 import { checkPermission } from '@/lib/rbac';
+import { useCronLastFire } from '@/features/longshort/hooks/useCronLastFire';
+import {
+  isSignalStale,
+  cadenceLabel,
+} from '@/features/longshort/utils/cron-staleness';
+import { formatDistanceToNowStrict } from 'date-fns';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // Untyped client view for tables/RPCs not present in generated Database types.
 const sb = supabase as unknown as SupabaseClient;
@@ -86,6 +98,11 @@ export default function AdminJobsPage() {
       return (data ?? []) as unknown as JobRegistry[];
     },
   });
+
+  // DW-shadow-visibility 1c — fire-status anchor for crons that bypass
+  // job-executor (shadow-rank, forward-returns, short-interest-carry).
+  // Rows without an entry render "—" in the Last Fire column.
+  const { byJobId: cronLastFireById } = useCronLastFire();
 
   // Recent executions
   const { data: executions } = useQuery({
@@ -278,6 +295,7 @@ export default function AdminJobsPage() {
                           <th className="pb-2 pr-4">Class</th>
                           <th className="pb-2 pr-4">Schedule</th>
                           <th className="pb-2 pr-4">Status</th>
+                          <th className="pb-2 pr-4">Last Fire / Staleness</th>
                           <th className="pb-2 pr-4">Retries</th>
                           <th className="pb-2">Actions</th>
                         </tr>
@@ -289,11 +307,25 @@ export default function AdminJobsPage() {
                             <td className="py-3 pr-4">
                               <Badge variant="outline" className="text-xs">{job.class}</Badge>
                             </td>
-                            <td className="py-3 pr-4 font-mono text-xs">{job.schedule}</td>
+                            <td className="py-3 pr-4 font-mono text-xs">
+                              <TooltipProvider delayDuration={150}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span>{cadenceLabel(job.schedule) ?? job.schedule}</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <span className="font-mono text-xs">{job.schedule}</span>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </td>
                             <td className="py-3 pr-4">
                               <Badge variant="outline" className={stateColor(job.status)}>
                                 {job.status}
                               </Badge>
+                            </td>
+                            <td className="py-3 pr-4">
+                              <CronLastFireCell job={job} row={cronLastFireById.get(job.id)} />
                             </td>
                             <td className="py-3 pr-4">{job.max_retries}</td>
                             <td className="py-3">
