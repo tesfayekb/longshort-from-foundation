@@ -36,6 +36,7 @@ import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
+import { persistCronLastFire } from '../_shared/persist-cron-last-fire.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   createCarryOrchestrator,
@@ -44,6 +45,9 @@ import {
 } from '../_shared/longshort-signals/short-interest-change/carry-orchestrator.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
+
+/** job_registry.id (MIG-102) — staleness anchor key for cron_last_fire. */
+const JOB_REGISTRY_ID = 'longshort.short_interest_carry.compute';
 
 /** DEC-060 §(iii) heal_date key. */
 export const HEAL_DATE_CONFIG_KEY = 'dw_106_short_interest_heal_date';
@@ -144,6 +148,13 @@ Deno.serve(createHandler(async (req: Request) => {
       },
     });
 
+    await persistCronLastFire(
+      supabaseAdmin,
+      JOB_REGISTRY_ID,
+      result.outcome === 'completed' ? 'success' : 'failed',
+      result.outcome === 'completed' ? null : (result.failure_reason ?? null),
+    );
+
     return apiSuccess({
       status: 'ok',
       signal_id: SIGNAL_ID,
@@ -171,6 +182,12 @@ Deno.serve(createHandler(async (req: Request) => {
         trigger: 'cron',
       },
     });
+    await persistCronLastFire(
+      supabaseAdmin,
+      JOB_REGISTRY_ID,
+      'failed',
+      e instanceof Error ? e.message : String(e),
+    );
     return apiError(500, 'short_interest_carry_compute_failed', { correlationId });
   }
 }));
