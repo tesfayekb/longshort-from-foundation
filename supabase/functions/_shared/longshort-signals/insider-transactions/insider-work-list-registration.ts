@@ -198,6 +198,14 @@ import {
   type InsiderLoadAndComputeContext,
 } from './insider-load-and-compute.ts';
 import { SignalComputationError } from '../shared/signal-types.ts';
+// DW-107 date-fix: NYSE-calendar-aware trading-day arithmetic. The
+// producer (scripts/insider-discovery-egress.ts) tags rows with
+// `as_of_date = tradingDaysBefore(now, 1)`; the consumer MUST use the
+// SAME helper so producer/consumer agree across NYSE holidays.
+// Re-exported here via `previousTradingDay` below to preserve the
+// existing call-site surface (L330/333 trailing window, L453 daily
+// drain target).
+import { tradingDaysBefore } from '../../longshort-universe/shared/trading-days.ts';
 
 // ─── Public registry constants (mirrors news/PEAD/options exports) ─────
 
