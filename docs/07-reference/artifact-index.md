@@ -255,6 +255,9 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | ART-026 | migration | MIG-100 Combiner Phase-3.M shadow measurement 3-table schema | Phase 3.M-i | `active` |
 | ART-027 | reference | Phase 3.M shadow-measurement design doc | Phase 3.M-i | `active` |
 | ART-028 | reference | DEC-059 DW-109 resolution rule | Phase 3.M-i | `active` |
+| ART-033 | edge-function | longshort-short-interest-carry-compute (FP-053 / DW-106-c-ii daily carry cron) | Phase 2 | `active` |
+| ART-034 | migration | sql/20 Short-Interest Carry Cron Schedule (operator-applied, PENDING) | Phase 2 | `pending-apply` |
+| ART-035 | migration | MIG-102 job_registry seed for short-interest carry cron (DISARMED) | Phase 2 | `active` |
 
 ---
 
@@ -630,6 +633,51 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Actions** | ACT-246 |
 | **Related Decisions** | DEC-023, DEC-033, DEC-034 (4), DEC-040, DEC-059, ACT-245 (forward-return anti-join filtered to `price_source_status='success'` — typed-absence retries every cron run until bars settle; the correctness pre-condition for daily cadence). |
 | **Notes** | Cron sibling of `longshort-combiner-forward-returns-manual` (ART-030) — mirrors `longshort-momentum-compute/index.ts` skeleton VERBATIM: `verifyCronSecret(req)` → `as_of = productionClock.getWallClockTs()` → `POLYGON_API_KEY` check (500 `polygon_api_key_unset` on miss) → `createForwardReturnOrchestrator({supabase, operator_id, priceHistory: new PolygonPriceHistoryFetcher(polygonApiKey)}).run(as_of)` → three-event audit envelope `.started`/`.completed`/`.failed` with `trigger:'cron'`. 200-on-completed AND 200-on-failed; per-ticker `fetch_error`/`polygon_404` rows are NORMAL typed-absence (reported in `by_status` metadata, retried on next cron tick — the orchestrator-throw 500 path is reserved for true fatals — `cron_combiner_forward_returns_failed`). NO `job_registry` row (3.M scope). Schedule `0 3 * * 2-6` (03:00 UTC Tue–Sat) is INDEPENDENT of the shadow-rank schedule — the orchestrator iterates PAST matured seeds, not today's seed. Operator-applied via `sql/19_longshort_combiner_shadow_cron_schedule.sql` (§22.5.3 Dashboard). |
+
+### ART-033: Longshort Short-Interest Carry Cron Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-033 |
+| **Type** | edge-function |
+| **Title** | longshort-short-interest-carry-compute — daily weekday carry-forward cron handler for Signal #9 (FP-053 / DW-106-c-ii) |
+| **Source Path** | `supabase/functions/longshort-short-interest-carry-compute/index.ts` |
+| **Created Date** | 2026-06-20 |
+| **Owning Phase** | Phase 2 — Signal carry-forward coverage heal |
+| **Status** | `active` (deployed 2026-06-20; no-auth POST probe returned HTTP 401 UNAUTHORIZED as expected; awaiting operator schedule-apply via `sql/20_*` + `job_registry.enabled=true` flip at DW-106-c-d) |
+| **Related Actions** | ACT-253 |
+| **Related Decisions** | DEC-023 (handler envelope), DEC-033 (T4 — per-strategy audit table), DEC-034 (4) (sole sanctioned wall-clock chokepoint), DEC-040 (cron.job evidence required), DEC-043 (end-to-end attestation), DEC-060 §(iii) (heal_date stamping mechanism this fn implements), DEC-060 §(vi) (locked parameters — bound, no-decay, forward-only, audit-only flag). |
+| **Notes** | Cron sibling of `longshort-short-interest-carry-compute-manual` (DW-106-c-i) — mirrors `longshort-short-interest-compute/index.ts` skeleton VERBATIM minus Polygon (carry is pure-DB) minus `POLYGON_API_KEY` check minus `persistSignalComputeLog` (custom `CarryOrchestratorResult` shape; telemetry rides the audit envelope). Three-event envelope `longshort.short_interest_carry.compute.{started,completed,failed}` all carrying `trigger:'cron'`. ON SUCCESSFUL COMPLETION WITH `carried_count >= 1`: calls `stampHealDateIfFirst(supabaseAdmin, as_of, correlationId)` which `INSERT`s `system_config(key='dw_106_short_interest_heal_date', value=jsonb)` and treats `code='23505'` unique-violation as "already stamped" — DB-level `ON CONFLICT (key) DO NOTHING` analog, PERMANENT / NEVER overwritten per DEC-060 §(iii). The manual c-i sibling does NOT stamp heal_date — that gate is reserved for this cron's first emission so operator §22.5.1 smoke runs cannot prematurely open the DEC-059 n>=30 measurement window. Schedule `'30 22 * * 1-5'` (22:30 UTC weekdays) is operator-applied via `sql/20_longshort_short_interest_carry_cron_schedule.sql` (§22.5.3 Dashboard, NOT the migration tool); existing `CRON_SECRET` REUSED. Test count = 11 Deno source-sentinel tests (PASS). |
+
+### ART-034: Longshort Short-Interest Carry Cron-Wiring SQL Artifact (sql/20)
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-034 |
+| **Type** | migration (operator-applied) |
+| **Title** | `sql/20_longshort_short_interest_carry_cron_schedule.sql` — wires `longshort-short-interest-carry-compute` to `pg_cron` at `'30 22 * * 1-5'` (FP-053 / DW-106-c-ii) |
+| **Source Path** | `sql/20_longshort_short_interest_carry_cron_schedule.sql` |
+| **Created Date** | 2026-06-20 |
+| **Owning Phase** | Phase 2 — Signal carry-forward coverage heal |
+| **Status** | `pending-apply` (operator-applied at DW-106-c-d) |
+| **Related Actions** | ACT-253 |
+| **Related Decisions** | DEC-040, DEC-043, DEC-060 §(iii). |
+| **Notes** | Mirrors `sql/14` (jobid:51 canonical end-to-end-verified pattern) verbatim — three placeholders (PROJECT_REF / YOUR_ANON_KEY / YOUR_CRON_SECRET_VALUE), no secret committed. ASCII-only verified at create time (full `grep -nP '[^\x00-\x7F]'` returns 0 matches per the sql/19 lesson). Post-apply verification block has FOUR steps: (1) cron.job introspection (schedule byte-match + active=true + resolved PROJECT_REF + X-Cron-Secret header); (2) PROJECT_REF-literal sweep across all cron.job rows (INC-64 sentinel; expected 0 rows); (3) `UPDATE job_registry SET enabled=true WHERE id='longshort.short_interest_carry.compute';` (the DW-106-c-d arm step); (4) after first 22:30 UTC fire, confirm `system_config.dw_106_short_interest_heal_date` row stamped exactly ONCE with `value_version=1` (never re-bumped per DEC-060 §(iii) permanence). Slot `'30 22 * * 1-5'` pre-flight-verified free against the full taken set (20:00 / 21:00 / 21:15 / 21:30 / 21:45 / 22:00 / 23:00 / 23:30 all taken; 22:30 free). |
+
+### ART-035: MIG-102 Short-Interest Carry job_registry Seed (DISARMED)
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-035 |
+| **Type** | migration |
+| **Title** | MIG-102 — `job_registry` seed for `longshort.short_interest_carry.compute` (DISARMED daily carry cron) |
+| **Source Path** | `supabase/migrations/20260620022639_af92c82b-b8ba-4e36-a97c-c82d775fc134.sql` |
+| **Created Date** | 2026-06-20 |
+| **Owning Phase** | Phase 2 — Signal carry-forward coverage heal |
+| **Status** | `active` |
+| **Related Actions** | ACT-253 |
+| **Related Decisions** | DEC-040, DEC-043, DEC-060 §(iii). |
+| **Notes** | Single-row `INSERT ... ON CONFLICT (id) DO NOTHING` mirroring MIG-066 / MIG-074 / MIG-076 disarmed-seed precedents. `enabled=false` at seed (disarm-fire-enable convention). `schedule='30 22 * * 1-5'` byte-identical to the sql/20 template (drift = §22.5 DRIFT-class defect). NO cron.job mutation (operator-applied via sql/20 at c-d). §22.5.1 live-DB verification at ACT-253: `(id, schedule, enabled, status, handler_path, owner_module, trigger_type, class)` = `('longshort.short_interest_carry.compute', '30 22 * * 1-5', false, 'registered', 'supabase/functions/longshort-short-interest-carry-compute/index.ts', 'longshort', 'scheduled', 'operational')`. |
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
