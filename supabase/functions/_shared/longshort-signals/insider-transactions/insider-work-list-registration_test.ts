@@ -104,6 +104,19 @@ Deno.test('(B.2) previousTradingDay: Monday asOf → Friday (weekend skip)', () 
   assertEquals(t.toISOString().slice(0, 10), '2026-06-12'); // Fri (skips Sun + Sat)
 });
 
+// DW-107 date-fix: NYSE-calendar-aware delegate now handles holidays.
+// 2026-01-19 is the observed-MLK-Day NYSE closure (per shared/trading-
+// days.ts NYSE_HOLIDAYS); asOf=Tue 2026-01-20 must skip BOTH the holiday
+// Monday AND the weekend, landing on Fri 2026-01-16. This is the
+// regression bar that the weekends-only legacy body silently violated
+// (it would have returned Mon 2026-01-19, a non-trading day with no
+// published master.idx).
+Deno.test('(B.3) previousTradingDay: Tuesday after NYSE-holiday Monday → prior Friday', () => {
+  const asOfTueAfterMlk = new Date('2026-01-20T21:00:00.000Z'); // Tue
+  const t = previousTradingDay(asOfTueAfterMlk);
+  assertEquals(t.toISOString().slice(0, 10), '2026-01-16'); // Fri (skips Mon MLK + weekend)
+});
+
 // ── (C) Backfill sweep ────────────────────────────────────────────────
 Deno.test('(C.1) trailingTradingDays returns N days, most-recent first, weekends skipped', () => {
   const list = trailingTradingDays(AS_OF_MON, 5);

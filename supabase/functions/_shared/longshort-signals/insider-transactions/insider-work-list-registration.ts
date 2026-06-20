@@ -198,6 +198,14 @@ import {
   type InsiderLoadAndComputeContext,
 } from './insider-load-and-compute.ts';
 import { SignalComputationError } from '../shared/signal-types.ts';
+// DW-107 date-fix: NYSE-calendar-aware trading-day arithmetic. The
+// producer (scripts/insider-discovery-egress.ts) tags rows with
+// `as_of_date = tradingDaysBefore(now, 1)`; the consumer MUST use the
+// SAME helper so producer/consumer agree across NYSE holidays.
+// Re-exported here via `previousTradingDay` below to preserve the
+// existing call-site surface (L330/333 trailing window, L453 daily
+// drain target).
+import { tradingDaysBefore } from '../../longshort-universe/shared/trading-days.ts';
 
 // ─── Public registry constants (mirrors news/PEAD/options exports) ─────
 
@@ -294,12 +302,16 @@ function utcDow(d: Date): number {
 }
 
 /**
- * "Yesterday's trading day" relative to `asOf` — weekends-only-skip
- * approximation (parity with `edgar-daily-index-fetcher.ts`'s v1 rule;
- * NYSE-calendar upgrade tracked separately). Holidays return cleanly
- * as `kind:'unavailable'` from the daily-index fetcher — the seed
- * surfaces an empty list for that day, which is a VALID empty seed
- * per the work-list contract (Q5).
+ * "Yesterday's trading day" relative to `asOf` — NYSE-calendar-aware
+ * (DW-107 date-fix). Delegates to the shared `tradingDaysBefore`
+ * helper so producer (scripts/insider-discovery-egress.ts) and
+ * consumer agree on holiday handling: an `asOf=D` consumer fire drains
+ * the `as_of_date=D-1` rows the producer just tagged, with both sides
+ * skipping NYSE holidays identically. Pre-DW-107 the body was a
+ * weekends-only skip; the upgrade is purely additive on non-holiday
+ * dates (Fri→Thu, Mon→Fri unchanged) and corrects the holiday case
+ * (Tue-after-MLK-Mon now returns the prior Friday, matching the
+ * producer's D-1 tag).
  *
  * Worked example (crosswalk D.1): `asOf=2026-06-12T21:00:00Z` (Friday)
  * → `asOf - 1 day = 2026-06-11` (Thursday) → no weekend skip → target
@@ -307,11 +319,9 @@ function utcDow(d: Date): number {
  * → skip → `2026-06-13` (Fri).
  */
 export function previousTradingDay(asOf: Date): Date {
-  let cursor = new Date(asOf.getTime() - MS_PER_DAY);
-  // Skip Saturday (6) → Friday; Sunday (0) → Friday.
-  while (utcDow(cursor) === 0 || utcDow(cursor) === 6) {
-    cursor = new Date(cursor.getTime() - MS_PER_DAY);
-  }
+  const cursor = tradingDaysBefore(asOf, 1);
+  // Normalize to UTC midnight — `tradingDaysBefore` preserves the
+  // input's time-of-day; the legacy contract returned UTC midnight.
   return new Date(Date.UTC(
     cursor.getUTCFullYear(),
     cursor.getUTCMonth(),

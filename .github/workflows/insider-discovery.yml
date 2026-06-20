@@ -13,6 +13,19 @@
 # buffer absorbs GHA scheduler jitter (~5-15 min typical) so the queue
 # is populated before the consumer fires.
 #
+# DAILY-MODE DATE CONTRACT (DW-107 date-fix):
+#   Daily mode tags rows with the LAST COMPLETED trading day
+#   (D-1, NYSE-calendar-aware). The 20:15 UTC slot of D fetches
+#   master.<D-1>.idx, which SEC reliably publishes after the D-1
+#   close (~22:00 UTC of D-1). The 21:15 UTC consumer fire on D
+#   drains as_of_date = previousTradingDay(now) = D-1, so an
+#   as_of=D compute consumes D-1's fully-published filings
+#   (leak-free: D's filings are not yet fully published at 21:15
+#   UTC of D). Producer and consumer share the SAME helper
+#   (supabase/functions/_shared/longshort-universe/shared/
+#   trading-days.ts :: tradingDaysBefore), so NYSE holidays are
+#   handled identically on both sides.
+#
 # Per F2-pre forward-binding rule: this workflow runs entirely outside
 # the Supabase Edge runtime, so no `check-deployed-sha` MATCH gate
 # binds on its execution. The MATCH gate re-enters at F2.c when the
@@ -81,12 +94,11 @@ jobs:
             echo "::error::backfill_from and backfill_to must both be set or both empty"
             exit 3
           else
-            # Daily mode — yesterday in UTC (the master.idx for D is published
-            # after the close, typically late-evening UTC; the 20:15 UTC
-            # daily slot consumes today's index, which is the as_of date for
-            # the 21:15 UTC daily-insider-compute fire).
-            ASOF="$(date -u +%Y-%m-%d)"
-            echo "args=--as-of=${ASOF}" >> "$GITHUB_OUTPUT"
+            # Daily mode — script resolves as_of = tradingDaysBefore(now, 1)
+            # (last completed NYSE trading day, D-1) at parse-time. See
+            # the DAILY-MODE DATE CONTRACT comment at the top of this
+            # file for the producer/consumer coordination invariant.
+            echo "args=--daily" >> "$GITHUB_OUTPUT"
             echo "mode=daily" >> "$GITHUB_OUTPUT"
           fi
 

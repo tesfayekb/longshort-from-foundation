@@ -509,6 +509,47 @@ Deno.test('(e) parseArgs rejects unknown args', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
+// DW-107 date-fix: --daily resolves asOf = tradingDaysBefore(now, 1)
+// (last completed NYSE trading day). Producer/consumer must agree on
+// holiday handling; the cases below pin the three observable branches.
+// ─────────────────────────────────────────────────────────────────────
+
+Deno.test('(e/DW-107) --daily on a normal Wednesday → asOf = prior Tuesday', () => {
+  const wedNow = new Date('2026-06-17T20:15:00.000Z'); // Wed (no holiday week)
+  const r = parseArgs(['--daily'], wedNow);
+  assertEquals(r.kind, 'ok');
+  if (r.kind === 'ok') assertEquals(r.mode, { kind: 'daily', asOf: '2026-06-16' }); // Tue
+});
+
+Deno.test('(e/DW-107) --daily on Monday → asOf = prior Friday (weekend skip)', () => {
+  const monNow = new Date('2026-06-15T20:15:00.000Z'); // Mon
+  const r = parseArgs(['--daily'], monNow);
+  assertEquals(r.kind, 'ok');
+  if (r.kind === 'ok') assertEquals(r.mode, { kind: 'daily', asOf: '2026-06-12' }); // Fri
+});
+
+Deno.test('(e/DW-107) --daily on Tuesday-after-NYSE-holiday-Monday → asOf = prior Friday', () => {
+  // 2026-01-19 Mon = MLK Day (NYSE closed); fire at 20:15 UTC Tue
+  // 2026-01-20 must skip both the holiday and the weekend → Fri 2026-01-16.
+  const tueAfterMlk = new Date('2026-01-20T20:15:00.000Z');
+  const r = parseArgs(['--daily'], tueAfterMlk);
+  assertEquals(r.kind, 'ok');
+  if (r.kind === 'ok') assertEquals(r.mode, { kind: 'daily', asOf: '2026-01-16' });
+});
+
+Deno.test('(e/DW-107) --daily with explicit --as-of override wins (operator/test path)', () => {
+  const wedNow = new Date('2026-06-17T20:15:00.000Z');
+  const r = parseArgs(['--daily', '--as-of=2026-05-01'], wedNow);
+  assertEquals(r.kind, 'ok');
+  if (r.kind === 'ok') assertEquals(r.mode, { kind: 'daily', asOf: '2026-05-01' });
+});
+
+Deno.test('(e/DW-107) --daily rejects mixing with --backfill-*', () => {
+  const r = parseArgs(['--daily', '--backfill-from=2026-03-15', '--backfill-to=2026-06-13']);
+  assertEquals(r.kind, 'error');
+});
+
+// ─────────────────────────────────────────────────────────────────────
 // ACT-220 / Path-Y producer-relocation: drift sentinels
 // ─────────────────────────────────────────────────────────────────────
 
