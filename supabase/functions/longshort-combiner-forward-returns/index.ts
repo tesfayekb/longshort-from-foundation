@@ -47,8 +47,10 @@ import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { createForwardReturnOrchestrator } from '../_shared/longshort-combiner/forward-return-orchestrator.ts';
 import { PolygonPriceHistoryFetcher } from '../_shared/longshort-signals/shared/polygon-price-history-fetcher.ts';
+import { persistCronLastFire } from '../_shared/persist-cron-last-fire.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
+const JOB_REGISTRY_ID = 'longshort.combiner_forward_returns.compute';
 
 Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
@@ -106,6 +108,13 @@ Deno.serve(createHandler(async (req: Request) => {
       },
     });
 
+    await persistCronLastFire(
+      supabaseAdmin,
+      JOB_REGISTRY_ID,
+      result.outcome === 'completed' ? 'success' : 'failed',
+      result.outcome === 'failed' ? (result.failure_reason ?? null) : null,
+    );
+
     return apiSuccess({
       status: 'ok',
       operator_id: DEFAULT_OPERATOR_ID,
@@ -134,6 +143,12 @@ Deno.serve(createHandler(async (req: Request) => {
         trigger: 'cron',
       },
     });
+    await persistCronLastFire(
+      supabaseAdmin,
+      JOB_REGISTRY_ID,
+      'failed',
+      e instanceof Error ? e.message : String(e),
+    );
     return apiError(500, 'cron_combiner_forward_returns_failed', { correlationId });
   }
 }));
