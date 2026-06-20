@@ -1924,6 +1924,25 @@ The two endpoints below were deployed as part of the auth + onboarding hardening
 | **Lifecycle** | active — deployed at ACT-246; 401 probe green; awaiting operator schedule-apply. |
 | **Added By** | FP-052 3.M-v (ACT-246) |
 
+### POST /longshort-short-interest-carry-compute — Cron Short-Interest Carry-Forward (FP-053 / DW-106-c-ii)
+
+| Field | Value |
+|-------|-------|
+| **Path** | `POST /longshort-short-interest-carry-compute` |
+| **Classification** | privileged (cron-only) |
+| **Owner Module** | longshort (Signal #9 carry-forward coverage heal — DEC-060) |
+| **Auth** | `X-Cron-Secret` header (`verifyCronSecret`). 401 on missing/bad header (deploy-time probe: 401 UNAUTHORIZED — ACT-253). |
+| **Permission** | n/a (cron-only path) |
+| **Rate Limit** | default (DEC-023 envelope via `_shared/handler.ts`) |
+| **Request Body** | ignored (cron `body := concat('{"time": …}')` payload) — `as_of` derives from `productionClock.getWallClockTs()` per DEC-034 (4). |
+| **Response** | `{ status:'ok', signal_id, as_of_date, outcome, universe_size, persisted_count, carried_count, past_bound_count, no_publication_count, skipped_native_count, heal_date_stamped, correlation_id }`. `heal_date_stamped`: `true` (this fire stamped), `false` (already stamped — DB-level ON CONFLICT DO NOTHING), or `null` (no stamp attempted because outcome≠'completed' or carried_count<1). |
+| **Audit** | Three-event envelope mirroring `longshort-short-interest-compute`: `longshort.short_interest_carry.compute.started` → `.completed`/`.failed` → catch `.failed` with `stage='orchestrator_throw'`. All carry `trigger:'cron'`. Written to `longshort_audit_logs` (T4). |
+| **POLYGON_API_KEY** | NOT required (carry is pure-DB; reads `signal_observations` priors only). |
+| **Side effects** | UPSERTs into `signal_observations` (via `createCarryOrchestrator` → `captureSignalObservations`, single-batch zero-partial). On `outcome==='completed' && carried_count >= 1`: INSERT into `public.system_config(key='dw_106_short_interest_heal_date', value=jsonb)` via `stampHealDateIfFirst` — PERMANENT / NEVER overwritten (DEC-060 §(iii)); `23505` unique-violation is the ON-CONFLICT-DO-NOTHING analog and is treated as "already stamped". No `signal_compute_log` write (custom result shape). |
+| **Schedule (operator-applied)** | `30 22 * * 1-5` (22:30 UTC weekdays) via `sql/20_longshort_short_interest_carry_cron_schedule.sql` (§22.5.3 Dashboard, NOT the migration tool); existing `CRON_SECRET` REUSED. job_registry seed (MIG-102) DISARMED at creation; operator flips `enabled=true` at DW-106-c-d after end-to-end DEC-043 attestation. |
+| **Lifecycle** | active — deployed at ACT-253; 401 probe green; awaiting operator schedule-apply + enable-flip. |
+| **Added By** | FP-053 / DW-106-c-ii (ACT-253) |
+
 ### POST /longshort-combiner-forward-returns — Cron Forward-Return Accrual (FP-052 3.M-v)
 
 | Field | Value |
