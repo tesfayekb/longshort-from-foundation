@@ -232,12 +232,30 @@ export interface RunDeps {
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export function parseArgs(argv: readonly string[]): ParsedArgs {
+/**
+ * DW-107 date-fix: daily mode now computes `asOf` as the last completed
+ * NYSE trading day (D-1, calendar-aware) at parse-time. The `--daily`
+ * flag is the canonical entrypoint from .github/workflows/insider-
+ * discovery.yml; an explicit `--as-of=YYYY-MM-DD` remains valid for
+ * operator override and hermetic tests. `now` is injectable so the
+ * test suite can pin the wall clock.
+ *
+ * Single-variable lockstep is preserved: the resolved asOf flows
+ * unchanged into `runDiscoveryDay`, which feeds it to BOTH the
+ * `master.<asOf>.idx` fetch URL AND the row tag `as_of_date`.
+ */
+export function parseArgs(
+  argv: readonly string[],
+  now: Date = new Date(),
+): ParsedArgs {
   let asOf: string | null = null;
   let backfillFrom: string | null = null;
   let backfillTo: string | null = null;
+  let dailyFlag = false;
   for (const a of argv) {
-    if (a.startsWith('--as-of=')) {
+    if (a === '--daily') {
+      dailyFlag = true;
+    } else if (a.startsWith('--as-of=')) {
       asOf = a.slice('--as-of='.length).trim();
     } else if (a.startsWith('--backfill-from=')) {
       backfillFrom = a.slice('--backfill-from='.length).trim();
@@ -247,15 +265,23 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       return { kind: 'error', reason: `unknown argument: ${a}` };
     }
   }
-  const daily = asOf !== null;
+  const daily = asOf !== null || dailyFlag;
   const backfill = backfillFrom !== null || backfillTo !== null;
   if (daily && backfill) {
     return {
       kind: 'error',
-      reason: '--as-of is mutually exclusive with --backfill-from/--backfill-to',
+      reason: '--daily/--as-of is mutually exclusive with --backfill-from/--backfill-to',
     };
   }
   if (daily) {
+    if (asOf === null && dailyFlag) {
+      // DW-107: daily flag with no explicit --as-of → compute last
+      // completed NYSE trading day (D-1) from `now`. This is the
+      // GHA-cron path; at 20:15 UTC of D the producer fetches
+      // master.<D-1>.idx (reliably published by SEC after the D-1
+      // close, ~22:00 UTC of D-1) and tags rows as_of_date=D-1.
+      asOf = isoDate(tradingDaysBefore(now, 1));
+    }
     if (asOf === null || !ISO_DATE_RE.test(asOf)) {
       return { kind: 'error', reason: `--as-of must be YYYY-MM-DD (got: ${asOf ?? '<missing>'})` };
     }
