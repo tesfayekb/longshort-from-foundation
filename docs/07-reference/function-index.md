@@ -2855,6 +2855,21 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Added by** | FP-053 / DW-106-c-i (ACT-250). |
 | **Added by** | FP-041 |
 
+#### `supabase/functions/longshort-short-interest-carry-compute/index.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | longshort (FP-053 / DW-106-c-ii) |
+| **Classification** | edge function — DAILY weekday cron handler for the short-interest CARRY-FORWARD path (Signal #9 `short_interest_change_30d`). Mirrors `longshort-short-interest-compute/index.ts` skeleton VERBATIM minus Polygon (carry is pure-DB) minus `persistSignalComputeLog` (result shape is custom `CarryOrchestratorResult`; telemetry rides the audit envelope). DISARMED at creation per MIG-102 (`enabled=false`); enable-flip + cron-wiring (`sql/20_*`) are a separate operator-run step at DW-106-c-d gated on DEC-043 attestation. |
+| **Trigger** | `verifyCronSecret` (X-Cron-Secret header); registered in `job_registry` as `longshort.short_interest_carry.compute` via MIG-102 (`enabled=false`, schedule `'30 22 * * 1-5'`). |
+| **Pipeline** | `verifyCronSecret` → `productionClock.getWallClockTs()` → `.started` audit (`trigger:'cron'`) → `createCarryOrchestrator({supabase, operator_id}).run(as_of)` → `if outcome==='completed' && carried_count>=1` then `stampHealDateIfFirst(supabaseAdmin, as_of, correlationId)` → `.completed`/`.failed` audit. The catch path emits `.failed` with `stage='orchestrator_throw'` and returns 500 `short_interest_carry_compute_failed`. |
+| **Helper** | `export async function stampHealDateIfFirst(supabase, as_of, correlationId)` — INSERT into `system_config(key, value)` with `key='dw_106_short_interest_heal_date'`, value `{heal_date: as_of_date, stamped_at, correlation_id}`. Uses plain `.insert()` (NEVER upsert) — relies on the unique-key constraint to surface `code='23505'` which the helper treats as "already stamped" (the `ON CONFLICT (key) DO NOTHING` analog). DEC-060 §(iii) + §(vi) — permanent / idempotent / NEVER overwritten. Exported alongside `HEAL_DATE_CONFIG_KEY` constant. |
+| **File** | `supabase/functions/longshort-short-interest-carry-compute/index.ts` |
+| **Tests** | `index_test.ts` — 11 Deno source-sentinel tests: (1)+(1a) cron-auth wired + auth-first ordering; (2) wall-clock discipline (codeOnly strip — no `new Date()` / `Date.now()` / `performance.now()`); (3) NO POLYGON_API_KEY / NO Polygon import (codeOnly); (4) `createCarryOrchestrator(ctx)` wired with pure-DB context (no Polygon ctx fields); (5) all three audit events + `trigger:'cron'` metadata + no manual_* leak; (6) NO `persistSignalComputeLog` (codeOnly); (7) handler-path pin; (8) signal_id locked via carry-orchestrator import (no native-orchestrator / momentum import drift); (9) `stampHealDateIfFirst` helper exported + `HEAL_DATE_CONFIG_KEY` constant + plain `.insert()` (no upsert) + `'23505'` unique-violation handling; (10) heal_date stamp gated on `outcome==='completed' && carried_count >= 1` + call-site ordering (after `orch.run`, before `.completed` audit). |
+| **Wall-clock** | `productionClock.getWallClockTs()` is the sole chokepoint; all telemetry timestamps derive from `as_of` (DEC-034 clause 4). |
+| **Deploy probe** | No-auth POST returned HTTP 401 UNAUTHORIZED (expected — `verifyCronSecret` rejection path; ACT-253). |
+| **Added by** | FP-053 / DW-106-c-ii (ACT-253). The c-i manual sibling (`longshort-short-interest-carry-compute-manual`) does NOT stamp `heal_date` — that gate is reserved for this cron's first emission so operator §22.5.1 smoke runs cannot prematurely open the DEC-059 n≥30 measurement window. |
+
 #### `supabase/functions/_shared/longshort-signals/short-term-reversal/reversal-orchestrator.ts`
 
 | Field | Value |
