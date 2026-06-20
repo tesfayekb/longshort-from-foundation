@@ -3,6 +3,27 @@
 | Field | Value |
 |---|---|
 | **ID** | ACT-251 (next-free after ACT-250). |
+
+---
+
+### ACT-252: FP-053 / DW-106-c-i closure — DEC-060 §(i) clarification (float64-semantics + `carried_forward` provenance) + full-cohort §22.5.1 (b) re-verification
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-252 (next-free after ACT-251). |
+| **Mode** | execution — governance clarification + read-only DB re-verification. **No code change. No schema change. No measurement-parameter change.** |
+| **Authority** | Operator-authorized supervisor session 2026-06-20 (DW-106-c-i §22.5.1 (b) resolution, operator-delegated). Pre-data: `heal_date` not stamped; DEC-059 n≥30 window not opened. |
+| **HEAD before / after** | before: `df04f293` / after: (Lovable commit at execution close). |
+| **Trigger** | §22.5.1 (b) initial 5-sample verification surfaced sub-ULP float drift (≤ 4e-15 absolute) between `carried_forward=true` rows at `as_of=2026-06-18` and their source-publication rows. Drift is inherent to `float8` ↔ JS `number` ↔ JSON round-trip, NOT to the carry orchestrator (which performs **zero** arithmetic on `value`). DEC-060 §(i) prose ("byte-identical") was imprecise vs. the `double precision` storage type the schema actually uses, and §(i)'s `as_of_publication` sketch was superseded by MIG-101's generic `carried_forward` boolean. Operator delegated a documented prose clarification (not a parameter tune) + full-cohort re-verification. |
+| **Root cause** | (1) §(i) "byte-identical" was authored against an implicit `numeric` mental model; the implemented schema is `double precision` (verified: `information_schema.columns` → `value` = `double precision`). The carry path holds the value with **zero transformation** (verified: `carry-decider.ts` returns the anchor's value as-is; `carry-orchestrator.ts` passes it through; `missingness-capture.ts` upserts as-is) — the observed drift is a storage-type artifact, not a transformation bug. (2) §(i)'s `as_of_publication` metadata sketch was implemented as the generic `signal_observations.carried_forward` boolean (MIG-101), which is information-preserving (source publication is derivable as the most-recent prior `carried_forward=false AND is_present=true` row). |
+| **Change** | (a) **DEC-060 addendum** — §(i) Clarification (i.a + i.b), marked "pre-data, operator-delegated ACT-252; NOT a measurement-parameter change — §(vi) preserved." Explicitly preserves the 22d bound, hold-no-decay, heal_date mechanism, forward-only scope, and `carried_forward` audit-only constraint. (b) This ACT row. **NO code, NO migration, NO schema, NO measurement parameter touched.** |
+| **§22.5.1 (b) re-verification (full cohort, read-only, `supabase--read_query`)** | Query: for every `carried_forward=true` row at `signal_id='short_interest_change_30d' AND as_of_date='2026-06-18'`, joined to that ticker's most-recent prior `carried_forward=false AND is_present=true` row. **Compared = 836** (matches orchestrator-reported carried count). **max abs(carried.value − source.value) = 4.88498130835069e-15**. **max abs((carried.value − source.value) / nullif(source.value,0)) = 4.54518278574293e-15**. **PASS** under the clarified float64-semantics contract (≤ 1e-12 relative — observed five orders of magnitude under bound; behaviorally inert for a ranking z-score). |
+| **§22.5.1 status (full)** | (a) counts + idempotency PASS (universe 839 / persisted 839 / carried 836 / past_bound 0 / no_publication 3, total=distinct=839). (b) value-verbatim PASS under clarified float64-semantics contract (full-cohort maxima above). (c) absence rows PASS (3 rows; `value=null`, `carried_forward=false`). (d) `heal_date` NOT stamped PASS (manual fn correctly cannot stamp; cron-only per §(iii) / c-ii). (e) reader-isolation PASS (assembler shape returns carried rows as ordinary present values; `carried_forward` not in projection). |
+| **FP-053 §22.3(e) status** | **DW-106-c-i CLOSED.** Unblocks DW-106-c-ii (cron + `heal_date` upsert). |
+| **Gates** | **Gate 4** — `npx eslint .` → 0 errors (confirms no accidental code touch). No deno gate required (no `.ts` changed). |
+| **Out-of-scope guarantees** | Zero edit to `carry-decider.ts`, `carry-orchestrator.ts`, `missingness-capture.ts`, `signal-types.ts`, `longshort-short-interest-carry-compute-manual/index.ts`, any test file, any SQL migration, any schema. Zero change to: 22d bound, hold-vs-decay, heal_date mechanism, forward-only scope, `carried_forward` semantics, any §(i)–§(vi) locked parameter. Zero new permissions / events / configs / env-vars / migrations / routes / dependencies. |
+| **ROI Impact** | Neutral — documents the float64-storage reality and the `carried_forward` provenance design. Does NOT weaken the signal contract; under the clarified semantics the carry is contract-compliant by five orders of magnitude. |
+| **Risks / Follow-up** | None. An explicit `as_of_publication` column remains deferred (not required for c-ii or the DEC-059 clock); future FP can add it if O(1) forensic provenance is ever needed. |
 | **Mode** | execution (Tier-A — test corrective; payload behavior in `missingness-capture.ts` is intentional per ACT-250 and untouched). |
 | **Authority** | Operator-authorized supervisor session 2026-06-19 (DW-106-c-i test-corrective build prompt). |
 | **HEAD before** | ACT-250 commit. |

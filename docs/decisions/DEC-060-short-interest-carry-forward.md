@@ -97,6 +97,37 @@ requires (a) an explicit FP authored *before* the change is applied to any in-fl
 
 Operator-authorized supervisor session 2026-06-19. Pre-registered at FP-053 / ACT-248. Schema foundation landed at this commit's migration (`signal_observations.carried_forward` + CHECK).
 
+## §(i) Clarification — pre-data, operator-delegated (ACT-252)
+
+> **Status:** prose clarification, **NOT** a measurement-parameter change. §(vi) pre-registration discipline is preserved: none of the locked parameters (hold-last-value vs decay, 22d staleness bound, heal_date mechanism, forward-only scope, `carried_forward` audit-only constraint) are altered. Recorded **pre-data** (DW-106 `heal_date` not stamped; DEC-059 n≥30 window not opened).
+
+### (i.a) "Verbatim" / "byte-identical" semantics under the actual schema
+
+`public.signal_observations.value` is `double precision` (IEEE-754 float64; confirmed via `information_schema.columns`). The DW-106-c-i carry path (`carry-decider.ts` → `carry-orchestrator.ts` → `missingness-capture.ts`) reads the anchor row's `value` and writes it back through the upsert payload with **zero arithmetic transformation** (verified by code inspection of the three files in scope).
+
+"Held verbatim" / "byte-identical" in §(i) is hereby clarified to mean **held-without-transformation at float64-value semantics**. The DB-driver serialization round-trip (Postgres `float8` ↔ JS `number` ↔ JSON over PostgREST) can introduce sub-ULP perturbations inherent to the storage type. Full-cohort §22.5.1 (b) re-verification at `as_of=2026-06-18` over **all 836 carried rows** measured `max |Δ| = 4.88e-15`, `max |Δ/v| = 4.55e-15` — five orders of magnitude below the `≤1e-12` relative-difference contract and behaviorally inert for the downstream z-score ranker. The pre-registered §(i) parameter — *hold-last-value, NOT decay* — is satisfied.
+
+Bit-identical preservation would require either changing `value` to `numeric` (schema change, broad blast radius) or transporting values as text and bypassing the JSON number path (orchestrator complication with **zero** behavioral benefit on a float64 ranking input). Neither is pursued; both are explicitly out of scope.
+
+### (i.b) Provenance: `carried_forward` (MIG-101) supersedes the `as_of_publication` prose sketch
+
+§(i) line 33 describes the publication date being "carried as `as_of_publication` metadata." The implemented schema (MIG-101, DW-106-a) instead uses the generic `signal_observations.carried_forward boolean` column, which is a strict design improvement and a superset in information content:
+
+- For any carried row at `as_of=D`, the source publication is fully derivable as that ticker's most-recent prior row with `carried_forward = false AND is_present = true` — i.e. the most-recent native publication preceding `D`. No information is lost.
+- The generic flag is signal-agnostic and serves DW-108 typed-absence uniformity without per-signal column proliferation.
+- The audit-only constraint of §(v) is structurally enforced by `carried_forward` (CHECK clause: `carried_forward = false OR (is_present = true AND value IS NOT NULL)`).
+
+An explicit `as_of_publication` column is **deferred** (not required for c-i/c-ii or for the DEC-059 n≥30 clock); should a future forensic workflow demand O(1) provenance lookup rather than the O(log N) "most-recent prior native" join, it can be added under a separate FP without disturbing this DEC.
+
+### What this clarification does NOT change
+
+- The 22-calendar-day staleness bound (§(ii)) — unchanged.
+- Hold-last-value, NOT decay (§(i) core rule) — unchanged.
+- The `heal_date` stamping mechanism (§(iii)) — unchanged; still cron-only, still pre-data.
+- Forward-only scope (§(iv)) — unchanged.
+- `carried_forward` audit-only semantics (§(v)) — unchanged; reinforced.
+- §(vi) pre-registration discipline — unchanged; this is a prose clarification of locked-parameter semantics under the actual storage type, **not** a parameter tune.
+
 ## Dependencies
 
 - [DW-106](../08-planning/deferred-work-register.md) — the deferred work item being resolved across DW-106-a/b/c
