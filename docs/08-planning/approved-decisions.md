@@ -1104,6 +1104,17 @@ If any field is missing → the decision is **INVALID**.
 | **Summary** | Locks the writer-side short-interest carry design before the DW-106-c cron lands: hold-last-value (no decay — SI is a state), 22-calendar-day staleness bound (covers FINRA ~15d cadence + missed-publication slack; trips to typed-absence only on a genuinely missed cycle), `heal_date` upserted to `system_config` on the first carry-emitting cron fire (downstream consumer = DEC-059 §1 n≥30 cutoff), forward-only (backfill explicitly forbidden — buys zero clock acceleration and corrupts the cutoff), `carried_forward` boolean (audit-only; MUST NOT leak into the feature vector). Re-tuning any parameter requires an FP + superseding DEC per §(vi). |
 | **Link** | [`docs/decisions/DEC-060-short-interest-carry-forward.md`](../decisions/DEC-060-short-interest-carry-forward.md) (verbatim body — load-bearing; read in full before any DW-106-b/c authoring) |
 
+## DEC-061 Index Entry
+
+| Field | Value |
+|---|---|
+| **ID** | DEC-061 |
+| **Title** | Strategy-scoped observability surfaces keyed to the strategy as named in `job_registry` (dotted `<strategy>.<surface>.<verb>` convention ratified) |
+| **Status** | approved (operator-ratified 2026-06-20) |
+| **Date** | 2026-06-20 |
+| **Summary** | Ratifies the de-facto system-wide dotted naming form for strategy-scoped observability (crons, `cron_last_fire` keys, shadow/measurement panels): exactly three lowercase dot-separated segments, registered to `job_registry`; global fan-out crons forbidden for strategy observability. Reconciles `strategy-module-pattern.md` Background Jobs Naming (DW-116) and forces the Removability Contract job glob from `<strategy>_*` to `<strategy>.*` (semantics-preserving spelling alignment; wider manifest path tracked DW-115). |
+| **Link** | [`docs/decisions/DEC-061-strategy-observability-dotted-convention.md`](../decisions/DEC-061-strategy-observability-dotted-convention.md) (verbatim body — load-bearing; read in full before any future strategy observability cron or measurement-panel work) |
+
 ## Enforcement Rule (CRITICAL)
 
 - AI MUST read this document before any plan revision or execution

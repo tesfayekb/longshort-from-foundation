@@ -2436,3 +2436,108 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **future_owner_phase** | Low-priority cleanup (folds into the next touch of either file or the third consumer's commit). |
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
+
+### DW-112: Measurement/heal crons bypass the job-executor `kill_switch` check
+
+| Field | Value |
+|---|---|
+| **id** | DW-112 (next-free after DW-111; grep-verified at HEAD `8f4e2797`). |
+| **date_deferred** | 2026-06-20 (surfaced during DEC-061 reconciliation pass). |
+| **title** | Route the three standalone measurement/heal crons (shadow-rank, forward-returns accrual, short-interest carry) through the job-executor / shared pre-fire `kill_switch` guard so the global kill-switch gates them. |
+| **why_deferred** | Pre-existing; Phase-3 zero-PnL. Shadow-rank, forward-return accrual, and the carry-forward writer are standalone `cron.schedule` functions that do not route through `job-executor`, so the global `kill_switch` does not gate them. No correctness or money-path impact at Phase 3 (all three are measurement/observability, zero live trading). Becomes load-bearing before any live phase: an operator who flips `kill_switch=true` expecting a hard stop would still see these three crons firing. |
+| **status** | logged (open; pre-existing, not in any active phase scope). |
+| **trigger_conditions** | (a) Any operator-authorized turn touching the three crons' handlers OR the shared cron-fire path; (b) approach of any live-trading phase (must be resolved before live PnL); (c) introduction of a fourth standalone measurement cron (cost-amortization tipping point for a shared pre-fire guard helper). |
+| **scope_sketch** | Either (i) route the three handlers through the existing `job-executor` pre-fire envelope (preferred — single chokepoint), or (ii) extract a shared `pre-fire-guard.ts` helper that reads `kill_switch` and short-circuits, called as the first line of each handler before any DB work or vendor call. Add a regression test per cron asserting `kill_switch=true` produces a typed no-op audit row, not a silent skip. |
+| **estimated_complexity** | S (one shared helper + three call-site edits + three regression tests + audit-vocabulary entry if route (ii)). |
+| **blocking_dependencies** | None — independently actionable. Naturally ordered before any live-trading phase. |
+| **related_decisions** | DEC-061 (surfacing pass); whichever DEC governs `kill_switch` semantics at the time of resolution. |
+| **related_actions** | DEC-061 reconciliation session 2026-06-20. |
+| **required_tests_for_closure** | (a) Per-cron regression test asserting `kill_switch=true` short-circuits before any vendor/DB write and emits a typed audit row; (b) grep at HEAD post-fix returns ZERO standalone measurement crons that bypass the guard; (c) audit-vocabulary entry registered same-PR if a new event name is introduced. |
+| **future_owner_phase** | Pre-live-trading. |
+| **future_owner_module** | longshort / combiner + longshort / signals / short-interest-change. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-113: `deno test supabase/functions/` suite has three pre-existing baseline failure classes (Gate-2 "full suite green" currently unsatisfiable)
+
+| Field | Value |
+|---|---|
+| **id** | DW-113 (next-free after DW-112). |
+| **date_deferred** | 2026-06-20 (surfaced during DEC-061 reconciliation pass). |
+| **title** | Define a single canonical green-able `deno test` invocation covering the `supabase/functions/` tree by resolving three pre-existing baseline failure classes: (a) six vitest-shaped `*.test.ts` files under `shared/longshort-universe/`; (b) handler source-sentinel `index_test.ts` files needing `--allow-read`; (c) eight `*_test.ts` files raising `MissingEnvVarsError` from `dotenv/load.ts`. |
+| **why_deferred** | Pre-existing; medium severity; no production-correctness impact. Until resolved, Gate-2 ("full suite green") operates as "no NEW failures vs the pre-change baseline failing-file set" — a documented downgrade, not a free pass. Resolving requires a coordinated env-bootstrap + test-runner shape decision spanning multiple subteams' fixture conventions; out of scope for any single touch surface. |
+| **status** | logged (open; pre-existing, blinds Gate-2 full-suite assertion). |
+| **trigger_conditions** | (a) Any phase whose definition-of-done legitimately requires a fully-green `deno test`; (b) approach of any live-trading phase; (c) the failing-file baseline drifts (new failures vs the cataloged set — at that point the baseline-diff Gate-2 stops being trustworthy). |
+| **scope_sketch** | (a) Six `cross-check-spec.test.ts` / `fetch-with-timeout-and-retry.test.ts` / `metrics-emitter.test.ts` / `hard-exclusion-refresh-orchestrator.test.ts` / `universe-membership-fetcher.test.ts` / `universe-service.test.ts` under `_shared/longshort-universe/` — decide: move under vitest (rename + path under `src/`), or rewrite as deno tests (clear TS2307/TS7006 by replacing vitest imports). (b) Add `--allow-read` to the canonical invocation; pin the read scope to the project root. (c) Bootstrap a fixed test env (VITE_*/ALPACA_* with sentinel values) before `deno test`, OR mark the eight env-reading tests as integration-only and exclude them from the unit invocation. Document the canonical command in `docs/00-governance/definition-of-done.md` or sibling. |
+| **estimated_complexity** | M (test-runner shape decision + per-file remediation + env-bootstrap design + DoD doc update). |
+| **blocking_dependencies** | None — independently actionable. |
+| **related_decisions** | DEC-061 (surfacing pass); regression-strategy.md (Gate-2 definition). |
+| **related_actions** | DEC-061 reconciliation session 2026-06-20. |
+| **required_tests_for_closure** | (a) A single documented `deno test ...` invocation exits 0 on a clean checkout; (b) the cataloged failing-file baseline (six + sentinel + eight) is empty at HEAD post-fix; (c) Gate-2 definition in regression-strategy.md is restored to "full suite green" (no baseline-diff downgrade). |
+| **future_owner_phase** | Pre-live-trading OR opportunistic at next test-infrastructure touch. |
+| **future_owner_module** | longshort / shared infra + universe. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-114: Insider silence detection gap — producer 403 before its R1 heartbeat seam + green-but-empty consumer mask a stale signal
+
+| Field | Value |
+|---|---|
+| **id** | DW-114 (next-free after DW-113). |
+| **date_deferred** | 2026-06-20 (surfaced during DW-107 post-mortem; reconciliation pass). |
+| **title** | (a) Introduce a `403`-on-egress heartbeat row type for the insider-discovery producer so any future egress block leaves a DB trace; (b) key insider freshness off filing-time / queue-row recency rather than consumer-fire success. |
+| **why_deferred** | DW-107's resolution removes the active silence (5-trading-day insider undetected gap), but the detection gap itself is durable: the producer 403'd BEFORE its R1 heartbeat seam (no sentinel row written on failure), and the consumer fired green-but-empty daily, so the freshness probe `MAX(consumer.last_success)` looked healthy while the underlying signal was stale. Severity: low (consumer-empty is not a money-path corruption — combiner reads typed-absence correctly), but pre-existing for any future egress class (vendor-rate-limited / DNS-failed / cert-expired). |
+| **status** | logged (open; pre-existing, surfaced post-DW-107). |
+| **trigger_conditions** | (a) Approach of any live-trading phase (must be resolved before live PnL — stale-signal masking is unacceptable on the money path); (b) introduction of a second egress-dependent producer (DW-114's heartbeat shape becomes the shared primitive); (c) any future undetected-silence incident class. |
+| **scope_sketch** | (a) Producer (`scripts/insider-discovery-egress.ts`) writes a `403_heartbeat` row to `insider_accession_discovery_queue` (or a sibling `producer_run_log` table) on egress failure — distinct sentinel from R1 empty-day heartbeat, so the monitor can distinguish "ran-and-blocked" from "ran-and-empty-day". (b) Freshness probe consumed by the longshort-signal-monitor switches from `MAX(consumer_fire.completed_at)` to a compound `LEAST(producer_recency, queue_row_recency)` so a producer block surfaces even when the consumer fires green-empty. (c) Regression test fixture: synthesize a 403 producer run + a downstream green-empty consumer fire and assert the monitor flags stale-signal. |
+| **estimated_complexity** | S–M (one sentinel-row type + one monitor-query rewrite + ≥2 regression tests + module-doc update). |
+| **blocking_dependencies** | None — independently actionable. Naturally ordered before any live-trading phase. |
+| **related_decisions** | DEC-061 (surfacing pass); whichever DEC governs the longshort-signal-monitor freshness contract at the time of resolution. |
+| **related_actions** | DW-107 resolution (closed the active 5-day silence); DEC-061 reconciliation session 2026-06-20. |
+| **required_tests_for_closure** | (a) Fixture test: 403 producer + empty consumer → monitor flags stale; (b) fixture test: green producer + empty consumer (legitimate empty day) → monitor stays green; (c) `403_heartbeat` row schema documented in the queue's module doc; (d) freshness-probe contract documented same-PR. |
+| **future_owner_phase** | Pre-live-trading. |
+| **future_owner_module** | longshort / signals / insider-transactions + longshort-signal-monitor. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-115: Per-strategy removal manifest — combiner shadow/measurement tables carry no `<strategy>_` prefix; Removability-Contract glob-orphan gap
+
+| Field | Value |
+|---|---|
+| **id** | DW-115 (next-free after DW-114). |
+| **date_deferred** | 2026-06-20 (surfaced during DEC-061 reconciliation pass). |
+| **title** | Author a documented per-strategy removal manifest at `docs/04-modules/longshort/removal-manifest.md` enumerating the full long-short artifact surface by NAME (replacing prefix-glob removability as the primary primitive for at-least the unprefixed `combiner_*` family). Optionally hold open a future table-rename path if a coded glob-remover is ever built. |
+| **why_deferred** | `combiner_book_shadow`, `combiner_forward_returns`, `combiner_shadow_variant_config` (all `public.combiner_*`, grep-confirmed at HEAD `8f4e2797`) carry no `longshort_` prefix; the Removability Contract (`strategy-module-pattern.md:273`) deletes via a `<strategy>_*` table glob, so these would be orphaned under a literal application of the contract. The full unprefixed `combiner_*` family is likely wider and the manifest's authoring must enumerate it. Latent / low severity: removal is **prose-only today** (no coded glob remover exists), so nothing is broken in any executable code path; the gap is doc-vs-reality. Pre-existing since Phase 3.M; not Layer-1 work. Folding into the L2 measurement-panel work would entangle the L2 scope; routed here per §22.3(c) scope-discipline. |
+| **status** | logged (open; pre-existing, prose-only impact). |
+| **trigger_conditions** | (a) Any operator-authorized turn building a coded strategy-removal helper (then the manifest is the helper's input); (b) approach of multi-strategy operation where per-strategy removal becomes operationally exercised; (c) opportunistic at the next touch of `strategy-module-pattern.md` Removability Contract. |
+| **scope_sketch** | NEW file `docs/04-modules/longshort/removal-manifest.md` enumerating: (i) all `longshort_*` tables; (ii) all unprefixed `combiner_*` tables (`combiner_book_shadow`, `combiner_forward_returns`, `combiner_shadow_variant_config`, plus the full grep-enumerated set); (iii) all `longshort.*` jobs (per DEC-061); (iv) all `longshort-*` edge functions; (v) all `longshort.*` permissions / events / routes; (vi) `src/features/longshort/` + `src/pages/trading/longshort/` + `docs/04-modules/longshort/`. Update `strategy-module-pattern.md` Removability Contract to point at the per-strategy manifest as the authoritative removal source-of-truth for any strategy with non-prefixed artifacts. Leave a future-work hook: a table-rename pass (rename `combiner_*` → `longshort_combiner_*`) stays an open option behind THIS DW if a coded glob-remover is later built and the manifest's overhead is judged inferior. |
+| **estimated_complexity** | M (full-surface grep + manifest authoring + pattern-doc cross-ref + ≥1 verifier asserting every manifest row exists at HEAD). |
+| **blocking_dependencies** | None — independently actionable; not folded into L2. |
+| **related_decisions** | DEC-061 (Consequences clause explicitly defers the wider manifest path here); strategy-module-pattern.md T6. |
+| **related_actions** | DEC-061 reconciliation session 2026-06-20. |
+| **required_tests_for_closure** | (a) Manifest verifier: every NAME in the manifest exists at HEAD (catches manifest-vs-reality drift); (b) reverse verifier: every `public.combiner_*` table at HEAD appears in the manifest (catches new-table additions that bypass the manifest); (c) `strategy-module-pattern.md` Removability Contract cross-references the manifest as the authoritative source for non-glob-clean strategies. |
+| **future_owner_phase** | Opportunistic / pre-multi-strategy. |
+| **future_owner_module** | longshort / docs + governance. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-116: Job-naming convention drift — documented underscore vs de-facto dotted (closed in same PR by DEC-061 / STEP C reconciliation)
+
+| Field | Value |
+|---|---|
+| **id** | DW-116 (next-free after DW-115). |
+| **date_deferred** | 2026-06-20 (logged for traceability; the corresponding reconciliation lands in the SAME PR as the DEC-061 ratification). |
+| **title** | Reconcile `strategy-module-pattern.md` Background Jobs Naming + Removability Contract job-glob to the dotted `<strategy>.<surface>.<verb>` grammar to match the system-wide de-facto convention (~13 long-short jobs + seeded `cron_last_fire` rows at HEAD `8f4e2797`). |
+| **why_deferred** | Pre-existing & system-wide doc drift, no functional impact. The pattern doc documented `<strategy>_<verb>` (snake_case) with `longshort_compute_signals` / `longshort_rebalance` as examples, while all production long-short jobs use the dotted three-segment form (`longshort.combiner_shadow_rank.compute`, `longshort.short_interest_carry.compute`, etc.). Renaming the ~13 production job keys to match the doc was rejected as a scope-discipline trap (helpful-refactoring class — 13 production key renames for a doc convention, with FK cascade blast-radius across `cron_last_fire` and seeded rows); the doc-side reconciliation is the cheap correct path. |
+| **status** | resolved-in-same-PR (logged for register continuity; the reconciliation diff lands in the same commit as DEC-061's index entry + DEC-061 standalone body file). |
+| **trigger_conditions** | None — closed in same PR. Entry kept for traceability so a future auditor reading the register sees the drift acknowledged and the resolution path documented. |
+| **scope_sketch** | (a) Replace `strategy-module-pattern.md` §Background Jobs Naming block: `<strategy>.<surface>.<verb>` with three-segment lowercase grammar; replace underscore examples with `longshort.combiner_shadow_rank.compute` and `longshort.short_interest_carry.compute`; cite DEC-061. (b) Reconcile Removability Contract line 275 from `<strategy>_*` to `<strategy>.*` (forced spelling alignment per DEC-061 Consequences; semantics-preserving). (c) No code migration; no job rename. |
+| **estimated_complexity** | XS (two paragraphs in one file; no code; no MIG). |
+| **blocking_dependencies** | None — closed in same PR as DEC-061. |
+| **related_decisions** | DEC-061 (ratifying decision). |
+| **related_actions** | DEC-061 reconciliation session 2026-06-20 (this PR). |
+| **required_tests_for_closure** | (a) `strategy-module-pattern.md` §Naming block contains the dotted three-segment grammar + DEC-061 cite; (b) line 275 Removability Contract job glob reads `<strategy>.*`; (c) no other line in the Removability Contract (lines 268–283) is altered (DW-115's manifest path stays separate); (d) DEC-061 index entry + standalone body file present. |
+| **future_owner_phase** | Closed in same PR. |
+| **future_owner_module** | governance / pattern-doc. |
+| **implemented_by_action** | DEC-061 reconciliation commit (this PR). |
+| **implemented_in_plan_version** | — |
