@@ -2239,6 +2239,48 @@ The six events below mirror the momentum signal's event family exactly, with `mo
 | **Lifecycle** | active |
 | **Added by** | FP-053 (DW-106-c-i / ACT-250) |
 
+#### `longshort.short_interest_carry.compute.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the `longshort-short-interest-carry-compute` daily cron handler immediately after `verifyCronSecret` succeeds, BEFORE the carry orchestrator runs. Pairs with `.completed` or `.failed`. Distinct from `longshort.short_interest.compute.started` (twice-monthly native publisher) and from `longshort.short_interest_carry.compute.manual_*` (operator-trigger manual sibling). |
+| **Emitted by** | `supabase/functions/longshort-short-interest-carry-compute/index.ts` via `writeStrategyAuditEvent` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { as_of, signal_id: 'short_interest_change_30d', trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-053 (DW-106-c-ii / ACT-253) |
+
+#### `longshort.short_interest_carry.compute.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, observability |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the daily carry cron after `CarryOrchestratorResult.outcome==='completed'`. `metadata` carries per-outcome counts + the `heal_date_stamped` tristate (`true` = this fire stamped `system_config.dw_106_short_interest_heal_date`; `false` = already stamped via DB-level `ON CONFLICT (key) DO NOTHING`; `null` = stamp not attempted because `carried_count<1`). |
+| **Emitted by** | `supabase/functions/longshort-short-interest-carry-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, outcome, universe_size, persisted_count, carried_count, past_bound_count, no_publication_count, skipped_native_count, heal_date_stamped, heal_date_error?, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-053 (DW-106-c-ii / ACT-253) |
+
+#### `longshort.short_interest_carry.compute.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted by the daily carry cron on orchestrator-throw (`stage='orchestrator_throw'`, returns 500 `short_interest_carry_compute_failed`) OR on a structured `CarryOrchestratorResult.outcome==='failed'` (200 with body — dual-trail discipline). |
+| **Emitted by** | `supabase/functions/longshort-short-interest-carry-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { signal_id, as_of, error?, failure_reason?, stage?, outcome?, universe_size?, persisted_count?, carried_count?, past_bound_count?, no_publication_count?, skipped_native_count?, heal_date_stamped?, heal_date_error?, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-053 (DW-106-c-ii / ACT-253) |
+
 #### `longshort.signal_monitor.started` — v1
 
 | Field | Value |
