@@ -207,9 +207,11 @@ Strategy jobs MUST be registered in the platform `job_registry` table per `jobs-
 
 ### Naming
 
-Job IDs follow `<strategy>_<verb>` (snake_case) format. Examples for long-short:
-- `longshort_compute_signals` (scheduled signal computation)
-- `longshort_rebalance` (periodic portfolio rebalance)
+Job IDs follow `<strategy>.<surface>.<verb>` — exactly three dot-separated segments, all lowercase, each segment matching `[a-z][a-z0-9_]*`. Per DEC-061. Strategy jobs register to the platform `job_registry` table per `jobs-and-scheduler.md` rules; per DEC-019, cron scheduling uses `pg_cron`. Examples for long-short:
+- `longshort.combiner_shadow_rank.compute` (scheduled shadow-rank measurement)
+- `longshort.short_interest_carry.compute` (carry-forward writer cron)
+
+T6 removability remains glob-equivalent under the dotted form: `longshort.*` deletes as cleanly as `longshort_*` would have. The Removability Contract job glob (below) is reconciled in the same change per DEC-061.
 
 ### Classification
 
@@ -272,7 +274,7 @@ A complete strategy removal MUST delete, in one operation:
 - `src/pages/trading/<strategy>/` directory
 - All `<strategy>_*` tables (data + audit) via migration
 - All `<strategy>-*` edge functions
-- All `<strategy>_*` job_registry rows + their pg_cron entries
+- All `<strategy>.*` job_registry rows + their pg_cron entries
 - All `<strategy>.*` permission rows from `permissions` table
 - All `<strategy>.*` event registrations from `event-index.md`
 - All `<strategy>.*` route registrations from `route-index.md`
