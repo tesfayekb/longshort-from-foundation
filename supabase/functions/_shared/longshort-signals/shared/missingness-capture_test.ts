@@ -68,6 +68,9 @@ Deno.test('(2) single row → UPSERT called with correct shape + correct conflic
     is_present: r.is_present,
     gics_sector: r.gics_sector,
     computed_at: r.computed_at,
+    // DW-106-c-i passthrough: SignalRow without `carried_forward` coerces
+    // to `false` in the payload (matches MIG-101 column DEFAULT).
+    carried_forward: false,
   }]);
   assertEquals(calls[0].opts, {
     onConflict: 'operator_id,signal_id,as_of_date,ticker',
