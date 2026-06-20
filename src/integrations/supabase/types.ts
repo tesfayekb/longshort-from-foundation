@@ -439,6 +439,38 @@ export type Database = {
           },
         ]
       }
+      cron_last_fire: {
+        Row: {
+          completed_at: string | null
+          failure_reason: string | null
+          job_id: string
+          outcome: string | null
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          failure_reason?: string | null
+          job_id: string
+          outcome?: string | null
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          failure_reason?: string | null
+          job_id?: string
+          outcome?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cron_last_fire_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "job_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_flags: {
         Row: {
           enabled: boolean
