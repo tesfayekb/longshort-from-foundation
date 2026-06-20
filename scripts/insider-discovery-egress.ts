@@ -80,6 +80,7 @@ import {
   isoDate,
   isTradingDay,
   parseIsoDate,
+  tradingDaysBefore,
 } from '../supabase/functions/_shared/longshort-universe/shared/trading-days.ts';
 
 // ---------------------------------------------------------------------------
