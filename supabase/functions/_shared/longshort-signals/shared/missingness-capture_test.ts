@@ -156,3 +156,12 @@ Deno.test('(8) type-level: SignalRow forces value/is_present consistency at the 
   assertEquals(absent.is_present, false);
   assertEquals(absent.value, null);
 });
+
+Deno.test('(9) DW-106-c-i: carried_forward:true passes through verbatim into upsert payload', async () => {
+  const { supabase, calls } = makeMock({ error: null, count: 1 });
+  const r = row({ carried_forward: true });
+  const out = await captureSignalObservations(supabase, [r]);
+  assertEquals(out.error, null);
+  const payload = calls[0].payload as Array<Record<string, unknown>>;
+  assertEquals(payload[0].carried_forward, true);
+});
