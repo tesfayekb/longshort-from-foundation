@@ -20,6 +20,21 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useUserRoles } from '@/hooks/useUserRoles';
 import { checkPermission } from '@/lib/rbac';
+import {
+  useCronLastFire,
+  type CronLastFireRow,
+} from '@/features/longshort/hooks/useCronLastFire';
+import {
+  isSignalStale,
+  cadenceLabel,
+} from '@/features/longshort/utils/cron-staleness';
+import { formatDistanceToNowStrict } from 'date-fns';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // Untyped client view for tables/RPCs not present in generated Database types.
 const sb = supabase as unknown as SupabaseClient;
@@ -61,6 +76,94 @@ function stateColor(state: string) {
   }
 }
 
+/**
+ * DW-shadow-visibility 1c — per-row "Last Fire / Staleness" cell.
+ *
+ * - No `cron_last_fire` row → neutral em-dash (job-executor jobs
+ *   report via the Executions tab, not here).
+ * - Row with `completed_at` + parseable schedule → Fresh/Stale pill
+ *   via `isSignalStale` + relative-time label + outcome.
+ * - Outcome `failed` with no successful `completed_at` → red
+ *   "Failing" indicator with `failure_reason` in a tooltip.
+ *
+ * Failing-but-firing crons correctly show STALE because `completed_at`
+ * is gated on success (`persistCronLastFire` omits `completed_at` on
+ * failure to preserve the last-success anchor) — this is the intended
+ * protective behavior, not a bug.
+ */
+function CronLastFireCell({
+  job,
+  row,
+}: {
+  job: JobRegistry;
+  row: CronLastFireRow | undefined;
+}) {
+  if (!row) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  const failureReason = row.failure_reason ?? 'unknown';
+
+  // No successful fire ever recorded → surface failing-only state.
+  if (!row.completed_at) {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-xs">
+              Failing — no successful fire
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <span className="text-xs">{failureReason}</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  const completedAt = new Date(row.completed_at);
+  const stale = isSignalStale(completedAt, job.schedule, new Date());
+  const rel = formatDistanceToNowStrict(completedAt, { addSuffix: true });
+
+  const pill = stale ? (
+    <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-xs">
+      Stale
+    </Badge>
+  ) : (
+    <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-xs">
+      Fresh
+    </Badge>
+  );
+
+  const lastOutcomeTag =
+    row.outcome === 'failed' ? (
+      <span className="text-xs text-destructive">· last attempt failed</span>
+    ) : null;
+
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-2">
+            {pill}
+            <span className="text-xs text-muted-foreground">{rel}</span>
+            {lastOutcomeTag}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <div className="space-y-1 text-xs">
+            <div>Last success: {completedAt.toISOString()}</div>
+            {row.outcome === 'failed' && (
+              <div className="text-destructive">Last attempt: {failureReason}</div>
+            )}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export default function AdminJobsPage() {
   const queryClient = useQueryClient();
   const { context } = useUserRoles();
@@ -86,6 +189,11 @@ export default function AdminJobsPage() {
       return (data ?? []) as unknown as JobRegistry[];
     },
   });
+
+  // DW-shadow-visibility 1c — fire-status anchor for crons that bypass
+  // job-executor (shadow-rank, forward-returns, short-interest-carry).
+  // Rows without an entry render "—" in the Last Fire column.
+  const { byJobId: cronLastFireById } = useCronLastFire();
 
   // Recent executions
   const { data: executions } = useQuery({
@@ -278,6 +386,7 @@ export default function AdminJobsPage() {
                           <th className="pb-2 pr-4">Class</th>
                           <th className="pb-2 pr-4">Schedule</th>
                           <th className="pb-2 pr-4">Status</th>
+                          <th className="pb-2 pr-4">Last Fire / Staleness</th>
                           <th className="pb-2 pr-4">Retries</th>
                           <th className="pb-2">Actions</th>
                         </tr>
@@ -289,11 +398,25 @@ export default function AdminJobsPage() {
                             <td className="py-3 pr-4">
                               <Badge variant="outline" className="text-xs">{job.class}</Badge>
                             </td>
-                            <td className="py-3 pr-4 font-mono text-xs">{job.schedule}</td>
+                            <td className="py-3 pr-4 font-mono text-xs">
+                              <TooltipProvider delayDuration={150}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span>{cadenceLabel(job.schedule) ?? job.schedule}</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <span className="font-mono text-xs">{job.schedule}</span>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </td>
                             <td className="py-3 pr-4">
                               <Badge variant="outline" className={stateColor(job.status)}>
                                 {job.status}
                               </Badge>
+                            </td>
+                            <td className="py-3 pr-4">
+                              <CronLastFireCell job={job} row={cronLastFireById.get(job.id)} />
                             </td>
                             <td className="py-3 pr-4">{job.max_retries}</td>
                             <td className="py-3">
