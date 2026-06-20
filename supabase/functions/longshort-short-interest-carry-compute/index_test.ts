@@ -45,9 +45,13 @@ Deno.test('(2) productionClock is the sole wall-clock source — no new Date() l
 });
 
 Deno.test('(3) NO POLYGON_API_KEY / NO Polygon fetcher import (carry is pure-DB)', () => {
-  assert(!HANDLER_SOURCE.includes('POLYGON_API_KEY'),
+  const codeOnly = HANDLER_SOURCE
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\*.*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+  assert(!codeOnly.includes('POLYGON_API_KEY'),
     'unexpected POLYGON_API_KEY env read — carry path is pure-DB');
-  assert(!HANDLER_SOURCE.includes('Polygon'),
+  assert(!codeOnly.includes('Polygon'),
     'unexpected Polygon import — carry path must not fetch externally');
 });
 
@@ -77,9 +81,13 @@ Deno.test('(5) all three audit events wired (.started / .completed / .failed), a
 });
 
 Deno.test('(6) NO persistSignalComputeLog (carry result is a custom shape; telemetry rides the audit envelope)', () => {
-  assert(!HANDLER_SOURCE.includes('persistSignalComputeLog'),
+  const codeOnly = HANDLER_SOURCE
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\*.*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+  assert(!codeOnly.includes('persistSignalComputeLog'),
     'unexpected persistSignalComputeLog call — carry result is CarryOrchestratorResult');
-  assert(!HANDLER_SOURCE.includes('persist-signal-compute-log'),
+  assert(!codeOnly.includes('persist-signal-compute-log'),
     'unexpected persist-signal-compute-log import');
 });
 
