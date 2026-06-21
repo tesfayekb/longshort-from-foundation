@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.longshort_get_heal_date() FROM PUBLIC, anon;
