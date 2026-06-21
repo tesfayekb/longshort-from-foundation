@@ -2,6 +2,25 @@
 
 ---
 
+### ACT-256: FP-054 sub-step 54.0 hardening — MIG-105 REVOKE EXECUTE on `longshort_get_heal_date()` FROM PUBLIC, anon (closes WARN-0028 for this fn; conforms to repo SECURITY DEFINER hardening pattern; DW-117 registered for system-wide sweep)
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-256 (next-free after ACT-255). |
+| **Mode** | execution — revision-fix / security hardening. Tier B (grant-only change on a SECURITY DEFINER function; §22.5.1 live-DB verify applied). |
+| **Authority** | FP-054 sub-step 54.0 hardening — supervisor-authorized correction closing the WARN-0028 drift surfaced under MIG-104's Capability-gap field. Conforms to the repo's established REVOKE-FROM-PUBLIC pattern for sensitive SECURITY DEFINER functions reading restricted-RLS tables (canonical exemplar: `compare_reconciliation_baseline` in `supabase/migrations/20260524130000_step_6_6_a1_baseline...sql:87`). §22.3(f) executor migration-tool path canonical (additive forward migration, no MIG-104 amend per §22.8.5(d)). |
+| **HEAD before / after** | before: `7d26ac84` / after: Lovable commit at execution close. |
+| **Anchors quoted (STEP A)** | (1) Grants-before on `longshort_get_heal_date`: `has_function_privilege` returned `public=t / anon=t / authenticated=t / service_role=t` — confirms WARN-0028 basis (PUBLIC + anon hold default EXECUTE) and MIG-104 grant to `authenticated` present. (2) Canonical idiom located at `supabase/migrations/20260524130000_step_6_6_a1_baseline...sql:87`: `REVOKE EXECUTE ON FUNCTION public.compare_reconciliation_baseline(text, reconciliation_outcome, integer, integer) FROM PUBLIC, anon;`. (3) Ledger highest at HEAD = **MIG-104** → next-free = **MIG-105** (unambiguous, no STOP). (4) Tracker highest = **ACT-255** → next-free = **ACT-256**. (5) DW register highest = **DW-116** → next-free = **DW-117**. |
+| **Files NEW (1)** | `supabase/migrations/20260621015411_c32c51cc-69e1-4369-8ee7-41d3c8c75b2b.sql` — single statement: `REVOKE EXECUTE ON FUNCTION public.longshort_get_heal_date() FROM PUBLIC, anon;`. NO function body change (no `CREATE OR REPLACE`). NO touch to other functions' grants. NO RLS change. |
+| **Files EDIT (4)** | (1) `docs/07-reference/database-migration-ledger.md` — added MIG-105 row (REVOKE hardening; grants-before/after evidence; idiom-conformance cite; linter delta 28→27). (2) `docs/08-planning/feature-proposals.md` — updated FP-054 Status: "54.0 HARDENED at ACT-256 via MIG-105 — REVOKE FROM PUBLIC, anon — conforms to repo SECURITY DEFINER hardening pattern". (3) `docs/06-tracking/action-tracker.md` — this entry (ACT-256). (4) `docs/08-planning/deferred-work-register.md` — appended DW-117 (system-wide pre-existing WARN-0028 sweep; slim entry; low priority, pre-live). |
+| **STEP C live-DB verify (§22.5.1)** | (a) Grants-after `has_function_privilege` on `public.longshort_get_heal_date()`: `public=false / anon=false / authenticated=true / service_role=true` — PUBLIC and `anon` no longer hold EXECUTE; `authenticated` retains EXECUTE (panel read path unchanged); `service_role` retains EXECUTE via owner-role privilege. (b) `authenticated` callability: function remains callable by `longshort.view`-gated holders (EXECUTE grant intact + in-function `has_permission` gate intact); the read_query session — which carries no `auth.uid()` context — correctly received `42501 permission denied for function longshort_get_heal_date` from the in-function gate (the gate fires before any SELECT, confirming both the gate is intact and the function body is unchanged). (c) Supabase linter delta: total findings 28 → 27 — one `WARN 0028` (`anon_security_definer_function_executable`) cleared for `longshort_get_heal_date`. |
+| **Anti-patterns avoided** | Function body NOT altered (grant-only change). `authenticated` EXECUTE NOT revoked (panel read path preserved). No other function's grants touched (system-wide sweep is DW-117, not this PR). MIG-104 NOT amended (forward-only per §22.8.5(d) — this is a new additive forward migration). ASCII-only. No `system_config` RLS / GRANT change. |
+| **Capability-gap surface (§22.8.5)** | None for this change. The supabase--migration tool accepts bare `REVOKE` statements; no executor mismatch. The MIG-104 Capability-gap (the tool emits `GRANT EXECUTE` without an accompanying `REVOKE FROM PUBLIC`) is exactly what this commit closes for `longshort_get_heal_date`; the same gap remains for the other SECURITY DEFINER functions in the project and is tracked under DW-117. |
+| **ROI impact** | None. Pure security hardening on a read-only RPC; no signal logic, no thresholds, no sizing, no execution timing, no monitoring change. |
+| **Cross-references** | MIG-105 (database-migration-ledger.md); MIG-104 (parent); FP-054 sub-step 54.0 hardening (`docs/08-planning/feature-proposals.md`); DW-117 (system-wide WARN-0028 sweep); canonical exemplar `supabase/migrations/20260524130000_step_6_6_a1_baseline...sql:87`. |
+
+---
+
 ### ACT-255: FP-054 sub-step 54.0 — `longshort_get_heal_date()` SECURITY DEFINER RPC + MIG-104 + MIG-103 ledger catch-up + STEP D read-only readout validation
 
 | Field | Value |
