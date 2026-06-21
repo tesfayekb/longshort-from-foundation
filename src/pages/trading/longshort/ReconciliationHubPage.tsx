@@ -1,6 +1,7 @@
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { HubTabs, HubEmptyState } from './hub/HubTabs';
 import ReconciliationEventsPage from './ReconciliationEventsPage';
+import ShadowMeasurementPage from './ShadowMeasurementPage';
 
 /**
  * Reconciliation hub — wraps the existing Events page, with Alerts and
@@ -11,7 +12,7 @@ export default function ReconciliationHubPage() {
     <div className="space-y-6">
       <PageHeader
         title="Reconciliation"
-        subtitle="Data-integrity cross-checks (verify_* envelopes) — not trade/position reconciliation, which arrives with execution (Phase 5+)."
+        subtitle="Data-integrity cross-checks (verify_* envelopes) and shadow-variant measurement — not trade/position reconciliation, which arrives with execution (Phase 5+)."
       />
       <HubTabs
         defaultTab="events"
@@ -39,6 +40,7 @@ export default function ReconciliationHubPage() {
               />
             ),
           },
+          { value: 'shadow', label: 'Shadow', content: <ShadowMeasurementPage /> },
         ]}
       />
     </div>
