@@ -2127,18 +2127,19 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **date_deferred** | 2026-06-21 (registered at DW-117 closure / ACT-262). |
 | **title** | 3 Supabase linter ERROR-0010 (`security_definer_view`) findings on `public.*` views — review each view's RLS-bypass posture and either (i) convert to `security_invoker` semantics, (ii) move out of the exposed API schema, or (iii) document the intentional bypass with a closure attestation. |
 | **why_deferred** | DW-117 scope was the WARN-0028 finding-class on SECURITY DEFINER FUNCTIONS only; SECURITY DEFINER VIEWS are a distinct class (different fix vocabulary — view definitions, not GRANTs). ERROR-class but pre-existing (predates DW-117 enumeration); low remediation urgency pre-Phase-5 (live-PnL). |
-| **status** | logged (open; ERROR-class, pre-existing, pre-live). |
+| **status** | resolved (closed at ACT-265 / MIG-108, 2026-06-21). |
 | **trigger_conditions** | (a) Pre-Phase-5 (live-PnL) security pass; (b) any operator-authorized turn opening Supabase linter ERROR-class remediation as primary scope; (c) opportunistic when touching any of the 3 views for an unrelated reason. |
 | **scope_sketch** | (i) Enumerate the 3 specific views (linter output identifies them by name); (ii) for each, evaluate whether the SECURITY DEFINER posture is intentional (e.g. cross-tenant aggregate) or accidental; (iii) author one migration per view that either rebuilds it under `security_invoker=true` (Postgres 15+ view option) or moves it to a non-exposed schema, OR ratify the intentional bypass with a closure decision; (iv) re-run the linter; (v) ledger entry per migration. |
 | **estimated_complexity** | M (per-view triage + per-view migration or ratification). |
 | **blocking_dependencies** | None (independently actionable). |
 | **related_decisions** | DW-117 triage at ACT-262. |
-| **related_actions** | ACT-262 (DW-117 closure that spun this off). |
+| **related_actions** | ACT-262 (DW-117 closure that spun this off); ACT-265 / MIG-108 (closure). |
 | **required_tests_for_closure** | (a) Supabase linter ERROR-0010 finding-class returns zero hits OR each remaining hit has an explicit ratification record; (b) each view remains queryable by its intended caller (no regression on dependent reads). |
 | **future_owner_phase** | Pre-Phase-5 (live-PnL) security pass. |
 | **future_owner_module** | governance / db-security. |
-| **implemented_by_action** | — |
-| **implemented_in_plan_version** | — |
+| **implemented_by_action** | ACT-265 / MIG-108. |
+| **implemented_in_plan_version** | (closure-only; no plan-version bump). |
+| **closure_evidence** | (a) Enumerated the 3 views via `pg_class` (`reconciliation_events_daily_agg`, `_weekly_agg`, `_monthly_agg`) — all on base table `public.reconciliation_events` which carries `reconciliation_events_read_policy` (`authenticated`, `using (has_permission(auth.uid(), 'longshort.view'))`). Triage net: bypass was ACCIDENTAL (the defining migration's intent was RLS-gated aggregate telemetry; definer-default silently bypassed the gate). (b) Recommendation (i) — rebuild with `security_invoker=true` — applied via MIG-108 (`ALTER VIEW ... SET (security_invoker = true)` × 3). (c) Post-apply linter delta 21 → 18: all 3 ERROR-0010 findings cleared; zero new findings. (d) `relacl` ground truth: `authenticated=rDxtm/postgres` grant LIVE pre- and post-apply (`has_table_privilege` = true) — no regression on the documented caller path. (e) Severity reconciliation: real-but-low — telemetry exposure (aggregate event counts, no PII, no PnL, authenticated-only); no runtime `.from(view)` caller exists at HEAD (only helper constants in `src/features/longshort/services/baseline/baseline-query-helpers.ts`); pre-live. (f) Read-drift correction: an earlier `information_schema.role_table_grants` query returned empty for these views, suggesting "zero grants"; the authoritative `pg_class.relacl` read contradicted that — grants were always live. The DW-118 enumeration prompt would have been misled by the empty information_schema read; the flip remained correct regardless. |
 
 ### DW-119: Spun-off from DW-117 — Auth-helper arbitrary-`_user_id` info-leak surface on `has_permission` / `has_role` / `is_superadmin` (WARN-0029 subset)
 
