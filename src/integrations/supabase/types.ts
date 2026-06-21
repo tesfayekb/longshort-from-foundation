@@ -1914,6 +1914,7 @@ export type Database = {
         }
         Returns: Json
       }
+      longshort_get_heal_date: { Args: never; Returns: string }
       signal_queue_cas_finalizing: {
         Args: { p_now: string; p_run_id: string }
         Returns: boolean
