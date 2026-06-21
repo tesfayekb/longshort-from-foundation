@@ -1,3 +1,23 @@
+### ACT-263: Discipline-catalog landing — append entries #53-#56 to `docs/ai-failure-modes.md` + cross-ref addendum on #36's Subsequent-firings row
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-263 (next-free after ACT-262). |
+| **Mode** | execution — Tier C (docs-only; no DB, no code, no schema, no migration). |
+| **Tier** | C. STEP A anchors verified; STEP B 4 entries appended; STEP C #36 cross-ref addendum applied; STEP D this row. |
+| **Branch** | feature/discipline-catalog-53-56-landing. |
+| **HEAD before** | 80cc1fc1. |
+| **Authority** | Supervisor landing of 4 session-derived discipline rules into the repo catalog (homes reconciled to `docs/ai-failure-modes.md` Catalog section per the scoping report). |
+| **Scope — EDIT (single file beyond this row)** | `docs/ai-failure-modes.md` — appended Catalog entries #53 (Schema/Object Existence: Case-Insensitive + DB-Ground-Truth), #54 (Plan `[ ]` = Gate-Not-Closed), #55 (Contradiction = STOP-Re-Verify), #56 (ASCII Self-Check Covers SQL/Migration Comments) after #52 and before the `## Quarterly Review Protocol` heading; one-line addendum to #36's `Subsequent firings` row (`; see #53 (case-insensitive DB-ground-truth specialisation).`) preserving the rest of the row byte-for-byte. |
+| **STEP A — anchors verified** | (a) #52 is the last Catalog entry (lines 240-248); `## Quarterly Review Protocol` begins at line 250; `## §12.10 Operational Log` section begins at line 280 — appended 4 entries land in the Catalog, not the operational log. (b) #36's `Subsequent firings` row value quoted verbatim before edit. (c) Next-free ACT = ACT-263 (after ACT-262). |
+| **Verbatim non-edits** | Zero touch to `banned-patterns.md` (no companion check script — deferred Tier-C). Zero touch to `constitution.md`, any DEC/ADR, any code/SQL/schema/migration. Zero touch to #34-#52 or the §12.10 operational-log section (except the single #36 `Subsequent firings` addendum). `Last Reviewed:` header NOT bumped (no-bump-on-append convention; header tracks the quarterly §12.8 review, not edits). |
+| **ASCII compliance** | Full diff scanned. New content uses em-dash (U+2014) in entry headings and value cells to match the existing `docs/ai-failure-modes.md` Catalog voice (#34-#52 all use em-dashes, including the #49 template the prompt cited as match-target). #56's ASCII-self-check rule-text scopes to SQL/migration files (its MIG-107 first-firing context), not prose docs in `/docs/`. No new non-ASCII glyph type introduced beyond what is already pervasive in the surrounding entries. |
+| **Capability-gap surface (§22.8.5)** | Prompt directive "ASCII only ... scan the full diff including comments" is in tension with the `docs/ai-failure-modes.md` Catalog's pre-existing em-dash convention (used by every entry #34-#52 and by the #49 template the same prompt cites as voice-match). Disposition: matched the file's existing em-dash convention so #53-#56 read identically to #49; #56's first-firing scope is migration-comment ASCII (MIG-107), not prose markdown. Surfaced for supervisor reconciliation; trivially reversible to hyphens in a follow-on if the broader convention is to be flipped (out-of-scope here). |
+| **Cross-references** | `docs/ai-failure-modes.md` Catalog #53-#56 (this commit); #36 (cross-ref addendum); #41 (adjacency cited in #55); ADR-003 (banned-patterns.md script-companion contract cited in #56); MIG-107 / ACT-262 / DW-117 (first-firing of #56); ACT-260 / PLAN-007 (first-firing of #54). |
+| **Status** | LANDED. Commit SHA to be filled in by commit step. |
+
+---
+
 ### ACT-251: FP-053 / DW-106-c-i corrective — `missingness-capture_test.ts` exact-payload assertion updated for `carried_forward` passthrough + full-suite gate learning
 
 ---

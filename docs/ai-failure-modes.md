@@ -69,7 +69,7 @@ Each entry MUST include:
 | **Symptom** | Supervisor pre-resolves Surface-N claims or path references using artifact-name inference or chat-memory rather than fresh repo-grep verification. Examples: claiming a table persists data it does not persist; claiming a directory exists when it does not; claiming a doc target path when the canonical location is elsewhere. |
 | **Codification target** | supervisor-instructions v0.6.3 §22.3 (g) — schema/capability/path repo-grep mandatory at draft time |
 | **First fired** | ACT-109 (`universe_refresh_log` persistence shape claim — caught by Lovable §22.8.4 STOP) |
-| **Subsequent firings** | ACT-111 dual firing: (a) `docs/decisions/` claimed to exist; (b) `docs/06-tracking/deferred-work-register.md` claimed as DW-065 target. Both caught by Lovable §22.8.4 STOP. |
+| **Subsequent firings** | ACT-111 dual firing: (a) `docs/decisions/` claimed to exist; (b) `docs/06-tracking/deferred-work-register.md` claimed as DW-065 target. Both caught by Lovable §22.8.4 STOP; see #53 (case-insensitive DB-ground-truth specialisation). |
 | **Status** | open — codification target identified; pattern_signal that drafting checklist needs path-grep as a standing pre-flight item alongside idiom-grep + schema-grep |
 
 ### #37 — In-Cycle Disposition Ruling Without File-Content Verification
@@ -246,6 +246,46 @@ Each entry MUST include:
 | **First fired** | 2026-06-14 / DATA-001 phantom defect. `short_term_reversal_5d` was constructed from a dashboard display name ("Short-term reversal (5d)"); zero rows reported and escalated as Phase 3 blocker. Actual literal is `short_term_reversal_1w` per the registry binding and the handler source at `supabase/functions/_shared/longshort-signals/reversal-orchestrator.ts:38` and `job-signal-mapping.ts:45`; `signal_compute_log` has 7 healthy rows for `short_term_reversal_1w` including Friday 2026-06-12 20:00:01.681+00. No code defect existed. |
 | **Subsequent firings** | — |
 | **Status** | open — codified at catalog-rule level (this entry); the literal-verification rule binds from this commit forward. Future "missing data" assertions against registry-bound artifacts MUST cite a registry row, handler source line, or mapping-table entry for the literal before the defect is logged. |
+
+### #53 — Schema/Object Existence: Case-Insensitive + DB-Ground-Truth Verification (never single-case source grep)
+
+| Field | Value |
+|-------|-------|
+| **Symptom** | Existence of a DB object concluded "absent/unbuilt" from a single case-sensitive source grep (e.g. lowercase `create table`) that missed the actual `CREATE TABLE`; the negative grep treated as ground truth rather than the non-result of one brittle method. |
+| **Codification target** | Object-existence checks MUST be (a) case-insensitive AND (b) verified against DB ground truth (`information_schema` / `pg_class` inventory), never a single case-sensitive source grep. A negative single-case grep is not evidence of absence. |
+| **First fired** | 2026-06-21 (Phase-3 re-grounding). A lowercase `create table` grep missed MIG-099's `CREATE TABLE` for the 5 combiner tables, producing a false "3.0a combiner schema unbuilt" conclusion that propagated into an acceleration analysis and a withdrawn build prompt. Caught by Lovable's STEP A STOP (MIG-099 confirmed at 20260616103102). |
+| **Subsequent firings** | — |
+| **Status** | open — codified at catalog-rule level; binds from this commit forward. Schema-existence specialisation of #36's repo-grep-verification family. |
+
+### #54 — Plan Checkbox `[ ]` Means Gate-Not-Closed, Not Unbuilt
+
+| Field | Value |
+|-------|-------|
+| **Symptom** | A plan `[ ]` read as "nothing built" when it means "gate not formally closed"; build state inferred from plan markers instead of code/DB/cron. |
+| **Codification target** | `[ ]` = gate-not-formally-closed, a distinct state from unbuilt. Build state MUST be read from code/DB/cron ground truth, never plan markers; the two routinely diverge for days (built-but-gate-open is normal). |
+| **First fired** | 2026-06-21 (ACT-260, PLAN-007 reconciliation). 3.0a/3.0b/3.0c/3.M were shipped and verified in code/DB while the single `[ ]` 3.0 plan line stayed unchecked — the marker lagged the build by days. |
+| **Subsequent firings** | — |
+| **Status** | open — codified; binds forward. |
+
+### #55 — A Conclusion Contradicting a Prior Summary Is a Re-Verify Trigger, Not an Override License
+
+| Field | Value |
+|-------|-------|
+| **Symptom** | A current conclusion contradicting a documented prior summary treated as the new truth (overriding the prior) instead of as a flag to STOP and re-verify both against ground truth. |
+| **Codification target** | When a current conclusion contradicts a documented prior summary, that contradiction MUST trigger STOP-and-re-verify against ground truth — never a license to override the prior. The prior may be correct and the new read the error. |
+| **First fired** | 2026-06-21 (Phase-3 re-grounding). The "3.0 combiner unbuilt" conclusion contradicted the prior summary's MIG-099/3.0a-built record but was treated as new truth rather than triggering re-verification; the prior was correct and the new grep was the error. Adjacent to #41 (gate-evidence substitution): both swap a weaker signal for run-at-ground-truth evidence. |
+| **Subsequent firings** | — |
+| **Status** | open — codified; binds forward. |
+
+### #56 — ASCII Self-Check Must Cover SQL/Migration Comments, Not Only Executable SQL
+
+| Field | Value |
+|-------|-------|
+| **Symptom** | The ASCII anti-pattern self-check scanned executable SQL but a non-ASCII glyph (em-dash) slipped into a migration `--` comment, passing the executable-only scan. |
+| **Codification target** | The ASCII self-check MUST cover the full migration file including `--` comments and header lines, not only executable statements. A comment-scope non-ASCII glyph is still a convention violation; because it is comment-only (zero execution effect) the disposition is accept-in-place, never a no-op fix migration (migrations are immutable — a follow-on cannot remove the original glyph). |
+| **First fired** | 2026-06-21 / MIG-107 (DW-117 remediation). Line-1 comment carried an em-dash; comment-only, DB applied clean, accepted as-is. One-off (MIG-104/105/106 scanned zero non-ASCII — not tool behaviour). Forward fix: this rule. |
+| **Subsequent firings** | — |
+| **Status** | open — codified; binds forward. No `banned-patterns.md` row: that registry's contract (ADR-003) requires a companion `scripts/check-*.ts`; a comment-ASCII enforcement script is a deferred Tier-C follow-on. |
 
 ## Quarterly Review Protocol (per §12.8)
 
