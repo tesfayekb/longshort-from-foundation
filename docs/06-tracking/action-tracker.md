@@ -2426,6 +2426,21 @@ Verdict: ALL GREEN
 | **ROI Impact** | **Positive on operator UX** — lets the operator preview top-30/top-50 against live momentum data today, before 9 signals compete for screen space; applies automatically to every future signal because the Rankings page is already signal-generic. **Zero on prediction / signal / sizing / execution logic** — no money-path code touched; no signal-math change. |
 | **Status** | Gate-4 verified (vitest 383/383, eslint 0 errors). |
 
+### ACT-264: DW-113 resolved-since closure + DoD Gate-2 canonical-command landing + DW-121 registration
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-264 (next-free after ACT-263). |
+| **Mode** | execution. |
+| **Tier** | C (docs-only; no code, no DB, no config, no test edit). |
+| **Branch** | feature/dw-113-closure-dod-canonical-commands. |
+| **HEAD before / after** | before: 32f02a0d / after: pending at execution commit. |
+| **Authority** | Supervisor closure of DW-113 per the live dual-runner re-baseline (read-only investigation turn preceding this ACT) + landing of the canonical Gate-2 dual-runner invocation in `definition-of-done.md` + registration of the residual four-file exclusion as DW-121. |
+| **Scope** | EDIT `docs/08-planning/deferred-work-register.md` — flip DW-113 status to `resolved-since` (closure_evidence + lineage notes); append DW-121 entry. EDIT `docs/00-governance/definition-of-done.md` — add `## Canonical Test Suite Invocation (Gate-2)` section with the two canonical commands. EDIT this tracker (this ACT). |
+| **Evidence** | (a) Re-baseline turn captured: `npm test` -> 61 files / 430 tests pass at HEAD 32f02a0d; `cd supabase/functions && deno test --allow-all --config=deno.json` -> 1467 pass / 0 fail / 1 ignored. (b) Lineage verified: vitest `include` glob for `supabase/functions/_shared/longshort-universe/**` landed 2026-05-28 (predates the 2026-06-20 DW-113 entry); `supabase/functions/deno.json` `exclude` of `**/*.test.ts` + the four explicit `index_test.ts` files predates the same entry. (c) DW-121 scope: the four excluded `index_test.ts` files import `dotenv/load` and run in neither runner today — registered as coverage gap, not correctness gap (handlers exercised via admin UI + Playwright E2E in production). (d) No code, test, schema, RLS, cron, migration, edge function, or runner-config file touched. |
+| **ROI Impact** | **Zero on prediction / signal / sizing / execution logic.** Positive on governance signal hygiene: Gate-2 "full suite green" is now a concrete invocation instead of a tribal phrase, and the stale DW-113 entry no longer blinds the gate. |
+| **Status** | Closed (docs-only landing). |
+
 ### ACT-162: FP-046 / DEC-054 — Signal-quality enhancement roadmap (exhaustion-risk review cycle, documentation-only)
 
 | Field | Value |

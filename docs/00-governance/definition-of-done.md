@@ -54,6 +54,24 @@ If ANY checklist item is not satisfied:
 - [ ] **Testing strategy followed** — coverage targets met per `testing-strategy.md`
 - [ ] **Regression strategy followed** — baseline comparisons done per `regression-strategy.md`
 
+## Canonical Test Suite Invocation (Gate-2)
+
+"Full suite green" for Gate-2 means **both** of the following commands exit 0 on a clean checkout at HEAD. The dual-runner split is intentional: vitest owns `.test.ts` / `.spec.ts`; deno owns `**/*_test.ts` under `supabase/functions/`. Neither runner alone constitutes Gate-2 evidence.
+
+- **Vitest** (`.test.ts` / `.spec.ts`, including `supabase/functions/_shared/longshort-universe/**` per the 2026-05-28 vitest `include` glob):
+
+  ```
+  npm test
+  ```
+
+- **Deno** (`**/*_test.ts` under `supabase/functions/`, honoring `supabase/functions/deno.json` `test.include` + `exclude`):
+
+  ```
+  cd supabase/functions && deno test --allow-all --config=deno.json
+  ```
+
+Closure docs citing "full suite green" MUST cite the pass counts from BOTH commands (e.g. "vitest N files / M tests pass; deno X pass / 0 fail / Y ignored"). Re-baseline DW-113 (resolved-since at ACT-264) for the lineage of this split.
+
 ## Verification Requirements (CLARIFIED)
 
 Verification must include:

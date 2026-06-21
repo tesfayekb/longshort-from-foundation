@@ -2538,7 +2538,10 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **date_deferred** | 2026-06-20 (surfaced during DEC-061 reconciliation pass). |
 | **title** | Define a single canonical green-able `deno test` invocation covering the `supabase/functions/` tree by resolving three pre-existing baseline failure classes: (a) six vitest-shaped `*.test.ts` files under `shared/longshort-universe/`; (b) handler source-sentinel `index_test.ts` files needing `--allow-read`; (c) eight `*_test.ts` files raising `MissingEnvVarsError` from `dotenv/load.ts`. |
 | **why_deferred** | Pre-existing; medium severity; no production-correctness impact. Until resolved, Gate-2 ("full suite green") operates as "no NEW failures vs the pre-change baseline failing-file set" — a documented downgrade, not a free pass. Resolving requires a coordinated env-bootstrap + test-runner shape decision spanning multiple subteams' fixture conventions; out of scope for any single touch surface. |
-| **status** | logged (open; pre-existing, blinds Gate-2 full-suite assertion). |
+| **status** | resolved-since (closed at ACT-264, 2026-06-21; the 2026-06-20 register entry was stale vs the live runner config — a #54/#55 marker-lag correction). |
+| **closure_evidence** | Live dual-runner re-baseline at HEAD 32f02a0d: (i) `npm test` -> Test Files 61 passed (61) / Tests 430 passed (430); (ii) `cd supabase/functions && deno test --allow-all --config=deno.json` -> 1467 pass / 0 fail / 1 ignored. Zero `MissingEnvVarsError`, zero `--allow-read` denials. |
+| **lineage** | All three originally-claimed classes were already resolved-since by changes that **predate** the 2026-06-20 register entry: (a) the 2026-05-28 vitest `include` glob covering `supabase/functions/_shared/longshort-universe/**` handles class (a); (b) the canonical deno invocation using `--allow-all` handles class (b); (c) `supabase/functions/deno.json`'s `**/*.test.ts` exclude + the explicit four-file exclude block keep env-loading tests out of the unit run, handling class (c). The 2026-06-20 entry was a marker-lag (#54/#55) error — `[ ]` was read as "broken" when ground truth was "already green." |
+| **canonical_invocation_landed_at** | `docs/00-governance/definition-of-done.md` -> `## Canonical Test Suite Invocation (Gate-2)` (added ACT-264). |
 | **trigger_conditions** | (a) Any phase whose definition-of-done legitimately requires a fully-green `deno test`; (b) approach of any live-trading phase; (c) the failing-file baseline drifts (new failures vs the cataloged set — at that point the baseline-diff Gate-2 stops being trustworthy). |
 | **scope_sketch** | (a) Six `cross-check-spec.test.ts` / `fetch-with-timeout-and-retry.test.ts` / `metrics-emitter.test.ts` / `hard-exclusion-refresh-orchestrator.test.ts` / `universe-membership-fetcher.test.ts` / `universe-service.test.ts` under `_shared/longshort-universe/` — decide: move under vitest (rename + path under `src/`), or rewrite as deno tests (clear TS2307/TS7006 by replacing vitest imports). (b) Add `--allow-read` to the canonical invocation; pin the read scope to the project root. (c) Bootstrap a fixed test env (VITE_*/ALPACA_* with sentinel values) before `deno test`, OR mark the eight env-reading tests as integration-only and exclude them from the unit invocation. Document the canonical command in `docs/00-governance/definition-of-done.md` or sibling. |
 | **estimated_complexity** | M (test-runner shape decision + per-file remediation + env-bootstrap design + DoD doc update). |
@@ -2548,6 +2551,27 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **required_tests_for_closure** | (a) A single documented `deno test ...` invocation exits 0 on a clean checkout; (b) the cataloged failing-file baseline (six + sentinel + eight) is empty at HEAD post-fix; (c) Gate-2 definition in regression-strategy.md is restored to "full suite green" (no baseline-diff downgrade). |
 | **future_owner_phase** | Pre-live-trading OR opportunistic at next test-infrastructure touch. |
 | **future_owner_module** | longshort / shared infra + universe. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-121: Four user-management `index_test.ts` files execute in no runner (integration-coverage gap)
+
+| Field | Value |
+|---|---|
+| **id** | DW-121 (next-free after DW-120). |
+| **date_deferred** | 2026-06-21 (surfaced during DW-113 resolved-since re-baseline / ACT-264). |
+| **title** | Four edge-function tests — `deactivate-user/index_test.ts`, `get-profile/index_test.ts`, `query-audit-logs/index_test.ts`, `reactivate-user/index_test.ts` — import `https://deno.land/std@0.224.0/dotenv/load.ts` and are explicitly excluded by `supabase/functions/deno.json` `exclude`. They currently execute in NEITHER the vitest run NOR the canonical deno unit run; disposition pending (formal integration-only acceptance, or wired integration runner, or registered coverage gap). |
+| **why_deferred** | Pre-existing; low priority; no production-correctness impact (the underlying handlers are exercised in production by the admin UI and by the live E2E suite under Playwright). Resolving requires a test-runner-shape decision (separate integration target with env-bootstrap vs. accept as integration-only and document) that is out of scope for the DW-113 closure. |
+| **status** | logged (open; pre-existing, low priority, coverage gap not correctness gap). |
+| **trigger_conditions** | (a) Pre-Phase-5 (live-PnL) test-infrastructure pass; (b) any operator-authorized turn opening edge-function integration coverage as primary scope; (c) addition of a fifth env-bootstrap-dependent `index_test.ts` (at that point the four-file exclude block stops scaling). |
+| **scope_sketch** | Decide between (i) wire a separate `npm run test:integration` (or `deno test --config=deno.integration.json`) target that bootstraps `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` from `.env.local` and runs the four files; OR (ii) formally accept the four as integration-only-via-Playwright-E2E, remove the exclude block, and convert the files to `*.integration.ts` outside both runners' globs; document the chosen path in `definition-of-done.md` alongside the Gate-2 block. Sub-item: address the cosmetic `nodeModulesDir: true` Deno-2.0 deprecation warning emitted by `supabase/functions/deno.json` during the same touch (non-failing today; will fail in a future Deno major). |
+| **estimated_complexity** | S (decision + small config change + doc note; the deprecation sub-item is XS). |
+| **blocking_dependencies** | None — independently actionable. |
+| **related_decisions** | DW-113 closure (ACT-264) which surfaced this as the residual exclusion. |
+| **related_actions** | ACT-264 (DW-113 closure that registered this). |
+| **required_tests_for_closure** | (a) The four files execute in some named runner target with documented green output; (b) `supabase/functions/deno.json` `exclude` no longer lists them OR a sibling config explicitly runs them; (c) Gate-2 documentation in `definition-of-done.md` is updated to name the integration target if one is added; (d) `nodeModulesDir` deprecation warning is silenced (config migration) or registered as accepted. |
+| **future_owner_phase** | Pre-Phase-5 (live-PnL) test-infrastructure pass; opportunistic before then. |
+| **future_owner_module** | governance / test-infrastructure + user-management edge functions. |
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
 
