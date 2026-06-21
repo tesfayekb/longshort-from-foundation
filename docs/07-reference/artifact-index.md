@@ -678,6 +678,66 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Actions** | ACT-253 |
 | **Related Decisions** | DEC-040, DEC-043, DEC-060 §(iii). |
 | **Notes** | Single-row `INSERT ... ON CONFLICT (id) DO NOTHING` mirroring MIG-066 / MIG-074 / MIG-076 disarmed-seed precedents. `enabled=false` at seed (disarm-fire-enable convention). `schedule='30 22 * * 1-5'` byte-identical to the sql/20 template (drift = §22.5 DRIFT-class defect). NO cron.job mutation (operator-applied via sql/20 at c-d). §22.5.1 live-DB verification at ACT-253: `(id, schedule, enabled, status, handler_path, owner_module, trigger_type, class)` = `('longshort.short_interest_carry.compute', '30 22 * * 1-5', false, 'registered', 'supabase/functions/longshort-short-interest-carry-compute/index.ts', 'longshort', 'scheduled', 'operational')`. |
+
+### ART-036: Longshort Combiner LIVE Assemble Cron Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-036 |
+| **Type** | edge function |
+| **Title** | `longshort-combiner-assemble` (FP-052 3.0d / ACT-261 — LIVE feature-vector assembler cron) |
+| **Source Path** | `supabase/functions/longshort-combiner-assemble/index.ts` |
+| **Created Date** | 2026-06-21 |
+| **Owning Phase** | Phase 3 — Combiner (FP-052 sub-step 3.0d) |
+| **Status** | `active` (built; DISARMED via MIG-106 until operator arm via sql/21) |
+| **Related Actions** | ACT-261 |
+| **Related Decisions** | DEC-034 clause 4, DEC-040, DEC-043 |
+| **Notes** | Wraps `createFeatureAssemblyOrchestrator` VERBATIM (cron sibling of `longshort-combiner-assemble-manual`). Two skip gates (kill-switch, job-disarmed) emit `.skipped` with typed reason and perform NO write. Audit envelope `longshort.combiner.assemble.{started,completed,failed,skipped}` with `trigger:'cron'`. `job_registry` row `longshort.combiner_assemble.compute` (MIG-106). Schedule `35 23 * * 1-5` operator-applied via sql/21. 7 source-sentinel Deno tests PASS. |
+
+### ART-037: Longshort Combiner LIVE Rank Cron Edge Function
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-037 |
+| **Type** | edge function |
+| **Title** | `longshort-combiner-rank` (FP-052 3.0d / ACT-261 — LIVE fallback ranker + book seeder cron) |
+| **Source Path** | `supabase/functions/longshort-combiner-rank/index.ts` |
+| **Created Date** | 2026-06-21 |
+| **Owning Phase** | Phase 3 — Combiner (FP-052 sub-step 3.0d) |
+| **Status** | `active` (built; DISARMED via MIG-106 until operator arm via sql/21) |
+| **Related Actions** | ACT-261 |
+| **Related Decisions** | DEC-034 clause 4, DEC-040, DEC-043, DEC-059 |
+| **Notes** | Wraps `createRankerOrchestrator` VERBATIM (cron sibling of `longshort-combiner-rank-manual`); `ranker_source='count_normalized_fallback'` inherited from `ranker.ts:199`. THREE skip gates emit `.skipped` (no write): kill-switch, job-disarmed, AND a deterministic per-as_of `assemble-completion` gate (queries `longshort_audit_logs` for a same-`as_of_date` `.completed` row — cron OR manual variant — fails closed). RATIONALE: the ranker's only input guard is `vectors_read === 0`; without the gate a rank fire racing an in-progress assemble would silently produce a live book on a truncated universe. `job_registry` row `longshort.combiner_rank.compute` (MIG-106). Schedule `50 23 * * 1-5` operator-applied via sql/21. 8 source-sentinel Deno tests PASS. |
+
+### ART-038: Longshort Combiner LIVE Cron-Wiring SQL Artifact (sql/21)
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-038 |
+| **Type** | sql artifact (operator-applied; not via migration tool) |
+| **Title** | `sql/21_longshort_combiner_live_cron_schedule.sql` — two `cron.schedule(...)` blocks + post-apply verification + arm step |
+| **Source Path** | `sql/21_longshort_combiner_live_cron_schedule.sql` |
+| **Created Date** | 2026-06-21 |
+| **Owning Phase** | Phase 3 — Combiner (FP-052 sub-step 3.0d) |
+| **Status** | `pending-operator-apply` |
+| **Related Actions** | ACT-261 |
+| **Related Decisions** | DEC-040, DEC-043 |
+| **Notes** | Mirrors sql/19 + sql/20 verbatim — three placeholders (PROJECT_REF / YOUR_ANON_KEY / YOUR_CRON_SECRET_VALUE), no secret committed. ASCII-only verified (`grep -nP '[^\x00-\x7F]'` returns 0). Four-step post-apply verification block: cron.job introspection + PROJECT_REF sweep + ARM step (`UPDATE job_registry SET enabled=true ...`) + freshness gate (cron-attributable rows in `combiner_feature_vectors` + `combiner_book`). REUSES existing `CRON_SECRET`. |
+
+### ART-039: MIG-106 Combiner LIVE Cron job_registry Seeds (DISARMED ×2)
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-039 |
+| **Type** | migration |
+| **Title** | MIG-106 — `job_registry` seeds for `longshort.combiner_assemble.compute` + `longshort.combiner_rank.compute` (both DISARMED) |
+| **Source Path** | `supabase/migrations/20260621095443_ad15461d-f416-4d3e-8b06-df0d03be9692.sql` |
+| **Created Date** | 2026-06-21 |
+| **Owning Phase** | Phase 3 — Combiner (FP-052 sub-step 3.0d) |
+| **Status** | `active` |
+| **Related Actions** | ACT-261 |
+| **Related Decisions** | DEC-040, DEC-043 |
+| **Notes** | Two `INSERT ... ON CONFLICT (id) DO NOTHING` rows mirroring MIG-102 precedent. Both `enabled=false` at seed (disarm-fire-enable). Schedules `35 23 * * 1-5` + `50 23 * * 1-5` byte-identical to sql/21 template. §22.5.1 live-DB verification at ACT-261 returned both rows present with `enabled=false`, `status='registered'`, handler_paths byte-match the deployed edge fns. |
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
