@@ -2023,6 +2023,118 @@ The three events below are emitted by the manual fallback-ranker edge function `
 | **Lifecycle** | active |
 | **Added by** | FP-052 3.0c-ii (ACT-239) |
 
+#### `longshort.combiner.assemble.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted at the top of the LIVE assemble cron handler, BEFORE any gate check or orchestrator call. Cron-trigger variant of the `manual_triggered` sibling. `metadata.trigger='cron'` distinguishes cron fires from operator manual fires. |
+| **Emitted by** | `supabase/functions/longshort-combiner-assemble/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: NULL (cron fire, no operator); `metadata: { operator_id, as_of, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0d (ACT-261) |
+
+#### `longshort.combiner.assemble.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted AFTER `createFeatureAssemblyOrchestrator.run(as_of)` returns `outcome='completed'`. Cron-trigger variant. **Load-bearing as the per-as_of assemble-completion marker consumed by the LIVE rank cron's structural gate** (queried with `action IN ('longshort.combiner.assemble.completed','longshort.combiner.assemble.manual_completed')` AND `metadata->>'as_of_date'=<today>`). |
+| **Emitted by** | `supabase/functions/longshort-combiner-assemble/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: NULL; `metadata: { operator_id, as_of, as_of_date, outcome, universe_size, persisted_count, included_count, excluded_by_reason, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0d (ACT-261) |
+
+#### `longshort.combiner.assemble.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted on orchestrator-throw or `outcome='failed'` structured result. Cron-trigger variant. `metadata.stage='orchestrator_throw'` discriminates the throw-path. |
+| **Emitted by** | `supabase/functions/longshort-combiner-assemble/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: NULL; `metadata: { operator_id, as_of, as_of_date?, outcome?, universe_size?, persisted_count?, included_count?, excluded_by_reason?, failure_reason?, error?, stage?, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0d (ACT-261) |
+
+#### `longshort.combiner.assemble.skipped` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted when the LIVE assemble cron handler short-circuits BEFORE calling the orchestrator (no write to `combiner_feature_vectors`). `metadata.reason` is one of `'global_kill_switch_active'` (job_registry row `__kill_switch__` has `enabled=false`) or `'job_disarmed'` (the handler's own `job_registry` row has `enabled=false`). NEW action verb in the combiner family — cron-only (no manual sibling). |
+| **Emitted by** | `supabase/functions/longshort-combiner-assemble/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: NULL; `metadata: { operator_id, as_of, reason: 'global_kill_switch_active' \| 'job_disarmed', trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0d (ACT-261) |
+
+#### `longshort.combiner.rank.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted at the top of the LIVE rank cron handler, BEFORE any gate check or orchestrator call. Cron-trigger variant of `manual_triggered`. |
+| **Emitted by** | `supabase/functions/longshort-combiner-rank/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: NULL; `metadata: { operator_id, as_of, as_of_date, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0d (ACT-261) |
+
+#### `longshort.combiner.rank.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted AFTER `createRankerOrchestrator.run(as_of)` returns `outcome='completed'`. Cron-trigger variant. `metadata.ranker_source='count_normalized_fallback'` on every row per §6.4 degraded path (inherited from `ranker.ts:199`). |
+| **Emitted by** | `supabase/functions/longshort-combiner-rank/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: NULL; `metadata: { operator_id, as_of, as_of_date, outcome, vectors_read, rankings_written, book_size_long, book_size_short, ranker_source, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0d (ACT-261) |
+
+#### `longshort.combiner.rank.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted on orchestrator-throw or `outcome='failed'` structured result. Cron-trigger variant. Same `failure_reason` taxonomy as the `manual_failed` sibling. `metadata.stage='orchestrator_throw'` discriminates the throw-path. |
+| **Emitted by** | `supabase/functions/longshort-combiner-rank/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: NULL; `metadata: { operator_id, as_of, as_of_date?, outcome?, vectors_read?, rankings_written?, book_size_long?, book_size_short?, ranker_source?, failure_reason?, error?, stage?, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0d (ACT-261) |
+
+#### `longshort.combiner.rank.skipped` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted when the LIVE rank cron handler short-circuits BEFORE calling the orchestrator (no write to `combiner_rankings` / `combiner_book`). `metadata.reason` is one of `'global_kill_switch_active'`, `'job_disarmed'`, or `'assemble_incomplete_for_as_of'` (reconciled per-as_of structural guarantee — the rank-cron gate fails closed when no `longshort.combiner.assemble.{completed,manual_completed}` row exists for today's `as_of_date`, so a rank fire that races an in-progress assemble cannot silently produce a live book on a truncated universe). NEW action verb in the combiner family — cron-only. |
+| **Emitted by** | `supabase/functions/longshort-combiner-rank/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: NULL; `metadata: { operator_id, as_of, as_of_date, reason: 'global_kill_switch_active' \| 'job_disarmed' \| 'assemble_incomplete_for_as_of', trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-052 3.0d (ACT-261) |
+
 ---
 
 ## Long-Short Short-Term Reversal Signal Events (FP-040 / Signal #7)

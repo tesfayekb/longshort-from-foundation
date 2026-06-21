@@ -3976,3 +3976,39 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **Tests** | `index_test.ts` — 6 source-sentinel Deno tests: (1) cron-auth via `verifyCronSecret`; (2) `productionClock` sole wall-clock; (3) `POLYGON_API_KEY` check + `polygon_api_key_unset` code; (4) `createForwardReturnOrchestrator({supabase, operator_id, priceHistory})` with `new PolygonPriceHistoryFetcher(polygonApiKey)` + `orch.run(as_of)`; (5) `.started` / `.completed` / `.failed` + `trigger:'cron'` + `stage:'orchestrator_throw'`; (6) per-ticker `by_status` metadata present + error code `cron_combiner_forward_returns_failed` reserved for orchestrator throw. |
 | **Deploy + probe (ACT-246)** | `supabase--deploy_edge_functions(['longshort-combiner-forward-returns'])` SUCCESS. No-auth POST probe returned **401 Unauthorized** — confirms deployed + cron-protected. |
 | **Added by** | FP-052 3.M-v (ACT-246) |
+
+#### `supabase/functions/longshort-combiner-assemble/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.0d / ACT-261) |
+| **Classification** | edge function — daily LIVE feature-vector assembler cron handler. Cron sibling of `longshort-combiner-assemble-manual` (3.0b-ii / ACT-236); wraps `createFeatureAssemblyOrchestrator` VERBATIM (zero orchestrator edit). |
+| **Auth** | cron-only — `verifyCronSecret` against `X-Cron-Secret` (401 on mismatch). |
+| **Wall-clock discipline** | `as_of = productionClock.getWallClockTs()` is the SOLE wall-clock site (DEC-034 clause 4); downstream timestamps derive from `as_of.toISOString()`. No `new Date()` / `Date.now()` / `performance.now()` in the handler. |
+| **`job_registry` row** | `longshort.combiner_assemble.compute` (MIG-106 seed, `enabled=false` at insert per disarm-fire-enable; operator flips after sql/21 dry-fire attestation). |
+| **Skip gates (in order, BEFORE orchestrator; each emits `.skipped` with typed reason — NO write)** | (1) Global kill-switch — `job_registry` row id=`__kill_switch__` with `enabled=false` → `reason='global_kill_switch_active'`. (2) Job disarmed — `job_registry` row id=`longshort.combiner_assemble.compute` with `enabled=false` → `reason='job_disarmed'`. |
+| **Audit envelope** | `longshort.combiner.assemble.started` BEFORE orchestrator → `.completed` / `.failed` AFTER → catch path writes `.failed` with `stage='orchestrator_throw'` → `.skipped` from either gate. All carry `trigger:'cron'`. Written to `longshort_audit_logs` via `writeStrategyAuditEvent` (T4). |
+| **Failure handling** | 200 on completed / failed / skipped (the cron run itself succeeded in invoking the orchestrator OR intentionally short-circuited at a gate). 500 ONLY on orchestrator throw — error code `cron_combiner_assemble_failed`. |
+| **Idempotency (inherited)** | The orchestrator's chunked UPSERT keyed on `(operator_id, as_of_date, ticker)` with `computed_at = as_of.toISOString()` makes same-as_of cron retries naturally safe. |
+| **Schedule (operator-applied)** | `35 23 * * 1-5` (23:35 UTC weekdays — 5min after the 23:30 UTC shadow-rank fire). Applied via `sql/21_longshort_combiner_live_cron_schedule.sql` through the Supabase SQL Editor (§22.5.3, NOT the migration tool). REUSES existing `CRON_SECRET`. |
+| **File** | `supabase/functions/longshort-combiner-assemble/index.ts` |
+| **Tests** | `index_test.ts` — 7 source-sentinel Deno tests (ALL PASS): (1) cron-auth via `verifyCronSecret`, no `authenticateRequest`; (2) `productionClock` sole wall-clock + no `new Date()` / `Date.now()` / `performance.now()` leak; (3) `createFeatureAssemblyOrchestrator({supabase, operator_id})` + `orch.run(as_of)`; (4) `.started` / `.completed` / `.failed` / `.skipped` + `trigger:'cron'` + `stage:'orchestrator_throw'` + no `manual_*`; (5) both skip-gate reason literals + ordered BEFORE orchestrator call; (6) error code `cron_combiner_assemble_failed` reserved for orchestrator throw; (7) `JOB_REGISTRY_ID` byte-identical to MIG-106 seed id. |
+| **Added by** | FP-052 3.0d (ACT-261) |
+
+#### `supabase/functions/longshort-combiner-rank/index.ts`
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052 — Phase 3.0d / ACT-261) |
+| **Classification** | edge function — daily LIVE fallback ranker + book seeder cron handler. Cron sibling of `longshort-combiner-rank-manual` (3.0c-ii / ACT-239); wraps `createRankerOrchestrator` VERBATIM (zero orchestrator edit). `ranker_source='count_normalized_fallback'` stamp is inherited from `ranker.ts:199` (asserted at `ranker_test.ts:37`) — the §6.4 degraded-path attestation. |
+| **Auth** | cron-only — `verifyCronSecret` against `X-Cron-Secret` (401 on mismatch). |
+| **Wall-clock discipline** | `as_of = productionClock.getWallClockTs()` SOLE wall-clock site; `as_of_date = as_of.toISOString().slice(0, 10)`; no `new Date()` / `Date.now()` / `performance.now()`. |
+| **`job_registry` row** | `longshort.combiner_rank.compute` (MIG-106 seed, `enabled=false` at insert per disarm-fire-enable). |
+| **Skip gates (in order, BEFORE orchestrator; each emits `.skipped` with typed reason — NO write)** | (1) Global kill-switch — `__kill_switch__` row `enabled=false` → `reason='global_kill_switch_active'`. (2) Job disarmed — own `job_registry` row `enabled=false` → `reason='job_disarmed'`. (3) **Assemble-completion gate** — per-as_of structural guarantee: queries `longshort_audit_logs` for any row with `action IN ('longshort.combiner.assemble.completed','longshort.combiner.assemble.manual_completed')` AND `metadata->>'as_of_date' = <today's as_of_date>`. If none exists (or the query errors — fails closed), emits `.skipped` with `reason='assemble_incomplete_for_as_of'` and returns WITHOUT calling the orchestrator. RATIONALE: the ranker's only input guard is `vectors_read === 0` (no partial-set guard); without this gate a rank fire racing an in-progress assemble would silently produce a live book on a truncated universe. The 15min schedule gap (23:35 → 23:50) is only common-case timing; this query is the structural guarantee. |
+| **Audit envelope** | `longshort.combiner.rank.started` BEFORE → `.completed` / `.failed` AFTER → catch writes `.failed` with `stage='orchestrator_throw'` → `.skipped` from any of the three gates. All carry `trigger:'cron'`. Written to `longshort_audit_logs` (T4). |
+| **Failure handling** | 200 on completed / failed / skipped. 500 ONLY on orchestrator throw — error code `cron_combiner_rank_failed`. |
+| **Idempotency (inherited)** | Orchestrator's chunked UPSERT keyed on `(operator_id, as_of_date, …)` with `computed_at = as_of.toISOString()` makes same-as_of cron retries naturally safe. |
+| **Schedule (operator-applied)** | `50 23 * * 1-5` (23:50 UTC weekdays — 15min after assemble cron). Applied via `sql/21_longshort_combiner_live_cron_schedule.sql` through Supabase SQL Editor (§22.5.3). REUSES existing `CRON_SECRET`. |
+| **File** | `supabase/functions/longshort-combiner-rank/index.ts` |
+| **Tests** | `index_test.ts` — 8 source-sentinel Deno tests (ALL PASS): (1) cron-auth; (2) `productionClock` sole wall-clock + no wall-clock leak; (3) `createRankerOrchestrator({supabase, operator_id})` + `orch.run(as_of)`; (4) `.started` / `.completed` / `.failed` / `.skipped` + `trigger:'cron'`; (5) ALL THREE skip-gate reason literals + each ordered BEFORE orchestrator call; (6) assemble-completion gate query targets `longshort_audit_logs` with both cron + manual `.completed` actions AND filters by `metadata->>as_of_date` for the per-as_of structural guarantee; (7) error code `cron_combiner_rank_failed` reserved for orchestrator throw; (8) `JOB_REGISTRY_ID` byte-identical to MIG-106 seed id. |
+| **Added by** | FP-052 3.0d (ACT-261) |
