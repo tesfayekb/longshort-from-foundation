@@ -56,10 +56,12 @@ describe('computePairedDiffStats — FP-054 54.1 / Fork B', () => {
 
   it('n=4 worked example: matches hand-computed mean/sd/se/CI/t', () => {
     // diffs = [+0.02, -0.01, +0.04, +0.03]; n=4
-    // mean = 0.02; sd (n-1) = sqrt(((0)^2+(−.03)^2+(.02)^2+(.01)^2)/3)
-    //                       = sqrt(.0014/3) ≈ 0.02160247
-    // se = sd/2 ≈ 0.01080123; CI = 0.02 ± 1.96*se ≈ [-0.0011704, 0.0411704]
-    // t = mean/se ≈ 1.85185
+    // mean = 0.02
+    // ss   = 0^2 + (-0.03)^2 + 0.02^2 + 0.01^2 = 0.0014
+    // var  = 0.0014/3 ≈ 0.00046667; sd ≈ 0.02160247
+    // se   = sd/sqrt(4) ≈ 0.01080123
+    // CI   = 0.02 ± 1.96 * se ≈ [-0.001170, 0.041170]
+    // t    = mean/se ≈ 1.85164
     const s = computePairedDiffStats(
       samples(
         [0.05, 0.03],
@@ -73,7 +75,7 @@ describe('computePairedDiffStats — FP-054 54.1 / Fork B', () => {
     expect(s.se!).toBeCloseTo(0.01080123, 6);
     expect(s.ci95Lo!).toBeCloseTo(0.02 - 1.96 * 0.01080123, 6);
     expect(s.ci95Hi!).toBeCloseTo(0.02 + 1.96 * 0.01080123, 6);
-    expect(s.tStat!).toBeCloseTo(1.85185, 4);
+    expect(s.tStat!).toBeCloseTo(1.85164, 4);
   });
 
   it('drops non-finite rows defensively (NaN / Infinity inputs)', () => {
