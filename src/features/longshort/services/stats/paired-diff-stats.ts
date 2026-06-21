@@ -73,7 +73,15 @@ export function computePairedDiffStats(
   }
   const variance = sqSum / (n - 1);
   const sd = Math.sqrt(Math.max(variance, 0));
-  const se = sd / Math.sqrt(n);
+  let se = sd / Math.sqrt(n);
+  // Numerical-stability snap: when the diffs are effectively constant
+  // the sum-of-squares loses precision and leaves a tiny non-zero
+  // residue (~1e-18). Snap to exact 0 so the SE=0 contract holds and
+  // tStat does NOT explode to ±Infinity. Threshold is relative to
+  // |mean| with an absolute floor, scaled well below any meaningful
+  // return diff (a 1e-12 relative scale is 12 orders below 1 bp).
+  const seFloor = 1e-12 * Math.max(Math.abs(meanDiff), 1);
+  if (se < seFloor) se = 0;
   if (!Number.isFinite(se)) {
     return { n, meanDiff, se: null, ci95Lo: null, ci95Hi: null, tStat: null };
   }
