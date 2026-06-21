@@ -106,6 +106,21 @@ Conformance: every component below conforms to [UI Design System](ui-design-syst
 | `PortfolioHubPage` | `src/pages/trading/longshort/PortfolioHubPage.tsx` | Portfolio hub — empty-state shell at FP-023; data lands in later FPs per master-plan portfolio sequence. | App route `/trading/longshort/portfolio` |
 
 > **Registered by:** FP-023 (ACT-134) shipped the components; FP-023.1 (ACT-135) registered them here per Constitution Rule 6.
+>
+> **FP-054 update (ACT-258):** `ReconciliationHubPage` adds a 4th tab `shadow` (label `Shadow`, content `ShadowMeasurementPage`) and broadens its subtitle to cover "shadow-variant measurement." The 3 existing tabs (`events` / `alerts` / `breaker`) are byte-unchanged.
+
+## Trading / Long-Short Reconciliation — Shadow-Measurement Panel (FP-054)
+
+Conformance: every component below conforms to [UI Design System](ui-design-system.md). The Shadow tab is assembled exclusively from `@/components/ui/*` primitives (Alert, Badge, Card, Separator, Skeleton, Table) plus the 54.1 strategy-internal hooks and the `paired-diff-stats` helper. Per DEC-061 / `strategy-module-pattern.md:240` strategy-tier confinement, NO `@/components/dashboard/*` and NO admin/platform import surfaces are used.
+
+AC7 (LOAD-BEARING) discipline is enforced in the component itself: descriptive stats only; persistent banner verbatim per DEC-059 §1a + §5; arms ordered neutrally by `(inclusion_rule, k)` — never by edge or significance; no pass-fail / promote affordance; registration-of-record at v1 renders "none registered" (Fork A reader-only).
+
+| Component | Path | Purpose | Used By |
+|-----------|------|---------|---------|
+| `ShadowMeasurementPage` | `src/pages/trading/longshort/ShadowMeasurementPage.tsx` | Thin page wrapper rendering `ShadowMeasurementPanel`; mounted as `?tab=shadow` of the Reconciliation hub. | `ReconciliationHubPage` (Shadow tab) |
+| `ShadowMeasurementPanel` | `src/features/longshort/components/shadow/ShadowMeasurementPanel.tsx` | L2 Shadow-Measurement composition. Sections: freshness strip (AC6 / F4 data-derived — `max(as_of_date)` / `max(horizon_close_date)`, NEVER `cron_last_fire`); spread + 95% CI per arm (AC2 / AC3) with the AC7 chrome (banner + registration-of-record + neutral arm ordering); fetch-error clusters (AC4); latest book head per variant (AC5). Honest degradation (AC9): pre-heal → "clock not started"; loading → skeletons; errors → contained alerts. Exports `SHADOW_AC7_BANNER` (verbatim string) and `orderArmsNeutrally` (pure helper) for test discipline. | `ShadowMeasurementPage` |
+
+> **Registered by:** FP-054 sub-step 54.2 (ACT-258) — same-PR per Constitution Rule 6.
 
 ## Trading / Long-Short Signals — Rankings (FP-024)
 

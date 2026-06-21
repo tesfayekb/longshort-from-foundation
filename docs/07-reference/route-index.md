@@ -752,7 +752,7 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 
 | Field | Value |
 |-------|-------|
-| **Page** | `ReconciliationHubPage` (FP-023). Tabbed via `?tab=`: `events` (default — `ReconciliationEventsPage`), `alerts` (empty-state — deferred), `breaker` (empty-state — deferred). |
+| **Page** | `ReconciliationHubPage` (FP-023; FP-054 sub-step 54.2 added `shadow`). Tabbed via `?tab=`: `events` (default — `ReconciliationEventsPage`), `alerts` (empty-state — deferred), `breaker` (empty-state — deferred), `shadow` (`ShadowMeasurementPage` — L2 Shadow-Measurement panel, AC7 multiplicity-guardrail chrome). |
 | **Module** | longshort |
 | **Classification** | authenticated, privileged |
 | **Auth required** | Yes |
@@ -760,7 +760,7 @@ Routes classified as `destructive` or `privileged` with system-wide scope:
 | **Scope** | system-wide |
 | **Panel** | trading-panel |
 | **Related tests** | `src/pages/trading/longshort/hub/HubTabs.test.tsx` (URL-sync contract used by every hub) |
-| **Related functions** | `ReconciliationHubPage`, `ReconciliationEventsPage`, `HubTabs` |
+| **Related functions** | `ReconciliationHubPage`, `ReconciliationEventsPage`, `HubTabs`, `ShadowMeasurementPage`, `ShadowMeasurementPanel` |
 | **Implementation** | **IMPLEMENTED** — `<Route path="longshort/reconciliation" element={<PermissionGate permission="longshort.view"><ReconciliationHubPage /></PermissionGate>}>` in `src/App.tsx`. |
 | **Lifecycle** | active |
 | **Added by** | FP-023 (ACT-134) — registered in route-index by FP-023.1 (ACT-135). |
