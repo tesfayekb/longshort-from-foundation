@@ -2541,3 +2541,24 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **future_owner_module** | governance / pattern-doc. |
 | **implemented_by_action** | DEC-061 reconciliation commit (this PR). |
 | **implemented_in_plan_version** | — |
+
+### DW-117: System-wide audit of the pre-existing 28-finding Supabase linter set — harden any SECURITY DEFINER functions reading sensitive data that lack REVOKE FROM PUBLIC
+
+| Field | Value |
+|---|---|
+| **id** | DW-117 (next-free after DW-116). |
+| **date_deferred** | 2026-06-21 (registered alongside the FP-054 sub-step 54.0 hardening — MIG-105 / ACT-256). |
+| **title** | Audit the pre-existing 28-finding Supabase linter set (27 remaining after MIG-105) and harden any SECURITY DEFINER functions reading sensitive data that lack a `REVOKE EXECUTE ... FROM PUBLIC, anon` to match the repo's established hardening pattern (canonical exemplar: `compare_reconciliation_baseline` per `supabase/migrations/20260524130000_step_6_6_a1_baseline...sql:87`). |
+| **why_deferred** | Pre-existing repo hygiene; NOT introduced by FP-054 sub-step 54.0. MIG-105 closes the WARN-0028 finding for `longshort_get_heal_date()` only — the supervisor-authorized scope-discipline boundary for that PR. A system-wide sweep would entangle multiple unrelated SECURITY DEFINER functions (RBAC helpers, kill-switch RPCs, eligibility writers, signal-queue RPCs, etc.) and is a class-A scope-discipline trap to fold into a single-function hardening commit. Low priority and pre-live (no production trading flows depend on the un-revoked default EXECUTE; the in-function privilege gates are load-bearing today). |
+| **status** | logged (open; pre-existing, low priority, pre-live). |
+| **trigger_conditions** | (a) Pre-Phase-5 (live-PnL) security pass; (b) any operator-authorized turn opening Supabase linter remediation as primary scope; (c) opportunistic when touching any individual SECURITY DEFINER function for an unrelated reason. |
+| **scope_sketch** | (i) Enumerate all `public.*` functions with `prosecdef=true` at HEAD; (ii) for each, evaluate whether the function reads RLS-restricted data or performs privilege-bearing writes; (iii) for those that do AND retain default `PUBLIC` EXECUTE, author one forward-only migration per function (or one batched migration if no FK/scope concerns) issuing `REVOKE EXECUTE ON FUNCTION public.<fn>(<args>) FROM PUBLIC, anon;` while leaving `authenticated` / `service_role` grants as the policy intends; (iv) re-run the Supabase linter and confirm the WARN-0028 finding-class drops to zero; (v) update `database-migration-ledger.md` with one MIG row per migration. |
+| **estimated_complexity** | M (enumeration + per-function privilege-need triage + one migration per affected function + ledger rows + linter re-run). |
+| **blocking_dependencies** | None (independently actionable); should land before Phase-5 live-PnL flips. |
+| **related_decisions** | MIG-104 Capability-gap surface (the systemic gap this DW addresses); MIG-105 (single-function precedent established by this PR). |
+| **related_actions** | ACT-256 (MIG-105 commit — establishes the precedent and registers this DW). |
+| **required_tests_for_closure** | (a) Supabase linter WARN-0028 finding-class returns zero hits for `public.*` SECURITY DEFINER functions reading sensitive data; (b) each affected function remains callable by its intended caller role (regression-style `has_function_privilege` + smoke call per function); (c) ledger carries one MIG row per affected function. |
+| **future_owner_phase** | Pre-Phase-5 (live-PnL) security pass; opportunistic before then. |
+| **future_owner_module** | governance / db-security. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
