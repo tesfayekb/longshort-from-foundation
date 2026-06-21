@@ -2658,3 +2658,20 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **future_owner_module** | governance / db-security. |
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
+
+### DW-122: action-tracker ordering disorder (ACT-251 mis-placed + L2400+ body out of sequence)
+
+| Field | Value |
+|---|---|
+| **ID** | DW-122 (next-free after DW-121). |
+| **Logged** | 2026-06-21 (surfaced during ACT-264 relocation corrective). |
+| **Status** | logged (open; navigability/integrity, not correctness). |
+| **Severity** | low. |
+| **Scope** | (a) ACT-251 sits between ACT-263 and ACT-262 near the top of `docs/06-tracking/action-tracker.md`, out of newest-first order. (b) The L2400+ region is generally out of sequence — e.g. ACT-162 / ACT-158 / ACT-150 / ACT-130 / ACT-149 jumbled rather than monotonically descending. Pre-existing condition; not introduced by ACT-264. NOTE: the duplicate ACT-149 that co-surfaced during the ACT-264 relocation was already resolved in the same commit (dedupe-safe — byte-identical copy removed); DW-122 is ordering-only. |
+| **Why_deferred** | Navigability hygiene, not correctness. A bulk re-sort touches every entry's line number and would conflict with concurrent tracker writes; better scheduled as a quiet docs-only sweep with no other edits in the same PR. |
+| **Resolution_shape** | Tier-C docs-only sweep: re-order all `### ACT-NNN` blocks under `docs/06-tracking/action-tracker.md` into strict newest-first (descending numeric ID) order, preserving each block byte-for-byte. No content edits. Verify with `grep -n '^### ACT-' docs/06-tracking/action-tracker.md` showing monotonic descent end-to-end. |
+| **Blocking_deps** | None. Safe to schedule anytime no other tracker writes are in flight. |
+| **Future_phase** | unscheduled (docs-hygiene queue). |
+| **future_owner_module** | governance / tracker-hygiene. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
