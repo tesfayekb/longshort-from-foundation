@@ -2,6 +2,26 @@
 
 ---
 
+### ACT-259: Phase-3 re-grounding — DEC-059 baseline-slice characterization + OQ-006 (coverage-floor investigation) landed from 2026-06-16 read-only coverage-clamp diagnostic
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-259 (next-free after ACT-258). |
+| **Mode** | execution — Tier C (documentation-only governance authoring). |
+| **Tier** | C (docs) authored with DEC-059-adjacent decision-integrity care. |
+| **Branch** | docs branch per operator-supplied name. |
+| **HEAD before** | 290782e5. |
+| **Authority** | Supervisor Phase-3 re-grounding (step-1 finding home), operator-ratified BOTH artifacts from the as_of=2026-06-16 read-only coverage-clamp diagnostic. NO new FP / NO new DEC required — this is characterization of the existing DEC-059 locked rule plus a non-blocking open question. |
+| **Scope — EDIT** | (1) `docs/decisions/DEC-059-dw109-resolution-rule.md` — APPEND new section `## Baseline-slice characterization (dated snapshot, ACT-259)` AFTER `## Baseline-arm clarification` and BEFORE `## Dependencies`. `## The Rule (verbatim — these numbers are locked)` is byte-untouched. (2) `docs/08-planning/open-questions.md` — APPEND OQ-006 row to the Open Questions table (8-column schema preserved). (3) `docs/06-tracking/action-tracker.md` — this entry. |
+| **Out-of-scope guarantees (verified by diff)** | Zero code touch. Zero schema / migration / RLS / GRANT touch. Zero cron arming or mutation. Zero edge-function touch. Zero other-doc touch (no master-plan / feature-proposals / approved-decisions / module doc / reference-index edits). DEC-059 `## The Rule` block byte-unchanged (verified by re-reading the file post-patch — only the new section between Baseline-arm clarification and Dependencies was inserted). |
+| **Anti-pattern compliance** | (a) DEC-059 `## The Rule` NOT edited. (b) No magnitude (~140 / ~694 / ~83% / floor numeric value) written as a rule or parameter — magnitudes are framed as a dated snapshot EXPECTED TO DRIFT; the only rule-literal reference is `MIN_NON_CRITICAL_PRESENT` referenced by name, not value. (c) OQ-006 marked HIGH-pending-triage but explicitly **NON-BLOCKING** (does NOT trip the open-questions.md `## Enforcement Rule (CRITICAL)` blocking-halt clause; does NOT halt 3.0d or the 3.M harness). (d) First triage step (coverage-count distribution read) named INSIDE OQ-006 and explicitly deferred until POST-DW-106-heal — NOT run now. (e) Two artifacts kept separate (DEC characterization vs open investigation) — different audiences, different lifecycles. |
+| **Cross-references** | DEC-059 (characterized, not modified); OQ-006 (raised); DW-106 (precondition for the deferred coverage-count read and for re-snapshotting magnitudes meaningfully); DW-109 (the deferred question the §1 rule resolves); PLAN-007 (the related plan section, named in OQ-006). |
+| **Evidence** | (a) Pre-write read-only diagnostic (prior turn) on `combiner_feature_vectors` at `as_of_date='2026-06-16'`: 839 assembled = 694 `below_coverage_threshold` + 140 included (NULL `excluded_reason`) + 5 `missing_critical_signal_6` + 0 `missing_critical_signal_7`; funnel cross-check `combiner_rankings` = 140 (included == ranked, exact); single `as_of_date` confirmed (one day). (b) Anchor verifications pre-write: DEC-059 section list (attachment point after Baseline-arm clarification, before Dependencies); open-questions.md 8-column schema + next-free OQ-006; `MIN_NON_CRITICAL_PRESENT` confirmed at `signal-catalog.ts:72`; next-free ACT = ACT-259. (c) Post-patch re-read confirms `## The Rule (verbatim — these numbers are locked)` byte-unchanged. (d) No vitest / no lint / no build — documentation-only patch, no code surface affected. |
+| **ROI Impact** | **Zero on prediction / signal / sizing / execution / monitoring logic** — pure governance documentation. **Positive on decision-integrity** — DEC-059 now carries the snapshot context a future evaluator needs to interpret what `live_gated` equals; OQ-006 prevents the coverage-floor question from drifting into implicit assumption without committing to a premature answer (the durable answer requires post-DW-106-heal data). |
+| **Status** | Landed. DEC-059 characterization section authored; OQ-006 row added (HIGH, non-blocking); this ACT entry registered. Commit SHA to be filled in by commit step. |
+
+---
+
 ### ACT-257: FP-054 sub-step 54.1 — L2 Shadow-Measurement frontend hooks + paired-diff stats helper (Fork B, no p-value) + registration reader (Fork A, null at v1)
 
 ### ACT-258: FP-054 sub-step 54.2 (CLOSURE) — L2 Shadow-Measurement panel UI + AC7 multiplicity-guardrail chrome + ReconciliationHub `shadow` tab + FP-054 in-entry closure
