@@ -1,3 +1,19 @@
+### ACT-264: DW-113 resolved-since closure + DoD Gate-2 canonical-command landing + DW-121 registration
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-264 (next-free after ACT-263). |
+| **Mode** | execution. |
+| **Tier** | C (docs-only; no code, no DB, no config, no test edit). |
+| **Branch** | feature/dw-113-closure-dod-canonical-commands. |
+| **HEAD before / after** | before: 32f02a0d / after: pending at execution commit. |
+| **Authority** | Supervisor closure of DW-113 per the live dual-runner re-baseline (read-only investigation turn preceding this ACT) + landing of the canonical Gate-2 dual-runner invocation in `definition-of-done.md` + registration of the residual four-file exclusion as DW-121. |
+| **Scope** | EDIT `docs/08-planning/deferred-work-register.md` — flip DW-113 status to `resolved-since` (closure_evidence + lineage notes); append DW-121 entry. EDIT `docs/00-governance/definition-of-done.md` — add `## Canonical Test Suite Invocation (Gate-2)` section with the two canonical commands. EDIT this tracker (this ACT). |
+| **Evidence** | (a) Re-baseline turn captured: `npm test` -> 61 files / 430 tests pass at HEAD 32f02a0d; `cd supabase/functions && deno test --allow-all --config=deno.json` -> 1467 pass / 0 fail / 1 ignored. (b) Lineage verified: vitest `include` glob for `supabase/functions/_shared/longshort-universe/**` landed 2026-05-28 (predates the 2026-06-20 DW-113 entry); `supabase/functions/deno.json` `exclude` of `**/*.test.ts` + the four explicit `index_test.ts` files predates the same entry. (c) DW-121 scope: the four excluded `index_test.ts` files import `dotenv/load` and run in neither runner today — registered as coverage gap, not correctness gap (handlers exercised via admin UI + Playwright E2E in production). (d) No code, test, schema, RLS, cron, migration, edge function, or runner-config file touched. |
+| **ROI Impact** | **Zero on prediction / signal / sizing / execution logic.** Positive on governance signal hygiene: Gate-2 "full suite green" is now a concrete invocation instead of a tribal phrase, and the stale DW-113 entry no longer blinds the gate. |
+| **Status** | Closed (docs-only landing). |
+| **Relocation Note (2026-06-21)** | Relocated to top per newest-first convention (mis-placed mid-file at landing between ACT-149 and ACT-162); duplicate ACT-149 deduped (byte-identical copy removed); DW-122 registered for the remaining ordering disorder. |
+
 ### ACT-263: Discipline-catalog landing — append entries #53-#56 to `docs/ai-failure-modes.md` + cross-ref addendum on #36's Subsequent-firings row
 
 | Field | Value |
@@ -2426,21 +2442,6 @@ Verdict: ALL GREEN
 | **ROI Impact** | **Positive on operator UX** — lets the operator preview top-30/top-50 against live momentum data today, before 9 signals compete for screen space; applies automatically to every future signal because the Rankings page is already signal-generic. **Zero on prediction / signal / sizing / execution logic** — no money-path code touched; no signal-math change. |
 | **Status** | Gate-4 verified (vitest 383/383, eslint 0 errors). |
 
-### ACT-264: DW-113 resolved-since closure + DoD Gate-2 canonical-command landing + DW-121 registration
-
-| Field | Value |
-|---|---|
-| **ID** | ACT-264 (next-free after ACT-263). |
-| **Mode** | execution. |
-| **Tier** | C (docs-only; no code, no DB, no config, no test edit). |
-| **Branch** | feature/dw-113-closure-dod-canonical-commands. |
-| **HEAD before / after** | before: 32f02a0d / after: pending at execution commit. |
-| **Authority** | Supervisor closure of DW-113 per the live dual-runner re-baseline (read-only investigation turn preceding this ACT) + landing of the canonical Gate-2 dual-runner invocation in `definition-of-done.md` + registration of the residual four-file exclusion as DW-121. |
-| **Scope** | EDIT `docs/08-planning/deferred-work-register.md` — flip DW-113 status to `resolved-since` (closure_evidence + lineage notes); append DW-121 entry. EDIT `docs/00-governance/definition-of-done.md` — add `## Canonical Test Suite Invocation (Gate-2)` section with the two canonical commands. EDIT this tracker (this ACT). |
-| **Evidence** | (a) Re-baseline turn captured: `npm test` -> 61 files / 430 tests pass at HEAD 32f02a0d; `cd supabase/functions && deno test --allow-all --config=deno.json` -> 1467 pass / 0 fail / 1 ignored. (b) Lineage verified: vitest `include` glob for `supabase/functions/_shared/longshort-universe/**` landed 2026-05-28 (predates the 2026-06-20 DW-113 entry); `supabase/functions/deno.json` `exclude` of `**/*.test.ts` + the four explicit `index_test.ts` files predates the same entry. (c) DW-121 scope: the four excluded `index_test.ts` files import `dotenv/load` and run in neither runner today — registered as coverage gap, not correctness gap (handlers exercised via admin UI + Playwright E2E in production). (d) No code, test, schema, RLS, cron, migration, edge function, or runner-config file touched. |
-| **ROI Impact** | **Zero on prediction / signal / sizing / execution logic.** Positive on governance signal hygiene: Gate-2 "full suite green" is now a concrete invocation instead of a tribal phrase, and the stale DW-113 entry no longer blinds the gate. |
-| **Status** | Closed (docs-only landing). |
-
 ### ACT-162: FP-046 / DEC-054 — Signal-quality enhancement roadmap (exhaustion-risk review cycle, documentation-only)
 
 | Field | Value |
@@ -2507,19 +2508,3 @@ Verdict: ALL GREEN
 | **Out-of-scope guarantees** | Zero code change. Zero migration. Zero touch to FP-018 Bucket A/B originals (Rule 8 preserved via the Bucket B addendum). |
 | **ROI Impact** | **Positive on operational confidence** — Bucket C closed on stronger evidence than originally planned. **Zero on prediction / signal / sizing / execution logic**. |
 | **Status** | Closed (ACT-130, 2026-06-08). |
-
-### ACT-149: FP-037 — Top-N Selector (20/30/50) on Rankings
-
-| Field | Value |
-|---|---|
-| **ID** | ACT-149 (ACT-130 explicitly NOT consumed — still reserved for FP-018 Bucket C; ACT-148 used by FP-036). |
-| **Mode** | execution. |
-| **Tier** | C (frontend, presentational, read-only). |
-| **Branch** | feature/FP-037-top-n-selector. |
-| **HEAD before / after** | before: post-FP-036 (ACT-148) baseline / after: pending at execution commit. |
-| **Authority** | FP-037 (approved 2026-06-08). |
-| **Scope** | EDIT `src/pages/trading/longshort/signals/RankingsTab.tsx` — replace `TOP_N = 20 / BOTTOM_N = 20` constants with `TOP_N_OPTIONS = [20, 30, 50] as const` and a `topN` state (default 20); add compact `<Select>` in filter toolbar; update `slice`, `SignalDistributionBand` props, table titles, and `startingRank` to read `topN`. EDIT `src/pages/trading/longshort/signals/__tests__/RankingsTab.test.tsx` (+1 test — selector changes cutoff to 50, titles update). Docs same-PR: `docs/08-planning/feature-proposals.md` (FP-037), `docs/06-tracking/action-tracker.md` (this entry), `docs/07-reference/component-inventory.md` (RankingsTab description + FP-037 note), `docs/07-reference/route-index.md` (signals hub description + related tests). |
-| **Related Tests** | `RankingsTab.test.tsx` (+1 test): top-N selector defaults to 20; selecting 50 updates both table titles to "Top 50" / "Bottom 50". |
-| **Evidence** | (a) **Pre-task verification** — confirmed `TOP_N = 20 / BOTTOM_N = 20` are used at exactly 6 sites in `RankingsTab.tsx` (lines 36-37 constants, 99 top slice, 102 bottom slice, 197-198 band props, 207 top title, 214 bottom title, 218 startingRank). Confirmed `SignalDistributionBand` already accepts numeric `topN` / `bottomN` props. Confirmed `Select` + `SelectItem` primitives are already imported in `RankingsTab.tsx` (used for signal/date/sector selectors). (b) **Gate-4 full run** — `bunx vitest run` returned `Test Files 49 passed (49) / Tests 383 passed (383)` (+1 vs FP-036 baseline 382); `bunx eslint .` returned `0 errors / 15 warnings` (all 15 pre-existing — same set as ACT-148). (c) **No `any` discipline** — `TOP_N_OPTIONS` typed `as const`; `topN` typed `number`; test uses existing typed mock fixtures. (d) **Out-of-scope guarantees by diff inspection** — zero data-query change (same `usePaginatedRankings` call, same select list, same mock shape); zero touch to edge functions, migrations, RLS, cron, `sql/14`, signal-math, FP-018 Bucket C deliverables, `jobid:51`, RBAC, audit code, façade, trading-navigation, `App.tsx` routing; zero new permissions / events / configs / env-vars / migrations / routes / dependencies. (e) **ID discipline** — ACT-130 untouched; ACT-149 next-free after ACT-148. No DEC required; no migration. (f) **Rule 6 same-PR** — component-inventory + route-index + feature-proposals + this register updated in same diff as the code. |
-| **ROI Impact** | **Positive on operator UX** — lets the operator preview top-30/top-50 against live momentum data today, before 9 signals compete for screen space; applies automatically to every future signal because the Rankings page is already signal-generic. **Zero on prediction / signal / sizing / execution logic** — no money-path code touched; no signal-math change. |
-| **Status** | Gate-4 verified (vitest 383/383, eslint 0 errors). |
