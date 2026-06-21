@@ -2110,6 +2110,78 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
 
+### DW-117: RESOLVED for WARN-0028 class (ACT-262 / MIG-107) — spun-off finding-classes registered as DW-118 / DW-119 / DW-120
+
+| Field | Value |
+|---|---|
+| **resolution_status** | RESOLVED for the WARN-0028 finding-class (the originally-defined scope). 6 SECURITY DEFINER fns hardened via MIG-107 / ACT-262: `assert_eligibility_complete`, `write_universe_eligibility_coverage`, `kill_switch_hard_pause`, `kill_switch_manual_liquidate`, `kill_switch_resume`, `kill_switch_soft_pause`. |
+| **closure_evidence (required_tests_for_closure)** | (a) Supabase linter WARN-0028 finding-class returns ZERO hits for the 6 enumerated fns (total findings 27 → 21 post-MIG-107). (b) Each affected function remains callable by intended caller — `has_function_privilege` matrix: 6/6 `anon=false / authenticated=true / service_role=true`; the 4 kill_switch fns retain `authenticated=true` via the paired GRANT (admin-UI emergency-stop preserved). (c) Ledger carries MIG-107 (batched per the DW-117 scope_sketch clause "or one batched migration if no FK/scope concerns"). |
+| **out_of_scope_at_closure (spun-off)** | The DW-117 read-only enumeration at ACT (DW-117 triage turn) surfaced THREE additional finding-classes outside the WARN-0028 scope. Registered below as DW-118 / DW-119 / DW-120 so they are not lost. |
+| **resolved_by_action** | ACT-262 (MIG-107). |
+
+### DW-118: Spun-off from DW-117 — 3 ERROR-0010 Security Definer Views
+
+| Field | Value |
+|---|---|
+| **id** | DW-118 (next-free after DW-117). |
+| **date_deferred** | 2026-06-21 (registered at DW-117 closure / ACT-262). |
+| **title** | 3 Supabase linter ERROR-0010 (`security_definer_view`) findings on `public.*` views — review each view's RLS-bypass posture and either (i) convert to `security_invoker` semantics, (ii) move out of the exposed API schema, or (iii) document the intentional bypass with a closure attestation. |
+| **why_deferred** | DW-117 scope was the WARN-0028 finding-class on SECURITY DEFINER FUNCTIONS only; SECURITY DEFINER VIEWS are a distinct class (different fix vocabulary — view definitions, not GRANTs). ERROR-class but pre-existing (predates DW-117 enumeration); low remediation urgency pre-Phase-5 (live-PnL). |
+| **status** | logged (open; ERROR-class, pre-existing, pre-live). |
+| **trigger_conditions** | (a) Pre-Phase-5 (live-PnL) security pass; (b) any operator-authorized turn opening Supabase linter ERROR-class remediation as primary scope; (c) opportunistic when touching any of the 3 views for an unrelated reason. |
+| **scope_sketch** | (i) Enumerate the 3 specific views (linter output identifies them by name); (ii) for each, evaluate whether the SECURITY DEFINER posture is intentional (e.g. cross-tenant aggregate) or accidental; (iii) author one migration per view that either rebuilds it under `security_invoker=true` (Postgres 15+ view option) or moves it to a non-exposed schema, OR ratify the intentional bypass with a closure decision; (iv) re-run the linter; (v) ledger entry per migration. |
+| **estimated_complexity** | M (per-view triage + per-view migration or ratification). |
+| **blocking_dependencies** | None (independently actionable). |
+| **related_decisions** | DW-117 triage at ACT-262. |
+| **related_actions** | ACT-262 (DW-117 closure that spun this off). |
+| **required_tests_for_closure** | (a) Supabase linter ERROR-0010 finding-class returns zero hits OR each remaining hit has an explicit ratification record; (b) each view remains queryable by its intended caller (no regression on dependent reads). |
+| **future_owner_phase** | Pre-Phase-5 (live-PnL) security pass. |
+| **future_owner_module** | governance / db-security. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-119: Spun-off from DW-117 — Auth-helper arbitrary-`_user_id` info-leak surface on `has_permission` / `has_role` / `is_superadmin` (WARN-0029 subset)
+
+| Field | Value |
+|---|---|
+| **id** | DW-119 (next-free after DW-118). |
+| **date_deferred** | 2026-06-21 (registered at DW-117 closure / ACT-262). |
+| **title** | The auth-helper SECURITY DEFINER fns (`has_permission(uuid, text)`, `has_role(uuid, app_role)`, `has_role(uuid, text)`, `is_superadmin(uuid)`) accept an arbitrary `_user_id` parameter and are callable by any `authenticated` caller — enabling a signed-in user to probe other users' roles/permissions. Fix is a parameter-scoping / design question, NOT a REVOKE (RLS policies depend on the `authenticated` grant). |
+| **why_deferred** | A naive REVOKE FROM authenticated would break every RLS policy that calls these helpers (system-wide RLS regression — explicitly out of scope per DW-117 anti-patterns). Correct remediation is design-level: (i) split into `authenticated`-callable self-only wrappers (`auth.uid()` pinned) + `service_role`-only arbitrary-uid variants, OR (ii) move arbitrary-uid checks into a SECURITY INVOKER wrapper that asserts `_user_id = auth.uid() OR is_superadmin(auth.uid())`. Non-trivial. Pre-live (no production exfiltration path). |
+| **status** | logged (open; design-question, pre-live). |
+| **trigger_conditions** | (a) Pre-Phase-5 (live-PnL) security pass; (b) operator-authorized auth-helper refactor; (c) any DEC that touches RBAC helper signatures. |
+| **scope_sketch** | (i) Enumerate the call-sites of each helper across RLS policies + SQL functions + edge functions + frontend (RLS policies = blocking-dependent rewrite surface); (ii) design a self-only / privileged-only split that preserves the RLS contract; (iii) author migration(s) + matching policy edits same-PR; (iv) regression test the RLS surface (DW-004 overlaps here); (v) re-run the linter — WARN-0029 hits for these 4 fns should drop. |
+| **estimated_complexity** | L (cross-cutting; touches RLS policies). |
+| **blocking_dependencies** | DW-004 (DB-level RLS verification) overlaps — should be coordinated. |
+| **related_decisions** | DW-117 triage at ACT-262; user-roles memory (constitution-grade — `Roles MUST be in separate user_roles table`). |
+| **related_actions** | ACT-262 (DW-117 closure that spun this off). |
+| **required_tests_for_closure** | (a) `has_function_privilege('authenticated', <arbitrary-uid helper>, 'execute')` returns false for the privileged variants; self-scoped wrappers retain `authenticated=true`; (b) every RLS policy that consumed the old signature passes regression (no permission drift); (c) Supabase linter WARN-0029 finding-class drops for these 4 fns. |
+| **future_owner_phase** | Pre-Phase-5 (live-PnL) security pass. |
+| **future_owner_module** | rbac / db-security. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-120: Spun-off from DW-117 — 6 WARN-0011 mutable `search_path` findings on non-SECURITY-DEFINER functions
+
+| Field | Value |
+|---|---|
+| **id** | DW-120 (next-free after DW-119). |
+| **date_deferred** | 2026-06-21 (registered at DW-117 closure / ACT-262). |
+| **title** | 6 Supabase linter WARN-0011 (`function_search_path_mutable`) findings on `public.*` functions that do NOT carry `SECURITY DEFINER` — add `SET search_path = ...` to each function definition to lock the resolution path. |
+| **why_deferred** | DW-117 scope was SECURITY DEFINER hardening only; the WARN-0011 hits on non-SD functions are a distinct finding-class (search-path drift on invoker-rights functions has narrower exploit surface than on definer-rights functions). Pre-existing repo hygiene; low urgency pre-live. |
+| **status** | logged (open; pre-existing, low priority, pre-live). |
+| **trigger_conditions** | (a) Pre-Phase-5 (live-PnL) security pass; (b) opportunistic when re-issuing any of the 6 functions for an unrelated reason. |
+| **scope_sketch** | (i) Enumerate the 6 specific functions (linter output identifies them by name); (ii) re-issue each with `SET search_path = public` (or `pg_catalog, public` per existing project convention); (iii) re-run the linter; (iv) ledger entry per migration (or one batched migration if no scope concerns). |
+| **estimated_complexity** | S (mechanical re-issue per function). |
+| **blocking_dependencies** | None. |
+| **related_decisions** | DW-117 triage at ACT-262. |
+| **related_actions** | ACT-262 (DW-117 closure that spun this off). |
+| **required_tests_for_closure** | (a) Supabase linter WARN-0011 finding-class returns zero hits for the 6 enumerated fns; (b) each function remains callable with identical semantics (regression smoke). |
+| **future_owner_phase** | Pre-Phase-5 (live-PnL) security pass; opportunistic before then. |
+| **future_owner_module** | governance / db-security. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
 ### DW-105: Combiner — §1.4 book state machine (hysteresis / cap-25 / no-bumping / 31-day re-entry block)
 
 | Field | Value |
