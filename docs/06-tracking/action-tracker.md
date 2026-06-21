@@ -1,3 +1,18 @@
+### ACT-265: DW-118 remediation (ERROR-0010 class) — MIG-108 flip 3 `reconciliation_events_*_agg` views to `security_invoker=true`
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-265 (next-free after ACT-264). |
+| **Mode** | execution. |
+| **Tier** | A (view security posture over RLS-protected reconciliation telemetry; low severity but a real bypass). |
+| **Branch** | feature/dw-118-security-invoker-views. |
+| **HEAD before / after** | before: a596e650 / after: pending at execution commit. |
+| **Authority** | Supervisor DW-118 remediation, scope reconciled. Realize the originally-intended RLS-gating posture on the 3 reconciliation-event aggregation views (`reconciliation_events_daily_agg`, `_weekly_agg`, `_monthly_agg`) by flipping them to `security_invoker=true`. Preserve the live `authenticated` SELECT grant. NO view-definition rewrite, NO grant change, NO base-table / RLS / function change. |
+| **Scope** | NEW migration MIG-108 (3 × `ALTER VIEW ... SET (security_invoker = true)`); EDIT `docs/07-reference/database-migration-ledger.md` (new MIG-108 row); EDIT `docs/08-planning/deferred-work-register.md` (DW-118 -> resolved with closure_evidence); EDIT this tracker (this ACT). |
+| **Evidence** | (a) Pre-apply enumeration via `pg_class`: 3 views named, all `reloptions = NULL` (definer-default), all owned by `postgres`, all carrying `authenticated=rDxtm/postgres` ACL (relacl truth — contradicted an earlier `information_schema.role_table_grants` empty read; drift reconciled). (b) Base table `public.reconciliation_events`: `relrowsecurity=true`; policies `reconciliation_events_read_policy` (`authenticated`, `using (has_permission(auth.uid(), 'longshort.view'))`) + `reconciliation_events_no_direct_write_policy` (`using (false)`). Under definer-default, the views bypassed the read-policy — any authenticated caller got aggregate counts irrespective of `longshort.view`. (c) MIG-108 applied via Lovable `supabase--migration` (atomic create+apply per §22.5.1). Full-ASCII SQL scan (`grep -nP '[^\x00-\x7F]'`) clean. (d) Post-apply §22.5.1 verification: `reloptions = [security_invoker=true]` on all 3; `has_table_privilege('authenticated', '<view>', 'SELECT') = true` on all 3 (grant preserved). (e) Supabase linter delta: 21 -> 18 — all 3 ERROR-0010 `security_definer_view` findings cleared; remaining 18 are pre-existing WARN-0011 (DW-120) + WARN-0029 (DW-119) classes — no regression introduced. (f) No runtime `.from(view)` caller exists at HEAD; only `src/features/longshort/services/baseline/baseline-query-helpers.ts` constants — flip locks the forward contract without changing live behavior. |
+| **ROI Impact** | **Zero on prediction / signal / sizing / execution logic.** Positive on security posture: the originally-intended RLS gate on reconciliation telemetry is now actually enforced against the caller. No money-path code touched. |
+| **Status** | Closed (live-DB verified; linter ERROR-0010 class clear; DW-118 resolved). |
+
 ### ACT-264: DW-113 resolved-since closure + DoD Gate-2 canonical-command landing + DW-121 registration
 
 | Field | Value |
