@@ -96,6 +96,64 @@ threshold change); it completes §1 before the 3.M-v cron-driven measurement
 series begins accruing under operator schedule-apply. Authored at ACT-246
 pre-arm.
 
+## Baseline-slice characterization (dated snapshot, ACT-259)
+
+**Not a rule, not a parameter — a dated characterization** of what the
+`live_gated` baseline arm (operationally `gated_k0` per the preceding
+clarification) actually equals in the live universe at one point in time, so a
+future evaluator of §1's "promote V if it beats `live_gated` by ≥15 bp" has an
+anchor for the slice of the universe that comparison runs over.
+
+**Snapshot context (frozen):**
+- `as_of_date` = 2026-06-16
+- Pre-DW-106 coverage-heal (the snapshot was taken before any heal lands)
+- Assembled universe `N` = 839 `combiner_feature_vectors` rows (single day)
+- Source: read-only diagnostic `combiner_feature_vectors` grouped by
+  `excluded_reason`, funnel cross-checked against `combiner_rankings`
+  (140 included = 140 ranked, exact)
+
+**What the gated baseline equals at this snapshot:**
+- The `gated` arm ranks ~140 names (the `excluded_reason IS NULL` slice).
+- The relaxation delta — names the `criticals_required` and `no_gate` arms
+  would admit but `gated` excludes via the §4.3.5 coverage floor — is ~694.
+- The §4.3.5 critical-absence exclusions (`missing_critical_signal_6` /
+  `missing_critical_signal_7`) accounted for ≤1% of the assembled set at
+  this snapshot; the clamp is overwhelmingly coverage-floor-driven, not
+  critical-absence-driven.
+
+**MANDATORY framing — these magnitudes are EXPECTED TO DRIFT:**
+The numbers above (`~140`, `~694`, the ~83% clamp share) are a **dated
+snapshot**, NOT parameters of this DEC and NOT inputs to §1. They scale with
+(a) universe size `N`, (b) per-signal coverage breadth across that universe,
+and (c) the eventual DW-106 coverage-heal landing. They will move as DW-106
+lands and as universe membership churns. Re-quoting these magnitudes as if
+they were rules is a category error; the durable claim here is **structural**,
+not numeric.
+
+**The durable structural claim** (this is what a future evaluator can rely on
+without re-measuring): at this snapshot the clamp was overwhelmingly driven
+by the non-critical coverage floor rather than critical-signal absence,
+which means the `gated` vs `criticals_required` differentiator is governed
+primarily by the floor constant — defined in code as
+`MIN_NON_CRITICAL_PRESENT` (see `supabase/functions/_shared/longshort-combiner/signal-catalog.ts`).
+This DEC references that constant **by name only**; its numeric value lives
+in code and is not restated here so the two cannot drift.
+
+**Open investigation linked to this snapshot:** the question of whether the
+coverage floor is set appropriately for the live universe — and whether the
+3.M harness should sweep the floor itself as a dimension — is tracked in
+`docs/08-planning/open-questions.md` as **OQ-006** (HIGH, non-blocking; does
+NOT halt 3.0d or the current harness, which proceed on the locked baseline
+per §1). The first triage step (coverage-count distribution read) is
+explicitly deferred until POST-DW-106-heal to avoid measuring a transient.
+
+**Cross-references:**
+- ACT-259 (this characterization landing)
+- OQ-006 (the open question)
+- DW-106 (coverage-heal; the precondition for re-snapshotting these
+  magnitudes meaningfully)
+- §1 above (the locked rule this section characterizes — NOT modifies)
+
 ## Dependencies
 
 - [DW-109](../08-planning/deferred-work-register.md) — the question being resolved
