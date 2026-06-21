@@ -1620,6 +1620,26 @@ Resumes from `soft_paused` only. Raises `no_data_found` if no row; raises `inval
 
 ---
 
+### `longshort_get_heal_date()` — db-function
+
+| Field | Value |
+|-------|-------|
+| **Type** | db-function (Postgres `SECURITY DEFINER`, `STABLE`, `SET search_path TO 'public'`) |
+| **Classification** | strategy-tier RLS-bypass read helper (longshort) |
+| **Owner module** | longshort (FP-054 sub-step 54.0) |
+| **Signature** | `public.longshort_get_heal_date() RETURNS date` |
+| **File** | `supabase/migrations/20260621014525_c94c7721-a0b3-4fe5-a456-6e582e7bc9f4.sql` (MIG-104) |
+| **Purpose** | Return the DW-106 short-interest heal-date (`system_config.value->>'heal_date'` for `key='dw_106_short_interest_heal_date'`) — the FP-053 / DEC-060 §(iii) clock origin for the DEC-059 n≥30 measurement window. Returns NULL when the row does not yet exist (pre-heal state — panel renders "clock not started"). |
+| **Authorization** | In-function gate: `IF NOT public.has_permission(auth.uid(), 'longshort.view') THEN RAISE EXCEPTION 'insufficient_privilege: longshort.view required' USING ERRCODE='42501'`. The gate is LOAD-BEARING — it is the sole privilege boundary, since `SECURITY DEFINER` bypasses the underlying `system_config` RLS (superadmin-only SELECT policy). `auth.uid()` is NULL for anon callers, `has_permission` returns false for NULL `_user_id`, so anon → `42501`. |
+| **Grants** | `GRANT EXECUTE ON FUNCTION public.longshort_get_heal_date() TO authenticated;` (PUBLIC retains the default EXECUTE — the in-function gate is the enforcement; documented as the load-bearing privilege primitive at FP-054 / ACT-255). |
+| **Side effects** | None (read-only SELECT against `public.system_config`; no INSERT/UPDATE/DELETE; no audit write — read helper, not a mutation). |
+| **Throws** | `42501 insufficient_privilege` when caller lacks `longshort.view`. |
+| **Determinism** | `STABLE` — value changes only when the `system_config` row is written (one-time stamp per DEC-060 §(iii)); no wall-clock read. |
+| **Consumers** | FP-054 sub-step 54.1 `useShadowMeasurement` hook (heal-date read for AC2 n-counter clock-start gating + AC9 pre-heal degradation banner). |
+| **Added by** | FP-054 sub-step 54.0, ACT-255, MIG-104. |
+
+---
+
 ## Reconciliation Engine Helpers (FP-006 Sub-Step 6.2)
 
 ### `reconcile<TExpected, TObserved>(spec, invoke, ts)` — ts-function
