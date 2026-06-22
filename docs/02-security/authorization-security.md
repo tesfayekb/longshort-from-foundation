@@ -135,12 +135,25 @@ RETURNS BOOLEAN
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.user_roles ur
-    JOIN public.roles r ON r.id = ur.role_id
-    WHERE ur.user_id = _user_id AND r.key = 'superadmin'
-  )
+  SELECT CASE WHEN (
+    _user_id = auth.uid()
+    OR COALESCE(
+      NULLIF(current_setting('request.jwt.claim.role', true), ''),
+      NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'
+    ) = 'service_role'
+    OR EXISTS (
+      SELECT 1 FROM public.user_roles ur
+      JOIN public.roles r ON r.id = ur.role_id
+      WHERE ur.user_id = auth.uid() AND r.key = 'superadmin'
+    )
+  ) THEN (
+    EXISTS (
+      SELECT 1
+      FROM public.user_roles ur
+      JOIN public.roles r ON r.id = ur.role_id
+      WHERE ur.user_id = _user_id AND r.key = 'superadmin'
+    )
+  ) ELSE false END
 $$;
 
 CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role_key TEXT)
@@ -148,12 +161,25 @@ RETURNS BOOLEAN
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.user_roles ur
-    JOIN public.roles r ON r.id = ur.role_id
-    WHERE ur.user_id = _user_id AND r.key = _role_key
-  )
+  SELECT CASE WHEN (
+    _user_id = auth.uid()
+    OR COALESCE(
+      NULLIF(current_setting('request.jwt.claim.role', true), ''),
+      NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'
+    ) = 'service_role'
+    OR EXISTS (
+      SELECT 1 FROM public.user_roles ur
+      JOIN public.roles r ON r.id = ur.role_id
+      WHERE ur.user_id = auth.uid() AND r.key = 'superadmin'
+    )
+  ) THEN (
+    EXISTS (
+      SELECT 1
+      FROM public.user_roles ur
+      JOIN public.roles r ON r.id = ur.role_id
+      WHERE ur.user_id = _user_id AND r.key = _role_key
+    )
+  ) ELSE false END
 $$;
 
 CREATE OR REPLACE FUNCTION public.has_permission(_user_id UUID, _permission_key TEXT)
@@ -162,6 +188,21 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  IF NOT (
+    _user_id = auth.uid()
+    OR COALESCE(
+      NULLIF(current_setting('request.jwt.claim.role', true), ''),
+      NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'
+    ) = 'service_role'
+    OR EXISTS (
+      SELECT 1 FROM public.user_roles ur
+      JOIN public.roles r ON r.id = ur.role_id
+      WHERE ur.user_id = auth.uid() AND r.key = 'superadmin'
+    )
+  ) THEN
+    RETURN false;
+  END IF;
+
   IF _user_id IS NULL OR _permission_key IS NULL THEN
     RETURN false;
   END IF;
