@@ -2783,3 +2783,20 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **future_owner_module** | governance / CI infrastructure. |
 | **related_actions** | (Gate-1 flake investigation; see ACT-272 logging this DW). |
 | **Cross_ref** | Catalog #57 (live-fire-path / non-deterministic-vs-source-state class); the two 2026-06-22 firings. |
+
+### DW-129: Deno 1.x -> 2.x CI runtime migration (deferred from DW-128 Stage 1)
+
+| Field | Value |
+|---|---|
+| **ID** | DW-129 (next-free after DW-128). |
+| **Logged** | 2026-06-22 (surfaced during DW-128 Stage 1 STEP-A probe; sandbox-default Deno 2.6.10 emits lockfile format v5 which Deno 1.46.x cannot parse). |
+| **Status** | open. |
+| **Severity** | LOW (runtime currency; no observed defect — Deno 1.x remains supported and behaves correctly across all 15 gates at DW-128 Stage 1 commit). |
+| **Symptom / evidence** | DW-128 Stage 1 had to acquire a matched 1.46.x binary specifically to emit v3-format locks readable by the pinned `deno-version: v1.46.3` runner; any future drift toward Deno 2.x lockfile generation would red every `--lock=` gate with a parse error. |
+| **Resolution_shape** | When taken: (1) bump `deno-version` across `.github/workflows/strong-evidence.yml` + `.github/workflows/insider-discovery.yml` (+ any other Deno-bearing workflow at the time) to a pinned 2.x; (2) re-verify all 15 gates' runtime behaviour and the `check-*.ts` script output-parsing contract (notably `scripts/check-gate-evidence.ts` canonical-summary regexes — `deno test` summary text could shift across the major); (3) regenerate both locks (`deno.lock`, `supabase/functions/deno.lock`) under the new runtime; (4) re-attest the full strong-evidence suite. |
+| **Why_deferred** | Bundling a runtime major-bump into a flake-resilience commit would conflate two risk surfaces (lock+cache topology vs. 1.x->2.x runtime semantics) and make a CI red ambiguous. DW-128 Stage 1 explicitly held the runtime at 1.46.3 so any post-Stage-1 red is attributable to the lock/cache change alone. |
+| **Blocking_deps** | None functionally; should follow any pre-live-trading CI-hardening sweep so the runtime migration is not coincident with an arming step. |
+| **Future_phase** | pre-live-trading. |
+| **future_owner_module** | governance / CI infrastructure. |
+| **related_actions** | (DW-128 Stage 1 STEP-A probe surfaced the coupling; see ACT-273 logging this DW). |
+| **Cross_ref** | DW-128 (parent — Stage 1 lock+cache landing held the runtime constant so this migration could be taken cleanly later). |
