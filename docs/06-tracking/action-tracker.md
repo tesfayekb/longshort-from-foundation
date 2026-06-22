@@ -1,3 +1,18 @@
+### ACT-278: Registered DW-133 (Catalog #56 cron-body ASCII gap) + DW-134 (cleanup-mfa-recovery-codes missing RPC) from the cron blast-radius scan
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-278 (next-free after ACT-277). |
+| **Mode** | execution / governance docs only (no code, no cron, no migration, no fire). |
+| **Tier** | C (governance documentation). |
+| **Branch** | feature/act-278-cron-blast-radius-dw-registration. |
+| **HEAD before / after** | before: 98c3a83 / after: pending at execution commit. |
+| **Authority** | Supervisor — the cron-secret blast-radius investigation (this chat) surfaced two durable findings warranting deferred-work registration: the Catalog #56 cron-body ASCII gap, and a missing RPC failing jobid 10 weekly. Register both; implement neither. |
+| **Scope** | EDIT `docs/08-planning/deferred-work-register.md` (append DW-133 + DW-134). EDIT this tracker (ACT-278). NO code touched. NO `cron.schedule(...)` issued. NO migration created. NO edge function deployed or redeployed. NO fire of any kind. |
+| **Evidence** | (a) STEP-A next-free id check: `DW-131` is the trailing entry in the register; next-free DWs = `DW-133`, `DW-134` (DW-132 already present). Trailing tracker entry is `ACT-277`; next-free ACT = `ACT-278`. (b) DW-133 evidence body cites `cron.job_run_details` runid `174803` (jobid 78, 2026-06-15 21:00 UTC scheduled fire, status=failed, smart-quote JSON parse error in `CRON_SECRET`); the 2026-06-15 `signal_compute_log` row is from a 2026-06-17 manual backfill, not the failed cron. (c) DW-134 evidence body cites `cron.job_run_details` jobid `10` (2026-06-21 04:00 UTC, status=failed, `function public.cleanup_mfa_recovery_codes() does not exist`); `sql/07_mfa_recovery_cron.sql` schedules but does not create the function. (d) Cumulative `git diff --name-only 98c3a83` = exactly two files: `docs/06-tracking/action-tracker.md`, `docs/08-planning/deferred-work-register.md`. |
+| **ROI Impact** | None (governance documentation). Preserves institutional memory of two durable defects so neither is re-discovered from scratch when the pre-live-trading hygiene pass picks them up. |
+| **Status** | Closed at execution commit (DW-133 + DW-134 registered; ACT-278 logged; no other artifact touched). Both DWs sit in `future_owner_phase: pre-live-trading hygiene`. |
+
 ### ACT-277: Defect 1 (DW-130) closure — short-interest orchestrator telemetry stamped from injected liveClock (FP-047 pattern), severing as_of-anchor / completed_at conflation that produced dashboard false-Stale
 
 | Field | Value |
