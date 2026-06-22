@@ -148,6 +148,8 @@ Roadmap-only. Each entry below requires its own operator-authorized build FP —
 
 **Source review cycle.** Operator concern (2026-06-10) → supervisor analysis → second-opinion review → supervisor reconciliation. Full record at ACT-162.
 
+**Supervisor-synthesis reference.** A four-tier framing of the full documented ROI roadmap (decision-ready / measurement-accruing / paper-book-blocked / vendor-blocked) plus the chokepoint map and measurement-prerequisite table lives at [`roi-roadmap.md`](roi-roadmap.md) (authored ACT-280; framing-only, no build authorized, no phase re-order, no DEC).
+
 ## Combiner (FP-052 — Phase 3.0b)
 
 The combiner is the §6 layer that turns the 9 live `signal_observations` into per-(operator, as_of, ticker) feature vectors written to `combiner_feature_vectors` (MIG-099). Phase 3.0b is split across two commits:
