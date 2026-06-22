@@ -1,3 +1,22 @@
+### ACT-280: Authored `docs/04-modules/longshort/roi-roadmap.md` (supervisor-synthesis ROI framing — four-tier sort + chokepoint map + measurement-prerequisite table); registered DW-136 (SHAP attribution write-path measurement prerequisite) + appended a flag-only DW-101 regime-label scope-check note; cross-referenced from longshort.md Enhancement Phase Ladder. Framing-only: no build authorized, no phase re-order, no DEC, no plan-version bump.
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-280 |
+| **Date** | 2026-06-22 |
+| **Mode** | EXECUTION (Tier B — documentation-only, durable governance synthesis) |
+| **HEAD at start** | 6dab26dc |
+| **Authority** | Supervisor — operator-authorized authoring of the ROI-roadmap supervisor-synthesis artifact as thread-loss insurance. Synthesis of existing decisions (DEC-054 / DEC-048 / DEC-059 / DEC-060 + DW register); re-decides nothing. |
+| **Scope** | CREATE `docs/04-modules/longshort/roi-roadmap.md`; EDIT `docs/04-modules/longshort/longshort.md` (one cross-reference line in the Enhancement Phase Ladder section); EDIT `docs/08-planning/deferred-work-register.md` (register DW-136 + append DW-101 regime-label scope-check flag-only note); EDIT `docs/06-tracking/action-tracker.md` (this row). NO code, NO migration, NO DEC file, NO master-plan re-order, NO plan-version bump. |
+| **Out of scope (load-bearing)** | The artifact is framing-only. Does NOT authorize any build (R2 / R3 / DW-093 / DW-100 / SHAP / regime-labels / cadence / R5 / R6 / R7 / R1). Does NOT alter DEC-054 phase sequencing. Does NOT expand DW-101's authorized scope (the regime-label note is flag-only). DW-136 is registered as a measurement-prerequisite gap, NOT as build authorization. |
+| **Files changed (planned vs actual)** | Planned = 4. Actual = 4: `docs/04-modules/longshort/roi-roadmap.md` (created); `docs/04-modules/longshort/longshort.md` (edited); `docs/08-planning/deferred-work-register.md` (edited); `docs/06-tracking/action-tracker.md` (edited). |
+| **Tracking registrations** | DW-136 (SHAP attribution write path — measurement prerequisite for R5 / per-signal ablation / per-signal-family execution-timeout); DW-101 regime-label scope-check note (flag only — DW-101 scope NOT expanded). |
+| **ROI Impact** | Zero direct impact (documentation-only). Indirect: any future ROI decision (build sequencing, FP authoring, DEC supersession) now reaches for the canonical four-tier framing + chokepoint map rather than re-deriving them from memory or thread state. Survives thread-loss; reduces re-litigation cost on every subsequent ROI conversation. |
+| **Verification** | (a) Diff scope = 4 in-scope files; (b) no code / migration / DEC file / master-plan / plan-changelog touched; (c) DW-101 authorized scope unchanged (verbatim title preserved; note appended as separate paragraph immediately after DW-136 registration block); (d) artifact status banner asserts framing-only / not-a-decision / no-build-authorized / no-phase-re-order. |
+| **Cross_ref** | `docs/04-modules/longshort/roi-roadmap.md` (the artifact); DEC-054 / DEC-048 / DEC-059 / DEC-060 (authoritative anchors); DW-106 / DW-109 / DW-101 / DW-135 / DW-136 (tracking entries); CROSSWIND §4.1 / §4.2 / §6.5.6 / §10.14.4 / §16; ACT-279 (the analogous Tier-B measurement-prerequisite landing the supervisor-synthesis cites as the Tier-2 cadence instrument). |
+
+---
+
 ### ACT-279: Landed the per-signal close-to-next-open alpha decay instrument (MIG-114 + new edge fn + cron + DW-135) — measurement-only evidence plumbing for DEC-048 / Phase-7 cadence decision
 
 | Field | Value |
