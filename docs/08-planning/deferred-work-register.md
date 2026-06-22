@@ -2697,3 +2697,21 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **related_actions** | ACT-267 (this surface point — DW-120 STEP A body-read enumeration). |
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
+
+### DW-124: `log-sudo-event/index_test.ts` sets `SUPABASE_SERVICE_ROLE_KEY="test-srk"` at module top-level — pollutes global Deno env in tree-wide runs
+
+| Field | Value |
+|---|---|
+| **ID** | DW-124 (next-free after DW-123). |
+| **Logged** | 2026-06-22 (surfaced during DW-121 ACT-268 STEP C tree-wide verification). |
+| **Status** | logged (open; low priority, test-isolation hygiene). |
+| **Severity** | low (no production / money-path impact; latent test-cross-talk surfaced once tests previously hidden by `deno.json` `exclude` started executing). |
+| **Scope** | `supabase/functions/log-sudo-event/index_test.ts:19` calls `Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-srk")` at module top-level (outside any `Deno.test` body). Because Deno test runs all files in one process with shared `Deno.env`, this write persists into every other test file's view of the env after `log-sudo-event/index_test.ts` is loaded. DW-121 ACT-268 surfaced this as the cause of `get-profile/index_test.ts` `HAS_SERVICE` becoming `true` with a fake key in tree-wide runs (causing SETUP to call the live admin API with `"test-srk"` and fail). Worked around in `get-profile/index_test.ts` by gating `HAS_SERVICE` on `SERVICE_ROLE_KEY !== 'test-srk' && SERVICE_ROLE_KEY.length > 32` (real JWTs are >>32 chars); the underlying pollution is unresolved. |
+| **Why_deferred** | Out of DW-121 scope (DW-121 was specifically the four user-management `index_test.ts` files; `log-sudo-event/index_test.ts` is a separate test file the operator did not authorize touching). The workaround is sufficient to keep CI green. Proper fix is straightforward but warrants its own turn. |
+| **Resolution_shape** | Move the `Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-srk")` into a per-test setup (or `Deno.test.beforeEach` if upgrading to BDD), capture the prior value, and restore it in a corresponding `finally` block — same shape already used in `_shared/shared_test.ts:184/215` (`priorKey` save+restore). After fix, the sentinel-rejection guard in `get-profile/index_test.ts:HAS_SERVICE` can be relaxed to `!!SERVICE_ROLE_KEY` (the length check is independently defensive and may stay). |
+| **Blocking_deps** | None. |
+| **Future_phase** | unscheduled (test-isolation hygiene queue). |
+| **future_owner_module** | governance / test-infrastructure + log-sudo-event. |
+| **related_actions** | ACT-268 (surface point — DW-121 STEP C tree-wide verification). |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
