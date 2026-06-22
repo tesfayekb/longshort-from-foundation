@@ -30,7 +30,12 @@ const ANON_KEY = Deno.env.get('VITE_SUPABASE_PUBLISHABLE_KEY') ?? Deno.env.get('
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 const HAS_ENV = !!BASE && !!ANON_KEY
-const HAS_SERVICE = HAS_ENV && !!SERVICE_ROLE_KEY
+// DW-121: log-sudo-event/index_test.ts sets SUPABASE_SERVICE_ROLE_KEY='test-srk' at module
+// top-level for its unit-test mocks; in tree-wide deno runs that pollutes global env and would
+// make us attempt live admin-API calls with a fake key. Reject the known sentinel. Real
+// service-role keys are JWTs (>>16 chars). Spinoff DW filed for the cross-test env pollution.
+const SERVICE_ROLE_KEY_LOOKS_REAL = !!SERVICE_ROLE_KEY && SERVICE_ROLE_KEY !== 'test-srk' && SERVICE_ROLE_KEY.length > 32
+const HAS_SERVICE = HAS_ENV && SERVICE_ROLE_KEY_LOOKS_REAL
 
 function fnUrl(fn: string, query?: Record<string, string>): string {
   const base = `${BASE}/functions/v1/${fn}`;
