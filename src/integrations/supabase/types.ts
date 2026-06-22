@@ -1872,15 +1872,10 @@ export type Database = {
         Args: { _permission_key: string; _user_id: string }
         Returns: boolean
       }
-      has_role:
-        | {
-            Args: {
-              _role: Database["public"]["Enums"]["app_role"]
-              _user_id: string
-            }
-            Returns: boolean
-          }
-        | { Args: { _role_key: string; _user_id: string }; Returns: boolean }
+      has_role: {
+        Args: { _role_key: string; _user_id: string }
+        Returns: boolean
+      }
       is_superadmin: { Args: { _user_id: string }; Returns: boolean }
       kill_switch_hard_pause: {
         Args: {
