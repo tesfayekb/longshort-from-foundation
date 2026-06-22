@@ -2181,8 +2181,10 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **required_tests_for_closure** | (a) Supabase linter WARN-0011 finding-class returns zero hits for the 6 enumerated fns; (b) each function remains callable with identical semantics (regression smoke). |
 | **future_owner_phase** | Pre-Phase-5 (live-PnL) security pass; opportunistic before then. |
 | **future_owner_module** | governance / db-security. |
-| **implemented_by_action** | — |
+| **implemented_by_action** | ACT-267 (MIG-110, 2026-06-22). |
 | **implemented_in_plan_version** | — |
+| **status (resolved)** | resolved — `ALTER FUNCTION public.<fn>() SET search_path = ''` applied to all 6 enumerated trigger functions via MIG-110. Closure evidence: (i) post-apply `pg_proc.proconfig = {search_path=""}` on all 6 (was NULL pre-apply); (ii) Supabase linter WARN-0011 finding-class count 6 → 0 (total 17 → 11; remaining 11 are WARN-0029 retained-by-design per DW-119 closure); (iii) §22.5.1 behavior smoke via no-schema-mutation `DO $smoke$` migration confirmed both `prevent_last_superadmin_delete` (business message raised, NOT a schema-resolution error → `public.roles` / `public.user_roles` still resolve under empty search_path) and `update_updated_at_column` (roles `updated_at` bumped strictly forward on UPDATE) still fire correctly. No body / grant / trigger / table change. Completes the DW-117 SD-cluster spinoff set (DW-118 ERROR-0010 + DW-119 WARN-0029 + DW-120 WARN-0011). |
+| **Resolution Confirmed (DW-120, 2026-06-22)** | Live-DB §22.5.1 verified at ACT-267 — all 6 fns `proconfig = {search_path=""}`; linter WARN-0011 count 0; behavior smokes SMOKE_OK_4 + SMOKE_OK_6 + SMOKE_OK_NO_PERSIST passed (migration committed = all assertions passed). DW-117 SD-cluster spinoff set fully closed. |
 
 ### DW-105: Combiner — §1.4 book state machine (hysteresis / cap-25 / no-bumping / 31-day re-entry block)
 
@@ -2675,5 +2677,23 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Blocking_deps** | None. Safe to schedule anytime no other tracker writes are in flight. |
 | **Future_phase** | unscheduled (docs-hygiene queue). |
 | **future_owner_module** | governance / tracker-hygiene. |
+| **implemented_by_action** | — |
+| **implemented_in_plan_version** | — |
+
+### DW-123: `update_updated_at` (sql/00) and `update_updated_at_column` (sql/01) are byte-identical duplicate helpers — dedupe
+
+| Field | Value |
+|---|---|
+| **ID** | DW-123 (next-free after DW-122). |
+| **Logged** | 2026-06-22 (surfaced at DW-120 STEP A pre-state body-read while enumerating the 6 WARN-0011 trigger functions). |
+| **Status** | logged (open; low priority, code-hygiene). |
+| **Severity** | low. |
+| **Scope** | `public.update_updated_at()` (created in `sql/00_auth_foundation.sql`) and `public.update_updated_at_column()` (created in `sql/01_rbac_schema.sql`) have byte-identical bodies (`BEGIN NEW.updated_at = now(); RETURN NEW; END;`). Both now carry the same `search_path = ''` pin (MIG-110). The duplication is a legacy artifact of the sql/00 + sql/01 split — two helpers exist where one would suffice, slightly increasing trigger-wiring surface and audit cost. |
+| **Why_deferred** | Pure code-hygiene; no security / behavior / ROI impact. Dedupe requires (a) enumerating all triggers wired to either helper across the repo + live DB, (b) authoring a migration that repoints every trigger to one canonical helper (suggested: keep `update_updated_at_column` — used by the larger `sql/01` RBAC surface), (c) dropping the loser. Touches more surface than the search_path pin justified bundling. |
+| **Resolution_shape** | Tier-C migration: (i) `SELECT tgname, relname FROM pg_trigger JOIN pg_proc ON tgfoid = pg_proc.oid WHERE proname IN ('update_updated_at','update_updated_at_column')` to enumerate; (ii) `DROP TRIGGER` + `CREATE TRIGGER … EXECUTE FUNCTION public.update_updated_at_column()` per wired trigger pointing at the loser; (iii) `DROP FUNCTION public.update_updated_at();`; (iv) ledger entry + this DW → resolved with the trigger-rewire enumeration as closure evidence. |
+| **Blocking_deps** | None. |
+| **Future_phase** | unscheduled (code-hygiene queue). |
+| **future_owner_module** | governance / db-hygiene. |
+| **related_actions** | ACT-267 (this surface point — DW-120 STEP A body-read enumeration). |
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
