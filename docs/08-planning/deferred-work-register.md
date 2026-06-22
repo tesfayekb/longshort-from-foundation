@@ -2715,3 +2715,54 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **related_actions** | ACT-268 (surface point — DW-121 STEP C tree-wide verification); ACT-269 (resolution). |
 | **implemented_by_action** | ACT-269. |
 | **implemented_in_plan_version** | n/a (test-infra hygiene; no plan version). |
+
+### DW-125: Canonical edge-function deploy command must pass `--import-map supabase/functions/deno.json` on ALL non-harness deploy paths
+
+| Field | Value |
+|---|---|
+| **ID** | DW-125 (next-free after DW-124). |
+| **Logged** | 2026-06-22 (surfaced during the longshort-combiner-assemble / -rank manual-fire detour). |
+| **Status** | open. |
+| **Severity** | HIGH (pre-live). A deploy path that drops the import map silently fails the bundler for any function whose import graph touches `_shared/supabase-admin.ts` (or any other bare-specifier import resolved via the deno.json import map); the failure surfaces only at the per-slug deploy step, not at source-grep / typecheck time. |
+| **Scope** | Since commit `ead446a6` (2026-06-04) `_shared/supabase-admin.ts:38` imports `@supabase/supabase-js` as a bare specifier resolved ONLY via `supabase/functions/deno.json`'s `imports` map. The Supabase CLI `supabase functions deploy <slug>` does NOT auto-discover that import map; it must be passed explicitly via `--import-map supabase/functions/deno.json`. The repo's GHA workflow `.github/workflows/deploy-edge-functions.yml` (the canonical Tier-A pipeline for BUILD_SHA-threaded slugs) currently issues `supabase functions deploy <slug> --project-ref ... --no-verify-jwt` with NO `--import-map` flag. The Lovable auto-deploy harness empirically deployed 88 / 90 functions across the post-`ead446a6` window (mechanism opaque from the sandbox — see DW-127), but longshort-combiner-assemble and longshort-combiner-rank were skipped and deployed only via operator manual CLI with `--import-map` on 2026-06-22. Two distinct deploy paths (GHA + manual CLI) are therefore both missing the import-map flag in their codified form. |
+| **Why_deferred** | Out of today's INVESTIGATION / VERIFICATION mode scope. Authoring the fix requires: (a) amending the GHA workflow to add `--import-map supabase/functions/deno.json` to every `supabase functions deploy` step, (b) documenting the canonical command shape in a runbook so any future manual / operator deploy uses it, (c) Lovable-support question to confirm the harness invocation includes the import map (since it empirically deployed 88 / 90 slugs the answer is presumably yes, but the mechanism is not observable from the repo). |
+| **Resolution_shape** | (1) EDIT `.github/workflows/deploy-edge-functions.yml`: append ` --import-map supabase/functions/deno.json` to each `supabase functions deploy ...` invocation; verify with a forced re-fire that the six BUILD_SHA-threaded slugs redeploy clean. (2) ADD a runbook section (likely `docs/04-modules/longshort/runbooks/edge-function-deploy.md` or extend an existing deploy runbook) codifying the canonical command shape for manual / operator CLI deploys. (3) Open a Lovable-support thread to confirm the auto-deploy harness command line includes the import map (and if not, ask for it to be added). (4) Add a CI lint (`scripts/check-edge-deploy-importmap.ts` or extend an existing check) that fails if any `supabase functions deploy` line in the repo lacks `--import-map`. |
+| **Blocking_deps** | None. Pre-live-trading hardening. |
+| **Future_phase** | pre-live-trading (deploy-hardening). |
+| **future_owner_module** | governance / edge-function deploy pipeline. |
+| **related_actions** | (today's manual-fire detour adjudicating combiner 404; see ACT-271 logging this DW). |
+| **Cross_ref** | §22.8.5 (deploy-replay-lag class — this is a sibling deploy-path defect: source attests, deploy fails, runtime shows 404 not stale-bundle). DW-126 (illusory-arming, the consequence at the cron layer). DW-127 (harness per-slug skip, the upstream surfacing). |
+
+### DW-126: "Armed" definition must include live gateway-reachability + auth-reachability proxies, not registry/cron-table flags alone
+
+| Field | Value |
+|---|---|
+| **ID** | DW-126 (next-free after DW-125). |
+| **Logged** | 2026-06-22 (surfaced when combiner crons 102 / 103 were two-layer "armed" while their target functions returned 404). |
+| **Status** | open. |
+| **Severity** | HIGH (pre-live). The current arming definition (cron.job.active = true AND job_registry.enabled = true) is necessary but NOT sufficient to prove a scheduled cron will fire. The target function may be undeployed (HTTP 404 from the gateway) or auth-mismatched (CRON_SECRET env drift). Today's combiner crons 102 (longshort.combiner.assemble) and 103 (longshort.combiner.rank) were both two-layer armed AND the target functions returned 404 — the scheduled fires would have silently 404'd into `net._http_response` with no audit-log row and no book. The "armed" attestation was illusory. |
+| **Scope** | Pre-go-live arming-verification currently relies on `SELECT FROM cron.job WHERE active = true` + `SELECT FROM job_registry WHERE enabled = true` correlated by jobname/slug. Neither query touches the deployed surface. A deploy-skip (DW-125 / DW-127), a project-secret rotation that desyncs CRON_SECRET, or a manual `supabase functions delete` would all leave the registry/cron-table state "armed" while the fire path is broken. The 2026-06-22 combiner incident is the first observed firing of this defect class against money-path-adjacent infrastructure. |
+| **Why_deferred** | Today's mode was VERIFICATION / INVESTIGATION (read-only). Authoring the codified checklist + the optional CI / pre-flight script is its own EXECUTION turn and requires operator-approved scope for the runbook edit + the probe-script add. |
+| **Resolution_shape** | (1) Codify a pre-go-live arming-verification checklist (likely new runbook section: `docs/04-modules/longshort/runbooks/pre-live-arming-checklist.md` or extend `signal-cron-wiring.md`) requiring, for every armed cron, BOTH (a) a live gateway probe of the target slug returning HTTP 401 (expected, not 404) — proving the function is deployed AND the JWT-required gateway boundary is intact, AND (b) an auth-reachability proxy: at least one historical `*.completed` audit row in `longshort_audit_logs` (or the equivalent strategy audit table) with `metadata.trigger = 'cron'` within the last 30 days, proving the CRON_SECRET env value in use matches what the deployed isolate expects. (2) Add the checklist as a mandatory gate to the Definition of Done for any go-live / cron-arming step. (3) Optional Tier-C: a `scripts/check-cron-arming.ts` that takes a slug list and returns PASS / FAIL per slug across both probes. |
+| **Blocking_deps** | None. Pre-live-trading hardening. |
+| **Future_phase** | pre-live-trading. |
+| **future_owner_module** | governance / jobs-and-scheduler / longshort runbooks. |
+| **related_actions** | (today's manual-fire detour; see ACT-271 logging this DW). |
+| **Cross_ref** | §22.5.1 (repo-presence vs live-state — this DW is the same defect class extended from source-evidence to deploy/fire-path evidence). DEC-040 (runtime-evidence-discipline: "this gate fired" requires cron.job evidence — this DW is the upstream sibling: "this cron is armed" requires gateway + auth evidence). DEC-041 (disposition-layer discipline — same family, different layer). DW-125 (the deploy-path root cause of today's firing). DW-127 (the harness-skip upstream surfacing). |
+
+### DW-127: Lovable auto-deploy harness skipped exactly longshort-combiner-assemble + -rank (88 / 90 deployed) — recurrence risk unknown
+
+| Field | Value |
+|---|---|
+| **ID** | DW-127 (next-free after DW-126). |
+| **Logged** | 2026-06-22 (surfaced when manual probe of all 90 functions returned 404 for exactly these two slugs while 88 siblings returned 401, including same-subtree combiner functions). |
+| **Status** | open (bypassed via operator manual CLI; recurrence risk unknown). |
+| **Severity** | MEDIUM. The immediate consequence is bypassed (operator manual `supabase functions deploy longshort-combiner-assemble longshort-combiner-rank --import-map supabase/functions/deno.json` on 2026-06-22 brought both to 401). The root cause is not determined from the sandbox — the Lovable auto-deploy harness command line / per-slug skip logic is opaque from the repo. Recurrence risk: if a future source touch on either slug re-triggers the same skip, the chain will silently revert to 404-while-armed (DW-126) until the next manual operator deploy. |
+| **Scope** | Empirical probe across all 90 functions under `supabase/functions/` (excluding `_shared/`, `deno.json`, `deno.lock`, `node_modules/`) returned HTTP 401 (70), 405 (14), 200 (2), 400 (2), 410 (1), and 404 (0) AFTER the operator manual deploy. BEFORE the manual deploy, longshort-combiner-assemble and longshort-combiner-rank were the ONLY two 404s out of 90 — every other slug, including same-subtree siblings, deployed cleanly via the harness during the same post-`ead446a6` window. There is no source-side defect visible (`deno check` is clean on both slugs; their import graphs are structurally identical to deployed siblings; no per-function config gate). The skip is therefore a harness-layer behaviour, not a per-slug source-side defect. |
+| **Why_deferred** | Determining root cause requires Lovable-support visibility into the harness command line / per-slug skip logic — not observable from the repo. The bypass via manual CLI is sufficient for the immediate go-live unblock. |
+| **Resolution_shape** | (1) Open a Lovable-support thread surfacing: "your auto-deploy harness skipped exactly longshort-combiner-assemble + longshort-combiner-rank across the post-`ead446a6` window while deploying 88 / 90 siblings; what was the skip mechanism, is it recurring, and would a future source touch on these slugs re-skip them?" (2) Until answered, EVERY post-touch on either slug MUST be followed by a manual `supabase functions deploy ... --import-map supabase/functions/deno.json` + a `check-deployed-sha.ts` probe to confirm the slug is live (NOT 404) at the attested commit SHA. (3) Once DW-126's pre-go-live arming checklist exists, the gateway-probe step will auto-detect any future re-skip. |
+| **Blocking_deps** | DW-126 (the arming checklist is the durable detector for any re-skip). |
+| **Future_phase** | pre-live-trading. |
+| **future_owner_module** | governance / Lovable-harness liaison. |
+| **related_actions** | (today's manual-fire detour; see ACT-271 logging this DW). |
+| **Cross_ref** | DW-125 (deploy-path import-map gap — adjacent surface, but distinct: DW-125 is "every non-harness deploy path drops the flag", DW-127 is "the harness silently skipped exactly these two slugs"). DW-126 (the consequence at the cron layer). |
