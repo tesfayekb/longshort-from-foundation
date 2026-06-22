@@ -32,3 +32,7 @@ docs/longshort-design-source/
 # Replay framework fixtures (§11.10.2) — generated artifacts, not tracked
 replay_storage/*.jsonl.zst
 replay_storage/*.jsonl
+
+# Deno lockfiles are committed for reproducible CI (DW-128). Negation
+# defends against any global gitignore that ignores deno.lock.
+!deno.lock
