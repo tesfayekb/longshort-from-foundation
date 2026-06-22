@@ -1,3 +1,19 @@
+### ACT-270: Catalog #56 hard/soft clarification — append ASCII hard-gate vs. comment-only soft-convention distinction and MIG-108 + DW-124 subsequent firings
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-270 (next-free after ACT-269). |
+| **Mode** | execution. |
+| **Tier** | C (governance docs only; no code, no migration, no product change). |
+| **Branch** | feature/catalog-56-ascii-hard-soft-clarification. |
+| **HEAD before / after** | before: e17dd9d2 / after: pending at execution commit. |
+| **Authority** | Supervisor applying previously-reconciled #56 soft-convention clarification: executable SQL is the HARD ASCII gate; comment-only non-ASCII (em-dashes, arrows) is the SOFT convention accepted in-place with zero execution effect. |
+| **Scope** | EDIT `docs/ai-failure-modes.md` Catalog entry #56 ONLY: append one-line hard/soft clarification to **Codification target**; update **Subsequent firings** to add MIG-108 and DW-124 in-place acceptances. NO Last Reviewed bump. NO other file edits. |
+| **Evidence** | (a) Pre-edit #56 entry text captured. (b) Post-edit #56 entry carries the HARD gate / SOFT convention split and logs MIG-108 + DW-124. (c) `grep -nP '[^\x00-\x7F]' docs/ai-failure-modes.md` on the added text returns zero matches. (d) Last Reviewed header unchanged at 2026-05-25 (ACT-111 initial landing). |
+| **ROI Impact** | **Zero.** Governance-documentation clarity only. No product, signal, or money-path code touched. |
+| **Capability gaps surfaced (§22.8.5)** | — |
+| **Status** | Closed (catalog entry updated; ASCII-clean verified; Last Reviewed preserved). |
+
 ### ACT-269: DW-124 remediation — isolate `log-sudo-event/index_test.ts` module-level env pollution via save/restore + forced eager-capture of the lazy `supabaseAdmin` Proxy
 
 | Field | Value |
