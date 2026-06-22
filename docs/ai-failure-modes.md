@@ -282,9 +282,9 @@ Each entry MUST include:
 | Field | Value |
 |-------|-------|
 | **Symptom** | The ASCII anti-pattern self-check scanned executable SQL but a non-ASCII glyph (em-dash) slipped into a migration `--` comment, passing the executable-only scan. |
-| **Codification target** | The ASCII self-check MUST cover the full migration file including `--` comments and header lines, not only executable statements. A comment-scope non-ASCII glyph is still a convention violation; because it is comment-only (zero execution effect) the disposition is accept-in-place, never a no-op fix migration (migrations are immutable — a follow-on cannot remove the original glyph). |
+| **Codification target** | The ASCII self-check MUST cover the full migration file including `--` comments and header lines, not only executable statements. HARD gate: executable SQL must be ASCII (the original MIG-107 trigger). SOFT convention: non-ASCII glyphs inside `--` comments or TS comments (em-dashes, arrows) are accepted in-place because they have zero execution effect; no dedicated CI script is required because enforcement is low-ROI cosmetic. A comment-scope non-ASCII glyph is still a convention violation; because it is comment-only (zero execution effect) the disposition is accept-in-place, never a no-op fix migration (migrations are immutable — a follow-on cannot remove the original glyph). |
 | **First fired** | 2026-06-21 / MIG-107 (DW-117 remediation). Line-1 comment carried an em-dash; comment-only, DB applied clean, accepted as-is. One-off (MIG-104/105/106 scanned zero non-ASCII — not tool behaviour). Forward fix: this rule. |
-| **Subsequent firings** | — |
+| **Subsequent firings** | MIG-108 (comment em-dash in SQL, accepted in-place, confirming the hard/soft split); DW-124 (comment non-ASCII in `log-sudo-event` test file, accepted in-place). |
 | **Status** | open — codified; binds forward. No `banned-patterns.md` row: that registry's contract (ADR-003) requires a companion `scripts/check-*.ts`; a comment-ASCII enforcement script is a deferred Tier-C follow-on. |
 
 ## Quarterly Review Protocol (per §12.8)
