@@ -287,6 +287,16 @@ Each entry MUST include:
 | **Subsequent firings** | MIG-108 (comment em-dash in SQL, accepted in-place, confirming the hard/soft split); DW-124 (comment non-ASCII in `log-sudo-event` test file, accepted in-place). |
 | **Status** | open — codified; binds forward. No `banned-patterns.md` row: that registry's contract (ADR-003) requires a companion `scripts/check-*.ts`; a comment-ASCII enforcement script is a deferred Tier-C follow-on. |
 
+### #57 — Live-Fire-Path Verification ("deployed" / "armed" requires gateway + auth probes, never repo / registry flags alone)
+
+| Field | Value |
+|-------|-------|
+| **Symptom** | "Deployed" or "armed" attestations for any cron-fired or HTTP-invoked function were treated as satisfied by source-side evidence (repo presence, `deno check` clean, `cron.job.active = true`, `job_registry.enabled = true`) without a live probe against the deployed surface. Result: the chain looked armed end-to-end while the target function returned HTTP 404 from the gateway, and any scheduled fire would have silently 404'd into `net._http_response` with no audit row and no book. |
+| **Codification target** | Supervisor pre-flight for any go-live, arming, or deploy attestation MUST include BOTH (a) a live gateway probe of the target slug returning HTTP 401 (expected, NOT 404) — proving the function is deployed and the JWT-required boundary is intact — AND (b) an auth-reachability proxy: at least one historical `*.completed` audit row with `metadata.trigger = 'cron'` (or the equivalent strategy-audit table row) within the last 30 days for the same slug, proving the CRON_SECRET env value in use matches what the deployed isolate expects. Repo presence, registry flags, and cron.job.active alone are NECESSARY but NOT SUFFICIENT. This rule binds forward for every "armed" / "deployed" claim. |
+| **First fired** | 2026-06-22 / longshort-combiner-assemble + longshort-combiner-rank were two-layer "armed" (cron.job.active = true, job_registry.enabled = true) while the target functions returned HTTP 404 across the post-`ead446a6` (2026-06-04) window. The scheduled 23:35 / 23:50 UTC fires would have silently 404'd with no audit, no book. Surfaced only by an empirical 90-function probe; resolved by operator manual `supabase functions deploy ... --import-map supabase/functions/deno.json`. See DW-125, DW-126, DW-127. |
+| **Subsequent firings** | (none yet — codification effective 2026-06-22). |
+| **Status** | open — codified; binds forward. Companion durable controls: DW-126 (pre-go-live arming-verification checklist authoring + optional `scripts/check-cron-arming.ts`). Sibling discipline: §22.5.1 (repo-presence vs live-state) extended here from source-evidence to deploy/fire-path evidence. |
+
 ## Quarterly Review Protocol (per §12.8)
 
 1. At each quarterly boundary, review action-tracker entries from the prior quarter for defect-class firings.
