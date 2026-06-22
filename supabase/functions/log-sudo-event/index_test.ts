@@ -13,7 +13,18 @@
  */
 import { assert, assertEquals, assertExists } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
-// ─── env MUST be set before importing the handler ───────────────────
+// --- env MUST be set before importing the handler -------------------
+// DW-124: capture priors, set stubs, import handler (which captures
+// stubs into the supabase-admin lazy Proxy on first access), then
+// restore priors so this test file does NOT leak SUPABASE_URL /
+// SUPABASE_SERVICE_ROLE_KEY / LOG_SUDO_EVENT_TEST / ALLOWED_ORIGINS
+// into sibling test files (root cause of the get-profile test-srk
+// collision that the HAS_SERVICE sentinel guard mitigates downstream).
+const PRIOR_LOG_SUDO_EVENT_TEST = Deno.env.get("LOG_SUDO_EVENT_TEST");
+const PRIOR_SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const PRIOR_SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const PRIOR_ALLOWED_ORIGINS = Deno.env.get("ALLOWED_ORIGINS");
+
 Deno.env.set("LOG_SUDO_EVENT_TEST", "1");
 Deno.env.set("SUPABASE_URL", "http://stub.local");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-srk");
@@ -100,6 +111,27 @@ function buildRequest(body: object): Request {
 
 // Import once; both tests reuse the same handler.
 const { handler } = await import("./index.ts");
+
+// DW-124: force eager construction of the lazy supabase-admin Proxy so
+// the stub SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY values are captured
+// into the cached _client BEFORE we restore the priors below. Without
+// this, the first handler invocation would lazily construct _client
+// against the restored (likely empty) env and throw. The .auth access
+// triggers the Proxy's get trap -> getClient() -> _client cached.
+const { supabaseAdmin } = await import("../_shared/supabase-admin.ts");
+void supabaseAdmin.auth;
+
+// Restore priors (or delete if previously undefined). After this point
+// the process env is back to what it was before this file's module
+// body ran; sibling test files no longer observe "test-srk" et al.
+if (PRIOR_LOG_SUDO_EVENT_TEST === undefined) Deno.env.delete("LOG_SUDO_EVENT_TEST");
+else Deno.env.set("LOG_SUDO_EVENT_TEST", PRIOR_LOG_SUDO_EVENT_TEST);
+if (PRIOR_SUPABASE_URL === undefined) Deno.env.delete("SUPABASE_URL");
+else Deno.env.set("SUPABASE_URL", PRIOR_SUPABASE_URL);
+if (PRIOR_SUPABASE_SERVICE_ROLE_KEY === undefined) Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+else Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", PRIOR_SUPABASE_SERVICE_ROLE_KEY);
+if (PRIOR_ALLOWED_ORIGINS === undefined) Deno.env.delete("ALLOWED_ORIGINS");
+else Deno.env.set("ALLOWED_ORIGINS", PRIOR_ALLOWED_ORIGINS);
 
 // Sanitize opts applied to all three tests at FP-008.4 Commit 1.5d:
 // `@supabase/auth-js` initializes a `setInterval` for auto-token-refresh
