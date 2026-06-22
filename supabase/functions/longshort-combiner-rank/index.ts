@@ -261,3 +261,4 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(500, 'cron_combiner_rank_failed', { correlationId });
   }
 }));
+// deploy-kick 2026-06-22
