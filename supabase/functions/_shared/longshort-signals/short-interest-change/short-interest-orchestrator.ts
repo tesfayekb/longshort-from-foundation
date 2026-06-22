@@ -64,10 +64,16 @@
  * and pinned by the orchestrator tests. Per §2 anti-phantom discipline:
  * approximations are acceptable, hidden approximations are not.
  *
- * Wall-clock discipline (DEC-034 clause 4): NO wall-clock reads anywhere
- * in supabase/functions/ — telemetry included. All timestamps
- * (`started_at`/`completed_at`/`computed_at`) derive from the `as_of`
- * parameter, mirroring the momentum/reversal precedent.
+ * Wall-clock discipline (DEC-034 clause 4 / FP-047 pattern): the
+ * financial-anchor timestamps (`as_of_date`, `computed_at`) derive from
+ * the `as_of` parameter and never from wall-clock. The orchestrator
+ * telemetry timestamps (`started_at` / `completed_at`) are stamped from
+ * the injected `liveClock` (defaults to the sanctioned `productionClock`
+ * chokepoint) so that `signal_compute_log.completed_at` reflects the
+ * real execution instant — this is what staleness dashboards and
+ * `classifyFireSource` consume. Conflating telemetry with the
+ * `as_of` date-anchor causes the FP-047 / Defect-1 dashboard
+ * false-Stale symptom and is forbidden here.
  *
  * Owner: longshort (FP-041 — Signal #5 / Phase 2.3; revision-fix:
  * Option A si_pct_float derivation)
@@ -89,6 +95,7 @@ import { zScoreNormalizeWithinSector } from '../shared/z-score-normalize.ts';
 import { captureSignalObservations } from '../shared/missingness-capture.ts';
 import type { PolygonShortInterestFetcher } from '../shared/polygon-short-interest-fetcher.ts';
 import type { PolygonSharesOutstandingFetcher } from '../shared/polygon-shares-outstanding-fetcher.ts';
+import { type ClockReader, productionClock } from '../../longshort-clock.ts';
 
 /** Locked signal-id for Phase 3 combiner consumption. Do not rename. */
 export const SIGNAL_ID = 'short_interest_change_30d';
@@ -119,14 +126,24 @@ export interface ShortInterestOrchestratorContext
   extends Omit<SignalOrchestratorContext, 'priceHistory'> {
   shortInterest: PolygonShortInterestFetcher;
   sharesOutstanding: PolygonSharesOutstandingFetcher;
+  /**
+   * Injectable wall-clock for orchestrator telemetry (`started_at` /
+   * `completed_at`). Defaults to `productionClock`. Compute inputs and
+   * the `as_of_date` / `computed_at` financial anchors never touch this
+   * clock — they consume `as_of` only (FP-047 pattern, mirrors
+   * `analyst-revision-orchestrator.ts`).
+   */
+  liveClock?: ClockReader;
 }
 
 export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorContext) {
+  const liveClock = ctx.liveClock ?? productionClock;
   return {
     async run(as_of: Date): Promise<SignalOrchestratorResult> {
       const ts = as_of.toISOString();
-      const started_at = ts;
       const as_of_date = ts.slice(0, 10);
+      const started_at = liveClock.getWallClockTs().toISOString();
+      const finalize = (): string => liveClock.getWallClockTs().toISOString();
 
       // ── Step 1: load current universe ─────────────────────────────────
       const { data: latestRows, error: latestErr } = await ctx.supabase
@@ -156,7 +173,7 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
           skipped: [],
           failure_reason: 'empty_universe',
           started_at,
-          completed_at: ts,
+          completed_at: finalize(),
         };
       }
 
@@ -183,7 +200,7 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
           skipped: [],
           failure_reason: 'empty_universe',
           started_at,
-          completed_at: ts,
+          completed_at: finalize(),
         };
       }
 
@@ -345,7 +362,7 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
           skipped: skips,
           failure_reason: `signal_observations persistence failed: ${persistErr.message}`,
           started_at,
-          completed_at: ts,
+          completed_at: finalize(),
         };
       }
 
@@ -357,7 +374,7 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
         persisted_count: inserted,
         skipped: skips,
         started_at,
-        completed_at: ts,
+        completed_at: finalize(),
       };
     },
   };

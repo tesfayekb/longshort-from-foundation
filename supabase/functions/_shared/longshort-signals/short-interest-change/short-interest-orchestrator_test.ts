@@ -11,6 +11,7 @@ import {
 } from './short-interest-orchestrator.ts';
 import { SignalComputationError } from '../shared/signal-types.ts';
 import type { SignalRow } from '../shared/signal-types.ts';
+import { createFixedClock } from '../../longshort-clock.ts';
 
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const AS_OF = new Date('2026-06-08T21:00:00Z');
@@ -353,7 +354,7 @@ Deno.test('(10) concurrency cap honored', async () => {
   assert(ph.peak() <= 5, `peak=${ph.peak()}`);
 });
 
-Deno.test('(11) determinism — same inputs produce identical persisted values + as_of-derived timestamps', async () => {
+Deno.test('(11) determinism — identical persisted values; telemetry timestamps stamped by injected liveClock (distinct from as_of), financial-anchor timestamps stamped by as_of (FP-047)', async () => {
   const universe = [
     { ticker: 'AAPL', gics_sector: 'IT' },
     { ticker: 'MSFT', gics_sector: 'IT' },
@@ -368,19 +369,41 @@ Deno.test('(11) determinism — same inputs produce identical persisted values +
   const b = makeSupabase({ universe });
   const fa = makeFetcher(behaviors);
   const fb = makeFetcher(behaviors);
-  const ra = await createShortInterestOrchestrator(ctx(a.supabase, fa.fetcher)).run(AS_OF);
-  const rb = await createShortInterestOrchestrator(ctx(b.supabase, fb.fetcher)).run(AS_OF);
+  // execInstant is INTENTIONALLY distinct from AS_OF — anti-gaming guard
+  // for the FP-047 fix. If the orchestrator regressed to stamping
+  // completed_at from as_of, every assertion below comparing against
+  // execInstantTs would fail (it does NOT equal AS_OF.toISOString()).
+  const execInstant = new Date('2026-06-15T21:00:00.123Z');
+  const execInstantTs = execInstant.toISOString();
+  const liveClock = createFixedClock(execInstant);
+  const ra = await createShortInterestOrchestrator(
+    { ...ctx(a.supabase, fa.fetcher), liveClock },
+  ).run(AS_OF);
+  const rb = await createShortInterestOrchestrator(
+    { ...ctx(b.supabase, fb.fetcher), liveClock },
+  ).run(AS_OF);
   const vals = (calls: MockCalls) =>
     [...calls.upsertPayloads[0]]
       .sort((x, y) => x.ticker.localeCompare(y.ticker))
       .map((r) => ({ ticker: r.ticker, value: r.value }));
   assertEquals(vals(a.calls), vals(b.calls));
   assertEquals(ra.persisted_count, rb.persisted_count);
-  const expectedTs = AS_OF.toISOString();
-  assertEquals(ra.started_at, expectedTs);
-  assertEquals(ra.completed_at, expectedTs);
+  // Telemetry (started_at / completed_at) is from the injected liveClock
+  // — this is what signal_compute_log surfaces to the staleness dashboard.
+  assertEquals(ra.started_at, execInstantTs);
+  assertEquals(ra.completed_at, execInstantTs);
+  assertEquals(rb.started_at, execInstantTs);
+  assertEquals(rb.completed_at, execInstantTs);
+  // Anti-gaming: explicit guard that telemetry timestamps are NOT the
+  // as_of date-anchor. If the orchestrator regressed to ts = as_of, this
+  // assertion would fail.
+  assert(ra.completed_at !== AS_OF.toISOString());
+  // Financial-anchor surfaces are still derived from as_of and untouched.
+  assertEquals(ra.as_of_date, AS_OF_DATE);
+  const asOfTs = AS_OF.toISOString();
   for (const row of a.calls.upsertPayloads[0]) {
-    assertEquals(row.computed_at, expectedTs);
+    assertEquals(row.computed_at, asOfTs);
+    assertEquals(row.as_of_date, AS_OF_DATE);
   }
 });
 
