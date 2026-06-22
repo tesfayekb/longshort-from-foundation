@@ -1,3 +1,19 @@
+### ACT-272: Register DW-128 — CI Deno gates fetch `deno.land/std` live every run; no lockfile, vendor, or GHA cache; a single CDN 5xx reds the gate
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-272 (next-free after ACT-271). |
+| **Mode** | execution. |
+| **Tier** | C (governance docs only; no code, no workflow edit, no product change, no fire). |
+| **Branch** | feature/dw-128-ci-deno-fetch-resilience. |
+| **HEAD before / after** | before: b7d4dcbb (+ ACT-271 docs commit) / after: pending at execution commit. |
+| **Authority** | Supervisor — Lovable's read-only investigation confirmed the recurring CI flake root: no `deno.lock`, no vendor, no `actions/cache` for `~/.cache/deno`; every CI run fetches `deno.land/std@0.224.0` live. The two 2026-06-22 firings (Gate-2 npm 502 on a docs-only commit, Gate-1 deno.land 500 on the ACT-271 docs commit) were transient, but their frequency is above the institutional-grade noise threshold. This ACT registers the finding and the scoped fix shape; no workflow or code touched. |
+| **Scope** | EDIT `docs/08-planning/deferred-work-register.md` (append 1 new entry DW-128 using the canonical entry shape); EDIT this tracker (this ACT). NO other file edits. NO workflow file, NO script, NO code, NO migration, NO edge-function deploy, NO cron fire. |
+| **Evidence** | (a) Next-free IDs confirmed pre-edit: DW-128 after DW-127; ACT-272 after ACT-271. (b) DW-128 appended at end of register with header verbatim: `### DW-128: CI Deno gates fetch deno.land/std live every run — no deno.lock, no vendor, no GHA cache; a single CDN 5xx reds the gate.` (c) Fields include ID, Logged, Status, Severity, Symptom / evidence, Resolution_shape, Why (a) over (b)/(c), Blocking_deps, Future_phase, future_owner_module, related_actions, Cross_ref. (d) ASCII-clean check on added text: `grep -nP '[^\x00-\x7F]'` on the added DW-128 range returns only intentional em-dashes and arrows used in the surrounding doc style (acceptable per Catalog #56 soft-convention). (e) NO workflow file, script, or code file in the diff. (f) `docs/08-planning/deferred-work-register.md` `Last Reviewed` header untouched. |
+| **ROI Impact** | **Zero on prediction / signal / sizing / execution logic.** Positive on CI governance: the flake class is now tracked with a fix shape, so a future hardening turn can eliminate the live-CDN dependency for Deno gates and restore evidence-trust in CI reds. |
+| **Capability gaps surfaced (section 22.8.5)** | (1) No `deno.lock` or `vendor/` exists for Deno gates, and `.github/workflows/strong-evidence.yml` fetches `deno.land/std` live on every run — a single CDN 5xx can false-red the gate. (2) No `actions/cache` for `~/.cache/deno` means even successful fetches are not retained across CI runs. (3) Fix shape codified in DW-128; implementation deferred to a dedicated CI-hardening turn. |
+| **Status** | Closed (DW-128 registered; ACT-272 logged; ASCII-clean verified; no workflow / code / script touched). |
+
 ### ACT-271: Register today's combiner-deploy detour as durable governance — DW-125 (import-map gap on non-harness deploy paths) + DW-126 (illusory-arming detection gap) + DW-127 (harness per-slug skip) + Catalog #57 (live-fire-path verification)
 
 | Field | Value |
