@@ -465,6 +465,7 @@ When changing any indexed function:
 | **Owner module** | rbac |
 | **Signature** | `(user_id: uuid) → boolean` |
 | **Returns** | `true` if user has the `superadmin` role |
+| **Authorization** | DW-119 guard: caller may query only self, service_role (canonical `request.jwt.claims` JSON role claim), or caller-superadmin; otherwise returns `false`. |
 | **Purity** | impure (DB read) |
 | **Side effects** | DB read (user_roles + roles tables) |
 | **Transactional** | No |
@@ -488,6 +489,7 @@ When changing any indexed function:
 | **Owner module** | rbac |
 | **Signature** | `(user_id: uuid, role_key: text) → boolean` |
 | **Returns** | `true` if user has the specified role (by key string, not enum) |
+| **Authorization** | DW-119 guard: caller may query only self, service_role (canonical `request.jwt.claims` JSON role claim), or caller-superadmin; otherwise returns `false`. |
 | **Purity** | impure (DB read) |
 | **Side effects** | DB read (user_roles + roles tables) |
 | **Transactional** | No |
@@ -513,6 +515,7 @@ When changing any indexed function:
 | **Owner module** | rbac |
 | **Signature** | `(user_id: uuid, permission_key: text) → boolean` |
 | **Returns** | `true` if superadmin (logical inheritance) OR user has explicit permission mapping. `false` on null inputs, nonexistent keys, or errors. |
+| **Authorization** | DW-119 guard: caller may query only self, service_role (canonical `request.jwt.claims` JSON role claim), or caller-superadmin; otherwise returns `false`. |
 | **Purity** | impure (DB read) |
 | **Side effects** | DB read (user_roles + roles + role_permissions + permissions) |
 | **Transactional** | No |

@@ -190,6 +190,8 @@ role_permissions (
 | `assign_permission_to_role(role_id, permission_id)` | Privileged RPC — assign permission to role | Edge function |
 | `revoke_permission_from_role(role_id, permission_id)` | Privileged RPC — revoke permission from role | Edge function |
 
+**SECURITY DEFINER helper guard:** `is_superadmin()`, `has_role()`, and `has_permission()` deny arbitrary target-user probes unless the caller is asking about self, the caller is the PostgREST `service_role`, or the caller is a real superadmin. The service-role branch MUST read the canonical `request.jwt.claims` JSON role claim (legacy scalar `request.jwt.claim.role` is compatibility-only). Any recreate of these helpers MUST re-issue the `GRANT EXECUTE` block to `authenticated, service_role` in the same migration.
+
 ## Events
 
 | Event | Emitted When | Consumed By |
