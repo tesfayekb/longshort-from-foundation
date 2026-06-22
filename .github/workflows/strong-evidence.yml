@@ -14,6 +14,8 @@ on:
 jobs:
   strong-evidence:
     runs-on: ubuntu-latest
+    env:
+      DENO_DIR: /home/runner/.cache/deno
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,24 +23,50 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v1
         with:
-          deno-version: v1.x
+          deno-version: v1.46.3
+
+      - name: Cache Deno deps (DW-128 Stage 1)
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.cache/deno
+          key: deno-${{ runner.os }}-${{ hashFiles('**/deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
+
+      - name: Warm Deno cache (root + supabase/functions)
+        run: |
+          deno cache --lock=deno.lock \
+            scripts/check-audit-writer-trap.ts \
+            scripts/check-sentinel-patterns.ts \
+            scripts/check-wall-clock.ts \
+            scripts/check-paper-only-url.ts \
+            scripts/check-unguarded-parsefloat.ts \
+            scripts/check-catch-returns-zero.ts \
+            scripts/check-edge-imports.ts \
+            scripts/check-eligibility-bypass.ts \
+            scripts/check-verify-after-mutation.ts \
+            scripts/check-supabase-client-specifier.ts \
+            scripts/check-handler-liveness-markers.ts \
+            supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts
+          (cd supabase/functions && deno cache --config=deno.json --lock=deno.lock $(find . -name '*_test.ts' -not -path './node_modules/*'))
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install Node dependencies
         run: npm ci || npm install
 
       - name: Gate 1 — audit-writer trap (DEC-034 clause (5))
-        run: deno run --allow-read scripts/check-audit-writer-trap.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-audit-writer-trap.ts
 
       - name: Gate 2 — scripts/ Deno tests (19 tests)
-        run: deno test --allow-read --allow-net --allow-env scripts/
+        run: deno test --allow-read --allow-net --allow-env --lock=deno.lock scripts/
 
       - name: Gate 3 — longshort verifier suite (71 tests)
-        run: deno test --allow-net supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts
+        run: deno test --allow-net --lock=deno.lock supabase/functions/_shared/longshort-verifiers/longshort-verifiers_test.ts
 
       - name: Gate 4 — Vitest + ESLint
         run: |
@@ -46,22 +74,22 @@ jobs:
           npx eslint .
 
       - name: Gate 5 — Sentinel patterns ban (DEC-034 clause (2))
-        run: deno run --allow-read scripts/check-sentinel-patterns.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-sentinel-patterns.ts
 
       - name: Gate 6 — Wall-clock leakage ban (DEC-034 clause (4))
-        run: deno run --allow-read scripts/check-wall-clock.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-wall-clock.ts
 
       - name: Gate 7 — Paper-only Alpaca URL ban (DEC-036 clause (2))
-        run: deno run --allow-read scripts/check-paper-only-url.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-paper-only-url.ts
 
       - name: Gate 8 — Unguarded parseFloat (ACT-097 finding #13 / DW-058 B1)
-        run: deno run --allow-read scripts/check-unguarded-parsefloat.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-unguarded-parsefloat.ts
 
       - name: Gate 9 — catch { return 0 } phantom-success ban (DEC-034 clause (2))
-        run: deno run --allow-read scripts/check-catch-returns-zero.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-catch-returns-zero.ts
 
       - name: Gate 10 — Edge functions must not import from src/ (FP-011)
-        run: deno run --allow-read scripts/check-edge-imports.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-edge-imports.ts
 
       - name: Gate 11 — Edge function suite full execution (FP-008.4 #12 / Commit 1.5e)
         # Strengthened from `deno test --no-run` (type-check only) to full
@@ -81,7 +109,7 @@ jobs:
         # Green baseline at strengthening SHA: 237 passed / 0 failed
         # against the Gate-11-territory subset.
         working-directory: supabase/functions
-        run: deno test --allow-net --allow-env --allow-read
+        run: deno test --allow-net --allow-env --allow-read --lock=deno.lock
 
       - name: Gate 12 — Eligibility-caveat bypass ban (FP-008.4 Commit 2 / MIG-055)
         # Forbids direct .long_eligible / .short_eligible reads outside the
@@ -94,7 +122,7 @@ jobs:
         # Per ADR-003 enforcement-as-scripts-not-prose. Sibling shape to
         # Gate 5 / Gate 6 / Gate 9 banned-pattern checks. Placed AFTER Gate 11
         # per Commit 2 ordering decision.
-        run: deno run --allow-read scripts/check-eligibility-bypass.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-eligibility-bypass.ts
 
       - name: Gate 13 — Verify-after-mutation ban (FP-008.4 Commit 7 / #8 forward-binding sentinel)
         # Forward-binding sentinel for the CROSSWIND §7.5 pre-mutation-gate invariant.
@@ -107,14 +135,14 @@ jobs:
         # File-level lexical heuristic (not control-flow): intentionally over-eager so
         # Phase-5 order-execution code cannot introduce a verify-after-mutation site
         # without explicit operator review. Current HEAD baseline: 0 violations.
-        run: deno run --allow-read scripts/check-verify-after-mutation.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-verify-after-mutation.ts
 
       - name: Gate 14 — Supabase client specifier unification (FP-008.4 Commit 7.5 / DW-082 A1.b)
         # Prevents the dual-type-identity class that produced TS2322 between
         # esm.sh @supabase/supabase-js and the canonical npm/import-map specifier.
         # Both runtime imports and `import type { SupabaseClient } ...` declarations
         # under supabase/functions/ must use '@supabase/supabase-js'.
-        run: deno run --allow-read scripts/check-supabase-client-specifier.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-supabase-client-specifier.ts
 
       - name: Gate 15 — Handler liveness markers / cross-artifact sentinel (FP-008.4 Commit 10 / DW-084)
         # Cross-artifact sentinel for the INC-39 seam class. Joins job_registry's
@@ -129,4 +157,4 @@ jobs:
         # liveness-check tests) as defense-in-depth across data + code dimensions.
         # Baseline at FP-008.4 Commit 10: CLEAN (the disarmed sweep's enabled=false
         # excludes it from the predicate).
-        run: deno run --allow-read scripts/check-handler-liveness-markers.ts
+        run: deno run --allow-read --lock=deno.lock scripts/check-handler-liveness-markers.ts
