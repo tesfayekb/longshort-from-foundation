@@ -106,3 +106,19 @@ BEGIN
   );
 END;
 $$;
+
+-- =============================================================================
+-- DW-131 / MIG-112 (2026-06-22): EXECUTE grants co-located with definitions.
+-- These four SECURITY DEFINER helpers are the RBAC entrypoints called by the
+-- admin edge functions via PostgREST `rpc(...)`. The internal DW-119 guard
+-- (in has_permission / is_superadmin / has_role bodies) restricts what a
+-- caller may observe; EXECUTE on the function itself MUST be granted to the
+-- PostgREST roles or every call raises SQLSTATE 42501 and surfaces as 403
+-- FORBIDDEN. DW-119 recreate dropped these grants -- they are now co-located
+-- so any future CREATE OR REPLACE replay re-issues them deterministically.
+-- =============================================================================
+
+GRANT EXECUTE ON FUNCTION public.has_permission(uuid, text)        TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_superadmin(uuid)               TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.has_role(uuid, text)              TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_my_authorization_context()    TO authenticated, service_role;
