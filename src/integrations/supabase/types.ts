@@ -1290,6 +1290,105 @@ export type Database = {
         }
         Relationships: []
       }
+      signal_decay_log: {
+        Row: {
+          as_of_date: string
+          by_status: Json | null
+          completed_at: string
+          distinct_tickers_fetched: number
+          failure_reason: string | null
+          observations_considered: number
+          operator_id: string
+          outcome: string
+          rows_written: number
+          run_id: string
+          signals_considered: number
+          started_at: string
+        }
+        Insert: {
+          as_of_date: string
+          by_status?: Json | null
+          completed_at: string
+          distinct_tickers_fetched?: number
+          failure_reason?: string | null
+          observations_considered?: number
+          operator_id: string
+          outcome: string
+          rows_written?: number
+          run_id?: string
+          signals_considered?: number
+          started_at: string
+        }
+        Update: {
+          as_of_date?: string
+          by_status?: Json | null
+          completed_at?: string
+          distinct_tickers_fetched?: number
+          failure_reason?: string | null
+          observations_considered?: number
+          operator_id?: string
+          outcome?: string
+          rows_written?: number
+          run_id?: string
+          signals_considered?: number
+          started_at?: string
+        }
+        Relationships: []
+      }
+      signal_decay_returns: {
+        Row: {
+          computed_at: string
+          horizon_label: string
+          next_open: number | null
+          next_open_date: string | null
+          notes: Json | null
+          open_decay_return: number | null
+          operator_id: string
+          price_source: string
+          price_source_status: string
+          seed_as_of_date: string
+          seed_close: number | null
+          seed_close_date: string | null
+          seed_value: number | null
+          signal_id: string
+          ticker: string
+        }
+        Insert: {
+          computed_at: string
+          horizon_label: string
+          next_open?: number | null
+          next_open_date?: string | null
+          notes?: Json | null
+          open_decay_return?: number | null
+          operator_id: string
+          price_source?: string
+          price_source_status: string
+          seed_as_of_date: string
+          seed_close?: number | null
+          seed_close_date?: string | null
+          seed_value?: number | null
+          signal_id: string
+          ticker: string
+        }
+        Update: {
+          computed_at?: string
+          horizon_label?: string
+          next_open?: number | null
+          next_open_date?: string | null
+          notes?: Json | null
+          open_decay_return?: number | null
+          operator_id?: string
+          price_source?: string
+          price_source_status?: string
+          seed_as_of_date?: string
+          seed_close?: number | null
+          seed_close_date?: string | null
+          seed_value?: number | null
+          signal_id?: string
+          ticker?: string
+        }
+        Relationships: []
+      }
       signal_observations: {
         Row: {
           as_of_date: string
