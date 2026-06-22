@@ -2766,3 +2766,20 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **future_owner_module** | governance / Lovable-harness liaison. |
 | **related_actions** | (today's manual-fire detour; see ACT-271 logging this DW). |
 | **Cross_ref** | DW-125 (deploy-path import-map gap — adjacent surface, but distinct: DW-125 is "every non-harness deploy path drops the flag", DW-127 is "the harness silently skipped exactly these two slugs"). DW-126 (the consequence at the cron layer). |
+
+### DW-128: CI Deno gates fetch deno.land/std live every run — no deno.lock, no vendor, no GHA cache; a single CDN 5xx reds the gate
+
+| Field | Value |
+|---|---|
+| **ID** | DW-128 (next-free after DW-127). |
+| **Logged** | 2026-06-22 (surfaced during the Gate-1 deno.land 500 flake investigation after the ACT-271 docs commit). |
+| **Status** | open. |
+| **Severity** | MEDIUM (CI reliability / governance-attestation hygiene — false-reds are indistinguishable from real reds at first glance, waste a supervisor adjudication turn each, and erode evidence-trust; inverted phantom-signal class). |
+| **Symptom / evidence** | Two firings on 2026-06-22 — Gate-2 npm 502 (`playwright-core`, DW-119 commit) + Gate-1 deno.land 500 (`std@0.224.0/fs/walk.ts`, ACT-271 commit). Both transient, both docs/SQL-only commits causally incapable of the failure. Every CI run fetches all `https://` imports live; no lockfile, no vendor, no `actions/cache` for `~/.cache/deno`. |
+| **Resolution_shape** | (a) Generate + commit `deno.lock`; (b) add `actions/cache` for `~/.cache/deno` keyed by `hashFiles('**/deno.lock')`; (c) insert a `deno cache --lock=deno.lock scripts/*.ts supabase/functions/_shared/**/*.ts` step before the first gate; (d) append `--cached-only --lock=deno.lock` to each `deno run` / `deno test` gate command in `.github/workflows/strong-evidence.yml` (+ evaluate `deploy-edge-functions.yml`). Pinning already correct (`@0.224.0`); the gap is lock+cache, not version. |
+| **Why (a) over (b)/(c)** | Retries paper over the symptom (any outage beyond the retry-budget still reds the gate). Ignoring is acceptable only at ~1 flake/month, not 2/day; at the observed frequency, the adjudication-cost compounding through the combiner-refinement gates makes the fix ROI-positive. |
+| **Blocking_deps** | None. |
+| **Future_phase** | pre-live-trading (CI hardening) — flagged as fix-soon due to adjudication-cost compounding. |
+| **future_owner_module** | governance / CI infrastructure. |
+| **related_actions** | (Gate-1 flake investigation; see ACT-272 logging this DW). |
+| **Cross_ref** | Catalog #57 (live-fire-path / non-deterministic-vs-source-state class); the two 2026-06-22 firings. |
