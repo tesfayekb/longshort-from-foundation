@@ -62,7 +62,12 @@ export interface RankingRow {
   short_score: number;
   long_rank: number;
   short_rank: number;
-  ranker_source: typeof RANKER_SOURCE_FALLBACK;
+  /** Attribution literal stamped onto the persisted row. The fallback
+   *  path stamps {@link RANKER_SOURCE_FALLBACK} verbatim; the 3.3b-i
+   *  model-active path stamps a composite `lgbm:<long_model>@<long_ver>/<short_model>@<short_ver>`
+   *  literal — see `ranker-orchestrator.ts` model-gate branch. The
+   *  `<> 'count_normalized_fallback'` partial index keys off this. */
+  ranker_source: string;
   gics_sector: string | null;
 }
 
