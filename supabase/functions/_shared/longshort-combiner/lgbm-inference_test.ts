@@ -41,6 +41,17 @@ import {
   nonCriticalIsPresentKey,
   nonCriticalValueKey,
 } from './signal-catalog.ts';
+import {
+  MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID,
+  MARKET_REALIZED_VOL_6M_SIGNAL_ID,
+} from '../longshort-signals/market-regime/compute-regime.ts';
+import { featureOrderHash } from './lgbm-inference.ts';
+
+/** Locked 18-key FEATURE_ORDER hash post-3.2-d (DEC-066). Byte-identical to
+ *  the Python `feature_order_hash()` (locked in test_feature_contract.py).
+ *  Any drift here MUST flip the Python constant in the SAME PR. */
+const EXPECTED_FEATURE_ORDER_HASH =
+  'd4aac3e3e58740543de51764c05b8688595eb025ec41bd55677c9c27f24ce348';
 
 /** Hand-crafted 2-tree fixture — minimal LightGBM model.txt shape.
  *
