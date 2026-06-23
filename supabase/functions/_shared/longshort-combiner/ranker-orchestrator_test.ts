@@ -30,6 +30,7 @@ import {
   nonCriticalIsPresentKey,
 } from './signal-catalog.ts';
 import { RANKER_SOURCE_FALLBACK } from './ranker-constants.ts';
+import { featureOrderHash } from './lgbm-inference.ts';
 
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const AS_OF = new Date('2026-06-16T00:00:00Z');
