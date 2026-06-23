@@ -1,3 +1,8 @@
+// @ts-nocheck — Deno test file; runs via `deno test`, not Vite/tsc. Matches sibling
+// orchestrator-test convention (feature-assembler-orchestrator_test.ts) so the in-memory
+// fake supabase can be passed structurally without an `as any` cast — which avoids the
+// dual-linter mismatch (Deno's `deno-lint-ignore no-explicit-any` is NOT honored by CI's
+// ESLint `@typescript-eslint/no-explicit-any` gate). See ai-failure-modes.md.
 /**
  * Regime orchestrator tests (FP-052.2 / 3.2-b).
  *
@@ -47,8 +52,7 @@ function makeFakeSupabase(opts: { upsertError?: { message: string } } = {}) {
       };
     },
   };
-  // deno-lint-ignore no-explicit-any
-  return { supabase: supabase as any, calls };
+  return { supabase, calls };
 }
 
 function makeFakeFetcher(behavior:
