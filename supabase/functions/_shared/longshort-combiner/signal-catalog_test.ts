@@ -14,6 +14,7 @@ import {
   EXCLUDED_REASON,
   EXPECTED_FEATURE_KEY_COUNT,
   MIN_NON_CRITICAL_PRESENT,
+  REGIME_FEATURE_COUNT,
   SIGNAL_IDS_ALL,
   SIGNAL_IDS_CRITICAL,
   SIGNAL_IDS_NON_CRITICAL,
@@ -57,8 +58,12 @@ Deno.test('catalog: MIN_NON_CRITICAL_PRESENT = 3 (§4.3.5 L402 5-of-9 floor)', (
   assertEquals(MIN_NON_CRITICAL_PRESENT, 3);
 });
 
-Deno.test('catalog: EXPECTED_FEATURE_KEY_COUNT = 16 (2 critical + 7×2 non-critical)', () => {
-  assertEquals(EXPECTED_FEATURE_KEY_COUNT, 16);
+Deno.test('catalog: REGIME_FEATURE_COUNT = 2 (DEC-066 §6.5.1.1 market-level)', () => {
+  assertEquals(REGIME_FEATURE_COUNT, 2);
+});
+
+Deno.test('catalog: EXPECTED_FEATURE_KEY_COUNT = 18 (2 critical + 7×2 non-critical + 2 market-level)', () => {
+  assertEquals(EXPECTED_FEATURE_KEY_COUNT, 18);
 });
 
 Deno.test('catalog: excluded-reason literals match MIG-099 CHECK values verbatim', () => {

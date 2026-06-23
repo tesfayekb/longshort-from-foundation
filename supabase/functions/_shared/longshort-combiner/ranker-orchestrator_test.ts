@@ -46,7 +46,7 @@ const FIXTURE_DUMP_LONG = [
   'tree',
   'version=v3',
   'num_class=1',
-  'max_feature_idx=15',
+  'max_feature_idx=17',
   'objective=lambdarank',
   '',
   'Tree=0',
@@ -69,7 +69,7 @@ const FIXTURE_DUMP_SHORT = [
   'tree',
   'version=v3',
   'num_class=1',
-  'max_feature_idx=15',
+  'max_feature_idx=17',
   'objective=lambdarank',
   '',
   'Tree=0',
@@ -95,6 +95,9 @@ function fullIncludedRow(ticker: string, score: number, sector: string | null = 
     features[nonCriticalValueKey(ncid)] = score;
     features[nonCriticalIsPresentKey(ncid)] = 1;
   }
+  // 3.2-d (DEC-066 §(c)): 2 market-level regime keys appended as bare numerics.
+  features['market_24m_cumulative_return'] = score;
+  features['market_realized_vol_6m'] = score;
   return {
     ticker,
     features,

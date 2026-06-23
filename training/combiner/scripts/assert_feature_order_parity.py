@@ -43,6 +43,7 @@ sys.path.insert(0, str(THIS_DIR.parent))
 
 from feature_contract import FEATURE_ORDER as PY_FEATURE_ORDER  # noqa: E402
 from feature_contract import (  # noqa: E402
+    MARKET_REGIME_FEATURE_KEYS as PY_MARKET_REGIME_FEATURE_KEYS,
     SIGNAL_IDS_CRITICAL as PY_SIGNAL_IDS_CRITICAL,
     SIGNAL_IDS_NON_CRITICAL as PY_SIGNAL_IDS_NON_CRITICAL,
     feature_order_hash as py_feature_order_hash,
@@ -64,6 +65,15 @@ TS_INFERENCE_PATH = (
     / "longshort-combiner"
     / "lgbm-inference.ts"
 )
+TS_REGIME_PATH = (
+    REPO_ROOT
+    / "supabase"
+    / "functions"
+    / "_shared"
+    / "longshort-signals"
+    / "market-regime"
+    / "compute-regime.ts"
+)
 
 
 def _extract_array(ts_src: str, name: str) -> list[str]:
@@ -81,6 +91,19 @@ def _extract_array(ts_src: str, name: str) -> list[str]:
     # Strip line comments.
     body = re.sub(r"//[^\n]*", "", body)
     return [s for s in re.findall(r"'([^']+)'", body)]
+
+
+def _extract_const_string(ts_src: str, name: str) -> str:
+    """Extract `export const NAME = 'literal';` from TS."""
+    pattern = re.compile(
+        r"export\s+const\s+" + re.escape(name) + r"\s*=\s*'([^']+)'\s*;",
+    )
+    m = pattern.search(ts_src)
+    if not m:
+        raise SystemExit(
+            f"assert_feature_order_parity: cannot locate `export const {name}` in TS source"
+        )
+    return m.group(1)
 
 
 def _ts_feature_order() -> list[str]:
@@ -101,12 +124,20 @@ def _ts_feature_order() -> list[str]:
     crit = _extract_array(catalog_src, "SIGNAL_IDS_CRITICAL")
     nc = _extract_array(catalog_src, "SIGNAL_IDS_NON_CRITICAL")
 
+    regime_src = TS_REGIME_PATH.read_text(encoding="utf-8")
+    market_keys = [
+        _extract_const_string(regime_src, "MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID"),
+        _extract_const_string(regime_src, "MARKET_REALIZED_VOL_6M_SIGNAL_ID"),
+    ]
+
     inference_src = TS_INFERENCE_PATH.read_text(encoding="utf-8")
     for required in (
         "SIGNAL_IDS_CRITICAL",
         "SIGNAL_IDS_NON_CRITICAL",
         "nonCriticalValueKey",
         "nonCriticalIsPresentKey",
+        "MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID",
+        "MARKET_REALIZED_VOL_6M_SIGNAL_ID",
         "FEATURE_ORDER",
     ):
         if required not in inference_src:
@@ -119,6 +150,7 @@ def _ts_feature_order() -> list[str]:
     for ncid in nc:
         order.append(f"{ncid}__value")
         order.append(f"{ncid}__is_present")
+    order.extend(market_keys)
     return order
 
 
@@ -137,6 +169,19 @@ def main() -> int:
     if tuple(ts_nc) != PY_SIGNAL_IDS_NON_CRITICAL:
         print(
             f"FAIL: SIGNAL_IDS_NON_CRITICAL drift: TS={ts_nc} PY={list(PY_SIGNAL_IDS_NON_CRITICAL)}"
+        )
+        return 1
+
+    # Market-level regime key parity (DEC-066 §(c), 3.2-d).
+    regime_src = TS_REGIME_PATH.read_text(encoding="utf-8")
+    ts_market = (
+        _extract_const_string(regime_src, "MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID"),
+        _extract_const_string(regime_src, "MARKET_REALIZED_VOL_6M_SIGNAL_ID"),
+    )
+    if ts_market != PY_MARKET_REGIME_FEATURE_KEYS:
+        print(
+            f"FAIL: MARKET_REGIME_FEATURE_KEYS drift: TS={list(ts_market)} "
+            f"PY={list(PY_MARKET_REGIME_FEATURE_KEYS)}"
         )
         return 1
 

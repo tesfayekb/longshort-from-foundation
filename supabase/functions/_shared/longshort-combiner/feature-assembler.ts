@@ -33,6 +33,7 @@
 import {
   EXCLUDED_REASON,
   EXPECTED_FEATURE_KEY_COUNT,
+  REGIME_FEATURE_COUNT,
   MIN_NON_CRITICAL_PRESENT,
   SIGNAL_IDS_CRITICAL,
   SIGNAL_IDS_NON_CRITICAL,
@@ -66,8 +67,13 @@ export interface RegimeFeatures {
   readonly market_realized_vol_6m: number;
 }
 
-/** Number of market-level keys 3.2-c broadcasts into the per-name jsonb. */
-export const REGIME_FEATURE_COUNT = 2;
+/**
+ * Re-export the catalog's REGIME_FEATURE_COUNT so existing consumers that
+ * import the constant from this module continue to work after 3.2-d folded
+ * the +2 into `EXPECTED_FEATURE_KEY_COUNT` (single source of truth lives in
+ * `signal-catalog.ts`).
+ */
+export { REGIME_FEATURE_COUNT };
 
 /**
  * Typed fail-loud reason surfaced by the orchestrator when regime data
@@ -318,12 +324,14 @@ export function assembleFeatureVectors(
       // 3.2-c additive: per-name catalog (EXPECTED_FEATURE_KEY_COUNT, 16)
       // + REGIME_FEATURE_COUNT (2). 3.2-d will fold the +2 into the catalog
       // constant itself (16 → 18) when FEATURE_ORDER flips.
-      const expected = EXPECTED_FEATURE_KEY_COUNT + REGIME_FEATURE_COUNT;
+      // 3.2-d: `EXPECTED_FEATURE_KEY_COUNT` now bakes in the 2 market-level
+      // regime keys (per DEC-066 §(c) — bare numerics appended after the
+      // per-name block); no separate `+ REGIME_FEATURE_COUNT` term.
+      const expected = EXPECTED_FEATURE_KEY_COUNT;
       if (Object.keys(features).length !== expected) {
         throw new Error(
           `feature-assembler: included-row feature count ${Object.keys(features).length} ` +
-            `!= EXPECTED_FEATURE_KEY_COUNT(${EXPECTED_FEATURE_KEY_COUNT}) ` +
-            `+ REGIME_FEATURE_COUNT(${REGIME_FEATURE_COUNT}) = ${expected}`,
+            `!= EXPECTED_FEATURE_KEY_COUNT(${expected})`,
         );
       }
       rows.push({

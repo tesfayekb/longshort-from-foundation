@@ -99,7 +99,20 @@ export function nonCriticalIsPresentKey(signalId: NonCriticalSignalId): string {
 }
 
 /**
- * Expected feature-key count — 2 critical (bare numeric) + 7×2 non-critical pairs = 16.
- * Locked by §6.5 (16-feature representation) and by FP-052 item (2).
+ * Number of market-level regime features per DEC-066 §6.5.1.1 — broadcast
+ * IDENTICALLY into every per-name `features` jsonb as bare numerics (NOT
+ * `__value`/`__is_present` pairs). 3.2-d folded this into the catalog's
+ * EXPECTED_FEATURE_KEY_COUNT so the three categories (critical / non-critical /
+ * market-level) are each named in one canonical place.
  */
-export const EXPECTED_FEATURE_KEY_COUNT = SIGNAL_IDS_CRITICAL.length + SIGNAL_IDS_NON_CRITICAL.length * 2; // 16
+export const REGIME_FEATURE_COUNT = 2;
+
+/**
+ * Expected feature-key count — 2 critical (bare numeric) + 7×2 non-critical
+ * pairs + 2 market-level regime bare numerics = 18. Locked by §6.5 (feature
+ * representation), FP-052 item (2), and DEC-066 §(c) (market category appended
+ * after the per-name block, hash flipped at 3.2-d to
+ * d4aac3e3e58740543de51764c05b8688595eb025ec41bd55677c9c27f24ce348).
+ */
+export const EXPECTED_FEATURE_KEY_COUNT =
+  SIGNAL_IDS_CRITICAL.length + SIGNAL_IDS_NON_CRITICAL.length * 2 + REGIME_FEATURE_COUNT; // 18

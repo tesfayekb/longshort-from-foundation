@@ -2,10 +2,14 @@
 
 The in-substrate TS inference seam
 (``supabase/functions/_shared/longshort-combiner/lgbm-inference.ts``)
-defines ``FEATURE_ORDER`` as a 16-key array and ``featureOrderHash()``
+defines ``FEATURE_ORDER`` as an 18-key array and ``featureOrderHash()``
 as the SHA-256 hex digest of ``FEATURE_ORDER.join('\\n')``. The
 ``model-artifact-loader.ts`` REFUSES any artifact whose
 ``meta.feature_order_hash`` does not match the live hash.
+
+3.2-d (DEC-066) appended the 2 market-level regime keys after the per-name
+block as bare numerics, flipping the hash to
+``d4aac3e3e58740543de51764c05b8688595eb025ec41bd55677c9c27f24ce348``.
 
 This module replicates that contract byte-for-byte in Python so the
 trainer can:
@@ -46,6 +50,18 @@ SIGNAL_IDS_NON_CRITICAL: Final[Tuple[str, ...]] = (
     "active_catalyst_flag",            # Signal #9
 )
 
+# Market-level regime keys per DEC-066 §6.5.1.1. Appended AFTER the
+# non-critical block as bare numerics (NOT (value, is_present) pairs).
+# Must equal the TS literals in
+# `supabase/functions/_shared/longshort-signals/market-regime/compute-regime.ts`
+# (MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID / MARKET_REALIZED_VOL_6M_SIGNAL_ID);
+# `scripts/assert_feature_order_parity.py` reconstructs the TS FEATURE_ORDER
+# and rejects any divergence.
+MARKET_REGIME_FEATURE_KEYS: Final[Tuple[str, ...]] = (
+    "market_24m_cumulative_return",
+    "market_realized_vol_6m",
+)
+
 # §6.5.2 missing-value sentinel for non-critical signal value slots.
 NON_CRITICAL_MISSING_SENTINEL: Final[float] = -999.0
 
@@ -64,16 +80,17 @@ def _build_feature_order() -> Tuple[str, ...]:
     for ncid in SIGNAL_IDS_NON_CRITICAL:
         keys.append(_non_critical_value_key(ncid))
         keys.append(_non_critical_is_present_key(ncid))
+    keys.extend(MARKET_REGIME_FEATURE_KEYS)
     return tuple(keys)
 
 
 # LOAD-BEARING — must equal lgbm-inference.ts FEATURE_ORDER element-for-element.
 FEATURE_ORDER: Final[Tuple[str, ...]] = _build_feature_order()
 
-# Expected vector length — 2 + 7*2 = 16.
+# Expected vector length — 2 + 7*2 + 2 = 18.
 FEATURE_VECTOR_LENGTH: Final[int] = len(FEATURE_ORDER)
-assert FEATURE_VECTOR_LENGTH == 16, (
-    "FEATURE_ORDER must be exactly 16 keys (2 criticals + 7 non-critical pairs)"
+assert FEATURE_VECTOR_LENGTH == 18, (
+    "FEATURE_ORDER must be exactly 18 keys (2 criticals + 7 non-critical pairs + 2 market-level)"
 )
 
 
@@ -90,12 +107,17 @@ def feature_order_hash() -> str:
 
 
 def features_to_ordered_row(features: dict) -> list[float]:
-    """Project a feature dict onto the ordered 16-element float row.
+    """Project a feature dict onto the ordered 18-element float row.
 
     Honors §6.5.2 sentinel: non-critical signals with ``is_present == 0``
     resolve to ``value = -999`` regardless of what is stored under the
     ``__value`` key (the assembler stores ``None`` for the absent half;
     the model was trained against the sentinel substitution).
+
+    The 2 market-level regime keys (DEC-066 §(c)) are appended as bare
+    numerics; an absent/non-finite value raises ``ValueError`` — the
+    assembler's regime fail-loud at the orchestrator boundary should have
+    prevented any such row reaching the trainer/scorer.
 
     Raises ``ValueError`` when a critical signal is missing or non-finite
     — the §4.3.5 gate should have excluded such rows upstream.
@@ -130,6 +152,16 @@ def features_to_ordered_row(features: dict) -> list[float]:
         else:
             row.append(NON_CRITICAL_MISSING_SENTINEL)
         row.append(float(is_present))
+
+    # 2 market-level regime features — bare numerics (DEC-066 §(c)).
+    for mkey in MARKET_REGIME_FEATURE_KEYS:
+        v = features.get(mkey)
+        if v is None or not isinstance(v, (int, float)) or not math.isfinite(float(v)):
+            raise ValueError(
+                f"market-level '{mkey}' not a finite number (value={v!r}); "
+                f"regime fail-loud should have prevented this row reaching the trainer"
+            )
+        row.append(float(v))
 
     if len(row) != FEATURE_VECTOR_LENGTH:
         raise ValueError(
