@@ -68,9 +68,9 @@ const FIXTURE_DUMP = [
   'num_class=1',
   'num_tree_per_iteration=1',
   'label_index=0',
-  'max_feature_idx=15',
+  'max_feature_idx=17',
   'objective=lambdarank',
-  'feature_names=cross_sectional_momentum_12_1 short_term_reversal_1w f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15',
+  'feature_names=cross_sectional_momentum_12_1 short_term_reversal_1w f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 market_24m_cumulative_return market_realized_vol_6m',
   '',
   'Tree=0',
   'num_leaves=2',
@@ -105,7 +105,7 @@ const FIXTURE_DUMP = [
   'end of trees',
 ].join('\n');
 
-/** Build a full 16-key feature record (all non-criticals present). */
+/** Build a full 18-key feature record (all non-criticals present, market keys set). */
 function fullPresent(critical_v: number, nc_v: number): Record<string, number | null> {
   const f: Record<string, number | null> = {};
   for (const cid of SIGNAL_IDS_CRITICAL) f[cid] = critical_v;
@@ -113,11 +113,14 @@ function fullPresent(critical_v: number, nc_v: number): Record<string, number | 
     f[nonCriticalValueKey(ncid)] = nc_v;
     f[nonCriticalIsPresentKey(ncid)] = 1;
   }
+  f[MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID] = 0.0;
+  f[MARKET_REALIZED_VOL_6M_SIGNAL_ID] = 0.0;
   return f;
 }
 
-/** Build a 16-key record where every non-critical is ABSENT (is_present=0,
- *  value=null) and criticals carry the given value. */
+/** Build an 18-key record where every non-critical is ABSENT (is_present=0,
+ *  value=null), criticals carry the given value, and market-level keys are
+ *  set to 0 (regime fail-loud guarantees they're never null at the scorer). */
 function allNonCriticalsAbsent(critical_v: number): Record<string, number | null> {
   const f: Record<string, number | null> = {};
   for (const cid of SIGNAL_IDS_CRITICAL) f[cid] = critical_v;
@@ -125,12 +128,14 @@ function allNonCriticalsAbsent(critical_v: number): Record<string, number | null
     f[nonCriticalValueKey(ncid)] = null;
     f[nonCriticalIsPresentKey(ncid)] = 0;
   }
+  f[MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID] = 0.0;
+  f[MARKET_REALIZED_VOL_6M_SIGNAL_ID] = 0.0;
   return f;
 }
 
-Deno.test('(lgbm-1) FEATURE_ORDER locks 16 keys: 2 criticals then 7 (value,is_present) pairs', () => {
-  assertEquals(FEATURE_VECTOR_LENGTH, 16);
-  assertEquals(FEATURE_ORDER.length, 16);
+Deno.test('(lgbm-1) FEATURE_ORDER locks 18 keys: 2 criticals, 7 (value,is_present) pairs, 2 market-level', () => {
+  assertEquals(FEATURE_VECTOR_LENGTH, 18);
+  assertEquals(FEATURE_ORDER.length, 18);
   // Criticals first, catalog order.
   assertEquals(FEATURE_ORDER[0], SIGNAL_IDS_CRITICAL[0]);
   assertEquals(FEATURE_ORDER[1], SIGNAL_IDS_CRITICAL[1]);
@@ -140,6 +145,14 @@ Deno.test('(lgbm-1) FEATURE_ORDER locks 16 keys: 2 criticals then 7 (value,is_pr
     assertEquals(FEATURE_ORDER[2 + 2 * i], nonCriticalValueKey(ncid));
     assertEquals(FEATURE_ORDER[2 + 2 * i + 1], nonCriticalIsPresentKey(ncid));
   }
+  // Then 2 market-level bare numerics (DEC-066 §(c)).
+  assertEquals(FEATURE_ORDER[16], MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID);
+  assertEquals(FEATURE_ORDER[17], MARKET_REALIZED_VOL_6M_SIGNAL_ID);
+});
+
+Deno.test('(lgbm-1b) featureOrderHash() matches the locked 18-key constant (DEC-064 Clause 4)', async () => {
+  const h = await featureOrderHash();
+  assertEquals(h, EXPECTED_FEATURE_ORDER_HASH);
 });
 
 Deno.test('(lgbm-2) parseLgbmTreeDump rejects empty / no-Tree dumps', () => {
