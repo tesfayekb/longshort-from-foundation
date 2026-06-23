@@ -3003,3 +3003,19 @@ Verdict: ALL GREEN
 | **Out-of-scope guarantees** | Zero code change. Zero migration. Zero touch to FP-018 Bucket A/B originals (Rule 8 preserved via the Bucket B addendum). |
 | **ROI Impact** | **Positive on operational confidence** — Bucket C closed on stronger evidence than originally planned. **Zero on prediction / signal / sizing / execution logic**. |
 | **Status** | Closed (ACT-130, 2026-06-08). |
+
+### ACT-294 — Fix CI #367 red: `@typescript-eslint/no-explicit-any` error at `regime-orchestrator_test.ts:51` (dual-linter directive mismatch from 3.2-b)
+
+| Field | Value |
+|---|---|
+| **Date** | 2026-06-23 |
+| **Mode** | EXECUTION (Tier B; CI-gate restoration; documentation + single-file test-type fix) |
+| **HEAD (pre)** | `6a9a5a0e` |
+| **CI run** | #367 (Gate 4 red on commit `bf252335` / 3.2-b): 1 ERROR `Unexpected any` at `supabase/functions/_shared/longshort-signals/market-regime/regime-orchestrator_test.ts:51:34` + 16 pre-existing baseline warnings (RoleDetailPage useMemo, unused eslint-disable in other files — NOT this fix's scope). |
+| **Root cause** | 3.2-b suppressed the `supabase as any` cast on the in-memory fake supabase via `// deno-lint-ignore no-explicit-any`. Sandbox `deno lint` honored the directive; CI's `eslint .` with `@typescript-eslint/no-explicit-any` did NOT recognize the Deno-flavored directive and fired ERROR at Gate 4. Lint-layer analogue of the DW-128 dual-toolchain class. |
+| **Fix path taken** | **PREFERRED (structural elimination).** Adopted the sibling-test convention (`feature-assembler-orchestrator_test.ts`): added a `// @ts-nocheck` header (already permitted for `*_test.ts` via `eslint.config.js` `@typescript-eslint/ban-ts-comment: off`) and removed the `as any` cast entirely. Fake `supabase` is now passed structurally without any cast — neither linter has anything to suppress. Rationale: zero directive-syntax footgun, matches established sibling pattern, no runtime change (only type-checking posture changes). |
+| **Verification** | `npx eslint supabase/functions/_shared/longshort-signals/market-regime/` → clean (0 errors, 0 warnings). The 16 baseline warnings in CI #367 are out-of-scope and untouched. `deno.lock` re-asserted at v3. No runtime behavior change to the fake — only its TYPE posture changed. |
+| **Files touched** | `supabase/functions/_shared/longshort-signals/market-regime/regime-orchestrator_test.ts` (added `// @ts-nocheck` header + removed `as any` cast + `deno-lint-ignore`); `docs/ai-failure-modes.md` (new catalog row — dual-linter directive mismatch); `docs/06-tracking/action-tracker.md` (this entry). |
+| **Out-of-scope guarantees** | Zero code change beyond the test's type posture. Zero migration. Zero `FEATURE_ORDER` change. Zero cron fire. No touch to the 16 baseline warnings (pre-existing; not this fix's scope). |
+| **ROI Impact** | Zero on prediction / signal / sizing / execution. Positive on CI gate health (restores green Gate 4). |
+| **Status** | Closed (ACT-294, 2026-06-23). |
