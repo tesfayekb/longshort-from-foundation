@@ -1105,3 +1105,99 @@ Deno.test('(p8) ACT-223 — global unique-set ceiling: unique_issuers_fetched ==
   assertEquals(summary.total_accessions_processed, cikSet.length * days.length);
   assertEquals(summary.dedup_ratio, days.length);
 });
+
+// ---------------------------------------------------------------------------
+// (c5) ACT-298 — PK-triple post-write verifier
+//
+// Covers the 2026-06-18 regression (Hypothesis A): the OLD `verify by
+// this-run's discovery_correlation_id` predicate threw on benign
+// idempotent re-runs where `ignore-duplicates` correctly suppressed
+// every insert (all PKs pre-existed under a prior run's id). The NEW
+// predicate asserts the intended property — submitted PK-triples are
+// present — regardless of which correlation_id labels them.
+// ---------------------------------------------------------------------------
+
+function makePkVerifierFetch(rowsByDay: Record<string, Array<{ issuer_cik: string; accession_number: string }>>) {
+  return ((url: string, _init?: RequestInit) => {
+    const u = new URL(url);
+    const dayEq = u.searchParams.get('as_of_date');
+    // Expect "eq.<YYYY-MM-DD>"
+    const day = dayEq?.startsWith('eq.') === true ? dayEq.slice(3) : '';
+    const rows = rowsByDay[day] ?? [];
+    return Promise.resolve(new Response(JSON.stringify(rows), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+  }) as never;
+}
+
+Deno.test('(c5a) verifyPersistedPkTriples: all submitted PKs present (benign idempotent re-run) → 0 missing', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = makePkVerifierFetch({
+    '2026-06-18': [
+      { issuer_cik: '0000320193', accession_number: '0000320193-26-000077' },
+      { issuer_cik: '0000789019', accession_number: '0000789019-26-000044' },
+    ],
+  });
+  try {
+    const submitted: PkTriple[] = [
+      { as_of_date: '2026-06-18', issuer_cik: '0000320193', accession_number: '0000320193-26-000077' },
+      { as_of_date: '2026-06-18', issuer_cik: '0000789019', accession_number: '0000789019-26-000044' },
+    ];
+    const result = await verifyPersistedPkTriples(
+      { supabaseUrl: 'https://example.supabase.co', serviceRoleKey: 'svc' },
+      submitted,
+    );
+    assertEquals(result.submitted, 2);
+    assertEquals(result.present, 2);
+    assertEquals(result.missing.length, 0, 'all submitted PK-triples present — idempotent re-run is SUCCESS, not failure');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('(c5b) verifyPersistedPkTriples: a submitted PK genuinely missing (real write hole) → reported in missing[]', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = makePkVerifierFetch({
+    '2026-06-18': [
+      { issuer_cik: '0000320193', accession_number: '0000320193-26-000077' },
+      // 0000789019 missing — this is the write-hole condition
+    ],
+  });
+  try {
+    const submitted: PkTriple[] = [
+      { as_of_date: '2026-06-18', issuer_cik: '0000320193', accession_number: '0000320193-26-000077' },
+      { as_of_date: '2026-06-18', issuer_cik: '0000789019', accession_number: '0000789019-26-000044' },
+    ];
+    const result = await verifyPersistedPkTriples(
+      { supabaseUrl: 'https://example.supabase.co', serviceRoleKey: 'svc' },
+      submitted,
+    );
+    assertEquals(result.submitted, 2);
+    assertEquals(result.present, 1);
+    assertEquals(result.missing.length, 1);
+    assertEquals(result.missing[0], {
+      as_of_date: '2026-06-18',
+      issuer_cik: '0000789019',
+      accession_number: '0000789019-26-000044',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('(c5c) verifyPersistedPkTriples: empty submitted set short-circuits (no fetch, 0/0)', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = (() => { fetchCalls += 1; return Promise.resolve(new Response('[]', { status: 200 })); }) as never;
+  try {
+    const result = await verifyPersistedPkTriples(
+      { supabaseUrl: 'https://example.supabase.co', serviceRoleKey: 'svc' },
+      [],
+    );
+    assertEquals(result, { submitted: 0, present: 0, missing: [] });
+    assertEquals(fetchCalls, 0, 'no submitted triples → no readback fetches');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
