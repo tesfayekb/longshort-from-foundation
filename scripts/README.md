@@ -4,7 +4,7 @@ CI-enforced helper scripts that supply the supervisor + operator evidence ladder
 (E1/E2/E3) for the longshort reconciliation engine. Landed at FP-006 sub-step 6.4
 (ACT-082); governed by ADR-003 (enforcement-as-scripts-not-prose) and DEC-034 v13.2.
 
-## Inventory (5 modules)
+## Inventory (6 modules listed below; the `scripts/` directory currently contains additional `check-*.ts` gate scripts added in later FP / DW work — this table tracks the FP-006 sub-step 6.4 baseline plus DW-128 Stage-2)
 
 | Script | Purpose | Source authority | Tests |
 |---|---|---|---|
@@ -13,8 +13,9 @@ CI-enforced helper scripts that supply the supervisor + operator evidence ladder
 | `replay-run.ts` | One-command replay execution scaffold (`--dry-run`); fixture parsing lands at 6.5. | CROSSWIND §11.10 + §11.0.13 | 2 |
 | `telemetry-report.ts` | CLI Markdown report generator (firing rate / outcome distribution / unresolved system_bug / expected-divergence ratio). | CROSSWIND §11.0.10 + §11.0.13 | 3 |
 | `broker-spot-check.ts` | E3 ground-truth spot-check helper (mock-mode; `--provider=alpaca` deferred to 6.7). | ADR-001 §8 + CROSSWIND §11.0.13 | 3 |
+| `check-lockfile-versions.ts` | DW-128 Stage-2 — both-locks-v3 invariant (root `deno.lock` + `supabase/functions/deno.lock`). Pure JSON read; NEVER invokes `deno cache` — cannot itself trigger a v5 rewrite. Executable form of Catalog #58. | Catalog #58 (docs/ai-failure-modes.md) + DW-128 | 14 |
 
-Total: 19 Deno tests across 5 companion `_test.ts` files.
+Total (rows above): 33 Deno tests across 6 companion `_test.ts` files (19 baseline + 14 for `check-lockfile-versions`).
 
 ## CI integration
 
