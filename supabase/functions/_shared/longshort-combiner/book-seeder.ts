@@ -37,7 +37,10 @@ export interface BookRow {
   rank_within_side: number;
   ticker: string;
   score: number;
-  ranker_source: typeof RANKER_SOURCE_FALLBACK;
+  /** Stamped from the source `RankingRow.ranker_source` — fallback
+   *  literal or 3.3b-i model-attribution composite. The book carries
+   *  the same attribution string the rankings row did. */
+  ranker_source: string;
 }
 
 /**

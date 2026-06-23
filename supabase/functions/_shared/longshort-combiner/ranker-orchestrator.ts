@@ -21,27 +21,74 @@
  *       rank_within_side). Both carry `computed_at = as_of.toISOString()`
  *       — explicitly overrides the schema DEFAULT now() per DEC-034 (4).
  *
- * Does NOT touch `combiner_model_registry`. The registry is the 3.2
- * LightGBM-promotion surface; the fallback ranker is the documented
- * degraded path (CROSSWIND §6.4 v0.9) and the `ranker_source =
- * 'count_normalized_fallback'` literal — stamped on every emitted row
- * — is what excludes those rows from the model-active partial index.
+ * 3.3b-i model-gate (ACT-285):
+ *   Before the fallback compute, the orchestrator READS
+ *   `combiner_model_registry` for `status='active'` rows. Three branches:
+ *     - 0 active rows  → fallback path UNCHANGED (byte-identical
+ *                        rankings/book payloads as 3.0c-ii).
+ *     - 1 active row   → failed: §6.1/§6.2 LOCK two models (long+short);
+ *                        a single-side active is a partial-promotion
+ *                        invariant violation — surface, do not score.
+ *     - 2 active rows  → model path. Requires `ctx.loadArtifact` to be
+ *                        wired (the Storage bucket provisioning is
+ *                        3.3b-ii); if absent → failed with
+ *                        `model_active_artifact_loader_not_wired_pending_3_3b_ii`.
+ *                        With loader: load both LightGBM text dumps,
+ *                        parse, score each included row's 16-feature
+ *                        vector against long+short models, build
+ *                        `RankingRow`s with composite ranker_source
+ *                        `lgbm:<long_key>@<long_ver>/<short_key>@<short_ver>`,
+ *                        then `seedBook` + persist via the SAME UPSERT
+ *                        path as fallback.
+ *
+ *   The §4.3.5 critical-exclusion + coverage gates apply identically in
+ *   both branches — names excluded by the assembler are excluded
+ *   regardless of ranker. The `ranker_source <> 'count_normalized_fallback'`
+ *   partial index keys off the stamped literal: fallback rows carry the
+ *   literal verbatim; model rows carry the composite attribution
+ *   string (any non-fallback literal hits the partial index).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from './paginated-read.ts';
 import type { FeatureVectorRow } from './feature-assembler.ts';
 import type { ExcludedReason } from './signal-catalog.ts';
-import { computeRankings, IncludedRowInvariantError } from './ranker.ts';
+import { computeRankings, IncludedRowInvariantError, type RankingRow } from './ranker.ts';
 import { seedBook, BookOverlapError } from './book-seeder.ts';
 import { RANKER_SOURCE_FALLBACK } from './ranker-constants.ts';
+import {
+  parseLgbmTreeDump,
+  scoreLgbm,
+  featuresToOrderedArray,
+  LgbmTreeDumpParseError,
+} from './lgbm-inference.ts';
 
 /** Per-row chunk size for the bulk UPSERTs. Matches the 3.0b-ii
  * assembler — well under PostgREST URL/JSON payload limits. */
 const UPSERT_CHUNK_SIZE = 500;
 
+/** Side-keyed active-model row shape read from `combiner_model_registry`. */
+interface ActiveModelRow {
+  model_id: string;
+  model_key: string;
+  side: 'long' | 'short';
+  version: string;
+  artifact_uri: string | null;
+}
+
+/** Pluggable artifact loader — the orchestrator BRANCHES on registry
+ *  state but defers the Storage fetch to this thin callback so the
+ *  3.3b-ii Storage bucket provisioning + auth-keyed `download()` shape
+ *  can land without re-opening this file. Tests inject a fixture loader
+ *  that returns a hand-crafted LightGBM text dump. */
+export type LoadModelArtifact = (artifact_uri: string) => Promise<string>;
+
 export interface RankerOrchestratorContext {
   supabase: SupabaseClient;
   operator_id: string;
+  /** Optional — required only when an active model row exists. Absence
+   *  with an active model row triggers the
+   *  `model_active_artifact_loader_not_wired_pending_3_3b_ii` failure. */
+  loadArtifact?: LoadModelArtifact;
 }
 
 export type RankerOrchestratorResult =
@@ -52,7 +99,8 @@ export type RankerOrchestratorResult =
       rankings_written: number;
       book_size_long: number;
       book_size_short: number;
-      ranker_source: typeof RANKER_SOURCE_FALLBACK;
+      /** Either the fallback literal or the model-attribution composite. */
+      ranker_source: string;
     }
   | {
       outcome: 'failed';
@@ -61,7 +109,7 @@ export type RankerOrchestratorResult =
       rankings_written: number;
       book_size_long: number;
       book_size_short: number;
-      ranker_source: typeof RANKER_SOURCE_FALLBACK;
+      ranker_source: string;
       failure_reason: string;
     };
 
@@ -127,15 +175,174 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         excluded_reason: r.excluded_reason,
       }));
 
-      // ── Step 2: pure compute IN-MEMORY FIRST (no writes yet) ──
-      // Both calls must succeed BEFORE any persistence side-effect.
-      let rankings;
-      let book;
+      // ── Step 2 (3.3b-i): model-gate. Read active models BEFORE the
+      //    compute branch so the path-selection is single-point. ──
+      let activeModels: ActiveModelRow[];
       try {
-        rankings = computeRankings(included);
-        book = seedBook(rankings);
+        const { data, error } = await ctx.supabase
+          .from('combiner_model_registry')
+          .select('model_id, model_key, side, version, artifact_uri')
+          .eq('status', 'active');
+        if (error) {
+          throw new Error(error.message);
+        }
+        activeModels = (data ?? []) as ActiveModelRow[];
       } catch (e) {
-        if (e instanceof BookOverlapError || e instanceof IncludedRowInvariantError) {
+        return {
+          outcome: 'failed',
+          as_of_date,
+          vectors_read,
+          rankings_written: 0,
+          book_size_long: 0,
+          book_size_short: 0,
+          ranker_source: RANKER_SOURCE_FALLBACK,
+          failure_reason: `combiner_model_registry read failed: ${(e as Error).message}`,
+        };
+      }
+
+      // §6.1/§6.2 LOCK: a 1-side-active state is a partial-promotion
+      // invariant violation — neither fallback NOR model is the correct
+      // disposition. Surface and stop.
+      if (activeModels.length === 1) {
+        return {
+          outcome: 'failed',
+          as_of_date,
+          vectors_read,
+          rankings_written: 0,
+          book_size_long: 0,
+          book_size_short: 0,
+          ranker_source: RANKER_SOURCE_FALLBACK,
+          failure_reason:
+            `only_one_side_active_violates_section_6_1_two_model_lock: ` +
+            `side='${activeModels[0].side}' model_id=${activeModels[0].model_id}`,
+        };
+      }
+
+      // Reject any unexpected duplicate-per-side (the partial-unique
+      // index in MIG-099 makes this impossible at DB level; defense in
+      // depth in case the index is dropped or the read races a write).
+      if (activeModels.length > 2) {
+        return {
+          outcome: 'failed',
+          as_of_date,
+          vectors_read,
+          rankings_written: 0,
+          book_size_long: 0,
+          book_size_short: 0,
+          ranker_source: RANKER_SOURCE_FALLBACK,
+          failure_reason:
+            `combiner_model_registry returned ${activeModels.length} active rows ` +
+            `(expected 0 or 2) — partial-unique-index invariant violated`,
+        };
+      }
+
+      // ── Step 3: compute IN-MEMORY FIRST on the selected branch. ──
+      // Both compute + seed must succeed BEFORE any persistence side-effect.
+      let rankings: RankingRow[];
+      let book;
+      let ranker_source_literal: string;
+
+      if (activeModels.length === 2) {
+        // Model-active branch — both sides have an active LightGBM model.
+        const longModel = activeModels.find((m) => m.side === 'long');
+        const shortModel = activeModels.find((m) => m.side === 'short');
+        if (!longModel || !shortModel) {
+          return {
+            outcome: 'failed',
+            as_of_date,
+            vectors_read,
+            rankings_written: 0,
+            book_size_long: 0,
+            book_size_short: 0,
+            ranker_source: RANKER_SOURCE_FALLBACK,
+            failure_reason:
+              `combiner_model_registry returned 2 active rows but sides ≠ {long, short}`,
+          };
+        }
+        if (!ctx.loadArtifact) {
+          return {
+            outcome: 'failed',
+            as_of_date,
+            vectors_read,
+            rankings_written: 0,
+            book_size_long: 0,
+            book_size_short: 0,
+            ranker_source: RANKER_SOURCE_FALLBACK,
+            failure_reason:
+              `model_active_artifact_loader_not_wired_pending_3_3b_ii: ` +
+              `long_model_id=${longModel.model_id} short_model_id=${shortModel.model_id}`,
+          };
+        }
+        if (!longModel.artifact_uri || !shortModel.artifact_uri) {
+          return {
+            outcome: 'failed',
+            as_of_date,
+            vectors_read,
+            rankings_written: 0,
+            book_size_long: 0,
+            book_size_short: 0,
+            ranker_source: RANKER_SOURCE_FALLBACK,
+            failure_reason:
+              `active model missing artifact_uri: long='${longModel.artifact_uri}' ` +
+              `short='${shortModel.artifact_uri}'`,
+          };
+        }
+
+        try {
+          const [longText, shortText] = await Promise.all([
+            ctx.loadArtifact(longModel.artifact_uri),
+            ctx.loadArtifact(shortModel.artifact_uri),
+          ]);
+          const longEnsemble = parseLgbmTreeDump(longText);
+          const shortEnsemble = parseLgbmTreeDump(shortText);
+
+          ranker_source_literal =
+            `lgbm:${longModel.model_key}@${longModel.version}` +
+            `/${shortModel.model_key}@${shortModel.version}`;
+
+          rankings = computeModelRankings(
+            included,
+            longEnsemble,
+            shortEnsemble,
+            ranker_source_literal,
+          );
+          book = seedBook(rankings);
+        } catch (e) {
+          if (
+            e instanceof BookOverlapError ||
+            e instanceof IncludedRowInvariantError ||
+            e instanceof LgbmTreeDumpParseError
+          ) {
+            return {
+              outcome: 'failed',
+              as_of_date,
+              vectors_read,
+              rankings_written: 0,
+              book_size_long: 0,
+              book_size_short: 0,
+              ranker_source: RANKER_SOURCE_FALLBACK,
+              failure_reason: `${(e as Error).name}: ${(e as Error).message}`,
+            };
+          }
+          return {
+            outcome: 'failed',
+            as_of_date,
+            vectors_read,
+            rankings_written: 0,
+            book_size_long: 0,
+            book_size_short: 0,
+            ranker_source: RANKER_SOURCE_FALLBACK,
+            failure_reason: `model_artifact_load_or_score_failed: ${(e as Error).message}`,
+          };
+        }
+      } else {
+        // Fallback branch — byte-identical to the 3.0c-ii path.
+        ranker_source_literal = RANKER_SOURCE_FALLBACK;
+        try {
+          rankings = computeRankings(included);
+          book = seedBook(rankings);
+        } catch (e) {
+          if (e instanceof BookOverlapError || e instanceof IncludedRowInvariantError) {
           return {
             outcome: 'failed',
             as_of_date,
@@ -148,6 +355,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
           };
         }
         throw e;
+      }
       }
 
       // ── Step 3: persist rankings (chunked UPSERT; computed_at = as_of) ──
@@ -178,7 +386,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
             rankings_written,
             book_size_long: 0,
             book_size_short: 0,
-            ranker_source: RANKER_SOURCE_FALLBACK,
+            ranker_source: ranker_source_literal,
             failure_reason: `combiner_rankings upsert failed at chunk offset ${i}: ${upErr.message}`,
           };
         }
@@ -219,7 +427,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
             rankings_written,
             book_size_long,
             book_size_short,
-            ranker_source: RANKER_SOURCE_FALLBACK,
+            ranker_source: ranker_source_literal,
             failure_reason: `combiner_book upsert failed at chunk offset ${i}: ${upErr.message}`,
           };
         }
@@ -236,8 +444,92 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         rankings_written,
         book_size_long,
         book_size_short,
-        ranker_source: RANKER_SOURCE_FALLBACK,
+        ranker_source: ranker_source_literal,
       };
     },
   };
+}
+
+/**
+ * Score every included row against the long + short LightGBM ensembles
+ * and emit `RankingRow`s. Two-model semantics: `long_score` comes from
+ * the long ensemble, `short_score` from the short ensemble — they are
+ * independent, not derived from a single composite (unlike the fallback
+ * which sets `short_score = -long_score`).
+ *
+ * Ranking — long_rank: long_score DESC, ticker ASC; short_rank:
+ * short_score DESC, ticker ASC. Both directions are DESC because each
+ * model's output is already side-oriented: the long model is trained to
+ * score "stronger long" higher; the short model is trained to score
+ * "stronger short" higher. (The fallback's ASC-of-composite for the
+ * short side is the equivalent operation for its negation contract.)
+ *
+ * Catalog-order iteration in `featuresToOrderedArray` (driven by the
+ * `FEATURE_ORDER` constant) is the determinism guarantee for replay
+ * diffing — IEEE-754 sum order matters and the projection is locked.
+ */
+function computeModelRankings(
+  included: readonly FeatureVectorRow[],
+  longEnsemble: ReturnType<typeof parseLgbmTreeDump>,
+  shortEnsemble: ReturnType<typeof parseLgbmTreeDump>,
+  ranker_source: string,
+): RankingRow[] {
+  const scored: Array<{
+    ticker: string;
+    long_score: number;
+    short_score: number;
+    gics_sector: string | null;
+  }> = [];
+
+  for (const row of included) {
+    if (row.excluded_reason !== null) {
+      throw new IncludedRowInvariantError(
+        `model-ranker: ticker=${row.ticker} carries excluded_reason='${row.excluded_reason}' — ` +
+          `caller must filter to included rows before invoking the model path`,
+      );
+    }
+    const v = featuresToOrderedArray(row.features);
+    scored.push({
+      ticker: row.ticker,
+      long_score: scoreLgbm(longEnsemble, v),
+      short_score: scoreLgbm(shortEnsemble, v),
+      gics_sector: row.gics_sector,
+    });
+  }
+
+  // Long-side rank — long_score DESC, ticker ASC.
+  const longOrder = [...scored].sort((a, b) => {
+    if (a.long_score !== b.long_score) return b.long_score - a.long_score;
+    return a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0;
+  });
+  const longRankByTicker = new Map<string, number>();
+  for (let i = 0; i < longOrder.length; i++) {
+    longRankByTicker.set(longOrder[i].ticker, i + 1);
+  }
+
+  // Short-side rank — short_score DESC, ticker ASC.
+  const shortOrder = [...scored].sort((a, b) => {
+    if (a.short_score !== b.short_score) return b.short_score - a.short_score;
+    return a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0;
+  });
+  const shortRankByTicker = new Map<string, number>();
+  for (let i = 0; i < shortOrder.length; i++) {
+    shortRankByTicker.set(shortOrder[i].ticker, i + 1);
+  }
+
+  const out: RankingRow[] = [];
+  for (const s of scored) {
+    const longRank = longRankByTicker.get(s.ticker)!;
+    const shortRank = shortRankByTicker.get(s.ticker)!;
+    out.push({
+      ticker: s.ticker,
+      long_score: s.long_score,
+      short_score: s.short_score,
+      long_rank: longRank,
+      short_rank: shortRank,
+      ranker_source,
+      gics_sector: s.gics_sector,
+    });
+  }
+  return out;
 }
