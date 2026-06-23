@@ -1067,6 +1067,132 @@ export async function verifyPersistedCount(env: SupabaseRestEnv, correlationId: 
 }
 
 // ---------------------------------------------------------------------------
+// PK-triple post-write verification (the correct predicate)
+//
+// Background — 2026-06-18 red, Hypothesis A reconciled live-DB-confirmed:
+// the old `verifyPersistedCount` queried by THIS run's
+// `discovery_correlation_id`. With `resolution=ignore-duplicates,
+// return=minimal`, a benign idempotent re-run (all PK-triples already
+// present from a prior run) returns 201 with an empty body and writes
+// zero new rows — leaving zero rows tagged with this run's id even
+// though every accession the run discovered IS present in the table
+// (under the prior run's id). The old predicate threw on that case,
+// reporting a "post-write verification found zero rows" failure for
+// data that was fully persisted.
+//
+// The correct predicate asserts the run's INTENDED PROPERTY: the
+// `(as_of_date, issuer_cik, accession_number)` PK-triples this run
+// submitted are PRESENT in the table — regardless of which
+// `discovery_correlation_id` labels them. The natural PK is the
+// authoritative identity of a discovery row; a prior run's label on the
+// same triple is the same row.
+//
+// Implementation shape: per submitted `as_of_date`, page the live
+// `(issuer_cik, accession_number)` set for that day from PostgREST and
+// intersect with the submitted triples for that day. This avoids URL-
+// length problems that an `or=(and(...),and(...),...)` composite filter
+// would hit at ~180+ rows/day, and bounds the read volume by the
+// per-day row count (already small: ~180/day in production).
+// ---------------------------------------------------------------------------
+
+export interface PkTriple {
+  as_of_date: string;
+  issuer_cik: string;
+  accession_number: string;
+}
+
+export interface PkVerificationResult {
+  submitted: number;
+  present: number;
+  missing: PkTriple[];
+}
+
+/** PostgREST default page size; we explicitly page via Range to be safe. */
+const VERIFY_PAGE_SIZE = 1000;
+
+/** Fetch every `(issuer_cik, accession_number)` for a given `as_of_date`. */
+async function fetchPkPairsForDay(
+  env: SupabaseRestEnv,
+  asOfDate: string,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  let offset = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const url = `${env.supabaseUrl.replace(/\/+$/, '')}/rest/v1/insider_accession_discovery_queue?select=issuer_cik,accession_number&as_of_date=eq.${encodeURIComponent(asOfDate)}&order=issuer_cik.asc,accession_number.asc`;
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'apikey': env.serviceRoleKey,
+        'Authorization': `Bearer ${env.serviceRoleKey}`,
+        'Range-Unit': 'items',
+        'Range': `${offset}-${offset + VERIFY_PAGE_SIZE - 1}`,
+      },
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '<body unreadable>');
+      throw new Error(
+        `supabase REST post-write PK-triple verification failed for ${asOfDate}: HTTP ${resp.status} ${resp.statusText} — ${body.slice(0, 512)}`,
+      );
+    }
+    const rows = await resp.json().catch(() => []) as Array<{ issuer_cik: string; accession_number: string }>;
+    for (const r of rows) {
+      out.add(`${r.issuer_cik}\u0000${r.accession_number}`);
+    }
+    if (rows.length < VERIFY_PAGE_SIZE) break;
+    offset += VERIFY_PAGE_SIZE;
+  }
+  return out;
+}
+
+/**
+ * Verify that every submitted PK-triple is present in
+ * `public.insider_accession_discovery_queue`. SUCCESS iff every
+ * submitted `(as_of_date, issuer_cik, accession_number)` triple is
+ * present — whether newly written by this run or pre-existing from a
+ * prior idempotent run. Returns the breakdown for telemetry; callers
+ * decide whether `missing.length > 0` is a failure.
+ */
+export async function verifyPersistedPkTriples(
+  env: SupabaseRestEnv,
+  submitted: readonly PkTriple[],
+): Promise<PkVerificationResult> {
+  if (submitted.length === 0) {
+    return { submitted: 0, present: 0, missing: [] };
+  }
+  // Group submitted by as_of_date, dedup'd by (cik|accession) within the day.
+  const byDay = new Map<string, Set<string>>();
+  for (const t of submitted) {
+    let s = byDay.get(t.as_of_date);
+    if (s === undefined) {
+      s = new Set<string>();
+      byDay.set(t.as_of_date, s);
+    }
+    s.add(`${t.issuer_cik}\u0000${t.accession_number}`);
+  }
+  let submittedDistinct = 0;
+  let present = 0;
+  const missing: PkTriple[] = [];
+  for (const [day, expected] of byDay) {
+    submittedDistinct += expected.size;
+    const actual = await fetchPkPairsForDay(env, day);
+    for (const key of expected) {
+      if (actual.has(key)) {
+        present += 1;
+      } else {
+        const idx = key.indexOf('\u0000');
+        missing.push({
+          as_of_date: day,
+          issuer_cik: key.slice(0, idx),
+          accession_number: key.slice(idx + 1),
+        });
+      }
+    }
+  }
+  return { submitted: submittedDistinct, present, missing };
+}
+
+// ---------------------------------------------------------------------------
 // CLI entrypoint
 // ---------------------------------------------------------------------------
 
@@ -1123,10 +1249,27 @@ if (import.meta.main) {
         `universe filter unavailable: universe_tickers=${universeTickers.length}, universe_cik10_resolved=${universeCik10.size}`,
       );
     }
+    // ACT-298: capture every submitted PK-triple so post-write
+    // verification can assert presence by `(as_of_date, issuer_cik,
+    // accession_number)` — the correct identity — rather than by this
+    // run's `discovery_correlation_id`, which `ignore-duplicates`
+    // legitimately drops on a benign idempotent re-run.
+    const submittedPkTriples: PkTriple[] = [];
+    const baseInserter = makeRestInserter(env);
+    const capturingInserter = async (rows: readonly DiscoveryRow[]) => {
+      for (const r of rows) {
+        submittedPkTriples.push({
+          as_of_date: r.as_of_date,
+          issuer_cik: r.issuer_cik,
+          accession_number: r.accession_number,
+        });
+      }
+      return baseInserter(rows);
+    };
     const deps: RunDeps = {
       fetcher,
       submissions,
-      insertRows: makeRestInserter(env),
+      insertRows: capturingInserter,
       correlationId,
       discoveredBy,
       isUniverseEntry: buildUniverseEntryPredicate(universeCik10),
@@ -1166,9 +1309,32 @@ if (import.meta.main) {
         `semantic-success verification failed: entries_parsed=${entriesParsed} but entries_after_universe_filter=0; refusing green exit with structural-only success`,
       );
     }
-    if (expectedWrites > 0 && persistedByCorrelation === 0) {
+    // ACT-298: PK-triple verification is the correct predicate.
+    // SUCCESS iff every submitted (as_of_date, issuer_cik,
+    // accession_number) triple is present — whether newly written by
+    // this run OR pre-existing from a prior idempotent run (the
+    // `ignore-duplicates` semantic). FAILURE only when a submitted
+    // triple is genuinely MISSING from the table after the insert
+    // (the real write-hole / Hypothesis-B case).
+    const pkVerification = await verifyPersistedPkTriples(env, submittedPkTriples);
+    const idempotentRerun = expectedWrites > 0
+      && pkVerification.missing.length === 0
+      && persistedByCorrelation === 0;
+    if (idempotentRerun) {
+      // Positively identify the benign re-run path so the next
+      // operator does not have to infer it from log contradictions.
+      console.log(JSON.stringify({
+        event: 'insider_discovery_idempotent_rerun',
+        correlation_id: correlationId,
+        submitted_pk_triples: pkVerification.submitted,
+        present_after_verify: pkVerification.present,
+        persisted_rows_by_correlation_id: persistedByCorrelation,
+        note: 'all submitted PK-triples were already present under a prior run; ignore-duplicates correctly suppressed every insert; data is intact',
+      }));
+    }
+    if (pkVerification.missing.length > 0) {
       throw new Error(
-        `post-write verification found zero rows for discovery_correlation_id=${correlationId} after expected_writes=${expectedWrites}`,
+        `post-write PK-triple verification found ${pkVerification.missing.length} of ${pkVerification.submitted} submitted (as_of_date,issuer_cik,accession_number) triples MISSING after insert (correlation_id=${correlationId}); first missing: ${JSON.stringify(pkVerification.missing[0])}`,
       );
     }
     console.log(
@@ -1178,7 +1344,12 @@ if (import.meta.main) {
         days: outcomes.length,
         entries_parsed: entriesParsed,
         entries_after_universe_filter: entriesAfterUniverseFilter,
-        rows_inserted: rowsTotal,
+        // ACT-298: relabelled — PostgREST `return=minimal` gives no
+        // server-confirmed inserted-count signal, so this is the
+        // SUBMITTED count (rows handed to the inserter), NOT a
+        // verified inserted count. The verified count is
+        // `present_after_verify` below.
+        rows_submitted: rowsTotal,
         heartbeats_inserted: heartbeats,
         days_unavailable: unavailable,
         // ACT-215: per-issuer submissions-feed status histogram + the
@@ -1197,6 +1368,16 @@ if (import.meta.main) {
         unique_issuers_fetched: summary.unique_issuers_fetched,
         dedup_ratio: summary.dedup_ratio,
         acceptance_xwalk_misses: summary.acceptance_xwalk_misses,
+        // ACT-298: PK-triple verification telemetry (the correct
+        // predicate). `present_after_verify` is the count of submitted
+        // triples found in the table by `(as_of_date, issuer_cik,
+        // accession_number)`. `persisted_rows_by_correlation_id` is
+        // retained as a diagnostic — zero with present_after_verify ==
+        // submitted means a benign idempotent re-run.
+        submitted_pk_triples: pkVerification.submitted,
+        present_after_verify: pkVerification.present,
+        missing_after_verify: pkVerification.missing.length,
+        idempotent_rerun: idempotentRerun,
         persisted_rows_by_correlation_id: persistedByCorrelation,
       }),
     );
