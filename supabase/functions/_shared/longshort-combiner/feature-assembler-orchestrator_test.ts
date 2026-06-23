@@ -24,6 +24,10 @@ import {
   SIGNAL_IDS_CRITICAL,
   SIGNAL_IDS_NON_CRITICAL,
 } from './signal-catalog.ts';
+import {
+  MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID,
+  MARKET_REALIZED_VOL_6M_SIGNAL_ID,
+} from '../longshort-signals/market-regime/compute-regime.ts';
 
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const AS_OF = new Date('2026-06-16T20:00:00Z');
@@ -48,9 +52,15 @@ function makeSupabase(opts: {
     is_present: boolean;
     gics_sector: string | null;
   }>;
+  /**
+   * Regime rows (FP-052.2 §(e)). Default: the 2 expected rows present
+   * for happy-path tests. Pass `[]` to exercise the fail-loud path.
+   */
+  regimeRows?: Array<{ signal_id: string; value: number | null; is_present: boolean }>;
   floorErr?: { message: string } | null;
   universeErr?: { message: string } | null;
   signalErr?: { message: string } | null;
+  regimeErr?: { message: string } | null;
   upsertErr?: { message: string } | null;
 }) {
   const calls = {
@@ -61,6 +71,8 @@ function makeSupabase(opts: {
     universeRowsFilters: [] as Filter[],
     universeRowsSelect: '' as string,
     universeRowsRanges: [] as RangeWindow[],
+    regimeFilters: [] as Filter[],
+    regimeSelect: '' as string,
     signalFilters: [] as Filter[],
     signalSelect: '' as string,
     signalRanges: [] as RangeWindow[],
@@ -70,6 +82,10 @@ function makeSupabase(opts: {
   const floorDate = 'floorDate' in opts ? opts.floorDate : FLOOR_DATE;
   const tickers = opts.universeTickers ?? ['AAPL', 'MSFT'];
   const signalRows = opts.signalRows ?? [];
+  const regimeRows = opts.regimeRows ?? [
+    { signal_id: MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID, value: 0.05, is_present: true },
+    { signal_id: MARKET_REALIZED_VOL_6M_SIGNAL_ID, value: 0.18, is_present: true },
+  ];
 
   function umBuilder() {
     const filters: Filter[] = [];
@@ -123,6 +139,17 @@ function makeSupabase(opts: {
       in(col: string, val: unknown) { filters.push({ op: 'in', col, val }); return builder; },
       range(from: number, to: number) { range = { from, to }; return builder; },
       then(onFul: unknown, onRej: unknown) {
+        // Distinguish regime-projection (no .range, narrow select) from
+        // per-name signal projection (paginated via .range).
+        const isRegime = range === null && /signal_id/.test(selectCols) && !/ticker/.test(selectCols);
+        if (isRegime) {
+          calls.regimeFilters = filters;
+          calls.regimeSelect = selectCols;
+          if (opts.regimeErr) {
+            return Promise.resolve({ data: null, error: opts.regimeErr }).then(onFul, onRej);
+          }
+          return Promise.resolve({ data: regimeRows, error: null }).then(onFul, onRej);
+        }
         calls.signalFilters = filters;
         calls.signalSelect = selectCols;
         if (opts.signalErr) {
@@ -221,8 +248,11 @@ Deno.test('(orch-3) upsert ON CONFLICT keys + payload shape + computed_at == as_
   assertEquals(row.excluded_reason, null);
   assertEquals(row.coverage_count, 9);
   assertEquals(row.computed_at, AS_OF.toISOString());
-  // 16 feature keys.
-  assertEquals(Object.keys(row.features as Record<string, unknown>).length, 16);
+  // 16 per-name + 2 regime broadcast = 18 keys (3.2-c additive; hash NOT flipped).
+  assertEquals(Object.keys(row.features as Record<string, unknown>).length, 18);
+  const features = row.features as Record<string, unknown>;
+  assertEquals(features[MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID], 0.05);
+  assertEquals(features[MARKET_REALIZED_VOL_6M_SIGNAL_ID], 0.18);
 });
 
 Deno.test('(orch-4) upsert chunking — 1200 universe rows splits into 3 chunks of 500/500/200', async () => {
@@ -349,4 +379,95 @@ Deno.test('(orch-8) regression — pagination defeats PostgREST 1000-row default
     assertEquals(res.excluded_by_reason[EXCLUDED_REASON.MISSING_CRITICAL_7], 0);
     assertEquals(res.excluded_by_reason[EXCLUDED_REASON.BELOW_COVERAGE], 0);
   }
+});
+
+// ─────────────── 3.2-c — regime read + fail-loud propagation ───────────────
+
+Deno.test('(orch-3.2-c-a) regime read: separate projection, NO universe_membership join, exact-as_of, 2 signal_ids', async () => {
+  const { supabase, calls } = makeSupabase({
+    universeTickers: ['AAPL'],
+    signalRows: fullObsForTicker('AAPL'),
+  });
+  await createFeatureAssemblyOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
+
+  // Regime select projects only signal_id/value/is_present (NO ticker — sentinel is dropped by universe filter).
+  assertEquals(calls.regimeSelect, 'signal_id, value, is_present');
+  // Exact-as_of eq filter, no lte/gte (no lookback, no universe join).
+  const eqAsOf = calls.regimeFilters.filter((f) => f.op === 'eq' && f.col === 'as_of_date');
+  assertEquals(eqAsOf.length, 1);
+  assertEquals(eqAsOf[0].val, AS_OF_DATE);
+  const ranged = calls.regimeFilters.filter((f) => f.op === 'lte' || f.op === 'gte');
+  assertEquals(ranged.length, 0);
+  // 2 regime signal_ids in IN()-filter.
+  const inFilter = calls.regimeFilters.find((f) => f.op === 'in' && f.col === 'signal_id');
+  assert(inFilter);
+  assertEquals((inFilter!.val as string[]).length, 2);
+  assertEquals(
+    new Set(inFilter!.val as string[]),
+    new Set([MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID, MARKET_REALIZED_VOL_6M_SIGNAL_ID]),
+  );
+});
+
+Deno.test('(orch-3.2-c-b) regime broadcast: IDENTICAL values across every per-name row at same as_of', async () => {
+  const tickers = ['AAA', 'BBB', 'CCC'];
+  const signalRows = tickers.flatMap((t) => fullObsForTicker(t));
+  const { supabase, calls } = makeSupabase({ universeTickers: tickers, signalRows });
+  await createFeatureAssemblyOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
+  const payload = calls.upsertCalls[0].payload as Array<{ features: Record<string, unknown> }>;
+  assertEquals(payload.length, 3);
+  for (const r of payload) {
+    assertEquals(r.features[MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID], 0.05);
+    assertEquals(r.features[MARKET_REALIZED_VOL_6M_SIGNAL_ID], 0.18);
+  }
+});
+
+Deno.test('(orch-3.2-c-c) regime ABSENT → fail-loud: zero rows written, typed reason, no book', async () => {
+  const { supabase, calls } = makeSupabase({
+    universeTickers: ['AAPL'],
+    signalRows: fullObsForTicker('AAPL'),
+    regimeRows: [], // producer didn't fire OR failed-loud
+  });
+  const res = await createFeatureAssemblyOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
+  assertEquals(res.outcome, 'failed');
+  if (res.outcome === 'failed') {
+    assertEquals(res.failure_reason, 'regime_data_unavailable_at_assemble');
+    assertEquals(res.persisted_count, 0);
+    assertEquals(res.included_count, 0);
+  }
+  // NO upsert call at all — zero feature vectors written.
+  assertEquals(calls.upsertCalls.length, 0);
+});
+
+Deno.test('(orch-3.2-c-d) regime partial (1 of 2 rows) → fail-loud', async () => {
+  const { supabase, calls } = makeSupabase({
+    universeTickers: ['AAPL'],
+    signalRows: fullObsForTicker('AAPL'),
+    regimeRows: [
+      { signal_id: MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID, value: 0.05, is_present: true },
+      // market_realized_vol_6m missing
+    ],
+  });
+  const res = await createFeatureAssemblyOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
+  assertEquals(res.outcome, 'failed');
+  if (res.outcome === 'failed') {
+    assertEquals(res.failure_reason, 'regime_data_unavailable_at_assemble');
+  }
+  assertEquals(calls.upsertCalls.length, 0);
+});
+
+Deno.test('(orch-3.2-c-e) regime row is_present=false → fail-loud (null-fill would poison training)', async () => {
+  const { supabase, calls } = makeSupabase({
+    universeTickers: ['AAPL'],
+    signalRows: fullObsForTicker('AAPL'),
+    regimeRows: [
+      { signal_id: MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID, value: null, is_present: false },
+      { signal_id: MARKET_REALIZED_VOL_6M_SIGNAL_ID, value: 0.18, is_present: true },
+    ],
+  });
+  const res = await createFeatureAssemblyOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
+  assertEquals(res.outcome, 'failed');
+  if (res.outcome === 'failed') {
+    assertEquals(res.failure_reason, 'regime_data_unavailable_at_assemble');
+  }
+  assertEquals(calls.upsertCalls.length, 0);
 });
