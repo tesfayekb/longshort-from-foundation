@@ -2255,6 +2255,19 @@ ban per §11.0.7; #14 is the FIRST strong_plus tier verifier outside #1 verify_p
 | **CI gate** | `.github/workflows/strong-evidence.yml` Gate 1 — `deno run --allow-read scripts/check-audit-writer-trap.ts` must exit 0 |
 | **Added by** | FP-006 sub-step 6.4, ACT-082 (FOLLOWUP-004 closure) |
 
+#### `scripts/check-lockfile-versions.ts`
+
+| Field | Value |
+|---|---|
+| **Module** | platform (DW-128 Stage-2 / CI toolchain-parity) |
+| **Classification** | CI enforcement (Catalog #58 widened both-locks-v3 invariant) |
+| **Exports** | `checkLockfileVersion(lockJson, path): Violation \| null`, `checkLockfileAt(path, displayPath?): Promise<Violation \| null>`, `checkAllLockfiles(rootDir?): Promise<Violation[]>`, `EXPECTED_LOCKFILE_VERSION`, `REQUIRED_LOCKFILES` |
+| **File** | `scripts/check-lockfile-versions.ts` |
+| **Tests** | `scripts/check-lockfile-versions_test.ts` — 14 unit tests covering v3-passes, v5-fails-with-observed, missing-version-field, non-object, numeric-version (string-equality), missing-file, unparseable-json, tmp-fixture both-locks-pass, root-v5-only, functions-v5-only, both-missing, REQUIRED_LOCKFILES contents, EXPECTED_LOCKFILE_VERSION pin, current-repo-clean. |
+| **Safety invariant** | PURE JSON READ — never spawns a subprocess, never invokes `deno cache`. Safe to run under any Deno binary (CI 1.46.3 or Lovable sandbox 2.x); cannot itself trigger the v5 rewrite it guards. |
+| **CI gate** | Intended insertion: new fast-fail early step in `.github/workflows/strong-evidence.yml` (operator-authored .yml edit — script is operator-runnable today via `deno run --allow-read scripts/check-lockfile-versions.ts`). |
+| **Added by** | DW-128 Stage-2, ACT-299 |
+
 #### `scripts/firing-diff.ts`
 
 | Field | Value |
