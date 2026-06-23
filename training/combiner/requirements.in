@@ -1,0 +1,17 @@
+# Top-level pins for the combiner trainer (FP-052.3 / 3.3b-ii-B).
+# DEC-064 Clause 2 — hash-pinned install.
+#
+# The operator MUST regenerate requirements.txt from this file via:
+#   pip-compile --generate-hashes --output-file requirements.txt requirements.in
+# so transitive deps are expanded with --hash=sha256:... lines. The GHA
+# workflow installs via:
+#   pip install --require-hashes -r requirements.txt
+#
+# Python: 3.11.x (GHA setup-python: 3.11).
+
+lightgbm==4.5.0
+optuna==4.0.0
+shap==0.46.0
+numpy==2.1.3
+pandas==2.2.3
+supabase==2.10.0
