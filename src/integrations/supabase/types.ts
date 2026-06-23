@@ -2009,6 +2009,8 @@ export type Database = {
         Returns: Json
       }
       longshort_get_heal_date: { Args: never; Returns: string }
+      promote_combiner_model: { Args: { p_model_id: string }; Returns: Json }
+      rollback_combiner_model: { Args: { p_side: string }; Returns: Json }
       signal_queue_cas_finalizing: {
         Args: { p_now: string; p_run_id: string }
         Returns: boolean

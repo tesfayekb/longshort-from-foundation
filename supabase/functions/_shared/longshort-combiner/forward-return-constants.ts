@@ -31,7 +31,14 @@
  */
 export const LIVE_VARIANT_LABEL = 'live_gated';
 
-export const HORIZONS_TD = [1, 5, 20] as const;
+/**
+ * Trading-day horizons the job accrues per (book × seed) tuple. Bounded by
+ * the `combiner_forward_returns_horizon_td_check` CHECK constraint, which
+ * MIG-115 (FP-052.3 / 3.3a) widened from `(1,5,20)` to `(1,5,10,20)` so the
+ * §6.1 / §6.2-locked T+10 training-label horizon is storable. T+10 labels
+ * accrue with a 10-RTH-day lag from the day MIG-115 landed.
+ */
+export const HORIZONS_TD = [1, 5, 10, 20] as const;
 export type HorizonTd = (typeof HORIZONS_TD)[number];
 
 export const FR_LOOKBACK_DAYS = 60;
@@ -44,6 +51,7 @@ export const UPSERT_CHUNK_SIZE = 500;
 export const MATURATION_FLOOR_CAL_DAYS: Record<HorizonTd, number> = {
   1: 1,
   5: 5,
+  10: 10,
   20: 20,
 };
 

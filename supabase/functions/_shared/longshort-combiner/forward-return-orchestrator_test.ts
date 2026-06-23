@@ -161,15 +161,15 @@ Deno.test('(forch-1) anti-join: existing FR rows are not re-written', async () =
 
   assertEquals(res.outcome, 'completed');
   if (res.outcome !== 'completed') return;
-  // 1 ticker × 3 horizons = 3 candidates; 1 already in FR; survivors = 2.
-  assertEquals(res.tuples_considered, 3);
-  assertEquals(res.tuples_after_anti_join, 2);
-  assertEquals(res.rows_written, 2);
-  // ONLY T+5 and T+20 rows in payload.
+  // 1 ticker × 4 horizons (MIG-115 added T+10) = 4 candidates; 1 already in FR; survivors = 3.
+  assertEquals(res.tuples_considered, 4);
+  assertEquals(res.tuples_after_anti_join, 3);
+  assertEquals(res.rows_written, 3);
+  // ONLY T+5, T+10, T+20 rows in payload.
   const horizons = calls.upsertChunks
     .flatMap((c) => c.payload.map((p) => p.horizon_td))
     .sort((a, b) => a - b);
-  assertEquals(horizons, [5, 20]);
+  assertEquals(horizons, [5, 10, 20]);
 });
 
 Deno.test('(forch-2) dedup: one fetch per distinct ticker across books × variants × horizons', async () => {
@@ -209,12 +209,12 @@ Deno.test('(forch-3) partial-fail isolation: throwing ticker → fetch_error; ot
 
   assertEquals(res.outcome, 'completed');
   if (res.outcome !== 'completed') return;
-  assertEquals(res.rows_written, 6); // 2 tickers × 3 horizons
+  assertEquals(res.rows_written, 8); // 2 tickers × 4 horizons (MIG-115 added T+10)
   const payload = calls.upsertChunks.flatMap((c) => c.payload);
   const aapl = payload.filter((p) => p.ticker === 'AAPL');
   const msft = payload.filter((p) => p.ticker === 'MSFT');
-  assertEquals(aapl.length, 3);
-  assertEquals(msft.length, 3);
+  assertEquals(aapl.length, 4);
+  assertEquals(msft.length, 4);
   for (const r of aapl) {
     assertEquals(r.price_source_status, 'fetch_error');
     assertEquals(r.raw_return, null);
@@ -241,7 +241,7 @@ Deno.test('(forch-4) idempotency: second run writes zero new rows', async () => 
   assertEquals(r1.outcome, 'completed');
   assertEquals(r2.outcome, 'completed');
   if (r1.outcome !== 'completed' || r2.outcome !== 'completed') return;
-  assertEquals(r1.rows_written, 3);
+  assertEquals(r1.rows_written, 4); // 1 ticker × 4 horizons (MIG-115 added T+10)
   assertEquals(r2.rows_written, 0);
   assertEquals(r2.tuples_after_anti_join, 0);
 });
@@ -295,8 +295,10 @@ Deno.test('(forch-6) maturation-retry contract: success rows anti-joined; fetch_
     // Pre-existing terminal coverage for the T+5/T+20 horizons of both
     // tickers so this case isolates the T+1 retry behavior cleanly.
     { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'AAPL', horizon_td: 5, price_source_status: 'success' },
+    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'AAPL', horizon_td: 10, price_source_status: 'success' },
     { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'AAPL', horizon_td: 20, price_source_status: 'success' },
     { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'MSFT', horizon_td: 5, price_source_status: 'success' },
+    { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'MSFT', horizon_td: 10, price_source_status: 'success' },
     { source_table: 'combiner_book', variant: LIVE_VARIANT_LABEL, seed_as_of_date: '2026-06-01', ticker: 'MSFT', horizon_td: 20, price_source_status: 'success' },
   ];
   // Bars now include D+1 → AAPL's T+1 horizon bar is available; retry succeeds.
@@ -314,9 +316,10 @@ Deno.test('(forch-6) maturation-retry contract: success rows anti-joined; fetch_
   assertEquals(res.outcome, 'completed');
   if (res.outcome !== 'completed') return;
 
-  // 2 tickers × 3 horizons = 6 candidates; 5 already-success → anti-joined;
-  // only AAPL T+1 (the fetch_error row) survives.
-  assertEquals(res.tuples_considered, 6);
+  // 2 tickers × 4 horizons (MIG-115 added T+10) = 8 candidates; 7 already-success
+  // (including the two T+10 fixtures above) → anti-joined; only AAPL T+1
+  // (the fetch_error row) survives.
+  assertEquals(res.tuples_considered, 8);
   assertEquals(res.tuples_after_anti_join, 1);
   assertEquals(res.rows_written, 1);
 
