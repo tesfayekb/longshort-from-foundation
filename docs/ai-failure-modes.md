@@ -297,6 +297,19 @@ Each entry MUST include:
 | **Subsequent firings** | (none yet — codification effective 2026-06-22). |
 | **Status** | open — codified; binds forward. Companion durable controls: DW-126 (pre-go-live arming-verification checklist authoring + optional `scripts/check-cron-arming.ts`). Sibling discipline: §22.5.1 (repo-presence vs live-state) extended here from source-evidence to deploy/fire-path evidence. |
 
+### #58 — Deno Lockfile Format-Version Coupling (CI / toolchain)
+
+| Field | Value |
+|-------|-------|
+| **Category** | CI / toolchain |
+| **Symptom** | A commit touching `supabase/functions/` may trigger the Lovable sandbox's Deno 2.x toolchain to regenerate `supabase/functions/deno.lock` at lockfile format `version: "5"`. CI runs pinned Deno 1.46.3, which reads lockfile format v3 only, and fails with `error: Unsupported lockfile version '5'`. The DW-128 Stage-1 fix pinned the CI READER (1.46.3) but did NOT pin the sandbox WRITER (still Deno 2.x), so the regression recurs on every functions-touching commit. Root `deno.lock` is unaffected because the sandbox does not regenerate it on functions-only edits. |
+| **Detection** | CI log: `error: Unsupported lockfile version '5'` against `supabase/functions/deno.lock`. Pre-push: `head -2 supabase/functions/deno.lock` shows `"version": "5"` instead of `"version": "3"`. |
+| **Resolution** | Regenerate the functions lock at v3 using the version-matched Deno 1.46.3 binary (NOT the sandbox default 2.x): `cd supabase/functions && rm deno.lock && <deno-1.46.3> cache --lock=deno.lock --lock-write _shared/longshort-combiner/*.ts` (or equivalent caching entrypoints). Dependency set MUST stay byte-equivalent — only the format version changes; no package adds, removes, or version bumps. Assert `head -2 supabase/functions/deno.lock` shows `"version": "3"` before commit. |
+| **Codification target** | Pre-push lock-version assertion for both `deno.lock` AND `supabase/functions/deno.lock` (must read `"version": "3"`). Flag DW-128 **Stage-2 candidate**: a pre-commit hook or CI guard step that fails fast if either lockfile is not v3 — closing the writer-pinning gap that Stage-1 left open. |
+| **First fired** | 2026-06-23 / 3.3a commit (post-`be182a35`) — `supabase/functions/deno.lock` silently regenerated v3 → v5 by the sandbox Deno 2.6.10 writer; CI red on `Unsupported lockfile version '5'`. Resolution: regenerated at v3 via pinned Deno 1.46.3; 110/110 functions tests green under CI-equivalent toolchain. See ACT for the corrective entry. |
+| **Subsequent firings** | (none yet — codification effective 2026-06-23). Pattern-signal: will recur on every `supabase/functions/`-touching commit until the Stage-2 writer-pin or pre-push guard lands. |
+| **Status** | open — codified; binds forward. DW-128 reopened at Stage-2 scope (writer-pinning / pre-push guard). |
+
 ## Quarterly Review Protocol (per §12.8)
 
 1. At each quarterly boundary, review action-tracker entries from the prior quarter for defect-class firings.
