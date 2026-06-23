@@ -2394,6 +2394,16 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
 
+#### DW-100 status update — 2026-06-23 (ACT-282 / DEC-062) — PAUSED / INVERTED (additive append per Constitution Rule 8; original `why_deferred` / `scope_sketch` / `trigger_conditions` / `required_tests_for_closure` preserved verbatim above)
+
+| Field | Value |
+|---|---|
+| **status (updated)** | PAUSED / INVERTED — sequenced below FP-052.3 (Phase 3.3 LambdaRank training design) per DEC-062. Multi-year premise refuted by the per-signal recompute-depth matrix established 2026-06-23 (native substrate ~2 weeks; only signals #1/#2/#6/#7 deep-recomputable; #3 depth=0 per DEC-046; #4 deep-but-~91k-call-expensive; #5/#8/#9 limited). Backfill provenance disposition (iii) hybrid is LOCKED (synthesize `signal_observations` typed-absence row + stamp `signal_compute_log` `outcome='backfill_synthesized'`; additive CHECK widening required at build time, live constraint probed first); consumer of the (iii) contract is reassigned to FP-052.3 (3.3) where the MNAR masking / loss semantic lives, NOT DW-100. DW-100 re-scopes (or may be retired) once FP-052.3 defines its substrate contract. |
+| **new blocking dependency** | FP-052.3 (3.3) substrate contract — coverage-regime handling, missing-value semantics, whether synthesized historical rows are wanted at all, consumable date range. Until this contract is defined, any DW-100 build is premature and risks poisoning the training substrate with MNAR coverage-inequality. |
+| **related_decisions (added)** | DEC-062 (this inversion + (iii) lock); DEC-046 (Signal #3 depth=0); DEC-053 (Signal #2 look-ahead-clean — the citation grounding the #2 deep-trainable claim); DEC-056 §(g) (Signal #8 `insights[]` density bound); DEC-058 (Signal #4 EDGAR replay-clean acceptance-gate). |
+| **related_actions (added)** | ACT-282 (this status update + DEC-062 authoring). |
+| **note** | Original `why_deferred` / `scope_sketch (a)-(d)` / `trigger_conditions` / `estimated_complexity` / `required_tests_for_closure` fields preserved byte-unchanged above per Rule 8 — this block is an additive append, not an overwrite. The (d) operator-decision-on-provenance row is resolved by DEC-062 Clause (1) selecting (iii); the (a)/(b)/(c) scope-sketch rows remain subject to FP-052.3's substrate contract before any re-authoring. |
+
 ### DW-101: Combiner — R4 market-index/SPY regime fetcher + features (Phase-3.2-gated; DEC-054 R4)
 
 | Field | Value |
