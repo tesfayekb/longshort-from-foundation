@@ -39,6 +39,8 @@ import {
   runModeWithSummary,
   type DiscoveryRow,
   type RunDeps,
+  verifyPersistedPkTriples,
+  type PkTriple,
 } from './insider-discovery-egress.ts';
 
 // ---------------------------------------------------------------------------
