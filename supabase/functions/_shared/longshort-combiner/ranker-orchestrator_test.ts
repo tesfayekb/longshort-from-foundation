@@ -30,6 +30,7 @@ import {
   nonCriticalIsPresentKey,
 } from './signal-catalog.ts';
 import { RANKER_SOURCE_FALLBACK } from './ranker-constants.ts';
+import { featureOrderHash } from './lgbm-inference.ts';
 
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const AS_OF = new Date('2026-06-16T00:00:00Z');
@@ -408,9 +409,10 @@ Deno.test('(rorch-10) model-gate: 2 active rows + fixture loader → model path 
     // short ranks differ — exercises both halves of the model trees.
     fullIncludedRow(`T${i.toString().padStart(3, '0')}`, (i % 2 === 0 ? 0.1 : 0.9)),
   );
+  const liveHash = await featureOrderHash();
   const fixtureLoader = async (uri: string) => {
-    if (uri.includes('/long/')) return FIXTURE_DUMP_LONG;
-    if (uri.includes('/short/')) return FIXTURE_DUMP_SHORT;
+    if (uri.includes('/long/')) return { modelText: FIXTURE_DUMP_LONG, meta: { feature_order_hash: liveHash } };
+    if (uri.includes('/short/')) return { modelText: FIXTURE_DUMP_SHORT, meta: { feature_order_hash: liveHash } };
     throw new Error(`unexpected artifact_uri ${uri}`);
   };
   const { supabase, calls } = makeSupabase({
@@ -454,7 +456,7 @@ Deno.test('(rorch-11) model-gate: 2 active rows but sides ≠ {long,short} → f
   const res = await createRankerOrchestrator({
     supabase,
     operator_id: OPERATOR_ID,
-    loadArtifact: async () => FIXTURE_DUMP_LONG,
+    loadArtifact: async () => ({ modelText: FIXTURE_DUMP_LONG, meta: { feature_order_hash: await featureOrderHash() } }),
   }).run(AS_OF);
   assertEquals(res.outcome, 'failed');
   if (res.outcome !== 'failed') return;

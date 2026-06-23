@@ -1683,6 +1683,51 @@ Resumes from `soft_paused` only. Raises `no_data_found` if no row; raises `inval
 | **Determinism** | Volatile. |
 | **Consumers** | None at 3.3a. First consumer = 3.3c DW-136 SHAP re-gate execution per DEC-063 Clause 3 (models failing the SHAP backfill verifier flip via this RPC). |
 | **Critical Invariants** | Same three as `promote_combiner_model`, plus (4) Prior-retired-must-exist — a side with exactly one model (current active) cannot rollback; the caller must hold off promotion until a prior `retired` row exists. |
+
+### `purge_retired_combiner_artifacts()` — db-function
+
+| Field | Value |
+|-------|-------|
+| **Type** | db-function (PL/pgSQL, `SECURITY DEFINER`, `search_path=public`) |
+| **Classification** | retention / housekeeping (no money path; no model-active row touched) |
+| **Owner module** | longshort (combiner) |
+| **Signature** | `public.purge_retired_combiner_artifacts() RETURNS jsonb` |
+| **File** | MIG-116 (sql) |
+| **Purpose** | DEC-065 Clause 3 retention purge: for every `combiner_model_registry` row with `status='retired' AND retired_at < now() - interval '12 weeks'`, DELETE the storage objects under `bucket_id='combiner-models'` matching `name LIKE '{model_id}/%'` (model.txt + meta.json). Registry rows are NEVER deleted (audit trail preserved); only the artifact bytes are reclaimed. Returns `jsonb { success, cutoff, models_purged, ran_at }`. |
+| **Authorization** | `REVOKE EXECUTE FROM PUBLIC, anon, authenticated`; `GRANT EXECUTE TO service_role`. In-function gate raises `insufficient_privilege` on any caller that is not `service_role` / `postgres` / `supabase_admin` (covers the `pg_cron` execution context). |
+| **Caller** | `pg_cron` job `longshort.combiner.artifact_retention_purge` (daily 04:15 UTC, jobid=105). No other caller. |
+| **Idempotency** | Calling repeatedly is safe: a model whose objects were already deleted produces a zero-row DELETE and emits no audit event (the `IF v_deleted_count > 0` guard). |
+| **Side effects** | DELETEs rows from `storage.objects` (Supabase storage stack triggers handle backend object cleanup); INSERTs one `combiner.artifact_purged` row in `public.audit_logs` per non-empty purge. |
+| **Critical Invariants** | (1) Registry preserved — purge NEVER touches `combiner_model_registry`. (2) Active-protected — only `status='retired'` rows are eligible. (3) Retention floor — `retired_at < now() - 12 weeks` enforced inside the function; caller cannot bypass. |
+| **Added by** | FP-052.3 sub-step 3.3b-ii-A; ACT-287; MIG-116 |
+
+### `createModelArtifactLoader(supabase)` — ts-function
+
+| Field | Value |
+|-------|-------|
+| **Type** | ts-function (Deno edge shared module — factory) |
+| **Classification** | financial-critical (consumed by the live combiner scoring path) |
+| **Owner module** | longshort (combiner) |
+| **Signature** | `createModelArtifactLoader(supabase: SupabaseClient): (artifact_uri: string) => Promise<LoadedModelArtifact>` where `LoadedModelArtifact = { modelText: string; meta: { feature_order_hash: string; ... } }` |
+| **File** | `supabase/functions/_shared/longshort-combiner/model-artifact-loader.ts` |
+| **Purpose** | Real `LoadModelArtifact` implementation the `ranker-orchestrator.ts` model-gate wires into `ctx.loadArtifact` (3.3b-ii-A consumer of the 3.3b-i pluggable seam). Parses `storage://combiner-models/{model_id}/model.txt` (DEC-065 Clause 2), downloads both the model.txt and the sibling meta.json from the bucket, parses meta.json, and enforces the **DEC-064 Clause 4 `feature_order_hash` refusal**: computes the live `featureOrderHash()` over `FEATURE_ORDER`, compares to `meta.feature_order_hash`, throws `FeatureOrderHashMismatchError` on any mismatch (closes the silent-inference-poisoning failure mode at load time). |
+| **Authorization** | The Supabase client passed in MUST be service-role-keyed in production — the `combiner-models/` bucket's INSERT/UPDATE/DELETE RLS is `service_role`-only (DEC-065 Clause 4) and SELECT is gated on `has_permission(auth.uid(), 'longshort.view')`. |
+| **Throws** | `ArtifactUriParseError` (non-conforming URI); `ArtifactDownloadError` (Storage `download()` failure on either object, missing/invalid `meta.feature_order_hash`); `FeatureOrderHashMismatchError` (LOAD-BEARING — model was trained against a different feature contract; refuse to score). The orchestrator catches all three for typed `failure_reason` surfacing. |
+| **Determinism** | Pure given the Supabase client + URI; the only I/O is the two `storage.from(bucket).download(path)` calls. NO wall-clock (Gate 6 — self-scan in `mal-8`). |
+| **Added by** | FP-052.3 sub-step 3.3b-ii-A; ACT-287 |
+
+### `featureOrderHash()` — ts-function
+
+| Field | Value |
+|-------|-------|
+| **Type** | ts-function (Deno edge shared module) |
+| **Classification** | financial-critical (the load-bearing contract the trainer + loader bind to) |
+| **Owner module** | longshort (combiner) |
+| **Signature** | `featureOrderHash(): Promise<string>` |
+| **File** | `supabase/functions/_shared/longshort-combiner/lgbm-inference.ts` |
+| **Purpose** | SHA-256 hex digest of the canonical `FEATURE_ORDER.join('\n')` sequence. The 3.3b-ii Python trainer stamps this hash into the artifact's `meta.json.feature_order_hash` at training time; the `createModelArtifactLoader` consumer computes it at load time and refuses any artifact whose stamped hash differs (DEC-064 Clause 4). |
+| **Determinism** | Pure of wall-clock; pure of I/O. Identical input → identical hex digest. |
+| **Added by** | FP-052.3 sub-step 3.3b-ii-A; ACT-287 |
 | **Added by** | FP-052.3 sub-step 3.3a, ACT-283, MIG-115. |
 
 ---
