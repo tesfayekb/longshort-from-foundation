@@ -7,7 +7,11 @@
   - winsorize labels at 1st/99th cross-sectionally per training day (§6.2)
   - exp-time-weight, half-life 1.5y (§6.3)
   - walk-forward CV (§6.3) — placeholder stub; full CV deferred to §6.4 Optuna
-  - 16-feature representation per §6.5 / `feature_contract.FEATURE_ORDER`
+  - 18-feature representation per §6.5 + DEC-066 §(c) (16 per-name keys + 2
+    appended market-level regime keys); `feature_contract.FEATURE_ORDER` is
+    the load-bearing contract; `feature_order_hash` =
+    `d4aac3e3e58740543de51764c05b8688595eb025ec41bd55677c9c27f24ce348`
+    (flipped from the 16-key `1054bbc1…` by 3.2-d per DEC-066).
   - sentinel -999 for missing non-critical values (§6.5.2)
 
 §6.3 cadence: weekly Sunday — enforced by the GHA cron schedule (operator).
