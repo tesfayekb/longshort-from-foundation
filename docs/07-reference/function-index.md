@@ -4118,3 +4118,78 @@ ACT-117 pre-flight; §11.10.1 8-stream tick enumeration NOT amended).
 | **File** | `supabase/functions/longshort-combiner-rank/index.ts` |
 | **Tests** | `index_test.ts` — 8 source-sentinel Deno tests (ALL PASS): (1) cron-auth; (2) `productionClock` sole wall-clock + no wall-clock leak; (3) `createRankerOrchestrator({supabase, operator_id})` + `orch.run(as_of)`; (4) `.started` / `.completed` / `.failed` / `.skipped` + `trigger:'cron'`; (5) ALL THREE skip-gate reason literals + each ordered BEFORE orchestrator call; (6) assemble-completion gate query targets `longshort_audit_logs` with both cron + manual `.completed` actions AND filters by `metadata->>as_of_date` for the per-as_of structural guarantee; (7) error code `cron_combiner_rank_failed` reserved for orchestrator throw; (8) `JOB_REGISTRY_ID` byte-identical to MIG-106 seed id. |
 | **Added by** | FP-052 3.0d (ACT-261) |
+
+## Market-Regime Signal Family (FP-052.2 / Phase 3.2 / DEC-066 §6.5.1.1)
+
+Market-level structural feature category introduced by DEC-066. Two grounded
+features, SPY-sourced, written to `signal_observations` under sentinel ticker
+`__MARKET__` (FP-052.2 / ACT-291; collision-safe — not a valid US-equity
+ticker; naturally dropped by per-name universe-intersection reads). Per-name
+§6.5.1 16-feature block is UNCHANGED. `FEATURE_VECTOR_LENGTH` 16→18 expansion
+(`[16]=market_24m_cumulative_return`, `[17]=market_realized_vol_6m`) is
+deferred to 3.2-d (paired TS+Python). 3.2-b lands the producer; rows are
+INERT (no reader) until 3.2-c assembler regime-broadcaster is wired.
+
+### `computeRegime24mReturn(bars) / computeRegimeVol6m(bars)` — ts-function (pure)
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052.2 / 3.2-b) |
+| **Classification** | pure compute — no I/O, no clock, no randomness. Mirrors `compute-momentum.ts` discipline. |
+| **Inputs** | `bars: ReadonlyArray<DailyBar>` (sorted ascending; `PolygonPriceHistoryFetcher` guarantees) |
+| **Outputs** | `number \| null` — RAW decimal return (Feature 1) / RAW annualized vol (Feature 2); `null` on insufficient history or degenerate price |
+| **Spec-literal constants** | `REGIME_24M_MIN_BARS = 504` (DEC-066 §(f) Feature 1, Daniel & Moskowitz 2016, JFE 122(2)) · `REGIME_VOL_6M_MIN_BARS = 126` (DEC-066 §(f) Feature 2, Barroso & Santa-Clara 2015, JFE 116(1)) |
+| **Annualization** | `sqrt(252) * stddev(daily log returns)` — sample stddev (Bessel correction). The `sqrt(252)` factor is CONVENTION-not-grounding per DEC-066 §(f); LightGBM trees are scale-invariant under monotone transforms, so annualization is a units-readability convention, not a modeling primitive. |
+| **Trailing-window guarantee** | Strict `bars[T-N+1 .. T]` window — no lookahead. Tested with the `(r7)` / `(v6)` MORE-than-N-bars sentinels: mutating bars BEFORE the trailing window must NOT change the result. |
+| **Anti-phantom** | Returns `null` (typed-absence) on insufficient history or any non-positive close in the vol window — NEVER fabricates a zero / NaN. Orchestrator translates `null` into typed DEC-066 §(e) reasons. |
+| **Locked signal IDs** | `MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID = 'market_24m_cumulative_return'` · `MARKET_REALIZED_VOL_6M_SIGNAL_ID = 'market_realized_vol_6m'` |
+| **File** | `supabase/functions/_shared/longshort-signals/market-regime/compute-regime.ts` |
+| **Tests** | `compute-regime_test.ts` — 19 Deno tests (ALL PASS): spec-literal constant locks (504 / 126); 504-/126-bar threshold boundaries; div-by-zero + non-positive-close defenses; off-by-one sentinels; MORE-than-N-bars trailing-window discipline; sqrt(252) annualization exactness; determinism. |
+| **Added by** | FP-052.2 / 3.2-b (ACT-292) |
+
+### `createRegimeOrchestrator(ctx)` — ts-factory
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052.2 / 3.2-b) |
+| **Classification** | shared orchestrator factory — single-ticker (SPY) DAILY market-regime compute. NO per-ticker concurrency, NO universe load, NO z-score, NO carry-forward. |
+| **Context** | `{ supabase, operator_id, priceHistory: PolygonPriceHistoryFetcher }` |
+| **Pipeline (3 steps)** | (1) Fetch SPY adjusted-close history via injected `priceHistory.fetchPriceHistory('SPY', as_of, REGIME_PRICE_HISTORY_LOOKBACK_DAYS)`; (2) Compute both DEC-066 §(f) features (or fail-loud typed); (3) Direct upsert to `signal_observations` of exactly TWO rows under sentinel ticker `__MARKET__` (PK upsert idempotent). |
+| **Constants** | `MARKET_SENTINEL_TICKER = '__MARKET__'` · `REGIME_TICKER = 'SPY'` · `REGIME_PRICE_HISTORY_LOOKBACK_DAYS = 730` (730 calendar days × 252/365 ≈ 504 trading days — at the threshold; widen via separate FP if cold-start tripping observed in §22.5.1 smoke runs). |
+| **DEC-066 §(e) typed-fail-loud — DISTINCT reasons (NOT collapsed)** | `regime_data_missing_current_bar` ← fetcher null (Polygon 404 on SPY — extreme tail) OR empty bar array. `regime_data_insufficient_history` ← bars present but `< REGIME_24M_MIN_BARS` (cold-start) OR degenerate-price compute null. `regime_fetch_error` ← fetcher threw. `regime_persistence_error` ← upsert error. All fail-loud reasons write ZERO rows; the 3.2-c assembler-side regime-broadcaster (future) refuses book-publication on these reasons rather than substituting a sentinel. |
+| **Wall-clock discipline** | `as_of: Date` parameter is the SOLE time source; all telemetry timestamps derive from `as_of.toISOString()` (DEC-034 clause 4). Gate-6 self-scan asserted in `(o7)` + `(o8)` tests. |
+| **Persistence shape** | Direct upsert (NOT `captureSignalObservations`) because the latter projects per-name `gics_sector`; market-level rows always `gics_sector=NULL`. Both live CHECKs honored: `is_present=true, value NOT NULL, carried_forward=false`. |
+| **File** | `supabase/functions/_shared/longshort-signals/market-regime/regime-orchestrator.ts` |
+| **Tests** | `regime-orchestrator_test.ts` — 9 Deno tests (ALL PASS): success-path 2-row write under `__MARKET__`; ALL four typed-fail-loud branches (`(o2)` polygon-404 / `(o2b)` empty-bar-window distinct from insufficient-history / `(o3)` cold-start / `(o4)` fetcher-throw); persistence-error distinct branch; replay-determinism on identical as_of; Gate-6 self-scans on orchestrator + compute files. |
+| **Added by** | FP-052.2 / 3.2-b (ACT-292) |
+
+### `supabase/functions/longshort-spy-regime-compute/index.ts` — edge function (cron)
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052.2 / 3.2-b) |
+| **Classification** | edge function — daily LIVE SPY regime compute cron handler. Mirrors `longshort-short-interest-carry-compute` skeleton verbatim (cron-auth → as_of → audit envelope → orchestrator → cron_last_fire). |
+| **Auth** | cron-only — `verifyCronSecret` (401). Auth-first ordering: `verifyCronSecret` precedes POLYGON_API_KEY read, productionClock read, and any audit-event write — pinned by `(1a)`. |
+| **Wall-clock discipline** | `as_of = productionClock.getWallClockTs()` SOLE wall-clock site; no `new Date()` / `Date.now()` / `performance.now()` (pinned by `(2)`). |
+| **Secrets** | `POLYGON_API_KEY` required — 500 `polygon_api_key_missing` if absent (pinned by `(3)`). |
+| **`job_registry` row** | `longshort.spy_regime.compute` — MIG-117 seed, `enabled=false` (DISARMED) per disarm-fire-enable convention. Schedule `0 19 * * 1-5` (19:00 UTC weekdays — collision-free; well BEFORE assemble 23:35 + rank 23:50 so 3.2-c regime-broadcaster reads land-ready regime rows). Operator arms at 3.2-c-d after end-to-end attestation. |
+| **Audit envelope** | `longshort.spy_regime.compute.{started,completed,failed}` — all carry `trigger:'cron'`. `.failed` metadata forwards `result.failure_reason` verbatim (DEC-066 §(e) typed reasons preserved end-to-end). |
+| **Failure handling** | 200 on completed / failed (typed fail-loud is NOT an HTTP error; the cron run itself succeeded in producing telemetry). 500 ONLY on orchestrator throw — error code `spy_regime_compute_failed`. Both branches stamp `cron_last_fire`. |
+| **NO touch (LOAD-BEARING for 3.2-b)** | No FEATURE_ORDER reference, no `lgbm-inference.ts` import, no `feature_contract.py` import, no `EXPECTED_FEATURE_KEY_COUNT` reference, no `feature_order_hash` reference (pinned by `(7)`); no `feature-assembler`, no `combiner_feature_vectors` write, no `shadow-ranker` (pinned by `(8)`). The `feature_order_hash` MUST NOT flip in 3.2-b — that is 3.2-d work. |
+| **NO heal_date / carry-forward** | Regime is per-day always-fresh fail-loud; DEC-059 / DEC-060 do not apply. `heal_date`, `stampHealDateIfFirst`, `carried_forward: true` are all explicitly absent (pinned by `(12)`). |
+| **File** | `supabase/functions/longshort-spy-regime-compute/index.ts` |
+| **Tests** | `index_test.ts` — 13 source-sentinel Deno tests (ALL PASS): cron-auth wired + auth-first ordering; productionClock sole wall-clock; POLYGON_API_KEY required; orchestrator invoked with priceHistory + supabase + operator_id; all three cron audit events + `trigger:'cron'`; typed-fail-loud reasons forwarded into failed-audit; NO FEATURE_ORDER / lgbm-inference / feature_contract / EXPECTED_FEATURE_KEY_COUNT / feature_order_hash touch; NO assembler / combiner_feature_vectors / shadow-ranker touch; `__MARKET__` sentinel pin; handler-path / job-registry-id parity; cron_last_fire wired both branches; NO heal_date / carry-forward. |
+| **Added by** | FP-052.2 / 3.2-b (ACT-292) |
+
+### `supabase/functions/longshort-spy-regime-compute-manual/index.ts` — edge function (operator manual)
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-052.2 / 3.2-b) |
+| **Classification** | edge function — operator-triggered manual SPY regime compute. Sibling of the cron handler; mirrors `longshort-short-interest-carry-compute-manual` skeleton. |
+| **Auth** | operator JWT (`authenticateRequest`) + `longshort.manage` permission (T3 two-segment RBAC). |
+| **Body** | `POST` with `{ "as_of": "YYYY-MM-DD" }`; reuses `parseAsOfDate`; rejects `as_of` in the future (compared against `productionClock.getWallClockTs()`). |
+| **Audit envelope** | dual: `longshort.spy_regime.compute.manual_triggered` BEFORE; `.manual_completed` or `.manual_failed` AFTER. All carry `trigger:'manual'` + actor + IP/UA. |
+| **Not in `job_registry`** | operator-invoked, not scheduled. |
+| **File** | `supabase/functions/longshort-spy-regime-compute-manual/index.ts` |
+| **Added by** | FP-052.2 / 3.2-b (ACT-292) |
