@@ -150,7 +150,9 @@ Roadmap-only. Each entry below requires its own operator-authorized build FP —
 
 **Supervisor-synthesis reference.** A four-tier framing of the full documented ROI roadmap (decision-ready / measurement-accruing / paper-book-blocked / vendor-blocked) plus the chokepoint map and measurement-prerequisite table lives at [`roi-roadmap.md`](roi-roadmap.md) (authored ACT-280; framing-only, no build authorized, no phase re-order, no DEC).
 
-## Combiner (FP-052 — Phase 3.0b)
+## Combiner (FP-052 — Phase 3.0 CLOSED 2026-06-23)
+
+**Status:** combiner-foundation-validated — Phase 3.0 (FP-052 (3.0)) **CLOSED 2026-06-23** at Gate-3.0 / ACT-281; closure attestation at [`../../08-planning/phase-closures/plan-trading-001-longshort-007-closure.md`](../../08-planning/phase-closures/plan-trading-001-longshort-007-closure.md). The combiner foundation is operational on the CROSSWIND §6.4 documented degraded path (count-normalized fallback ranker; 20-long / 20-short book per as_of). Trained-model promotion (LightGBM / LambdaRank) is deferred to Phase 3.3 (FP-052.3) per the exit-gate invariant — both `combiner_model_registry WHERE status='active'` and `combiner_rankings WHERE ranker_source <> 'count_normalized_fallback'` return 0 on live DB by construction, and 3.3 atomic promotion is what flips both queries to non-zero. Phase 3.1 (DW-100 backfill) and Phase 3.2 (DW-101 regime features) remain PENDING and out-of-scope of the Phase-3.0 closure. Mirrors the FP-008 `phase-1-validated` precedent shape: foundation operational; downstream sub-phases tracked separately.
 
 The combiner is the §6 layer that turns the 9 live `signal_observations` into per-(operator, as_of, ticker) feature vectors written to `combiner_feature_vectors` (MIG-099). Phase 3.0b is split across two commits:
 
