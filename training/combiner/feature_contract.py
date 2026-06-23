@@ -2,10 +2,14 @@
 
 The in-substrate TS inference seam
 (``supabase/functions/_shared/longshort-combiner/lgbm-inference.ts``)
-defines ``FEATURE_ORDER`` as a 16-key array and ``featureOrderHash()``
+defines ``FEATURE_ORDER`` as an 18-key array and ``featureOrderHash()``
 as the SHA-256 hex digest of ``FEATURE_ORDER.join('\\n')``. The
 ``model-artifact-loader.ts`` REFUSES any artifact whose
 ``meta.feature_order_hash`` does not match the live hash.
+
+3.2-d (DEC-066) appended the 2 market-level regime keys after the per-name
+block as bare numerics, flipping the hash to
+``d4aac3e3e58740543de51764c05b8688595eb025ec41bd55677c9c27f24ce348``.
 
 This module replicates that contract byte-for-byte in Python so the
 trainer can:
@@ -46,6 +50,18 @@ SIGNAL_IDS_NON_CRITICAL: Final[Tuple[str, ...]] = (
     "active_catalyst_flag",            # Signal #9
 )
 
+# Market-level regime keys per DEC-066 §6.5.1.1. Appended AFTER the
+# non-critical block as bare numerics (NOT (value, is_present) pairs).
+# Must equal the TS literals in
+# `supabase/functions/_shared/longshort-signals/market-regime/compute-regime.ts`
+# (MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID / MARKET_REALIZED_VOL_6M_SIGNAL_ID);
+# `scripts/assert_feature_order_parity.py` reconstructs the TS FEATURE_ORDER
+# and rejects any divergence.
+MARKET_REGIME_FEATURE_KEYS: Final[Tuple[str, ...]] = (
+    "market_24m_cumulative_return",
+    "market_realized_vol_6m",
+)
+
 # §6.5.2 missing-value sentinel for non-critical signal value slots.
 NON_CRITICAL_MISSING_SENTINEL: Final[float] = -999.0
 
@@ -64,16 +80,17 @@ def _build_feature_order() -> Tuple[str, ...]:
     for ncid in SIGNAL_IDS_NON_CRITICAL:
         keys.append(_non_critical_value_key(ncid))
         keys.append(_non_critical_is_present_key(ncid))
+    keys.extend(MARKET_REGIME_FEATURE_KEYS)
     return tuple(keys)
 
 
 # LOAD-BEARING — must equal lgbm-inference.ts FEATURE_ORDER element-for-element.
 FEATURE_ORDER: Final[Tuple[str, ...]] = _build_feature_order()
 
-# Expected vector length — 2 + 7*2 = 16.
+# Expected vector length — 2 + 7*2 + 2 = 18.
 FEATURE_VECTOR_LENGTH: Final[int] = len(FEATURE_ORDER)
-assert FEATURE_VECTOR_LENGTH == 16, (
-    "FEATURE_ORDER must be exactly 16 keys (2 criticals + 7 non-critical pairs)"
+assert FEATURE_VECTOR_LENGTH == 18, (
+    "FEATURE_ORDER must be exactly 18 keys (2 criticals + 7 non-critical pairs + 2 market-level)"
 )
 
 
