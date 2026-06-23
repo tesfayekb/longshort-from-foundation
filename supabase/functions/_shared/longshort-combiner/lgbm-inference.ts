@@ -62,6 +62,35 @@ export const FEATURE_ORDER: readonly string[] = Object.freeze([
 /** Expected vector length — 2 + 7*2 = 16. */
 export const FEATURE_VECTOR_LENGTH = FEATURE_ORDER.length; // 16
 
+/**
+ * SHA-256 hash of the canonical `FEATURE_ORDER` joined sequence — the
+ * load-bearing contract the 3.3b-ii Python trainer stamps into the
+ * artifact's `meta.json` (`feature_order_hash`). The 3.3b-ii TS
+ * Storage loader (`model-artifact-loader.ts`) computes this same hash
+ * at load time and REFUSES to return any artifact whose stamped hash
+ * differs (per DEC-064 Clause 4 — closes the silent-inference-
+ * poisoning failure mode at load time, not at score-rank-drift
+ * detection time).
+ *
+ * Hash input: `FEATURE_ORDER.join('\n')` — newline-joined so
+ * accidental concatenations of adjacent keys can never collide.
+ * Encoding: lowercase hex of the 32-byte SHA-256 digest. Async
+ * because Web Crypto's `subtle.digest` is async; the Deno + browser
+ * `crypto.subtle` is the runtime substrate (no Node `crypto`).
+ * Pure of wall-clock (Gate 6).
+ */
+export async function featureOrderHash(): Promise<string> {
+  const canonical = FEATURE_ORDER.join('\n');
+  const bytes = new TextEncoder().encode(canonical);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const view = new Uint8Array(digest);
+  let hex = '';
+  for (let i = 0; i < view.length; i++) {
+    hex += view[i].toString(16).padStart(2, '0');
+  }
+  return hex;
+}
+
 /** Typed error surfaced for any tree-dump shape the parser refuses. */
 export class LgbmTreeDumpParseError extends Error {
   constructor(message: string) {
