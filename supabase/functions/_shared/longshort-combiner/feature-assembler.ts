@@ -41,6 +41,41 @@ import {
   type ExcludedReason,
   type SignalId,
 } from './signal-catalog.ts';
+import {
+  MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID,
+  MARKET_REALIZED_VOL_6M_SIGNAL_ID,
+} from '../longshort-signals/market-regime/compute-regime.ts';
+
+/**
+ * FP-052.2 / DEC-066 — market-level regime broadcast (3.2-c).
+ *
+ * Two market-level regime features are broadcast IDENTICALLY into every
+ * per-name `features` jsonb at a given `as_of_date`:
+ *   • `market_24m_cumulative_return`  (bare numeric)
+ *   • `market_realized_vol_6m`        (bare numeric)
+ *
+ * Category per §6.5.1.1: MARKET-LEVEL. NOT the per-name non-critical
+ * pattern — NO `__value`/`__is_present` pair. Fail-loud propagation lives
+ * at the orchestrator boundary (a regime-less feature vector would poison
+ * training and is therefore never constructed); 3.2-d will flip
+ * `EXPECTED_FEATURE_KEY_COUNT` 16 → 18 in the catalog and re-hash
+ * `FEATURE_ORDER`. THIS file does NOT change the hash.
+ */
+export interface RegimeFeatures {
+  readonly market_24m_cumulative_return: number;
+  readonly market_realized_vol_6m: number;
+}
+
+/** Number of market-level keys 3.2-c broadcasts into the per-name jsonb. */
+export const REGIME_FEATURE_COUNT = 2;
+
+/**
+ * Typed fail-loud reason surfaced by the orchestrator when regime data
+ * is absent for an as_of (producer failed-loud OR hasn't fired). Consistent
+ * with the DEC-066 §(e) fail-loud family on the producer side.
+ */
+export const REGIME_FAIL_LOUD_REASON = 'regime_data_unavailable_at_assemble' as const;
+export type RegimeFailLoudReason = typeof REGIME_FAIL_LOUD_REASON;
 
 /**
  * Per-(operator, ticker, signal) observation — the minimal in-process
@@ -190,6 +225,7 @@ function deriveSector(
  */
 function buildFeaturesJsonb(
   perTickerObs: ReadonlyMap<SignalId, SignalObservationInput>,
+  regime: RegimeFeatures,
 ): Record<string, number | null> {
   // Insertion order is the contract — `JSON.stringify` will emit keys
   // in this exact sequence, making the output byte-deterministic.
@@ -214,6 +250,14 @@ function buildFeaturesJsonb(
     features[nonCriticalValueKey(id)] = present ? (obs!.value as number) : null;
     features[nonCriticalIsPresentKey(id)] = present ? 1 : 0;
   }
+
+  // Market-level regime broadcast (FP-052.2 §(d) / DEC-066). Bare numerics,
+  // identical across every per-name row at the same as_of. The literal
+  // keys here MUST match the constants 3.2-d will append to FEATURE_ORDER
+  // at positions [16] and [17] when the hash flips — one literal, one
+  // contract chain. Appended LAST so the per-name key order is unchanged.
+  features[MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID] = regime.market_24m_cumulative_return;
+  features[MARKET_REALIZED_VOL_6M_SIGNAL_ID] = regime.market_realized_vol_6m;
 
   return features;
 }
@@ -256,6 +300,7 @@ export function assembleFeatureVectors(
   observations: ReadonlyArray<SignalObservationInput>,
   universe: ReadonlyArray<UniverseMember>,
   asOfDate: string,
+  regime: RegimeFeatures,
 ): FeatureVectorRow[] {
   const indexed = indexObservations(observations);
   const rows: FeatureVectorRow[] = [];
@@ -268,12 +313,17 @@ export function assembleFeatureVectors(
     const gicsSector = deriveSector(perTickerObs);
 
     if (gate.included) {
-      const features = buildFeaturesJsonb(perTickerObs);
-      // Defense-in-depth: lock the 16-key accountancy.
-      if (Object.keys(features).length !== EXPECTED_FEATURE_KEY_COUNT) {
+      const features = buildFeaturesJsonb(perTickerObs, regime);
+      // Defense-in-depth: lock the per-name + regime-broadcast key count.
+      // 3.2-c additive: per-name catalog (EXPECTED_FEATURE_KEY_COUNT, 16)
+      // + REGIME_FEATURE_COUNT (2). 3.2-d will fold the +2 into the catalog
+      // constant itself (16 → 18) when FEATURE_ORDER flips.
+      const expected = EXPECTED_FEATURE_KEY_COUNT + REGIME_FEATURE_COUNT;
+      if (Object.keys(features).length !== expected) {
         throw new Error(
           `feature-assembler: included-row feature count ${Object.keys(features).length} ` +
-            `!= EXPECTED_FEATURE_KEY_COUNT ${EXPECTED_FEATURE_KEY_COUNT}`,
+            `!= EXPECTED_FEATURE_KEY_COUNT(${EXPECTED_FEATURE_KEY_COUNT}) ` +
+            `+ REGIME_FEATURE_COUNT(${REGIME_FEATURE_COUNT}) = ${expected}`,
         );
       }
       rows.push({
