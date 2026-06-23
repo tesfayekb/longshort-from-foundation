@@ -135,7 +135,14 @@ export function createForwardReturnOrchestrator(
       const as_of_iso = as_of_run.toISOString();
       const run_date = as_of_iso.slice(0, 10);
 
-      const emptyByHorizon = (): Record<string, number> => ({ '1': 0, '5': 0, '20': 0 });
+      // Derived from HORIZONS_TD so widening the horizon set (MIG-115 added
+      // T+10) updates the by-horizon initializer automatically. Do NOT
+      // hardcode horizon keys here.
+      const emptyByHorizon = (): Record<string, number> => {
+        const o: Record<string, number> = {};
+        for (const h of HORIZONS_TD) o[String(h)] = 0;
+        return o;
+      };
       const emptyByStatus = (): Record<string, number> => ({
         success: 0,
         polygon_404: 0,
