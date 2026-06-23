@@ -140,18 +140,17 @@ Deno.test('applyGates: is_present=false rows do NOT count as present', () => {
 
 // ────────────────────── assembleFeatureVectors ─────────────────────
 
-Deno.test('assembler: INCLUDED row jsonb has exactly 16 keys, NO -999 anywhere', () => {
+Deno.test('assembler: INCLUDED row jsonb has exactly 18 keys, NO -999 anywhere', () => {
   const universe: UniverseMember[] = [{ operator_id: OP, ticker: 'AAPL' }];
   const rows = assembleFeatureVectors(allNineFor('AAPL'), universe, AS_OF, REGIME);
   assertEquals(rows.length, 1);
   const row = rows[0];
   assertEquals(row.excluded_reason, null);
-  // 3.2-c additive: per-name catalog (16) + regime broadcast (2) = 18.
-  // 3.2-d will fold +2 into EXPECTED_FEATURE_KEY_COUNT.
-  assertEquals(
-    Object.keys(row.features).length,
-    EXPECTED_FEATURE_KEY_COUNT + REGIME_FEATURE_COUNT,
-  );
+  // 3.2-d: EXPECTED_FEATURE_KEY_COUNT now bakes in the 2 market-level keys
+  // (2 critical + 7*2 non-critical + 2 market = 18).
+  assertEquals(REGIME_FEATURE_COUNT, 2);
+  assertEquals(EXPECTED_FEATURE_KEY_COUNT, 18);
+  assertEquals(Object.keys(row.features).length, EXPECTED_FEATURE_KEY_COUNT);
   assertEquals(row.coverage_count, 9);
   // No -999 anywhere in the features payload.
   for (const v of Object.values(row.features)) {
