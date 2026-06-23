@@ -107,12 +107,17 @@ def feature_order_hash() -> str:
 
 
 def features_to_ordered_row(features: dict) -> list[float]:
-    """Project a feature dict onto the ordered 16-element float row.
+    """Project a feature dict onto the ordered 18-element float row.
 
     Honors §6.5.2 sentinel: non-critical signals with ``is_present == 0``
     resolve to ``value = -999`` regardless of what is stored under the
     ``__value`` key (the assembler stores ``None`` for the absent half;
     the model was trained against the sentinel substitution).
+
+    The 2 market-level regime keys (DEC-066 §(c)) are appended as bare
+    numerics; an absent/non-finite value raises ``ValueError`` — the
+    assembler's regime fail-loud at the orchestrator boundary should have
+    prevented any such row reaching the trainer/scorer.
 
     Raises ``ValueError`` when a critical signal is missing or non-finite
     — the §4.3.5 gate should have excluded such rows upstream.
@@ -147,6 +152,16 @@ def features_to_ordered_row(features: dict) -> list[float]:
         else:
             row.append(NON_CRITICAL_MISSING_SENTINEL)
         row.append(float(is_present))
+
+    # 2 market-level regime features — bare numerics (DEC-066 §(c)).
+    for mkey in MARKET_REGIME_FEATURE_KEYS:
+        v = features.get(mkey)
+        if v is None or not isinstance(v, (int, float)) or not math.isfinite(float(v)):
+            raise ValueError(
+                f"market-level '{mkey}' not a finite number (value={v!r}); "
+                f"regime fail-loud should have prevented this row reaching the trainer"
+            )
+        row.append(float(v))
 
     if len(row) != FEATURE_VECTOR_LENGTH:
         raise ValueError(
