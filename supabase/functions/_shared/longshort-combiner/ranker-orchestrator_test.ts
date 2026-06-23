@@ -11,8 +11,11 @@
  *       return `outcome:'failed'` with ZERO upserts attempted;
  *   (c) UPSERT shape for both `combiner_rankings` and `combiner_book`
  *       with correct onConflict + `computed_at == as_of`;
- *   (d) `combiner_model_registry` is NEVER touched;
- *   (e) empty-included → outcome=failed, failure_reason='no_included_vectors'.
+ *   (d) empty-included → outcome=failed, failure_reason='no_included_vectors';
+ *   (e) 3.3b-i model-gate (ACT-285): registry IS read; 0-active → fallback
+ *       path byte-identical to 3.0c-ii; 1-active → §6.1 lock violation;
+ *       2-active without loader → 3.3b-ii pending; 2-active with fixture
+ *       loader → model path scored, ranker_source = composite literal.
  */
 import {
   assert,
@@ -34,6 +37,54 @@ const AS_OF_DATE = '2026-06-16';
 
 type Filter = { op: string; col: string; val: unknown };
 type RangeWindow = { from: number; to: number };
+
+/** Same canned 2-tree LightGBM fixture as `lgbm-inference_test.ts`. The
+ *  3.3b-ii Python trainer will produce a real model.txt; this fixture
+ *  exercises the orchestrator's wiring. */
+const FIXTURE_DUMP_LONG = [
+  'tree',
+  'version=v3',
+  'num_class=1',
+  'max_feature_idx=15',
+  'objective=lambdarank',
+  '',
+  'Tree=0',
+  'num_leaves=2',
+  'num_cat=0',
+  'split_feature=0',
+  'split_gain=1.0',
+  'threshold=0.5',
+  'decision_type=2',
+  'left_child=-1',
+  'right_child=-2',
+  'leaf_value=-0.3 0.4',
+  'shrinkage=1',
+  '',
+  'end of trees',
+].join('\n');
+
+// Short model splits in the opposite direction so long_score ≠ short_score.
+const FIXTURE_DUMP_SHORT = [
+  'tree',
+  'version=v3',
+  'num_class=1',
+  'max_feature_idx=15',
+  'objective=lambdarank',
+  '',
+  'Tree=0',
+  'num_leaves=2',
+  'num_cat=0',
+  'split_feature=0',
+  'split_gain=1.0',
+  'threshold=0.5',
+  'decision_type=2',
+  'left_child=-1',
+  'right_child=-2',
+  'leaf_value=0.6 -0.2',
+  'shrinkage=1',
+  '',
+  'end of trees',
+].join('\n');
 
 /** Build a fully-included feature-vector row (criticals bare + all 7 non-criticals present). */
 function fullIncludedRow(ticker: string, score: number, sector: string | null = 'IT') {
@@ -57,6 +108,15 @@ function makeSupabase(opts: {
   cfvErr?: { message: string } | null;
   rankingsUpsertErr?: { message: string } | null;
   bookUpsertErr?: { message: string } | null;
+  /** Active models returned by the 3.3b-i registry SELECT. Default: empty. */
+  registryRows?: Array<{
+    model_id: string;
+    model_key: string;
+    side: 'long' | 'short';
+    version: string;
+    artifact_uri: string | null;
+  }>;
+  registryErr?: { message: string } | null;
 }) {
   const calls = {
     cfvFilters: [] as Filter[],
@@ -64,9 +124,12 @@ function makeSupabase(opts: {
     cfvRanges: [] as RangeWindow[],
     rankingsUpserts: [] as Array<{ payload: unknown[]; onConflict: string }>,
     bookUpserts: [] as Array<{ payload: unknown[]; onConflict: string }>,
-    registryTouches: 0,
+    registryReads: 0,
+    registryFilters: [] as Filter[],
+    registrySelect: '' as string,
   };
   const cfvRows = opts.cfvRows ?? [];
+  const registryRows = opts.registryRows ?? [];
 
   function cfvBuilder() {
     const filters: Filter[] = [];
@@ -87,6 +150,32 @@ function makeSupabase(opts: {
         calls.cfvRanges.push(window);
         const slice = cfvRows.slice(window.from, window.to + 1);
         return Promise.resolve({ data: slice, error: null }).then(onFul, onRej);
+      },
+    };
+    return builder;
+  }
+
+  function registryBuilder() {
+    calls.registryReads++;
+    const filters: Filter[] = [];
+    let selectCols = '';
+    const builder: Record<string, unknown> = {
+      select(cols: string) { selectCols = cols; return builder; },
+      eq(col: string, val: unknown) { filters.push({ op: 'eq', col, val }); return builder; },
+      then(onFul: unknown, onRej: unknown) {
+        calls.registrySelect = selectCols;
+        calls.registryFilters = filters;
+        if (opts.registryErr) {
+          return Promise.resolve({ data: null, error: opts.registryErr }).then(onFul, onRej);
+        }
+        // Honor the eq('status','active') filter shape.
+        const active = registryRows.filter((r) => {
+          for (const f of filters) {
+            if (f.op === 'eq' && f.col === 'status' && f.val !== 'active') return false;
+          }
+          return true;
+        });
+        return Promise.resolve({ data: active, error: null }).then(onFul, onRej);
       },
     };
     return builder;
@@ -115,12 +204,9 @@ function makeSupabase(opts: {
   const supabase = {
     from(table: string) {
       if (table === 'combiner_feature_vectors') return cfvBuilder();
+      if (table === 'combiner_model_registry') return registryBuilder();
       if (table === 'combiner_rankings') return rankingsBuilder();
       if (table === 'combiner_book') return bookBuilder();
-      if (table === 'combiner_model_registry') {
-        calls.registryTouches++;
-        throw new Error('orchestrator must NOT touch combiner_model_registry');
-      }
       throw new Error(`unexpected table ${table}`);
     },
   };
@@ -144,7 +230,7 @@ Deno.test('(rorch-1) read filters: eq(operator_id), eq(as_of_date), is(excluded_
   assertEquals(isFilters[0], { op: 'is', col: 'excluded_reason', val: null });
 });
 
-Deno.test('(rorch-2) happy path — 40 included rows → 40 rankings upserted, 20+20 book upserted, registry untouched', async () => {
+Deno.test('(rorch-2) happy path (model-absent) — 40 rows → fallback path byte-identical, registry read with status=active', async () => {
   const rows = Array.from({ length: 40 }, (_, i) =>
     fullIncludedRow(`T${i.toString().padStart(3, '0')}`, i * 0.1),
   );
@@ -158,6 +244,13 @@ Deno.test('(rorch-2) happy path — 40 included rows → 40 rankings upserted, 2
   assertEquals(res.book_size_long, 20);
   assertEquals(res.book_size_short, 20);
   assertEquals(res.ranker_source, RANKER_SOURCE_FALLBACK);
+
+  // 3.3b-i: registry IS read exactly once with status='active' filter.
+  assertEquals(calls.registryReads, 1);
+  assertEquals(calls.registrySelect, 'model_id, model_key, side, version, artifact_uri');
+  const regEqs = calls.registryFilters.filter((f) => f.op === 'eq');
+  assertEquals(regEqs.length, 1);
+  assertEquals(regEqs[0], { op: 'eq', col: 'status', val: 'active' });
 
   // Rankings upsert
   assertEquals(calls.rankingsUpserts.length, 1);
@@ -183,9 +276,6 @@ Deno.test('(rorch-2) happy path — 40 included rows → 40 rankings upserted, 2
     assertEquals(b.computed_at, AS_OF.toISOString());
     assertEquals(b.ranker_source, RANKER_SOURCE_FALLBACK);
   }
-
-  // Registry untouched
-  assertEquals(calls.registryTouches, 0);
 });
 
 Deno.test('(rorch-3) empty included → outcome=failed, failure_reason=no_included_vectors, no upserts', async () => {
@@ -201,6 +291,8 @@ Deno.test('(rorch-3) empty included → outcome=failed, failure_reason=no_includ
   assertEquals(res.book_size_short, 0);
   assertEquals(calls.rankingsUpserts.length, 0);
   assertEquals(calls.bookUpserts.length, 0);
+  // Empty-included short-circuits BEFORE the registry read.
+  assertEquals(calls.registryReads, 0);
 });
 
 Deno.test('(rorch-4) included-row invariant violation → outcome=failed BEFORE any write', async () => {
@@ -261,4 +353,123 @@ Deno.test('(rorch-7) read uses pagination (.range called)', async () => {
   await createRankerOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
   assert(calls.cfvRanges.length >= 1, 'read must use .range() pagination');
   assertEquals(calls.cfvRanges[0].from, 0);
+});
+
+// ───────────────────────────────────────────────────────────────────────
+// 3.3b-i model-gate (ACT-285)
+// ───────────────────────────────────────────────────────────────────────
+
+Deno.test('(rorch-8) model-gate: 1 active model row → §6.1/§6.2 two-model lock violation, ZERO writes', async () => {
+  const rows = Array.from({ length: 40 }, (_, i) =>
+    fullIncludedRow(`T${i.toString().padStart(3, '0')}`, i * 0.1),
+  );
+  const { supabase, calls } = makeSupabase({
+    cfvRows: rows,
+    registryRows: [{
+      model_id: '11111111-1111-1111-1111-111111111111',
+      model_key: 'lgbm_long_v1',
+      side: 'long',
+      version: 'v1.0.0',
+      artifact_uri: 'storage://combiner-models/m1/model.txt',
+    }],
+  });
+  const res = await createRankerOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
+
+  assertEquals(res.outcome, 'failed');
+  if (res.outcome !== 'failed') return;
+  assertStringIncludes(res.failure_reason, 'only_one_side_active_violates_section_6_1_two_model_lock');
+  assertEquals(calls.rankingsUpserts.length, 0);
+  assertEquals(calls.bookUpserts.length, 0);
+});
+
+Deno.test('(rorch-9) model-gate: 2 active rows without loadArtifact → 3.3b-ii pending, ZERO writes', async () => {
+  const rows = Array.from({ length: 40 }, (_, i) =>
+    fullIncludedRow(`T${i.toString().padStart(3, '0')}`, i * 0.1),
+  );
+  const { supabase, calls } = makeSupabase({
+    cfvRows: rows,
+    registryRows: [
+      { model_id: 'aaa', model_key: 'lgbm_long_v1', side: 'long', version: 'v1', artifact_uri: 'storage://a' },
+      { model_id: 'bbb', model_key: 'lgbm_short_v1', side: 'short', version: 'v1', artifact_uri: 'storage://b' },
+    ],
+  });
+  const res = await createRankerOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
+
+  assertEquals(res.outcome, 'failed');
+  if (res.outcome !== 'failed') return;
+  assertStringIncludes(res.failure_reason, 'model_active_artifact_loader_not_wired_pending_3_3b_ii');
+  assertEquals(calls.rankingsUpserts.length, 0);
+  assertEquals(calls.bookUpserts.length, 0);
+});
+
+Deno.test('(rorch-10) model-gate: 2 active rows + fixture loader → model path scored, ranker_source = composite literal', async () => {
+  const rows = Array.from({ length: 40 }, (_, i) =>
+    // Spread feature values across the split threshold (0.5) so long and
+    // short ranks differ — exercises both halves of the model trees.
+    fullIncludedRow(`T${i.toString().padStart(3, '0')}`, (i % 2 === 0 ? 0.1 : 0.9)),
+  );
+  const fixtureLoader = async (uri: string) => {
+    if (uri.includes('/long/')) return FIXTURE_DUMP_LONG;
+    if (uri.includes('/short/')) return FIXTURE_DUMP_SHORT;
+    throw new Error(`unexpected artifact_uri ${uri}`);
+  };
+  const { supabase, calls } = makeSupabase({
+    cfvRows: rows,
+    registryRows: [
+      { model_id: 'long-uuid', model_key: 'lgbm_long', side: 'long', version: 'v1.2.3', artifact_uri: 'storage://m/long/model.txt' },
+      { model_id: 'short-uuid', model_key: 'lgbm_short', side: 'short', version: 'v1.2.3', artifact_uri: 'storage://m/short/model.txt' },
+    ],
+  });
+  const res = await createRankerOrchestrator({
+    supabase,
+    operator_id: OPERATOR_ID,
+    loadArtifact: fixtureLoader,
+  }).run(AS_OF);
+
+  assertEquals(res.outcome, 'completed');
+  if (res.outcome !== 'completed') return;
+  assertEquals(res.vectors_read, 40);
+  assertEquals(res.rankings_written, 40);
+  assertEquals(res.book_size_long, 20);
+  assertEquals(res.book_size_short, 20);
+  // Composite ranker_source carries BOTH side attributions.
+  assertEquals(res.ranker_source, 'lgbm:lgbm_long@v1.2.3/lgbm_short@v1.2.3');
+
+  // Stamped on every persisted row — flips them into the non-fallback partial index.
+  const r0 = (calls.rankingsUpserts[0].payload as Array<Record<string, unknown>>)[0];
+  assertEquals(r0.ranker_source, 'lgbm:lgbm_long@v1.2.3/lgbm_short@v1.2.3');
+  const b0 = (calls.bookUpserts[0].payload as Array<Record<string, unknown>>)[0];
+  assertEquals(b0.ranker_source, 'lgbm:lgbm_long@v1.2.3/lgbm_short@v1.2.3');
+});
+
+Deno.test('(rorch-11) model-gate: 2 active rows but sides ≠ {long,short} → failed', async () => {
+  const rows = [fullIncludedRow('AAPL', 0.5)];
+  const { supabase } = makeSupabase({
+    cfvRows: rows,
+    registryRows: [
+      { model_id: 'a', model_key: 'k1', side: 'long', version: 'v1', artifact_uri: 'storage://a' },
+      { model_id: 'b', model_key: 'k2', side: 'long', version: 'v1', artifact_uri: 'storage://b' },
+    ],
+  });
+  const res = await createRankerOrchestrator({
+    supabase,
+    operator_id: OPERATOR_ID,
+    loadArtifact: async () => FIXTURE_DUMP_LONG,
+  }).run(AS_OF);
+  assertEquals(res.outcome, 'failed');
+  if (res.outcome !== 'failed') return;
+  assertStringIncludes(res.failure_reason, 'sides ≠ {long, short}');
+});
+
+Deno.test('(rorch-12) model-gate: registry read error → failed with registry message', async () => {
+  const rows = [fullIncludedRow('AAPL', 0.5)];
+  const { supabase, calls } = makeSupabase({
+    cfvRows: rows,
+    registryErr: { message: 'simulated PG failure' },
+  });
+  const res = await createRankerOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
+  assertEquals(res.outcome, 'failed');
+  if (res.outcome !== 'failed') return;
+  assertStringIncludes(res.failure_reason, 'combiner_model_registry read failed');
+  assertEquals(calls.rankingsUpserts.length, 0);
 });
