@@ -38,6 +38,7 @@ import {
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   assembleFeatureVectors,
+  type RegimeFeatures,
   type SignalObservationInput,
   type UniverseMember,
 } from './feature-assembler.ts';
@@ -48,6 +49,10 @@ import {
 
 const OPERATOR = '00000000-0000-0000-0000-00000000d106';
 const AS_OF = '2026-06-19';
+const REGIME: RegimeFeatures = {
+  market_24m_cumulative_return: 0.05,
+  market_realized_vol_6m: 0.18,
+};
 
 /** Full-coverage observation set for one ticker — passes both gates. */
 function fullCoverage(ticker: string): SignalObservationInput[] {
@@ -106,8 +111,8 @@ Deno.test('(G2) assembler output is byte-identical for "native" vs "carried" inp
   const fromNative = fullCoverage('AAPL');
   const fromCarried = fullCoverage('AAPL'); // identical projection
 
-  const out1 = assembleFeatureVectors(fromNative, universe, AS_OF);
-  const out2 = assembleFeatureVectors(fromCarried, universe, AS_OF);
+  const out1 = assembleFeatureVectors(fromNative, universe, AS_OF, REGIME);
+  const out2 = assembleFeatureVectors(fromCarried, universe, AS_OF, REGIME);
 
   assertEquals(JSON.stringify(out1), JSON.stringify(out2));
   assertEquals(out1.length, 1);
