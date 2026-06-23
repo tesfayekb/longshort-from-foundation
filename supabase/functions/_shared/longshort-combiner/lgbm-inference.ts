@@ -370,6 +370,26 @@ export function featuresToOrderedArray(
     out[i++] = isPresent;
   }
 
+  // 2 market-level regime features — bare numerics (DEC-066 §(c)). The
+  // assembler's regime-fail-loud at the orchestrator boundary guarantees
+  // a feature vector NEVER reaches the scorer with these absent; an
+  // absent/non-finite value here is a contract break, not a runtime
+  // signal-coverage state.
+  for (const mkey of [
+    MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID,
+    MARKET_REALIZED_VOL_6M_SIGNAL_ID,
+  ]) {
+    const v = features[mkey];
+    if (v === null || v === undefined || typeof v !== 'number' || !Number.isFinite(v)) {
+      throw new LgbmTreeDumpParseError(
+        `featuresToOrderedArray: market-level '${mkey}' not a finite number ` +
+          `(value=${JSON.stringify(v)}); regime fail-loud at the orchestrator ` +
+          `should have prevented this row reaching the scorer`,
+      );
+    }
+    out[i++] = v;
+  }
+
   return out;
 }
 
