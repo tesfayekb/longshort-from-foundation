@@ -356,7 +356,9 @@ Deno.test('(3.2-c) per-name signal keys are UNCHANGED — broadcast is purely ad
   for (const k of perNameKeys) {
     assert(k in rows[0].features, `per-name key missing: ${k}`);
   }
-  assertEquals(perNameKeys.length, EXPECTED_FEATURE_KEY_COUNT);
+  // 3.2-d: EXPECTED_FEATURE_KEY_COUNT now includes the 2 market-level keys;
+  // the per-name block is the catalog count minus the regime broadcast.
+  assertEquals(perNameKeys.length, EXPECTED_FEATURE_KEY_COUNT - REGIME_FEATURE_COUNT);
 });
 
 Deno.test('(3.2-c) REGIME_FAIL_LOUD_REASON is the typed reason literal', () => {
