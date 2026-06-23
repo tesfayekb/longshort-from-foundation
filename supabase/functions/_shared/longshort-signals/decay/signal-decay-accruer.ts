@@ -42,7 +42,22 @@ import {
 } from './signal-decay-constants.ts';
 import type { OpenCloseBar } from '../shared/polygon-open-close-fetcher.ts';
 
-export type DecayBarBundle = OpenCloseBar[] | null | 'error';
+/**
+ * Per-ticker fetched bundle.
+ *  - `OpenCloseBar[]` — Polygon returned bars (may still be empty / missing
+ *    seed bar; the accruer handles that via Precedence 6/7).
+ *  - `null` — Polygon 404 (ticker not found at the venue).
+ *  - `'error'` — fetch threw, upstream error string not preserved
+ *    (legacy shape; kept for back-compat with existing tests).
+ *  - `{ error: string }` — fetch threw, orchestrator preserved the caught
+ *    error's message so the accruer can surface it in `notes.upstream_error`
+ *    (FP-XXX observability fix — measurement-only, no schema change).
+ */
+export type DecayBarBundle =
+  | OpenCloseBar[]
+  | null
+  | 'error'
+  | { error: string };
 
 /**
  * Per-ticker eligibility evidence assembled by the orchestrator from
@@ -130,8 +145,31 @@ export function accrueDecayRows(
       };
 
     // Precedence 1-2: fetch outcome short-circuits everything else.
-    if (bars === undefined || bars === 'error') {
-      out.push(emptyRow(obs, DECAY_STATUS_FETCH_ERROR));
+    if (bars === undefined) {
+      out.push(
+        emptyRow(obs, DECAY_STATUS_FETCH_ERROR, {
+          decay_fail: 'bars_undefined',
+          detail: 'orchestrator did not populate ticker',
+        }),
+      );
+      continue;
+    }
+    if (bars === 'error') {
+      out.push(
+        emptyRow(obs, DECAY_STATUS_FETCH_ERROR, {
+          decay_fail: 'fetch_threw',
+          upstream_error: null,
+        }),
+      );
+      continue;
+    }
+    if (typeof bars === 'object' && bars !== null && !Array.isArray(bars) && 'error' in bars) {
+      out.push(
+        emptyRow(obs, DECAY_STATUS_FETCH_ERROR, {
+          decay_fail: 'fetch_threw',
+          upstream_error: bars.error,
+        }),
+      );
       continue;
     }
     if (bars === null) {
@@ -161,12 +199,29 @@ export function accrueDecayRows(
     // Precedence 6-7: bar presence.
     const seedIdx = bars.findIndex((b) => b.ts === obs.seed_as_of_date);
     if (seedIdx < 0) {
-      out.push(emptyRow(obs, DECAY_STATUS_FETCH_ERROR));
+      out.push(
+        emptyRow(obs, DECAY_STATUS_FETCH_ERROR, {
+          decay_fail: 'seed_bar_not_in_window',
+          seed_target: obs.seed_as_of_date,
+          bars_returned: bars.length,
+          bars_range: bars.length
+            ? `${bars[0].ts}..${bars[bars.length - 1].ts}`
+            : 'empty',
+        }),
+      );
       continue;
     }
     const nextIdx = seedIdx + 1;
     if (nextIdx >= bars.length) {
-      out.push(emptyRow(obs, DECAY_STATUS_FETCH_ERROR));
+      out.push(
+        emptyRow(obs, DECAY_STATUS_FETCH_ERROR, {
+          decay_fail: 'no_next_open_bar',
+          seed_target: obs.seed_as_of_date,
+          seed_idx: seedIdx,
+          bars_returned: bars.length,
+          bars_range: `${bars[0].ts}..${bars[bars.length - 1].ts}`,
+        }),
+      );
       continue;
     }
     const seedClose = bars[seedIdx].close;
@@ -176,7 +231,13 @@ export function accrueDecayRows(
       !Number.isFinite(nextOpen) ||
       seedClose === 0
     ) {
-      out.push(emptyRow(obs, DECAY_STATUS_FETCH_ERROR));
+      out.push(
+        emptyRow(obs, DECAY_STATUS_FETCH_ERROR, {
+          decay_fail: 'nonfinite_price',
+          seed_close: Number.isFinite(seedClose) ? seedClose : null,
+          next_open: Number.isFinite(nextOpen) ? nextOpen : null,
+        }),
+      );
       continue;
     }
 

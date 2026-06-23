@@ -311,8 +311,20 @@ export function createSignalDecayOrchestrator(
             lookbackDays,
           );
           return { ticker, bundle: bars };
-        } catch {
-          return { ticker, bundle: 'error' as const };
+        } catch (err) {
+          // Belt-and-suspenders observability: write to edge logs AND
+          // preserve the error string into the bundle so the accruer's
+          // bars==='error' branch can surface it via notes.upstream_error.
+          // Measurement-only — fetch logic / retry / window unchanged.
+          console.error('[decay] fetch failed', {
+            ticker,
+            seed_run_date: run_date,
+            error: String(err),
+          });
+          return {
+            ticker,
+            bundle: { error: (err as Error)?.message ?? String(err) },
+          };
         }
       });
       const barsByTicker = new Map<string, DecayBarBundle>();

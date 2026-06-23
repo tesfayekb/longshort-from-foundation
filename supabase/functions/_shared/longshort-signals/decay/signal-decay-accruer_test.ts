@@ -49,6 +49,9 @@ Deno.test('(dec-1) clean Polygon fetch stamps unreconciled_single_source, NEVER 
   assertEquals(r.seed_close_date, '2026-06-19');
   assertEquals(r.next_open_date, '2026-06-22');
   assertEquals(r.price_source, 'polygon');
+  // Observability regression guard: success-path notes MUST remain null
+  // (the 6,811 existing unreconciled_single_source rows are bit-identical).
+  assertEquals(r.notes, null);
 });
 
 Deno.test('(dec-2) raw return is NOT side-signed (decay rows carry no side)', () => {
@@ -74,12 +77,15 @@ Deno.test('(dec-4) fetch_error (error sentinel) -> typed-absence', () => {
   const out = accrueDecayRows(bars, new Map(), [obs()]);
   assertEquals(out[0].price_source_status, 'fetch_error');
   assertEquals(out[0].open_decay_return, null);
+  assertEquals((out[0].notes as any).decay_fail, 'fetch_threw');
+  assertEquals((out[0].notes as any).upstream_error, null);
 });
 
 Deno.test('(dec-5) ticker missing from bundle map -> defensive fetch_error', () => {
   const out = accrueDecayRows(new Map(), new Map(), [obs()]);
   assertEquals(out[0].price_source_status, 'fetch_error');
   assertEquals(out[0].next_open, null);
+  assertEquals((out[0].notes as any).decay_fail, 'bars_undefined');
 });
 
 Deno.test('(dec-6) hard_excluded_since_seed precedence + firing_rules in notes', () => {
@@ -124,6 +130,10 @@ Deno.test('(dec-9) seed bar missing from bundle -> fetch_error typed-absence', (
   const out = accrueDecayRows(bars, new Map(), [obs()]);
   assertEquals(out[0].price_source_status, 'fetch_error');
   assertEquals(out[0].open_decay_return, null);
+  assertEquals((out[0].notes as any).decay_fail, 'seed_bar_not_in_window');
+  assertEquals((out[0].notes as any).seed_target, '2026-06-19');
+  assertEquals((out[0].notes as any).bars_returned, 1);
+  assertEquals((out[0].notes as any).bars_range, '2026-06-22..2026-06-22');
 });
 
 Deno.test('(dec-10) next-open bar missing (seed is last bar) -> fetch_error typed-absence', () => {
@@ -133,6 +143,11 @@ Deno.test('(dec-10) next-open bar missing (seed is last bar) -> fetch_error type
   const out = accrueDecayRows(bars, new Map(), [obs()]);
   assertEquals(out[0].price_source_status, 'fetch_error');
   assertEquals(out[0].open_decay_return, null);
+  assertEquals((out[0].notes as any).decay_fail, 'no_next_open_bar');
+  assertEquals((out[0].notes as any).seed_target, '2026-06-19');
+  assertEquals((out[0].notes as any).seed_idx, 0);
+  assertEquals((out[0].notes as any).bars_returned, 1);
+  assertEquals((out[0].notes as any).bars_range, '2026-06-19..2026-06-19');
 });
 
 Deno.test('(dec-11) non-finite seed_close -> fetch_error (never NaN-bearing row)', () => {
@@ -145,6 +160,9 @@ Deno.test('(dec-11) non-finite seed_close -> fetch_error (never NaN-bearing row)
   const out = accrueDecayRows(bars, new Map(), [obs()]);
   assertEquals(out[0].price_source_status, 'fetch_error');
   assertEquals(out[0].open_decay_return, null);
+  assertEquals((out[0].notes as any).decay_fail, 'nonfinite_price');
+  assertEquals((out[0].notes as any).seed_close, null);
+  assertEquals((out[0].notes as any).next_open, 105);
 });
 
 Deno.test('(dec-12) seed_close === 0 -> fetch_error (no divide-by-zero)', () => {
@@ -195,4 +213,15 @@ Deno.test('(dec-14) no row EVER stamps "success" in Phase-1 (anti-phantom-confid
       `decay row stamped 'success' in Phase-1 — VIOLATION of unreconciled-single-source rule (DW-135 owns success)`,
     );
   }
+});
+
+Deno.test('(dec-15) preserved-error bundle ({error:string}) -> fetch_threw + upstream_error in notes', () => {
+  const bars: Map<string, DecayBarBundle> = new Map([
+    ['AAPL', { error: 'polygon 500: upstream timeout' }],
+  ]);
+  const out = accrueDecayRows(bars, new Map(), [obs()]);
+  assertEquals(out[0].price_source_status, 'fetch_error');
+  assertEquals(out[0].open_decay_return, null);
+  assertEquals((out[0].notes as any).decay_fail, 'fetch_threw');
+  assertEquals((out[0].notes as any).upstream_error, 'polygon 500: upstream timeout');
 });
