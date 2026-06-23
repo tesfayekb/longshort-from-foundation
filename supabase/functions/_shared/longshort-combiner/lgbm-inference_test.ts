@@ -178,7 +178,7 @@ Deno.test('(lgbm-4) parseLgbmTreeDump rejects leaf-index OOB', () => {
 Deno.test('(lgbm-5) featuresToOrderedArray substitutes -999 when is_present=0 (§6.5.2 sentinel)', () => {
   const f = allNonCriticalsAbsent(0.0);
   const arr = featuresToOrderedArray(f);
-  assertEquals(arr.length, 16);
+  assertEquals(arr.length, 18);
   assertEquals(arr[0], 0.0);
   assertEquals(arr[1], 0.0);
   // Every non-critical value slot is the sentinel; every is_present slot is 0.
@@ -186,6 +186,9 @@ Deno.test('(lgbm-5) featuresToOrderedArray substitutes -999 when is_present=0 (�
     assertEquals(arr[2 + 2 * i], NON_CRITICAL_MISSING_SENTINEL);
     assertEquals(arr[2 + 2 * i + 1], 0);
   }
+  // Market-level keys (3.2-d) — bare numerics at indices 16/17.
+  assertEquals(arr[16], 0.0);
+  assertEquals(arr[17], 0.0);
 });
 
 Deno.test('(lgbm-6) featuresToOrderedArray throws when critical signal is null', () => {
