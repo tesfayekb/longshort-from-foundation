@@ -61,6 +61,12 @@ import {
   featuresToOrderedArray,
   LgbmTreeDumpParseError,
 } from './lgbm-inference.ts';
+import {
+  ArtifactDownloadError,
+  ArtifactUriParseError,
+  FeatureOrderHashMismatchError,
+  type LoadedModelArtifact,
+} from './model-artifact-loader.ts';
 
 /** Per-row chunk size for the bulk UPSERTs. Matches the 3.0b-ii
  * assembler — well under PostgREST URL/JSON payload limits. */
@@ -76,11 +82,15 @@ interface ActiveModelRow {
 }
 
 /** Pluggable artifact loader — the orchestrator BRANCHES on registry
- *  state but defers the Storage fetch to this thin callback so the
- *  3.3b-ii Storage bucket provisioning + auth-keyed `download()` shape
- *  can land without re-opening this file. Tests inject a fixture loader
- *  that returns a hand-crafted LightGBM text dump. */
-export type LoadModelArtifact = (artifact_uri: string) => Promise<string>;
+ *  state but defers the Storage fetch + DEC-064 Clause 4 hash refusal
+ *  to this thin callback so the Storage download details + the
+ *  hash-mismatch refusal live in `model-artifact-loader.ts`. Returns
+ *  both the LightGBM text dump and the parsed sidecar meta.json
+ *  (per DEC-065 Clause 2). Tests inject a fixture loader that returns
+ *  a hand-crafted dump + matching meta with the live FEATURE_ORDER
+ *  hash. Loader MUST throw `FeatureOrderHashMismatchError` on any
+ *  hash mismatch (3.3b-ii-A / ACT-287). */
+export type LoadModelArtifact = (artifact_uri: string) => Promise<LoadedModelArtifact>;
 
 export interface RankerOrchestratorContext {
   supabase: SupabaseClient;
@@ -289,12 +299,12 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         }
 
         try {
-          const [longText, shortText] = await Promise.all([
+          const [longLoaded, shortLoaded] = await Promise.all([
             ctx.loadArtifact(longModel.artifact_uri),
             ctx.loadArtifact(shortModel.artifact_uri),
           ]);
-          const longEnsemble = parseLgbmTreeDump(longText);
-          const shortEnsemble = parseLgbmTreeDump(shortText);
+          const longEnsemble = parseLgbmTreeDump(longLoaded.modelText);
+          const shortEnsemble = parseLgbmTreeDump(shortLoaded.modelText);
 
           ranker_source_literal =
             `lgbm:${longModel.model_key}@${longModel.version}` +
@@ -311,7 +321,10 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
           if (
             e instanceof BookOverlapError ||
             e instanceof IncludedRowInvariantError ||
-            e instanceof LgbmTreeDumpParseError
+            e instanceof LgbmTreeDumpParseError ||
+            e instanceof FeatureOrderHashMismatchError ||
+            e instanceof ArtifactDownloadError ||
+            e instanceof ArtifactUriParseError
           ) {
             return {
               outcome: 'failed',
