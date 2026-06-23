@@ -34,20 +34,32 @@ import {
   nonCriticalIsPresentKey,
   nonCriticalValueKey,
 } from './signal-catalog.ts';
+import {
+  MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID,
+  MARKET_REALIZED_VOL_6M_SIGNAL_ID,
+} from '../longshort-signals/market-regime/compute-regime.ts';
 
 /** §6.5.2 missing-value sentinel for non-critical signal `value` slots. */
 export const NON_CRITICAL_MISSING_SENTINEL = -999;
 
 /**
- * 16-feature emission order — LOAD-BEARING contract with the 3.3b-ii
+ * 18-feature emission order — LOAD-BEARING contract with the 3.3b-ii
  * Python trainer. Order: the 2 critical bare numerics first (catalog
- * order, matching `SIGNAL_IDS_CRITICAL`), then for each of the 7
+ * order, matching `SIGNAL_IDS_CRITICAL`); then for each of the 7
  * non-critical signals (catalog order of `SIGNAL_IDS_NON_CRITICAL`)
- * the typed-absence pair `<id>__value` then `<id>__is_present`.
+ * the typed-absence pair `<id>__value` then `<id>__is_present`; then
+ * the 2 market-level regime features as BARE NUMERICS (DEC-066 §(c) —
+ * market-level category, NOT `__value`/`__is_present` pairs).
  *
  * The trainer MUST emit feature columns in this exact order; the test
  * fixture in `lgbm-inference_test.ts` locks the literal sequence so any
  * accidental reordering trips at CI rather than silently mis-scoring.
+ *
+ * 3.2-d flipped FEATURE_ORDER from 16 → 18 keys; `featureOrderHash()` is
+ * now d4aac3e3e58740543de51764c05b8688595eb025ec41bd55677c9c27f24ce348.
+ * Per DEC-066 §(f) this is ADDITIVE-NOT-BREAK (zero artifacts existed at
+ * the flip; the load-time hash refusal fired on nothing) — the
+ * post-promotion lock takes effect from the first promoted artifact.
  */
 export const FEATURE_ORDER: readonly string[] = Object.freeze([
   // 2 critical bare numerics
@@ -57,10 +69,13 @@ export const FEATURE_ORDER: readonly string[] = Object.freeze([
     nonCriticalValueKey(id),
     nonCriticalIsPresentKey(id),
   ]),
+  // 2 market-level regime features (bare numerics) — DEC-066 §(c).
+  MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID,
+  MARKET_REALIZED_VOL_6M_SIGNAL_ID,
 ]);
 
-/** Expected vector length — 2 + 7*2 = 16. */
-export const FEATURE_VECTOR_LENGTH = FEATURE_ORDER.length; // 16
+/** Expected vector length — 2 + 7*2 + 2 = 18. */
+export const FEATURE_VECTOR_LENGTH = FEATURE_ORDER.length; // 18
 
 /**
  * SHA-256 hash of the canonical `FEATURE_ORDER` joined sequence — the
