@@ -1643,6 +1643,50 @@ Resumes from `soft_paused` only. Raises `no_data_found` if no row; raises `inval
 
 ---
 
+## Combiner Promotion-Gate RPCs (FP-052.3 Sub-Step 3.3a)
+
+### `promote_combiner_model(p_model_id uuid)` — db-function
+
+| Field | Value |
+|-------|-------|
+| **Type** | db-function (Postgres `SECURITY DEFINER`, `LANGUAGE plpgsql`, `SET search_path = public`) |
+| **Classification** | strategy-tier promotion-gate mutation (longshort); financial-critical at consumption (no consumer in 3.3a — first consumer is the 3.3b promotion edge function) |
+| **Owner module** | longshort (FP-052.3 sub-step 3.3a) |
+| **Signature** | `public.promote_combiner_model(p_model_id uuid) RETURNS jsonb` |
+| **File** | MIG-115 (Lovable `supabase--migration` atomic create+apply per §22.5.1, 2026-06-23). |
+| **Purpose** | Atomic single-active-per-side candidate→active promotion. Locks the candidate row `FOR UPDATE`, retires the prior `status='active'` row for the same `side` FIRST (stamping `retired_at`), promotes the candidate to `status='active'` SECOND (stamping `promoted_at`) — within one transaction. Order is LOAD-BEARING: the `uq_combiner_model_registry_active_per_side` PARTIAL UNIQUE index forbids any transient two-active state. |
+| **Authorization** | Service-role-only via canonical PostgREST claim read (mirrors MIG-113 / DW-131 — covers scalar and JSON claim shapes). Raises `insufficient_privilege` otherwise. `SECURITY DEFINER` bypasses the registry RLS (which already denies all writes from `authenticated`); the in-function gate is the sole privilege boundary. |
+| **Grants** | `REVOKE EXECUTE FROM PUBLIC, anon, authenticated`; `GRANT EXECUTE TO service_role`. Verified live: `proacl = postgres=X/postgres, service_role=X/postgres` (no authenticated grant → no WARN-0029 contribution). |
+| **Side effects** | UPDATE `combiner_model_registry` retiring the prior active for `v_side` (zero or one row), then UPDATE promoting the candidate. NO `audit_logs` write at 3.3a (the audit envelope wraps the future 3.3b caller edge function, mirroring the kill-switch pattern). |
+| **Returns** | `jsonb { success, model_id, side, promoted_at, prev_active_id (uuid or null), prev_active_retired_at (timestamptz or null) }`. |
+| **Throws** | `insufficient_privilege` (non-service-role); `invalid_parameter_value` (null `p_model_id`); `no_data_found` (`model_id` not found); `invalid_transaction_state` (`status <> 'candidate'`). |
+| **Determinism** | Volatile (mutates registry). |
+| **Consumers** | None at 3.3a (no model exists; nothing to promote). First consumer = 3.3b promotion edge function (separate prompt). |
+| **Critical Invariants** | (1) Retire-first ordering — DO NOT REORDER the two UPDATEs; the partial unique index rejects transient two-active state. (2) Candidate-only — only `status='candidate'` may be promoted. (3) Single-active-per-side — enforced by `uq_combiner_model_registry_active_per_side`. |
+| **Added by** | FP-052.3 sub-step 3.3a, ACT-283, MIG-115. |
+
+### `rollback_combiner_model(p_side text)` — db-function
+
+| Field | Value |
+|-------|-------|
+| **Type** | db-function (Postgres `SECURITY DEFINER`, `LANGUAGE plpgsql`, `SET search_path = public`) |
+| **Classification** | strategy-tier promotion-gate mutation (longshort); financial-critical at consumption (no consumer at 3.3a) |
+| **Owner module** | longshort (FP-052.3 sub-step 3.3a) |
+| **Signature** | `public.rollback_combiner_model(p_side text) RETURNS jsonb` |
+| **File** | MIG-115 (2026-06-23). |
+| **Purpose** | Atomic rollback: retire the current `status='active'` for `p_side` FIRST (stamping `retired_at`), restore the most-recently-retired prior model for the same side to `status='active'` SECOND (stamping `promoted_at`, clearing `retired_at`). Prior model selected via `ORDER BY retired_at DESC NULLS LAST, updated_at DESC LIMIT 1 FOR UPDATE`. Same retire-first ordering as `promote_combiner_model`. |
+| **Authorization** | Service-role-only via canonical PostgREST claim read (identical gate to `promote_combiner_model`). |
+| **Grants** | `REVOKE EXECUTE FROM PUBLIC, anon, authenticated`; `GRANT EXECUTE TO service_role`. Verified live. |
+| **Side effects** | UPDATE retiring `v_current_active`, then UPDATE restoring `v_prior_retired` (clearing its `retired_at`). NO `audit_logs` write at 3.3a. |
+| **Returns** | `jsonb { success, side, rolled_back_id, restored_active_id, effected_at }`. |
+| **Throws** | `insufficient_privilege`; `invalid_parameter_value` (`p_side` not in `('long','short')`); `no_data_found` (no active for side, or no prior-retired model to restore). |
+| **Determinism** | Volatile. |
+| **Consumers** | None at 3.3a. First consumer = 3.3c DW-136 SHAP re-gate execution per DEC-063 Clause 3 (models failing the SHAP backfill verifier flip via this RPC). |
+| **Critical Invariants** | Same three as `promote_combiner_model`, plus (4) Prior-retired-must-exist — a side with exactly one model (current active) cannot rollback; the caller must hold off promotion until a prior `retired` row exists. |
+| **Added by** | FP-052.3 sub-step 3.3a, ACT-283, MIG-115. |
+
+---
+
 ## Reconciliation Engine Helpers (FP-006 Sub-Step 6.2)
 
 ### `reconcile<TExpected, TObserved>(spec, invoke, ts)` — ts-function
