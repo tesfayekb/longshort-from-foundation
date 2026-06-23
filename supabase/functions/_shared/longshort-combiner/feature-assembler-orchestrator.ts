@@ -36,6 +36,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   assembleFeatureVectors,
   type FeatureVectorRow,
+  type RegimeFeatures,
   type SignalObservationInput,
   type UniverseMember,
 } from './feature-assembler.ts';
@@ -44,11 +45,27 @@ import {
   SIGNAL_IDS_ALL,
   type ExcludedReason,
 } from './signal-catalog.ts';
+import {
+  MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID,
+  MARKET_REALIZED_VOL_6M_SIGNAL_ID,
+} from '../longshort-signals/market-regime/compute-regime.ts';
 import { fetchAllRows } from './paginated-read.ts';
 
 /** Per-row chunk size for the bulk UPSERT. ~500 keeps the URL/JSON payload
  * well under PostgREST limits while minimizing round-trips. */
 const UPSERT_CHUNK_SIZE = 500;
+
+/**
+ * FP-052.2 / DEC-066 §(e) — market-level regime signal_ids the assembler
+ * reads as a SEPARATE projection (no universe_membership join: the
+ * sentinel ticker `__MARKET__` is intentionally outside the per-name
+ * universe, so a join would drop these rows). Exactly 2 expected per as_of.
+ */
+const REGIME_SIGNAL_IDS = [
+  MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID,
+  MARKET_REALIZED_VOL_6M_SIGNAL_ID,
+] as const;
+const REGIME_EXPECTED_ROW_COUNT = REGIME_SIGNAL_IDS.length;
 
 export interface FeatureAssemblyContext {
   supabase: SupabaseClient;
@@ -157,6 +174,64 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         };
       }
 
+      // ── Step 1.5: market-level regime — SEPARATE projection (FP-052.2 §(e)) ──
+      // No universe_membership join: the `__MARKET__` sentinel ticker is
+      // outside the per-name universe by design. Exact-as_of read, only
+      // the 2 regime signal_ids. Fail-loud propagation: producer-side
+      // typed-fail-loud (regime_data_missing_current_bar /
+      // regime_data_insufficient_history / regime_fetch_error /
+      // regime_persistence_error) becomes assembler-side
+      // `regime_data_unavailable_at_assemble`. A regime-less or
+      // null-filled feature vector would silently poison training, so we
+      // write ZERO feature vectors that day instead.
+      type RegRow = {
+        signal_id: string;
+        value: number | null;
+        is_present: boolean;
+      };
+      let regRows: RegRow[];
+      try {
+        const { data, error } = await ctx.supabase
+          .from('signal_observations')
+          .select('signal_id, value, is_present')
+          .eq('operator_id', ctx.operator_id)
+          .eq('as_of_date', as_of_date)
+          .in('signal_id', [...REGIME_SIGNAL_IDS]);
+        if (error) {
+          throw new Error(error.message);
+        }
+        regRows = (data ?? []) as RegRow[];
+      } catch (e) {
+        throw new Error(
+          `feature-assembler-orchestrator: signal_observations regime read failed: ${(e as Error).message}`,
+        );
+      }
+
+      const regimeByKey = new Map<string, RegRow>();
+      for (const r of regRows) regimeByKey.set(r.signal_id, r);
+      const reg24 = regimeByKey.get(MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID);
+      const regVol = regimeByKey.get(MARKET_REALIZED_VOL_6M_SIGNAL_ID);
+      const regimeOk =
+        regRows.length === REGIME_EXPECTED_ROW_COUNT &&
+        reg24 !== undefined && reg24.is_present === true && reg24.value !== null &&
+        regVol !== undefined && regVol.is_present === true && regVol.value !== null;
+      if (!regimeOk) {
+        // Fail-loud — DEC-066 §(e). Zero feature vectors written; no book.
+        return {
+          outcome: 'failed',
+          as_of_date,
+          universe_size: universe.length,
+          persisted_count: 0,
+          included_count: 0,
+          excluded_by_reason: emptyExcludedCounter(),
+          failure_reason: 'regime_data_unavailable_at_assemble',
+        };
+      }
+      const regime: RegimeFeatures = {
+        market_24m_cumulative_return: reg24!.value as number,
+        market_realized_vol_6m: regVol!.value as number,
+      };
+
       // ── Step 2: signals — EXACT as_of, catalog-9 only (F7 defense-in-depth) ──
       // Paginated read — REGRESSION FIX. The prior unbounded `.select()`
       // hit PostgREST's 1000-row default cap, returning an arbitrary slice
@@ -198,7 +273,12 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
       }));
 
       // ── Step 3: pure assembly (typed-absence; NO -999 per ADR-008a) ──
-      const rows: FeatureVectorRow[] = assembleFeatureVectors(observations, universe, as_of_date);
+      const rows: FeatureVectorRow[] = assembleFeatureVectors(
+        observations,
+        universe,
+        as_of_date,
+        regime,
+      );
 
       // ── Step 4: tally + chunked UPSERT into combiner_feature_vectors ──
       const excluded_by_reason = emptyExcludedCounter();
