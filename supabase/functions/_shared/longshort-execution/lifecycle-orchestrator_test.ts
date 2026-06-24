@@ -21,6 +21,8 @@ import {
   type ReconciliationEventWriter,
   advanceTick,
 } from './lifecycle-orchestrator.ts';
+import { createRejectionPropagator, type HtbCacheWriter } from './cache-propagator-io.ts';
+import type { HtbRecordWrite, SameTickContradictoryPass } from './cache-propagator.ts';
 
 const PROV: DeltaProvenance = {
   selection_reason: 'primary', substituted_from_symbol: null,
@@ -83,6 +85,11 @@ function mkCanceller(): { canceller: BrokerOrderCanceller; cancelled: string[] }
 function mkWriter(): { writer: ReconciliationEventWriter; events: EmittedExecutionEvent[] } {
   const events: EmittedExecutionEvent[] = [];
   return { events, writer: { async emit(ev: EmittedExecutionEvent): Promise<void> { events.push(ev); } } };
+}
+
+function mkHtbWriter(): { writer: HtbCacheWriter; writes: HtbRecordWrite[] } {
+  const writes: HtbRecordWrite[] = [];
+  return { writes, writer: { async upsertHtb(w) { writes.push(w); } } };
 }
 
 const CLOCK = createFixedClock(T0);
@@ -342,4 +349,170 @@ Deno.test('Provenance flows on terminal results regardless of kind', async () =>
   });
   assertEquals(r.terminal[0].provenance.original_rank, 5);
   assertEquals(r.terminal[0].provenance.sector, 'Tech');
+});
+
+// ─── FP-056 E4 (ACT-312): inline propagator seam ──────────────────────
+
+Deno.test('E4 seam: htb rejection invokes propagator → htb UPSERT + broker_rejection_propagation event', async () => {
+  const order = mkOrder({ symbol: 'GME', side: 'short', broker_side: 'sell' });
+  const { writer, events } = mkWriter();
+  const { submitter } = mkSubmitter();
+  const { canceller } = mkCanceller();
+  const { writer: htbWriter, writes: htbWrites } = mkHtbWriter();
+  const propagator = createRejectionPropagator({ htbWriter, eventWriter: writer });
+
+  const r = await advanceTick({
+    in_flight: [order],
+    initial_limit_prices: new Map([['o1', 100]]),
+    acceptanceFetcher: mkAcceptanceFetcher({
+      o1: { order_id: 'o1', symbol: 'GME', state: 'rejected', rejection_reason: 'htb', pending_elapsed_s: 1, fetched_at: PLUS(1) },
+    }),
+    fillFetcher: mkFillFetcher({}),
+    submitter, canceller, eventWriter: writer,
+    propagator,
+    clock: CLOCK, ts: PLUS(1),
+  });
+
+  // Kernel terminalized the order tier-2 (htb classifies as tier2_skip per E3 classifier).
+  assertEquals(r.terminal[0].state, 'terminal_tier2_skip_next_tick');
+  // htb record was UPSERTed.
+  assertEquals(htbWrites.length, 1);
+  assertEquals(htbWrites[0].row.symbol, 'GME');
+  // BOTH the kernel's tier-tag event AND the propagation event fired.
+  assert(events.some((e) => e.call_name === 'longshort.execution.tier2_rejection_skipped'));
+  const propEv = events.find((e) => e.call_name === 'broker_rejection_propagation');
+  assert(propEv, 'propagation event missing');
+  assertEquals(propEv.payload.propagation_class, 'htb');
+  assertEquals(propEv.payload.persisted, true);
+});
+
+Deno.test('E4 seam: halted rejection → propagator emits event but NO htb write', async () => {
+  const order = mkOrder({ symbol: 'AAPL' });
+  const { writer, events } = mkWriter();
+  const { submitter } = mkSubmitter();
+  const { canceller } = mkCanceller();
+  const { writer: htbWriter, writes: htbWrites } = mkHtbWriter();
+  const propagator = createRejectionPropagator({ htbWriter, eventWriter: writer });
+
+  await advanceTick({
+    in_flight: [order],
+    initial_limit_prices: new Map([['o1', 100]]),
+    acceptanceFetcher: mkAcceptanceFetcher({
+      o1: { order_id: 'o1', symbol: 'AAPL', state: 'rejected', rejection_reason: 'halted', pending_elapsed_s: 1, fetched_at: PLUS(1) },
+    }),
+    fillFetcher: mkFillFetcher({}),
+    submitter, canceller, eventWriter: writer,
+    propagator,
+    clock: CLOCK, ts: PLUS(1),
+  });
+
+  assertEquals(htbWrites.length, 0); // halted has NO cache write — live verifier authoritative
+  const propEv = events.find((e) => e.call_name === 'broker_rejection_propagation');
+  assert(propEv);
+  assertEquals(propEv.payload.propagation_class, 'halted');
+  assertEquals(propEv.payload.persisted, false);
+});
+
+Deno.test('E4 seam: transient_bp rejection → propagator emits event but NO htb write', async () => {
+  const order = mkOrder({ symbol: 'MSFT' });
+  const { writer, events } = mkWriter();
+  const { submitter } = mkSubmitter();
+  const { canceller } = mkCanceller();
+  const { writer: htbWriter, writes: htbWrites } = mkHtbWriter();
+  const propagator = createRejectionPropagator({ htbWriter, eventWriter: writer });
+
+  await advanceTick({
+    in_flight: [order],
+    initial_limit_prices: new Map([['o1', 100]]),
+    acceptanceFetcher: mkAcceptanceFetcher({
+      o1: { order_id: 'o1', symbol: 'MSFT', state: 'rejected', rejection_reason: 'insufficient_buying_power', pending_elapsed_s: 1, fetched_at: PLUS(1) },
+    }),
+    fillFetcher: mkFillFetcher({}),
+    submitter, canceller, eventWriter: writer,
+    propagator,
+    clock: CLOCK, ts: PLUS(1),
+  });
+
+  assertEquals(htbWrites.length, 0);
+  const propEv = events.find((e) => e.call_name === 'broker_rejection_propagation');
+  assert(propEv);
+  assertEquals(propEv.payload.propagation_class, 'transient_bp');
+  assertEquals(propEv.payload.failure_action, 'buying_power_cache_refreshed');
+});
+
+Deno.test('E4 seam: pause-class rejection (pdt_block) → propagator is no-op (kernel tier-3 routes)', async () => {
+  const order = mkOrder();
+  const { writer, events } = mkWriter();
+  const { submitter } = mkSubmitter();
+  const { canceller } = mkCanceller();
+  const { writer: htbWriter, writes: htbWrites } = mkHtbWriter();
+  const propagator = createRejectionPropagator({ htbWriter, eventWriter: writer });
+
+  const r = await advanceTick({
+    in_flight: [order],
+    initial_limit_prices: new Map([['o1', 100]]),
+    acceptanceFetcher: mkAcceptanceFetcher({
+      o1: { order_id: 'o1', symbol: 'A', state: 'rejected', rejection_reason: 'pdt_block', pending_elapsed_s: 1, fetched_at: PLUS(1) },
+    }),
+    fillFetcher: mkFillFetcher({}),
+    submitter, canceller, eventWriter: writer,
+    propagator,
+    clock: CLOCK, ts: PLUS(1),
+  });
+
+  assertEquals(r.terminal[0].state, 'terminal_tier3_pause');
+  assertEquals(htbWrites.length, 0);
+  assertEquals(events.find((e) => e.call_name === 'broker_rejection_propagation'), undefined);
+});
+
+Deno.test('E4 seam: htb rejection with same-tick contradictory pass → propagation event tier=tier3 system_bug', async () => {
+  const order = mkOrder({ symbol: 'GME', side: 'short', broker_side: 'sell' });
+  const { writer, events } = mkWriter();
+  const { submitter } = mkSubmitter();
+  const { canceller } = mkCanceller();
+  const { writer: htbWriter, writes: htbWrites } = mkHtbWriter();
+  const propagator = createRejectionPropagator({ htbWriter, eventWriter: writer });
+
+  const passes: SameTickContradictoryPass[] = [{ symbol: 'GME', class: 'htb' }];
+  await advanceTick({
+    in_flight: [order],
+    initial_limit_prices: new Map([['o1', 100]]),
+    acceptanceFetcher: mkAcceptanceFetcher({
+      o1: { order_id: 'o1', symbol: 'GME', state: 'rejected', rejection_reason: 'htb', pending_elapsed_s: 1, fetched_at: PLUS(1) },
+    }),
+    fillFetcher: mkFillFetcher({}),
+    submitter, canceller, eventWriter: writer,
+    propagator,
+    sameTickContradictoryPasses: passes,
+    clock: CLOCK, ts: PLUS(1),
+  });
+
+  assertEquals(htbWrites.length, 1); // record STILL written — loop-break is independent of bug classification
+  const propEv = events.find((e) => e.call_name === 'broker_rejection_propagation');
+  assert(propEv);
+  assertEquals(propEv.tier, 'tier3');
+  assertEquals(propEv.outcome, 'failure_escalated');
+});
+
+Deno.test('E4 seam: no propagator injected → existing behavior preserved (backward compat)', async () => {
+  const order = mkOrder({ symbol: 'GME' });
+  const { writer, events } = mkWriter();
+  const { submitter } = mkSubmitter();
+  const { canceller } = mkCanceller();
+
+  await advanceTick({
+    in_flight: [order],
+    initial_limit_prices: new Map([['o1', 100]]),
+    acceptanceFetcher: mkAcceptanceFetcher({
+      o1: { order_id: 'o1', symbol: 'GME', state: 'rejected', rejection_reason: 'htb', pending_elapsed_s: 1, fetched_at: PLUS(1) },
+    }),
+    fillFetcher: mkFillFetcher({}),
+    submitter, canceller, eventWriter: writer,
+    // no propagator
+    clock: CLOCK, ts: PLUS(1),
+  });
+
+  // Kernel still emits its tier-2 event; no propagation event.
+  assert(events.some((e) => e.call_name === 'longshort.execution.tier2_rejection_skipped'));
+  assertEquals(events.find((e) => e.call_name === 'broker_rejection_propagation'), undefined);
 });

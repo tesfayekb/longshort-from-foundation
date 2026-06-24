@@ -1005,6 +1005,27 @@ export type Database = {
         }
         Relationships: []
       }
+      longshort_short_availability_cache: {
+        Row: {
+          created_at: string
+          expires_at: string
+          marked_htb_at: string
+          symbol: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          marked_htb_at: string
+          symbol: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          marked_htb_at?: string
+          symbol?: string
+        }
+        Relationships: []
+      }
       longshort_target_positions: {
         Row: {
           allocation_pct: number
