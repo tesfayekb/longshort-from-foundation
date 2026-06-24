@@ -60,6 +60,8 @@ import {
   nextState,
 } from './state-machine.ts';
 import { classifyRejection } from './rejection-classifier.ts';
+import type { RejectionPropagator } from './cache-propagator-io.ts';
+import type { SameTickContradictoryPass } from './cache-propagator.ts';
 
 // ── Reconciliation event writer interface ──────────────────────────
 
@@ -122,6 +124,18 @@ export interface AdvanceTickParams {
   submitter: BrokerOrderSubmitter;
   canceller: BrokerOrderCanceller;
   eventWriter: ReconciliationEventWriter;
+  /** OPTIONAL — FP-056 E4 (DEC-068 clause e). When injected, broker rejections
+   *  flow through the §8.9 propagation surface AFTER the kernel's tier-2/3
+   *  event emit (the inline seam — zero propagation lag; the htb record is
+   *  written before the tick returns, so next-tick pre-flight sees it).
+   *  Backward-compatible: legacy callers that don't pass this still get the
+   *  kernel's tier-tag event but skip the cache propagation. Production
+   *  callers MUST inject it. */
+  propagator?: RejectionPropagator;
+  /** OPTIONAL — per-tick snapshot of §7 pre-flight verifier PASSes that
+   *  would have caught a rejection. The propagator uses this for system_bug
+   *  classification (§8.9 L274-275). Defaults to empty. */
+  sameTickContradictoryPasses?: readonly SameTickContradictoryPass[];
   /** Injected clock — passed through for fetcher calls; the kernel uses `ts` directly. */
   clock: ClockReader;
   ts: Date;
@@ -171,6 +185,7 @@ function toTerminal(
 export async function advanceTick(p: AdvanceTickParams): Promise<AdvanceTickResult> {
   const config = mergeConfig(p.config);
   const phase1TimeoutS = p.phase1AcceptanceTimeoutS ?? DEFAULT_PHASE1_TIMEOUT_S;
+  const sameTickPasses = p.sameTickContradictoryPasses ?? [];
   const still: InFlightOrder[] = [];
   const terminal: TerminalOrderResult[] = [];
 
@@ -349,6 +364,46 @@ export async function advanceTick(p: AdvanceTickParams): Promise<AdvanceTickResu
           client_order_id: resub.client_order_id,
           state: 'phase2_escalating',
         };
+      }
+    }
+
+    // ── 3b. §8.9 cache propagation (E4 inline seam). Fires AFTER the
+    //   kernel's tier-2/3 event emit so the broker_rejection_propagation
+    //   row's outcome reflects the actual cache-write result. Confined
+    //   to the original-event-was-rejection branch — fill/timeout paths
+    //   are not propagation surfaces.
+    if (
+      p.propagator &&
+      event.kind === 'acceptance_observed' &&
+      event.state === 'rejected'
+    ) {
+      try {
+        await p.propagator.propagate({
+          symbol: original.symbol,
+          rejection_reason: event.rejection_reason,
+          sameTickPasses,
+          ts: p.ts,
+          order_id: original.order_id,
+          client_order_id: original.client_order_id,
+        });
+      } catch (err) {
+        // Defensive — the propagator itself surfaces htb-write failures as
+        // tier-3 events; this catches an unexpected throw above that layer.
+        // The order is already terminal (set by the kernel); we just emit
+        // a diagnostic and continue the loop.
+        await p.eventWriter.emit(
+          {
+            call_name: 'longshort.execution.propagator_threw',
+            tier: 'tier3',
+            outcome: 'failure_escalated',
+            payload: {
+              order_id: original.order_id,
+              symbol: original.symbol,
+              error: err instanceof Error ? err.message : String(err),
+            },
+          },
+          p.ts,
+        );
       }
     }
 
