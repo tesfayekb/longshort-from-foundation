@@ -174,7 +174,12 @@ export function computeLimitPrice(p: ComputeLimitPriceParams): ComputeLimitPrice
 
   const side = brokerSide(p.intent, p.side);
   // Marketable-limit shape per §8.2 L756: buy bid+offset / sell ask-offset.
-  const limit = side === 'buy' ? bid + offset : ask - offset;
+  // Round to cents (Alpaca limit prices are USD with 2-decimal precision;
+  // float arithmetic on $100.05 − $0.01 yields $100.04000000000002 without
+  // rounding, which the broker would reject as a sub-cent price). The round
+  // is applied AFTER the offset arithmetic so the spec rule is preserved.
+  const rawLimit = side === 'buy' ? bid + offset : ask - offset;
+  const limit = Math.round(rawLimit * 100) / 100;
 
   if (!(limit > 0) || !Number.isFinite(limit)) {
     throw new DegenerateQuoteError(p.quote.symbol, bid, ask, limit);
