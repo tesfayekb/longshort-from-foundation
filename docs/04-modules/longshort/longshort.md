@@ -150,6 +150,27 @@ Roadmap-only. Each entry below requires its own operator-authorized build FP —
 
 **Supervisor-synthesis reference.** A four-tier framing of the full documented ROI roadmap (decision-ready / measurement-accruing / paper-book-blocked / vendor-blocked) plus the chokepoint map and measurement-prerequisite table lives at [`roi-roadmap.md`](roi-roadmap.md) (authored ACT-280; framing-only, no build authorized, no phase re-order, no DEC).
 
+## Sizing / Portfolio Construction (FP-055 / ACT-302 — Step A LANDED 2026-06-24; ratified by DEC-067)
+
+**Status:** sizing-foundation-validated — Step A (pure-compute portfolio construction) **LANDED 2026-06-24** at ACT-302 and **RATIFIED by [DEC-067](../../decisions/DEC-067-longshort-sizing-model.md)** (longshort v1 sizing model — landed same day via investigation + reconciliation per §21.3). The sizing layer reads `combiner_book` (the daily 20L + 20S ranked book) plus `BrokerBuyingPower.account_equity`, computes per-ticker target dollar positions via the v1 sizing model, and writes them to `longshort_target_positions` (MIG-118). PURE compute — **NO order, NO broker write, NO `longshort.execute`** (DEC-032 clause-4 reservation preserved). Decoupled `longshort.targets.published` audit event emitted after each successful UPSERT — the sizing → execution trigger surface (analogous to `longshort.combiner.book_published`).
+
+**v1 sizing model (DEC-067 clause a, locked):**
+
+```
+capital_base       = account_equity × allocation_pct × r7_gross_scaling × leverage
+per_name_notional  = capital_base / book_size
+```
+
+Named multipliers: `allocation_pct` ∈ (0, 1] (D4, default 1.0, dashboard-configurable; operator-facing always-on deployment fraction); `r7_gross_scaling` (DEC-054 R7 reserved gross-scaling slot, default 1.0 until R7 ships — DISTINCT sibling multiplier from `allocation_pct`); `leverage` (D5, hard-locked at 1.0 via `LeverageLockViolationError` in the kernel; column CHECK `>= 1 AND <= 2` is DW-137 forward-compat scaffolding with the 2.0 ceiling provisionally ratified by DEC-067 clause d as DW-137's inheritance bound — NOT an authorization to use any value ≠ 1.0).
+
+**CROSSWIND §1.5 binding rebound (DEC-067 clause b, Rule 8 delta-carry).** "Current invested capital" wherever it appears in §1.5 L144 / L147–149 / L155–157 is rebound to `account_equity × allocation_pct`. At `allocation_pct = 1.0` the rebinding is identity (§1.5 numerics hold verbatim — 2.5% per name at a 40-name book; long gross = short gross = 50%; total gross = 100%; net = 0%). At `allocation_pct < 1.0` total gross becomes `100% × allocation_pct` of account_equity; dollar-neutrality is preserved unconditionally. CROSSWIND §1 L95 / L153 no-leverage invariant is HONORED unchanged (kernel locks `leverage = 1.0`); supersession of L95 / L153 is reserved to DW-137 / the Phase-8 leverage authorization DEC.
+
+**Step G observed numbers (2026-06-23 live book, stub equity = $100,000).** 20 long + 20 short rows persisted; per-name `target_notional = $2,500.00`; long gross = short gross = $50,000 (dollar-neutral exactly); `capital_base = $100,000`; `book_size = 40`; `sizing_basis = account_equity`; `ranker_source = count_normalized_fallback`. Math: 40 × $2,500 = $100,000 = capital_base; per-name = 1/40 = 2.5% of capital_base — matches §1.5 verbatim at the locked params.
+
+**Fallback-book-as-SIZING-INPUT (DEC-067 clause f — load-bearing boundary).** The sizing layer consumes whatever ranked book `combiner_book` carries, including the degraded fallback ranker (`ranker_source = 'count_normalized_fallback'`), because sizing is arithmetic on rankings, not money movement. The fallback-book-as-EXECUTION-INPUT acceptance is a SEPARATE, CONSEQUENTIAL decision deferred to the execution-layer DEC where real money-path risk lives. **DEC-067 does NOT authorize firing trades off the fallback book.**
+
+**Deferred follow-ups.** DW-138 (Alpaca live capital-fetcher wiring — replaces the stub fetcher with `AlpacaBuyingPowerFetcher` once `ALPACA_PAPER_KEY` / `ALPACA_PAPER_SECRET` are provisioned); cron arming (register `longshort.targets.compute` in `job_registry` DISARMED at seed, arm at the operator §22.5.1 boundary); dashboard `allocation_pct` control (separate FP); the execution-layer FP+DEC (consumes `longshort.targets.published`); DW-137 / Phase-8 leverage authorization DEC (the sole future authority to relax the kernel's `leverage === 1.0` assertion, inheriting DEC-067's pre-approved 2.0 column ceiling).
+
 ## Combiner (FP-052 — Phase 3.0 CLOSED 2026-06-23)
 
 **Status:** combiner-foundation-validated — Phase 3.0 (FP-052 (3.0)) **CLOSED 2026-06-23** at Gate-3.0 / ACT-281; closure attestation at [`../../08-planning/phase-closures/plan-trading-001-longshort-007-closure.md`](../../08-planning/phase-closures/plan-trading-001-longshort-007-closure.md). The combiner foundation is operational on the CROSSWIND §6.4 documented degraded path (count-normalized fallback ranker; 20-long / 20-short book per as_of). Trained-model promotion (LightGBM / LambdaRank) is deferred to Phase 3.3 (FP-052.3) per the exit-gate invariant — both `combiner_model_registry WHERE status='active'` and `combiner_rankings WHERE ranker_source <> 'count_normalized_fallback'` return 0 on live DB by construction, and 3.3 atomic promotion is what flips both queries to non-zero. Phase 3.1 (DW-100 backfill) and Phase 3.2 (DW-101 regime features) remain PENDING and out-of-scope of the Phase-3.0 closure. Mirrors the FP-008 `phase-1-validated` precedent shape: foundation operational; downstream sub-phases tracked separately.
