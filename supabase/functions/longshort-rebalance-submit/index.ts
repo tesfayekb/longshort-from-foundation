@@ -251,7 +251,7 @@ function classifySubmissionEvent(r: SubmissionResult): EmittedExecutionEvent {
     case 'accepted':
       return {
         call_name: 'longshort.rebalance.placement',
-        tier: 'strong_evidence',
+        tier: 'tier1',
         outcome: 'false_positive_within_tolerance',
         payload: {
           symbol: r.symbol, side: r.side, intent: r.intent,
@@ -263,7 +263,7 @@ function classifySubmissionEvent(r: SubmissionResult): EmittedExecutionEvent {
     case 'rejected':
       return {
         call_name: 'longshort.rebalance.placement',
-        tier: 'strong_evidence',
+        tier: 'tier2',
         outcome: 'failure_handled',
         payload: {
           symbol: r.symbol, side: r.side, intent: r.intent,
@@ -275,7 +275,7 @@ function classifySubmissionEvent(r: SubmissionResult): EmittedExecutionEvent {
     case 'pending_timeout':
       return {
         call_name: 'longshort.rebalance.placement',
-        tier: 'strong_evidence',
+        tier: 'tier2',
         outcome: 'failure_handled',
         payload: {
           symbol: r.symbol, side: r.side, intent: r.intent,
@@ -291,8 +291,8 @@ function classifySubmissionEvent(r: SubmissionResult): EmittedExecutionEvent {
     case 'noop_skipped':
       return {
         call_name: 'longshort.rebalance.placement',
-        tier: 'strong_evidence',
-        outcome: 'expected_divergence_handled',
+        tier: 'tier1',
+        outcome: 'false_positive_within_tolerance',
         payload: { ...r },
       };
   }
