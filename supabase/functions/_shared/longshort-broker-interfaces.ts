@@ -395,3 +395,63 @@ export interface BrokerRebalanceAggregateFetcher {
    */
   fetchRebalanceAggregate(ts: Date): Promise<BrokerRebalanceAggregate>;
 }
+
+// ────────────────────────────────────────────────────────────────────
+// FP-056 E2 additions (DEC-068 clause k — sequential submitter contract).
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Order request — the marketable-limit shape the E2 submitter posts to
+ * Alpaca paper per DEC-068 clause (k).3 §8.2 named pricing constants.
+ *
+ * `type='limit'` + `time_in_force='day'` per clause (k).3 SHARE_ROUNDING +
+ * TIF row. `qty` is integer whole-shares (Alpaca paper fractional-limit
+ * orders carry TIF/marketable constraints that disqualify them at the
+ * submitter boundary per clause (k).3).
+ *
+ * `client_order_id` is the per-target-per-tick idempotency key per DEC-031
+ * T8; the E2 submitter generates it deterministically from (symbol, intent,
+ * ts) so a re-submit produces an idempotent broker-side dedupe.
+ */
+export interface BrokerOrderRequest {
+  symbol: string;
+  qty: number;                       // integer whole shares
+  side: 'buy' | 'sell';
+  type: 'limit';                     // §8.2 marketable-limit posture
+  time_in_force: 'day';              // §8.2 TIF=DAY
+  limit_price: number;               // dollars; > 0
+  client_order_id: string;           // T8 idempotency key
+}
+
+/**
+ * Order acceptance return — the broker's response to a successful POST.
+ * Equivalent to Alpaca's `POST /v2/orders` 200 response (subset). Per
+ * DEC-034 (3): no swallow + phantom-success — the submitter THROWS on
+ * broker error and the throw propagates upward.
+ */
+export interface BrokerOrderAcceptance {
+  order_id: string;
+  client_order_id: string;
+  /** Broker-reported lifecycle: 'new' / 'pending_new' / 'accepted' / etc. */
+  status: string;
+  /** When the broker accepted the order (broker-side timestamp). */
+  submitted_at: Date;
+}
+
+/**
+ * The POST /v2/orders surface. The E2 submitter consumes ONE method; the
+ * live AlpacaPaperClient.postJson wrapper that implements it goes through
+ * the construction-time paper-only allow-list guard (DEC-068 clause k.8 +
+ * INC-77 closure).
+ *
+ * Errors propagate (DEC-034 clause 3). Network errors throw
+ * AlpacaNetworkError; 4xx/5xx throw AlpacaApiError carrying the broker's
+ * structured rejection body so the E2 shell can classify into the typed
+ * SubmissionResult union (accepted / rejected / pending_timeout).
+ *
+ * Phase-1 acceptance polling is the EXISTING `BrokerOrderAcceptanceFetcher`
+ * (line 297 above); the E2 shell calls it after each successful POST.
+ */
+export interface BrokerOrderSubmitter {
+  submitOrder(req: BrokerOrderRequest, ts: Date): Promise<BrokerOrderAcceptance>;
+}
