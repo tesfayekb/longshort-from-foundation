@@ -66,16 +66,23 @@ export const MARKET_SENTINEL_TICKER = '__MARKET__';
 export const REGIME_TICKER = 'SPY';
 
 /**
- * Calendar-day lookback for the SPY price-history fetch. 730 calendar
- * days × (252/365) ≈ 504 trading days — i.e., right at REGIME_24M_MIN_BARS.
- * Vocabulary-coherent with `DEFAULT_PRICE_HISTORY_LOOKBACK_DAYS=400`
- * (which covers 253 trading days = momentum). Holiday clusters can push
- * the trailing trading-day count to exactly the boundary; if cold-start
- * tripping observed in operator §22.5.1 smoke runs, widen to 760+
- * via a separate FP — do NOT widen here as a "while we're at it"
- * adjustment (ROI-guardrail discipline).
+ * Calendar-day lookback for the SPY price-history fetch. 504 trading
+ * days (REGIME_24M_MIN_BARS) requires 504 / (252/365.25) ≈ 730 calendar
+ * days at ZERO margin; market holidays (~9/yr, ~18 over a 2-yr window)
+ * push the actual trailing bar count under 504. Observed 2026-06-23
+ * manual fire (correlation_id 2ee55801-7380-4196-9dbc-fb2cf8a3c6ad):
+ * Polygon returned bar_count=501 at the 730-day lookback, tripping
+ * `regime_data_insufficient_history`. Widened to 810 calendar days
+ * (≈ 559 trading days theoretical → ~55-bar margin) so the holiday
+ * shortfall is absorbed in any 2-yr window. The 126-bar vol window
+ * (REGIME_VOL_6M_MIN_BARS, ~6mo) is amply covered by the same fetch.
+ * Do NOT widen further as a "while we're at it" adjustment — 810 is
+ * the load-bearing target; massive over-fetch wastes Polygon payload
+ * (ROI-guardrail discipline). Vocabulary-coherent with
+ * `DEFAULT_PRICE_HISTORY_LOOKBACK_DAYS=400` (Signal #6's 253-trading-day
+ * window — a different signal; do NOT alter it here).
  */
-export const REGIME_PRICE_HISTORY_LOOKBACK_DAYS = 730;
+export const REGIME_PRICE_HISTORY_LOOKBACK_DAYS = 810;
 
 export type RegimeOrchestratorOutcome =
   | 'completed'
