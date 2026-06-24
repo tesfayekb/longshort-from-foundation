@@ -2137,6 +2137,124 @@ The three events below are emitted by the manual fallback-ranker edge function `
 
 ---
 
+## Long-Short Target-Position Events (FP-055 / Step A — Portfolio Construction)
+
+The eight events below cover the Step A portfolio-construction / target-position layer. They mirror the combiner.rank family with `combiner.rank` → `targets.compute` plus the decoupled `targets.published` sizing→execution trigger surface (analogous to `combiner.book_published`). All target the `public.longshort_audit_logs` table via `writeStrategyAuditEvent`.
+
+#### `longshort.targets.compute.started` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted at the top of the cron handler BEFORE any gate check or orchestrator call. Cron-trigger variant. |
+| **Emitted by** | `supabase/functions/longshort-targets-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, as_of, as_of_date, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-055 / ACT-302 |
+
+#### `longshort.targets.compute.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted AFTER `createTargetPositionOrchestrator.run(as_of)` returns `outcome='completed'`. Cron-trigger variant. `metadata.capital_source` is `'stub_100k'` until ALPACA_PAPER_KEY/SECRET are provisioned (DW-137); will become `'alpaca_live'` post-provision. The persisted `allocation_pct` / `leverage` mirror the kernel's named params; `leverage` is paper-locked at 1.0 (Phase-8 DEC / DW-136 supersedes the lock). |
+| **Emitted by** | `supabase/functions/longshort-targets-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, as_of, as_of_date, outcome: 'completed' \| 'empty_book', capital_source, alpaca_secrets_present, capital_base, sizing_basis_value, book_size, book_size_long, book_size_short, per_name_notional, ranker_source, targets_written, allocation_pct, leverage, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-055 / ACT-302 |
+
+#### `longshort.targets.compute.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Emitted on orchestrator throw or `outcome='failed'`. Cron-trigger variant. `metadata.stage='orchestrator_throw'` discriminates the throw path; `metadata.failure_reason` carries the typed kernel error name (e.g. `compute_threw: LeverageLockViolationError`). |
+| **Emitted by** | `supabase/functions/longshort-targets-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, as_of, as_of_date?, error?, failure_reason?, stage?, …completed-fields?, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-055 / ACT-302 |
+
+#### `longshort.targets.compute.skipped` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted when the cron handler short-circuits BEFORE the orchestrator (no write to `longshort_target_positions`). `metadata.reason` ∈ `{global_kill_switch_active, job_disarmed, rank_incomplete_for_as_of}`. The `rank_incomplete_for_as_of` gate mirrors the rank-cron's assemble-completion gate (FP-052 3.0d) — a targets fire that races an in-progress rank cannot silently produce a target book on a partial ranking. |
+| **Emitted by** | `supabase/functions/longshort-targets-compute/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, as_of, as_of_date, reason, trigger: 'cron', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-055 / ACT-302 |
+
+#### `longshort.targets.compute.manual_triggered` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted by the manual sibling BEFORE the orchestrator. Carries `actor_id` (operator), optional `allocation_pct` body param. |
+| **Emitted by** | `supabase/functions/longshort-targets-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator UUID; `metadata: { operator_id, as_of, allocation_pct, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-055 / ACT-302 |
+
+#### `longshort.targets.compute.manual_completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Manual-trigger variant of `.completed`. Same payload shape; `trigger:'manual'`. |
+| **Emitted by** | `supabase/functions/longshort-targets-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator UUID; `metadata: { …completed-fields, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-055 / ACT-302 |
+
+#### `longshort.targets.compute.manual_failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, security |
+| **Severity** | HIGH |
+| **Owner module** | longshort |
+| **Description** | Manual-trigger variant of `.failed`. Same payload shape; `trigger:'manual'`. |
+| **Emitted by** | `supabase/functions/longshort-targets-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `actor_id`: operator UUID; `metadata: { …failed-fields, trigger: 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-055 / ACT-302 |
+
+#### `longshort.targets.published` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, domain |
+| **Severity** | INFO |
+| **Owner module** | longshort |
+| **Description** | Emitted AFTER `.completed` / `.manual_completed`, immediately following a successful UPSERT into `longshort_target_positions`. This is the decoupled sizing→execution **trigger surface** — analogous to `longshort.combiner.book_published`. The Phase-5 paper-execution layer (DW-046) will subscribe to this event; emitting it now (no consumer yet) is a deliberate pre-cut socket, cheap to add at write time, expensive to retrofit later. **NOT** an order-submission signal — emission carries zero broker side-effect; downstream consumers gate independently. |
+| **Emitted by** | `supabase/functions/longshort-targets-compute/index.ts` and `supabase/functions/longshort-targets-compute-manual/index.ts` |
+| **Target table** | `public.longshort_audit_logs` |
+| **Payload schema** | `metadata: { operator_id, as_of, as_of_date, capital_source, capital_base, book_size, targets_published, ranker_source, allocation_pct, leverage, trigger: 'cron' \| 'manual', correlation_id }` |
+| **Lifecycle** | active |
+| **Added by** | FP-055 / ACT-302 |
+
+---
+
 ## Long-Short Short-Term Reversal Signal Events (FP-040 / Signal #7)
 
 The six events below mirror the momentum signal's event family exactly, with `momentum` → `reversal` and `cross_sectional_momentum_12_1` → `short_term_reversal_1w`. Same target table (`public.longshort_audit_logs`), same payload shapes, same lifecycle semantics.
