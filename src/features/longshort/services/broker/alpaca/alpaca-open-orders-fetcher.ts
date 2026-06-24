@@ -52,7 +52,7 @@ const RECONSTRUCTED_PROVENANCE: DeltaProvenance = {
   computed_at: '1970-01-01T00:00:00.000Z',
 };
 
-const CID_RE = /^lse-([A-Z0-9.\-]+)-(open|increase|decrease|close|noop)-(\d+)(?:-step(\d+))?$/;
+const CID_RE = /^lse-([A-Z0-9.-]+)-(open|increase|decrease|close|noop)-(\d+)(?:-step(\d+))?$/;
 
 const ACCEPTED_PHASE1 = new Set(['accepted', 'new', 'pending_new', 'accepted_for_bidding']);
 const ACCEPTED_PHASE2 = new Set(['partially_filled']);
