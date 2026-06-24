@@ -130,6 +130,11 @@ function makeCapturingEventWriter(): { writer: ReconciliationEventWriter; events
   };
 }
 
+/** No-op snapshot writer for tests that don't care about snapshot
+ *  behavior. Avoids the default writer's supabaseAdmin env-var lookup
+ *  noise during test runs. */
+const noopSnapshotWriter: EquitySnapshotWriter = { async write(_s) {} };
+
 // ── (a) FULL_REBALANCE end-to-end ────────────────────────────────────────
 
 Deno.test('FULL_REBALANCE drives rankings → composer → planRebalance → submitRebalance', async () => {
@@ -147,6 +152,7 @@ Deno.test('FULL_REBALANCE drives rankings → composer → planRebalance → sub
     eventWriter: writer,
     rankingsReader: async (_op) => rankings,
     ts: TS,
+    snapshotWriter: noopSnapshotWriter,
   };
 
   const out = await runRebalanceSubmit(
@@ -248,7 +254,7 @@ Deno.test('GUARDRAIL 2: response carries ssr_unavailable + shorts_placed_without
   const { writer } = makeCapturingEventWriter();
   const out = await runRebalanceSubmit(
     { mode: 'full_rebalance', operator_id: OP },
-    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS },
+    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter },
     CID,
   );
   // Top-level fields, not buried in summary or debug.
