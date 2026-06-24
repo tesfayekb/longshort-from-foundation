@@ -125,3 +125,13 @@ The Phase 7 RTH re-run requirement is tracked in `deferred-work-register.md` as 
 ADR-002's current `Accepted` status holds for the wash-trade finding (§8.6.1.1 parallel-order mechanism rejected by Alpaca paper). The fill-independence premise of v0 fallback is recorded as Phase-7-evidence-gap rather than as ADR-002 deficiency.
 
 **Cross-reference:** DW-062 (Phase 7 RTH re-run); ACT-096 (Lovable independent audit); ACT-097 (this addendum); §22.5.4 (visibility-gap-across-sessions discipline; the evidence-gap was surfaced by Lovable's independent reading even though supervisor's prior analysis didn't catch it).
+
+---
+
+## Back-reference addendum (2026-06-24 — DEC-068 / FP-056 / ACT-305 charter landing)
+
+[DEC-068](../../../decisions/DEC-068-longshort-execution-authorization.md) (longshort v1 execution authorization) **RATIFIES this ADR's sequential-only determination at the execution-layer scope** and operationalizes the v0 fallback for short-stop Phase-1 timeouts. DEC-068 clause (c) is the verbatim re-binding of this ADR's Decision section into the execution charter.
+
+Additionally, DEC-068 clause (b) (autonomous three-tier unfillable resolution) **aligns its Tier 2 auto-skip terminal state (`unfillable_skip`) with CROSSWIND §8.6.2 line 187 verbatim** ("Not filled: Cancel the order. Trade fails. Book operates at one fewer name until next opportunity. Worst-case slippage on attempted entry: 50 bps."). The `unfillable_skip` state names what the spec's "book operates one fewer name" already implies, and the `MAX_SLIPPAGE_BUDGET_BPS = 50` default matches the spec's worst-case slippage line verbatim. This composes correctly with the sequential-only architectural lock this ADR established — the autonomous skip-and-continue posture is the v0-fallback-compatible behavior at scale, not a parallel mechanism.
+
+**Cross-reference:** DEC-068 (execution authorization — ratifies this ADR's sequential-only Decision); FP-056 (the execution FP under that authorization); ACT-305 (DEC-068 + FP-056 charter authoring action).
