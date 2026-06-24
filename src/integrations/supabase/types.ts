@@ -966,6 +966,45 @@ export type Database = {
         }
         Relationships: []
       }
+      longshort_equity_snapshots: {
+        Row: {
+          account_equity: number
+          cash: number | null
+          gross: number
+          long_mv: number
+          mode: string | null
+          net: number
+          operator_id: string
+          short_mv: number
+          source: string
+          ts: string
+        }
+        Insert: {
+          account_equity: number
+          cash?: number | null
+          gross: number
+          long_mv: number
+          mode?: string | null
+          net: number
+          operator_id: string
+          short_mv: number
+          source: string
+          ts: string
+        }
+        Update: {
+          account_equity?: number
+          cash?: number | null
+          gross?: number
+          long_mv?: number
+          mode?: string | null
+          net?: number
+          operator_id?: string
+          short_mv?: number
+          source?: string
+          ts?: string
+        }
+        Relationships: []
+      }
       longshort_reconciliation_state: {
         Row: {
           call_name: string

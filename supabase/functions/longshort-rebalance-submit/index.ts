@@ -183,6 +183,79 @@ export interface RebalanceSubmitDeps {
   eventWriter: ReconciliationEventWriter;
   rankingsReader: (operator_id: string) => Promise<RankingRow[]>;
   ts: Date;
+  /**
+   * ACT-324 / FP-057 — equity-snapshot writer. Called inside the
+   * full_rebalance path AFTER submitRebalance completes, on the equity +
+   * positions ALREADY in hand (NO new broker call). The write is
+   * NON-FATAL: a snapshot-write failure MUST NOT fail the fire — the
+   * order placement is authoritative; the snapshot is observational
+   * (mirrors the strategy-audit "write_failed" tolerance pattern).
+   * Optional — defaults to a `supabaseAdmin`-backed writer.
+   */
+  snapshotWriter?: EquitySnapshotWriter;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// ACT-324 / FP-057 — equity snapshot (the portfolio growth chart's data
+// source). One row per full_rebalance fire on the equity + positions
+// ALREADY fetched at lines 343-346 below — NO new broker call.
+// ──────────────────────────────────────────────────────────────────────────
+
+export type EquitySnapshotSource = 'rebalance_fire' | 'daily_cron';
+
+export interface EquitySnapshotInput {
+  operator_id: string;
+  ts: Date;
+  account_equity: number;
+  cash: number | null;
+  long_mv: number;
+  short_mv: number;
+  gross: number;
+  net: number;
+  source: EquitySnapshotSource;
+  mode: RebalanceMode | null;
+}
+
+export interface EquitySnapshotWriter {
+  write(snap: EquitySnapshotInput): Promise<void>;
+}
+
+/** Pure: derive long_mv / short_mv / gross / net from the positions
+ *  already returned by `listOpenPositions` (which populates market_value).
+ *  Shorts carry negative market_value per Alpaca convention; the
+ *  absolute value is used so `gross = long_mv + short_mv >= 0`. */
+export function computeEquitySnapshotComponents(
+  positions: CurrentPosition[],
+): { long_mv: number; short_mv: number; gross: number; net: number } {
+  let long_mv = 0;
+  let short_mv = 0;
+  for (const p of positions) {
+    if (p.side === 'long') long_mv += p.market_value;
+    else short_mv += Math.abs(p.market_value);
+  }
+  return { long_mv, short_mv, gross: long_mv + short_mv, net: long_mv - short_mv };
+}
+
+function createSupabaseEquitySnapshotWriter(): EquitySnapshotWriter {
+  return {
+    async write(snap: EquitySnapshotInput): Promise<void> {
+      const { error } = await supabaseAdmin.from('longshort_equity_snapshots').insert({
+        operator_id: snap.operator_id,
+        ts: snap.ts.toISOString(),
+        account_equity: snap.account_equity,
+        cash: snap.cash,
+        long_mv: snap.long_mv,
+        short_mv: snap.short_mv,
+        gross: snap.gross,
+        net: snap.net,
+        source: snap.source,
+        mode: snap.mode,
+      });
+      if (error) {
+        throw new Error(`longshort_equity_snapshots insert failed: ${error.message}`);
+      }
+    },
+  };
 }
 
 /** Production rankings reader — `supabaseAdmin` → latest as_of_date for
@@ -402,6 +475,34 @@ export async function runRebalanceSubmit(
   // 7. Emit reconciliation_events per result. Throws propagate (DEC-034 (3)).
   for (const r of submissions) {
     await deps.eventWriter.emit(classifySubmissionEvent(r), ts);
+  }
+
+  // 8. ACT-324 / FP-057 — equity snapshot. NON-FATAL (the order placement
+  //    already succeeded; the snapshot is observational). Uses the equity
+  //    + positions ALREADY in hand at steps 2 — NO new broker call. Wrapped
+  //    in try/catch like the strategy-audit "write_failed" tolerance pattern.
+  const snapshotWriter = deps.snapshotWriter ?? createSupabaseEquitySnapshotWriter();
+  try {
+    const components = computeEquitySnapshotComponents(currentPositions);
+    await snapshotWriter.write({
+      operator_id,
+      ts,
+      account_equity: bp.account_equity,
+      cash: null, // BrokerBuyingPower carries available_bp + account_equity; no cash field.
+      long_mv: components.long_mv,
+      short_mv: components.short_mv,
+      gross: components.gross,
+      net: components.net,
+      source: 'rebalance_fire',
+      mode: 'full_rebalance',
+    });
+  } catch (snapErr) {
+    // Non-fatal: log + continue. The placement succeeded; missing snapshot
+    // costs one chart point, not order correctness.
+    console.error(
+      'longshort_equity_snapshot.write_failed',
+      snapErr instanceof Error ? snapErr.message : String(snapErr),
+    );
   }
 
   return buildResponse({
