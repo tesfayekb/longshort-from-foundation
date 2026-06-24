@@ -23,6 +23,9 @@ import {
 
 import {
   runRebalanceSubmit,
+  computeEquitySnapshotComponents,
+  type EquitySnapshotInput,
+  type EquitySnapshotWriter,
   type RebalanceSubmitDeps,
 } from './index.ts';
 import type { BrokerInterfaces } from '../_shared/longshort-execution/broker-bootstrap.ts';
