@@ -37,7 +37,8 @@ const ALPACA_DATA_BASE_URL = 'https://data.alpaca.markets' as const;
  *
  * Any other override throws `PaperOnlyViolationError` at construction. CI
  * lint complement: `scripts/check-paper-only-url.ts` (DEC-036 clause 2) bans
- * literal references to the live trading URL `://api.alpaca.markets`; the
+ * literal references to the live trading URL string (the live alpaca-markets
+ * trading host the paper-api / data subdomains are the alternatives to); the
  * runtime guard catches dynamic / config-injected overrides the static lint
  * cannot see.
  */
