@@ -274,3 +274,128 @@ Deno.test('Gate-6: index.ts contains no banned wall-clock reads in business logi
   // `new Date()` with no args is banned; `new Date(...)` with args is fine.
   assertEquals(/\bnew\s+Date\s*\(\s*\)/.test(stripped), false, 'no no-arg new Date()');
 });
+
+// ── (f) ACT-324 / FP-057 — equity snapshot math (pure compute). ──────────
+
+Deno.test('computeEquitySnapshotComponents derives long_mv / short_mv / gross / net from positions', () => {
+  const c1 = computeEquitySnapshotComponents([
+    { symbol: 'AAA', side: 'long',  qty:  100, market_value:  10_000, current_price: 100 },
+    { symbol: 'BBB', side: 'long',  qty:   50, market_value:   7_500, current_price: 150 },
+    { symbol: 'CCC', side: 'short', qty:  -25, market_value:  -5_000, current_price: 200 },
+    { symbol: 'DDD', side: 'short', qty:  -40, market_value:  -2_500, current_price:  62.5 },
+  ]);
+  assertEquals(c1.long_mv, 17_500);
+  assertEquals(c1.short_mv,  7_500); // absolute value of negative market_value
+  assertEquals(c1.gross,    25_000);
+  assertEquals(c1.net,      10_000); // long_mv - short_mv
+
+  // Empty book → zeros (the first fire's snapshot, before any positions).
+  const c0 = computeEquitySnapshotComponents([]);
+  assertEquals(c0, { long_mv: 0, short_mv: 0, gross: 0, net: 0 });
+});
+
+// ── (g) ACT-324 / FP-057 — snapshot writer is called with correct payload
+//        on full_rebalance; uses the equity + positions ALREADY in hand. ──
+
+Deno.test('FULL_REBALANCE writes one equity snapshot using equity + positions already in hand', async () => {
+  const rankings: RankingRow[] = [
+    { ticker: 'AAA', long_rank: 1, short_rank: 999, long_score: 1, short_score: -1, gics_sector: 'Tech', ranker_source: 'test' },
+  ];
+  // One pre-existing long position so long_mv > 0 in the snapshot.
+  const positions: BrokerPosition[] = [
+    { symbol: 'XYZ', qty: 10, market_value: 1_234.56, current_price: 123.456,
+      cost_basis: 1_000, unrealized_pl: 234.56, fetched_at: TS },
+  ];
+  const { interfaces } = makeFakeBroker({
+    positions, account_equity: 250_000, available_bp: 200_000,
+  });
+  const { writer } = makeCapturingEventWriter();
+
+  const captured: EquitySnapshotInput[] = [];
+  const snapshotWriter: EquitySnapshotWriter = {
+    async write(s) { captured.push(s); },
+  };
+
+  await runRebalanceSubmit(
+    { mode: 'full_rebalance', operator_id: OP },
+    {
+      brokerFactory: () => interfaces,
+      eventWriter: writer,
+      rankingsReader: async () => rankings,
+      ts: TS,
+      snapshotWriter,
+    },
+    CID,
+  );
+
+  assertEquals(captured.length, 1, 'one snapshot per fire');
+  const snap = captured[0];
+  assertEquals(snap.operator_id, OP);
+  assertEquals(snap.ts, TS, 'injected ts — no wall-clock');
+  assertEquals(snap.account_equity, 250_000, 'bp.account_equity reused — no new broker call');
+  assertEquals(snap.long_mv, 1_234.56);
+  assertEquals(snap.short_mv, 0);
+  assertEquals(snap.gross, 1_234.56);
+  assertEquals(snap.net, 1_234.56);
+  assertEquals(snap.source, 'rebalance_fire');
+  assertEquals(snap.mode, 'full_rebalance');
+  assertEquals(snap.cash, null);
+});
+
+// ── (h) ACT-324 / FP-057 — snapshot write failure MUST NOT fail the fire. ─
+
+Deno.test('FULL_REBALANCE: snapshot-write failure is NON-FATAL (the order placement is authoritative)', async () => {
+  const rankings: RankingRow[] = [
+    { ticker: 'AAA', long_rank: 1, short_rank: 999, long_score: 1, short_score: -1, gics_sector: 'Tech', ranker_source: 'test' },
+    { ticker: 'BBB', long_rank: 999, short_rank: 1, long_score: -1, short_score: 1, gics_sector: 'Health', ranker_source: 'test' },
+  ];
+  const { interfaces, orders } = makeFakeBroker({});
+  const { writer } = makeCapturingEventWriter();
+
+  const throwingSnapshotWriter: EquitySnapshotWriter = {
+    async write(_s) { throw new Error('snapshot_write_blew_up'); },
+  };
+
+  // The fire MUST complete successfully despite the snapshot writer throwing.
+  const out = await runRebalanceSubmit(
+    { mode: 'full_rebalance', operator_id: OP },
+    {
+      brokerFactory: () => interfaces,
+      eventWriter: writer,
+      rankingsReader: async () => rankings,
+      ts: TS,
+      snapshotWriter: throwingSnapshotWriter,
+    },
+    CID,
+  );
+  assertEquals(out.status, 'ok');
+  assertEquals(out.mode, 'full_rebalance');
+  assertEquals(orders.length, 2, 'orders still placed despite snapshot failure');
+});
+
+// ── (i) ACT-324 / FP-057 — SPOT_CHECK does NOT write a snapshot
+//        (no positions/bp fetched on the spot-check path — would require
+//        a new broker call, which the directive forbids). ──────────────────
+
+Deno.test('SPOT_CHECK does NOT call the snapshot writer (no equity+positions in hand)', async () => {
+  const { interfaces } = makeFakeBroker({});
+  const { writer } = makeCapturingEventWriter();
+
+  let snapshotCalls = 0;
+  const snapshotWriter: EquitySnapshotWriter = {
+    async write(_s) { snapshotCalls++; },
+  };
+
+  await runRebalanceSubmit(
+    { mode: 'spot_check', symbol: 'SPY', qty: 1, operator_id: OP },
+    {
+      brokerFactory: () => interfaces,
+      eventWriter: writer,
+      rankingsReader: async () => { throw new Error('not_used'); },
+      ts: TS,
+      snapshotWriter,
+    },
+    CID,
+  );
+  assertEquals(snapshotCalls, 0);
+});
