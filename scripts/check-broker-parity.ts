@@ -142,25 +142,23 @@ async function scenarioBuyingPower() {
 }
 
 async function scenarioPosition() {
-  // listOpenPositions — array of rows
-  const fixture = [
-    { symbol: 'AAPL', qty: '10', avg_entry_price: '180.10', side: 'long', market_value: '1805.20', current_price: '180.52' },
-    { symbol: 'TSLA', qty: '-5', avg_entry_price: '200.00', side: 'short', market_value: '-1000.00', current_price: '200.00' },
-  ];
-  const edge = new EdgePos(new EdgeClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) }));
-  const src = new SrcPos(new SrcClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) }));
-  // src/ position fetcher does not expose listOpenPositions — gate the parity check on the
-  // available surface only (fetchPosition single-symbol). Both trees should narrow to a single row.
+  // ACT-320 — src/ adapter now populates {market_value, current_price};
+  // single-symbol parity is full deep-equal. listOpenPositions parity is only
+  // asserted when the src/ adapter exposes the method (additive surface).
   const single = { symbol: 'AAPL', qty: '10', avg_entry_price: '180.10', side: 'long', market_value: '1805.20', current_price: '180.52' };
   const edgeFetch = new EdgePos(new EdgeClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(single) }));
   const srcFetch = new SrcPos(new SrcClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(single) }));
   const e = await edgeFetch.fetchPosition('AAPL', TS);
   const s = await srcFetch.fetchPosition('AAPL', TS);
   if (!deepEqual(e, s)) failures.push({ scenario: 'position:fetch', detail: `edge=${JSON.stringify(e, dateReplacer)} src=${JSON.stringify(s, dateReplacer)}` });
-  // listOpenPositions parity — only assert if src/ exposes it (additive method).
-  const srcAny = src as unknown as { listOpenPositions?: (ts: Date) => Promise<unknown> };
+  const srcAny = srcFetch as unknown as { listOpenPositions?: (ts: Date) => Promise<unknown> };
   if (typeof srcAny.listOpenPositions === 'function') {
-    const eList = await edge.listOpenPositions(TS);
+    const listFixture = [
+      { symbol: 'AAPL', qty: '10', avg_entry_price: '180.10', side: 'long', market_value: '1805.20', current_price: '180.52' },
+      { symbol: 'TSLA', qty: '-5', avg_entry_price: '200.00', side: 'short', market_value: '-1000.00', current_price: '200.00' },
+    ];
+    const edgeList = new EdgePos(new EdgeClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(listFixture) }));
+    const eList = await edgeList.listOpenPositions(TS);
     const sList = await srcAny.listOpenPositions(TS);
     if (!deepEqual(eList, sList)) failures.push({ scenario: 'position:list', detail: `edge=${JSON.stringify(eList, dateReplacer)} src=${JSON.stringify(sList, dateReplacer)}` });
   }

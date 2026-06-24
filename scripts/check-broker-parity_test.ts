@@ -131,12 +131,9 @@ Deno.test('parity: position single-symbol (edge-resident ≡ src/)', async () =>
     const fixture = { symbol: 'AAPL', qty: '10', avg_entry_price: '180.10', side: 'long', market_value: '1805.20', current_price: '180.52' };
     const e = await new EdgePos(new EdgeClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchPosition('AAPL', TS);
     const s = await new SrcPos(new SrcClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchPosition('AAPL', TS);
-    // src/ position fetcher omits market_value/current_price; assert the
-    // SHARED-shape fields agree (symbol, qty, avg_entry_price, fetched_at)
-    // — edge-resident is a SUPERSET (additive E1 fields per BrokerPosition
-    // optional shape). Behavior-parity is on the shared surface.
-    const eShared = { symbol: e!.symbol, qty: e!.qty, avg_entry_price: e!.avg_entry_price, fetched_at: e!.fetched_at };
-    assertEquals(canon(eShared), canon(s));
+    // ACT-320 — src/ adapter now populates market_value/current_price too;
+    // the two adapters are genuinely parity-identical. Full deep-equal.
+    assertEquals(canon(e), canon(s));
   } finally { c.restore(); }
 });
 

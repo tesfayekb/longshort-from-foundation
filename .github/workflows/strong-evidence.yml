@@ -65,6 +65,19 @@ jobs:
       - name: Gate 0b — ESLint parity (fast-fail)
         run: npx eslint .
 
+      # Check (c): `deno check` type gate over the edge-function tree. Catalog
+      # #58 seventh firing: a test-literal in tick-scheduler_test.ts violated
+      # the BrokerInterfaces contract (Gate-11 type-check RED) — the failure
+      # only surfaces under `deno check`, not under `deno test` (which never
+      # imports the offending file directly). Wired here as a fast-fail gate
+      # so the type-incomplete-literal class fails in the front of CI instead
+      # of deep in the strong-evidence suite. Uses the functions/deno.json so
+      # the import map + node-modules-dir match the test environment.
+      - name: Gate 0c — deno check (edge-function type parity, fast-fail)
+        run: |
+          cd supabase/functions
+          deno check --config=deno.json $(find _shared -name '*.ts' -not -path '*/node_modules/*')
+
   strong-evidence:
     needs: toolchain-parity
     runs-on: ubuntu-latest
