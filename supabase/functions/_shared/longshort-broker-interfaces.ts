@@ -27,6 +27,15 @@ export interface BrokerPosition {
   qty: number;             // signed: negative for short positions
   avg_entry_price: number; // dollars per share
   fetched_at: Date;        // when the broker call returned this snapshot
+  // ── FP-056 E1 additive extensions (DEC-068 clause j — book-construction
+  //    delta computation). Optional on the interface to preserve byte-identical
+  //    behavior for verify_position (#1), which reads ONLY {qty, avg_entry_price}
+  //    and is unaffected by the presence/absence of these fields. The live
+  //    AlpacaPositionFetcher (E2/E6 work — Alpaca GET /v2/{positions, positions/{symbol}}
+  //    returns both natively) MUST populate these; the E1 rebalance-planner narrows
+  //    via its own CurrentPosition shape and throws on absence at its boundary.
+  market_value?: number;   // dollars; signed (negative for shorts). Alpaca: positions.market_value.
+  current_price?: number;  // dollars per share, last mark. Alpaca: positions.current_price.
 }
 
 export interface BrokerPositionFetcher {
@@ -36,6 +45,22 @@ export interface BrokerPositionFetcher {
    * broker explicitly reports the symbol has NO position (not a fetch failure).
    */
   fetchPosition(symbol: string, ts: Date): Promise<BrokerPosition | null>;
+
+  /**
+   * FP-056 E1 additive — list all currently-open broker positions (Alpaca
+   * GET /v2/positions). Used by the rebalance-planner's CLOSE-ENUMERATION:
+   * a current position whose symbol is NOT in the post-substitution selected
+   * set materializes a `close` ExecutionDelta. Throws on network/auth errors.
+   *
+   * Optional on the interface so existing MOCK_POSITION_FETCHER call sites
+   * (sub-step 6.3d reconciliation-tick dispatch) remain compliant without a
+   * cross-module edit. The E1 boundary consumer narrows and throws if absent
+   * (the live AlpacaPositionFetcher at E2/E6 supplies it).
+   *
+   * Live impl MUST populate the additive {market_value, current_price} fields
+   * on every returned row (E1's planner consumes them).
+   */
+  listOpenPositions?(ts: Date): Promise<BrokerPosition[]>;
 }
 
 /** Quote from one source (signal-source = Polygon; reconciliation-source = Tradier/Yahoo; broker-source = Alpaca). */
