@@ -477,6 +477,34 @@ export async function runRebalanceSubmit(
     await deps.eventWriter.emit(classifySubmissionEvent(r), ts);
   }
 
+  // 8. ACT-324 / FP-057 — equity snapshot. NON-FATAL (the order placement
+  //    already succeeded; the snapshot is observational). Uses the equity
+  //    + positions ALREADY in hand at steps 2 — NO new broker call. Wrapped
+  //    in try/catch like the strategy-audit "write_failed" tolerance pattern.
+  const snapshotWriter = deps.snapshotWriter ?? createSupabaseEquitySnapshotWriter();
+  try {
+    const components = computeEquitySnapshotComponents(currentPositions);
+    await snapshotWriter.write({
+      operator_id,
+      ts,
+      account_equity: bp.account_equity,
+      cash: null, // BrokerBuyingPower carries available_bp + account_equity; no cash field.
+      long_mv: components.long_mv,
+      short_mv: components.short_mv,
+      gross: components.gross,
+      net: components.net,
+      source: 'rebalance_fire',
+      mode: 'full_rebalance',
+    });
+  } catch (snapErr) {
+    // Non-fatal: log + continue. The placement succeeded; missing snapshot
+    // costs one chart point, not order correctness.
+    console.error(
+      'longshort_equity_snapshot.write_failed',
+      snapErr instanceof Error ? snapErr.message : String(snapErr),
+    );
+  }
+
   return buildResponse({
     mode: 'full_rebalance', operator_id, ts, correlationId,
     preflight_summary: preflight.summary,
