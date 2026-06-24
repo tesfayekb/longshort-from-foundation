@@ -706,15 +706,28 @@ Permissions classified as `destructive`, `system-wide`, or `security-critical` r
 | **Lifecycle** | active |
 | **Added by** | PLAN-TRADING-001-LONGSHORT-001 (FP-005, DEC-031 architectural pattern, DEC-032 bootstrap scope lock) |
 
-#### `longshort.execute` — FORWARD-DECLARED (NOT YET SEEDED — DW-047 / E5 build of FP-056)
+#### `longshort.execute`
 
 | Field | Value |
 |-------|-------|
-| **Status** | **FORWARD-DECLARED at charter — permission NOT yet seeded.** DEC-032 clause (4) is honored: key exists only when consuming code exists. [DEC-068](../decisions/DEC-068-longshort-execution-authorization.md) clause (d) AUTHORIZES the introduction TRIGGER; the introduction itself (permission seed migration + first `checkPermissionOrThrow(...,'longshort.execute')` callsite) is PERFORMED in the SAME PR at [FP-056](../08-planning/feature-proposals.md#fp-056-phase-5-paper-exec-execution-layer--sequential-submitter--two-phase-state-machine--autonomous-three-tier-resolution-longshort) E5 build. This entry is a discoverability placeholder — the full per-permission entry replaces it at E5 land. |
-| **Implementation status** | NOT IMPLEMENTED (charter-only). DEC-036 clause (4)'s "MUST NOT introduce" prohibition was scoped to FP-006 (which honored it); DEC-068 clause (d) RETIRES that prohibition for FP-056 specifically. The CI grep enforcement of `longshort.execute` introduction continues to bind every commit EXCEPT the E5 commit (which cites DEC-068 + DEC-032 clause (4) compliance in its commit message + ACT entry). |
-| **Planned shape** | Two-segment per DEC-031 T3 (`longshort.execute`). System-wide scope. Default roles: none seeded; superadmin inherits via wildcard. Reauth required: Yes — destructive trading action. Audit required: Yes — every execute-gated call writes to `longshort_audit_logs` via `_shared/strategy-audit.ts::writeStrategyAuditEvent` per DEC-033 v4.1. Blast radius: high — gates the money-path (paper order placement at v1, live trading at Phase 8). |
-| **Charter** | DEC-068 clause (d) (the introduction-trigger authorization); FP-056 (the FP that performs the introduction at E5); DW-047 (the deferred-work item that closes at E5 land). |
-| **Added by (planned)** | FP-056 / DEC-068 / ACT-305 (charter); seed migration at E5 build (ACT TBD). |
+| **Permission UUID** | (assigned at DB seed by MIG-120 — `gen_random_uuid()` default) |
+| **Module** | longshort (strategy) |
+| **Description** | Gates the long-short execution edge function (`longshort-execute`) which drives the autonomous three-tier order lifecycle (E3 `advanceTick`) against the broker. Highest-privilege long-short permission — gates the MONEY PATH (paper order placement at v1 per DEC-068 clause (f); live trading is Phase 8+). |
+| **Classification** | admin-critical / destructive — places real orders against the broker (paper at v1; live at Phase 8+). |
+| **Scope** | system-wide (per-operator multi-instance scoping is via the `operator_id` parameter on consuming surfaces, not via the permission). |
+| **Default roles** | — (NONE seeded; superadmin inherits all permissions via wildcard; admin and user roles do NOT receive `longshort.execute` by default per DEC-031 sub-point 10 / initial-seed-grants rule. Granting requires explicit operator action.) |
+| **Used by** | `supabase/functions/longshort-execute/index.ts` (FP-056 E5 — the tick-scheduler envelope over E3's `advanceTick`; gates the call with `await checkPermissionOrThrow(authCtx.user.id, 'longshort.execute')` IMMEDIATELY after `authenticateRequest` and BEFORE any broker-facing call). Future consumers will land at FP-056 E6 (the operator-armed cron sibling) and Phase-8 live-trading. |
+| **Blast radius** | high — gates the money-path. At v1 (DEC-068 clause f) the broker boundary is paper-only and the live factory THROWS `LiveBrokerNotProvisionedError` until DW-138 + E6 land the live wiring; at Phase-8+ the same permission gates live order placement. |
+| **Approval required** | Yes — granting requires explicit operator action (no automatic grant via role seeds; superadmin-only by default per the inheritance pattern). |
+| **Audit required** | Yes — every execute-gated call writes `longshort.execute.tick_triggered` / `tick_completed` / `tick_failed` events to `longshort_audit_logs` via `_shared/strategy-audit.ts::writeStrategyAuditEvent` per DEC-033 v4.1. |
+| **Reauth required** | Yes — destructive trading action (operator MFA / recent-auth enforcement is the trading-panel `panels.trading` policy boundary per DEC-028). |
+| **Related routes** | (no UI route at E5 — manual operator POST to the edge function; the operator-armed cron at E6 is back-end). |
+| **Related functions** | `supabase/functions/longshort-execute/index.ts` (edge fn); `supabase/functions/_shared/longshort-execution/tick-scheduler.ts::runTick` (the scheduler envelope); `supabase/functions/_shared/longshort-execution/broker-bootstrap.ts::createLiveBrokerInterfaces` (the composition-root factory — THROWS until E6/DW-138); `_shared/authorization.ts::checkPermissionOrThrow` (the gate). |
+| **Related risks** | DW-138 (Alpaca secrets — E6 closure gate); DW-150 / DW-151 / DW-152 (pause-class deferrals — safety posture preserved via E3's tier-3 routing); DW-140 (partial-fill — out of v1 scope). |
+| **Related tests** | `supabase/functions/_shared/longshort-execution/tick-scheduler_test.ts` (6 tests — envelope semantics + the LiveBrokerNotProvisionedError propagation per DEC-034 clause 3). Full E2E permission-gate test (user without `longshort.execute` blocked at the edge fn) is part of FP-056 E6 closure evidence. |
+| **Depends on** | `trading.access` (panel outer gate); `longshort.view` (cannot execute what you cannot view); `longshort.manage` (the management surface is transitively present for any operator authorized to execute). |
+| **Lifecycle** | active (introduced FP-056 E5 / ACT-313 / MIG-120). |
+| **Added by** | FP-056 / DEC-068 clause (d) introduction authorization; DEC-032 clause (4) reservation satisfied; MIG-120 seed; ACT-313. |
 
 ### Audit Permissions
 
