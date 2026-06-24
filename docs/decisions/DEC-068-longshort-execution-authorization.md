@@ -405,3 +405,21 @@ E3 v1 implements a **defensive STOP guard**: any in-flight order tagged `trade_t
 **This addendum edits NO ratified clause.** Clauses (a)–(k) are unchanged; the v1 scope cut is recorded here for audit lineage and cross-referenced from DW-149.
 
 Cross-reference: DW-149 (the deferred-work register entry, names BOTH halves — intent producer + execution branch); ADR-002 (parallel-order blocked → v0-fallback); clause (c) (v0-fallback ratified); ACT-311 (the E3 build action that introduces this scope cut).
+
+---
+
+## Addendum — htb cache TTL ratification (ACT-313, 2026-06-24; APPEND-ONLY, no ratified clause edited)
+
+At E5 build authorization the operator + supervisor ratified the FP-056 E4 surfaced TTL-decision for the `longshort_short_availability_cache` table (MIG-119) introduced at ACT-312 per clause (e) HYBRID resolution.
+
+**Ratified:** htb cache TTL = **24h wall-clock** from `marked_htb_at`. Acceptable for v1 paper given:
+
+1. **Clear-on-genuine-success is the primary clear path.** The verifier `verify_short_availability` DELETEs the htb record on the next genuine locate-success (qty_available ≥ qty_requested); the 24h TTL is a defense-in-depth backstop for the narrow tail where a marked name is never re-attempted within a session.
+2. **Failure mode is bounded and self-healing.** A Friday-afternoon htb mark expires Saturday afternoon; Monday's first locate either re-marks (one spurious re-reject, self-healing on tick T+2 via the §8.9 propagator) or confirms borrow-available (genuine clear via the DELETE path). No catastrophic-failure mode exists for the 24h-wall-clock cut.
+3. **§2 prime-vs-derivative axiom favors simplicity at v1.** A calendar-aware "next-session-open" TTL introduces a new derived computation (trading-calendar source — holidays, half-days, DST transitions) with its own staleness/correctness modes. The marginal correctness gain is speculative at paper stage; building it now would polish a corner that barely matters until paper produces evidence.
+
+**Revisit trigger:** paper validation surfaces >1 Monday-morning spurious htb re-reject in the paper validation window. The calendar-aware TTL (e.g. `expires_at = next_session_open_after(marked_htb_at)`) is the noted refinement path, **deferred as DW-153** with the paper-evidence trigger condition recorded.
+
+**This addendum edits NO ratified clause.** Clauses (a)–(k) are unchanged; the TTL ratification is recorded here for audit lineage and cross-referenced from DW-153 + ACT-313.
+
+Cross-reference: clause (e) (the NO-PAUSE-only HYBRID resolution this TTL belongs to); ACT-312 (E4 build — introduced the 24h-wall-clock TTL as the v1 default pending this ratification); ACT-313 (E5 build — this ratification); MIG-119 (the htb cache table); DW-153 (the calendar-aware refinement, paper-evidence-gated).

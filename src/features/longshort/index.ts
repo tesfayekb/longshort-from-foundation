@@ -24,10 +24,12 @@ import { LayoutDashboard, Activity, Database, GitCompare, Briefcase } from 'luci
 import type { NavSection } from '@/config/navigation.types';
 
 /**
- * Long-short permission keys, exactly two two-segment keys per DEC-031 sub-point 3
- * and DEC-032 clause 1 bootstrap surface. NO `longshort.execute` — explicitly
- * deferred to FP-006 per DEC-032 clause 7. Seeded into `public.permissions` by
- * MIG-037 (Step 5.2).
+ * Long-short permission keys, two-segment per DEC-031 sub-point 3. Updated
+ * at FP-056 E5 (ACT-313): `longshort.execute` is now seeded (MIG-120) and
+ * consumed by `supabase/functions/longshort-execute/index.ts` — DEC-032
+ * clause (4)'s "key exists only when consuming code exists" invariant is
+ * satisfied in the same PR. Original two keys (`longshort.view` /
+ * `longshort.manage`) were seeded at MIG-037 (Step 5.2).
  *
  * `as const` makes the array readonly and the elements literal-typed — consumers
  * see the exact string literals at the type level.
@@ -35,6 +37,7 @@ import type { NavSection } from '@/config/navigation.types';
 export const LONGSHORT_PERMISSION_KEYS = [
   'longshort.view',
   'longshort.manage',
+  'longshort.execute',
 ] as const;
 
 export type LongShortPermissionKey = (typeof LONGSHORT_PERMISSION_KEYS)[number];
