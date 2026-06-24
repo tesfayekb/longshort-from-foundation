@@ -54,6 +54,18 @@ import type {
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
+/** FP-056 E6-build (ACT-314) — diagnostic-503 pre-flight. Returns true
+ *  iff the Alpaca paper creds are provisioned. Run BEFORE invoking
+ *  `createLiveBrokerInterfaces()` so an absent-creds operator sees a
+ *  structured `broker_credentials_not_provisioned` envelope instead of
+ *  an opaque internal error. Two-line check; prevents a confusing
+ *  failure mode if creds are rotated/removed later. */
+function alpacaCredsPresent(): boolean {
+  const k = Deno.env.get('ALPACA_PAPER_KEY');
+  const s = Deno.env.get('ALPACA_PAPER_SECRET');
+  return typeof k === 'string' && k.length > 0 && typeof s === 'string' && s.length > 0;
+}
+
 /** Production reconciliation event writer — appends to
  *  `public.reconciliation_events`. The shell emits in this shape so
  *  paging fires from `outcome='failure_escalated'` (matches the
@@ -87,6 +99,28 @@ Deno.serve(createHandler(async (req: Request) => {
 
   const correlationId = authCtx.correlationId;
   const ts = productionClock.getWallClockTs();
+
+  // FP-056 E6-build diagnostic-503 pre-flight (ACT-314). Surfaces the
+  // absent-creds case as a structured envelope before the factory is
+  // called. The factory itself remains the authoritative source if
+  // creds are present but invalid (AlpacaApiError 401 propagates).
+  if (!alpacaCredsPresent()) {
+    await writeStrategyAuditEvent({
+      strategyKey: 'longshort',
+      action: 'longshort.execute.tick_failed',
+      actorId: authCtx.user.id,
+      correlationId,
+      ipAddress: authCtx.ipAddress ?? undefined,
+      userAgent: authCtx.userAgent ?? undefined,
+      metadata: {
+        operator_id: DEFAULT_OPERATOR_ID,
+        ts: ts.toISOString(),
+        stage: 'broker_credentials_not_provisioned',
+        trigger: 'manual',
+      },
+    });
+    return apiError(503, 'broker_credentials_not_provisioned', { correlationId });
+  }
 
   await writeStrategyAuditEvent({
     strategyKey: 'longshort',

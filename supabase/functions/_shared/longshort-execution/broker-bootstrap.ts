@@ -1,5 +1,5 @@
 /**
- * broker-bootstrap — FP-056 E5 (DEC-068 clause d + DW-138 reframe).
+ * broker-bootstrap — FP-056 E5 (DEC-068 clause d) + E6-BUILD (ACT-314).
  *
  * Composition-root factory that hands the live execution edge function the
  * four broker interfaces `advanceTick` needs:
@@ -12,27 +12,33 @@
  *     orders (the E3 SURFACE-1 RECONSTRUCT-FROM-BROKER invariant — the
  *     broker IS the authoritative in-flight state; no persisted projection).
  *
- * E5 STATUS — LIVE WIRING IS A NO-OP UNTIL DW-138 LANDS.
+ * E6-BUILD STATUS — LIVE WIRING LANDED; SPOT-CHECK STILL OPERATOR-GATED.
  *
- *   The live AlpacaPaperClient + the per-interface Alpaca adapter modules
- *   are NOT BUILT YET. Per DW-138's reframe at DEC-068 charter landing,
- *   the AlpacaPaperClient exposes a `fetchImpl` injection seam so E1-E5
- *   build against scripted fixtures; live credentials (`ALPACA_PAPER_KEY`
- *   / `ALPACA_PAPER_SECRET`) are the E6 closure prerequisite, NOT the E5
- *   build prerequisite.
+ *   `createLiveBrokerInterfaces()` now instantiates the real
+ *   `AlpacaPaperClient` + per-interface adapters (DW-138 secrets confirmed
+ *   provisioned). The factory is LAZY — all construction happens inside
+ *   the body so the module is import-safe in creds-free CI; the
+ *   `AlpacaCredentialError` only surfaces when the factory is actually
+ *   invoked.
  *
- *   `createLiveBrokerInterfaces()` therefore THROWS a typed
- *   `LiveBrokerNotProvisionedError` until the E6 wiring lands. The throw
- *   propagates through `_shared/handler.ts` into a 503 envelope (DEC-034
- *   clause 3 — errors propagate; NO swallow + phantom-success). This is
- *   intentional: E5 lands the permission gate + the envelope + the
- *   scheduler seam; E5 does NOT fire real orders.
+ *   The DIAGNOSTIC-503 pre-flight at the edge fn (`longshort-execute/
+ *   index.ts`) catches the absent-creds case BEFORE calling the factory
+ *   and returns a structured `broker_credentials_not_provisioned` envelope
+ *   so the operator-facing error is diagnostic, not opaque.
+ *
+ *   `LiveBrokerNotProvisionedError` is retained as an exported type for
+ *   back-compat with E5 callers + tests that asserted the throw; the
+ *   factory no longer throws it (the production code path is now the
+ *   diagnostic-503 pre-flight on absent creds + the `AlpacaCredentialError`
+ *   propagation if the pre-flight is somehow bypassed).
  *
  * Mock-buildability — the tick-scheduler (`tick-scheduler.ts`) consumes a
  * `BrokerInterfaces` value through its `brokerFactory` parameter; tests
  * inject a synthetic factory returning capturing stubs (the standard E3
  * pattern). Production wires `createLiveBrokerInterfaces` at the edge-fn
- * composition root.
+ * composition root. The E_evidence_1 replay leg exercises the SAME
+ * `createLiveBrokerInterfaces → adapter → advanceTick` path via the
+ * `AlpacaPaperClient.fetchImpl` injection seam — fixture-driven, creds-free.
  */
 
 import type {
@@ -42,6 +48,15 @@ import type {
   BrokerOrderCanceller,
 } from '../longshort-broker-interfaces.ts';
 import type { InFlightOrder } from './state-machine.ts';
+import {
+  AlpacaPaperClient,
+  type AlpacaPaperClientConfig,
+} from '../../../../src/features/longshort/services/broker/alpaca/alpaca-paper-client.ts';
+import { AlpacaOrderAcceptanceFetcher } from '../../../../src/features/longshort/services/broker/alpaca/alpaca-order-acceptance-fetcher.ts';
+import { AlpacaOrderSubmitter } from '../../../../src/features/longshort/services/broker/alpaca/alpaca-order-submitter.ts';
+import { AlpacaFillFetcher } from '../../../../src/features/longshort/services/broker/alpaca/alpaca-fill-fetcher.ts';
+import { AlpacaOrderCanceller } from '../../../../src/features/longshort/services/broker/alpaca/alpaca-order-canceller.ts';
+import { AlpacaOpenOrdersFetcher } from '../../../../src/features/longshort/services/broker/alpaca/alpaca-open-orders-fetcher.ts';
 
 /** The four broker surfaces `advanceTick` needs + the in-flight
  *  reconstruction callable that satisfies the E3 SURFACE-1 invariant. */
@@ -56,24 +71,37 @@ export interface BrokerInterfaces {
   reconstructInFlight(ts: Date): Promise<readonly InFlightOrder[]>;
 }
 
-/** Typed throw used until DW-138 + E6 wires the live AlpacaPaperClient.
- *  The handler envelope maps the throw to a 503 response so callers get
- *  a structured "not yet provisioned" signal rather than a phantom 200. */
+/** Retained for back-compat with E5-era callers / tests that asserted
+ *  the "not provisioned" throw. The live factory no longer throws this
+ *  (the production path is the diagnostic-503 pre-flight at the edge
+ *  fn — `broker_credentials_not_provisioned`). Kept exported so callers
+ *  that still pattern-match on it compile. */
 export class LiveBrokerNotProvisionedError extends Error {
   readonly kind = 'live_broker_not_provisioned';
-  constructor(message = 'Live broker interfaces are not provisioned — DW-138 + FP-056 E6 must land first') {
+  constructor(message = 'Live broker interfaces are not provisioned') {
     super(message);
     this.name = 'LiveBrokerNotProvisionedError';
   }
 }
 
 /**
- * Live broker factory — THROWS until DW-138 + E6 wires it. E5 ships the
- * envelope and the throw; E6 replaces the throw body with the real
- * AlpacaPaperClient + per-interface adapters. This deliberate throw is
- * the DEC-034 clause (3) propagation that ensures the edge fn cannot
- * phantom-succeed against an unprovisioned broker.
+ * Live broker factory — instantiates the real `AlpacaPaperClient` + per-
+ * interface Alpaca adapters. LAZY: all construction inside this body so
+ * the module is import-safe in creds-free CI; `AlpacaCredentialError`
+ * only surfaces when this function is actually called.
+ *
+ * `config.fetchImpl` flows into `AlpacaPaperClient` — the E_evidence_1
+ * replay leg uses this seam to drive the SAME factory → adapter →
+ * advanceTick path with fixture-driven responses (creds-free CI).
  */
-export function createLiveBrokerInterfaces(): BrokerInterfaces {
-  throw new LiveBrokerNotProvisionedError();
+export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {}): BrokerInterfaces {
+  const client = new AlpacaPaperClient(config);
+  const openOrders = new AlpacaOpenOrdersFetcher(client);
+  return {
+    acceptanceFetcher: new AlpacaOrderAcceptanceFetcher(client),
+    fillFetcher: new AlpacaFillFetcher(client),
+    submitter: new AlpacaOrderSubmitter(client),
+    canceller: new AlpacaOrderCanceller(client),
+    reconstructInFlight: (ts: Date) => openOrders.listOpenInFlight(ts),
+  };
 }
