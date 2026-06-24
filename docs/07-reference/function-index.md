@@ -4263,3 +4263,12 @@ INERT (no reader) until 3.2-c assembler regime-broadcaster is wired.
 | **Files** | `supabase/functions/longshort-targets-compute/index.ts` + `supabase/functions/longshort-targets-compute-manual/index.ts` |
 | **`job_registry`** | NOT yet registered. Step A landing intentionally NO cron arming — operator-triggered manual fires first; cron registration is a follow-up commit once the manual-fire dry-run confirms stable behavior. |
 | **Added by** | FP-055 / ACT-302 |
+
+### Forward-pointer — FP-056 / DEC-068 execution-layer surfaces (E1–E5 build, NOT YET LIVE)
+
+| Field | Value |
+|---|---|
+| **Status** | **FORWARD-DECLARED at charter — code NOT yet authored.** This entry exists so the index records the planned surfaces and so consumers searching for them find the governance trail; it MUST be replaced with full per-function entries at the respective E-step build commits (the convention is that function-index entries describe LIVE code — this entry is a discoverability placeholder, not a stand-in for live entries). |
+| **Planned surfaces** | (E1) `computeDelta` (pure) — `supabase/functions/_shared/longshort-execution/delta-computer.ts`. (E2) `OrderSubmitter` (sequential `POST /v2/orders` via `AlpacaPaperClient.postJson`; idempotency-key per target per tick; runtime paper-only URL guard) — `supabase/functions/_shared/longshort-execution/order-submitter.ts`. (E3) `ExecutionStateMachine` (two-phase entry + rank-exit; injected Clock per DEC-034 clause 4) + `resolveUnfillable` (autonomous three-tier per DEC-068 clause b; named defaults: MAX_RETRY=3, MAX_SLIPPAGE_BPS=50, WALL_CLOCK_S=120, re-eligible next tick) — `supabase/functions/_shared/longshort-execution/execution-state-machine.ts`. (E4) `RejectionClassifier` (§8.9 NO-PAUSE only at v1 per DEC-068 clause e) + `reconciliation_events` writer for execution-side `call_name` literals — `supabase/functions/_shared/longshort-execution/rejection-classifier.ts`. (E5) `longshort-execution-tick` (cron) + `longshort-execution-tick-manual` edge fns — `supabase/functions/longshort-execution-tick/index.ts` + `…-manual/index.ts`. |
+| **Charter** | [DEC-068](../decisions/DEC-068-longshort-execution-authorization.md) + [FP-056](../08-planning/feature-proposals.md#fp-056-phase-5-paper-exec-execution-layer--sequential-submitter--two-phase-state-machine--autonomous-three-tier-resolution-longshort). |
+| **Added by** | FP-056 / DEC-068 / ACT-305 (charter landing). Full per-function entries land at the respective E-step build actions. |
