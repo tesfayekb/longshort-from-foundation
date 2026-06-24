@@ -387,3 +387,21 @@ Clause (k) operates on the post-clause-(j) selected set: substitution decides WH
 - CROSSWIND §8 (execution spec); §8.6.1 line 109 + §8.6.2 line 187 (the autonomous-resolution spec anchors); §8.6.2 (escalation ladder); §8.9 (broker-rejection propagation); §8.4 lines 771–777 (LOCKED v0.7 baseline + v0.9 supplement — superseded in part by clause (j) per the §8.4 spec-delta carry); §7 (pre-flight gates); §7.1 (sector cap 6-per-(side, sector) — enforced inline by clause (j).1 sector-legality check); §11.0.7 (verify_* surfaces); §1 L95 / L153 (no-leverage invariant — honored transitively).
 - FP-052.3.0c-i / ACT-238 (`combiner_rankings` table — the substitution candidate pool clause (j) consumes; MIG-099 sibling 20260616103102).
 - ACT-302 (FP-055 landing — the sizing kernel this consumes); ACT-303 (DEC-067 authoring); ACT-305 (this DEC's original authoring action — clauses (a)–(i)); **ACT-306 (this DEC's clause-(j) amendment authoring — bounded sector-aware substitution + §8.4 spec-delta carry + FP-056 E1 scope expansion).**
+
+---
+
+## Addendum — E3-v1 scope cut (ACT-311, 2026-06-24; APPEND-ONLY, no ratified clause edited)
+
+At E3 build authorization the operator + supervisor ratified a scope cut for the E3 v1 lifecycle: **E3 v1 handles `entry` + `rank_exit` trade types only**. The short-stop branch (the §8.6.1 L113 elevated-200bps-restart, the parallel-order mechanism per §8.6.1.1 — already ADR-002-blocked → v0-fallback per clause (c) — and the position-state-attached stop-obligation persistence) is deferred to **DW-149** with future-owner-phase = risk-management / stop-detection FP (not yet planned).
+
+Rationale (operator-ratified, captured here for future audit):
+
+1. **No upstream producer exists.** E1 (`rebalance-planner`, ACT-307) generates intents from `target_vs_current` notional deltas off rankings + sizing. A short-stop fires on a P&L breach (≥15% per CROSSWIND §6.3 stop-loss spec) — a trigger NOT in E1's input surface. Building short-stop handling into E3 would be building a consumer for a producer that does not exist (speculative scope; violates the internals-are-derived discipline per Constitution Rule + DEC-034 (3)).
+2. **Zero-cross-tick-state invariant.** E3 v1's architectural load-bearing property is that no execution-layer state spans ticks — the next tick's fresh E1 selection re-derives everything via delta logic (closes via name-not-in-set; decreases via smaller-target delta). The short-stop elevated-200bps restart is the ONLY case that CANNOT be re-derived from rankings + positions — it would force a `short_stop_state` column on `longshort_positions` purely for execution-layer memory (the "execution leaks into position state" anti-pattern). Excising short-stop preserves the invariant.
+3. **Established deferral pattern.** Partial-fill (DW-140), modify-vs-cancel-and-replace (DW-141), LULD (DW-142), parallel-order (ADR-002 → v0-fallback per clause (c)), and now short-stop-execution-branch (DW-149) are all the same shape: spec specifies it; v1 doesn't need it for the fallback book's day-one paper-validation behavior; defer with a register entry and a future-FP home.
+
+E3 v1 implements a **defensive STOP guard**: any in-flight order tagged `trade_type='short_stop'` (or any non-entry/non-rank_exit type) is forced to `terminal_tier3_pause` with a structured `scope_violation_error` side-effect and a `longshort.execution.scope_violation` event. Because E1 does not emit short-stop intents, this guard should never fire in production — it exists to prevent silent handling if a producer ever does. See `supabase/functions/_shared/longshort-execution/state-machine.ts` `isSupportedTradeType` + `nextState` opening.
+
+**This addendum edits NO ratified clause.** Clauses (a)–(k) are unchanged; the v1 scope cut is recorded here for audit lineage and cross-referenced from DW-149.
+
+Cross-reference: DW-149 (the deferred-work register entry, names BOTH halves — intent producer + execution branch); ADR-002 (parallel-order blocked → v0-fallback); clause (c) (v0-fallback ratified); ACT-311 (the E3 build action that introduces this scope cut).
