@@ -706,6 +706,16 @@ Permissions classified as `destructive`, `system-wide`, or `security-critical` r
 | **Lifecycle** | active |
 | **Added by** | PLAN-TRADING-001-LONGSHORT-001 (FP-005, DEC-031 architectural pattern, DEC-032 bootstrap scope lock) |
 
+#### `longshort.execute` — FORWARD-DECLARED (NOT YET SEEDED — DW-047 / E5 build of FP-056)
+
+| Field | Value |
+|-------|-------|
+| **Status** | **FORWARD-DECLARED at charter — permission NOT yet seeded.** DEC-032 clause (4) is honored: key exists only when consuming code exists. [DEC-068](../decisions/DEC-068-longshort-execution-authorization.md) clause (d) AUTHORIZES the introduction TRIGGER; the introduction itself (permission seed migration + first `checkPermissionOrThrow(...,'longshort.execute')` callsite) is PERFORMED in the SAME PR at [FP-056](../08-planning/feature-proposals.md#fp-056-phase-5-paper-exec-execution-layer--sequential-submitter--two-phase-state-machine--autonomous-three-tier-resolution-longshort) E5 build. This entry is a discoverability placeholder — the full per-permission entry replaces it at E5 land. |
+| **Implementation status** | NOT IMPLEMENTED (charter-only). DEC-036 clause (4)'s "MUST NOT introduce" prohibition was scoped to FP-006 (which honored it); DEC-068 clause (d) RETIRES that prohibition for FP-056 specifically. The CI grep enforcement of `longshort.execute` introduction continues to bind every commit EXCEPT the E5 commit (which cites DEC-068 + DEC-032 clause (4) compliance in its commit message + ACT entry). |
+| **Planned shape** | Two-segment per DEC-031 T3 (`longshort.execute`). System-wide scope. Default roles: none seeded; superadmin inherits via wildcard. Reauth required: Yes — destructive trading action. Audit required: Yes — every execute-gated call writes to `longshort_audit_logs` via `_shared/strategy-audit.ts::writeStrategyAuditEvent` per DEC-033 v4.1. Blast radius: high — gates the money-path (paper order placement at v1, live trading at Phase 8). |
+| **Charter** | DEC-068 clause (d) (the introduction-trigger authorization); FP-056 (the FP that performs the introduction at E5); DW-047 (the deferred-work item that closes at E5 land). |
+| **Added by (planned)** | FP-056 / DEC-068 / ACT-305 (charter); seed migration at E5 build (ACT TBD). |
+
 ### Audit Permissions
 
 #### `audit.view`
