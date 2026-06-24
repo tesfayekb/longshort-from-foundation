@@ -2968,3 +2968,93 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future_owner_phase** | Pre-paper-exec hygiene — directly upstream of the Phase-5 paper-exec DEC. |
 | **Cross_ref** | FP-055 (the FP that authored this DW); ACT-302 (the landing action); **DEC-067** (longshort v1 sizing model — the DEC whose formula DW-138's real-equity `sizing_basis_value` feeds; DEC-067's formula is ratified independent of any specific equity value, so DW-138 is a DATA-QUALITY prerequisite for the eventual execution DEC's authoring against real numbers, NOT a governance prerequisite for DEC-067); ACT-303 (DEC-067 authoring action); DEC-034 clause (3) (errors propagate; no swallow + phantom-success — why `AlpacaPaperClient` throws on missing secrets); `supabase/functions/_shared/longshort-targets/stub-capital-fetcher.ts` (the surface to flip); `src/features/longshort/services/broker/alpaca/alpaca-buying-power-fetcher.ts` (the live fetcher already implemented); DW-046 (the paper-exec layer downstream of this DW). |
 | **Reframe (2026-06-24 — DEC-068 / FP-056 / ACT-305 charter landing)** | DW-138 is reframed as **FP-056 CLOSURE (E6) prerequisite, NOT FP-056 BUILD (E1–E5) prerequisite.** Verified at the AlpacaPaperClient surface: the constructor accepts `config.fetchImpl ?? fetch` (a `typeof fetch` injection seam) and exposes a generic `postJson` POST seam. E1–E5 build proceeds against scripted Alpaca-response fixtures via `fetchImpl` injection without ANY live credentials; only E6 (the Alpaca paper spot-check leg of the triple-evidence closure ladder per DEC-068 clause g) requires the provisioned `ALPACA_PAPER_KEY` / `ALPACA_PAPER_SECRET`. DW-138 provisioning runs **IN PARALLEL** with E1–E5 so it is ready for E6. Cross_ref adds: **FP-056** (the execution FP whose E6 closure DW-138 gates); **DEC-068** (the execution authorization that reframes DW-138's blocking semantics from build-prerequisite to closure-prerequisite); **ACT-305** (the charter authoring action that landed this reframe). |
+
+---
+
+### DW-139: Short-stop §8.6.1.1 parallel-order branch (reconsideration triggers per ADR-002)
+
+| Field | Value |
+|---|---|
+| **ID** | DW-139 (next-free after DW-138). |
+| **Status** | Open. Registered at DEC-068 / FP-056 / ACT-305 charter landing. v1 uses ADR-002 v0-fallback only (operator-page + aggressive escalation per polling tick per §8.6.2 — note: at v1, "operator-page" for the short-stop v0-fallback case is itself revisited under the autonomous-resolution discipline; the engine continues escalating without paging until the Tier 2 budget exhausts, at which point Tier 2 auto-skip applies. The §8.6.2 verbatim "operator page" language is preserved here for spec fidelity but operationally subsumed under DEC-068 clause (b)). |
+| **Tier** | A — short-side correctness on the over-close/corrective-trade path. |
+| **Title** | §8.6.1.1 parallel-order mechanism re-evaluation (over-close detection + corrective-trade architecture per §8.6.1.1 paragraphs 3-4). |
+| **Blocking Dependencies** | One of: (i) Phase 5 live-Alpaca (non-paper) wash-trade policy proven different from paper; OR (ii) alternative broker selected with clean parallel-order acceptance; OR (iii) operational paper experience reveals v0-fallback insufficient. Per ADR-002 reconsideration triggers. |
+| **Future Owner Phase** | Phase 5 production-broker integration OR Phase 7 operational evidence — whichever fires first. |
+| **Resolution shape** | A future FP + DEC that authorizes the §8.6.1.1 parallel-order mechanism (parallel limit + market submission with different order IDs; post-fill `verify_position` over-close detection; corrective-trade auto-submission) against a broker that empirically accepts the pattern. Requires schema work for parallel-order tracking + state-machine extension. |
+| **Cross_ref** | DEC-068 clause (c) + clause (h); ADR-002 (the dispositive harness finding); CROSSWIND §8.6.1.1 paragraphs 3-4 (the spec mechanism); DW-062 (Phase-7 RTH re-run of the fill-independence premise); FP-056 (the v1 charter that defers this); ACT-305. |
+
+---
+
+### DW-140: §8.7 Partial-fill discipline
+
+| Field | Value |
+|---|---|
+| **ID** | DW-140 (next-free after DW-139). |
+| **Status** | Open. Registered at DEC-068 / FP-056 / ACT-305 charter landing. |
+| **Tier** | A — fill-ledgering correctness on the money path. |
+| **Title** | §8.7 partial-fill discipline (residual re-submission + audit-trail consistency). |
+| **Blocking Dependencies** | FP-056 v1 (the two-phase state machine that this extends) live. |
+| **Future Owner Phase** | Phase-5 paper-exec follow-up FP (post-FP-056 closure). |
+| **Resolution shape** | A future FP + DEC that authorizes: partial-fill detection at the Fill phase boundary; ledgering of `filled_qty` vs `target_qty`; bounded re-submission of the residual under the same Tier 1 / Tier 2 discipline; audit-trail consistency (one logical target → multiple physical orders, traceable). |
+| **Cross_ref** | DEC-068 clause (h); CROSSWIND §8.7; FP-056 (the v1 charter that defers this); ACT-305. |
+
+---
+
+### DW-141: §8.8 Modify-vs-cancel order amendment
+
+| Field | Value |
+|---|---|
+| **ID** | DW-141 (next-free after DW-140). |
+| **Status** | Open. Registered at DEC-068 / FP-056 / ACT-305 charter landing. v1 uses cancel-and-replace exclusively. |
+| **Tier** | B — efficiency (latency + race-window-handling); correctness path is cancel-and-replace which is well-defined. |
+| **Title** | §8.8 Alpaca PATCH-modify path for in-flight orders (replacing cancel-and-replace for the bps-escalation step). |
+| **Blocking Dependencies** | FP-056 v1 live; empirical evidence that cancel-and-replace race-window is a measurable cost. |
+| **Future Owner Phase** | Phase-5 paper-exec follow-up FP. |
+| **Resolution shape** | A future FP + DEC that evaluates Alpaca's `PATCH /v2/orders/{id}` semantics (atomicity vs cancel-then-replace; idempotency; rejection modes) and authorizes the modify path where it reduces race-window cost without correctness regression. |
+| **Cross_ref** | DEC-068 clause (h); CROSSWIND §8.8; FP-056; ACT-305. |
+
+---
+
+### DW-142: §8.10 LULD-aware re-quote logic
+
+| Field | Value |
+|---|---|
+| **ID** | DW-142 (next-free after DW-141). |
+| **Status** | Open. Registered at DEC-068 / FP-056 / ACT-305 charter landing. v1 surfaces LULD-bounded rejections as Tier 2 auto-skip (routine). |
+| **Tier** | A — correctness on the volatility-event path. |
+| **Title** | §8.10 Limit Up / Limit Down (LULD) handling at the order layer. |
+| **Blocking Dependencies** | FP-056 v1 live; operational evidence of LULD-rejection frequency in the trading universe. |
+| **Future Owner Phase** | Phase-5 paper-exec follow-up FP. |
+| **Resolution shape** | A future FP + DEC that ingests the LULD band publication (broker or exchange feed) at §7 pre-flight and re-quotes the limit price within the band, replacing the Tier 2 auto-skip for LULD-bounded rejections with a band-aware re-submission. |
+| **Cross_ref** | DEC-068 clause (h); CROSSWIND §8.10; FP-056; ACT-305. |
+
+---
+
+### DW-143: §7.x Settlement / lot accounting / wash-sale tracking
+
+| Field | Value |
+|---|---|
+| **ID** | DW-143 (next-free after DW-142). |
+| **Status** | Open. Registered at DEC-068 / FP-056 / ACT-305 charter landing. v1 paper has no settlement; live-money territory. |
+| **Tier** | A (live-money territory) — correctness on the tax + reconciliation surface. |
+| **Title** | §7.x settlement / lot accounting / wash-sale tracking (Strong+ FP scope). |
+| **Blocking Dependencies** | Phase-8 live-money authorization; tax/lot ledger schema. |
+| **Future Owner Phase** | Phase 8 (live-money boundary). |
+| **Resolution shape** | A future Strong+ FP that authors the lot-level ledger (per-fill cost basis), the T+1/T+2 settlement state machine, wash-sale detection windows, and the reconciliation surface against broker statements. NOT a paper concern; paper has no settlement. |
+| **Cross_ref** | DEC-068 clause (h); CROSSWIND §7.x; FP-056; ACT-305. |
+
+---
+
+### DW-144: §8.9 PAUSE-class branch + operator-pause / kill-switch surface
+
+| Field | Value |
+|---|---|
+| **ID** | DW-144 (next-free after DW-143). |
+| **Status** | Open. Registered at DEC-068 / FP-056 / ACT-305 charter landing. v1 handles NO-PAUSE classes (`halted` / `htb` / transient-BP) only per DEC-068 clause (e); PAUSE classes (`ssr_violation` system_bug / `pdt_block` / persistent-BP) are this DW. |
+| **Tier** | A — invariant-violation surface; the Tier 3 operator-page channel per DEC-068 clause (b). |
+| **Title** | §8.9 PAUSE-class propagation + operator-pause / kill-switch surface (the Tier 3 surface). |
+| **Blocking Dependencies** | FP-056 v1 live (so the Tier 1 + Tier 2 autonomous loop has empirical baseline); operator-pause kill-switch surface design (currently nonexistent). |
+| **Future Owner Phase** | Phase-5 paper-exec follow-up FP (the Tier 3 surface) — directly follows FP-056 v1. |
+| **Resolution shape** | A future FP + DEC that authors: (i) the operator-pause kill-switch surface (per-strategy pause; per-symbol pause; account-wide pause); (ii) the `ssr_violation` system_bug classification + ssr-routing post-incident review path; (iii) `pdt_block` account-level pause + operator-review queue; (iv) persistent-BP exhaustion → account-level pause; (v) dashboard surfacing of the Tier 3 incident queue. Pre-submission §7 gates remain the PRIMARY defense — this DW is the escalation surface when the gates fail, NOT a replacement for them. |
+| **Cross_ref** | DEC-068 clause (b) + clause (e) + clause (h); CROSSWIND §8.9 (full broker-rejection propagation table); §8.2 (routing correctness for SSR); FP-056 (the v1 charter that defers this); DEC-036 clause (5) (the original Phase-5 §8.9 boundary); ACT-305. |
