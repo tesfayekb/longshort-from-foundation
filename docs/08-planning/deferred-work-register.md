@@ -3058,3 +3058,16 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future Owner Phase** | Phase-5 paper-exec follow-up FP (the Tier 3 surface) — directly follows FP-056 v1. |
 | **Resolution shape** | A future FP + DEC that authors: (i) the operator-pause kill-switch surface (per-strategy pause; per-symbol pause; account-wide pause); (ii) the `ssr_violation` system_bug classification + ssr-routing post-incident review path; (iii) `pdt_block` account-level pause + operator-review queue; (iv) persistent-BP exhaustion → account-level pause; (v) dashboard surfacing of the Tier 3 incident queue. Pre-submission §7 gates remain the PRIMARY defense — this DW is the escalation surface when the gates fail, NOT a replacement for them. |
 | **Cross_ref** | DEC-068 clause (b) + clause (e) + clause (h); CROSSWIND §8.9 (full broker-rejection propagation table); §8.2 (routing correctness for SSR); FP-056 (the v1 charter that defers this); DEC-036 clause (5) (the original Phase-5 §8.9 boundary); ACT-305. |
+
+### DW-145: E1 noop-tolerance constants (`NOOP_PCT`, `NOOP_FLOOR_USD`) pending empirical-distribution DEC ratification
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-145 (next-free after DW-144). |
+| **Status** | open. |
+| **Title** | Ratify E1 noop-tolerance constants (`NOOP_PCT = 0.02`, `NOOP_FLOOR_USD = 50`) by a future DEC once paper-replay surfaces the empirical drift distribution. |
+| **Reason for Deferral** | The noop band determines whether a small target ↔ current divergence materializes as a real order or as a `noop` intent (no submission). Its values shape commission/slippage drag and the engine's reactivity to price drift. At E1-build time there is **no empirical replay evidence** to calibrate the values against — they are E1 NAMED CONSTANTS surfaced as exports (not silent defaults; not phantom-zero anti-pattern), but they are NOT DEC-ratified. The right ratification moment is after E3 lands the replay-fixture surface and a paper window produces a real drift histogram. |
+| **Blocking Dependencies** | E3 replay-fixture surface (so the noop band can be calibrated against scripted broker fills); ideally one paper window's worth of `longshort.execution.*` events to observe the empirical drift distribution. |
+| **Future Owner Phase** | Phase-5 paper-exec — amend DEC-068 with clause (k) at the E3/E4-era replay-evidence checkpoint OR author a standalone noop-band DEC. |
+| **Resolution shape** | A future DEC clause (or standalone DEC) that ratifies `NOOP_PCT` + `NOOP_FLOOR_USD` against empirical drift evidence, with explicit rationale + the calibration source cited verbatim. Until then, the constants live in `supabase/functions/_shared/longshort-execution/rebalance-planner.ts` as documented exports and are referenced in `function-index.md` (rebalance-planner row) and FP-056 (E1 noop-tolerance DEC-RATIFICATION DEFERRAL row). |
+| **Cross_ref** | FP-056 E1 (the build that introduces them at ACT-307); `function-index.md` `rebalance-planner` entry; DEC-068 (clauses a–j ratified; clause k reserved-by-implication for noop-band ratification); ACT-307. |
