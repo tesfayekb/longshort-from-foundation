@@ -422,4 +422,33 @@ At E5 build authorization the operator + supervisor ratified the FP-056 E4 surfa
 
 **This addendum edits NO ratified clause.** Clauses (a)–(k) are unchanged; the TTL ratification is recorded here for audit lineage and cross-referenced from DW-153 + ACT-313.
 
+---
+
+### Clause (n) — Paper-v1 SSR posture: typed-absence, degraded-documented, NOT live-acceptable — AMENDMENT (ACT-321, 2026-06-24)
+
+(Letters (l) and (m) intentionally unused — reserved-by-skip; clause (n) is the next-emitted clause per supervisor framing. Clauses (a)–(k) and both prior addenda are BYTE-UNCHANGED by this amendment; this clause is APPEND-ONLY.)
+
+**THE POSTURE.** Alpaca paper does not expose Short Sale Restriction (SSR) state cleanly. Phase-1 (ACT-317) confirmed this empirically: no `alpaca-ssr-status-fetcher` adapter exists in either tree (neither `supabase/functions/_shared/longshort-broker/` nor `src/features/longshort/services/broker/alpaca/`). The §7 preflight composer (`supabase/functions/_shared/longshort-execution/preflight-composer.ts`) handles this as **typed absence per the §2 prime-vs-derivative axiom** — NOT a synthetic "SSR-clear" sentinel, NOT a fabricated `state: 'not_active'`, NOT a default-on-failure: when no `ssrStatusFetcher` is injected at composer construction, `verify_ssr_status` is **skipped** on every short candidate, recorded per-candidate in `verifiers_skipped` and at batch-level in `summary.ssr_unavailable = true`. The composer carries an `ssrStatusFetcher?` optional injection slot at `preflight-composer.ts:126` as the pre-live wiring point — the slot exists today; only the source-side adapter is absent.
+
+**THE RATIONALE.** SSR is a Reg SHO routing/regulatory constraint that bites only on REAL shorts on REAL capital. Paper accounts carry no regulatory exposure — the constraint is vestigial on paper. Wiring a real SSR source now (Polygon / Tradier / equivalent) would add (i) a live data-feed dependency with its own staleness, auth, and rate-limit failure modes, and (ii) a new failure axis whereby an SSR-feed outage blocks ALL shorts (a worse posture than the typed-absence cut, which surfaces "we don't know" rather than fabricating "we checked"). The typed-absence representation is the honest encoding of what we actually know on paper, consistent with the §2 axiom (`No silent sentinels in money paths`; `Missing data uses typed Optional / explicit enums, never fabricated zeros`).
+
+**THE SCOPE BOUNDARY (load-bearing).** This posture is **PAPER-ONLY-ACCEPTABLE and EXPLICITLY NOT LIVE-ACCEPTABLE.** Live-fire ratification CANNOT proceed with SSR as typed-absence — a real SSR source MUST be wired (and verified) before live. **DW-154** is the named pre-live blocker (Polygon / Tradier SSR-source STEP-A → composer injection → verification); DW-154 closure is a hard prerequisite for the live-money DEC. The spot-check first fire (E_evidence_3) is **long-only by design** (a single long-side name; shorts route through a locate first which is out of scope for the spot-check), so SSR does not gate the initial validation regardless of paper-v1 SSR posture.
+
+**GUARDRAIL 1 (this clause — DEC ratification).** The paper-v1 SSR posture is governance-ratified HERE (clause (n)). It cannot quietly persist into live by inertia: live-fire ratification must explicitly close DW-154 and reference its evidence.
+
+**GUARDRAIL 2 (binding Phase-2 trigger requirement — operator-visible diagnostic).** The placement-trigger response payload (Phase-2 build, not yet authored) **MUST surface `summary.ssr_unavailable` plus per-symbol `verify_ssr_status`-skipped attribution on EVERY placement that includes shorts.** If shorts are placed under typed-absence SSR, the operator MUST SEE that count and attribution on every placement — not silently swallowed, not buried under a debug flag, not deferred to a follow-up dashboard. This is a binding requirement on the Phase-2 placement-trigger build: the trigger's response schema must include `ssr_unavailable: boolean` and `shorts_placed_without_ssr_check: string[]` (the symbol list), and the trigger's caller-facing diagnostic surface (UI / operator log) must render them. A Phase-2 build that omits this surfacing FAILS the clause-(n) contract.
+
+**GUARDRAIL 3 (named live-fire blocker — DW-154).** DW-154 is registered concurrently with this clause (same PR, ACT-321) as a named, OPEN, live-fire-ratification-blocking deferred-work item. Its closure prerequisite is: a real SSR source wired into the composer's `ssrStatusFetcher?` injection slot, verified against the §11.0.7 #5 tri-state semantics (`not_active` / `active` / `indeterminate`), with the live-fire ratification DEC explicitly citing DW-154 closure evidence.
+
+**CROSS-REFERENCES.**
+- **DW-154** (the pre-live SSR-source wiring blocker — registered same PR; live-fire ratification prerequisite).
+- **Clause (e) / §8.9** (`ssr_violation` rejection-class — already deferred per DW-150). DISTINCTION: clause (e) governs the broker-REJECTION path (broker reports an SSR violation on a submitted order → PAUSE-class routing, deferred per DW-150); clause (n) governs the PRE-FLIGHT path (the composer's `verify_ssr_status` skip behavior under typed-absence). The two are independent slices of the SSR surface — clause (n) does not amend, supersede, or weaken clause (e); they compose.
+- **§2 axiom** (prime-vs-derivative, no synthetic sentinels) — the basis for typed-absence over default-on-failure.
+- **CROSSWIND §11.0.7 #5** (SSR tri-state spec — the contract DW-154's wired source will be verified against).
+- **ACT-317** (Phase-1 broker-adapter transcription — the action that confirmed no Alpaca SSR adapter exists in either tree).
+- **`preflight-composer.ts:126`** (the `ssrStatusFetcher?` optional injection slot — the in-code anchor for the typed-absence handling and the DW-154 wiring point).
+- **`verify_ssr_status.ts`** (the verifier whose skip is recorded in `verifiers_skipped` / `summary.ssr_unavailable`).
+- **E_evidence_3 / spot-check first fire** (long-only by design — confirms clause (n) does not gate initial validation).
+- **ACT-321** (this clause's amendment authoring action).
+
 Cross-reference: clause (e) (the NO-PAUSE-only HYBRID resolution this TTL belongs to); ACT-312 (E4 build — introduced the 24h-wall-clock TTL as the v1 default pending this ratification); ACT-313 (E5 build — this ratification); MIG-119 (the htb cache table); DW-153 (the calendar-aware refinement, paper-evidence-gated).
