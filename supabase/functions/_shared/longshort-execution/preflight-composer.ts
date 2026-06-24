@@ -246,20 +246,26 @@ export async function composePreflightResults(
         //   !available                                              → failure_handled
         //   available && qty_available < qty_requested              → failure_handled (partial)
         //   available && qty_available >= qty_requested             → false_positive_within_tolerance (PASS)
-        // qty_requested at the gate uses the candidate's requested
-        // position size; the locate adapter's probe qty is its own
-        // construction default (1 share — "can we borrow at all?").
+        // GATE SEMANTICS: at pre-flight time the candidate carries DOLLAR
+        // notional (`requested_position_size`), not shares — share count
+        // is computed at submit-time via pricing.ts. The gate therefore
+        // asks the boundary question "can we borrow at all?" (qty_available
+        // ≥ 1 share). The submit-time path re-checks against actual share
+        // count via the standalone verify_short_availability surface when
+        // wired into the reconciliation sweeps. Splitting the check this
+        // way keeps the gate fast + dollar-denominated and the verifier
+        // share-denominated, which is what each layer's input contract is.
         if (!locate.available) {
           shortFailed = true;
-        } else if (
-          locate.qty_available !== null &&
-          locate.qty_available < Math.max(1, Math.abs(c.requested_position_size))
-        ) {
+        } else if (locate.qty_available !== null && locate.qty_available < 1) {
           shortFailed = true;
         }
         // CLEAR-ON-GENUINE-SUCCESS — mirrors verify_short_availability.ts
         // line ~155: clear ONLY on the genuine-success branch (passed AND
-        // qty_available >= requested). Partial does NOT clear.
+        // qty_available >= 1 share at the gate). Partial-on-actual-shares
+        // is enforced at the submit-time verifier surface, which DOES NOT
+        // clear on partial — the gate's clear here is the "any-borrow"
+        // green-light, not the full-size green-light.
         if (!shortFailed && deps.htbCache?.clearer) {
           await deps.htbCache.clearer.clearHtb(c.symbol);
         }
