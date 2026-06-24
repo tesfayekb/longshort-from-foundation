@@ -264,6 +264,92 @@ This preserves the §22.5.2-adjacent "compute layer is pure; boundary fetches" d
 - **FP-056 E1 (delta-computer)** — scope EXPANDED by this amendment: E1's input becomes `combiner_rankings` top-30 per side (with score + sector) + INJECTED `Map<symbol, PreflightResult>` + current positions, rather than the fixed 40-row `longshort_target_positions` table. The substitution pre-pass runs inside E1; the delta is computed over the selected (post-substitution) set. The unit-fork (notional at E1, shares at E2), noop tolerance, close enumeration, and intent classification are UNAFFECTED by this scope expansion (they apply to the selected set, whatever it ends up being).
 - **FP-056 E2 (sequential submitter), E3 (state machine + autonomous resolution), E4 (§8.9 propagation), E5 (`longshort.execute`), E6 (triple-evidence closure)** — UNAFFECTED by this amendment. The clause-(b) tier model governs them unchanged.
 
+### Clause (k) — Cross-symbol sequential-submission ordering + §8.2 named pricing constants — AMENDMENT (ACT-309, 2026-06-24)
+
+> **AMENDMENT NOTE.** Added 2026-06-24 at ACT-309 as a NEW clause; **clauses (a)–(j) are UNCHANGED** by this amendment. Clause (b) (execution-layer autonomous three-tier retry/skip) is **EXPLICITLY UNCHANGED** — clause (k) decides only the SUBMISSION ORDER of the post-clause-(j) selected set and pins the §8.2 marketable-limit pricing constants; per-target retry/skip semantics, escalation bps ladder, and named clause-(b) constants are preserved verbatim. Clause numbering follows monotonic append (no renumbering). Clause (k) operates within ADR-002's sequential-only architectural lock (clause (c)); ADR-002 is SILENT on cross-symbol ordering, so clause (k) is a free design choice within that lock — NOT a supersession of ADR-002.
+
+#### Clause (k).1 — The cross-symbol submission-order rule
+
+The post-clause-(j) selected set is partitioned by INTENT CLASS and submitted to the broker in this fixed order:
+
+1. **CLOSES** — current-positions-NOT-in-selected (exact-held-qty market-/marketable-limit exit, per clause (k).3 close-path rule).
+2. **DECREASES** — same-side held positions whose target |notional| is strictly less than current |notional| (delta reduces gross exposure on that side).
+3. **OPENS** — selected names with no current position (delta increases gross exposure from zero).
+4. **INCREASES** — same-side held positions whose target |notional| is strictly greater than current |notional| (delta increases gross exposure on that side).
+
+**Within each class, the two sides are INTERLEAVED (NOT all-longs-then-all-shorts), ordered by `|delta_notional|` DESCENDING.** Interleaving runs the largest long-side order, then the largest short-side order, then the next-largest long, the next-largest short, and so on within the class; ties broken by symbol ascending for determinism.
+
+#### Clause (k).2 — Rationale (the interruption-state argument — money-path INVARIANT protection)
+
+The invariant protected is **DOLLAR-NEUTRALITY** — the CROSSWIND §1 ~L182 90–110% gross-balance band between the long and short books. The submission order is engineered to KEEP THE INVARIANT WHOLE IF THE BATCH IS INTERRUPTED MID-FLIGHT (broker outage, tick-window expiry, kernel throw, operator pause).
+
+- **Closes/Decreases FIRST.** If a batch is interrupted after the closes ran but before opens ran, the book is **UNDER-INVESTED but proportionally NEUTRAL** (both sides shrank in similar dollar magnitude; the 90–110% band holds; recovery cost is the OPPORTUNITY of the un-placed opens at next-tick prices — bounded slippage). The inverse posture — opens-first interrupted — leaves the book **FULLY INVESTED but IMBALANCED** (e.g. 24 longs / 20 shorts; the band BREAKS; concentration cap may break; recovery requires forced closes against degraded mid-tick quotes plus carried inter-tick imbalance — an order of magnitude worse). The trade-off is explicit: **dollar-neutrality > capital-utilization** for a 1-tick interruption window.
+- **Sides INTERLEAVED within class.** Shorts-first-exhausting-buying-power within a class would leave the broker book net-short for a tick (invariant break inside the batch, not just at the end). Interleaving by `|notional|` across both sides keeps the running gross-balance near-neutral at every point in the submission stream.
+- **Within-class `|notional|`-DESCENDING.** If buying power exhausts mid-batch, the deferred tail is the cheapest names (lowest opportunity cost); the names that move the gross-balance most are placed first.
+
+#### Clause (k).3 — §8.2 marketable-limit pricing — NAMED CONSTANTS (clause-(j).5-style table)
+
+Pricing constants for the §8.2 marketable-limit shape, ratified verbatim against the v0.7-locked spec (CROSSWIND_SPEC.md L756/758 — *"Buy: bid + 1¢. Sell: ask − 1¢. 30-second initial timeout. For high-priced names ($500+/share), use 5-cent buffer instead of 1-cent. Phase 0 validates buffer width."*). The 5¢ for ≥$500 names **REPLACES** the 1¢ (not additive — the buffer is the spread the limit price sits inside, not a cumulative offset). TIF = DAY (broker-acceptance-window discipline, not next-day persistence). Whole shares only (Alpaca paper fractional limit orders carry TIF/marketable constraints that disqualify them at the submitter boundary).
+
+| Parameter | Value | Anchor |
+|---|---|---|
+| `PRICE_OFFSET_NORMAL_USD` | **0.01** | §8.2 L756 verbatim *"Buy: bid + 1¢. Sell: ask − 1¢"*. |
+| `PRICE_OFFSET_HIGH_PRICED_USD` | **0.05** | §8.2 L758 verbatim *"For high-priced names ($500+/share), use 5-cent buffer instead of 1-cent"*. REPLACES `PRICE_OFFSET_NORMAL_USD` (not additive). |
+| `HIGH_PRICED_THRESHOLD_USD` | **500.00** | §8.2 L758 *"$500+/share"* — interpreted as **inclusive `≥ 500.00`** (the `+` in `$500+/share`). |
+| `TIER_SELECTION_PRICE` | **`mid = (bid + ask) / 2`** | **Operator-affirmed resolution of a §8.2 spec gap.** §8.2 is SILENT on which observed price determines tier eligibility; mid is insensitive to bid/ask asymmetry and avoids the edge-case where one side of the NBBO straddles $500 (e.g. bid $499.95 / ask $500.05 — using bid says NORMAL, using ask says HIGH; mid resolves deterministically). Recorded here as the affirmed disambiguator; revisitable at the DW-146 Phase-0 buffer-width ratification checkpoint. |
+| `TIF` | **DAY** | §8.2 marketable-limit posture; broker-acceptance-window discipline. |
+| `SHARE_ROUNDING` | **whole shares only — `floor(\|notional\| / limit_price)`** | Opens/Increases: floor against the limit price (PRICE_OFFSET-adjusted from the side's NBBO leg per the buy/sell rule). Closes: **EXACT current-position qty** (clause (k).4). Decreases: capped at `current_qty − 1` to avoid 1-share residual stubs. Alpaca paper fractional-limit constraints disqualify fractional sizing at the submitter boundary. |
+
+**Phase 0 buffer-width validation.** §8.2 itself reserves *"Phase 0 validates buffer width"* — the 1¢ / 5¢ values are the v1 ratified defaults but slated for empirical-fill-evidence revision at the E3-replay checkpoint per **DW-146** (clause (k).7). The constants are E1-style surfaced exports (not silent defaults; not phantom-zero anti-pattern), authored at the E2-code submitter module.
+
+#### Clause (k).4 — Close path: EXACT current-position qty (NOT notional-derived)
+
+A CLOSE is **FLAT** — exact `current_position.qty` is submitted, not a notional-derived approximation. Notional-derived close sizing risks a 1-share residual stub (e.g. 100 held, `floor($X / price) = 99` leaves 1 share dangling indefinitely). Decreases ALSO use the qty-aware cap `target_qty ≤ current_qty − 1` to avoid the 1-share-stub failure mode at the decrease boundary. Sell-side closes on shorts submit the exact-held-qty buy-to-cover; long closes submit the exact-held-qty sell.
+
+#### Clause (k).5 — Buying-power strategy (the hybrid — ratify the approach)
+
+The submitter consumes buying power against a **hybrid snapshot + running-decrement** model, ratified here as the v1 approach:
+
+1. **Pre-batch snapshot** — one `verify_buying_power` call at batch start writes a `BatchBuyingPowerSnapshot` carrying the broker-truth at t₀.
+2. **Per-order running decrement** — on each broker acceptance, the local counter decrements by `shares × limit_price` (opens/increases) OR CREDITS by `shares × limit_price` (closes/decreases — Alpaca paper updates BP on ACCEPTANCE not fill, so the running counter mirrors broker semantics).
+3. **Post-batch reconciliation** — E3 closes the loop with a post-batch `verify_buying_power` call as the race-detector (snapshot-vs-actual divergence is the noop-class signal that the running-counter model is drifting).
+
+Per-order live `verify_buying_power` calls (the authoritative-but-slower path) are **REJECTED v1** on latency grounds (N × broker round-trip at 20+ orders/tick blows the §8.5 wall-clock budget). The hybrid is the v1 path; the per-order live path is a future-tightening slot if paper evidence shows the running-counter drifts beyond tolerance at the E3 reconciliation checkpoint.
+
+#### Clause (k).6 — Composition with clauses (a)–(j) + ADR-002
+
+- **Clause (a) (fallback-book-as-EXECUTION-input):** UNCHANGED. Clause (k) operates on whatever selected set clause (j) produces; book-source agnostic.
+- **Clause (b) (autonomous three-tier resolution):** UNCHANGED. The four named clause-(b) constants (`MAX_RETRY_ATTEMPTS_PER_TARGET=3` / `MAX_SLIPPAGE_BUDGET_BPS=50` / `PER_TARGET_WALL_CLOCK_CAP_S=120` / `SKIP_RE_ELIGIBILITY=next tick`) and the three tiers govern every order placed under clause (k) ordering unchanged. Clause (k) decides ORDER; clause (b) decides RETRY/SKIP/PAGE — orthogonal layers.
+- **Clause (c) (ADR-002 sequential-only):** PRESERVED — clause (k) operates within the same-symbol sequential lock (ADR-002 wash-trade-detector finding). ADR-002 is SILENT on cross-symbol ordering; clause (k) fills that silence and is therefore additive, not a supersession.
+- **Clause (d) (DEC-036 clause-4 retirement / `longshort.execute` at E5):** UNCHANGED.
+- **Clause (e) (§8.9 NO-PAUSE-only v1 scope):** UNCHANGED.
+- **Clause (f) (paper-only URL gate):** PRESERVED — see clause (k).8 for the DEC-vs-code divergence record (INC-77) and the E2-code resolution path. The clause-(f) prose (line 133: *"the submitter's `AlpacaPaperClient` baseUrl is hard-asserted to start with `https://paper-api.alpaca.markets` at construction"*) is **NOT retroactively edited** (append-only); clause (k).8 records the forward-declaration + the E2-build resolution.
+- **Clauses (g)–(j):** UNCHANGED.
+
+Clause (k) operates on the post-clause-(j) selected set: substitution decides WHICH names; clause (k) decides the SUBMISSION ORDER. The order frees buying power before consuming it (§8.5 latency + equity-headroom discipline).
+
+#### Clause (k).7 — Deferred ratifications (DW-146 / DW-147 / DW-148)
+
+- **DW-146** — §8.2 buffer-width Phase-0/replay-evidence ratification. `PRICE_OFFSET_NORMAL_USD` / `PRICE_OFFSET_HIGH_PRICED_USD` / `HIGH_PRICED_THRESHOLD_USD` are ratified as v1 defaults per clause (k).3; the §8.2 spec itself reserves *"Phase 0 validates buffer width"*. DW-146 is the E3-replay-checkpoint ratification slot against a paper window's empirical fill-evidence.
+- **DW-147** — `QUOTE_MAX_STALENESS_S` ratification. Placeholder 5s (matching `verify_quote_freshness` #3 default per `supabase/functions/_shared/longshort-verifiers/verify_quote_freshness.ts` `VERIFY_QUOTE_FRESHNESS_TOLERANCE.max_age_s = 5`). The noop-class ROI knob; ratified at the E3-replay-evidence checkpoint against the observed paper-window quote-age distribution.
+- **DW-148** — PRE-LIVE Alpaca data-tier decision (Algo Trader Plus subscription for real-time full-market SIP quotes vs. free-tier IEX-real-time quotes). E2 builds + paper-validates against the FREE TIER plus the `verify_quote_freshness` gate; the tier upgrade is a PRE-LIVE gate (alongside DW-138 secrets provisioning), ratified by paper-validation evidence on quote-coverage adequacy for the rank-30 large/mid-cap pool. **Rationale:** the `verify_quote_freshness` verifier (not the subscription) is the failure-mode gate; paying $99/mo before paper validation runs is premature. **STEP-A-VERIFY claims (NOT charter-ratified — §2 axiom):** (i) Algo Trader Plus provides real-time full-market SIP quotes; (ii) Alpaca paper fills against real-time NBBO regardless of the account's data-subscription tier; (iii) the account's CURRENT data tier (Basic IEX-real-time-or-SIP-delayed vs. Algo Trader Plus). These three claims came from supervisor doc-search, NOT the live account; they MUST be independently verified at the E2-code STEP-A against the live Alpaca account + current Alpaca docs before being relied upon.
+
+#### Clause (k).8 — Paper-only-guard DEC-vs-code divergence (INC-77, SAFETY-direction)
+
+**Recorded as INC-77** in `docs/06-tracking/incidental-findings.md`: clause (f) line 133 of this DEC prose-attests a runtime guard in `src/features/longshort/services/broker/alpaca/alpaca-paper-client.ts` that the constructor *"hard-asserts to start with `https://paper-api.alpaca.markets`"*; the landed code (`alpaca-paper-client.ts` constructor, *"`this.baseUrl = config.baseUrlOverride ?? ALPACA_PAPER_BASE_URL`"*) accepts any `baseUrlOverride` with **ZERO validation**. The guard is **ABSENT**. Surfaced at ACT-309 E2-design investigation; independently verified by supervisor fresh-clone.
+
+**Classification.** DEC-vs-code divergence, **SAFETY direction** (the DEC attests a paper-only control that's absent on the only broker-boundary client). **Latent now** (nothing submits orders pre-E2); **becomes live-relevant at E2** when the submitter first depends on the guard. Mirror of the ACT-308 clause-j reconciliation precedent (DEC-vs-code divergences get their own clean governance record). The DEC-068 clause-(f) line-133 prose is **NOT retroactively edited** (append-only convention); the INC is the canonical record of the forward-declaration + the resolution path.
+
+**Resolution path (E2-CODE PR, NOT this charter PR).** At the E2-code build the guard is constructed: allow-list `paper-api.alpaca.markets` + `data.alpaca.markets` + `localhost` (test seam for `fetchImpl` injection); typed `PaperOnlyViolationError` thrown at construction if `baseUrlOverride` falls outside the allow-list; companion expansion of `scripts/check-paper-only-url.ts` `SCAN_ROOT` to cover `supabase/functions/` (currently narrowly scoped to `src/features/longshort/`). The guard BUILD and the SCAN_ROOT extension are **NOT in this charter PR** — this PR is governance-only and records the divergence; the build is the E2-code PR.
+
+#### Clause (k).9 — Same-PR documentation deltas (governance-only — NO code, NO test, NO migration)
+
+- DEC-068 Index Entry in `docs/08-planning/approved-decisions.md` (new amendment row for ACT-309 — clause (k) + §8.2 named constants + DW-146/147/148 + INC-77).
+- NEW DW entries in `docs/08-planning/deferred-work-register.md`: DW-146 (§8.2 buffer-width Phase-0/replay ratification), DW-147 (`QUOTE_MAX_STALENESS_S` ratification), DW-148 (PRE-LIVE Alpaca data-tier decision, with the three STEP-A-VERIFY claims flagged).
+- NEW INC-77 entry in `docs/06-tracking/incidental-findings.md` (paper-only-guard DEC-vs-code divergence; SAFETY direction; E2-code resolution path).
+- `docs/06-tracking/action-tracker.md` (ACT-309 entry).
+- **NO new code, NO submitter, NO guard BUILD, NO `scripts/check-paper-only-url.ts` SCAN_ROOT change, NO migration, NO new permission, NO new event, NO new env-var, NO test.** Both `deno.lock` files unchanged at `version: 3`. The guard-BUILD and SCAN_ROOT extension are the E2-CODE PR (next).
+
 ---
 
 ## Affected Modules / Systems
