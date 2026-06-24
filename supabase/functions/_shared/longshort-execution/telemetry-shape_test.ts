@@ -41,8 +41,18 @@ function withCreds(fn: () => Promise<void> | void): () => Promise<void> {
   };
 }
 
-const VALID_TIERS = new Set(['tier2', 'tier3']);
-const VALID_OUTCOMES = new Set(['failure_handled', 'failure_escalated', 'system_bug']);
+const VALID_TIERS = new Set(['tier1', 'tier2', 'tier3']);
+/** Mirrors `reconciliation_outcome` enum surface used by the verifier path
+ *  + the execution lifecycle. The 3 failure-class values + the 2
+ *  non-failure-class values (the kernel emits informational events on
+ *  successful transitions). */
+const VALID_OUTCOMES = new Set([
+  'failure_handled',
+  'failure_escalated',
+  'system_bug',
+  'false_positive_within_tolerance',
+  'expected_divergence_handled',
+]);
 
 function assertEventShape(e: EmittedExecutionEvent, context: string) {
   assert(typeof e.call_name === 'string' && e.call_name.length > 0, `${context}: call_name`);
@@ -117,6 +127,11 @@ Deno.test('E_evidence_2: clean accept tick emits zero failure events', withCreds
     clock: createFixedClock(TS),
     ts: TS,
   });
-  // Clean accept emits no tier-2/tier-3 failure events.
-  assertEquals(events.length, 0);
+  // Clean accept emits no FAILURE (tier-2/tier-3) events. The kernel may
+  // emit informational events on a successful transition; only the failure
+  // tiers are contract-relevant for paging routing.
+  const failures = events.filter((e) => e.tier === 'tier2' || e.tier === 'tier3');
+  assertEquals(failures.length, 0);
+  // Every emitted event still matches the shape contract.
+  for (const e of events) assertEventShape(e, e.call_name);
 }));

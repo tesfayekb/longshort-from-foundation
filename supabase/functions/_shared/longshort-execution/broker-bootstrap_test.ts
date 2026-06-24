@@ -29,20 +29,22 @@ function withCreds(fn: () => Promise<void> | void): () => Promise<void> {
 }
 
 function scriptedFetch(routes: Record<string, (req: Request) => Response>): typeof fetch {
-  return async (input: URL | RequestInfo, init?: RequestInit) => {
+  const impl = async (input: URL | RequestInfo, init?: RequestInit): Promise<Response> => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
-    const method = (init?.method ?? (input instanceof Request ? (input as Request).method : 'GET')).toUpperCase();
+    const i = (init ?? {}) as RequestInit;
+    const method = (i.method ?? (input instanceof Request ? (input as Request).method : 'GET')).toUpperCase();
     const key = `${method} ${new URL(url).pathname}${new URL(url).search}`;
     const handler = routes[key];
     if (!handler) throw new Error(`no scripted route for ${key}`);
-    return handler(new Request(url, init));
-  } as typeof fetch;
+    return handler(new Request(url, init as RequestInit));
+  };
+  return impl as unknown as typeof fetch;
 }
 
 Deno.test('broker-bootstrap: createLiveBrokerInterfaces wires all 5 surfaces (with fetchImpl)', withCreds(() => {
   const broker = createLiveBrokerInterfaces({
     baseUrlOverride: 'http://localhost',
-    fetchImpl: (async () => new Response('{}', { status: 200 })) as typeof fetch,
+    fetchImpl: (async (): Promise<Response> => new Response('{}', { status: 200 })) as unknown as typeof fetch,
   });
   assert(typeof broker.acceptanceFetcher.fetchOrderAcceptance === 'function');
   assert(typeof broker.fillFetcher.fetchFill === 'function');
@@ -117,7 +119,7 @@ Deno.test('broker-bootstrap: canceller DELETEs and swallows 422 (already-termina
     fetchImpl: (async () => {
       calls += 1;
       return calls === 1
-        ? new Response('', { status: 204 })
+        ? new Response(null, { status: 204 })
         : new Response('{"message":"order is already terminal"}', { status: 422 });
     }) as typeof fetch,
   });
