@@ -237,11 +237,21 @@ jobs:
             --project-ref "${SUPABASE_PROJECT_REF}" \
             --no-verify-jwt
 
+      - name: Deploy longshort-rebalance-submit
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase functions deploy longshort-rebalance-submit \
+            --project-ref "${SUPABASE_PROJECT_REF}" \
+            --no-verify-jwt
+
       - name: Summary
         run: |
-          echo "Deployed six edge functions with BUILD_SHA=${GITHUB_SHA}."
-          echo "Operator next: run scripts/check-deployed-sha.ts against ALL SIX URLs:"
-          for fn in longshort-queue-init longshort-queue-init-manual longshort-queue-slice longshort-queue-sweeper longshort-insider-compute longshort-insider-compute-manual; do
+          echo "Deployed seven edge functions with BUILD_SHA=${GITHUB_SHA}."
+          echo "Operator next: run scripts/check-deployed-sha.ts against ALL SEVEN URLs:"
+          for fn in longshort-queue-init longshort-queue-init-manual longshort-queue-slice longshort-queue-sweeper longshort-insider-compute longshort-insider-compute-manual longshort-rebalance-submit; do
             echo "  https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/$fn"
           done
-          echo "Contract: all six must report MATCH deployed=${GITHUB_SHA} source=${GITHUB_SHA} (exit 0)."
+          echo "Contract: all seven must report MATCH deployed=${GITHUB_SHA} source=${GITHUB_SHA} (exit 0)."
