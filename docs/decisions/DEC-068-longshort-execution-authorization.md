@@ -197,7 +197,7 @@ The **first** candidate that satisfies both is substituted in. Substitution is p
 
 The same-side scan proceeds up to and including **rank 30** of the side's ranking (so candidates considered for substitution span `rank ∈ [21, 30]` on each side). If no candidate in that range is both sector-legal AND pre-flight-passing, **that side operates with one fewer name for the day** — the §8.4 "book operates one short fewer" / §8.6.2 line 187 "book operates one fewer name" posture is preserved as the **post-cascade fallback** after the bounded scan exhausts.
 
-The cap counts **RANK-POSITIONS-SCANNED, NOT candidates-accepted.** If ranks 21–27 are sector-illegal (or pre-flight-failing) and rank 28 is legal-and-passing, that is **ONE** substitution at rank 28; the scanner does not continue past rank 30 to substitute additional names for the same failure.
+The rank-30 boundary is a **POOL cap** on the candidates considered per scan: each substitution scan walks the same-side pool `rank ∈ [21, 30]` and accepts the first sector-legal + pre-flight-passing candidate; the scan does not continue past rank 30 to substitute additional names for the same failure. If ranks 21–27 are sector-illegal (or pre-flight-failing) and rank 28 is legal-and-passing, that is **ONE** substitution at rank 28. The PER-SIDE DAILY BOUND on how many such scans may run is governed by clause (j).3 (episode-counting, not position-counting — see supersession note in (j).3).
 
 **EVIDENCE BASIS (cite — this is a data-driven cap, not intuition):**
 
@@ -206,9 +206,13 @@ The cap counts **RANK-POSITIONS-SCANNED, NOT candidates-accepted.** If ranks 21�
 
 #### Clause (j).3 — The bound (compute + borrow-locate budget)
 
-Cascade applies **per-failed-name independently** (so up to 20 names per side could each trigger a same-side scan in the worst case). To bound compute and bound external borrow-locate API call volume:
+Cascade applies **per-failed-name independently** (so up to 20 names per side could each trigger a same-side scan in the worst case). To bound compute:
 
-**`MAX_SUBSTITUTION_ATTEMPTS_PER_SIDE_PER_DAY = 10`** — the engine performs at most 10 substitution scans per side per as_of; beyond that bound, additional top-20 failures on that side fall through to the §8.4 "one fewer" posture without scanning. Rationale: 10/side/day caps worst-case substitute pre-flight calls at 20/day (vs. up to 10/scan × 20 failures = 200 unbounded), which sits comfortably inside both Alpaca paper rate-limits and the §8.5 30s end-to-end latency target.
+**`MAX_SUBSTITUTION_ATTEMPTS_PER_SIDE_PER_DAY = 10`** — the engine performs at most **10 SUBSTITUTION EPISODES per side per as_of**, where one EPISODE = one same-side substitute-pool scan triggered by one failed primary (top-20) slot. Beyond that bound, additional top-20 failures on that side fall through to the §8.4 "one fewer" posture without scanning. The bound counts EPISODES (failed-primary slots that trigger a scan), NOT raw rank-positions visited within an episode; the per-episode rank-pool cap is governed independently by clause (j).2 (`SUBSTITUTION_SCAN_CAP_RANK = 30`).
+
+**SUPERSESSION NOTE (§21.9 symmetric-correction, ACT-307 verification).** This clause originally framed the bound as "RANK-POSITIONS-SCANNED, not candidates-accepted." That phrasing was written under the assumption — superseded by clause (j).4's purity discipline — that the substitution kernel made live per-rank borrow-locate calls (so the per-rank API cost was the binding budget). With pre-flight results INJECTED into the pure kernel per clause (j).4, there is **NO per-rank I/O cost** inside the substitution layer; the borrow-locate API budget lives entirely at the boundary where pre-flight is computed once per name. The meaningful in-kernel bound is therefore EPISODES (failed-primary slots that trigger a scan), not raw rank-positions visited. Episode-counting is also strictly superior book-construction behavior: it distributes the per-side daily scan budget across failing slots rather than allowing a single slot — facing a wall of sector-illegal ranks 21–30 — to exhaust the side's budget and starve subsequent failing slots. Per §21.9 symmetric-correction, the DEC wording is aligned here to the (correct) landed code at `supabase/functions/_shared/longshort-execution/rebalance-planner.ts` (`selectFinalTargets`, ACT-307); the code is the correct artifact and the prior wording was stale relative to clause (j).4's injected-pre-flight decision.
+
+**WORST-CASE COMPUTE ENVELOPE (audit-facing — pinned).** Under the episode-counting bound combined with the rank-30 pool cap, the substitution layer's worst-case compute is **≤ 10 episodes/side × ≤ 10 ranks-scanned/episode (ranks 21–30) = ≤ 100 sector-legality + injected-pre-flight checks per side per day**, **ALL PURE-COMPUTE** (no I/O — pre-flight results are injected per clause (j).4; sector counts are read from the in-memory accepted-set map). Per as_of across both sides: **≤ 200 pure-compute checks**, no broker calls, no database calls. This is the audit envelope.
 
 #### Clause (j).4 — Purity discipline (load-bearing — preserves E1 testability)
 
@@ -221,7 +225,7 @@ This preserves the §22.5.2-adjacent "compute layer is pure; boundary fetches" d
 | Parameter | Value | Anchor |
 |---|---|---|
 | `SUBSTITUTION_SCAN_CAP_RANK` | **30** | V1 live 2026-06-23 score-distribution evidence (long rank 20→30 = −14% smooth, no cliff; beyond ~35 decay accelerates). |
-| `MAX_SUBSTITUTION_ATTEMPTS_PER_SIDE_PER_DAY` | **10** | Bounds compute + borrow-locate API call volume; sits inside Alpaca paper rate-limits and the §8.5 30s end-to-end latency target. |
+| `MAX_SUBSTITUTION_ATTEMPTS_PER_SIDE_PER_DAY` | **10** | Bounds **substitution EPISODES** (failed-primary slots that trigger a same-side pool scan) per side per as_of. Episode-counting per clause (j).3 supersession note — injected-pre-flight (clause (j).4) removed the per-rank I/O cost that motivated the original position-counting phrasing; episode-counting is the correct in-kernel bound and the more sensible book-construction behavior (distributes budget across failing slots). Combined with `SUBSTITUTION_SCAN_CAP_RANK=30`, worst case ≤ 100 pure-compute checks/side/day. |
 | `SUBSTITUTION_LAYER` | **book_construction** (NOT execution) | Layer distinction load-bearing — clause (j) runs BEFORE E1's delta computation; clause (b) is unchanged. |
 | `POST_CASCADE_FALLBACK` | **book operates one fewer name** | §8.4 / §8.6.2 line 187 verbatim posture preserved when the bounded scan exhausts (no sector-legal + pre-flight-passing substitute in `[rank 21, rank 30]`). |
 
