@@ -166,25 +166,17 @@ Deno.test('tick-scheduler: caller-provided initialLimitPrices override the broke
   assertEquals(result.reconstructed_in_flight_count, 1);
 });
 
-Deno.test('broker-bootstrap: createLiveBrokerInterfaces THROWS LiveBrokerNotProvisionedError (DW-138 gate)', () => {
-  try {
-    createLiveBrokerInterfaces();
-    throw new Error('expected createLiveBrokerInterfaces to throw');
-  } catch (e) {
-    assert(e instanceof LiveBrokerNotProvisionedError, `expected LiveBrokerNotProvisionedError, got ${e}`);
-    assertEquals((e as LiveBrokerNotProvisionedError).kind, 'live_broker_not_provisioned');
-  }
+Deno.test('broker-bootstrap: LiveBrokerNotProvisionedError type retained for back-compat (E6-build)', () => {
+  const e = new LiveBrokerNotProvisionedError();
+  assert(e instanceof Error);
+  assertEquals(e.kind, 'live_broker_not_provisioned');
 });
 
-Deno.test('tick-scheduler: propagates LiveBrokerNotProvisionedError from the live factory (DEC-034 clause 3)', async () => {
-  const { writer } = captureEvents();
-  await assertRejects(
-    () => runTick({
-      brokerFactory: createLiveBrokerInterfaces,
-      eventWriter: writer,
-      clock: createFixedClock(TS),
-      ts: TS,
-    }),
-    LiveBrokerNotProvisionedError,
-  );
+Deno.test('broker-bootstrap: module-load is creds-free (factory body is lazy — import does not call AlpacaPaperClient)', () => {
+  // If module-load triggered AlpacaPaperClient construction, the import at
+  // the top of this file would throw AlpacaCredentialError in a creds-free
+  // CI env. The fact that this test runs (any test in this file runs) is
+  // the module-load gate evidence. The function reference exists without
+  // invocation.
+  assertEquals(typeof createLiveBrokerInterfaces, 'function');
 });

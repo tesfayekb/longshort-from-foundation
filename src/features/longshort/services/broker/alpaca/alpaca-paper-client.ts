@@ -9,6 +9,8 @@
  *   GET  /v2/account
  *   GET  /v2/orders/{order_id}
  *   POST /v2/orders
+ *   DELETE /v2/orders/{order_id}        (E6 — cancel)
+ *   GET  /v2/orders?status=open         (E6 — reconstructInFlight)
  *
  * Per DEC-034 clause (3): errors propagate; no swallow + phantom-success.
  * Per DEC-034 clause (4): no wall-clock leakage; client takes no time params.
@@ -184,5 +186,31 @@ export class AlpacaPaperClient {
       throw new AlpacaApiError(endpoint, resp.status, bodyText);
     }
     return await resp.json() as TResp;
+  }
+
+  /**
+   * Generic DELETE. Returns void on 2xx (Alpaca DELETE /v2/orders/{id} returns
+   * 204 No Content on success). Throws AlpacaApiError on non-2xx;
+   * AlpacaNetworkError on fetch failure. Per DEC-034 (3): no swallow.
+   *
+   * Idempotency at broker boundary: cancelling an already-terminal order
+   * surfaces a 4xx from Alpaca; callers (the canceller adapter) MUST treat
+   * "already-terminal" as a no-op per BrokerOrderCanceller contract — that
+   * mapping lives in the adapter, not here.
+   */
+  async deleteVoid(endpoint: string): Promise<void> {
+    const url = `${this.baseUrl}${endpoint}`;
+    let resp: Response;
+    try {
+      resp = await this.fetchFn(url, { method: 'DELETE', headers: this.headers() });
+    } catch (cause) {
+      throw new AlpacaNetworkError(endpoint, cause);
+    }
+    if (!resp.ok) {
+      const bodyText = await resp.text().catch(() => '<no body>');
+      throw new AlpacaApiError(endpoint, resp.status, bodyText);
+    }
+    // Drain body to free resources (Deno requires consumption).
+    await resp.text().catch(() => '');
   }
 }
