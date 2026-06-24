@@ -95,12 +95,21 @@ Deno.test('(o1) success path: SPY 504 bars → 2 rows written under __MARKET__ s
   assertEquals(res.market_24m_cumulative_return, 120 / 100 - 1);
   assert(res.market_realized_vol_6m !== null);
 
-  // SPY ticker requested; 730-day lookback.
+  // SPY ticker requested; 810-day lookback (504 trading bars + ~55-bar
+  // holiday margin; widened from 730 after 2026-06-23 manual fire returned
+  // bar_count=501 < REGIME_24M_MIN_BARS=504 — see regime-orchestrator.ts
+  // REGIME_PRICE_HISTORY_LOOKBACK_DAYS comment for the math).
   assertEquals(fetchCalls.length, 1);
   assertEquals(fetchCalls[0].ticker, REGIME_TICKER);
   assertEquals(fetchCalls[0].ticker, 'SPY');
   assertEquals(fetchCalls[0].lookbackDays, REGIME_PRICE_HISTORY_LOOKBACK_DAYS);
-  assertEquals(REGIME_PRICE_HISTORY_LOOKBACK_DAYS, 730);
+  assertEquals(REGIME_PRICE_HISTORY_LOOKBACK_DAYS, 810);
+  // Floor: must exceed REGIME_24M_MIN_BARS / (252/365.25) with holiday
+  // margin. Narrowing below this trips this guard so the 501<504 regression
+  // can't recur silently.
+  // 504 / (252/365.25) ≈ 730.36 calendar days at ZERO margin;
+  // require ≥ 774 (~6% buffer for ~18 holidays per 2yr window).
+  assert(REGIME_PRICE_HISTORY_LOOKBACK_DAYS >= 774);
 
   // Exactly 2 rows under __MARKET__.
   assertEquals(calls.length, 1);
