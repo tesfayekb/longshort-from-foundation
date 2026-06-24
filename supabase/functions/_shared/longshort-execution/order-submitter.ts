@@ -22,10 +22,10 @@
  *   - longshort.execute permission gate (E5)
  *   - reconciliation_events writes (E4)
  *
- * PURITY DISCIPLINE: the shell does NOT call `new Date()` / `Date.now()` /
- * `performance.now()` (DEC-034 clause 4 / Gate-6 scanner enforces). The `ts`
- * parameter is the sole Date source. Side effects are confined to the four
- * injected fetchers + the BrokerOrderSubmitter.
+ * PURITY DISCIPLINE: the shell does NOT invoke wall-clock APIs (no no-arg
+ * Date constructor; no Date.now; no performance.now). Per DEC-034 clause 4 /
+ * Gate-6 scanner. The `ts` parameter is the sole Date source. Side effects
+ * are confined to the four injected fetchers + the BrokerOrderSubmitter.
  *
  * PAPER-ONLY: the BrokerOrderSubmitter implementation (AlpacaPaperClient
  * wrapper) is paper-only-guarded at construction per DEC-068 clause (f) +
