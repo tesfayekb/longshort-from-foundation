@@ -32,7 +32,7 @@
  *   ("Not a leveraged strategy in v1. 100% gross exposure, no margin
  *   borrowing." / "Leverage: None. Strategy operates at 100% gross.")
  *   is HONORED in the live path via this assertion. Leverage is a
- *   named PARAM (not a literal) so the future Phase-8 DEC (DW-136)
+ *   named PARAM (not a literal) so the future Phase-8 DEC (DW-137)
  *   can ratify slider unlock at 1.0–2.0 without a kernel rewrite —
  *   but until that DEC lands the kernel refuses any non-1.0 value.
  *
@@ -52,7 +52,7 @@
 
 import type { BrokerBuyingPowerFetcher } from '../longshort-broker-interfaces.ts';
 
-/** Paper-bootstrap leverage lock. Phase-8 DEC (DW-136) supersedes. */
+/** Paper-bootstrap leverage lock. Phase-8 DEC (DW-137) supersedes. */
 export const LEVERAGE_PAPER_LOCK = 1.0 as const;
 
 /** Default account allocation when operator config absent. */
@@ -225,7 +225,7 @@ export async function computeTargets(
   }
 
   // (2) D5 LOCK — leverage MUST equal 1.0 in the paper bootstrap.
-  //     Phase-8 DEC (DW-136) is the sole authority that can relax this.
+  //     Phase-8 DEC (DW-137) is the sole authority that can relax this.
   if (leverage !== LEVERAGE_PAPER_LOCK) {
     throw new LeverageLockViolationError(leverage);
   }

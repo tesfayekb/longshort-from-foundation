@@ -9,7 +9,7 @@
  * Audit: `.manual_triggered` BEFORE; `.manual_completed`/`.manual_failed`
  * AFTER; `.published` AFTER `.manual_completed` (Step F trigger).
  *
- * Stub capital fetcher until ALPACA_PAPER_KEY/SECRET land (DW-137).
+ * Stub capital fetcher until ALPACA_PAPER_KEY/SECRET land (DW-138).
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';

@@ -16,7 +16,7 @@
  * current Step A surface has zero execution path).
  *
  * Removed once the operator provisions Alpaca paper secrets and the
- * edge fn switches to `AlpacaBuyingPowerFetcher` — see DW-137.
+ * edge fn switches to `AlpacaBuyingPowerFetcher` — see DW-138.
  */
 import type {
   BrokerBuyingPower,
@@ -41,7 +41,7 @@ declare const Deno: { env: { get(name: string): string | undefined } };
 /**
  * Step A always returns the stub. The Alpaca-presence check is logged
  * via the returned `source` literal — `stub_100k` is the only outcome
- * here; live wiring is the post-secret-provision follow-up (DW-137),
+ * here; live wiring is the post-secret-provision follow-up (DW-138),
  * intentionally NOT exercised by Step A's deploy (per STOP condition:
  * "the dry-run uses the LIVE Alpaca fetcher … → STOP").
  */

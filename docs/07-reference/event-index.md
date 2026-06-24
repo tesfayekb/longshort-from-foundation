@@ -2162,7 +2162,7 @@ The eight events below cover the Step A portfolio-construction / target-position
 | **Classification** | audit |
 | **Severity** | INFO |
 | **Owner module** | longshort |
-| **Description** | Emitted AFTER `createTargetPositionOrchestrator.run(as_of)` returns `outcome='completed'`. Cron-trigger variant. `metadata.capital_source` is `'stub_100k'` until ALPACA_PAPER_KEY/SECRET are provisioned (DW-137); will become `'alpaca_live'` post-provision. The persisted `allocation_pct` / `leverage` mirror the kernel's named params; `leverage` is paper-locked at 1.0 (Phase-8 DEC / DW-136 supersedes the lock). |
+| **Description** | Emitted AFTER `createTargetPositionOrchestrator.run(as_of)` returns `outcome='completed'`. Cron-trigger variant. `metadata.capital_source` is `'stub_100k'` until ALPACA_PAPER_KEY/SECRET are provisioned (DW-138); will become `'alpaca_live'` post-provision. The persisted `allocation_pct` / `leverage` mirror the kernel's named params; `leverage` is paper-locked at 1.0 (Phase-8 DEC / DW-137 supersedes the lock). |
 | **Emitted by** | `supabase/functions/longshort-targets-compute/index.ts` |
 | **Target table** | `public.longshort_audit_logs` |
 | **Payload schema** | `metadata: { operator_id, as_of, as_of_date, outcome: 'completed' \| 'empty_book', capital_source, alpaca_secrets_present, capital_base, sizing_basis_value, book_size, book_size_long, book_size_short, per_name_notional, ranker_source, targets_written, allocation_pct, leverage, trigger: 'cron', correlation_id }` |

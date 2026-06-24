@@ -18,7 +18,7 @@
  *
  * Auth: cron-only (X-Cron-Secret). NO broker write; NO order; NO
  * `longshort.execute` permission. Capital fetcher: stub (Step G
- * dry-run) until ALPACA_PAPER_KEY/SECRET land (DW-137).
+ * dry-run) until ALPACA_PAPER_KEY/SECRET land (DW-138).
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
