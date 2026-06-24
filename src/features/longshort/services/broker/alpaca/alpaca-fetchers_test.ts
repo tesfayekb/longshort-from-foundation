@@ -22,7 +22,7 @@ function fixedFetch(status: number, body: string): typeof fetch {
 Deno.test('(1) AlpacaPositionFetcher maps response to BrokerPosition', async () => {
   setEnv();
   const body = JSON.stringify({ symbol: 'AAPL', qty: '100', avg_entry_price: '150.25', side: 'long' });
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://test', fetchImpl: fixedFetch(200, body) });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl: fixedFetch(200, body) });
   const pos = await new AlpacaPositionFetcher(client).fetchPosition('AAPL', TS);
   assertEquals(pos?.symbol, 'AAPL');
   assertEquals(pos?.qty, 100);
@@ -32,7 +32,7 @@ Deno.test('(1) AlpacaPositionFetcher maps response to BrokerPosition', async () 
 
 Deno.test('(2) AlpacaPositionFetcher returns null on 404 (no position)', async () => {
   setEnv();
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://test', fetchImpl: fixedFetch(404, 'not found') });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl: fixedFetch(404, 'not found') });
   const pos = await new AlpacaPositionFetcher(client).fetchPosition('NOSUCH', TS);
   assertEquals(pos, null);
 });
@@ -40,7 +40,7 @@ Deno.test('(2) AlpacaPositionFetcher returns null on 404 (no position)', async (
 Deno.test('(3) AlpacaQuoteFetcher maps latest quote with broker ts (no wall-clock)', async () => {
   setEnv();
   const body = JSON.stringify({ symbol: 'AAPL', quote: { bp: 150.49, ap: 150.51, bs: 1, as: 1, t: '2026-01-02T14:30:00.123Z' } });
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://t', dataUrlOverride: 'https://d', fetchImpl: fixedFetch(200, body) });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', dataUrlOverride: 'http://localhost', fetchImpl: fixedFetch(200, body) });
   const q = await new AlpacaQuoteFetcher(client).fetchQuote('AAPL', TS);
   assertEquals(q.symbol, 'AAPL');
   assertEquals(q.bid, 150.49);
@@ -53,7 +53,7 @@ Deno.test('(3) AlpacaQuoteFetcher maps latest quote with broker ts (no wall-cloc
 Deno.test('(4) AlpacaHaltStatusFetcher reports halted when status != active', async () => {
   setEnv();
   const body = JSON.stringify({ symbol: 'XYZ', status: 'inactive', tradable: false });
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://t', fetchImpl: fixedFetch(200, body) });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl: fixedFetch(200, body) });
   const h = await new AlpacaHaltStatusFetcher(client).fetchHaltStatus('XYZ', TS);
   assertEquals(h.halted, true);
   assert(h.halt_reason !== null);
@@ -62,7 +62,7 @@ Deno.test('(4) AlpacaHaltStatusFetcher reports halted when status != active', as
 Deno.test('(5) AlpacaHaltStatusFetcher reports not-halted when status=active+tradable', async () => {
   setEnv();
   const body = JSON.stringify({ symbol: 'AAPL', status: 'active', tradable: true });
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://t', fetchImpl: fixedFetch(200, body) });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl: fixedFetch(200, body) });
   const h = await new AlpacaHaltStatusFetcher(client).fetchHaltStatus('AAPL', TS);
   assertEquals(h.halted, false);
   assertEquals(h.halt_reason, null);
@@ -71,7 +71,7 @@ Deno.test('(5) AlpacaHaltStatusFetcher reports not-halted when status=active+tra
 Deno.test('(6) AlpacaBuyingPowerFetcher parses account numbers', async () => {
   setEnv();
   const body = JSON.stringify({ buying_power: '50000.00', equity: '25000.00' });
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://t', fetchImpl: fixedFetch(200, body) });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl: fixedFetch(200, body) });
   const bp = await new AlpacaBuyingPowerFetcher(client).fetchBuyingPower(TS);
   assertEquals(bp.available_bp, 50000);
   assertEquals(bp.account_equity, 25000);
@@ -85,7 +85,7 @@ Deno.test('(7) AlpacaLocateFetcher posts symbol+qty and maps available=true', as
     postedBody = init?.body as string ?? '';
     return new Response(JSON.stringify({ symbol: 'AAPL', locate_id: 'L1', qty: 100, available: true }), { status: 200 });
   };
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://t', fetchImpl });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl });
   const l = await new AlpacaLocateFetcher(client, 100).fetchLocate('AAPL', TS);
   assertEquals(JSON.parse(postedBody).symbol, 'AAPL');
   assertEquals(JSON.parse(postedBody).qty, 100);
@@ -96,7 +96,7 @@ Deno.test('(7) AlpacaLocateFetcher posts symbol+qty and maps available=true', as
 
 Deno.test('(8) AlpacaLocateFetcher returns available=false on broker 4xx (not throw)', async () => {
   setEnv();
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://t', fetchImpl: fixedFetch(404, 'no locate') });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl: fixedFetch(404, 'no locate') });
   const l = await new AlpacaLocateFetcher(client).fetchLocate('XYZ', TS);
   assertEquals(l.available, false);
   assertEquals(l.locate_id, null);
@@ -107,7 +107,7 @@ Deno.test('(9) AlpacaOrderAcceptanceFetcher maps filled→accepted', async () =>
   setEnv();
   const submitted = '2026-01-02T14:29:50Z';
   const body = JSON.stringify({ id: 'o1', symbol: 'AAPL', status: 'filled', submitted_at: submitted });
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://t', fetchImpl: fixedFetch(200, body) });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl: fixedFetch(200, body) });
   const a = await new AlpacaOrderAcceptanceFetcher(client).fetchOrderAcceptance('o1', 30, TS);
   assertEquals(a.state, 'accepted');
   assertEquals(a.order_id, 'o1');
@@ -118,7 +118,7 @@ Deno.test('(9) AlpacaOrderAcceptanceFetcher maps filled→accepted', async () =>
 Deno.test('(10) AlpacaOrderAcceptanceFetcher maps rejected with reason', async () => {
   setEnv();
   const body = JSON.stringify({ id: 'o2', symbol: 'AAPL', status: 'rejected', rejected_reason: 'insufficient_bp', submitted_at: '2026-01-02T14:29:55Z' });
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://t', fetchImpl: fixedFetch(200, body) });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl: fixedFetch(200, body) });
   const a = await new AlpacaOrderAcceptanceFetcher(client).fetchOrderAcceptance('o2', 30, TS);
   assertEquals(a.state, 'rejected');
   assertEquals(a.rejection_reason, 'insufficient_bp');
@@ -127,7 +127,7 @@ Deno.test('(10) AlpacaOrderAcceptanceFetcher maps rejected with reason', async (
 Deno.test('(11) AlpacaOrderAcceptanceFetcher maps pending_new→pending', async () => {
   setEnv();
   const body = JSON.stringify({ id: 'o3', symbol: null, status: 'pending_new', submitted_at: '2026-01-02T14:29:00Z' });
-  const client = new AlpacaPaperClient({ baseUrlOverride: 'https://t', fetchImpl: fixedFetch(200, body) });
+  const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl: fixedFetch(200, body) });
   const a = await new AlpacaOrderAcceptanceFetcher(client).fetchOrderAcceptance('o3', 30, TS);
   assertEquals(a.state, 'pending');
   assertEquals(a.symbol, null);
