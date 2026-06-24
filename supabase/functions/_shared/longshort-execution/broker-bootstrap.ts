@@ -95,20 +95,28 @@ export interface BrokerInterfaces {
   // The Phase-2 placement trigger + the §7 preflight composer consume the
   // 5 fields below. All are lazily constructed in `createLiveBrokerInterfaces`
   // so the module remains import-safe in creds-free CI.
+  //
+  // ACT-319 (Gate-11 type-check fix): these 5 are OPTIONAL on the interface
+  // because they reflect a placement-path-only dependency. The advance path
+  // (tick-scheduler / runTick / advanceTick) never consumes them, so the
+  // advance-path test helpers (e.g. tick-scheduler_test's `mkBroker`) must
+  // not be forced to fabricate fetchers they never call. The production
+  // factory `createLiveBrokerInterfaces` still provides ALL 10; the Phase-2
+  // placement trigger asserts/narrows presence at its call site.
   /** §8.2 marketable-limit pricing via Alpaca `/v2/stocks/{sym}/quotes/latest`. */
-  quoteFetcher: BrokerQuoteFetcher;
+  quoteFetcher?: BrokerQuoteFetcher;
   /** Pre-batch BP snapshot for submitter + `account_equity` for planner
    *  `capitalBase` (DEC-067 sizing basis). One fetch satisfies both. */
-  buyingPowerFetcher: BrokerBuyingPowerFetcher;
+  buyingPowerFetcher?: BrokerBuyingPowerFetcher;
   /** `listOpenPositions(ts)` feeds the planner's `currentPositions` input
    *  through the orchestrator normalization boundary. */
-  positionFetcher: BrokerPositionFetcher;
+  positionFetcher?: BrokerPositionFetcher;
   /** §7 short-availability via Alpaca `/v2/short_locates`. Reached ONLY
    *  when the htb-cache pre-flight consult MISSES (E4 load-bearing wiring
    *  is enforced inside `verify_short_availability(...cache?)`, not here). */
-  locateFetcher: BrokerLocateFetcher;
+  locateFetcher?: BrokerLocateFetcher;
   /** §7 halt-status via Alpaca `/v2/assets/{sym}` (`status`+`tradable`). */
-  haltStatusFetcher: BrokerHaltStatusFetcher;
+  haltStatusFetcher?: BrokerHaltStatusFetcher;
   // SSR DETERMINATION (Phase-1 report): Alpaca paper does NOT expose SSR
   // cleanly — no public REST endpoint surfacing SSR state. Per §2 axiom
   // (typed absence, NOT a synthetic 'SSR clear' sentinel) the §7 preflight
