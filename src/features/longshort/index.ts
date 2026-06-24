@@ -20,7 +20,7 @@
  * Step 5.5 status (after this commit): all three exports populated; façade
  * discipline complete. AC-16 closed.
  */
-import { LayoutDashboard, Activity, Database, GitCompare, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Activity, Database, GitCompare, Briefcase, PlayCircle } from 'lucide-react';
 import type { NavSection } from '@/config/navigation.types';
 
 /**
@@ -81,6 +81,12 @@ export const longshortNav: NavSection = {
       title: 'Portfolio',
       url: '/trading/longshort/portfolio',
       icon: Briefcase,
+      permission: 'longshort.view',
+    },
+    {
+      title: 'Execution',
+      url: '/trading/longshort/execution',
+      icon: PlayCircle,
       permission: 'longshort.view',
     },
   ],

@@ -52,6 +52,7 @@ const SignalsHubPage = lazy(() => import("./pages/trading/longshort/SignalsHubPa
 const UniverseHubPage = lazy(() => import("./pages/trading/longshort/UniverseHubPage"));
 const ReconciliationHubPage = lazy(() => import("./pages/trading/longshort/ReconciliationHubPage"));
 const PortfolioHubPage = lazy(() => import("./pages/trading/longshort/PortfolioHubPage"));
+const ExecutionHubPage = lazy(() => import("./pages/trading/longshort/ExecutionHubPage"));
 const ProfilePage = lazy(() => import("./pages/user/ProfilePage"));
 const SecurityPage = lazy(() => import("./pages/user/SecurityPage"));
 
@@ -232,6 +233,11 @@ const App = () => (
                 <Route path="longshort/portfolio" element={
                   <PermissionGate permission="longshort.view">
                     <PortfolioHubPage />
+                  </PermissionGate>
+                } />
+                <Route path="longshort/execution" element={
+                  <PermissionGate permission="longshort.view">
+                    <ExecutionHubPage />
                   </PermissionGate>
                 } />
               </Route>
