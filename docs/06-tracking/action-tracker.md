@@ -1,3 +1,21 @@
+### ACT-319: REVISION-FIX — Gate-11 type-check RED: ACT-317's 5 placement-path `BrokerInterfaces` fields made OPTIONAL so the advance-path `tick-scheduler_test`'s `mkBroker` literal type-checks (advance-path does not consume them); factory still provides all 10; new sandbox-vs-CI sub-class catalogued (deno test vs deno check)
+
+REVISION-FIX for CI Gate-11 (`deno check`) RED on `supabase/functions/_shared/longshort-execution/tick-scheduler_test.ts:61`: the hand-built `mkBroker` `BrokerInterfaces` literal was missing the 5 placement-path fetcher fields that ACT-317 (Phase-1) added as REQUIRED to the interface. The Lovable sandbox `deno test` run was green at ACT-317 because the advance-path code never reads those fields at runtime; the structural incompleteness only surfaces under `deno check` (the CI type-gate). Root cause: the 5 placement-path fields reflect a placement-path-only dependency the advance-path does not have; forcing the advance-path test helper to fabricate fetchers it never calls is architecturally wrong. FIX: make those 5 fields OPTIONAL on the interface; the live factory `createLiveBrokerInterfaces` STILL provides all 10 (production always has them); Phase-2's placement trigger asserts/narrows presence at its call site.
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-319 |
+| **Date** | 2026-06-24 |
+| **Mode** | REVISION-FIX (Tier A — type-correctness on the money-path broker contract; interface optionality only, no factory change, no logic change). |
+| **HEAD at start** | `c6cd7241` (post ACT-318 root-lock restore). |
+| **Files touched** | `supabase/functions/_shared/longshort-execution/broker-bootstrap.ts` (`quoteFetcher` / `buyingPowerFetcher` / `positionFetcher` / `locateFetcher` / `haltStatusFetcher` annotated `?` on `BrokerInterfaces`; rationale comment added citing ACT-319; advance-path 5 fields UNCHANGED required); `docs/06-tracking/action-tracker.md` (this entry); `docs/09-catalog/ai-failure-modes.md` (Catalog #58.c sub-class: `deno test` vs `deno check` sandbox-vs-CI divergence). |
+| **Verification** | `/tmp/deno check` (pinned 1.46.3) over `supabase/functions/_shared/longshort-execution/*.ts` + `supabase/functions/_shared/longshort-broker/*.ts`: PASS (was RED on `tick-scheduler_test.ts:61` pre-fix). Full execution test suite: 160/160 PASS. Boundary gates: `check-src-imports` CLEAN (0 violations). Both `deno.lock` (root + functions) remain `version: "3"` — not touched. Factory `createLiveBrokerInterfaces` confirmed still provides all 10 surfaces (no change). Advance-path required-5 unchanged. |
+| **Catalog forward-binding** | Catalog #58.c (new sub-class): `deno check` (CI Gate-11) is a CI gate the Lovable sandbox `deno test` run does NOT enforce; a structurally-incomplete type literal (a test helper missing required interface fields) passes `deno test` but fails `deno check`. Forward-binding: when an interface gains required fields, grep ALL hand-built literals (`: <Interface> = {` and `as <Interface>`) and either update them OR make the new fields optional; local verification MUST run `deno check`, not just `deno test`. Sibling to the eslint / lockfile / permission sandbox-vs-CI divergences. |
+| **Out-of-scope finding (not fixed)** | `scripts/check-broker-parity.ts` reports a divergence on `position:fetch` (edge returns `market_value` + `current_price`; src returns base 4 fields). This is NOT caused by ACT-319 (interface-only edit, no adapter touch) and was not surfaced at ACT-317 closure; logged for follow-up — out of scope for this revision-fix per STOP conditions. |
+| **ROI Impact** | Positive type-correctness ROI only; no change to prediction, sizing, ordering, monitoring, or any money-path runtime behavior. |
+
+---
+
 ### ACT-318: REVISION-FIX — Catalog #58 third root `deno.lock` v5 recurrence restored to v3 under pinned Deno 1.46.3; recurrence diagnosed as cache-triggered Lovable Deno 2.x lock writer, not every commit
 
 REVISION-FIX for the CI toolchain-parity RED where the root `deno.lock` had landed at lockfile `version: "5"` while CI is pinned to Deno `1.46.3` and accepts lockfile v3 only. This is the third Catalog #58 root-lock recurrence in the session. The functions lock was already v3 and was intentionally left untouched.
