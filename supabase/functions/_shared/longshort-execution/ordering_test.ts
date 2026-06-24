@@ -168,7 +168,12 @@ Deno.test('Gate-6 — ordering.ts contains no wall-clock leakage', async () => {
 });
 
 Deno.test('Gate-6 — ordering.ts contains no broker / network imports (purity)', async () => {
+  // ACT-316 (E6-build-revision): generalized from `/alpaca-paper-client/`
+  // (filename-specific) to the architectural property — pure kernel must not
+  // import any alpaca-* concrete adapter (src/ OR edge-resident copy) and
+  // must not import any src/ module.
   const txt = await Deno.readTextFile(new URL('./ordering.ts', import.meta.url));
-  assertEquals(/from\s+['"][^'"]*alpaca-paper-client/.test(txt), false);
+  assertEquals(/from\s+['"][^'"]*alpaca-/.test(txt), false);
+  assertEquals(/from\s+['"][^'"]*\/src\//.test(txt), false);
   assertEquals(/\bfetch\(/.test(txt), false);
 });

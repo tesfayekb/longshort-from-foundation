@@ -31,6 +31,10 @@ export default tseslint.config(
       "scripts/**/*.ts",
       "**/test-fixtures.ts",
       "src/features/longshort/services/broker/**/*.ts",
+      // ACT-316 (E6-build-revision): edge-resident broker layer is the
+      // architectural mirror of src/.../broker/** and uses the same
+      // @ts-ignore Deno-global declaration. Same carve-out applies.
+      "supabase/functions/_shared/longshort-broker/**/*.ts",
     ],
     rules: {
       "@typescript-eslint/ban-ts-comment": "off",
