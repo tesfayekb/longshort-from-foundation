@@ -1595,6 +1595,58 @@ Key event chains showing upstream triggers and downstream effects:
 
 #### `longshort.init` — v1
 
+<!-- ACT-322 — placement-trigger events registered ahead of the longshort.init row. -->
+
+#### `longshort.rebalance.triggered` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.rebalance.triggered` |
+| **Module** | longshort/execution (FP-056 E5.5 Phase-2 — ACT-322) |
+| **Version** | 1 |
+| **Classification** | audit-critical (money-path placement-trigger entry marker) |
+| **Description** | Emitted by `longshort-rebalance-submit` AFTER `authenticateRequest` + `checkPermissionOrThrow('longshort.execute')` + diagnostic-503 creds pre-flight + request-body parse, immediately BEFORE invoking `runRebalanceSubmit` (which calls `composePreflightResults` → `planRebalance` → `submitRebalance`). Pairs with `.completed` or `.failed` on the same correlation_id. |
+| **Emitted by** | `longshort-rebalance-submit` edge function (`supabase/functions/longshort-rebalance-submit/index.ts`) |
+| **Target table** | `public.longshort_audit_logs` (per-strategy table per DEC-031 sub-point 5 / DEC-033 v4.1) |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Delivery** | Fail-closed: a write failure propagates as 500 (DEC-034 (3) — no swallow). |
+| **Schema fields written** | `operator_id`, `action='longshort.rebalance.triggered'`, `correlation_id`, `ip_address`, `user_agent`, `metadata: { operator_id, ts (ISO), mode: 'full_rebalance'|'spot_check', trigger: 'manual' }`. |
+| **Related events** | `.completed` (success terminal), `.failed` (any-error terminal). |
+| **Added by** | ACT-322 |
+| **Lifecycle** | active |
+
+#### `longshort.rebalance.completed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.rebalance.completed` |
+| **Module** | longshort/execution (FP-056 E5.5 Phase-2 — ACT-322) |
+| **Version** | 1 |
+| **Classification** | audit-critical (money-path placement-trigger success terminal) |
+| **Description** | Emitted by `longshort-rebalance-submit` after `runRebalanceSubmit` returns successfully. Carries the placement-tier disposition summary; the per-`SubmissionResult` detail is written separately to `public.reconciliation_events` (`call_name='longshort.rebalance.placement'`). |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `operator_id`, `action='longshort.rebalance.completed'`, `correlation_id`, `metadata: { operator_id, ts, mode, trigger, submission_counts: Record<SubmissionResult.kind, number>, ssr_unavailable: boolean, shorts_placed_without_ssr_check_count: number }`. **DEC-068 clause (n) Guardrail-2 surface** — `ssr_unavailable` + `shorts_placed_without_ssr_check_count` are BINDING fields (full per-symbol list lives in the HTTP response payload). |
+| **Related events** | `.triggered` (pair start). |
+| **Added by** | ACT-322 |
+| **Lifecycle** | active |
+
+#### `longshort.rebalance.failed` — v1
+
+| Field | Value |
+|-------|-------|
+| **Event Key** | `longshort.rebalance.failed` |
+| **Module** | longshort/execution (FP-056 E5.5 Phase-2 — ACT-322) |
+| **Version** | 1 |
+| **Classification** | audit-critical (money-path placement-trigger failure terminal) |
+| **Description** | Emitted by `longshort-rebalance-submit` in the catch path of `runRebalanceSubmit` (any throw — broker network/auth, planner invariant, composer fetcher throw, reconciliation_events write failure). Also emitted by the diagnostic-503 creds pre-flight with `stage='broker_credentials_not_provisioned'` BEFORE the `.triggered` envelope. |
+| **Target table** | `public.longshort_audit_logs` |
+| **Writer** | `writeStrategyAuditEvent` |
+| **Schema fields written** | `operator_id`, `action='longshort.rebalance.failed'`, `correlation_id`, `metadata: { operator_id, ts, mode?, trigger, error?: string, stage?: 'broker_credentials_not_provisioned' }`. |
+| **Related events** | `.triggered` (pair start when failure follows successful auth). |
+| **Added by** | ACT-322 |
+| **Lifecycle** | active |
+
 | Field | Value |
 |-------|-------|
 | **Event Key** | `longshort.init` |
