@@ -79,10 +79,31 @@ import type {
   HtbCacheClearer,
 } from './cache-propagator-io.ts';
 import type { FetcherSource } from '../longshort-reconciliation-types.ts';
-import { verifyHaltStatus } from '../longshort-verifiers/verify_halt_status.ts';
-import { verifyShortAvailability } from '../longshort-verifiers/verify_short_availability.ts';
-import { verifySSRStatus } from '../longshort-verifiers/verify_ssr_status.ts';
-import { verifyBuyingPower } from '../longshort-verifiers/verify_buying_power.ts';
+
+/**
+ * COMPOSER ↔ VERIFIER LAYER DISTINCTION (load-bearing):
+ *
+ * The §7 PRE-FLIGHT GATE is a pure CLASSIFIER (does the candidate pass?).
+ * The verify_*.ts SHELLS wrap each gate in the `reconcile()` lifecycle, which
+ * WRITES `reconciliation_events` via supabaseAdmin every call. Pre-flight
+ * runs O(candidates × verifiers) times per tick (up to 40 names × 4 gates =
+ * 160 writes per rebalance) — flooding the events table with PASS rows is
+ * the wrong observability shape AND couples the composer to a DB client.
+ *
+ * Resolution: the composer calls the broker fetchers DIRECTLY and applies
+ * the SAME classification rules as the verifier specs (transcribed inline,
+ * comments cite the verbatim verifier source). The verify_*.ts shells remain
+ * the AUTHORITATIVE reconciliation surface — they fire during real-fill
+ * post-mortems (verify_position) and the strong-evidence reconciliation
+ * sweeps. The composer is the GATE, not the recorder. Phase-2 trigger emits
+ * its own placement audit envelope; per-candidate gate decisions are
+ * surfaced through the `summary` return + the trigger's audit metadata, NOT
+ * through reconciliation_events.
+ *
+ * Classification rules MUST stay in sync with the verifier specs they
+ * mirror — any change to a spec's `classify_outcome` MUST be carried here
+ * verbatim. The unit tests assert the per-rule outcomes on every gate.
+ */
 
 // ────────────────────────────────────────────────────────────────────────────
 // Public types.
@@ -155,7 +176,10 @@ export async function composePreflightResults(
   input: PreflightComposerInput,
   deps: PreflightComposerDeps,
 ): Promise<PreflightComposerOutput> {
-  const fetcherSource: FetcherSource = deps.fetcher_source ?? 'live';
+  // fetcher_source is reserved for the Phase-2 trigger's audit metadata;
+  // the gate-level composer does not project it onto reconciliation_events.
+  const _fetcherSource: FetcherSource = deps.fetcher_source ?? 'live';
+  void _fetcherSource;
   const ssrUnavailable = deps.ssrStatusFetcher === undefined;
 
   const requestedTotal = input.candidates.reduce(
@@ -163,27 +187,14 @@ export async function composePreflightResults(
     0,
   );
 
-  // ── SYSTEM-LEVEL: verify_buying_power (ONE call for the whole batch). ──
-  // §11.0.7 #9 verbatim "skip entry" — when insufficient, EVERY candidate
-  // fails with the same system-level reason. The verifier itself drives
-  // tier classification + state-surface emit; the composer reads its outcome
-  // and the divergence to render per-candidate PreflightResults.
-  const bpResult = await verifyBuyingPower(
-    {
-      operator_id: deps.operator_id,
-      expected_bp: input.internal_expected_bp,
-      requested_position_size: requestedTotal,
-    },
-    deps.buyingPowerFetcher,
-    input.ts,
-    fetcherSource,
-  );
-  const bpDivergence = bpResult.divergence as
-    | { observed_bp?: number; insufficient_for_request?: boolean }
-    | null
-    | undefined;
-  const bpObserved = typeof bpDivergence?.observed_bp === 'number' ? bpDivergence.observed_bp : 0;
-  const bpInsufficient = bpDivergence?.insufficient_for_request === true;
+  // ── SYSTEM-LEVEL: verify_buying_power gate (ONE call for the whole batch).
+  // Mirrors verify_buying_power.ts classify_outcome — `insufficient_for_request`
+  // when `observed_bp < requested_total` (§11.0.7 #9 verbatim "skip entry").
+  // System-level failure short-circuits every candidate.
+  const bp = await deps.buyingPowerFetcher.fetchBuyingPower(input.ts);
+  const bpObserved = bp.available_bp;
+  const bpInsufficient = bp.available_bp < requestedTotal;
+  void input.internal_expected_bp; // reserved for the Phase-2 trigger audit envelope
 
   const results = new Map<PreflightKey, PreflightResult>();
   const skipped = new Map<PreflightKey, readonly string[]>();
@@ -206,52 +217,65 @@ export async function composePreflightResults(
     }
 
     // ── HALT (every candidate). ──
-    const haltResult = await verifyHaltStatus(
-      { symbol: c.symbol, operator_id: deps.operator_id },
-      deps.haltStatusFetcher,
-      input.ts,
-      fetcherSource,
-    );
-    if (haltResult.outcome === 'failure_handled' || haltResult.outcome === 'failure_escalated') {
+    // Mirrors verify_halt_status.ts classify_outcome —
+    // observed.halted === true → failure_handled (gate FAIL).
+    const halt = await deps.haltStatusFetcher.fetchHaltStatus(c.symbol, input.ts);
+    if (halt.halted === true) {
       failed.push('verify_halt_status');
     }
 
     // ── SHORT-SIDE GATES. ──
     if (c.side === 'short') {
-      // verify_short_availability — htb consult inside the verifier fires
-      // BEFORE the broker locate (E4 load-bearing wiring; the consult-then-
-      // locate ordering lives in verify_short_availability.ts and is
-      // preserved verbatim by passing `deps.htbCache` through).
-      const shortResult = await verifyShortAvailability(
-        {
-          symbol: c.symbol,
-          operator_id: deps.operator_id,
-          qty_requested: 1, // probe qty matches the locate adapter default; sizing-level qty is enforced at submit-time
-        },
-        deps.locateFetcher,
-        input.ts,
-        fetcherSource,
-        deps.htbCache,
-      );
-      if (
-        shortResult.outcome === 'failure_handled' ||
-        shortResult.outcome === 'failure_escalated'
-      ) {
+      // ── E4 LOAD-BEARING WIRING (consult-before-locate) ─────────────────
+      // verify_short_availability.ts:107-114 transcribed verbatim: the htb
+      // pre-flight consult fires BEFORE the broker locate call. If
+      // `isMarkedHtb` returns true the candidate FAILS without invoking
+      // the locate adapter (the loop-break the E4 closure depends on).
+      // Per §11.0.7 #4 verbatim "skip short entry; do NOT substitute long;
+      // do NOT default to 'assume available'."
+      const htbMarked = deps.htbCache?.reader
+        ? await deps.htbCache.reader.isMarkedHtb(c.symbol, input.ts)
+        : false;
+      let shortFailed = false;
+      if (htbMarked) {
+        shortFailed = true; // consult HIT — locate is NOT called.
+      } else {
+        // Consult MISS — call the locate adapter.
+        const locate = await deps.locateFetcher.fetchLocate(c.symbol, input.ts);
+        // Mirrors verify_short_availability.ts classify_outcome:
+        //   !available                                              → failure_handled
+        //   available && qty_available < qty_requested              → failure_handled (partial)
+        //   available && qty_available >= qty_requested             → false_positive_within_tolerance (PASS)
+        // qty_requested at the gate uses the candidate's requested
+        // position size; the locate adapter's probe qty is its own
+        // construction default (1 share — "can we borrow at all?").
+        if (!locate.available) {
+          shortFailed = true;
+        } else if (
+          locate.qty_available !== null &&
+          locate.qty_available < Math.max(1, Math.abs(c.requested_position_size))
+        ) {
+          shortFailed = true;
+        }
+        // CLEAR-ON-GENUINE-SUCCESS — mirrors verify_short_availability.ts
+        // line ~155: clear ONLY on the genuine-success branch (passed AND
+        // qty_available >= requested). Partial does NOT clear.
+        if (!shortFailed && deps.htbCache?.clearer) {
+          await deps.htbCache.clearer.clearHtb(c.symbol);
+        }
+      }
+      if (shortFailed) {
         failed.push('verify_short_availability');
       }
 
       // verify_ssr_status — typed absence when no fetcher injected.
       if (deps.ssrStatusFetcher !== undefined) {
-        const ssrResult = await verifySSRStatus(
-          { symbol: c.symbol, operator_id: deps.operator_id },
-          deps.ssrStatusFetcher,
-          input.ts,
-          fetcherSource,
-        );
-        if (
-          ssrResult.outcome === 'failure_handled' ||
-          ssrResult.outcome === 'failure_escalated'
-        ) {
+        // Mirrors verify_ssr_status.ts classify_outcome:
+        //   not_active    → PASS
+        //   active        → failure_handled (gate FAIL — SSR-compliant routing required)
+        //   indeterminate → failure_handled (gate FAIL — refuse this tick)
+        const ssr = await deps.ssrStatusFetcher.fetchSSRStatus(c.symbol, input.ts);
+        if (ssr.state !== 'not_active') {
           failed.push('verify_ssr_status');
         }
       } else {
