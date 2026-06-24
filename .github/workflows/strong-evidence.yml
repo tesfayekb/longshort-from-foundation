@@ -97,6 +97,7 @@ jobs:
             scripts/check-unguarded-parsefloat.ts \
             scripts/check-catch-returns-zero.ts \
             scripts/check-edge-imports.ts \
+            scripts/check-src-imports.ts \
             scripts/check-eligibility-bypass.ts \
             scripts/check-verify-after-mutation.ts \
             scripts/check-supabase-client-specifier.ts \
@@ -144,6 +145,9 @@ jobs:
 
       - name: Gate 10 — Edge functions must not import from src/ (FP-011)
         run: deno run --allow-read --lock=deno.lock scripts/check-edge-imports.ts
+
+      - name: Gate 10b — src/ must not import from supabase/functions/ (ACT-316 reciprocal of FP-011)
+        run: deno run --allow-read --lock=deno.lock scripts/check-src-imports.ts
 
       - name: Gate 11 — Edge function suite full execution (FP-008.4 #12 / Commit 1.5e)
         # Strengthened from `deno test --no-run` (type-check only) to full

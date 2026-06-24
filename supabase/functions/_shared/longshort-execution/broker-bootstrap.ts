@@ -48,15 +48,21 @@ import type {
   BrokerOrderCanceller,
 } from '../longshort-broker-interfaces.ts';
 import type { InFlightOrder } from './state-machine.ts';
+// ACT-316 (E6-build-revision) — edge-resident Alpaca adapters. Prior to ACT-316
+// these imports reached into src/features/longshort/services/broker/alpaca/*,
+// which the Supabase bundler cannot resolve outside supabase/functions/ (Gate-2
+// FP-011 red). The edge-resident transcriptions live under _shared/longshort-broker/
+// and import nothing from src/. The src/ Alpaca client is untouched and continues
+// to serve src/ verifier/signal/UI paths.
 import {
   AlpacaPaperClient,
   type AlpacaPaperClientConfig,
-} from '../../../../src/features/longshort/services/broker/alpaca/alpaca-paper-client.ts';
-import { AlpacaOrderAcceptanceFetcher } from '../../../../src/features/longshort/services/broker/alpaca/alpaca-order-acceptance-fetcher.ts';
-import { AlpacaOrderSubmitter } from '../../../../src/features/longshort/services/broker/alpaca/alpaca-order-submitter.ts';
-import { AlpacaFillFetcher } from '../../../../src/features/longshort/services/broker/alpaca/alpaca-fill-fetcher.ts';
-import { AlpacaOrderCanceller } from '../../../../src/features/longshort/services/broker/alpaca/alpaca-order-canceller.ts';
-import { AlpacaOpenOrdersFetcher } from '../../../../src/features/longshort/services/broker/alpaca/alpaca-open-orders-fetcher.ts';
+} from '../longshort-broker/alpaca-paper-client.ts';
+import { AlpacaOrderAcceptanceFetcher } from '../longshort-broker/alpaca-order-acceptance-fetcher.ts';
+import { AlpacaOrderSubmitter } from '../longshort-broker/alpaca-order-submitter.ts';
+import { AlpacaFillFetcher } from '../longshort-broker/alpaca-fill-fetcher.ts';
+import { AlpacaOrderCanceller } from '../longshort-broker/alpaca-order-canceller.ts';
+import { AlpacaOpenOrdersFetcher } from '../longshort-broker/alpaca-open-orders-fetcher.ts';
 
 /** The four broker surfaces `advanceTick` needs + the in-flight
  *  reconstruction callable that satisfies the E3 SURFACE-1 invariant. */

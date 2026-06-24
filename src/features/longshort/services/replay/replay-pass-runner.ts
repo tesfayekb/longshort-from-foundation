@@ -22,12 +22,12 @@ import { InMemoryEventCollector } from './in-memory-event-collector.ts';
 import type { QuoteEvent, ReplayTimestamp } from '../../types/replay-fixture.ts';
 import {
   VERIFY_QUOTE_TOLERANCE,
-} from '../../../../../supabase/functions/_shared/longshort-verifiers/verify_quote.ts';
+} from '../../../../../supabase/functions/_shared/longshort-verifiers/verify_quote.ts'; // allow-src-edge-import: dev-tooling replay runner (Deno-executed via scripts/replay-pass.ts), not Vite-bundled — ACT-316 reciprocal-guard override
 import type {
   L2SyntheticUniverseQuarterlyRefreshFixture,
   UniverseMembershipSnapshotEvent,
 } from './l2-synthetic-universe-quarterly-refresh-generator.ts';
-import { MATERIALLY_EXCLUDED_REASONS } from '../../../../../supabase/functions/_shared/longshort-verifiers/verify_universe_membership.ts';
+import { MATERIALLY_EXCLUDED_REASONS } from '../../../../../supabase/functions/_shared/longshort-verifiers/verify_universe_membership.ts'; // allow-src-edge-import: dev-tooling replay runner (Deno-executed via scripts/replay-pass.ts), not Vite-bundled — ACT-316 reciprocal-guard override
 
 const OPERATOR_ID = 'l2-synth-operator';
 const SYMBOL = 'AAPL';
