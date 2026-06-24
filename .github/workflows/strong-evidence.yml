@@ -12,7 +12,61 @@ on:
     branches: [main]
 
 jobs:
+  # DW-128 Stage-2: fast-failing toolchain-parity gate.
+  # Catches the sandbox-vs-CI divergence class (4x this session: functions-lock v5,
+  # lint-directive, root-lock v5, test-permission-set) at the FRONT of CI (~60-120s)
+  # instead of deep in a strong-evidence run. Runs under CI's exact pinned toolchain.
+  # The main strong-evidence job gates on this via `needs: toolchain-parity` — the
+  # expensive gates do not start until parity passes.
+  # RESIDUAL GAP (accepted, topology-bound): this is prevention-via-fast-detection,
+  # NOT prevention-via-blocked-write — the committing env (Lovable Deno 2.x sandbox)
+  # is structurally non-parity with CI and cannot self-check v3 without triggering
+  # the v5 rewrite. Zero-gap would require a version-selectable Lovable runtime or
+  # PR-gated merges, both out of scope for DW-128.
+  toolchain-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno (pinned 1.46.3 — same as the main job)
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.46.3
+
+      - name: Setup Node (for ESLint parity)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci || npm install
+
+      # Check (a): both deno.lock files at version 3 (pure JSON read; never invokes
+      # deno cache, so it cannot itself trigger a v5 rewrite — the load-bearing invariant).
+      - name: Gate 0a — lockfile versions (both locks v3)
+        run: deno run --allow-read scripts/check-lockfile-versions.ts
+
+      # Check (a-test): run the gate's own test under CI's EXACT permission set
+      # (--allow-read --allow-net --allow-env, NO --allow-write) — exercises the
+      # permission-divergence axis that caused #374.
+      # NOTE: no --lock here by design. The test imports only stdlib + the local
+      # script (no lock resolution needed), and --lock invokes the lock-touching
+      # path that caused #370 — omitting it keeps the first-axis risk out of the
+      # gate built to catch it. The main job's Gate 2 still runs this test with
+      # --lock as part of the full scripts/ pass; this is the fast-fail front copy.
+      - name: Gate 0a-test — lockfile-check test under CI permission set
+        run: deno test --allow-read --allow-net --allow-env scripts/check-lockfile-versions_test.ts
+
+      # Check (b): ESLint clean — the same invocation as the main job's Gate 4,
+      # moved to the front so the lint-directive divergence class fails fast
+      # instead of deep in the run.
+      - name: Gate 0b — ESLint parity (fast-fail)
+        run: npx eslint .
+
   strong-evidence:
+    needs: toolchain-parity
     runs-on: ubuntu-latest
     env:
       DENO_DIR: /home/runner/.cache/deno
