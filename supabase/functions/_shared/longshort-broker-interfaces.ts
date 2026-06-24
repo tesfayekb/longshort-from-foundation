@@ -455,3 +455,40 @@ export interface BrokerOrderAcceptance {
 export interface BrokerOrderSubmitter {
   submitOrder(req: BrokerOrderRequest, ts: Date): Promise<BrokerOrderAcceptance>;
 }
+
+// ────────────────────────────────────────────────────────────────────
+// FP-056 E3 additions (DEC-068 clause b — autonomous three-tier
+// resolution; ACT-311). All additive; no edit to E1/E2 contracts.
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Phase-2 fill snapshot per §8.6 / §11.0.7. E3 polls via this each tick
+ * for orders in `phase2_working` / `phase2_escalating`. Live impl =
+ * Alpaca `GET /v2/orders/{order_id}` reading `filled_qty` + `status`.
+ *
+ * `filled: true` requires `filled_qty === requested_qty` (atomic fill —
+ * partial fills are DW-140 deferred per DEC-068 clause (h); a partial
+ * is reported as `filled: false` with `filled_qty > 0` until DW-140
+ * lands the partial-fill branch).
+ */
+export interface BrokerFillResult {
+  order_id: string;
+  filled: boolean;
+  filled_qty: number;
+  avg_fill_price: number | null;
+  fetched_at: Date;
+}
+
+export interface BrokerFillFetcher {
+  fetchFill(order_id: string, ts: Date): Promise<BrokerFillResult>;
+}
+
+/**
+ * Order cancellation surface — required for clause (b) Tier-1
+ * cancel-and-replace escalation (NOT modify, per DW-141 deferral).
+ * Live impl = Alpaca `DELETE /v2/orders/{order_id}`. Idempotent at
+ * broker boundary: cancelling an already-terminal order is a no-op.
+ */
+export interface BrokerOrderCanceller {
+  cancelOrder(order_id: string, ts: Date): Promise<void>;
+}
