@@ -3071,3 +3071,46 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future Owner Phase** | Phase-5 paper-exec — amend DEC-068 with clause (k) at the E3/E4-era replay-evidence checkpoint OR author a standalone noop-band DEC. |
 | **Resolution shape** | A future DEC clause (or standalone DEC) that ratifies `NOOP_PCT` + `NOOP_FLOOR_USD` against empirical drift evidence, with explicit rationale + the calibration source cited verbatim. Until then, the constants live in `supabase/functions/_shared/longshort-execution/rebalance-planner.ts` as documented exports and are referenced in `function-index.md` (rebalance-planner row) and FP-056 (E1 noop-tolerance DEC-RATIFICATION DEFERRAL row). |
 | **Cross_ref** | FP-056 E1 (the build that introduces them at ACT-307); `function-index.md` `rebalance-planner` entry; DEC-068 (clauses a–j ratified; clause k reserved-by-implication for noop-band ratification); ACT-307. |
+
+### DW-146: §8.2 marketable-limit buffer-width Phase-0 / replay-evidence ratification (`PRICE_OFFSET_NORMAL_USD`, `PRICE_OFFSET_HIGH_PRICED_USD`, `HIGH_PRICED_THRESHOLD_USD`)
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-146 (next-free after DW-145). |
+| **Status** | open. |
+| **Tier** | A — money-path pricing constants (govern the limit-price the submitter posts at the broker boundary). |
+| **Title** | Ratify the §8.2 marketable-limit named pricing constants — `PRICE_OFFSET_NORMAL_USD = 0.01`, `PRICE_OFFSET_HIGH_PRICED_USD = 0.05`, `HIGH_PRICED_THRESHOLD_USD = 500.00` — against empirical paper-window fill-evidence at the E3-replay-evidence checkpoint. |
+| **Reason for Deferral** | The §8.2 buffer widths are ratified as v1 defaults per DEC-068 clause (k).3 from CROSSWIND_SPEC.md L756/758 verbatim, but the §8.2 spec itself reserves *"Phase 0 validates buffer width"* — meaning these are SPEC-AUTHORED defaults pending empirical confirmation that 1¢ / 5¢ actually win the spread the submitter expects them to win on the rank-30 large/mid-cap pool. At E2-build time there is no paper-fill evidence to calibrate against. The constants are E1-noop-class surfaced exports (not silent defaults; not phantom-zero anti-pattern) authored at the E2-code submitter module, but not DEC-empirically-ratified. |
+| **Blocking Dependencies** | E3 replay-fixture surface (so buffer-width sensitivity can be tested against scripted broker fills); one paper window's worth of `longshort.execution.*` fill events to observe actual marketable-limit win-rate vs. miss-rate by tier (NORMAL / HIGH_PRICED). |
+| **Future Owner Phase** | Phase-5 paper-exec — amend DEC-068 (a future clause OR an amendment row to clause (k)) at the E3/E4-era replay-evidence checkpoint, OR author a standalone pricing-constants DEC if the revision is non-trivial. |
+| **Resolution shape** | A future DEC clause or standalone DEC that ratifies the three buffer-width constants against empirical fill-evidence, with the calibration source cited verbatim (the paper window's fill-event range, the NORMAL/HIGH_PRICED tier-bucket statistics, and the chosen revision rationale if any value changes). The `TIER_SELECTION_PRICE=mid` operator-affirmed gap-resolution (clause (k).3) is revisitable at the same checkpoint. |
+| **Cross_ref** | DEC-068 clause (k).3 (the constants table) + clause (k).7 (the explicit DW-146 reservation); CROSSWIND_SPEC.md §8.2 L756/758 ("Phase 0 validates buffer width"); FP-056 E2 (the submitter module that introduces them); FP-056 E3 (the replay-evidence checkpoint that ratifies them); ACT-309. |
+
+### DW-147: `QUOTE_MAX_STALENESS_S` ratification (the `verify_quote_freshness` noise-tolerant ROI knob)
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-147 (next-free after DW-146). |
+| **Status** | open. |
+| **Tier** | B — noise-tolerant verifier knob; mis-tuning over-fires the freshness verifier (cost: skipped MTM cycles) or under-fires it (cost: stale-quote-priced orders). Not a hard money-path invariant — the verifier failure-action is `mtm_skipped_quote_stale`, not order-block. |
+| **Title** | Ratify `QUOTE_MAX_STALENESS_S = 5` (the `verify_quote_freshness` #3 tolerance, per `supabase/functions/_shared/longshort-verifiers/verify_quote_freshness.ts` `VERIFY_QUOTE_FRESHNESS_TOLERANCE.max_age_s = 5`) against the observed paper-window quote-age distribution at the E3-replay-evidence checkpoint. |
+| **Reason for Deferral** | The 5s value is the CROSSWIND §11.0.7 #3 default (*"Default max_age_s = 5"*), already implemented. At E2-build time there is no replay-evidence to confirm 5s is the right threshold for the paper-window quote-jitter on the rank-30 pool (IEX-real-time or SIP-via-Algo-Trader-Plus per DW-148). The right ratification moment is after E3 lands the replay-fixture surface and a paper window produces a real quote-age histogram per symbol. |
+| **Blocking Dependencies** | E3 replay-fixture surface; one paper window's worth of quote-fetch latency + observed `quote.ts` lag per symbol. |
+| **Future Owner Phase** | Phase-5 paper-exec — amend DEC-068 (clause (k) amendment row OR new clause) at the E3 replay-evidence checkpoint, OR ratify in a standalone verifier-tolerance DEC. |
+| **Resolution shape** | A future DEC that ratifies `QUOTE_MAX_STALENESS_S` against the empirical paper-window quote-age distribution (p50 / p95 / p99 by symbol tier) with the calibration source cited verbatim. |
+| **Cross_ref** | DEC-068 clause (k).7 (the explicit DW-147 reservation); `supabase/functions/_shared/longshort-verifiers/verify_quote_freshness.ts` (the verifier implementation; `VERIFY_QUOTE_FRESHNESS_TOLERANCE.max_age_s = 5`); CROSSWIND §11.0.7 #3 (*"Default max_age_s = 5"*); FP-056 E3 (the replay-evidence checkpoint that ratifies); ACT-309. |
+
+### DW-148: PRE-LIVE Alpaca data-tier decision (Algo Trader Plus subscription for real-time full-market SIP quotes vs. free-tier IEX-real-time quotes)
+
+| Field | Value |
+|-------|-------|
+| **ID** | DW-148 (next-free after DW-147). |
+| **Status** | open. |
+| **Tier** | A — pre-live gate on the data tier the production submitter prices against; coupled to the rank-30 pool's quote-coverage adequacy. |
+| **Title** | Decide whether to upgrade the Alpaca account to Algo Trader Plus (real-time full-market SIP quotes) BEFORE the live cut-over, OR retain the free-tier IEX-real-time quotes for live. v1 E2 builds + paper-validates against the FREE TIER plus the `verify_quote_freshness` gate; the upgrade is a PRE-LIVE decision ratified by paper-validation evidence. |
+| **Reason for Deferral** | Paying the Algo Trader Plus monthly fee before paper validation runs is premature: the FREE TIER IEX-real-time quotes are sufficient to BUILD and PAPER-VALIDATE the submitter (the `verify_quote_freshness` verifier, not the subscription tier, is the failure-mode gate at the noop-class level). The upgrade decision is ratified by paper-validation evidence on whether IEX-real-time coverage is adequate for the rank-30 large/mid-cap pool, or whether thin-coverage names require real-time SIP. Sits alongside DW-138 (Alpaca secrets provisioning) as a PRE-LIVE gate. |
+| **STEP-A-VERIFY claims (§2 axiom — NOT charter-ratified; came from supervisor doc-search, NOT the live account)** | The following three claims MUST be independently verified at the E2-code STEP-A against the live Alpaca account + current Alpaca docs before being relied upon: **(1)** Algo Trader Plus provides real-time full-market SIP quotes. **(2)** Alpaca paper fills against real-time NBBO regardless of the account's data-subscription tier (i.e., the tier affects the PRICING quote the submitter READS, not the fill quality the paper engine SIMULATES). **(3)** The account's CURRENT data tier (Basic IEX-real-time-or-SIP-delayed vs. Algo Trader Plus). Per §2 axiom on upstream evidence: external snapshots are primes; don't let a search result become a governance fact without external-anchor verification. |
+| **Blocking Dependencies** | DW-138 (Alpaca secrets provisioning — must land first so the live-account verification CAN run). One paper window's worth of quote-coverage evidence on the rank-30 pool (which symbols, if any, lack adequate IEX-real-time coverage). The three STEP-A-VERIFY claims above (verified against the live account at E2-code STEP-A). |
+| **Future Owner Phase** | Pre-live — informed by paper-validation quote-coverage evidence. The decision is taken alongside the live cut-over DEC (Phase-8 live-money territory). |
+| **Resolution shape** | A pre-live decision (recorded as a future DEC or live-cut-over checklist item) that either (a) ratifies the FREE TIER for live, citing paper-window coverage evidence demonstrating IEX-real-time is adequate; OR (b) authorizes the Algo Trader Plus subscription, citing the specific paper-window coverage gap that motivates the upgrade. The `verify_quote_freshness` gate continues to bind regardless of tier choice. |
+| **Cross_ref** | DEC-068 clause (k).7 (the explicit DW-148 reservation + the three STEP-A-VERIFY flags); DW-138 (Alpaca secrets — the parallel pre-live gate); `supabase/functions/_shared/longshort-verifiers/verify_quote_freshness.ts` (the freshness gate that binds at every tier); FP-056 E2 (the submitter that consumes the chosen tier's quotes); ACT-309. |
