@@ -5,6 +5,7 @@ import {
   checkLockfileVersion,
   EXPECTED_LOCKFILE_VERSION,
   REQUIRED_LOCKFILES,
+  REQUIRED_TOOLCHAIN_PARITY_GATES,
 } from './check-lockfile-versions.ts';
 
 // CI Gate 2 (.github/workflows/strong-evidence.yml line 66) runs:
@@ -115,4 +116,28 @@ Deno.test('REQUIRED_LOCKFILES — both Catalog #58 paths present', () => {
 
 Deno.test('EXPECTED_LOCKFILE_VERSION — pinned to "3" per CI Deno 1.46.3', () => {
   assertEquals(EXPECTED_LOCKFILE_VERSION, '3');
+});
+
+// ---------- ACT-320: toolchain-parity gate-set contract ----------
+//
+// The local-verification discipline that prevents Catalog #58 firings is
+// codified in `.github/workflows/strong-evidence.yml`'s `toolchain-parity`
+// job. This test asserts the workflow CONTAINS every gate listed in
+// REQUIRED_TOOLCHAIN_PARITY_GATES. Pure read of the workflow file under
+// --allow-read; no subprocess, no write.
+
+Deno.test('toolchain-parity workflow contains every required gate (ACT-320)', async () => {
+  const wf = await Deno.readTextFile('.github/workflows/strong-evidence.yml');
+  for (const gate of REQUIRED_TOOLCHAIN_PARITY_GATES) {
+    if (!wf.includes(gate)) {
+      throw new Error(
+        `strong-evidence.yml toolchain-parity job is missing required gate: "${gate}"`,
+      );
+    }
+  }
+});
+
+Deno.test('REQUIRED_TOOLCHAIN_PARITY_GATES includes the Gate-11 deno-check fast-fail (ACT-320)', () => {
+  const hasDenoCheck = REQUIRED_TOOLCHAIN_PARITY_GATES.some((g) => g.includes('deno check'));
+  assertEquals(hasDenoCheck, true, 'Catalog #58 seventh firing requires a deno-check fast-fail gate');
 });

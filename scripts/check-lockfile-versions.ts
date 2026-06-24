@@ -13,6 +13,20 @@
  * this session (Catalog #58 first firing on the functions lock, then on the root lock).
  * This script is the executable form of the Catalog #58 widened invariant.
  *
+ * ACT-320 widening (Catalog #58 seventh firing): the local-verification gate set
+ * the workflow's `toolchain-parity` job must run is now codified as a contract
+ * the matching test (`check-lockfile-versions_test.ts`) asserts statically over
+ * `.github/workflows/strong-evidence.yml`:
+ *
+ *   - Gate 0a   — both deno.lock files at v3 (this script)
+ *   - Gate 0a-test — this script's test under CI's exact permission set
+ *   - Gate 0b   — `npx eslint .` (lint-directive divergence class)
+ *   - Gate 0c   — `deno check` over supabase/functions/_shared (type-incomplete
+ *                  literal class — the 7th firing). Empirically necessary
+ *                  because `deno test` does NOT type-check files it does not
+ *                  import; a test literal that violates an interface can pass
+ *                  the test suite while failing `deno check`.
+ *
  * CRITICAL SAFETY INVARIANT — PURE JSON READ ONLY:
  * This script MUST NEVER invoke `deno cache`, `deno test`, or anything else that could
  * itself rewrite a lockfile. It uses `Deno.readTextFile` + `JSON.parse` exclusively.
@@ -39,6 +53,21 @@ export const EXPECTED_LOCKFILE_VERSION = '3' as const;
 export const REQUIRED_LOCKFILES = [
   'deno.lock',
   'supabase/functions/deno.lock',
+] as const;
+
+/**
+ * ACT-320 — the set of toolchain-parity gate names that `strong-evidence.yml`'s
+ * `toolchain-parity` job MUST contain (asserted by the matching test). These
+ * are the front-of-CI fast-fail gates for the four sandbox-vs-CI divergence
+ * axes Catalog #58 has fired on. The test greps the workflow file for these
+ * literal substrings; updating this list without updating the workflow (or
+ * vice versa) FAILS the gate's own test.
+ */
+export const REQUIRED_TOOLCHAIN_PARITY_GATES = [
+  'Gate 0a — lockfile versions',
+  'Gate 0a-test — lockfile-check test',
+  'Gate 0b — ESLint parity',
+  'Gate 0c — deno check',
 ] as const;
 
 export type ViolationKind =
