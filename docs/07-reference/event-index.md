@@ -3038,3 +3038,13 @@ The six events below mirror the short-interest signal's event family exactly, wi
 | **Payload schema** | `actor_id`: operator user id; `metadata: { operator_id, signal_id, as_of, error?, failure_reason?, stage?, trigger: 'manual', correlation_id }` |
 | **Lifecycle** | active |
 | **Added by** | FP-049 Phase 3a |
+
+### Forward-pointer — FP-056 / DEC-068 execution-layer events (E3–E5 build, NOT YET LIVE)
+
+| Field | Value |
+|---|---|
+| **Status** | **FORWARD-DECLARED at charter — events NOT yet emitted.** This entry exists so the index records the planned event surface; it MUST be replaced with full per-event entries at the respective E-step build commits (convention: event-index entries describe LIVE emit sites). |
+| **Planned events (`longshort.execution.*`, written via `_shared/strategy-audit.ts::writeStrategyAuditEvent` per DEC-033 v4.1; per-strategy table `longshort_audit_logs` per DEC-031 T4)** | `longshort.execution.tick.{started,completed,failed,skipped,manual_triggered,manual_completed,manual_failed}` (execution edge fn lifecycle, mirrors `longshort.targets.compute.*`); `longshort.execution.order.submitted` (sequential submitter post); `longshort.execution.order.accepted` / `.rejected` (Phase-1 outcomes); `longshort.execution.order.filled` / `.partially_filled` (Phase-2 outcomes — partial-fill is DW-140 territory; v1 emits the event but does NOT re-submit residual); `longshort.execution.target.unfillable_skipped` (Tier 2 auto-skip terminal-for-tick per DEC-068 clause b; carries `unfillable_reason ∈ {retry_budget_exhausted, wall_clock_exhausted, slippage_budget_exhausted}` + `attempts_count` + `last_attempt_bps` + escalation trail); `longshort.execution.rejection.no_pause_propagated` (§8.9 NO-PAUSE cache-update); `longshort.execution.incident.invariant_violation` (Tier 3 operator-page — broker auth failure, reconciliation divergence, kernel invariant). |
+| **`reconciliation_events.call_name` literals (existing table, no migration)** | `broker_acceptance_received`, `broker_fill_received`, `broker_rejection_no_pause`, `unfillable_skip_terminal`, `cancel_and_replace_race`. Existing `call_name text NOT NULL` column accommodates without schema change (no value-constraining enum). Confirmation at E4 build against the live events table per DEC-068 clause (g) E_evidence_2. |
+| **Charter** | [DEC-068](../decisions/DEC-068-longshort-execution-authorization.md) + [FP-056](../08-planning/feature-proposals.md#fp-056-phase-5-paper-exec-execution-layer--sequential-submitter--two-phase-state-machine--autonomous-three-tier-resolution-longshort). |
+| **Added by** | FP-056 / DEC-068 / ACT-305 (charter landing). Full per-event entries land at the respective E-step build actions. |
