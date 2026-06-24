@@ -1,3 +1,22 @@
+### ACT-318: REVISION-FIX — Catalog #58 third root `deno.lock` v5 recurrence restored to v3 under pinned Deno 1.46.3; recurrence diagnosed as cache-triggered Lovable Deno 2.x lock writer, not every commit
+
+REVISION-FIX for the CI toolchain-parity RED where the root `deno.lock` had landed at lockfile `version: "5"` while CI is pinned to Deno `1.46.3` and accepts lockfile v3 only. This is the third Catalog #58 root-lock recurrence in the session. The functions lock was already v3 and was intentionally left untouched.
+
+| Field | Value |
+|---|---|
+| **ID** | ACT-318 |
+| **Date** | 2026-06-24 |
+| **Mode** | REVISION-FIX (Tier A — toolchain-parity; root lock restore only, no structural fix, no scope beyond recurrence diagnosis). |
+| **HEAD at start** | `a158743d` (`origin/main` at task start; observed root lock v5). |
+| **Fix** | Regenerated only the root `deno.lock` with pinned Deno `1.46.3` (`/tmp/deno cache --lock=deno.lock --lock-write` over the `strong-evidence.yml` root entrypoints). Confirmed `head -2 deno.lock` = `"version": "3"`; re-ran the same pinned cache command and confirmed the root lock stayed byte-identical; confirmed `supabase/functions/deno.lock` stayed byte-identical and v3. |
+| **Dependency delta gate** | Compared the saved v5 root lock to the regenerated v3 root lock. Changed package version sets: `autoprefixer 10.5.1 → 10.5.2` (declared `^10.4.21`, in-range patch/minor, no major); `cron-parser 5.6.0 → 5.6.1` (declared `^5.5.0`, in-range patch/minor, no major). Dropped package names: none. Financial-path import-reach over `supabase/functions/_shared/longshort-combiner/`, `supabase/functions/_shared/longshort-signals/`, and `training/`: EMPTY for both `autoprefixer` and `cron-parser`. |
+| **Recurrence diagnosis** | `git log -- deno.lock` shows alternating v5 cache-trigger writes and v3 restores: `c7874601` v5 → `5f513d8c` v3; `3704ad5c` v5 → `72a7de2a` v3; `2c0b9e17` v5 → `ccb14346` v3; current restore `af7c438f` v3 over `origin/main` `a158743d` inheriting the v5 from `2c0b9e17`. It is NOT every commit; it recurs when the root Deno graph is cached/resolved under Lovable sandbox Deno 2.x (`deno 2.6.10` observed), which writes lockfile v5. |
+| **Structural-fix recommendation (not built)** | Best prevention options for operator decision: (a) pin the Lovable sandbox lock writer to Deno 1.46.3 if platform-supported; (b) add a root `deno.json` only if it can force parity for config-less resolution without expanding scope; (c) keep/strengthen DW-128 Stage-2 pre-commit/fast-fail guard so either lock at v5 fails before merge. Recommendation: (a) is highest ROI if available; otherwise (c) is the least invasive guard, with (b) requiring separate governance because it changes root Deno resolution topology. |
+| **Verification** | Both locks v3; root pinned-cache stability PASS; functions lock unchanged PASS; `deno run --allow-read scripts/check-lockfile-versions.ts` PASS under pinned Deno 1.46.3. No live fire, grant, cron, migration, or structural fix. |
+| **ROI Impact** | Positive deployment/toolchain ROI only: restores CI compatibility without changing application, trading, signal, sizing, or execution logic. |
+
+---
+
 ### ACT-316: FP-056 E6-BUILD-REVISION — Edge-resident broker layer (`_shared/longshort-broker/*`) replaces ACT-314's src/-importing factory body; reciprocal `check-src-imports.ts` guard + behavior-parity test; src/ Alpaca adapters UNTOUCHED
 ### ACT-317: FP-056 E5.5 PHASE-1 (FOUNDATION) — 5 edge-resident placement-path adapters (quote/buying-power/position/locate/halt-status) + `BrokerInterfaces` extended with the 5 new surfaces (LAZY) + §7 preflight composer (with E4 htb-consult-before-locate invariant + typed-absence SSR handling) + parity gates extended; NO trigger edge fn (Phase 2), NO `planRebalance`/`submitRebalance` wiring (Phase 2), NO grant, NO cron, NO live fire
 
