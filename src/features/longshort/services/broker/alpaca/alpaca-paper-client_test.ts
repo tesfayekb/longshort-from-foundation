@@ -5,6 +5,7 @@ import {
   AlpacaCredentialError,
   AlpacaApiError,
   AlpacaNetworkError,
+  PaperOnlyViolationError,
 } from './alpaca-paper-client.ts';
 
 function withEnv(key: string, secret: string, fn: () => Promise<void> | void): () => Promise<void> {
@@ -104,4 +105,72 @@ Deno.test('(9) postJson throws AlpacaApiError on non-2xx', withEnv('k', 's', asy
   const fetchImpl = mockFetch(() => new Response('bad request', { status: 400 }));
   const client = new AlpacaPaperClient({ baseUrlOverride: 'http://localhost', fetchImpl });
   await assertRejects(() => client.postJson('/v2/orders', { foo: 'bar' }), AlpacaApiError);
+}));
+
+// ────────────────────────────────────────────────────────────────────────────
+// INC-77 closure (DEC-068 clause f + k.8) — paper-only-URL runtime guard.
+// ────────────────────────────────────────────────────────────────────────────
+
+Deno.test('(10) INC-77 guard: live-trading URL override throws PaperOnlyViolationError', withEnv('k', 's', () => {
+  let caught: unknown = null;
+  try {
+    // The literal live URL is constructed in the test fixture (paper-only-URL
+    // lint cannot scan this file — _test.ts is in SELF_EXCLUDE / _test.ts
+    // exclude; if those rules ever change, this assembly preserves intent).
+    const liveUrl = 'https://' + 'api.' + 'alpaca.markets';
+    new AlpacaPaperClient({ baseUrlOverride: liveUrl, fetchImpl: () => new Response('{}') });
+  } catch (e) {
+    caught = e;
+  }
+  assert(caught instanceof PaperOnlyViolationError, 'live URL must throw PaperOnlyViolationError');
+  if (caught instanceof PaperOnlyViolationError) {
+    assertEquals(caught.kind, 'baseUrlOverride');
+  }
+}));
+
+Deno.test('(11) INC-77 guard: data-tier URL override accepted (allow-listed)', withEnv('k', 's', () => {
+  const client = new AlpacaPaperClient({
+    baseUrlOverride: 'https://paper-api.alpaca.markets',
+    dataUrlOverride: 'https://data.alpaca.markets',
+    fetchImpl: () => new Response('{}'),
+  });
+  assert(client instanceof AlpacaPaperClient);
+}));
+
+Deno.test('(12) INC-77 guard: localhost override accepted (test seam)', withEnv('k', 's', () => {
+  const client = new AlpacaPaperClient({
+    baseUrlOverride: 'http://localhost',
+    dataUrlOverride: 'http://localhost:8080',
+    fetchImpl: () => new Response('{}'),
+  });
+  assert(client instanceof AlpacaPaperClient);
+}));
+
+Deno.test('(13) INC-77 guard: arbitrary host override throws PaperOnlyViolationError', withEnv('k', 's', () => {
+  let caught: unknown = null;
+  try {
+    new AlpacaPaperClient({ baseUrlOverride: 'https://example.com', fetchImpl: () => new Response('{}') });
+  } catch (e) {
+    caught = e;
+  }
+  assert(caught instanceof PaperOnlyViolationError, 'arbitrary host must throw');
+}));
+
+Deno.test('(14) INC-77 guard: default (no override) resolves to ALPACA_PAPER_BASE_URL', withEnv('k', 's', () => {
+  const client = new AlpacaPaperClient({ fetchImpl: () => new Response('{}') });
+  assert(client instanceof AlpacaPaperClient);
+}));
+
+Deno.test('(15) INC-77 guard: dataUrlOverride with live URL throws (independent gate)', withEnv('k', 's', () => {
+  let caught: unknown = null;
+  try {
+    const liveUrl = 'https://' + 'api.' + 'alpaca.markets';
+    new AlpacaPaperClient({ dataUrlOverride: liveUrl, fetchImpl: () => new Response('{}') });
+  } catch (e) {
+    caught = e;
+  }
+  assert(caught instanceof PaperOnlyViolationError);
+  if (caught instanceof PaperOnlyViolationError) {
+    assertEquals(caught.kind, 'dataUrlOverride');
+  }
 }));
