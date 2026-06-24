@@ -113,27 +113,29 @@ Deno.test('(b) single substitution sector-legal — provenance stamped (substitu
 
 // ── (c) Sector-cap blocks — rank-21 ConsDisc skipped at cap, next legal substituted. ──
 Deno.test('(c) sector-cap blocks — V2 live scenario: rank-21 sector-illegal, scan continues to next legal', () => {
-  // Construct a short side where ConsDisc occupies ranks 1–6 (all primary-accepted ⇒ 6/6),
-  // then rank 7..20 fill with non-ConsDisc, rank-20 fails pre-flight, rank-21 is ConsDisc
-  // (must be SKIPPED for sector-illegality), rank-22 is Tech (must be substituted in).
+  // V2-shaped: ConsDisc occupies short ranks 1–6 (6/6 cap at primaries), then
+  // ranks 7..20 distribute across {Health, Energy, Tech, Financials} so none
+  // breaches its own cap. Primary S20 fails. Substitute pool: rank-21 is
+  // ConsDisc (must be skipped — 6/6), rank-22 is Tech (legal+passing).
   const rankings: RankingRow[] = [];
   for (let i = 1; i <= 6; i++) rankings.push(row(`S${i}`, 'short', i, 'ConsDisc'));
-  for (let i = 7; i <= 20; i++) rankings.push(row(`S${i}`, 'short', i, 'Health'));
+  const filler = ['Health', 'Energy', 'Tech', 'Financials'];
+  for (let i = 7; i <= 20; i++) rankings.push(row(`S${i}`, 'short', i, filler[(i - 7) % 4]));
   rankings.push(row('S21', 'short', 21, 'ConsDisc'));
   rankings.push(row('S22', 'short', 22, 'Tech'));
-  // Pad ranks 23..30 with Energy.
   for (let i = 23; i <= SUBSTITUTION_SCAN_CAP_RANK; i++) rankings.push(row(`S${i}`, 'short', i, 'Energy'));
-  // Add a parallel long universe so the planner has both sides.
-  for (let i = 1; i <= SUBSTITUTION_SCAN_CAP_RANK; i++) rankings.push(row(`L${i}`, 'long', i, 'Tech'));
+  // Parallel long universe (no failures on long).
+  for (let i = 1; i <= SUBSTITUTION_SCAN_CAP_RANK; i++) {
+    rankings.push(row(`L${i}`, 'long', i, filler[(i - 1) % 4]));
+  }
 
   const preflight = passAll(rankings);
   preflight.set(preflightKey('S20', 'short'), pf(false, 'borrow_locate_unavailable'));
-  // Force long side to break too — only one substitute on long, sector cap doesn't bind there.
 
   const res = selectFinalTargets({ rankings, preflightResults: preflight, capitalBase: 500_000 });
   const sub = res.selected.find((t) => t.selection_reason === 'substitute' && t.side === 'short');
   assert(sub, 'expected a short-side substitute');
-  assertEquals(sub!.symbol, 'S22', 'should skip S21 (sector-illegal: ConsDisc 6/6) and select S22 (Tech)');
+  assertEquals(sub!.symbol, 'S22', 'should skip S21 (ConsDisc 6/6) and select S22 (Tech)');
   assertEquals(sub!.substituted_from_symbol, 'S20');
   assertEquals(sub!.original_rank, 22);
   assertEquals(res.summary.substitutions_made_short, 1);
