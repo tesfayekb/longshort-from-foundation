@@ -4208,3 +4208,58 @@ INERT (no reader) until 3.2-c assembler regime-broadcaster is wired.
 | **Not in `job_registry`** | operator-invoked, not scheduled. |
 | **File** | `supabase/functions/longshort-spy-regime-compute-manual/index.ts` |
 | **Added by** | FP-052.2 / 3.2-b (ACT-292) |
+
+### `computeTargets` — target-position pure kernel (FP-055 Step A)
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-055 / ACT-302) |
+| **Classification** | shared pure compute — financial-critical sizing kernel. NO Supabase, NO `Date.now()`, NO randomness. |
+| **Signature** | `computeTargets({ operatorId, asOfDate, ts, capitalFetcher, bookReader, allocationPct?, leverage?, sizingBasis? }) => Promise<ComputeTargetsResult>` |
+| **Math** | `capital_base = account_equity × allocation_pct × leverage`; `per_name_notional = capital_base / book_size`; `target_shares = NULL` (execution layer fills via fill price). |
+| **Defaults** | `allocationPct = 1.0` (full account); `leverage = 1.0` (paper-bootstrap lock — kernel ASSERTS `=== 1.0`, throws `LeverageLockViolationError` otherwise; relaxed only by Phase-8 DEC DW-137); `sizingBasis = 'account_equity'`. |
+| **Invariants** | (i) `allocationPct ∈ (0, 1]` or `AllocationOutOfRangeError`. (ii) `leverage === 1.0` or `LeverageLockViolationError`. (iii) `account_equity > 0` or `NonPositiveEquityError`. (iv) Per-(side, sector) ≤ 6 (§7.1 WITNESS only; throws `SectorCapViolationError` — kernel does NOT re-enforce, upstream book-assembly does). (v) Empty book → `outcome: 'empty_book'`, zero targets (NOT an error). |
+| **Pre-persistence discipline** | Throws BEFORE any persistence side-effect — orchestrator writes ONLY on a `'completed'` result. Mirrors `ranker.ts` / `book-seeder.ts` pattern. |
+| **File** | `supabase/functions/_shared/longshort-targets/target-position-builder.ts` |
+| **Tests** | `target-position-builder_test.ts` — 15 tests: P1 dollar-neutrality, P2 gross bound, P3 per-name cap not binding, P4 sector-cap witness, P5 replay determinism, P6 partial-book linear scaling, P7 capital-monotonicity, P8 empty-book noop, LM1/LM2 leverage-math at L=1.5/2.0 (formula proven in isolation; kernel still refuses), LL1 leverage-lock (kernel throws for any `lv !== 1.0`), A1 allocation halving, A2 allocation out-of-range, E1 non-positive equity, G6 wall-clock self-scan. |
+| **Added by** | FP-055 / ACT-302 |
+
+### `createTargetPositionOrchestrator` — Step A boundary layer
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-055 / ACT-302) |
+| **Classification** | shared orchestrator — wraps the pure kernel with Supabase I/O. |
+| **Signature** | `createTargetPositionOrchestrator({ supabase, operator_id, capitalFetcher, allocationPct? }).run(as_of: Date) => Promise<TargetPositionOrchestratorResult>` |
+| **I/O** | READS: `combiner_book` (the as-of book) + `combiner_rankings.gics_sector` (for the §7.1 witness; degrades gracefully to no-witness on query error). WRITES: `longshort_target_positions` via chunked UPSERT `ON CONFLICT (operator_id, as_of_date, ticker) DO UPDATE`, chunk size 500. |
+| **Failure modes** | Returns structured `{ outcome: 'failed', failure_reason }` for: kernel throw (wrapped as `compute_threw: <ErrorName>: <msg>`); UPSERT error (`longshort_target_positions upsert failed at chunk offset N: <msg>`). Empty book → `{ outcome: 'empty_book', targets_written: 0 }`. |
+| **DEC-034 compliance** | `as_of.toISOString()` is the sole timestamp source; threaded into both the kernel (`ts`) and the persisted `computed_at`. |
+| **File** | `supabase/functions/_shared/longshort-targets/target-position-orchestrator.ts` |
+| **Added by** | FP-055 / ACT-302 |
+
+### `selectCapitalFetcher` / `StubCapitalFetcher` — Step G dry-run capital source
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-055 / ACT-302) |
+| **Classification** | shared adapter — selects the live or stub capital fetcher based on Alpaca secret presence. |
+| **Behavior at Step A** | Always returns `{ fetcher: StubCapitalFetcher, source: 'stub_100k', alpaca_secrets_present }`. The `alpaca_secrets_present` boolean is computed from `Deno.env.get('ALPACA_PAPER_KEY') && Deno.env.get('ALPACA_PAPER_SECRET')` and emitted in every `.completed` / `.published` audit event — a queryable trip-wire that surfaces the day secrets land. |
+| **Stub equity** | `STUB_ACCOUNT_EQUITY = 100_000` (exported constant). Persisted as `sizing_basis_value = 100000` on every Step-A row. |
+| **DW-138** | Live wiring deferred — see DW-138. Step A's deploy is intentionally stub-only per the STOP condition "the dry-run uses the LIVE Alpaca fetcher … → STOP". |
+| **File** | `supabase/functions/_shared/longshort-targets/stub-capital-fetcher.ts` |
+| **Added by** | FP-055 / ACT-302 |
+
+### `longshort-targets-compute` (cron) + `longshort-targets-compute-manual` edge fns
+
+| Field | Value |
+|-------|-------|
+| **Module** | longshort (FP-055 / ACT-302) |
+| **Classification** | edge function pair — daily portfolio-construction / target-position compute. Cron sibling + operator-triggered manual sibling. |
+| **Auth** | Cron: `verifyCronSecret(X-Cron-Secret)`. Manual: operator JWT (`authenticateRequest`) + `longshort.manage` permission (T3 two-segment RBAC). NO `longshort.execute` permission (DEC-032 clause-4 preserved). |
+| **Cron gates** | (in order) (1) global kill-switch (`job_registry.__kill_switch__` enabled=false → skip); (2) job disarmed (`job_registry.longshort.targets.compute` enabled=false → skip); (3) rank-completion gate — `longshort_audit_logs` row with action ∈ `{longshort.combiner.rank.completed, .manual_completed}` and `metadata->>as_of_date = today` (mirrors the rank-cron's assemble-completion gate). |
+| **Manual body** | `POST { "as_of": "YYYY-MM-DD", "allocation_pct"?: number }`. `as_of` strict-parsed; future-as_of rejected. |
+| **Audit envelope** | `.started` → `.completed`/`.failed`/`.skipped` (cron) or `.manual_triggered` → `.manual_completed`/`.manual_failed` (manual). Plus the decoupled `.published` event AFTER any `*_completed` — the Step F sizing→execution trigger surface (analogous to `combiner.book_published`). All carry `correlation_id`, `capital_source`, `alpaca_secrets_present`, `capital_base`, `book_size`, `per_name_notional`, `ranker_source`, `allocation_pct`, `leverage`. |
+| **cron_last_fire** | Cron fn writes via `persistCronLastFire` after every fire (success / failed / skipped) — standard FP-052 pattern. |
+| **Files** | `supabase/functions/longshort-targets-compute/index.ts` + `supabase/functions/longshort-targets-compute-manual/index.ts` |
+| **`job_registry`** | NOT yet registered. Step A landing intentionally NO cron arming — operator-triggered manual fires first; cron registration is a follow-up commit once the manual-fire dry-run confirms stable behavior. |
+| **Added by** | FP-055 / ACT-302 |

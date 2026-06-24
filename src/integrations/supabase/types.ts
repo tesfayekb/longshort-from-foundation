@@ -1005,6 +1005,60 @@ export type Database = {
         }
         Relationships: []
       }
+      longshort_target_positions: {
+        Row: {
+          allocation_pct: number
+          as_of_date: string
+          book_ref_computed_at: string
+          book_size: number
+          capital_base: number
+          computed_at: string
+          leverage: number
+          operator_id: string
+          ranker_source: string
+          side: string
+          sizing_basis: string
+          sizing_basis_value: number
+          target_notional: number
+          target_shares: number | null
+          ticker: string
+        }
+        Insert: {
+          allocation_pct: number
+          as_of_date: string
+          book_ref_computed_at: string
+          book_size: number
+          capital_base: number
+          computed_at?: string
+          leverage: number
+          operator_id: string
+          ranker_source: string
+          side: string
+          sizing_basis: string
+          sizing_basis_value: number
+          target_notional: number
+          target_shares?: number | null
+          ticker: string
+        }
+        Update: {
+          allocation_pct?: number
+          as_of_date?: string
+          book_ref_computed_at?: string
+          book_size?: number
+          capital_base?: number
+          computed_at?: string
+          leverage?: number
+          operator_id?: string
+          ranker_source?: string
+          side?: string
+          sizing_basis?: string
+          sizing_basis_value?: number
+          target_notional?: number
+          target_shares?: number | null
+          ticker?: string
+        }
+        Relationships: []
+      }
       mfa_recovery_attempts: {
         Row: {
           failed_count: number
