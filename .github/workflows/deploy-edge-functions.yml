@@ -39,10 +39,22 @@
 # The `paths:` filter below enforces this — absence of those deploys
 # in the same commit is a sub-class B violation by construction.
 #
-# This workflow REPLACES Lovable's auto-deploy for the six functions
+# This workflow REPLACES Lovable's auto-deploy for the seven functions
 # listed below — all other edge functions continue to deploy via the
 # Lovable harness. Adding a function here = explicit ACT entry, never
 # silent.
+#
+# ACT-323 ADDS `longshort-rebalance-submit` — the FP-056 Phase-2
+# placement trigger (ranks → §7 preflight → planRebalance →
+# submitRebalance → POST /v2/orders). The money-path placement
+# function belongs on the governed/reproducible deploy path, not the
+# silent Lovable auto-deploy: the ACT-322 commit landed the function
+# at HEAD `c58bccc8` but a Lovable auto-deploy did NOT pick it up
+# (post-commit unauthenticated probe at HEAD `c0243e14` returned 404
+# while the six functions on THIS workflow returned 401 — a textbook
+# silent-auto-deploy-miss on the most money-path-critical function
+# in the strategy surface). The silent miss is itself the argument
+# for adopting the explicit pipeline.
 #
 # OPERATOR ACTION REQUIRED BEFORE FIRST FIRE
 # ------------------------------------------
@@ -68,8 +80,8 @@
 #   any subsequent re-fire of the workflow will retry the failed deploys
 #   with the same `$GITHUB_SHA` (idempotent in BUILD_SHA terms).
 # - Success → operator runs `scripts/check-deployed-sha.ts` against
-#   ALL SIX function URLs and pastes the six MATCH outcomes into the
-#   triggering ACT entry.
+#   ALL SEVEN function URLs and pastes the seven MATCH outcomes into
+#   the triggering ACT entry.
 
 name: deploy-edge-functions
 
@@ -86,6 +98,13 @@ on:
       - 'supabase/functions/longshort-queue-init-manual/**'
       - 'supabase/functions/longshort-queue-slice/**'
       - 'supabase/functions/longshort-queue-sweeper/**'
+      # Placement trigger (ACT-323 / FP-056 Phase-2 money path).
+      - 'supabase/functions/longshort-rebalance-submit/**'
+      # Shared execution kernels the placement trigger links — a fix
+      # to any of these must atomically redeploy the trigger isolate
+      # (same sub-class B forward-binding rule as the queue workers).
+      - 'supabase/functions/_shared/longshort-execution/**'
+      - 'supabase/functions/_shared/longshort-broker-interfaces.ts'
       # Registry surface — any change here changes the in-bundle
       # registry state of every worker that reads it (init, init-manual,
       # slice, sweeper). Atomic redeploy is mandatory (sub-class B).
