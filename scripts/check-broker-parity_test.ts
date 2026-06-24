@@ -14,11 +14,22 @@ import { AlpacaPaperClient as EdgeClient } from '../supabase/functions/_shared/l
 import { AlpacaOpenOrdersFetcher as EdgeOpenOrders } from '../supabase/functions/_shared/longshort-broker/alpaca-open-orders-fetcher.ts';
 import { AlpacaOrderAcceptanceFetcher as EdgeAcceptance } from '../supabase/functions/_shared/longshort-broker/alpaca-order-acceptance-fetcher.ts';
 import { AlpacaFillFetcher as EdgeFill } from '../supabase/functions/_shared/longshort-broker/alpaca-fill-fetcher.ts';
+// ACT-317 (E5.5 Phase-1) — placement-path parity gates.
+import { AlpacaQuoteFetcher as EdgeQuote } from '../supabase/functions/_shared/longshort-broker/alpaca-quote-fetcher.ts';
+import { AlpacaBuyingPowerFetcher as EdgeBP } from '../supabase/functions/_shared/longshort-broker/alpaca-buying-power-fetcher.ts';
+import { AlpacaPositionFetcher as EdgePos } from '../supabase/functions/_shared/longshort-broker/alpaca-position-fetcher.ts';
+import { AlpacaLocateFetcher as EdgeLocate } from '../supabase/functions/_shared/longshort-broker/alpaca-locate-fetcher.ts';
+import { AlpacaHaltStatusFetcher as EdgeHalt } from '../supabase/functions/_shared/longshort-broker/alpaca-halt-status-fetcher.ts';
 
 import { AlpacaPaperClient as SrcClient } from '../src/features/longshort/services/broker/alpaca/alpaca-paper-client.ts';
 import { AlpacaOpenOrdersFetcher as SrcOpenOrders } from '../src/features/longshort/services/broker/alpaca/alpaca-open-orders-fetcher.ts';
 import { AlpacaOrderAcceptanceFetcher as SrcAcceptance } from '../src/features/longshort/services/broker/alpaca/alpaca-order-acceptance-fetcher.ts';
 import { AlpacaFillFetcher as SrcFill } from '../src/features/longshort/services/broker/alpaca/alpaca-fill-fetcher.ts';
+import { AlpacaQuoteFetcher as SrcQuote } from '../src/features/longshort/services/broker/alpaca/alpaca-quote-fetcher.ts';
+import { AlpacaBuyingPowerFetcher as SrcBP } from '../src/features/longshort/services/broker/alpaca/alpaca-buying-power-fetcher.ts';
+import { AlpacaPositionFetcher as SrcPos } from '../src/features/longshort/services/broker/alpaca/alpaca-position-fetcher.ts';
+import { AlpacaLocateFetcher as SrcLocate } from '../src/features/longshort/services/broker/alpaca/alpaca-locate-fetcher.ts';
+import { AlpacaHaltStatusFetcher as SrcHalt } from '../src/features/longshort/services/broker/alpaca/alpaca-halt-status-fetcher.ts';
 
 const TS = new Date('2026-06-24T20:30:00Z');
 const SUBMITTED = '2026-06-24T20:29:50Z';
@@ -88,6 +99,72 @@ Deno.test('parity: fill semantics (edge-resident ≡ src/)', async () => {
       const e = await new EdgeFill(new EdgeClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchFill('O-X', TS);
       const s = await new SrcFill(new SrcClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchFill('O-X', TS);
       assertEquals(canon(e), canon(s), `fill divergence at status=${fixture.status}`);
+    }
+  } finally { c.restore(); }
+});
+
+// ── ACT-317 (E5.5 Phase-1) parity gates — the 5 placement-path adapters. ──
+
+Deno.test('parity: quote latest (edge-resident ≡ src/)', async () => {
+  const c = withCreds();
+  try {
+    const fixture = { quote: { bp: 180.50, ap: 180.52, bs: 100, as: 100, t: SUBMITTED }, symbol: 'AAPL' };
+    const e = await new EdgeQuote(new EdgeClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchQuote('AAPL', TS);
+    const s = await new SrcQuote(new SrcClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchQuote('AAPL', TS);
+    assertEquals(canon(e), canon(s));
+  } finally { c.restore(); }
+});
+
+Deno.test('parity: buying-power account (edge-resident ≡ src/)', async () => {
+  const c = withCreds();
+  try {
+    const fixture = { buying_power: '100000.00', equity: '120000.00' };
+    const e = await new EdgeBP(new EdgeClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchBuyingPower(TS);
+    const s = await new SrcBP(new SrcClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchBuyingPower(TS);
+    assertEquals(canon(e), canon(s));
+  } finally { c.restore(); }
+});
+
+Deno.test('parity: position single-symbol (edge-resident ≡ src/)', async () => {
+  const c = withCreds();
+  try {
+    const fixture = { symbol: 'AAPL', qty: '10', avg_entry_price: '180.10', side: 'long', market_value: '1805.20', current_price: '180.52' };
+    const e = await new EdgePos(new EdgeClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchPosition('AAPL', TS);
+    const s = await new SrcPos(new SrcClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchPosition('AAPL', TS);
+    // src/ position fetcher omits market_value/current_price; assert the
+    // SHARED-shape fields agree (symbol, qty, avg_entry_price, fetched_at)
+    // — edge-resident is a SUPERSET (additive E1 fields per BrokerPosition
+    // optional shape). Behavior-parity is on the shared surface.
+    const eShared = { symbol: e!.symbol, qty: e!.qty, avg_entry_price: e!.avg_entry_price, fetched_at: e!.fetched_at };
+    assertEquals(canon(eShared), canon(s));
+  } finally { c.restore(); }
+});
+
+Deno.test('parity: locate (edge-resident ≡ src/)', async () => {
+  const c = withCreds();
+  try {
+    for (const fixture of [
+      { symbol: 'TSLA', available: true, locate_id: 'L-1', qty: 100 },
+      { symbol: 'GME', available: false },
+    ]) {
+      const e = await new EdgeLocate(new EdgeClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchLocate(fixture.symbol, TS);
+      const s = await new SrcLocate(new SrcClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchLocate(fixture.symbol, TS);
+      assertEquals(canon(e), canon(s), `locate divergence at symbol=${fixture.symbol}`);
+    }
+  } finally { c.restore(); }
+});
+
+Deno.test('parity: halt-status (edge-resident ≡ src/)', async () => {
+  const c = withCreds();
+  try {
+    for (const fixture of [
+      { symbol: 'AAPL', status: 'active', tradable: true },
+      { symbol: 'XYZ', status: 'inactive', tradable: false },
+      { symbol: 'ABC', status: 'active', tradable: false },
+    ]) {
+      const e = await new EdgeHalt(new EdgeClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchHaltStatus(fixture.symbol, TS);
+      const s = await new SrcHalt(new SrcClient({ baseUrlOverride: 'http://localhost', fetchImpl: scriptedFetch(fixture) })).fetchHaltStatus(fixture.symbol, TS);
+      assertEquals(canon(e), canon(s), `halt divergence at symbol=${fixture.symbol}`);
     }
   } finally { c.restore(); }
 });
