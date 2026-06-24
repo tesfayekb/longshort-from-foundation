@@ -35,7 +35,9 @@ export class StubCapitalFetcher implements BrokerBuyingPowerFetcher {
   }
 }
 
-// @ts-ignore — Deno global; consumed by edge runtime.
+// Deno global; this file is consumed by the Deno edge runtime, not the Vite/tsc bundle
+// (supabase/functions/** is outside tsconfig.app.json's `include`), so no TS
+// suppression directive is needed for the ambient declaration below.
 declare const Deno: { env: { get(name: string): string | undefined } };
 
 /**
