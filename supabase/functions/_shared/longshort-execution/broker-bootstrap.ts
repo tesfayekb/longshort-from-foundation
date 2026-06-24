@@ -46,6 +46,11 @@ import type {
   BrokerOrderSubmitter,
   BrokerFillFetcher,
   BrokerOrderCanceller,
+  BrokerQuoteFetcher,
+  BrokerBuyingPowerFetcher,
+  BrokerPositionFetcher,
+  BrokerLocateFetcher,
+  BrokerHaltStatusFetcher,
 } from '../longshort-broker-interfaces.ts';
 import type { InFlightOrder } from './state-machine.ts';
 // ACT-316 (E6-build-revision) — edge-resident Alpaca adapters. Prior to ACT-316
@@ -63,6 +68,15 @@ import { AlpacaOrderSubmitter } from '../longshort-broker/alpaca-order-submitter
 import { AlpacaFillFetcher } from '../longshort-broker/alpaca-fill-fetcher.ts';
 import { AlpacaOrderCanceller } from '../longshort-broker/alpaca-order-canceller.ts';
 import { AlpacaOpenOrdersFetcher } from '../longshort-broker/alpaca-open-orders-fetcher.ts';
+// ACT-317 (E5.5 Phase-1) — placement-path adapters. Required by the §7
+// preflight composer (halt + locate + position) and by the Phase-2 trigger
+// (quote + buying-power for submitRebalance; position for planRebalance
+// currentPositions; buying-power.account_equity for planRebalance capitalBase).
+import { AlpacaQuoteFetcher } from '../longshort-broker/alpaca-quote-fetcher.ts';
+import { AlpacaBuyingPowerFetcher } from '../longshort-broker/alpaca-buying-power-fetcher.ts';
+import { AlpacaPositionFetcher } from '../longshort-broker/alpaca-position-fetcher.ts';
+import { AlpacaLocateFetcher } from '../longshort-broker/alpaca-locate-fetcher.ts';
+import { AlpacaHaltStatusFetcher } from '../longshort-broker/alpaca-halt-status-fetcher.ts';
 
 /** The four broker surfaces `advanceTick` needs + the in-flight
  *  reconstruction callable that satisfies the E3 SURFACE-1 invariant. */
@@ -75,6 +89,34 @@ export interface BrokerInterfaces {
    *  Live impl = Alpaca `GET /v2/orders?status=open` (E6 wiring). Returns
    *  an empty array when the broker has no open orders for the account. */
   reconstructInFlight(ts: Date): Promise<readonly InFlightOrder[]>;
+  // ── ACT-317 (E5.5 Phase-1) PLACEMENT-PATH SURFACES ──────────────────────
+  // Additive — existing advance-path consumers (tick-scheduler, runTick,
+  // longshort-execute) read only the 5 fields above and are unaffected.
+  // The Phase-2 placement trigger + the §7 preflight composer consume the
+  // 5 fields below. All are lazily constructed in `createLiveBrokerInterfaces`
+  // so the module remains import-safe in creds-free CI.
+  /** §8.2 marketable-limit pricing via Alpaca `/v2/stocks/{sym}/quotes/latest`. */
+  quoteFetcher: BrokerQuoteFetcher;
+  /** Pre-batch BP snapshot for submitter + `account_equity` for planner
+   *  `capitalBase` (DEC-067 sizing basis). One fetch satisfies both. */
+  buyingPowerFetcher: BrokerBuyingPowerFetcher;
+  /** `listOpenPositions(ts)` feeds the planner's `currentPositions` input
+   *  through the orchestrator normalization boundary. */
+  positionFetcher: BrokerPositionFetcher;
+  /** §7 short-availability via Alpaca `/v2/short_locates`. Reached ONLY
+   *  when the htb-cache pre-flight consult MISSES (E4 load-bearing wiring
+   *  is enforced inside `verify_short_availability(...cache?)`, not here). */
+  locateFetcher: BrokerLocateFetcher;
+  /** §7 halt-status via Alpaca `/v2/assets/{sym}` (`status`+`tradable`). */
+  haltStatusFetcher: BrokerHaltStatusFetcher;
+  // SSR DETERMINATION (Phase-1 report): Alpaca paper does NOT expose SSR
+  // cleanly — no public REST endpoint surfacing SSR state. Per §2 axiom
+  // (typed absence, NOT a synthetic 'SSR clear' sentinel) the §7 preflight
+  // composer treats SSR as a documented degraded leg when no
+  // `ssrStatusFetcher` is injected: it records `verifiers_skipped:
+  // ['verify_ssr_status']` with reason `ssr_unavailable_on_paper` on every
+  // short candidate. No `ssrStatusFetcher` is exposed on this interface at
+  // Phase 1; Phase-2 decides whether to source SSR from a non-Alpaca feed.
 }
 
 /** Retained for back-compat with E5-era callers / tests that asserted
@@ -109,5 +151,11 @@ export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {})
     submitter: new AlpacaOrderSubmitter(client),
     canceller: new AlpacaOrderCanceller(client),
     reconstructInFlight: (ts: Date) => openOrders.listOpenInFlight(ts),
+    // ── ACT-317 (E5.5 Phase-1) — placement-path adapters (LAZY). ────────
+    quoteFetcher: new AlpacaQuoteFetcher(client),
+    buyingPowerFetcher: new AlpacaBuyingPowerFetcher(client),
+    positionFetcher: new AlpacaPositionFetcher(client),
+    locateFetcher: new AlpacaLocateFetcher(client),
+    haltStatusFetcher: new AlpacaHaltStatusFetcher(client),
   };
 }
