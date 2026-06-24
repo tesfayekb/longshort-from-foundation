@@ -7,6 +7,12 @@
  * Allowed: paper trading URL https://paper-api.alpaca.markets and data URL https://data.alpaca.markets.
  *
  * Scanned scope per DEC-036 clause (2) verbatim: src/features/longshort/**.
+ * EXPANDED at INC-77 closure (DEC-068 clause f + k.8 — FP-056 E2 PR): also
+ * scans supabase/functions/** so the E2 sequential submitter + the rest of
+ * _shared/longshort-execution/ live inside the static-lint coverage. The
+ * runtime guard in `alpaca-paper-client.ts` constructor catches dynamic /
+ * config-injected overrides; this static lint catches literal references to
+ * the live URL string. The two together cover both surface classes.
  *
  * Override: // allow-live-alpaca-url: ADR-NNN
  *
@@ -28,7 +34,10 @@ export interface Violation {
   reason: string;
 }
 
-const SCAN_ROOT = 'src/features/longshort';
+const SCAN_ROOTS = [
+  'src/features/longshort',
+  'supabase/functions',
+] as const;
 
 const SELF_EXCLUDE = [
   'scripts/check-paper-only-url.ts',
@@ -95,19 +104,28 @@ export function findViolationInLine(line: string, filePath: string, lineNumber: 
 
 export async function scanRepository(rootDir = '.'): Promise<Violation[]> {
   const violations: Violation[] = [];
-  try {
-    for await (const entry of walk(`${rootDir}/${SCAN_ROOT}`, { exts: ['.ts', '.tsx'], includeDirs: false })) {
-      const relPath = entry.path.replace(`${rootDir}/`, '');
-      if (isExcluded(relPath)) continue;
-      const text = await Deno.readTextFile(entry.path);
-      const lines = text.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const v = findViolationInLine(lines[i], relPath, i + 1);
-        if (v) violations.push(v);
-      }
+  for (const root of SCAN_ROOTS) {
+    const rootAbs = `${rootDir}/${root}`;
+    // Stat the root before walking — `walk` wraps errors in `WalkError` which
+    // is NOT `instanceof Deno.errors.NotFound`, so the prior swallow-by-class
+    // pattern silently lost coverage when one of multiple SCAN_ROOTS was
+    // absent. Stat-first short-circuits cleanly per missing root.
+    try {
+      await Deno.stat(rootAbs);
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) continue;
+      throw e;
     }
-  } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e;
+    for await (const entry of walk(rootAbs, { exts: ['.ts', '.tsx'], includeDirs: false })) {
+        const relPath = entry.path.replace(`${rootDir}/`, '');
+        if (isExcluded(relPath)) continue;
+        const text = await Deno.readTextFile(entry.path);
+        const lines = text.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          const v = findViolationInLine(lines[i], relPath, i + 1);
+          if (v) violations.push(v);
+        }
+    }
   }
   return violations;
 }
