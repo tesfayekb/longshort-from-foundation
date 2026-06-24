@@ -105,8 +105,18 @@ export function findViolationInLine(line: string, filePath: string, lineNumber: 
 export async function scanRepository(rootDir = '.'): Promise<Violation[]> {
   const violations: Violation[] = [];
   for (const root of SCAN_ROOTS) {
+    const rootAbs = `${rootDir}/${root}`;
+    // Stat the root before walking — `walk` wraps errors in `WalkError` which
+    // is NOT `instanceof Deno.errors.NotFound`, so the prior swallow-by-class
+    // pattern silently lost coverage when one of multiple SCAN_ROOTS was
+    // absent. Stat-first short-circuits cleanly per missing root.
     try {
-      for await (const entry of walk(`${rootDir}/${root}`, { exts: ['.ts', '.tsx'], includeDirs: false })) {
+      await Deno.stat(rootAbs);
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) continue;
+      throw e;
+    }
+    for await (const entry of walk(rootAbs, { exts: ['.ts', '.tsx'], includeDirs: false })) {
         const relPath = entry.path.replace(`${rootDir}/`, '');
         if (isExcluded(relPath)) continue;
         const text = await Deno.readTextFile(entry.path);
@@ -115,9 +125,6 @@ export async function scanRepository(rootDir = '.'): Promise<Violation[]> {
           const v = findViolationInLine(lines[i], relPath, i + 1);
           if (v) violations.push(v);
         }
-      }
-    } catch (e) {
-      if (!(e instanceof Deno.errors.NotFound)) throw e;
     }
   }
   return violations;
