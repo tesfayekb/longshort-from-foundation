@@ -1220,6 +1220,7 @@ At each phase boundary (before advancing to the next phase):
 | **Required Tests for Closure** | Order lifecycle state machine paths (1.A/1.B/1.C; Phase 2 fill/partial/escalation/cancel); short-stop over-close detection + corrective trade synthetic test |
 | **Status** | `deferred` |
 | **Cross-references** | CROSSWIND v0.9 Part 2c §8.6.2, Part 3b §10.9 Phase 5; FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #3 |
+| **Resolution status (2026-06-24 — DEC-068 / FP-056 / ACT-305 charter landing)** | **CHARTERED.** [FP-056](feature-proposals.md#fp-056-phase-5-paper-exec-execution-layer--sequential-submitter--two-phase-state-machine--autonomous-three-tier-resolution-longshort) (Phase-5 paper-exec execution layer) under [DEC-068](../decisions/DEC-068-longshort-execution-authorization.md) (longshort v1 execution authorization) is the resolving FP for DW-046. v1 scope cut per DEC-068 + FP-056: sequential submitter (ADR-002), two-phase state machine, autonomous three-tier unfillable resolution (DEC-068 clause b), §8.9 no-pause-only (clause e), entry + rank-exit only. Build sub-ladder E1–E6 (separate prompts post-charter); E6 closure DW-138-gated. DW-046 will move to `resolving` at E1 land and to `resolved` at FP-056 closure. |
 
 ---
 
@@ -1243,6 +1244,7 @@ At each phase boundary (before advancing to the next phase):
 | **Required Tests for Closure** | E2E gate: user without `longshort.execute` blocked at execution edge functions; superadmin retains via wildcard; audit log records denial |
 | **Status** | `deferred` |
 | **Cross-references** | FP-005 closure document at `docs/08-planning/phase-closures/plan-trading-001-longshort-001-closure.md` Deferred item #4; constitution.md Rule 11 (critical module override) |
+| **Resolution status (2026-06-24 — DEC-068 / FP-056 / ACT-305 charter landing)** | **INTRODUCTION TRIGGER AUTHORIZED.** [DEC-068](../decisions/DEC-068-longshort-execution-authorization.md) clause (d) AUTHORIZES the introduction trigger for `longshort.execute`; the introduction itself is **PERFORMED at FP-056 E5 build** (the permission seed migration + the first consumer's `checkPermissionOrThrow(...,'longshort.execute')` callsite land in the SAME PR per DEC-032 clause (4) — key only when code exists). DEC-036 clause (4)'s "FP-006 MUST NOT introduce" prohibition is RETIRED by DEC-068 clause (d) — FP-056 is the FP authorized to introduce. DW-047 will close at E5 land. |
 
 ---
 
