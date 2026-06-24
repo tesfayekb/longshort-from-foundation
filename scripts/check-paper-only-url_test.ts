@@ -92,44 +92,37 @@ Deno.test('scanRepository — clean on current repo', async () => {
 // INC-77 closure (DEC-068 clause f + k.8) — SCAN_ROOT expansion to
 // supabase/functions/** so the E2 submitter + _shared/longshort-execution/
 // live inside the static-lint coverage.
+//
+// Mechanism note (Gate-2b revision-fix): these tests previously built a temp
+// tree via Deno.makeTempDir/writeTextFile, which requires --allow-write. CI
+// Gate-2 + Gate-2b run scripts/ tests with --allow-read --allow-net --allow-env
+// (NO --allow-write) by deliberate hardening — see strong-evidence.yml line
+// 51-58 ("the permission-divergence axis"). The tests now consume a committed
+// read-only fixture tree at scripts/__fixtures__/inc77-scan-roots/ instead.
+// The fixture tree mirrors both SCAN_ROOTS and is invisible to a default
+// scanRepository('.') run because scripts/__fixtures__/ is outside SCAN_ROOTS.
+// Pattern parallels scripts/__fixtures__/unparseable.lock.
 // ────────────────────────────────────────────────────────────────────────────
 
+const INC77_FIXTURE_ROOT = 'scripts/__fixtures__/inc77-scan-roots';
+
 Deno.test('SCAN_ROOT expansion — catches live URL under supabase/functions/', async () => {
-  // Build a temp tree mirroring the expanded SCAN_ROOTS so we exercise the
-  // walk over BOTH scan roots without polluting the real repo. The test
-  // proves the new supabase/functions root is covered.
-  const tmp = await Deno.makeTempDir({ prefix: 'check-paper-only-url-scan-root-' });
-  try {
-    const fnDir = `${tmp}/supabase/functions/_shared/longshort-execution/__lint_fixture__`;
-    await Deno.mkdir(fnDir, { recursive: true });
-    // Build the literal live URL via concatenation so this test file itself
-    // never contains the banned literal (kept inert under SELF_EXCLUDE +
-    // _test.ts exclude semantics).
-    const liveUrl = 'https://' + 'api.' + 'alpaca.markets/v2/orders';
-    await Deno.writeTextFile(
-      `${fnDir}/fixture.ts`,
-      `// INC-77 SCAN_ROOT-expansion lint fixture — must be caught by scanRepository.\n` +
-        `export const FIXTURE_URL = "${liveUrl}";\n`,
-    );
-    const violations = await scanRepository(tmp);
-    assertEquals(violations.length, 1, 'expanded SCAN_ROOT must catch the fixture under supabase/functions/');
-    assertEquals(violations[0].file.endsWith('fixture.ts'), true);
-  } finally {
-    await Deno.remove(tmp, { recursive: true });
-  }
+  // Exercise the multi-root walk by pointing scanRepository at the committed
+  // fixture tree. Proves the supabase/functions/** SCAN_ROOT resolves and
+  // the live-URL pattern is detected under it.
+  const violations = await scanRepository(INC77_FIXTURE_ROOT);
+  const fnViolations = violations.filter((v) =>
+    v.file.includes('supabase/functions/_shared/longshort-execution/__lint_fixture__/fixture.ts')
+  );
+  assertEquals(fnViolations.length, 1, 'expanded SCAN_ROOT must catch the fixture under supabase/functions/');
 });
 
 Deno.test('SCAN_ROOT — still covers src/features/longshort/ (original root preserved)', async () => {
-  const tmp = await Deno.makeTempDir({ prefix: 'check-paper-only-url-orig-root-' });
-  try {
-    const dir = `${tmp}/src/features/longshort/services/__lint_fixture__`;
-    await Deno.mkdir(dir, { recursive: true });
-    const liveUrl = 'https://' + 'api.' + 'alpaca.markets';
-    await Deno.writeTextFile(`${dir}/fixture.ts`, `export const X = "${liveUrl}";\n`);
-    const violations = await scanRepository(tmp);
-    assertEquals(violations.length, 1);
-    assertEquals(violations[0].file.endsWith('fixture.ts'), true);
-  } finally {
-    await Deno.remove(tmp, { recursive: true });
-  }
+  // Same fixture-tree mechanism; assert the src/features/longshort root is
+  // still walked (regression guard for the multi-root expansion).
+  const violations = await scanRepository(INC77_FIXTURE_ROOT);
+  const srcViolations = violations.filter((v) =>
+    v.file.includes('src/features/longshort/services/__lint_fixture__/fixture.ts')
+  );
+  assertEquals(srcViolations.length, 1, 'original src/features/longshort SCAN_ROOT must still be walked');
 });
