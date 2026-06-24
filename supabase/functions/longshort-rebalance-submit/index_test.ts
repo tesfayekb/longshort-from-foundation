@@ -303,8 +303,8 @@ Deno.test('FULL_REBALANCE writes one equity snapshot using equity + positions al
   ];
   // One pre-existing long position so long_mv > 0 in the snapshot.
   const positions: BrokerPosition[] = [
-    { symbol: 'XYZ', qty: 10, market_value: 1_234.56, current_price: 123.456,
-      cost_basis: 1_000, unrealized_pl: 234.56, fetched_at: TS },
+    { symbol: 'XYZ', qty: 10, avg_entry_price: 100, fetched_at: TS,
+      market_value: 1_234.56, current_price: 123.456 },
   ];
   const { interfaces } = makeFakeBroker({
     positions, account_equity: 250_000, available_bp: 200_000,
