@@ -161,37 +161,73 @@ Deno.test('(d) cascade to rank-30 exhausts → one-fewer fallback (selection has
 
 // ── (e) Sequential substitution re-reads sector counts. ──
 Deno.test('(e) sequential substitution re-reads sector counts (second substitute sees first substitute\'s sector)', () => {
-  // Construct: long sector cap edge case.
-  //   Primary Tech accepted: L1,L5,L9,L13,L17 = 5/6
-  //   L21 (Tech) substituted in for failing L2 ⇒ Tech now 6/6
-  //   L4 fails next → scan substitutes; L25 (Tech) MUST be skipped (cap 6/6),
-  //                   L26 (Health) selected instead. Without re-read, planner
-  //                   would wrongly accept L25.
+  // Construct a scenario where a PRIOR SUBSTITUTE pushes Tech to 6/6, then a
+  // LATER failing primary must skip the next Tech candidate that would have
+  // been legal under a snapshot taken at start-of-day:
+  //   Primary Tech accepted at L1..L5 (Tech 5/6 after processing)
+  //   L6 (Health) primary accepted
+  //   L7 (Energy) primary FAILS → scan. Substitute pool starts at rank 21.
+  //     L21 (Tech) — sector-legal (Tech=5<6), passing → ACCEPT ⇒ Tech now 6/6.
+  //   L8 (ConsDisc) primary FAILS → scan.
+  //     L22 (Tech) — MUST be SKIPPED (Tech=6/6 — only possible to detect with
+  //                  per-substitution re-read).
+  //     L23 (Health) — sector-legal, passing → ACCEPT.
+  // Without re-read, the planner would wrongly accept L22.
   const rankings: RankingRow[] = [];
-  // Long ranks 1..20 with sectors so Tech sits at 1,5,9,13,17 (i mod 4 == 1).
-  const sectors = ['Tech', 'Health', 'Energy', 'ConsDisc'];
-  for (let i = 1; i <= 20; i++) rankings.push(row(`L${i}`, 'long', i, sectors[(i - 1) % 4]));
+  for (let i = 1; i <= 5; i++) rankings.push(row(`L${i}`, 'long', i, 'Tech'));
+  rankings.push(row('L6', 'long', 6, 'Health'));
+  rankings.push(row('L7', 'long', 7, 'Energy'));
+  rankings.push(row('L8', 'long', 8, 'ConsDisc'));
+  // L9..L20 fill primaries with non-Tech to leave Tech at 5 after primaries.
+  for (let i = 9; i <= 20; i++) rankings.push(row(`L${i}`, 'long', i, 'Health'));
   rankings.push(row('L21', 'long', 21, 'Tech'));
-  rankings.push(row('L22', 'long', 22, 'Energy'));
+  rankings.push(row('L22', 'long', 22, 'Tech'));
   rankings.push(row('L23', 'long', 23, 'Health'));
-  rankings.push(row('L24', 'long', 24, 'ConsDisc'));
-  rankings.push(row('L25', 'long', 25, 'Tech'));
-  rankings.push(row('L26', 'long', 26, 'Health'));
-  for (let i = 27; i <= SUBSTITUTION_SCAN_CAP_RANK; i++) rankings.push(row(`L${i}`, 'long', i, 'Energy'));
-  // Parallel short side.
+  for (let i = 24; i <= SUBSTITUTION_SCAN_CAP_RANK; i++) rankings.push(row(`L${i}`, 'long', i, 'Energy'));
+  // Short side full pass.
+  for (let i = 1; i <= SUBSTITUTION_SCAN_CAP_RANK; i++) rankings.push(row(`S${i}`, 'short', i, 'Tech'));
+
+  // Health primary at L9 — make sure L9-L20 don't breach Health cap. With cap=6
+  // and Health=L6+L9..L13 = 6, L14..L20 (7 more) would breach. So restrict:
+  // simplify with Energy filler for L14..L20.
+  // Rebuild precisely:
+  rankings.length = 0;
+  for (let i = 1; i <= 5; i++) rankings.push(row(`L${i}`, 'long', i, 'Tech'));      // Tech 5/6
+  rankings.push(row('L6', 'long', 6, 'Health'));                                     // Health 1/6
+  rankings.push(row('L7', 'long', 7, 'Energy'));                                     // primary FAILS
+  rankings.push(row('L8', 'long', 8, 'ConsDisc'));                                   // primary FAILS
+  for (let i = 9; i <= 13; i++) rankings.push(row(`L${i}`, 'long', i, 'Health'));    // Health 1+5=6/6
+  for (let i = 14; i <= 20; i++) rankings.push(row(`L${i}`, 'long', i, 'Energy'));   // Energy 1+7=8
+  // Energy cap! L14..L20 are 7 names of Energy + L7 (would have been Energy) = 8 > 6.
+  // L7 fails so it doesn't count. L14..L20 = 7 Energy primaries — still breaches 6.
+  // Replace L14..L20 with alternating non-cap-breaching sectors:
+  rankings.length = 0;
+  for (let i = 1; i <= 5; i++) rankings.push(row(`L${i}`, 'long', i, 'Tech'));      // Tech 5
+  rankings.push(row('L6', 'long', 6, 'Health'));                                     // Health 1
+  rankings.push(row('L7', 'long', 7, 'Energy'));                                     // FAILS
+  rankings.push(row('L8', 'long', 8, 'ConsDisc'));                                   // FAILS
+  // L9..L20 = 12 slots, distribute across {Health, Energy, ConsDisc, Financials}
+  // such that none exceeds 6.
+  const filler = ['Health', 'Energy', 'ConsDisc', 'Financials'];
+  for (let i = 9; i <= 20; i++) rankings.push(row(`L${i}`, 'long', i, filler[(i - 9) % 4]));
+  // Substitute pool ranks 21+:
+  rankings.push(row('L21', 'long', 21, 'Tech'));        // SUB for L7 — Tech 5→6
+  rankings.push(row('L22', 'long', 22, 'Tech'));        // would be sub for L8 but Tech now 6/6 → SKIP
+  rankings.push(row('L23', 'long', 23, 'Health'));      // SUB for L8 — Health 4 → 5 (OK)
+  for (let i = 24; i <= SUBSTITUTION_SCAN_CAP_RANK; i++) rankings.push(row(`L${i}`, 'long', i, 'Energy'));
   for (let i = 1; i <= SUBSTITUTION_SCAN_CAP_RANK; i++) rankings.push(row(`S${i}`, 'short', i, 'Tech'));
 
   const preflight = passAll(rankings);
-  preflight.set(preflightKey('L2', 'long'), pf(false));  // Health → substitute L21 (Tech, brings Tech to 6/6)
-  preflight.set(preflightKey('L4', 'long'), pf(false));  // ConsDisc → must NOT pick L25 (Tech 6/6), must pick L26 (Health)
+  preflight.set(preflightKey('L7', 'long'), pf(false));
+  preflight.set(preflightKey('L8', 'long'), pf(false));
 
   const res = selectFinalTargets({ rankings, preflightResults: preflight, capitalBase: 500_000 });
   assertEquals(res.summary.substitutions_made_long, 2);
   const subs = res.selected.filter((t) => t.selection_reason === 'substitute');
-  const subForL2 = subs.find((t) => t.substituted_from_symbol === 'L2');
-  const subForL4 = subs.find((t) => t.substituted_from_symbol === 'L4');
-  assertEquals(subForL2?.symbol, 'L21');
-  assertEquals(subForL4?.symbol, 'L26', 'must skip L25 (Tech 6/6 after L21 sub) and accept L26 (Health)');
+  const subForL7 = subs.find((t) => t.substituted_from_symbol === 'L7');
+  const subForL8 = subs.find((t) => t.substituted_from_symbol === 'L8');
+  assertEquals(subForL7?.symbol, 'L21', 'first substitute should be L21 (Tech, 5/6 → 6/6)');
+  assertEquals(subForL8?.symbol, 'L23', 'must SKIP L22 (Tech 6/6 due to L21 sub) and accept L23 (Health)');
 });
 
 // ── (f) MAX_SUBSTITUTION_ATTEMPTS_PER_SIDE_PER_DAY bound — beyond bound = no scan, one-fewer. ──
@@ -361,6 +397,3 @@ Deno.test('exported constants match DEC-068 clause (j) + E1 noop defaults', () =
   assertEquals(NOOP_PCT, 0.02);
   assertEquals(NOOP_FLOOR_USD, 50);
 });
-
-void OppositeSideOpenPositionError; // ensure named export retained
-void PreflightResult;
