@@ -1872,6 +1872,14 @@ The 5 verifiers below are importable Deno shared modules under `supabase/functio
 | `BrokerLocateFetcher` | same | verifyShortAvailability | sub-step 6.7 |
 | `BrokerSSRStatusFetcher` | same | verifySSRStatus | sub-step 6.7 |
 
+##### FP-056 E1 additive extensions (ACT-307) — BrokerPosition + BrokerPositionFetcher
+
+| Surface | Shape | Notes |
+|---|---|---|
+| `BrokerPosition.market_value?: number` | optional dollars (signed; negative for shorts) | Additive field; populated by AlpacaPositionFetcher (E2/E6 live impl). Consumed by the rebalance-planner's `CurrentPosition` narrowing. verifyPosition reads only `{qty, avg_entry_price}` and is byte-identical — no regression. |
+| `BrokerPosition.current_price?: number` | optional dollars per share, last mark | Same notes as above. |
+| `BrokerPositionFetcher.listOpenPositions?(ts): Promise<BrokerPosition[]>` | optional method on the existing interface | Used by FP-056 E1's CLOSE-ENUMERATION (a current position whose symbol is NOT in the post-substitution selected set materializes a `close` ExecutionDelta). Optional so the existing MOCK_POSITION_FETCHER in `longshort-reconciliation-tick/index.ts` continues to compile without a cross-module edit. Live AlpacaPositionFetcher (E2/E6) supplies it. |
+
 ### verify_* Batch B (#6–#10) — sub-step 6.3b (ACT-079)
 
 The 5 verifiers below extend the Batch A registry. Same module path + spec/wrapper shape per Batch A; tolerance + escalation per CROSSWIND §11.0.9. Three first-occurrence cases land here: #8 emits `expected_divergence_handled` (lifecycle's shouldRunAction guard suppresses failure_action), #9 is the first system-level verifier (symbol=null; lifecycle skips state surface), #10 is the first structural-escalation classifier (categorical materially_excluded condition).
