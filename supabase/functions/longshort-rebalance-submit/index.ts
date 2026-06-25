@@ -319,6 +319,14 @@ export async function runRebalanceSubmit(
 ): Promise<RebalanceSubmitResponse> {
   const operator_id = req.operator_id ?? DEFAULT_OPERATOR_ID;
   const ts = deps.ts;
+
+  // writer_smoke short-circuits BEFORE broker instantiation — by design the
+  // smoke verifies only the writer mapping against `reconciliation_events`,
+  // so it must run without any broker call (and without creds).
+  if (req.mode === 'writer_smoke') {
+    return await runWriterSmoke({ operator_id, ts, correlationId, eventWriter: deps.eventWriter });
+  }
+
   const broker = deps.brokerFactory();
 
   // Narrow the placement-path fetchers (Phase-1 made them optional on the
@@ -342,10 +350,6 @@ export async function runRebalanceSubmit(
       acceptanceFetcher: broker.acceptanceFetcher,
       eventWriter: deps.eventWriter,
     });
-  }
-
-  if (req.mode === 'writer_smoke') {
-    return await runWriterSmoke({ operator_id, ts, correlationId, eventWriter: deps.eventWriter });
   }
 
   // ── FULL_REBALANCE ─────────────────────────────────────────────────────
