@@ -68,6 +68,7 @@ import type {
   BrokerLocateFetcher,
   BrokerSSRStatusFetcher,
   BrokerBuyingPowerFetcher,
+  BrokerShortabilityFetcher,
 } from '../longshort-broker-interfaces.ts';
 import {
   preflightKey,
@@ -126,6 +127,14 @@ export interface PreflightComposerDeps {
    *  called, and `summary.locate_unavailable=true`. Mirrors clause-(n)'s
    *  `ssrStatusFetcher?` pattern. */
   locateFetcher?: BrokerLocateFetcher;
+  /** Optional — pre-trade shortability via `/v2/assets.shortable` (DEC-068
+   *  clause (q)). When PRESENT and the htb-cache consult MISSES, the
+   *  composer calls this fetcher BEFORE the locate fetcher (and BEFORE
+   *  the typed-absence short-circuit). When ABSENT, the composer falls
+   *  through to the `locateFetcher` path; when BOTH are absent, the
+   *  short candidate is FAILED with reason `short_availability_source_
+   *  unavailable` (clause-(p) typed-absence shape). */
+  shortabilityFetcher?: BrokerShortabilityFetcher;
   buyingPowerFetcher: BrokerBuyingPowerFetcher;
   /** Optional — typed absence per the SSR DETERMINATION above. When omitted,
    *  every short candidate records `verify_ssr_status` as SKIPPED. */
@@ -167,6 +176,12 @@ export interface PreflightComposerSummary {
    *  on Alpaca paper). Short candidates are FAILED with reason
    *  `short_availability_source_unavailable`; broker locate was NEVER called. */
   locate_unavailable: boolean;
+  /** TRUE iff no `shortabilityFetcher` was injected (DEC-068 clause (q)).
+   *  `long_only_mode` at the trigger is `locate_unavailable &&
+   *  shortability_unavailable` (both pre-trade short-gates structurally
+   *  absent). FALSE on Alpaca paper by default — clause (q) ratifies
+   *  `/v2/assets.shortable` as the gate. */
+  shortability_unavailable: boolean;
   short_count: number;
   long_count: number;
 }
@@ -193,6 +208,12 @@ export async function composePreflightResults(
   void _fetcherSource;
   const ssrUnavailable = deps.ssrStatusFetcher === undefined;
   const locateUnavailable = deps.locateFetcher === undefined;
+  const shortabilityUnavailable = deps.shortabilityFetcher === undefined;
+  // The pre-trade short gate is structurally ABSENT only when BOTH the
+  // shortability fetcher and the locate fetcher are missing. Either one
+  // present satisfies §11.0.7 #4 "skip short entry; do NOT default to
+  // 'assume available'."
+  const shortGateAbsent = shortabilityUnavailable && locateUnavailable;
 
   const requestedTotal = input.candidates.reduce(
     (acc, c) => acc + Math.abs(c.requested_position_size),
@@ -238,19 +259,17 @@ export async function composePreflightResults(
 
     // ── SHORT-SIDE GATES. ──
     if (c.side === 'short') {
-      // ── DEC-068 clause (p) TYPED-ABSENCE SHORT-CIRCUIT ────────────────
-      // When no `locateFetcher` is injected (env-flag
-      // ALPACA_PAPER_LOCATE_AVAILABLE=false at the bootstrap), the
-      // short-availability source is structurally absent. We DO NOT call
-      // the broker locate, DO NOT consult htb (no fetch follows), and
+      // ── DEC-068 clause (p)+(q) TYPED-ABSENCE SHORT-CIRCUIT ────────────
+      // When BOTH `locateFetcher` AND `shortabilityFetcher` are absent
+      // the short-availability source is structurally absent. We DO NOT
+      // call any broker gate, DO NOT consult htb (no fetch follows), and
       // record the candidate FAILED with reason
       // `short_availability_source_unavailable` — distinct in audit shape
       // from a transient broker-reported htb reject (clause (p)
       // DISTINGUISHABILITY INVARIANT). The verifier name is added to
-      // `verifiers_skipped`, NOT to `failed_verifiers`. The composer
-      // writes NO reconciliation_events row for the locate verifier
-      // (broker not called → no row).
-      if (locateUnavailable) {
+      // `verifiers_skipped`, NOT to `failed_verifiers`. Composer writes
+      // NO reconciliation_events row for the locate verifier.
+      if (shortGateAbsent) {
         skippedHere.push('verify_short_availability');
         // SSR typed-absence skip on the short side (when applicable)
         // is still recorded alongside.
@@ -275,18 +294,40 @@ export async function composePreflightResults(
         continue;
       }
       // ── E4 LOAD-BEARING WIRING (consult-before-locate) ─────────────────
-      // verify_short_availability.ts:107-114 transcribed verbatim: the htb
-      // pre-flight consult fires BEFORE the broker locate call. If
-      // `isMarkedHtb` returns true the candidate FAILS without invoking
-      // the locate adapter (the loop-break the E4 closure depends on).
-      // Per §11.0.7 #4 verbatim "skip short entry; do NOT substitute long;
-      // do NOT default to 'assume available'."
+      // Composer layering (clause (q) refinement 1 — fail-closed):
+      //   1. htb-cache consult (cache HIT short-circuits BEFORE any
+      //      assets read — the broken-loop guarantee from E4).
+      //   2. shortability fetcher (clause (q) pre-trade gate via
+      //      assets.shortable). When present this IS the pre-trade
+      //      decision; structurally equivalent to a locate.
+      //   3. locate fetcher (legacy POST /v2/short_locates path; only
+      //      reached when shortabilityFetcher is absent).
+      // Per §11.0.7 #4 verbatim "skip short entry; do NOT substitute
+      // long; do NOT default to 'assume available'."
       const htbMarked = deps.htbCache?.reader
         ? await deps.htbCache.reader.isMarkedHtb(c.symbol, input.ts)
         : false;
       let shortFailed = false;
       if (htbMarked) {
-        shortFailed = true; // consult HIT — locate is NOT called.
+        shortFailed = true; // consult HIT — no further short-gate calls.
+      } else if (deps.shortabilityFetcher !== undefined) {
+        // ── clause-(q) PRE-TRADE SHORTABILITY GATE ────────────────────
+        // STEP-A verified `shortable === true` is the authoritative gate
+        // on Alpaca paper. Layered AFTER the htb consult so cache-hits
+        // never spend an assets read. On `shortable === false` the
+        // candidate fails with verify_short_availability marked failed —
+        // mirrors the locate-path classification so downstream readers
+        // see one consistent failure shape regardless of which gate fired.
+        const sh = await deps.shortabilityFetcher.fetchShortability(c.symbol, input.ts);
+        if (!sh.shortable) {
+          shortFailed = true;
+        }
+        // CLEAR-ON-GENUINE-SUCCESS — mirrors the locate-path semantics
+        // below. A shortable name has its (possibly stale) htb mark
+        // cleared so the next-tick consult doesn't keep it gated.
+        if (!shortFailed && deps.htbCache?.clearer) {
+          await deps.htbCache.clearer.clearHtb(c.symbol);
+        }
       } else {
         // Consult MISS — call the locate adapter.
         const locate = await deps.locateFetcher!.fetchLocate(c.symbol, input.ts);
@@ -361,6 +402,7 @@ export async function composePreflightResults(
       bp_requested_total: requestedTotal,
       ssr_unavailable: ssrUnavailable,
       locate_unavailable: locateUnavailable,
+      shortability_unavailable: shortabilityUnavailable,
       short_count: shortCount,
       long_count: longCount,
     },
