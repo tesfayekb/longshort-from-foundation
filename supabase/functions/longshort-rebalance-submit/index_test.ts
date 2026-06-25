@@ -145,7 +145,7 @@ const noopSnapshotWriter: EquitySnapshotWriter = { async write(_s) {} };
 const noopHtbCacheReader: HtbCacheReader = { async isMarkedHtb(_s) { return false; } };
 const noopHtbCacheClearer: HtbCacheClearer = { async clearHtb(_s) {} };
 const noopRejectionPropagator: RejectionPropagator = {
-  async propagate(_r) { return { persist: false, classification: 'tier1_expected' as const, reason_class: 'unknown' as const }; },
+  async propagate(_args) { return null; },
 };
 const placementShortStackNoops = {
   htbCacheReader: noopHtbCacheReader,
