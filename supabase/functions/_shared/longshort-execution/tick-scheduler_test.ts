@@ -29,6 +29,9 @@ import {
   LiveBrokerNotProvisionedError,
   type BrokerInterfaces,
 } from './broker-bootstrap.ts';
+import { createRejectionPropagator } from './cache-propagator-io.ts';
+import type { HtbCacheWriter } from './cache-propagator-io.ts';
+import type { HtbRecordWrite } from './cache-propagator.ts';
 
 const PROV: DeltaProvenance = {
   selection_reason: 'primary', substituted_from_symbol: null,
@@ -170,6 +173,51 @@ Deno.test('broker-bootstrap: LiveBrokerNotProvisionedError type retained for bac
   const e = new LiveBrokerNotProvisionedError();
   assert(e instanceof Error);
   assertEquals(e.kind, 'live_broker_not_provisioned');
+});
+
+// ── INC-81 closure: advance-path htb-rejection → propagator → htb write ──
+// runTick is the advance-path entry point. The kernel (advanceTick) calls
+// propagator.propagate() inline on terminal htb rejections; absent the
+// injection at the edge fn, the loop-break record never lands. This test
+// drives a phase1_pending SHORT through reconstructInFlight → broker
+// reports rejected(htb) → propagator must write to the htb cache. Closes
+// INC-81 criterion (c): "an htb-rejected short on the advance path marks
+// the cache".
+Deno.test('INC-81: advance-path htb rejection routes through injected propagator and writes htb mark', async () => {
+  const shortOrder = mkOrder({
+    order_id: 'o-htb-1', client_order_id: 'cid-htb', symbol: 'GME',
+    side: 'short', broker_side: 'sell', trade_type: 'entry', intent: 'open',
+  });
+  const { broker } = mkBroker(
+    [shortOrder],
+    {
+      'o-htb-1': {
+        order_id: 'o-htb-1', symbol: 'GME', state: 'rejected',
+        rejection_reason: 'htb', pending_elapsed_s: 1, fetched_at: TS,
+      },
+    },
+    {
+      'o-htb-1': { order_id: 'o-htb-1', filled: false, filled_qty: 0, avg_fill_price: null, fetched_at: TS },
+    },
+  );
+  const writes: HtbRecordWrite[] = [];
+  const htbWriter: HtbCacheWriter = { async upsertHtb(w) { writes.push(w); } };
+  const { writer } = captureEvents();
+  const propagator = createRejectionPropagator({ htbWriter, eventWriter: writer });
+
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+    propagator,
+  });
+
+  // Order terminalized (htb rejection is terminal).
+  assertEquals(result.terminal.length, 1);
+  // Propagator wrote the htb cache mark (the loop-break record).
+  assertEquals(writes.length, 1);
+  assertEquals(writes[0].row.symbol, 'GME');
 });
 
 Deno.test('broker-bootstrap: module-load is creds-free (factory body is lazy — import does not call AlpacaPaperClient)', () => {
