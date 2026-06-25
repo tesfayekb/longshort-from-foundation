@@ -475,10 +475,13 @@ Deno.test('clause (p): long_only_mode TRUE when locateFetcher omitted; shorts_sk
   }
 });
 
-Deno.test('clause (p): both flags TRUE → long_only_mode TRUE; locate-present + SSR-absent → long_only_mode still TRUE (ssr leg)', async () => {
-  // With fake broker (locateFetcher PRESENT) and no SSR fetcher (clause (n)
-  // typed-absence), summary.ssr_unavailable=true, summary.locate_unavailable=false,
-  // long_only_mode = false || true = true.
+Deno.test('clause (q) supersedes (p): long_only_mode requires BOTH locate AND shortability unavailable; SSR alone does NOT force long-only', async () => {
+  // Per DEC-068 clause (q): the long-only declaration is structural absence
+  // of EVERY pre-trade short gate (locate AND shortability). SSR is a
+  // separate axis (clause (n)) and does not by itself produce long-only —
+  // Alpaca paper shorts via sell-to-open even without SSR coverage.
+  // Fake broker exposes locateFetcher → summary.locate_unavailable=false,
+  // so long_only_mode MUST be false even though SSR is absent.
   const rankings: RankingRow[] = [
     { ticker: 'AAA', long_rank: 1, short_rank: 999, long_score: 1, short_score: -1, gics_sector: 'Tech', ranker_source: 'test' },
   ];
@@ -489,7 +492,7 @@ Deno.test('clause (p): both flags TRUE → long_only_mode TRUE; locate-present +
     { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter, ...placementShortStackNoops },
     CID,
   );
-  assertEquals(out.long_only_mode, true);
+  assertEquals(out.long_only_mode, false, 'locate-present → long_only_mode false even with SSR absent (clause (q))');
   assertEquals(out.ssr_unavailable, true);
   assertEquals(out.preflight_summary!.locate_unavailable, false);
   assertEquals(out.shorts_skipped_locate_unavailable, []);
