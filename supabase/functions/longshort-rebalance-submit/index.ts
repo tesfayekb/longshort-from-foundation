@@ -95,6 +95,17 @@ import {
   PLACEMENT_CALL_NAME,
 } from '../_shared/longshort-execution/classify-submission-event.ts';
 import type { BrokerPosition } from '../_shared/longshort-broker-interfaces.ts';
+import {
+  createRejectionPropagator,
+  createSupabaseHtbCacheWriter,
+  createSupabaseHtbCacheReader,
+  createSupabaseHtbCacheClearer,
+  type RejectionPropagator,
+  type HtbCacheReader,
+  type HtbCacheClearer,
+} from '../_shared/longshort-execution/cache-propagator-io.ts';
+import type { SameTickContradictoryPass } from '../_shared/longshort-execution/cache-propagator.ts';
+import { preflightKey } from '../_shared/longshort-execution/rebalance-planner.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -176,6 +187,11 @@ export interface RebalanceSubmitResponse {
    *  (typed-absence at the composer; broker locate NEVER called). Parallel
    *  to clause-(n)'s `shorts_placed_without_ssr_check`. */
   shorts_skipped_locate_unavailable: string[];
+  // ── ACT-331 (DEC-068 clause (q)) — propagator surfacing. ────────────────
+  /** Symbols whose terminal htb rejection landed an htb-cache write via the
+   *  §8.4 rejection propagator on this fire. The next-tick `htbCache.reader`
+   *  consult will short-circuit these symbols. */
+  htb_marks_persisted: string[];
 }
 
 export interface RebalanceSubmitDeps {
@@ -193,6 +209,18 @@ export interface RebalanceSubmitDeps {
    * Optional — defaults to a `supabaseAdmin`-backed writer.
    */
   snapshotWriter?: EquitySnapshotWriter;
+  /** ACT-331 (DEC-068 clause (q)) — htb-cache reader + clearer injected
+   *  into the composer's `htbCache` slot. Defaults to the supabaseAdmin
+   *  pair. The reader+clearer pair MUST be threaded together for the E4
+   *  load-bearing wiring (consult-before-shortability + clear-on-success). */
+  htbCacheReader?: HtbCacheReader;
+  htbCacheClearer?: HtbCacheClearer;
+  /** ACT-331 — §8.4 rejection propagator. Fires on every terminal htb
+   *  rejection from `submitRebalance` so the cache reader picks it up next
+   *  tick (the loop-break the E4 closure depends on, now on the placement
+   *  path too). Defaults to a supabaseAdmin-backed pair (writer +
+   *  reconciliation-event writer reuse of `deps.eventWriter`). */
+  rejectionPropagator?: RejectionPropagator;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -351,6 +379,10 @@ export async function runRebalanceSubmit(
   // path (no broker call) and the trigger declares `long_only_mode`.
   const locateFetcher = broker.locateFetcher;
   const haltStatusFetcher = broker.haltStatusFetcher;
+  // DEC-068 clause (q): shortabilityFetcher is OPTIONAL — env-flag-gated
+  // at broker-bootstrap (`ALPACA_PAPER_SHORTABILITY_AVAILABLE`, default
+  // true). When present, it IS the pre-trade short gate.
+  const shortabilityFetcher = broker.shortabilityFetcher;
   if (!quoteFetcher || !buyingPowerFetcher || !positionFetcher || !haltStatusFetcher) {
     throw new Error('placement_path_broker_fetchers_missing');
   }
@@ -399,14 +431,23 @@ export async function runRebalanceSubmit(
     }
   }
 
-  // 4. §7 PRE-FLIGHT GATE — ssrStatusFetcher OMITTED per DEC-068 (n) typed-absence.
-  //    locateFetcher is conditionally injected per DEC-068 (p) env-flag gate;
-  //    when omitted the composer routes short candidates through typed-absence.
+  // 4. §7 PRE-FLIGHT GATE — ssrStatusFetcher OMITTED per DEC-068 (n)
+  //    typed-absence. locateFetcher conditionally injected per clause (p).
+  //    shortabilityFetcher injected per clause (q) — the real pre-trade
+  //    short gate on Alpaca paper. htbCache reader+clearer threaded so
+  //    the consult-before-shortability + clear-on-success E4 loop-break
+  //    runs end-to-end on the placement path (ACT-331).
+  const htbCacheReader = deps.htbCacheReader
+    ?? createSupabaseHtbCacheReader(supabaseAdmin as unknown as Parameters<typeof createSupabaseHtbCacheReader>[0]);
+  const htbCacheClearer = deps.htbCacheClearer
+    ?? createSupabaseHtbCacheClearer(supabaseAdmin as unknown as Parameters<typeof createSupabaseHtbCacheClearer>[0]);
   const preflight = await composePreflightResults(
     { candidates, internal_expected_bp: bp.available_bp, ts },
     {
       haltStatusFetcher, buyingPowerFetcher,
       ...(locateFetcher ? { locateFetcher } : {}),
+      ...(shortabilityFetcher ? { shortabilityFetcher } : {}),
+      htbCache: { reader: htbCacheReader, clearer: htbCacheClearer },
       // ssrStatusFetcher: undefined — DEC-068 clause (n) typed-absence.
       operator_id,
       fetcher_source: 'live',
@@ -438,6 +479,55 @@ export async function runRebalanceSubmit(
   // 7. Emit reconciliation_events per result. Throws propagate (DEC-034 (3)).
   for (const r of submissions) {
     await deps.eventWriter.emit(classifySubmissionEvent(r), ts);
+  }
+
+  // 7b. ACT-331 — §8.4 REJECTION-PROPAGATION on the placement path.
+  // For every terminal rejection whose reason matches an htb-class token
+  // the propagator writes to longshort_short_availability_cache (the same
+  // table the composer's htb-consult reads next tick). This closes the
+  // placement-path leg of the orphaned-kernel gap; advance-path wiring is
+  // tracked as a named cron-arming prerequisite (INC-81). The propagator
+  // emits its own observability event via `deps.eventWriter`; failures
+  // are non-fatal (cache-write error already routes tier-3 inside the
+  // propagator's own catch).
+  const rejectionPropagator = deps.rejectionPropagator ?? createRejectionPropagator({
+    htbWriter: createSupabaseHtbCacheWriter(
+      supabaseAdmin as unknown as Parameters<typeof createSupabaseHtbCacheWriter>[0],
+    ),
+    eventWriter: deps.eventWriter,
+  });
+  // sameTickPasses: any SHORT candidate whose preflight passed contributes
+  // a contradictory 'htb' pass — if the broker then rejects htb, the
+  // propagator classifies system_bug (the pre-flight gate had a defect).
+  const sameTickPasses: SameTickContradictoryPass[] = [];
+  for (const c of candidates) {
+    if (c.side !== 'short') continue;
+    const r = preflight.results.get(preflightKey(c.symbol, 'short'));
+    if (r?.passed) sameTickPasses.push({ symbol: c.symbol, class: 'htb' });
+  }
+  const htb_marks_persisted: string[] = [];
+  for (const r of submissions) {
+    if (r.kind !== 'rejected') continue;
+    try {
+      const decision = await rejectionPropagator.propagate({
+        symbol: r.symbol,
+        rejection_reason: r.reason,
+        sameTickPasses,
+        ts,
+        client_order_id: r.client_order_id,
+      });
+      if (decision?.persist) {
+        htb_marks_persisted.push(r.symbol);
+      }
+    } catch (propErr) {
+      // Propagator's own tier-3 event already emitted on cache-write
+      // failure; outer placement is authoritative — do not fail the fire.
+      console.error(
+        'longshort_rejection_propagator.failed',
+        r.symbol,
+        propErr instanceof Error ? propErr.message : String(propErr),
+      );
+    }
   }
 
   // 8. ACT-324 / FP-057 — equity snapshot. NON-FATAL (the order placement
@@ -473,6 +563,7 @@ export async function runRebalanceSubmit(
     preflight_summary: preflight.summary,
     submissions,
     candidates,
+    htb_marks_persisted,
   });
 }
 
@@ -537,6 +628,7 @@ async function runSpotCheck(args: {
     preflight_summary: undefined,
     submissions,
     candidates: [],
+    htb_marks_persisted: [],
   });
 }
 
@@ -613,6 +705,7 @@ async function runWriterSmoke(args: {
     preflight_summary: undefined,
     submissions,
     candidates: [],
+    htb_marks_persisted: [],
   });
 }
 
@@ -627,6 +720,9 @@ function buildResponse(args: {
    *  `shorts_skipped_locate_unavailable` on the typed-absence path
    *  (clause (p)). Empty on `spot_check` / `writer_smoke`. */
   candidates: readonly PreflightCandidate[];
+  /** ACT-331 (clause (q)) — symbols whose terminal htb rejection landed
+   *  an htb-cache write via the §8.4 propagator on this fire. */
+  htb_marks_persisted: string[];
 }): RebalanceSubmitResponse {
   const counts: Record<SubmissionResult['kind'], number> = {
     accepted: 0, rejected: 0, pending_timeout: 0,
@@ -646,10 +742,16 @@ function buildResponse(args: {
         .map((r) => r.symbol)
     : [];
 
-  // ── DEC-068 clause (p) — explicit (not inferred) long-only declaration. ──
+  // ── DEC-068 clause (p)+(q) — explicit (not inferred) long-only
+  //     declaration. Per clause (q) the structural absence of a pre-trade
+  //     short gate requires BOTH `locate_unavailable && shortability_
+  //     unavailable`. SSR is a separate axis (clause (n)) and does NOT by
+  //     itself produce long-only — Alpaca paper shorts via sell-to-open
+  //     even without SSR coverage (paper carries no Reg SHO exposure).
   const locate_unavailable = args.preflight_summary?.locate_unavailable ?? true;
-  const long_only_mode = locate_unavailable || ssr_unavailable;
-  const shorts_skipped_locate_unavailable: string[] = locate_unavailable
+  const shortability_unavailable = args.preflight_summary?.shortability_unavailable ?? true;
+  const long_only_mode = locate_unavailable && shortability_unavailable;
+  const shorts_skipped_locate_unavailable: string[] = (locate_unavailable && shortability_unavailable)
     ? args.candidates.filter((c) => c.side === 'short').map((c) => c.symbol)
     : [];
 
@@ -666,6 +768,7 @@ function buildResponse(args: {
     shorts_placed_without_ssr_check,
     long_only_mode,
     shorts_skipped_locate_unavailable,
+    htb_marks_persisted: args.htb_marks_persisted,
   };
 }
 
@@ -750,6 +853,8 @@ Deno.serve(createHandler(async (req: Request) => {
         // longshort_audit_logs row.
         long_only_mode: result.long_only_mode,
         shorts_skipped_locate_unavailable: result.shorts_skipped_locate_unavailable,
+        // ACT-331 (clause (q)) — htb cache writes landed this fire.
+        htb_marks_persisted: result.htb_marks_persisted,
       },
     });
 

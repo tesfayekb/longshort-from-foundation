@@ -28,6 +28,11 @@ import {
   type EquitySnapshotWriter,
   type RebalanceSubmitDeps,
 } from './index.ts';
+import type {
+  HtbCacheReader,
+  HtbCacheClearer,
+  RejectionPropagator,
+} from '../_shared/longshort-execution/cache-propagator-io.ts';
 import type { BrokerInterfaces } from '../_shared/longshort-execution/broker-bootstrap.ts';
 import type {
   EmittedExecutionEvent,
@@ -135,6 +140,19 @@ function makeCapturingEventWriter(): { writer: ReconciliationEventWriter; events
  *  noise during test runs. */
 const noopSnapshotWriter: EquitySnapshotWriter = { async write(_s) {} };
 
+// ── ACT-331 — test no-ops for the placement-path short-side stack ───────
+// avoid the production defaults' supabaseAdmin env-var lookup at test time.
+const noopHtbCacheReader: HtbCacheReader = { async isMarkedHtb(_s) { return false; } };
+const noopHtbCacheClearer: HtbCacheClearer = { async clearHtb(_s) {} };
+const noopRejectionPropagator: RejectionPropagator = {
+  async propagate(_args) { return null; },
+};
+const placementShortStackNoops = {
+  htbCacheReader: noopHtbCacheReader,
+  htbCacheClearer: noopHtbCacheClearer,
+  rejectionPropagator: noopRejectionPropagator,
+};
+
 // ── (a) FULL_REBALANCE end-to-end ────────────────────────────────────────
 
 Deno.test('FULL_REBALANCE drives rankings → composer → planRebalance → submitRebalance', async () => {
@@ -153,6 +171,7 @@ Deno.test('FULL_REBALANCE drives rankings → composer → planRebalance → sub
     rankingsReader: async (_op) => rankings,
     ts: TS,
     snapshotWriter: noopSnapshotWriter,
+    ...placementShortStackNoops,
   };
 
   const out = await runRebalanceSubmit(
@@ -254,7 +273,7 @@ Deno.test('GUARDRAIL 2: response carries ssr_unavailable + shorts_placed_without
   const { writer } = makeCapturingEventWriter();
   const out = await runRebalanceSubmit(
     { mode: 'full_rebalance', operator_id: OP },
-    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter },
+    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter, ...placementShortStackNoops },
     CID,
   );
   // Top-level fields, not buried in summary or debug.
@@ -330,6 +349,7 @@ Deno.test('FULL_REBALANCE writes one equity snapshot using equity + positions al
       rankingsReader: async () => rankings,
       ts: TS,
       snapshotWriter,
+      ...placementShortStackNoops,
     },
     CID,
   );
@@ -371,6 +391,7 @@ Deno.test('FULL_REBALANCE: snapshot-write failure is NON-FATAL (the order placem
       rankingsReader: async () => rankings,
       ts: TS,
       snapshotWriter: throwingSnapshotWriter,
+      ...placementShortStackNoops,
     },
     CID,
   );
@@ -436,7 +457,7 @@ Deno.test('clause (p): long_only_mode TRUE when locateFetcher omitted; shorts_sk
   const { writer } = makeCapturingEventWriter();
   const out = await runRebalanceSubmit(
     { mode: 'full_rebalance', operator_id: OP },
-    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter },
+    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter, ...placementShortStackNoops },
     CID,
   );
 
@@ -454,10 +475,13 @@ Deno.test('clause (p): long_only_mode TRUE when locateFetcher omitted; shorts_sk
   }
 });
 
-Deno.test('clause (p): both flags TRUE → long_only_mode TRUE; locate-present + SSR-absent → long_only_mode still TRUE (ssr leg)', async () => {
-  // With fake broker (locateFetcher PRESENT) and no SSR fetcher (clause (n)
-  // typed-absence), summary.ssr_unavailable=true, summary.locate_unavailable=false,
-  // long_only_mode = false || true = true.
+Deno.test('clause (q) supersedes (p): long_only_mode requires BOTH locate AND shortability unavailable; SSR alone does NOT force long-only', async () => {
+  // Per DEC-068 clause (q): the long-only declaration is structural absence
+  // of EVERY pre-trade short gate (locate AND shortability). SSR is a
+  // separate axis (clause (n)) and does not by itself produce long-only —
+  // Alpaca paper shorts via sell-to-open even without SSR coverage.
+  // Fake broker exposes locateFetcher → summary.locate_unavailable=false,
+  // so long_only_mode MUST be false even though SSR is absent.
   const rankings: RankingRow[] = [
     { ticker: 'AAA', long_rank: 1, short_rank: 999, long_score: 1, short_score: -1, gics_sector: 'Tech', ranker_source: 'test' },
   ];
@@ -465,10 +489,10 @@ Deno.test('clause (p): both flags TRUE → long_only_mode TRUE; locate-present +
   const { writer } = makeCapturingEventWriter();
   const out = await runRebalanceSubmit(
     { mode: 'full_rebalance', operator_id: OP },
-    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter },
+    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter, ...placementShortStackNoops },
     CID,
   );
-  assertEquals(out.long_only_mode, true);
+  assertEquals(out.long_only_mode, false, 'locate-present → long_only_mode false even with SSR absent (clause (q))');
   assertEquals(out.ssr_unavailable, true);
   assertEquals(out.preflight_summary!.locate_unavailable, false);
   assertEquals(out.shorts_skipped_locate_unavailable, []);

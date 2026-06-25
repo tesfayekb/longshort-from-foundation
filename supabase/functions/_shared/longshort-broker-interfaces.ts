@@ -96,6 +96,38 @@ export interface BrokerLocateFetcher {
   fetchLocate(symbol: string, ts: Date): Promise<BrokerLocateResult>;
 }
 
+// ────────────────────────────────────────────────────────────────────
+// ACT-331 (DEC-068 clause (q)) — short-availability via Alpaca paper
+// `/v2/assets/{symbol}.shortable`. The clause-(p) "Alpaca paper cannot
+// short" premise was FALSIFIED by operator probe (POST /v2/orders
+// sell_to_open → HTTP 200, status:pending_new); paper shorts via plain
+// sell-to-open. The §7 pre-trade gate uses `shortable: boolean` on the
+// assets endpoint — composite of ETB-list membership + marginability
+// (operator-confirmed STEP-A: SPY/AAPL/MSFT/NVDA/GME/RIVN/PLUG/SOFI
+// shortable:true; BBBYQ shortable:false). Layers WITH (not replaces)
+// the §8.4 rejection-propagation backstop the placement path wires.
+// ────────────────────────────────────────────────────────────────────
+
+/** Per-symbol shortability snapshot. Mirrors the BrokerHaltStatus shape. */
+export interface BrokerShortability {
+  symbol: string;
+  /** Authoritative pre-trade gate field per STEP-A. Alpaca composes
+   *  ETB-list membership + marginability into this single boolean. */
+  shortable: boolean;
+  /** Diagnostic — surfaced into reconciliation_events payload only. */
+  easy_to_borrow: boolean | null;
+  fetched_at: Date;
+}
+
+export interface BrokerShortabilityFetcher {
+  /**
+   * Fetch shortability for one symbol. Throws on network/auth errors
+   * (DEC-034 (3) propagation). Inactive/delisted symbols return
+   * `shortable: false` explicitly — NOT default-on-failure.
+   */
+  fetchShortability(symbol: string, ts: Date): Promise<BrokerShortability>;
+}
+
 /** SSR (Short Sale Restriction) status from exchange feed. Tri-state per §11.0.7 #5. */
 export type SSRState = 'not_active' | 'active' | 'indeterminate';
 

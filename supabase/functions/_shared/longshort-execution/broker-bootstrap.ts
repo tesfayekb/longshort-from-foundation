@@ -51,6 +51,7 @@ import type {
   BrokerPositionFetcher,
   BrokerLocateFetcher,
   BrokerHaltStatusFetcher,
+  BrokerShortabilityFetcher,
 } from '../longshort-broker-interfaces.ts';
 import type { InFlightOrder } from './state-machine.ts';
 // ACT-316 (E6-build-revision) — edge-resident Alpaca adapters. Prior to ACT-316
@@ -77,6 +78,7 @@ import { AlpacaBuyingPowerFetcher } from '../longshort-broker/alpaca-buying-powe
 import { AlpacaPositionFetcher } from '../longshort-broker/alpaca-position-fetcher.ts';
 import { AlpacaLocateFetcher } from '../longshort-broker/alpaca-locate-fetcher.ts';
 import { AlpacaHaltStatusFetcher } from '../longshort-broker/alpaca-halt-status-fetcher.ts';
+import { AlpacaShortabilityFetcher } from '../longshort-broker/alpaca-shortability-fetcher.ts';
 
 /** The four broker surfaces `advanceTick` needs + the in-flight
  *  reconstruction callable that satisfies the E3 SURFACE-1 invariant. */
@@ -117,6 +119,12 @@ export interface BrokerInterfaces {
   locateFetcher?: BrokerLocateFetcher;
   /** §7 halt-status via Alpaca `/v2/assets/{sym}` (`status`+`tradable`). */
   haltStatusFetcher?: BrokerHaltStatusFetcher;
+  /** §7 pre-trade shortability via Alpaca `/v2/assets/{sym}.shortable`
+   *  (ACT-331 / DEC-068 clause (q)). Env-flag-gated at the bootstrap
+   *  (`ALPACA_PAPER_SHORTABILITY_AVAILABLE`, default true). When absent,
+   *  the §7 composer takes its shortability-typed-absence path; when
+   *  ALSO `locateFetcher` is absent the trigger declares `long_only_mode`. */
+  shortabilityFetcher?: BrokerShortabilityFetcher;
   // SSR DETERMINATION (Phase-1 report): Alpaca paper does NOT expose SSR
   // cleanly — no public REST endpoint surfacing SSR state. Per §2 axiom
   // (typed absence, NOT a synthetic 'SSR clear' sentinel) the §7 preflight
@@ -165,6 +173,17 @@ export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {})
   // construction (no boot-time probe; clause (p) explicitly REJECTS that).
   const locateAvailableEnv = Deno.env.get('ALPACA_PAPER_LOCATE_AVAILABLE');
   const locateAvailable = locateAvailableEnv === 'true' || locateAvailableEnv === '1';
+  // ── DEC-068 clause (q) ENV-FLAG GATE ─────────────────────────────────────
+  // ALPACA_PAPER_SHORTABILITY_AVAILABLE defaults TRUE (clause (q) ratified
+  // shortability on paper as the structural short-availability gate). Set
+  // to '0' / 'false' to OMIT the fetcher and force the composer's
+  // shortability-typed-absence path (operator emergency lever; paired with
+  // ALPACA_PAPER_LOCATE_AVAILABLE=false yields `long_only_mode=true`).
+  const shortabilityAvailableEnv = Deno.env.get('ALPACA_PAPER_SHORTABILITY_AVAILABLE');
+  const shortabilityAvailable = shortabilityAvailableEnv === undefined
+    || shortabilityAvailableEnv === ''
+    || shortabilityAvailableEnv === 'true'
+    || shortabilityAvailableEnv === '1';
   const base: BrokerInterfaces = {
     acceptanceFetcher: new AlpacaOrderAcceptanceFetcher(client),
     fillFetcher: new AlpacaFillFetcher(client),
@@ -179,6 +198,9 @@ export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {})
   };
   if (locateAvailable) {
     base.locateFetcher = new AlpacaLocateFetcher(client);
+  }
+  if (shortabilityAvailable) {
+    base.shortabilityFetcher = new AlpacaShortabilityFetcher(client);
   }
   return base;
 }
