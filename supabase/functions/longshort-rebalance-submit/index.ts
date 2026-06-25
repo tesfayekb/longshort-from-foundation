@@ -671,7 +671,7 @@ Deno.serve(createHandler(async (req: Request) => {
   } catch {
     return apiError(400, 'invalid_request_body', { correlationId });
   }
-  if (body.mode !== 'full_rebalance' && body.mode !== 'spot_check') {
+  if (body.mode !== 'full_rebalance' && body.mode !== 'spot_check' && body.mode !== 'writer_smoke') {
     return apiError(400, 'invalid_mode', { correlationId });
   }
 
@@ -690,7 +690,10 @@ Deno.serve(createHandler(async (req: Request) => {
   try {
     const result = await runRebalanceSubmit(body, {
       brokerFactory: () => createLiveBrokerInterfaces(),
-      eventWriter: createSupabaseReconciliationEventWriter(),
+      eventWriter: createSupabaseReconciliationEventWriter({
+        operator_id,
+        fetcher_source: 'live',
+      }),
       rankingsReader: createSupabaseRankingsReader(),
       ts,
     }, correlationId);
