@@ -51,6 +51,7 @@ import type {
   EmittedExecutionEvent,
   ReconciliationEventWriter,
 } from '../_shared/longshort-execution/lifecycle-orchestrator.ts';
+import { createSupabaseReconciliationEventWriter } from '../_shared/longshort-execution/reconciliation-event-writer.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -66,27 +67,12 @@ function alpacaCredsPresent(): boolean {
   return typeof k === 'string' && k.length > 0 && typeof s === 'string' && s.length > 0;
 }
 
-/** Production reconciliation event writer — appends to
- *  `public.reconciliation_events`. The shell emits in this shape so
- *  paging fires from `outcome='failure_escalated'` (matches the
- *  verifier pattern). */
-function createSupabaseReconciliationEventWriter(): ReconciliationEventWriter {
-  return {
-    async emit(event: EmittedExecutionEvent, ts: Date): Promise<void> {
-      const { error } = await supabaseAdmin.from('reconciliation_events').insert({
-        call_name: event.call_name,
-        tier: event.tier,
-        outcome: event.outcome,
-        payload: event.payload,
-        ts: ts.toISOString(),
-      });
-      if (error) {
-        // DEC-034 clause (3): propagate; no swallow.
-        throw new Error(`reconciliation_events_insert_failed: ${error.message}`);
-      }
-    },
-  };
-}
+// createSupabaseReconciliationEventWriter moved to
+// `_shared/longshort-execution/reconciliation-event-writer.ts` (ACT-326)
+// — single source for both longshort-execute (advance path) and
+// longshort-rebalance-submit (placement path). The local copy carried
+// the corr-`bb3810bf` four-violation defect (payload column / tier
+// enum / engine_version / fetcher_source).
 
 Deno.serve(createHandler(async (req: Request) => {
   if (req.method !== 'POST') {
@@ -139,7 +125,10 @@ Deno.serve(createHandler(async (req: Request) => {
   try {
     const result = await runTick({
       brokerFactory: createLiveBrokerInterfaces,
-      eventWriter: createSupabaseReconciliationEventWriter(),
+      eventWriter: createSupabaseReconciliationEventWriter({
+        operator_id: DEFAULT_OPERATOR_ID,
+        fetcher_source: 'live',
+      }),
       clock: productionClock,
       ts,
     });
