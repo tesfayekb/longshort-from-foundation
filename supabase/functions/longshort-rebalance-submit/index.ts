@@ -744,6 +744,12 @@ Deno.serve(createHandler(async (req: Request) => {
         submission_counts: result.submission_counts,
         ssr_unavailable: result.ssr_unavailable,
         shorts_placed_without_ssr_check_count: result.shorts_placed_without_ssr_check.length,
+        // DEC-068 clause (p) §22.5.1 audit-shape gate. The full list of
+        // typed-absence short symbols lands here so the operator-gated
+        // post-landing re-fire verifies these fields are present in a real
+        // longshort_audit_logs row.
+        long_only_mode: result.long_only_mode,
+        shorts_skipped_locate_unavailable: result.shorts_skipped_locate_unavailable,
       },
     });
 
