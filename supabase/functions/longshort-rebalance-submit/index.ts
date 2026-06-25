@@ -89,6 +89,11 @@ import type {
   EmittedExecutionEvent,
   ReconciliationEventWriter,
 } from '../_shared/longshort-execution/lifecycle-orchestrator.ts';
+import { createSupabaseReconciliationEventWriter } from '../_shared/longshort-execution/reconciliation-event-writer.ts';
+import {
+  classifySubmissionEvent,
+  PLACEMENT_CALL_NAME,
+} from '../_shared/longshort-execution/classify-submission-event.ts';
 import type { BrokerPosition } from '../_shared/longshort-broker-interfaces.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
@@ -101,28 +106,11 @@ function alpacaCredsPresent(): boolean {
   return typeof k === 'string' && k.length > 0 && typeof s === 'string' && s.length > 0;
 }
 
-function createSupabaseReconciliationEventWriter(): ReconciliationEventWriter {
-  return {
-    async emit(event: EmittedExecutionEvent, ts: Date): Promise<void> {
-      const { error } = await supabaseAdmin.from('reconciliation_events').insert({
-        call_name: event.call_name,
-        tier: event.tier,
-        outcome: event.outcome,
-        payload: event.payload,
-        ts: ts.toISOString(),
-      });
-      if (error) {
-        throw new Error(`reconciliation_events_insert_failed: ${error.message}`);
-      }
-    },
-  };
-}
-
 // ──────────────────────────────────────────────────────────────────────────
 // Public request/response shapes + the orchestration entry (testable).
 // ──────────────────────────────────────────────────────────────────────────
 
-export type RebalanceMode = 'full_rebalance' | 'spot_check';
+export type RebalanceMode = 'full_rebalance' | 'spot_check' | 'writer_smoke';
 
 export interface RebalanceSubmitRequest {
   mode: RebalanceMode;
