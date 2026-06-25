@@ -546,3 +546,73 @@ Conflating the two by routing structural absence through the transient-reject pa
 - **Operator 404-probe** (same session — the empirical confirmation that Alpaca paper structurally lacks `POST /v2/short_locates`).
 - **ACT-328** (this clause's authoring action; the governance-only PR landing clause (p) + DW-155).
 - **STEP-C REVISION-FIX (next ACT)** — the four-module code touch (composer / broker-bootstrap / trigger / tests) implementing the mechanics this clause binds; sequenced separately per §21.3 (governance and code in separate PRs).
+
+---
+
+## Clause (q) — Long-Only Premise CORRECTED; Two-Sided Paper Posture (SUPERSEDES clause (p) operative posture; preserves (p) as the audit record of the false-premise discipline)
+
+**STATUS**: APPEND-ONLY, ratified concurrently with the ACT-331 REVISION-FIX.
+**SUPERSEDES**: clause (p)'s operative LONG-ONLY POSTURE (the posture is reverted to TWO-SIDED on paper). **PRESERVES**: clause (p) in full as the audit record of the false-premise correction discipline (per §21.3 — never delete a ratified clause; supersede with explicit cross-reference).
+
+### THE FALSIFICATION
+
+Clause (p) was ratified on the premise that **Alpaca paper cannot short**. That premise is **FALSIFIED** by an operator probe (post-clause-(p) ratification, pre-implementation):
+
+- **Probe**: `POST /v2/orders {symbol:AAPL, qty:1, side:sell, type:market}` against the live paper account.
+- **Response**: HTTP 200; `status: pending_new`; `position_intent: sell_to_open`.
+- **Conclusion**: Alpaca paper shorts cleanly via plain `sell-to-open`. The 404 that surfaced under corr `f0b0c2e7` was on `POST /v2/short_locates` SPECIFICALLY — a pre-trade locate API that paper does not expose — NOT on shorting itself.
+
+The CROSSWIND spec (§8.4 + §11.0.4) defines short-availability enforcement as **broker-rejection-driven** (submit short → if rejected for htb, cache marks symbol → blocked next tick), NOT pre-trade-locate-API-driven. The original `AlpacaLocateFetcher`'s use of `POST /v2/short_locates` was an implementation choice on top of the spec, not a spec mandate. The sibling halt verifier already calls `GET /v2/assets/{symbol}`, which carries `shortable: boolean` and `easy_to_borrow: boolean` — the real pre-trade shortability signal.
+
+### THE CORRECTED MECHANICS (BINDING — supersede clause (p) §"THE MECHANICS")
+
+1. **New `BrokerShortabilityFetcher`** (edge + src parity) reading `shortable: boolean` from `GET /v2/assets/{symbol}` — the AUTHORITATIVE pre-trade short gate on Alpaca paper. Gate condition: `resp.status === 'active' && resp.tradable && resp.shortable`.
+2. **Composer layering** (`preflight-composer.ts`): for SHORT candidates, the gate order is **htb-cache consult → shortability fetcher → locate fetcher (fallback)**. Cache-HIT short-circuits before any HTTP call. A short is FAILED with `short_availability_source_unavailable` ONLY when BOTH `shortabilityFetcher === undefined` AND `locateFetcher === undefined` (the structural-absence path; the only path that yields long-only).
+3. **Trigger** (`longshort-rebalance-submit/index.ts`): `long_only_mode = locate_unavailable && shortability_unavailable` (AND, not OR — the structural absence of EVERY pre-trade short gate). SSR is a separate axis (clause (n)) and does NOT by itself produce long-only — Alpaca paper shorts via `sell-to-open` even without SSR coverage (paper carries no Reg SHO exposure).
+4. **Broker bootstrap**: `shortabilityFetcher` is conditionally injected behind `ALPACA_PAPER_SHORTABILITY_AVAILABLE` (default `true` per the probe-confirmed authoritative field). Env-flag-gated; no boot-time probe (same rationale as clause (p)'s §"THE ENV-FLAG MECHANISM").
+5. **§8.4 REJECTION-PROPAGATION wired into the placement path**: `longshort-rebalance-submit` injects the `htbCache` reader+clearer into the composer AND the `RejectionPropagator` (htbWriter + reuse of `deps.eventWriter`) into the submit flow. Every terminal htb rejection from `submitRebalance` marks the cache the next-tick consult reads — closing the orphaned-kernel gap on the placement path.
+
+### THE ORPHANED-KERNEL CLASS — THIRD FIRING (binding observation)
+
+The §8.4 propagator + the htb-cache reader/clearer were built, tested, and never composed into either live edge function. This is the **THIRD firing** of the orphaned-kernel class on this codebase:
+
+1. The original E1–E6 kernels (planner / composer / submitter) — built, tested, unwired until FP-056 phases 2–6.
+2. The reconciliation-event writer payload-column defect (INC-80 / corr `bb3810bf`) — schema-violating writer reached production because no live-DB test exercised it.
+3. **This clause** — the §8.4 propagator + htb-cache pair, built and tested in isolation, never composed into either live edge function. The composer's `htbCache?` consult was a no-op in production on every prior fire (including the clause-(p) long-only one) because nothing was injecting it.
+
+The pattern: build → test in isolation → ship the factory → never wire it into the live invocation chain. The discipline that catches it: **fresh-clone grep the live invocation chain** (`rg createSupabaseHtbCache|createRejectionPropagator` outside `*_test.ts` returns only the factory files themselves → wiring gap). This grep is added to the §22.3(g) read-orientation checklist for every future REVISION-FIX that touches a "built + tested" kernel.
+
+### ADVANCE-PATH GAP (INC-81) — NAMED CRON-ARM PREREQUISITE (binding)
+
+The same orphaned-kernel gap exists in the advance/tick path: `longshort-execute → runTick` does NOT inject `htbCache` or `RejectionPropagator` either. The advance-path gap is not actively bleeding (the cron is unarmed; the advance path is not autonomously firing in production), but **the cron MUST NOT arm until the advance-path short-side stack is wired**. Arming is what would turn the advance-path gap from dormant to live (autonomous re-reject loops on htb-failed shorts). INC-81 is registered same PR as a NAMED pre-cron-arm prerequisite, NOT a someday-followup.
+
+### THE AUTHORITATIVE-FIELD VERIFICATION (§22.3(g) discipline — binding record)
+
+The `shortable` field's authority was confirmed by a temporary probe (`tmp-shortability-probe`) reading live paper account `/v2/assets/{symbol}` for a deliberately variant ticker set: SPY / AAPL / MSFT / NVDA → `shortable: true` (mega-cap, ETB + marginable); BBBYQ (delisted) → `shortable: false`. The variance proves the gate distinguishes real shortable names from non-shortable ones; the boolean composes ETB + marginable on Alpaca's side (no client-side composition needed). Recorded here to memorialize that the authoritative-field claim is empirically grounded, not asserted.
+
+### THE DISTINGUISHABILITY INVARIANT (extends clause (p)'s — binding)
+
+Three distinct short-side failure shapes now coexist in the audit envelope and MUST remain distinguishable:
+- **Structural-absence (long-only mode)** — `shortabilityFetcher === undefined && locateFetcher === undefined`: per-candidate reason `short_availability_source_unavailable`; broker NEVER called; `long_only_mode: true`.
+- **Pre-trade-gate rejection** — `shortabilityFetcher` present, returns `shortable: false`: per-candidate reason begins `preflight_failed:`; `verify_short_availability` in `failed_verifiers`; broker assets-endpoint called once; no submit POST.
+- **Broker-rejection-driven htb-cache write** — submit POST proceeds → broker rejects htb → `RejectionPropagator` classifies and writes the cache: a `broker_rejection_propagation` `reconciliation_events` row lands; `htb_marks_persisted` enumerates the symbols on the trigger response; next-tick consult short-circuits these symbols at the composer.
+
+Conflating any two of these masks a future real defect and is a clause-(q) violation.
+
+### SCOPE BOUNDARIES (binding)
+
+- **TWO-SIDED PAPER POSTURE.** Clause (q) restores the two-sided book on the placement path. The strategy's dollar-neutral design is now exercised on paper.
+- **PRESERVES CLAUSE (p)** as the audit record of the false-premise discipline. Clause (p)'s §"THE BETA-EXPOSURE CAVEAT" and §"FAIL-CLOSED INVARIANT" and §"DISTINGUISHABILITY INVARIANT" all remain binding where they apply (the fail-closed adapter contract, the distinguishability discipline). The OPERATIVE posture supersedes; the disciplines persist.
+- **CLAUSE (n) UNCHANGED.** The SSR typed-absence stays exactly as ratified — Alpaca paper carries no Reg SHO; SSR is a live-only concern and remains a DW-154 pre-live blocker.
+- **DW-155 RESCOPED, NOT CLOSED** (see DW register entry): from "wire non-Alpaca locate source" to "validate `assets.shortable` semantics on live accounts before live-fire" — still a pre-live blocker, but the wiring work is now empirical-validation, not new-vendor-integration.
+- **NO LIVE FIRE.** Clause (q) authorizes the two-sided paper book; it does NOT authorize live fire. INC-81 closure (advance-path short-side stack wired) is added to the live-fire ratification prerequisite list alongside DW-154 and DW-155.
+
+### CROSS-REFERENCES
+- **Clause (p)** — superseded posture, preserved record; the false-premise this clause corrects.
+- **Clause (n)** — SSR typed-absence twin; unchanged.
+- **INC-81** — advance-path propagator + htb-cache gap; named cron-arm prerequisite.
+- **DW-155** — rescoped to `assets.shortable` live-account validation.
+- **CROSSWIND §8.4 + §11.0.4** — the broker-rejection-driven short-availability spec the propagator now implements end-to-end on the placement path.
+- **Operator sell-to-open probe** — the empirical falsification of clause (p)'s premise.
+- **`tmp-shortability-probe`** — the empirical confirmation of `assets.shortable`'s authority and variance.
+- **ACT-331** — this clause's authoring action; the REVISION-FIX landing the corrected mechanics + INC-81.
