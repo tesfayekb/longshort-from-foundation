@@ -452,3 +452,38 @@ At E5 build authorization the operator + supervisor ratified the FP-056 E4 surfa
 - **ACT-321** (this clause's amendment authoring action).
 
 Cross-reference: clause (e) (the NO-PAUSE-only HYBRID resolution this TTL belongs to); ACT-312 (E4 build — introduced the 24h-wall-clock TTL as the v1 default pending this ratification); ACT-313 (E5 build — this ratification); MIG-119 (the htb cache table); DW-153 (the calendar-aware refinement, paper-evidence-gated).
+---
+
+### Clause (o) — Kernel-tier → reconciliation_tier mapping; placement-path 'weak' prohibition — ADDENDUM (ACT-326, 2026-06-25)
+
+(Clauses (a)–(n) and prior addenda are BYTE-UNCHANGED by this addendum; clause (o) is APPEND-ONLY. Following the supervisor-framed clause-skip convention used at (l)/(m), no letters are reserved-by-skip here; (o) is the next-emitted clause.)
+
+**THE TRIGGER.** Corr `bb3810bf` (2026-06-25 spot_check live fire): the placement-trigger's `reconciliation_events` writer in BOTH `longshort-rebalance-submit` and `longshort-execute` carried a four-violation defect against the MIG-043 schema — (1) a non-existent `payload` column; (2) `tier` values `'tier1'|'tier2'|'tier3'` (kernel-state-machine vocabulary) inserted into the `reconciliation_tier` enum (`strong_plus|strong|medium|weak`); (3) missing `engine_version` (NOT NULL); (4) missing `fetcher_source` (NOT NULL). The fix (REVISION-FIX, ACT-326) centralizes the writer into `_shared/longshort-execution/reconciliation-event-writer.ts` and the SubmissionResult→event decomposition into `_shared/longshort-execution/classify-submission-event.ts`; this clause records the ratified tier-mapping semantics those modules embody.
+
+**THE MAPPING (binding).** Kernel-tier values (the state-machine vocabulary in `tick-scheduler.ts` / `lifecycle-orchestrator.ts`) map onto the `reconciliation_tier` enum on the placement path as follows:
+
+| Kernel tier | reconciliation_tier | Semantics on the placement path |
+|-------------|---------------------|--------------------------------|
+| `tier1`     | `medium`            | false-positive / handled / informational (accepted; the four `*_skipped` kinds) |
+| `tier2`     | `strong`            | handled failure; auto-skip terminal (rejected; pending-timeout) |
+| `tier3`     | `strong_plus`       | paging escalation; PAUSE-class (orchestrator in-flight escalations; not currently produced by `classifySubmissionEvent` which only emits placement-tier-1/2) |
+
+The mapping is monotonic (kernel-severity ↑ ⇒ reconciliation-severity ↑) and centralized in **one** function (`mapKernelTierToReconciliationTier` in `_shared/longshort-execution/reconciliation-event-writer.ts`); both writers consume it via the shared factory. Duplicating the mapping across writers is a clause-(o) violation.
+
+**THE 'weak' PROHIBITION (binding).** `weak` is **INTENTIONALLY UNMAPPED** on the placement path. Every placement-path `reconciliation_events` row records the disposition of a real or intent-to-be-real money-touching order; the lowest severity such a row can carry is `medium` (per the mapping above, `tier1` → `medium`). A mapping function that would return `weak` for a placement event is a structural signal that the call does not belong on the placement path — it should be re-classified as an observability event (a different surface) or routed through a different call_name. **Future callers of `mapKernelTierToReconciliationTier` MUST NOT default placement events to `weak`; defaulting to `weak` is the wrong escape hatch and would understate the consequence-class the divergence detector reads.**
+
+**THE OUTCOME SEMANTICS (informational, follows MIG-043 enum).** `classifySubmissionEvent` routes outcomes per the canonical `reconciliation_outcome` enum (`false_positive_within_tolerance | failure_handled | failure_escalated | expected_divergence_handled | system_bug`): accepted + the four `*_skipped` kinds → `false_positive_within_tolerance` (no expectation gap; intent was either matched or deliberately deferred). Rejected + pending_timeout → `failure_handled` (handled failure; the orchestrator's in-flight escalation path retains `failure_escalated` for tier3-class divergences, NOT the placement path).
+
+**THE NULL-DIVERGENCE INVARIANT (binding).** For accepted + the four `*_skipped` kinds, `divergence` is `null` — there is no expectation gap to record. Manufacturing a non-null divergence for a non-divergent outcome to "force a value" is a phantom-divergence injection and is a clause-(o) violation. Producers MUST emit `null` divergence where no gap exists; the writer MUST NOT default a missing divergence to the payload on a non-divergent outcome.
+
+**THE 22.5.1 VERIFICATION GATE (binding).** Any future change that touches the `reconciliation_events` insert path (writer mapping, SubmissionResult shape, MIG-043 columns, enum values, NOT NULL constraints) MUST be verified by driving the writer's real emit code path against the real `reconciliation_events` table BEFORE merge — NOT by a hand-written SQL insert (which bypasses the mapping that was broken at corr `bb3810bf`) and NOT by a live POST `/v2/orders` (too expensive a harness for a schema bug; re-creates orphaned positions). The placement-trigger's `writer_smoke` mode (`longshort-rebalance-submit`, request body `{"mode":"writer_smoke"}`) is the canonical non-money harness: it drives `classifySubmissionEvent` → `createSupabaseReconciliationEventWriter.emit` → real-table insert with synthesized SubmissionResults (no broker call, no creds required). This is the gate that would have caught all four violations at corr `bb3810bf`.
+
+**CROSS-REFERENCES.**
+- **MIG-043** (`reconciliation_events` schema + `reconciliation_tier` / `reconciliation_outcome` enums; the contract this clause binds the writers to).
+- **`_shared/longshort-execution/reconciliation-event-writer.ts`** (the ONE production writer; `mapKernelTierToReconciliationTier` lives here).
+- **`_shared/longshort-execution/classify-submission-event.ts`** (`PLACEMENT_CALL_NAME` + the SubmissionResult→EmittedExecutionEvent decomposition).
+- **`_shared/longshort-reconciliation-lifecycle.ts:219`** (`writeEventRow` — the canonical 6.2-engine writer; the reference shape `createSupabaseReconciliationEventWriter` mirrors for `engine_version` + the decomposed columns).
+- **DW-069** (the deferred-cleanup note for `VerifyCallName` carrying non-`verify_*` identifiers; `longshort.rebalance.placement` is registered under that precedent).
+- **`longshort-rebalance-submit/index.ts` `writer_smoke` mode** (the §22.5.1 non-money verification harness).
+- **INC-78** (the orphaned spot_check fill at corr `bb3810bf`; the surfacing event for this clause).
+- **ACT-326** (this addendum's authoring action; the REVISION-FIX that landed the centralized writer + this clause + INC-78).
