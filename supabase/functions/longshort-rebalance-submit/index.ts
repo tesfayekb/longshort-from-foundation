@@ -520,6 +520,81 @@ async function runSpotCheck(args: {
   });
 }
 
+/**
+ * runWriterSmoke — ACT-326 §22.5.1 verification harness.
+ *
+ * Drives the REAL `eventWriter.emit` code path (which is the production
+ * `createSupabaseReconciliationEventWriter` factory in production calls)
+ * against the REAL `reconciliation_events` table with a synthesized,
+ * schema-distinct SubmissionResult set — ZERO broker calls, ZERO POST
+ * /v2/orders. Verifies the writer's mapping against MIG-043 columns +
+ * enums + NOT-NULL constraints (the exact code path that failed at corr
+ * `bb3810bf` with a payload-column throw).
+ *
+ * Returns the inserted rows' synthesized SubmissionResults in the standard
+ * response envelope so the operator + supervisor can confirm the
+ * decomposition shape via the subsequent live-DB read_query.
+ */
+async function runWriterSmoke(args: {
+  operator_id: string;
+  ts: Date;
+  correlationId: string;
+  eventWriter: ReconciliationEventWriter;
+}): Promise<RebalanceSubmitResponse> {
+  const { operator_id, ts, correlationId, eventWriter } = args;
+  // Synthesize one accepted + one rejected SubmissionResult — the two
+  // distinct outcome paths (false_positive_within_tolerance / failure_handled)
+  // that map to BOTH the divergent and non-divergent column shapes. Symbols
+  // are 'SMOKE-A' / 'SMOKE-R' so the rows are trivially queryable + clearly
+  // synthetic (no real ticker collision).
+  const provenance = {
+    selection_reason: 'primary' as const,
+    substituted_from_symbol: null,
+    original_rank: null,
+    sector: null,
+    computed_at: ts.toISOString(),
+  };
+  const submissions: SubmissionResult[] = [
+    {
+      kind: 'accepted',
+      symbol: 'SMOKE-A',
+      side: 'long',
+      intent: 'open',
+      broker_side: 'buy',
+      order_id: `smoke-${correlationId}-A`,
+      client_order_id: `smoke-coid-${correlationId}-A`,
+      shares: 1,
+      limit_price: 1.0,
+      offset_applied_usd: 0,
+      tier_selection_mid_usd: 1.0,
+      accepted_at: ts.toISOString(),
+      provenance,
+    },
+    {
+      kind: 'rejected',
+      symbol: 'SMOKE-R',
+      side: 'long',
+      intent: 'open',
+      broker_side: 'buy',
+      client_order_id: `smoke-coid-${correlationId}-R`,
+      shares: 1,
+      limit_price: 1.0,
+      reason: 'writer_smoke_synthetic_rejection',
+      broker_status_code: null,
+      rejected_at: ts.toISOString(),
+      provenance,
+    },
+  ];
+  for (const r of submissions) {
+    await eventWriter.emit(classifySubmissionEvent(r), ts);
+  }
+  return buildResponse({
+    mode: 'writer_smoke', operator_id, ts, correlationId,
+    preflight_summary: undefined,
+    submissions,
+  });
+}
+
 function buildResponse(args: {
   mode: RebalanceMode;
   operator_id: string;
