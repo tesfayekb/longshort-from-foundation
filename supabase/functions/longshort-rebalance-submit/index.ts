@@ -628,6 +628,7 @@ async function runSpotCheck(args: {
     preflight_summary: undefined,
     submissions,
     candidates: [],
+    htb_marks_persisted: [],
   });
 }
 
@@ -704,6 +705,7 @@ async function runWriterSmoke(args: {
     preflight_summary: undefined,
     submissions,
     candidates: [],
+    htb_marks_persisted: [],
   });
 }
 
@@ -718,6 +720,9 @@ function buildResponse(args: {
    *  `shorts_skipped_locate_unavailable` on the typed-absence path
    *  (clause (p)). Empty on `spot_check` / `writer_smoke`. */
   candidates: readonly PreflightCandidate[];
+  /** ACT-331 (clause (q)) — symbols whose terminal htb rejection landed
+   *  an htb-cache write via the §8.4 propagator on this fire. */
+  htb_marks_persisted: string[];
 }): RebalanceSubmitResponse {
   const counts: Record<SubmissionResult['kind'], number> = {
     accepted: 0, rejected: 0, pending_timeout: 0,
@@ -737,10 +742,16 @@ function buildResponse(args: {
         .map((r) => r.symbol)
     : [];
 
-  // ── DEC-068 clause (p) — explicit (not inferred) long-only declaration. ──
+  // ── DEC-068 clause (p)+(q) — explicit (not inferred) long-only
+  //     declaration. Per clause (q) the structural absence of a pre-trade
+  //     short gate requires BOTH `locate_unavailable && shortability_
+  //     unavailable`. SSR is a separate axis (clause (n)) and does NOT by
+  //     itself produce long-only — Alpaca paper shorts via sell-to-open
+  //     even without SSR coverage (paper carries no Reg SHO exposure).
   const locate_unavailable = args.preflight_summary?.locate_unavailable ?? true;
-  const long_only_mode = locate_unavailable || ssr_unavailable;
-  const shorts_skipped_locate_unavailable: string[] = locate_unavailable
+  const shortability_unavailable = args.preflight_summary?.shortability_unavailable ?? true;
+  const long_only_mode = locate_unavailable && shortability_unavailable;
+  const shorts_skipped_locate_unavailable: string[] = (locate_unavailable && shortability_unavailable)
     ? args.candidates.filter((c) => c.side === 'short').map((c) => c.symbol)
     : [];
 
@@ -757,6 +768,7 @@ function buildResponse(args: {
     shorts_placed_without_ssr_check,
     long_only_mode,
     shorts_skipped_locate_unavailable,
+    htb_marks_persisted: args.htb_marks_persisted,
   };
 }
 
