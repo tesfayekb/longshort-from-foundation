@@ -89,6 +89,11 @@ import type {
   EmittedExecutionEvent,
   ReconciliationEventWriter,
 } from '../_shared/longshort-execution/lifecycle-orchestrator.ts';
+import { createSupabaseReconciliationEventWriter } from '../_shared/longshort-execution/reconciliation-event-writer.ts';
+import {
+  classifySubmissionEvent,
+  PLACEMENT_CALL_NAME,
+} from '../_shared/longshort-execution/classify-submission-event.ts';
 import type { BrokerPosition } from '../_shared/longshort-broker-interfaces.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
@@ -101,28 +106,11 @@ function alpacaCredsPresent(): boolean {
   return typeof k === 'string' && k.length > 0 && typeof s === 'string' && s.length > 0;
 }
 
-function createSupabaseReconciliationEventWriter(): ReconciliationEventWriter {
-  return {
-    async emit(event: EmittedExecutionEvent, ts: Date): Promise<void> {
-      const { error } = await supabaseAdmin.from('reconciliation_events').insert({
-        call_name: event.call_name,
-        tier: event.tier,
-        outcome: event.outcome,
-        payload: event.payload,
-        ts: ts.toISOString(),
-      });
-      if (error) {
-        throw new Error(`reconciliation_events_insert_failed: ${error.message}`);
-      }
-    },
-  };
-}
-
 // ──────────────────────────────────────────────────────────────────────────
 // Public request/response shapes + the orchestration entry (testable).
 // ──────────────────────────────────────────────────────────────────────────
 
-export type RebalanceMode = 'full_rebalance' | 'spot_check';
+export type RebalanceMode = 'full_rebalance' | 'spot_check' | 'writer_smoke';
 
 export interface RebalanceSubmitRequest {
   mode: RebalanceMode;
@@ -315,61 +303,10 @@ function slimResult(r: SubmissionResult): SubmissionResultSlim {
   return base;
 }
 
-function classifySubmissionEvent(r: SubmissionResult): EmittedExecutionEvent {
-  // Map SubmissionResult kinds onto reconciliation_events outcome semantics.
-  // The submitter pairs (the existing fillFetcher / state machine path)
-  // remain the AUTHORITATIVE post-fill reconciliation surface; these rows
-  // record the PLACEMENT-tier disposition for operator observability.
-  switch (r.kind) {
-    case 'accepted':
-      return {
-        call_name: 'longshort.rebalance.placement',
-        tier: 'tier1',
-        outcome: 'false_positive_within_tolerance',
-        payload: {
-          symbol: r.symbol, side: r.side, intent: r.intent,
-          order_id: r.order_id, client_order_id: r.client_order_id,
-          shares: r.shares, limit_price: r.limit_price,
-          accepted_at: r.accepted_at, provenance: r.provenance,
-        },
-      };
-    case 'rejected':
-      return {
-        call_name: 'longshort.rebalance.placement',
-        tier: 'tier2',
-        outcome: 'failure_handled',
-        payload: {
-          symbol: r.symbol, side: r.side, intent: r.intent,
-          reason: r.reason, broker_status_code: r.broker_status_code,
-          client_order_id: r.client_order_id, shares: r.shares,
-          limit_price: r.limit_price, provenance: r.provenance,
-        },
-      };
-    case 'pending_timeout':
-      return {
-        call_name: 'longshort.rebalance.placement',
-        tier: 'tier2',
-        outcome: 'failure_handled',
-        payload: {
-          symbol: r.symbol, side: r.side, intent: r.intent,
-          order_id: r.order_id, client_order_id: r.client_order_id,
-          shares: r.shares, limit_price: r.limit_price,
-          timeout_s: r.timeout_s, pending_elapsed_s: r.pending_elapsed_s,
-          provenance: r.provenance,
-        },
-      };
-    case 'zero_share_skipped':
-    case 'quote_stale_skipped':
-    case 'insufficient_buying_power_skipped':
-    case 'noop_skipped':
-      return {
-        call_name: 'longshort.rebalance.placement',
-        tier: 'tier1',
-        outcome: 'false_positive_within_tolerance',
-        payload: { ...r },
-      };
-  }
-}
+// classifySubmissionEvent has moved to
+// `_shared/longshort-execution/classify-submission-event.ts` (ACT-326)
+// — the decomposed (expected/observed/divergence) shape replaces the
+// payload-only output that produced the corr-`bb3810bf` schema throw.
 
 /**
  * The orchestration entry — testable in isolation with injected deps. The
@@ -382,6 +319,14 @@ export async function runRebalanceSubmit(
 ): Promise<RebalanceSubmitResponse> {
   const operator_id = req.operator_id ?? DEFAULT_OPERATOR_ID;
   const ts = deps.ts;
+
+  // writer_smoke short-circuits BEFORE broker instantiation — by design the
+  // smoke verifies only the writer mapping against `reconciliation_events`,
+  // so it must run without any broker call (and without creds).
+  if (req.mode === 'writer_smoke') {
+    return await runWriterSmoke({ operator_id, ts, correlationId, eventWriter: deps.eventWriter });
+  }
+
   const broker = deps.brokerFactory();
 
   // Narrow the placement-path fetchers (Phase-1 made them optional on the
@@ -575,6 +520,81 @@ async function runSpotCheck(args: {
   });
 }
 
+/**
+ * runWriterSmoke — ACT-326 §22.5.1 verification harness.
+ *
+ * Drives the REAL `eventWriter.emit` code path (which is the production
+ * `createSupabaseReconciliationEventWriter` factory in production calls)
+ * against the REAL `reconciliation_events` table with a synthesized,
+ * schema-distinct SubmissionResult set — ZERO broker calls, ZERO POST
+ * /v2/orders. Verifies the writer's mapping against MIG-043 columns +
+ * enums + NOT-NULL constraints (the exact code path that failed at corr
+ * `bb3810bf` with a payload-column throw).
+ *
+ * Returns the inserted rows' synthesized SubmissionResults in the standard
+ * response envelope so the operator + supervisor can confirm the
+ * decomposition shape via the subsequent live-DB read_query.
+ */
+async function runWriterSmoke(args: {
+  operator_id: string;
+  ts: Date;
+  correlationId: string;
+  eventWriter: ReconciliationEventWriter;
+}): Promise<RebalanceSubmitResponse> {
+  const { operator_id, ts, correlationId, eventWriter } = args;
+  // Synthesize one accepted + one rejected SubmissionResult — the two
+  // distinct outcome paths (false_positive_within_tolerance / failure_handled)
+  // that map to BOTH the divergent and non-divergent column shapes. Symbols
+  // are 'SMOKE-A' / 'SMOKE-R' so the rows are trivially queryable + clearly
+  // synthetic (no real ticker collision).
+  const provenance = {
+    selection_reason: 'primary' as const,
+    substituted_from_symbol: null,
+    original_rank: null,
+    sector: null,
+    computed_at: ts.toISOString(),
+  };
+  const submissions: SubmissionResult[] = [
+    {
+      kind: 'accepted',
+      symbol: 'SMOKE-A',
+      side: 'long',
+      intent: 'open',
+      broker_side: 'buy',
+      order_id: `smoke-${correlationId}-A`,
+      client_order_id: `smoke-coid-${correlationId}-A`,
+      shares: 1,
+      limit_price: 1.0,
+      offset_applied_usd: 0,
+      tier_selection_mid_usd: 1.0,
+      accepted_at: ts.toISOString(),
+      provenance,
+    },
+    {
+      kind: 'rejected',
+      symbol: 'SMOKE-R',
+      side: 'long',
+      intent: 'open',
+      broker_side: 'buy',
+      client_order_id: `smoke-coid-${correlationId}-R`,
+      shares: 1,
+      limit_price: 1.0,
+      reason: 'writer_smoke_synthetic_rejection',
+      broker_status_code: null,
+      rejected_at: ts.toISOString(),
+      provenance,
+    },
+  ];
+  for (const r of submissions) {
+    await eventWriter.emit(classifySubmissionEvent(r), ts);
+  }
+  return buildResponse({
+    mode: 'writer_smoke', operator_id, ts, correlationId,
+    preflight_summary: undefined,
+    submissions,
+  });
+}
+
 function buildResponse(args: {
   mode: RebalanceMode;
   operator_id: string;
@@ -651,7 +671,7 @@ Deno.serve(createHandler(async (req: Request) => {
   } catch {
     return apiError(400, 'invalid_request_body', { correlationId });
   }
-  if (body.mode !== 'full_rebalance' && body.mode !== 'spot_check') {
+  if (body.mode !== 'full_rebalance' && body.mode !== 'spot_check' && body.mode !== 'writer_smoke') {
     return apiError(400, 'invalid_mode', { correlationId });
   }
 
@@ -670,7 +690,10 @@ Deno.serve(createHandler(async (req: Request) => {
   try {
     const result = await runRebalanceSubmit(body, {
       brokerFactory: () => createLiveBrokerInterfaces(),
-      eventWriter: createSupabaseReconciliationEventWriter(),
+      eventWriter: createSupabaseReconciliationEventWriter({
+        operator_id,
+        fetcher_source: 'live',
+      }),
       rankingsReader: createSupabaseRankingsReader(),
       ts,
     }, correlationId);

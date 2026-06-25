@@ -79,6 +79,16 @@ export interface EmittedExecutionEvent {
   tier: EmitEventEffect['tier'];
   outcome: EmitEventEffect['outcome'];
   payload: Record<string, unknown>;
+  // ── ACT-326 — decomposed MIG-043 fields (optional; the writer falls back
+  //   to `payload`→observed_value when these are absent, preserving back-
+  //   compat with the orchestrator's existing emit sites). Producers that
+  //   know the decomposition (e.g. classifySubmissionEvent) populate these
+  //   directly so the writer emits a contract-shaped row.
+  symbol?: string | null;
+  expected_value?: Record<string, unknown> | null;
+  observed_value?: Record<string, unknown> | null;
+  divergence?: Record<string, unknown> | null;
+  tolerance?: Record<string, unknown> | null;
 }
 
 // ── Terminal result (handed back to the caller for the tick close) ─

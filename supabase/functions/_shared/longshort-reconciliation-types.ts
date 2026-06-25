@@ -48,7 +48,13 @@ export type VerifyCallName =
   // Same precedent as 'universe_cross_check': non-verify_* reconcile() identifier
   // (DW-069 future cleanup). The liveness-check writes its own system_bug event via
   // reconcile() through this call_name when the two-invocation-empty predicate fires.
-  | 'liveness_check';
+  | 'liveness_check'
+  // FP-056 E5.5 / ACT-326 — placement-trigger SubmissionResult disposition.
+  // Same DW-069 precedent (non-verify_* reconcile() identifier; type-name
+  // vs scope cleanup deferred). Centralized in
+  // `_shared/longshort-execution/classify-submission-event.ts`
+  // (`PLACEMENT_CALL_NAME`).
+  | 'longshort.rebalance.placement';
 
 /**
  * Provenance of the fetcher that produced a reconciliation_events row.
