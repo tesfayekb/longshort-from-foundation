@@ -171,6 +171,7 @@ Deno.test('FULL_REBALANCE drives rankings → composer → planRebalance → sub
     rankingsReader: async (_op) => rankings,
     ts: TS,
     snapshotWriter: noopSnapshotWriter,
+    ...placementShortStackNoops,
   };
 
   const out = await runRebalanceSubmit(
@@ -272,7 +273,7 @@ Deno.test('GUARDRAIL 2: response carries ssr_unavailable + shorts_placed_without
   const { writer } = makeCapturingEventWriter();
   const out = await runRebalanceSubmit(
     { mode: 'full_rebalance', operator_id: OP },
-    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter },
+    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter, ...placementShortStackNoops },
     CID,
   );
   // Top-level fields, not buried in summary or debug.
@@ -389,6 +390,7 @@ Deno.test('FULL_REBALANCE: snapshot-write failure is NON-FATAL (the order placem
       rankingsReader: async () => rankings,
       ts: TS,
       snapshotWriter: throwingSnapshotWriter,
+      ...placementShortStackNoops,
     },
     CID,
   );
@@ -454,7 +456,7 @@ Deno.test('clause (p): long_only_mode TRUE when locateFetcher omitted; shorts_sk
   const { writer } = makeCapturingEventWriter();
   const out = await runRebalanceSubmit(
     { mode: 'full_rebalance', operator_id: OP },
-    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter },
+    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter, ...placementShortStackNoops },
     CID,
   );
 
@@ -483,7 +485,7 @@ Deno.test('clause (p): both flags TRUE → long_only_mode TRUE; locate-present +
   const { writer } = makeCapturingEventWriter();
   const out = await runRebalanceSubmit(
     { mode: 'full_rebalance', operator_id: OP },
-    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter },
+    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter, ...placementShortStackNoops },
     CID,
   );
   assertEquals(out.long_only_mode, true);
