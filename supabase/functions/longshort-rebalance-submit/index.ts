@@ -344,6 +344,10 @@ export async function runRebalanceSubmit(
     });
   }
 
+  if (req.mode === 'writer_smoke') {
+    return await runWriterSmoke({ operator_id, ts, correlationId, eventWriter: deps.eventWriter });
+  }
+
   // ── FULL_REBALANCE ─────────────────────────────────────────────────────
   // 1. Read rankings (latest as_of_date).
   const rankings = await deps.rankingsReader(operator_id);
