@@ -13,7 +13,18 @@ Each entry must reach one of two terminal states per supervisor protocol §8: **
 
 ## Open Findings
 
-_(no open findings)_
+### INC-81 — Advance-path (`longshort-execute` / `runTick`) §8.4 propagator + htb-cache wiring gap (NAMED cron-arm prerequisite)
+
+| Field | Value |
+|---|---|
+| **Discovered** | 2026-06-26 |
+| **Discovery Context** | ACT-331 STEP-A grounding — fresh-clone grep `rg createSupabaseHtbCache\|createRejectionPropagator` outside `*_test.ts` returned ONLY the factory files themselves, falsifying the supervisor brief's premise that the advance path was wired. Lovable surfaced this rather than executing the misframed instruction. |
+| **Class** | Orphaned-kernel (THIRD firing on this codebase — after the original E1–E6 kernels and the INC-80 writer-payload defect). |
+| **Defect** | `supabase/functions/longshort-execute/` (the cron-driven advance/tick path) instantiates neither `createSupabaseHtbCacheReader/Clearer/Writer` nor `createRejectionPropagator`. The composer's `htbCache?` consult is a no-op on every advance-path fire; the §8.4 broker-rejection propagation has no live wiring. Cache-write-on-htb-reject + cache-read-before-shortability are both inert on this path. |
+| **Impact (today)** | None active — the cron is unarmed; the advance path is not autonomously firing in production. **Latent**: arming the cron without closing this gap creates the autonomous-re-reject-loop failure mode the htb-cache was designed to break (an htb-rejected short would not mark the cache, so the next tick would re-attempt the same htb short, ad infinitum). |
+| **Disposition** | **OPEN — NAMED cron-arm prerequisite** (DEC-068 clause (q)). The cron MUST NOT arm until the advance-path short-side stack (htb-cache reader+clearer injection into the composer + RejectionPropagator injection into the submit flow) is wired symmetrically with the placement path (the placement path's wiring landed in ACT-331). Same fix shape as ACT-331's placement-path wiring; the only reason it isn't bundled into ACT-331 is scope discipline (the placement path is the path that fired live; the advance path is a separate verifiable surface that gets its own REVISION-FIX + its own verification). |
+| **Verification on closure** | (a) `rg createRejectionPropagator supabase/functions/longshort-execute` returns a hit in the live invocation chain (not just `_test.ts`); (b) advance-path unit tests exercise the inject-then-propagate path; (c) an integration test (or supervised live shadow-fire) shows that an htb-rejected short on the advance path marks the cache and the next-tick consult short-circuits the symbol. |
+| **Cross_ref** | **DEC-068 clause (q)** (the ratifying clause naming this gap); **ACT-331** (the placement-path symmetric fix this INC mirrors); **DW-155 (rescoped)** + **DW-154** (the live-fire short-side prerequisites this INC composes with); **§22.3(g)** (the fresh-clone-grep discipline that caught this — added to the read-orientation checklist for every future REVISION-FIX touching a "built + tested" kernel); **INC-80** (the previous firing of the orphaned-kernel class — same pattern, different surface). |
 
 ## Resolved Findings
 
