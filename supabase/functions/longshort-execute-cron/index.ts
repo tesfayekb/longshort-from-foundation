@@ -3,8 +3,9 @@
  *
  * Thin CRON SIBLING of `longshort-execute` (the operator-gated
  * advance/tick path). Cadence: every 15 minutes during RTH
- * (`*/15 14-19 * * 1-5` UTC = 10:00–15:45 ET). Avoids the
- * 13:30–13:45 UTC open auction and the final ~15 min near close.
+ * (cron expression: every-15-min, hours 14..19, weekdays = UTC
+ * 10:00–15:45 ET). Avoids the 13:30–13:45 UTC open auction
+ * and the final ~15 min near close.
  *
  * SAFETY-BY-CONSTRUCTION: `runTick` is ADVANCE-ONLY — it reconstructs
  * in-flight orders from the broker via `reconstructInFlight(ts)` and
