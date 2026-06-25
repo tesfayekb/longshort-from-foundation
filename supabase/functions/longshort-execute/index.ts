@@ -52,6 +52,10 @@ import type {
   ReconciliationEventWriter,
 } from '../_shared/longshort-execution/lifecycle-orchestrator.ts';
 import { createSupabaseReconciliationEventWriter } from '../_shared/longshort-execution/reconciliation-event-writer.ts';
+import {
+  createRejectionPropagator,
+  createSupabaseHtbCacheWriter,
+} from '../_shared/longshort-execution/cache-propagator-io.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -123,12 +127,31 @@ Deno.serve(createHandler(async (req: Request) => {
   });
 
   try {
+    // INC-81 closure (DEC-068 clause q): wire the §8.4 RejectionPropagator
+    // into the advance path. The kernel (advanceTick) already invokes
+    // `propagator.propagate(...)` inline in its terminal-rejection branch
+    // — absent injection the htb-loop-break record is never written and
+    // the cron would re-attempt the same htb short next tick. The
+    // placement-time consult is NOT wired here: the advance path does
+    // not PLACE new orders (it advances orders the placement path
+    // already submitted), so a consult would be dead wiring.
+    // `sameTickContradictoryPasses` stays defaulted-empty: there is no
+    // fresh preflight on the advance path, so no same-tick PASS exists
+    // to contradict a same-tick rejection (the system_bug branch).
+    const eventWriter = createSupabaseReconciliationEventWriter({
+      operator_id: DEFAULT_OPERATOR_ID,
+      fetcher_source: 'live',
+    });
+    const propagator = createRejectionPropagator({
+      htbWriter: createSupabaseHtbCacheWriter(
+        supabaseAdmin as unknown as Parameters<typeof createSupabaseHtbCacheWriter>[0],
+      ),
+      eventWriter,
+    });
     const result = await runTick({
       brokerFactory: createLiveBrokerInterfaces,
-      eventWriter: createSupabaseReconciliationEventWriter({
-        operator_id: DEFAULT_OPERATOR_ID,
-        fetcher_source: 'live',
-      }),
+      eventWriter,
+      propagator,
       clock: productionClock,
       ts,
     });
