@@ -349,6 +349,7 @@ Deno.test('FULL_REBALANCE writes one equity snapshot using equity + positions al
       rankingsReader: async () => rankings,
       ts: TS,
       snapshotWriter,
+      ...placementShortStackNoops,
     },
     CID,
   );
