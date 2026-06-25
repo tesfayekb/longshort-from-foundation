@@ -28,6 +28,11 @@ import {
   type EquitySnapshotWriter,
   type RebalanceSubmitDeps,
 } from './index.ts';
+import type {
+  HtbCacheReader,
+  HtbCacheClearer,
+  RejectionPropagator,
+} from '../_shared/longshort-execution/cache-propagator-io.ts';
 import type { BrokerInterfaces } from '../_shared/longshort-execution/broker-bootstrap.ts';
 import type {
   EmittedExecutionEvent,
@@ -134,6 +139,19 @@ function makeCapturingEventWriter(): { writer: ReconciliationEventWriter; events
  *  behavior. Avoids the default writer's supabaseAdmin env-var lookup
  *  noise during test runs. */
 const noopSnapshotWriter: EquitySnapshotWriter = { async write(_s) {} };
+
+// ── ACT-331 — test no-ops for the placement-path short-side stack ───────
+// avoid the production defaults' supabaseAdmin env-var lookup at test time.
+const noopHtbCacheReader: HtbCacheReader = { async isMarkedHtb(_s) { return false; } };
+const noopHtbCacheClearer: HtbCacheClearer = { async clearHtb(_s) {} };
+const noopRejectionPropagator: RejectionPropagator = {
+  async propagate(_r) { return { persist: false, classification: 'tier1_expected' as const, reason_class: 'unknown' as const }; },
+};
+const placementShortStackNoops = {
+  htbCacheReader: noopHtbCacheReader,
+  htbCacheClearer: noopHtbCacheClearer,
+  rejectionPropagator: noopRejectionPropagator,
+};
 
 // ── (a) FULL_REBALANCE end-to-end ────────────────────────────────────────
 
