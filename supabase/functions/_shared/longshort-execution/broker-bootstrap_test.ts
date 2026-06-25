@@ -159,13 +159,13 @@ Deno.test('broker-bootstrap: fillFetcher reports filled only when status=filled 
 // DEC-068 clause (p) — ALPACA_PAPER_LOCATE_AVAILABLE env-flag gate.
 // ──────────────────────────────────────────────────────────────────────────
 
-function withLocateFlag(value: string | undefined, fn: () => void): () => void {
-  return () => {
+function withLocateFlag(value: string | undefined, fn: () => void | Promise<void>): () => Promise<void> {
+  return async () => {
     const prev = Deno.env.get('ALPACA_PAPER_LOCATE_AVAILABLE');
     if (value === undefined) Deno.env.delete('ALPACA_PAPER_LOCATE_AVAILABLE');
     else Deno.env.set('ALPACA_PAPER_LOCATE_AVAILABLE', value);
     try {
-      fn();
+      await fn();
     } finally {
       if (prev === undefined) Deno.env.delete('ALPACA_PAPER_LOCATE_AVAILABLE');
       else Deno.env.set('ALPACA_PAPER_LOCATE_AVAILABLE', prev);
@@ -176,12 +176,9 @@ function withLocateFlag(value: string | undefined, fn: () => void): () => void {
 Deno.test('broker-bootstrap: ALPACA_PAPER_LOCATE_AVAILABLE unset → locateFetcher OMITTED (clause (p) default-paper posture); construction is creds-free + network-free', withLocateFlag(undefined, withCreds(() => {
   const broker = createLiveBrokerInterfaces({
     baseUrlOverride: 'http://localhost',
-    // No fetchImpl wired — if the factory dialed the network at construction
-    // (e.g. a boot-time probe), Deno would throw. The fact that this returns
-    // proves the construction is network-free.
   });
   assertEquals(broker.locateFetcher, undefined);
-}) as unknown as () => void));
+})));
 
 Deno.test('broker-bootstrap: ALPACA_PAPER_LOCATE_AVAILABLE=true → locateFetcher INJECTED (DW-155 closure posture)', withLocateFlag('true', withCreds(() => {
   const broker = createLiveBrokerInterfaces({
@@ -190,4 +187,4 @@ Deno.test('broker-bootstrap: ALPACA_PAPER_LOCATE_AVAILABLE=true → locateFetche
   });
   assert(broker.locateFetcher !== undefined);
   assert(typeof broker.locateFetcher!.fetchLocate === 'function');
-}) as unknown as () => void));
+})));
