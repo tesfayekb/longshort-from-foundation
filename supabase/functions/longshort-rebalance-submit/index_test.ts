@@ -405,3 +405,71 @@ Deno.test('SPOT_CHECK does NOT call the snapshot writer (no equity+positions in 
   );
   assertEquals(snapshotCalls, 0);
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// DEC-068 clause (p) — LONG-ONLY POSTURE DECLARATION (long_only_mode +
+// shorts_skipped_locate_unavailable; derived EXPLICITLY from summary flags).
+// ──────────────────────────────────────────────────────────────────────────
+
+Deno.test('clause (p): long_only_mode TRUE when locateFetcher omitted; shorts_skipped_locate_unavailable enumerates short candidates; broker locate NEVER called', async () => {
+  const rankings: RankingRow[] = [
+    { ticker: 'AAA', long_rank: 1, short_rank: 999, long_score: 1, short_score: -1, gics_sector: 'Tech',   ranker_source: 'test' },
+    { ticker: 'BBB', long_rank: 999, short_rank: 1, long_score: -1, short_score: 1, gics_sector: 'Health', ranker_source: 'test' },
+    { ticker: 'CCC', long_rank: 999, short_rank: 2, long_score: -1, short_score: 1, gics_sector: 'Energy', ranker_source: 'test' },
+  ];
+  const { interfaces, orders } = makeFakeBroker({});
+  // Clause-(p) typed-absence: env-flag-false ⇒ bootstrap omits locateFetcher.
+  // Simulate at the fake by deleting the field BEFORE injection.
+  let locateCalls = 0;
+  const originalLocate = interfaces.locateFetcher;
+  if (originalLocate) {
+    interfaces.locateFetcher = {
+      async fetchLocate(symbol, ts) {
+        locateCalls++;
+        return originalLocate.fetchLocate(symbol, ts);
+      },
+    };
+  }
+  // Now actually OMIT it from the interface (the env-flag-false posture).
+  delete (interfaces as { locateFetcher?: unknown }).locateFetcher;
+
+  const { writer } = makeCapturingEventWriter();
+  const out = await runRebalanceSubmit(
+    { mode: 'full_rebalance', operator_id: OP },
+    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter },
+    CID,
+  );
+
+  // long_only_mode is the explicit derivation (NOT heuristic).
+  assertEquals(out.long_only_mode, true);
+  assertEquals(out.preflight_summary!.locate_unavailable, true);
+  // The typed-absence short-symbol list enumerates the short candidates the
+  // composer was asked to evaluate (parallel to shorts_placed_without_ssr_check).
+  assertEquals(out.shorts_skipped_locate_unavailable.sort(), ['BBB', 'CCC']);
+  // Broker locate NEVER reached.
+  assertEquals(locateCalls, 0);
+  // Only LONG orders submitted (shorts typed-absence-failed at the composer).
+  for (const o of orders) {
+    assertEquals(o.side, 'buy', 'every order long on typed-absence run');
+  }
+});
+
+Deno.test('clause (p): both flags TRUE → long_only_mode TRUE; locate-present + SSR-absent → long_only_mode still TRUE (ssr leg)', async () => {
+  // With fake broker (locateFetcher PRESENT) and no SSR fetcher (clause (n)
+  // typed-absence), summary.ssr_unavailable=true, summary.locate_unavailable=false,
+  // long_only_mode = false || true = true.
+  const rankings: RankingRow[] = [
+    { ticker: 'AAA', long_rank: 1, short_rank: 999, long_score: 1, short_score: -1, gics_sector: 'Tech', ranker_source: 'test' },
+  ];
+  const { interfaces } = makeFakeBroker({});
+  const { writer } = makeCapturingEventWriter();
+  const out = await runRebalanceSubmit(
+    { mode: 'full_rebalance', operator_id: OP },
+    { brokerFactory: () => interfaces, eventWriter: writer, rankingsReader: async () => rankings, ts: TS, snapshotWriter: noopSnapshotWriter },
+    CID,
+  );
+  assertEquals(out.long_only_mode, true);
+  assertEquals(out.ssr_unavailable, true);
+  assertEquals(out.preflight_summary!.locate_unavailable, false);
+  assertEquals(out.shorts_skipped_locate_unavailable, []);
+});

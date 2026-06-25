@@ -154,3 +154,37 @@ Deno.test('broker-bootstrap: fillFetcher reports filled only when status=filled 
   assertEquals(c.filled, false);
   assertEquals(c.filled_qty, 0);
 }));
+
+// ──────────────────────────────────────────────────────────────────────────
+// DEC-068 clause (p) — ALPACA_PAPER_LOCATE_AVAILABLE env-flag gate.
+// ──────────────────────────────────────────────────────────────────────────
+
+function withLocateFlag(value: string | undefined, fn: () => void | Promise<void>): () => Promise<void> {
+  return async () => {
+    const prev = Deno.env.get('ALPACA_PAPER_LOCATE_AVAILABLE');
+    if (value === undefined) Deno.env.delete('ALPACA_PAPER_LOCATE_AVAILABLE');
+    else Deno.env.set('ALPACA_PAPER_LOCATE_AVAILABLE', value);
+    try {
+      await fn();
+    } finally {
+      if (prev === undefined) Deno.env.delete('ALPACA_PAPER_LOCATE_AVAILABLE');
+      else Deno.env.set('ALPACA_PAPER_LOCATE_AVAILABLE', prev);
+    }
+  };
+}
+
+Deno.test('broker-bootstrap: ALPACA_PAPER_LOCATE_AVAILABLE unset → locateFetcher OMITTED (clause (p) default-paper posture); construction is creds-free + network-free', withLocateFlag(undefined, withCreds(() => {
+  const broker = createLiveBrokerInterfaces({
+    baseUrlOverride: 'http://localhost',
+  });
+  assertEquals(broker.locateFetcher, undefined);
+})));
+
+Deno.test('broker-bootstrap: ALPACA_PAPER_LOCATE_AVAILABLE=true → locateFetcher INJECTED (DW-155 closure posture)', withLocateFlag('true', withCreds(() => {
+  const broker = createLiveBrokerInterfaces({
+    baseUrlOverride: 'http://localhost',
+    fetchImpl: (async (): Promise<Response> => new Response('{}', { status: 200 })) as unknown as typeof fetch,
+  });
+  assert(broker.locateFetcher !== undefined);
+  assert(typeof broker.locateFetcher!.fetchLocate === 'function');
+})));

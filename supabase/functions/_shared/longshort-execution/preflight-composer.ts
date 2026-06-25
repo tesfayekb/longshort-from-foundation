@@ -119,7 +119,13 @@ export interface PreflightCandidate {
 
 export interface PreflightComposerDeps {
   haltStatusFetcher: BrokerHaltStatusFetcher;
-  locateFetcher: BrokerLocateFetcher;
+  /** Optional — typed absence per DEC-068 clause (p). When omitted, every
+   *  short candidate is recorded FAILED with reason
+   *  `short_availability_source_unavailable` (NOT `failed_verifiers:
+   *  ['verify_short_availability']`), the broker locate adapter is NEVER
+   *  called, and `summary.locate_unavailable=true`. Mirrors clause-(n)'s
+   *  `ssrStatusFetcher?` pattern. */
+  locateFetcher?: BrokerLocateFetcher;
   buyingPowerFetcher: BrokerBuyingPowerFetcher;
   /** Optional — typed absence per the SSR DETERMINATION above. When omitted,
    *  every short candidate records `verify_ssr_status` as SKIPPED. */
@@ -156,6 +162,11 @@ export interface PreflightComposerSummary {
   /** TRUE iff no `ssrStatusFetcher` was injected — SSR was UNIFORMLY skipped
    *  on every short candidate (typed absence per §2 axiom). */
   ssr_unavailable: boolean;
+  /** TRUE iff no `locateFetcher` was injected — short-availability source
+   *  is structurally absent on this venue (DEC-068 clause (p) typed-absence
+   *  on Alpaca paper). Short candidates are FAILED with reason
+   *  `short_availability_source_unavailable`; broker locate was NEVER called. */
+  locate_unavailable: boolean;
   short_count: number;
   long_count: number;
 }
@@ -181,6 +192,7 @@ export async function composePreflightResults(
   const _fetcherSource: FetcherSource = deps.fetcher_source ?? 'live';
   void _fetcherSource;
   const ssrUnavailable = deps.ssrStatusFetcher === undefined;
+  const locateUnavailable = deps.locateFetcher === undefined;
 
   const requestedTotal = input.candidates.reduce(
     (acc, c) => acc + Math.abs(c.requested_position_size),
@@ -226,6 +238,42 @@ export async function composePreflightResults(
 
     // ── SHORT-SIDE GATES. ──
     if (c.side === 'short') {
+      // ── DEC-068 clause (p) TYPED-ABSENCE SHORT-CIRCUIT ────────────────
+      // When no `locateFetcher` is injected (env-flag
+      // ALPACA_PAPER_LOCATE_AVAILABLE=false at the bootstrap), the
+      // short-availability source is structurally absent. We DO NOT call
+      // the broker locate, DO NOT consult htb (no fetch follows), and
+      // record the candidate FAILED with reason
+      // `short_availability_source_unavailable` — distinct in audit shape
+      // from a transient broker-reported htb reject (clause (p)
+      // DISTINGUISHABILITY INVARIANT). The verifier name is added to
+      // `verifiers_skipped`, NOT to `failed_verifiers`. The composer
+      // writes NO reconciliation_events row for the locate verifier
+      // (broker not called → no row).
+      if (locateUnavailable) {
+        skippedHere.push('verify_short_availability');
+        // SSR typed-absence skip on the short side (when applicable)
+        // is still recorded alongside.
+        if (deps.ssrStatusFetcher === undefined) {
+          skippedHere.push('verify_ssr_status');
+        }
+        // Bypass htb-consult + locate + SSR; record the fail-shape.
+        const reasonParts: string[] = ['short_availability_source_unavailable'];
+        // If BP was already insufficient, surface that too — it remains
+        // an authoritative system-level failure on this candidate.
+        if (failed.length > 0) {
+          reasonParts.unshift(`preflight_failed:${failed.join(',')}`);
+        }
+        passedCount += 0;
+        failedCount++;
+        results.set(key, {
+          passed: false,
+          reason: reasonParts.join('|'),
+          failed_verifiers: failed, // does NOT include verify_short_availability
+        });
+        if (skippedHere.length > 0) skipped.set(key, skippedHere);
+        continue;
+      }
       // ── E4 LOAD-BEARING WIRING (consult-before-locate) ─────────────────
       // verify_short_availability.ts:107-114 transcribed verbatim: the htb
       // pre-flight consult fires BEFORE the broker locate call. If
@@ -241,7 +289,7 @@ export async function composePreflightResults(
         shortFailed = true; // consult HIT — locate is NOT called.
       } else {
         // Consult MISS — call the locate adapter.
-        const locate = await deps.locateFetcher.fetchLocate(c.symbol, input.ts);
+        const locate = await deps.locateFetcher!.fetchLocate(c.symbol, input.ts);
         // Mirrors verify_short_availability.ts classify_outcome:
         //   !available                                              → failure_handled
         //   available && qty_available < qty_requested              → failure_handled (partial)
@@ -312,6 +360,7 @@ export async function composePreflightResults(
       bp_observed: bpObserved,
       bp_requested_total: requestedTotal,
       ssr_unavailable: ssrUnavailable,
+      locate_unavailable: locateUnavailable,
       short_count: shortCount,
       long_count: longCount,
     },

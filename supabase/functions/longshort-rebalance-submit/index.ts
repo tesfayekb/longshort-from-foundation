@@ -164,6 +164,18 @@ export interface RebalanceSubmitResponse {
    *  operator-facing surface must render this list on every short-inclusive
    *  placement. */
   shorts_placed_without_ssr_check: string[];
+  // ── DEC-068 clause (p) — LONG-ONLY POSTURE DECLARATION. ─────────────────
+  /** TRUE when the placement run was long-only by structural posture
+   *  (locate source absent OR SSR source absent). Derived EXPLICITLY from
+   *  `summary.locate_unavailable || summary.ssr_unavailable` — clause (p)
+   *  line 532 forbids heuristic/inference-based detection. On `spot_check`
+   *  (LONG-only by design) the posture flags still drive this surfacing. */
+  long_only_mode: boolean;
+  /** Per clause (p) DISTINGUISHABILITY INVARIANT: short symbols the
+   *  composer skipped because the locate source was structurally absent
+   *  (typed-absence at the composer; broker locate NEVER called). Parallel
+   *  to clause-(n)'s `shorts_placed_without_ssr_check`. */
+  shorts_skipped_locate_unavailable: string[];
 }
 
 export interface RebalanceSubmitDeps {
@@ -334,9 +346,12 @@ export async function runRebalanceSubmit(
   const quoteFetcher = broker.quoteFetcher;
   const buyingPowerFetcher = broker.buyingPowerFetcher;
   const positionFetcher = broker.positionFetcher;
+  // DEC-068 clause (p): locateFetcher is OPTIONAL — env-flag-gated at
+  // broker-bootstrap. When omitted, the composer takes the typed-absence
+  // path (no broker call) and the trigger declares `long_only_mode`.
   const locateFetcher = broker.locateFetcher;
   const haltStatusFetcher = broker.haltStatusFetcher;
-  if (!quoteFetcher || !buyingPowerFetcher || !positionFetcher || !locateFetcher || !haltStatusFetcher) {
+  if (!quoteFetcher || !buyingPowerFetcher || !positionFetcher || !haltStatusFetcher) {
     throw new Error('placement_path_broker_fetchers_missing');
   }
   const listOpenPositions = positionFetcher.listOpenPositions;
@@ -385,10 +400,13 @@ export async function runRebalanceSubmit(
   }
 
   // 4. §7 PRE-FLIGHT GATE — ssrStatusFetcher OMITTED per DEC-068 (n) typed-absence.
+  //    locateFetcher is conditionally injected per DEC-068 (p) env-flag gate;
+  //    when omitted the composer routes short candidates through typed-absence.
   const preflight = await composePreflightResults(
     { candidates, internal_expected_bp: bp.available_bp, ts },
     {
-      haltStatusFetcher, locateFetcher, buyingPowerFetcher,
+      haltStatusFetcher, buyingPowerFetcher,
+      ...(locateFetcher ? { locateFetcher } : {}),
       // ssrStatusFetcher: undefined — DEC-068 clause (n) typed-absence.
       operator_id,
       fetcher_source: 'live',
@@ -454,6 +472,7 @@ export async function runRebalanceSubmit(
     mode: 'full_rebalance', operator_id, ts, correlationId,
     preflight_summary: preflight.summary,
     submissions,
+    candidates,
   });
 }
 
@@ -517,6 +536,7 @@ async function runSpotCheck(args: {
     mode: 'spot_check', operator_id, ts, correlationId,
     preflight_summary: undefined,
     submissions,
+    candidates: [],
   });
 }
 
@@ -592,6 +612,7 @@ async function runWriterSmoke(args: {
     mode: 'writer_smoke', operator_id, ts, correlationId,
     preflight_summary: undefined,
     submissions,
+    candidates: [],
   });
 }
 
@@ -602,6 +623,10 @@ function buildResponse(args: {
   correlationId: string;
   preflight_summary: PreflightComposerSummary | undefined;
   submissions: SubmissionResult[];
+  /** Candidate set the composer was invoked with — used to derive
+   *  `shorts_skipped_locate_unavailable` on the typed-absence path
+   *  (clause (p)). Empty on `spot_check` / `writer_smoke`. */
+  candidates: readonly PreflightCandidate[];
 }): RebalanceSubmitResponse {
   const counts: Record<SubmissionResult['kind'], number> = {
     accepted: 0, rejected: 0, pending_timeout: 0,
@@ -621,6 +646,13 @@ function buildResponse(args: {
         .map((r) => r.symbol)
     : [];
 
+  // ── DEC-068 clause (p) — explicit (not inferred) long-only declaration. ──
+  const locate_unavailable = args.preflight_summary?.locate_unavailable ?? true;
+  const long_only_mode = locate_unavailable || ssr_unavailable;
+  const shorts_skipped_locate_unavailable: string[] = locate_unavailable
+    ? args.candidates.filter((c) => c.side === 'short').map((c) => c.symbol)
+    : [];
+
   return {
     status: 'ok',
     mode: args.mode,
@@ -632,6 +664,8 @@ function buildResponse(args: {
     submissions: args.submissions.map(slimResult),
     ssr_unavailable,
     shorts_placed_without_ssr_check,
+    long_only_mode,
+    shorts_skipped_locate_unavailable,
   };
 }
 
@@ -710,6 +744,12 @@ Deno.serve(createHandler(async (req: Request) => {
         submission_counts: result.submission_counts,
         ssr_unavailable: result.ssr_unavailable,
         shorts_placed_without_ssr_check_count: result.shorts_placed_without_ssr_check.length,
+        // DEC-068 clause (p) §22.5.1 audit-shape gate. The full list of
+        // typed-absence short symbols lands here so the operator-gated
+        // post-landing re-fire verifies these fields are present in a real
+        // longshort_audit_logs row.
+        long_only_mode: result.long_only_mode,
+        shorts_skipped_locate_unavailable: result.shorts_skipped_locate_unavailable,
       },
     });
 
