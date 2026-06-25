@@ -485,5 +485,5 @@ The mapping is monotonic (kernel-severity ↑ ⇒ reconciliation-severity ↑) a
 - **`_shared/longshort-reconciliation-lifecycle.ts:219`** (`writeEventRow` — the canonical 6.2-engine writer; the reference shape `createSupabaseReconciliationEventWriter` mirrors for `engine_version` + the decomposed columns).
 - **DW-069** (the deferred-cleanup note for `VerifyCallName` carrying non-`verify_*` identifiers; `longshort.rebalance.placement` is registered under that precedent).
 - **`longshort-rebalance-submit/index.ts` `writer_smoke` mode** (the §22.5.1 non-money verification harness).
-- **INC-78** (the orphaned spot_check fill at corr `bb3810bf`; the surfacing event for this clause).
-- **ACT-326** (this addendum's authoring action; the REVISION-FIX that landed the centralized writer + this clause + INC-78).
+- **INC-80** (the orphaned spot_check fill at corr `bb3810bf`; the surfacing event for this clause). Renumbered from a transient INC-78 collision — INC-78 was already claimed by the alpaca-fetchers `pending_new→pending` fixture-mismatch candidate (ACT-310) and INC-79 by the `deno.lock` v5/v3 drift candidate; the next free number is INC-80.
+- **ACT-326** (this addendum's authoring action; the REVISION-FIX that landed the centralized writer + this clause + INC-80).
