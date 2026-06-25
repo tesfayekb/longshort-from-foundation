@@ -153,7 +153,19 @@ export class LiveBrokerNotProvisionedError extends Error {
 export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {}): BrokerInterfaces {
   const client = new AlpacaPaperClient(config);
   const openOrders = new AlpacaOpenOrdersFetcher(client);
-  return {
+  // ── DEC-068 clause (p) ENV-FLAG GATE ─────────────────────────────────────
+  // ALPACA_PAPER_LOCATE_AVAILABLE is the declarative posture flag for the
+  // short-availability source. Default `false` on paper (Alpaca paper does
+  // NOT expose POST /v2/short_locates — operator-confirmed 404). When false,
+  // we OMIT `locateFetcher` from the returned interface so the §7 preflight
+  // composer takes the typed-absence path (no broker call, distinct audit
+  // shape). When DW-155 wires a real source (or the flag flips true on a
+  // venue that supports the endpoint), the real `AlpacaLocateFetcher`
+  // injects. This is a pure env-var read — creds-free + network-free at
+  // construction (no boot-time probe; clause (p) explicitly REJECTS that).
+  const locateAvailableEnv = Deno.env.get('ALPACA_PAPER_LOCATE_AVAILABLE');
+  const locateAvailable = locateAvailableEnv === 'true' || locateAvailableEnv === '1';
+  const base: BrokerInterfaces = {
     acceptanceFetcher: new AlpacaOrderAcceptanceFetcher(client),
     fillFetcher: new AlpacaFillFetcher(client),
     submitter: new AlpacaOrderSubmitter(client),
@@ -163,7 +175,10 @@ export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {})
     quoteFetcher: new AlpacaQuoteFetcher(client),
     buyingPowerFetcher: new AlpacaBuyingPowerFetcher(client),
     positionFetcher: new AlpacaPositionFetcher(client),
-    locateFetcher: new AlpacaLocateFetcher(client),
     haltStatusFetcher: new AlpacaHaltStatusFetcher(client),
   };
+  if (locateAvailable) {
+    base.locateFetcher = new AlpacaLocateFetcher(client);
+  }
+  return base;
 }
