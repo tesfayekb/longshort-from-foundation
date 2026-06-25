@@ -303,61 +303,10 @@ function slimResult(r: SubmissionResult): SubmissionResultSlim {
   return base;
 }
 
-function classifySubmissionEvent(r: SubmissionResult): EmittedExecutionEvent {
-  // Map SubmissionResult kinds onto reconciliation_events outcome semantics.
-  // The submitter pairs (the existing fillFetcher / state machine path)
-  // remain the AUTHORITATIVE post-fill reconciliation surface; these rows
-  // record the PLACEMENT-tier disposition for operator observability.
-  switch (r.kind) {
-    case 'accepted':
-      return {
-        call_name: 'longshort.rebalance.placement',
-        tier: 'tier1',
-        outcome: 'false_positive_within_tolerance',
-        payload: {
-          symbol: r.symbol, side: r.side, intent: r.intent,
-          order_id: r.order_id, client_order_id: r.client_order_id,
-          shares: r.shares, limit_price: r.limit_price,
-          accepted_at: r.accepted_at, provenance: r.provenance,
-        },
-      };
-    case 'rejected':
-      return {
-        call_name: 'longshort.rebalance.placement',
-        tier: 'tier2',
-        outcome: 'failure_handled',
-        payload: {
-          symbol: r.symbol, side: r.side, intent: r.intent,
-          reason: r.reason, broker_status_code: r.broker_status_code,
-          client_order_id: r.client_order_id, shares: r.shares,
-          limit_price: r.limit_price, provenance: r.provenance,
-        },
-      };
-    case 'pending_timeout':
-      return {
-        call_name: 'longshort.rebalance.placement',
-        tier: 'tier2',
-        outcome: 'failure_handled',
-        payload: {
-          symbol: r.symbol, side: r.side, intent: r.intent,
-          order_id: r.order_id, client_order_id: r.client_order_id,
-          shares: r.shares, limit_price: r.limit_price,
-          timeout_s: r.timeout_s, pending_elapsed_s: r.pending_elapsed_s,
-          provenance: r.provenance,
-        },
-      };
-    case 'zero_share_skipped':
-    case 'quote_stale_skipped':
-    case 'insufficient_buying_power_skipped':
-    case 'noop_skipped':
-      return {
-        call_name: 'longshort.rebalance.placement',
-        tier: 'tier1',
-        outcome: 'false_positive_within_tolerance',
-        payload: { ...r },
-      };
-  }
-}
+// classifySubmissionEvent has moved to
+// `_shared/longshort-execution/classify-submission-event.ts` (ACT-326)
+// — the decomposed (expected/observed/divergence) shape replaces the
+// payload-only output that produced the corr-`bb3810bf` schema throw.
 
 /**
  * The orchestration entry — testable in isolation with injected deps. The
