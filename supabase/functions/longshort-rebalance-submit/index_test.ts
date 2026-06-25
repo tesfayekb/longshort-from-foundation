@@ -238,28 +238,52 @@ Deno.test('SPOT_CHECK places one LONG-only order; shorts list empty', async () =
 
 // ── (c) Load-bearing wiring assertion (source-text) ──────────────────────
 
-Deno.test('END-TO-END WIRING: index.ts imports + invokes planRebalance + submitRebalance + composePreflightResults', async () => {
-  const src = await Deno.readTextFile(
+Deno.test('END-TO-END WIRING: handler→orchestrator→kernels chain is intact (post ACT-333 extraction)', async () => {
+  // ACT-333 relocated the kernel imports + invocations from index.ts into
+  // rebalance-submit-orchestrator.ts. The guard now asserts the FULL CHAIN:
+  //   index.ts (HTTP handler) → runRebalanceSubmit (orchestrator)
+  //     → {composePreflightResults, planRebalance, submitRebalance}
+  // so neither an orphaned-orchestrator (handler doesn't call it) nor an
+  // orphaned-kernel (orchestrator doesn't call a kernel) can sneak in.
+  const indexSrc = await Deno.readTextFile(
     new URL('./index.ts', import.meta.url),
   );
-  // Import declarations.
-  assertStringIncludes(src, "from '../_shared/longshort-execution/preflight-composer.ts'");
-  assertStringIncludes(src, "from '../_shared/longshort-execution/rebalance-planner.ts'");
-  assertStringIncludes(src, "from '../_shared/longshort-execution/order-submitter.ts'");
-  // Named imports.
-  assertStringIncludes(src, 'composePreflightResults');
-  assertStringIncludes(src, 'planRebalance');
-  assertStringIncludes(src, 'submitRebalance');
-  // Actual invocations (parens prove the kernels are CALLED, not just imported).
-  assertStringIncludes(src, 'composePreflightResults(');
-  assertStringIncludes(src, 'planRebalance({');
-  assertStringIncludes(src, 'submitRebalance({');
-  // Permission gate is the money-path gate.
-  assertStringIncludes(src, "checkPermissionOrThrow(authCtx.user.id, 'longshort.execute')");
-  // Diagnostic-503 pre-flight.
-  assertStringIncludes(src, 'broker_credentials_not_provisioned');
-  // SSR posture per clause (n): NO ssrStatusFetcher injected.
-  assertStringIncludes(src, '// ssrStatusFetcher: undefined');
+  const orchSrc = await Deno.readTextFile(
+    new URL('../_shared/longshort-execution/rebalance-submit-orchestrator.ts', import.meta.url),
+  );
+
+  // ── Link 1: HTTP handler in index.ts reaches the orchestrator. ──────
+  // Import the orchestration entry…
+  assertStringIncludes(indexSrc, "from '../_shared/longshort-execution/rebalance-submit-orchestrator.ts'");
+  assertStringIncludes(indexSrc, 'runRebalanceSubmit');
+  // …AND invoke it (parens prove the orchestrator is CALLED, not just imported
+  // or re-exported — guards the orphaned-orchestrator-one-level-up case).
+  assertStringIncludes(indexSrc, 'await runRebalanceSubmit(');
+  // Permission gate is the money-path gate (lives in the HTTP handler).
+  assertStringIncludes(indexSrc, "checkPermissionOrThrow(authCtx.user.id, 'longshort.execute')");
+  // Diagnostic-503 pre-flight (lives in the HTTP handler).
+  assertStringIncludes(indexSrc, 'broker_credentials_not_provisioned');
+
+  // ── Link 2: orchestrator imports + invokes all three kernels. ───────
+  assertStringIncludes(orchSrc, "from './preflight-composer.ts'");
+  assertStringIncludes(orchSrc, "from './rebalance-planner.ts'");
+  assertStringIncludes(orchSrc, "from './order-submitter.ts'");
+  assertStringIncludes(orchSrc, 'composePreflightResults');
+  assertStringIncludes(orchSrc, 'planRebalance');
+  assertStringIncludes(orchSrc, 'submitRebalance');
+  // Parens prove the kernels are CALLED, not just imported.
+  assertStringIncludes(orchSrc, 'composePreflightResults(');
+  assertStringIncludes(orchSrc, 'planRebalance({');
+  assertStringIncludes(orchSrc, 'submitRebalance({');
+
+  // ── Clause-(n) SSR posture: orchestrator MUST NOT inject an
+  //    ssrStatusFetcher into the composer (uniform-skip → ssr_unavailable=true).
+  //    Asserted as a negative grep at the orchestrator (the call site). ──
+  assertEquals(
+    /\bssrStatusFetcher\b/.test(orchSrc),
+    false,
+    'orchestrator must not inject ssrStatusFetcher (clause-(n) SSR posture)',
+  );
 });
 
 // ── (d) Guardrail-2 contract: ssr_unavailable + shorts_placed_without_ssr_check
