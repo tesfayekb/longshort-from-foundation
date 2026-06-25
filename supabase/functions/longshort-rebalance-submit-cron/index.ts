@@ -47,8 +47,9 @@ import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { persistCronLastFire } from '../_shared/persist-cron-last-fire.ts';
 import {
   runRebalanceSubmit,
+  createSupabaseRankingsReader,
   type RebalanceSubmitRequest,
-} from '../longshort-rebalance-submit/index.ts';
+} from '../_shared/longshort-execution/rebalance-submit-orchestrator.ts';
 import { createLiveBrokerInterfaces } from '../_shared/longshort-execution/broker-bootstrap.ts';
 import { createSupabaseReconciliationEventWriter } from '../_shared/longshort-execution/reconciliation-event-writer.ts';
 
@@ -60,40 +61,6 @@ function alpacaCredsPresent(): boolean {
   const k = Deno.env.get('ALPACA_PAPER_KEY');
   const s = Deno.env.get('ALPACA_PAPER_SECRET');
   return typeof k === 'string' && k.length > 0 && typeof s === 'string' && s.length > 0;
-}
-
-/** Production rankings reader — duplicate of the operator-gated
- *  handler's local helper, kept inline to avoid an export-surface
- *  change to the existing handler. The two MUST stay in sync; a
- *  future hygiene pass extracts both to
- *  `_shared/longshort-execution/supabase-rankings-reader.ts`. */
-import {
-  SUBSTITUTION_SCAN_CAP_RANK,
-  type RankingRow,
-} from '../_shared/longshort-execution/rebalance-planner.ts';
-
-function createSupabaseRankingsReader() {
-  return async (operator_id: string): Promise<RankingRow[]> => {
-    const { data: latest, error: e1 } = await supabaseAdmin
-      .from('combiner_rankings')
-      .select('as_of_date')
-      .eq('operator_id', operator_id)
-      .order('as_of_date', { ascending: false })
-      .limit(1);
-    if (e1) throw new Error(`combiner_rankings as_of_date read failed: ${e1.message}`);
-    if (!latest || latest.length === 0) return [];
-    const as_of_date = (latest[0] as { as_of_date: string }).as_of_date;
-
-    const cap = SUBSTITUTION_SCAN_CAP_RANK;
-    const { data: rows, error: e2 } = await supabaseAdmin
-      .from('combiner_rankings')
-      .select('ticker, long_rank, short_rank, long_score, short_score, gics_sector, ranker_source')
-      .eq('operator_id', operator_id)
-      .eq('as_of_date', as_of_date)
-      .or(`long_rank.lte.${cap},short_rank.lte.${cap}`);
-    if (e2) throw new Error(`combiner_rankings rows read failed: ${e2.message}`);
-    return (rows ?? []) as RankingRow[];
-  };
 }
 
 /** Kill-switch consult — money-path discipline. Returns the state, or
