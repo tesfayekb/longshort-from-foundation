@@ -853,6 +853,8 @@ Deno.serve(createHandler(async (req: Request) => {
         // longshort_audit_logs row.
         long_only_mode: result.long_only_mode,
         shorts_skipped_locate_unavailable: result.shorts_skipped_locate_unavailable,
+        // ACT-331 (clause (q)) — htb cache writes landed this fire.
+        htb_marks_persisted: result.htb_marks_persisted,
       },
     });
 
