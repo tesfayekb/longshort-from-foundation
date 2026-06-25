@@ -277,3 +277,63 @@ Deno.test('preflight-composer: ts is the sole Date source (Gate-6 — no wall-cl
   );
   assert(out.results.size === 1); // sanity — the composer ran with the injected ts
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// DEC-068 clause (p) — LOCATE TYPED-ABSENCE (DISTINGUISHABILITY INVARIANT).
+// ──────────────────────────────────────────────────────────────────────────
+
+Deno.test('preflight-composer: no locateFetcher → SHORT FAILED with reason short_availability_source_unavailable; locate NEVER called; NO failed_verifiers entry (clause (p) typed-absence)', async () => {
+  const candidates: PreflightCandidate[] = [
+    { symbol: 'TSLA', side: 'short', requested_position_size: 1500 },
+  ];
+  // We intentionally do NOT pass `locateFetcher`. We also pass a locate
+  // stub bound to a separate variable to prove it is NEVER reached — by
+  // construction the only way the composer could call it is through
+  // `deps.locateFetcher`, which is undefined here.
+  const locateNeverWired = locateStub(true);
+  const out = await composePreflightResults(
+    { candidates, internal_expected_bp: 100_000, ts: TS },
+    {
+      haltStatusFetcher: haltStub(false),
+      buyingPowerFetcher: bpStub(100_000),
+      // locateFetcher OMITTED — env-flag-false at the bootstrap.
+      operator_id: OP,
+      fetcher_source: 'mock',
+    },
+  );
+  const r = out.results.get(preflightKey('TSLA', 'short'))!;
+  assertEquals(r.passed, false);
+  // DISTINGUISHABILITY: failed_verifiers MUST NOT include
+  // 'verify_short_availability' — that shape is reserved for the
+  // transient-reject path.
+  assertEquals(r.failed_verifiers.includes('verify_short_availability'), false);
+  assert(r.reason !== null && r.reason.includes('short_availability_source_unavailable'));
+  // verifiers_skipped carries the verifier name (audit trail).
+  const skipped = out.skipped.get(preflightKey('TSLA', 'short'));
+  assert(skipped, 'short candidate must have a skipped entry on typed-absence');
+  assert(skipped!.includes('verify_short_availability'));
+  // summary surfaces the structural flag.
+  assertEquals(out.summary.locate_unavailable, true);
+  // The locate adapter (even if one existed alongside) was never invoked.
+  assertEquals(locateNeverWired.calls, 0);
+});
+
+Deno.test('preflight-composer: locateFetcher PRESENT + locate returns available:false → SHORT fails with failed_verifiers:[verify_short_availability] (transient-reject path UNCHANGED — distinguishability twin)', async () => {
+  const candidates: PreflightCandidate[] = [
+    { symbol: 'TSLA', side: 'short', requested_position_size: 1500 },
+  ];
+  const locate = locateStub(false);
+  const out = await composePreflightResults(
+    { candidates, internal_expected_bp: 100_000, ts: TS },
+    baseDeps({ locateFetcher: locate, htbCache: { reader: htbReader(new Set()) } }),
+  );
+  const r = out.results.get(preflightKey('TSLA', 'short'))!;
+  assertEquals(r.passed, false);
+  // The TRANSIENT-REJECT shape — failed_verifiers DOES include the verifier name.
+  assert(r.failed_verifiers.includes('verify_short_availability'));
+  assert(r.reason !== null && r.reason.startsWith('preflight_failed:'));
+  assert(r.reason !== null && !r.reason.includes('short_availability_source_unavailable'));
+  assertEquals(out.summary.locate_unavailable, false);
+  // Broker locate WAS called on the transient-reject path.
+  assertEquals(locate.calls, 1);
+});
