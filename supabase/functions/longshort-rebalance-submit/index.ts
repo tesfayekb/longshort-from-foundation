@@ -95,6 +95,17 @@ import {
   PLACEMENT_CALL_NAME,
 } from '../_shared/longshort-execution/classify-submission-event.ts';
 import type { BrokerPosition } from '../_shared/longshort-broker-interfaces.ts';
+import {
+  createRejectionPropagator,
+  createSupabaseHtbCacheWriter,
+  createSupabaseHtbCacheReader,
+  createSupabaseHtbCacheClearer,
+  type RejectionPropagator,
+  type HtbCacheReader,
+  type HtbCacheClearer,
+} from '../_shared/longshort-execution/cache-propagator-io.ts';
+import type { SameTickContradictoryPass } from '../_shared/longshort-execution/cache-propagator.ts';
+import { preflightKey } from '../_shared/longshort-execution/rebalance-planner.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -176,6 +187,11 @@ export interface RebalanceSubmitResponse {
    *  (typed-absence at the composer; broker locate NEVER called). Parallel
    *  to clause-(n)'s `shorts_placed_without_ssr_check`. */
   shorts_skipped_locate_unavailable: string[];
+  // ── ACT-331 (DEC-068 clause (q)) — propagator surfacing. ────────────────
+  /** Symbols whose terminal htb rejection landed an htb-cache write via the
+   *  §8.4 rejection propagator on this fire. The next-tick `htbCache.reader`
+   *  consult will short-circuit these symbols. */
+  htb_marks_persisted: string[];
 }
 
 export interface RebalanceSubmitDeps {
@@ -193,6 +209,18 @@ export interface RebalanceSubmitDeps {
    * Optional — defaults to a `supabaseAdmin`-backed writer.
    */
   snapshotWriter?: EquitySnapshotWriter;
+  /** ACT-331 (DEC-068 clause (q)) — htb-cache reader + clearer injected
+   *  into the composer's `htbCache` slot. Defaults to the supabaseAdmin
+   *  pair. The reader+clearer pair MUST be threaded together for the E4
+   *  load-bearing wiring (consult-before-shortability + clear-on-success). */
+  htbCacheReader?: HtbCacheReader;
+  htbCacheClearer?: HtbCacheClearer;
+  /** ACT-331 — §8.4 rejection propagator. Fires on every terminal htb
+   *  rejection from `submitRebalance` so the cache reader picks it up next
+   *  tick (the loop-break the E4 closure depends on, now on the placement
+   *  path too). Defaults to a supabaseAdmin-backed pair (writer +
+   *  reconciliation-event writer reuse of `deps.eventWriter`). */
+  rejectionPropagator?: RejectionPropagator;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
