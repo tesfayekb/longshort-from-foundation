@@ -137,6 +137,7 @@ export type Database = {
         Row: {
           as_of_date: string
           computed_at: string
+          intraday_slot: number
           operator_id: string
           rank_within_side: number
           ranker_source: string
@@ -147,6 +148,7 @@ export type Database = {
         Insert: {
           as_of_date: string
           computed_at?: string
+          intraday_slot?: number
           operator_id: string
           rank_within_side: number
           ranker_source: string
@@ -157,6 +159,7 @@ export type Database = {
         Update: {
           as_of_date?: string
           computed_at?: string
+          intraday_slot?: number
           operator_id?: string
           rank_within_side?: number
           ranker_source?: string
