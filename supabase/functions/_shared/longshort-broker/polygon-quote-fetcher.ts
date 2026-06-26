@@ -67,20 +67,36 @@ export function polygonNanosToDate(nanos: number): Date {
   return new Date(Math.floor(nanos / NANOS_PER_MS));
 }
 
+/**
+ * Typed credential error — thrown at FIRST fetchQuote when POLYGON_API_KEY
+ * is missing/empty. Construction is creds-free (mirrors AlpacaPaperClient's
+ * deferred credential pattern); we fail loud at runtime, not at import.
+ */
+export class PolygonCredentialError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PolygonCredentialError';
+  }
+}
+
 export class PolygonQuoteFetcher implements BrokerQuoteFetcher {
   constructor(
     private readonly apiKey: string,
     private readonly httpFetch: typeof fetch = fetch,
     private readonly baseUrl: string = POLYGON_BASE_URL,
   ) {
-    if (!apiKey || apiKey.length === 0) {
-      throw new Error(
-        'PolygonQuoteFetcher: apiKey is required (POLYGON_API_KEY secret missing).',
-      );
-    }
+    // LAZY: do NOT throw on empty apiKey here. broker-bootstrap constructs
+    // this fetcher in creds-free CI harnesses; the key check is deferred to
+    // fetchQuote so import / construction remains side-effect-free.
   }
 
   async fetchQuote(symbol: string, _ts: Date): Promise<BrokerQuote> {
+    if (!this.apiKey || this.apiKey.length === 0) {
+      throw new PolygonCredentialError(
+        'PolygonQuoteFetcher: POLYGON_API_KEY is required to fetch quotes ' +
+        '(set the secret or override with LONGSHORT_QUOTE_FEED=alpaca to revert).',
+      );
+    }
     const url =
       `${this.baseUrl}/v2/last/nbbo/${encodeURIComponent(symbol)}` +
       `?apiKey=${encodeURIComponent(this.apiKey)}`;
