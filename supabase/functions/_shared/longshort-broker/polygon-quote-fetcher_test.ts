@@ -8,6 +8,7 @@ import {
   PolygonQuoteFetcher,
   polygonNanosToDate,
   NANOS_PER_MS,
+  PolygonCredentialError,
 } from './polygon-quote-fetcher.ts';
 import { buildVerifyQuoteFreshnessSpec } from '../longshort-verifiers/verify_quote_freshness.ts';
 
@@ -73,6 +74,20 @@ Deno.test('(5) PolygonQuoteFetcher: throws on malformed body (missing results.t)
     () => f.fetchQuote('AAPL', new Date(KNOWN_MS)),
     Error,
     'malformed response',
+  );
+});
+
+// LAZY-CONSTRUCTION / FAIL-LOUD-AT-RUNTIME guard. Construction with an empty
+// key must NOT throw (preserves broker-bootstrap's creds-free-construction
+// invariant). The first fetchQuote with a missing key MUST throw a typed
+// PolygonCredentialError (preserves prod-misconfig protection).
+Deno.test('(8) PolygonQuoteFetcher: construction is creds-free; first fetchQuote with empty key throws PolygonCredentialError', async () => {
+  // Construction with empty key — must NOT throw.
+  const f = new PolygonQuoteFetcher('', fixedFetch(200, '{}'));
+  await assertRejects(
+    () => f.fetchQuote('AAPL', new Date(KNOWN_MS)),
+    PolygonCredentialError,
+    'POLYGON_API_KEY is required',
   );
 });
 

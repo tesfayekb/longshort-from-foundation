@@ -204,13 +204,13 @@ export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {})
   if (quoteFeed === 'alpaca') {
     quoteFetcher = new AlpacaQuoteFetcher(client);
   } else {
-    const polyKey = Deno.env.get('POLYGON_API_KEY');
-    if (!polyKey) {
-      throw new Error(
-        'broker-bootstrap: POLYGON_API_KEY is required for the default polygon quote feed; ' +
-        'set the secret or override with LONGSHORT_QUOTE_FEED=alpaca to revert.',
-      );
-    }
+    // LAZY: do NOT throw at construction when POLYGON_API_KEY is absent.
+    // The module's creds-free-construction invariant (see header at L19-20,
+    // L109, L163-169) mirrors AlpacaPaperClient's deferred credential check.
+    // PolygonQuoteFetcher fails loud on first fetchQuote when the key is
+    // missing, preserving prod-misconfig protection without breaking
+    // import-safe / CI-test construction.
+    const polyKey = Deno.env.get('POLYGON_API_KEY') ?? '';
     quoteFetcher = new PolygonQuoteFetcher(polyKey);
   }
   const base: BrokerInterfaces = {
