@@ -105,6 +105,7 @@ export type RankerOrchestratorResult =
   | {
       outcome: 'completed';
       as_of_date: string;
+      intraday_slot: number;
       vectors_read: number;
       rankings_written: number;
       book_size_long: number;
@@ -115,6 +116,7 @@ export type RankerOrchestratorResult =
   | {
       outcome: 'failed';
       as_of_date: string;
+      intraday_slot: number;
       vectors_read: number;
       rankings_written: number;
       book_size_long: number;
@@ -135,7 +137,13 @@ type CFVReadRow = {
 
 export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
   return {
-    async run(as_of: Date): Promise<RankerOrchestratorResult> {
+    async run(
+      as_of: Date,
+      opts?: { intraday_slot?: number },
+    ): Promise<RankerOrchestratorResult> {
+      // DEC-070 clause (d) / FP-057 Sub-step 3: intraday slot. Default 0 =
+      // legacy daily path (Sub-step 1 invariant). Intraday tick passes >=1.
+      const intraday_slot = opts?.intraday_slot ?? 0;
       // Single as_of-derived timestamp; never wall-clock (DEC-034 (4)).
       const as_of_iso = as_of.toISOString();
       const as_of_date = as_of_iso.slice(0, 10);
@@ -149,6 +157,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
             .select('ticker, features, gics_sector, coverage_count, excluded_reason')
             .eq('operator_id', ctx.operator_id)
             .eq('as_of_date', as_of_date)
+            .eq('intraday_slot', intraday_slot)
             .is('excluded_reason', null)
             .range(from, to),
         );
@@ -164,6 +173,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         return {
           outcome: 'failed',
           as_of_date,
+          intraday_slot,
           vectors_read: 0,
           rankings_written: 0,
           book_size_long: 0,
@@ -201,6 +211,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         return {
           outcome: 'failed',
           as_of_date,
+          intraday_slot,
           vectors_read,
           rankings_written: 0,
           book_size_long: 0,
@@ -217,6 +228,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         return {
           outcome: 'failed',
           as_of_date,
+          intraday_slot,
           vectors_read,
           rankings_written: 0,
           book_size_long: 0,
@@ -235,6 +247,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         return {
           outcome: 'failed',
           as_of_date,
+          intraday_slot,
           vectors_read,
           rankings_written: 0,
           book_size_long: 0,
@@ -260,6 +273,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
           return {
             outcome: 'failed',
             as_of_date,
+            intraday_slot,
             vectors_read,
             rankings_written: 0,
             book_size_long: 0,
@@ -273,6 +287,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
           return {
             outcome: 'failed',
             as_of_date,
+            intraday_slot,
             vectors_read,
             rankings_written: 0,
             book_size_long: 0,
@@ -287,6 +302,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
           return {
             outcome: 'failed',
             as_of_date,
+            intraday_slot,
             vectors_read,
             rankings_written: 0,
             book_size_long: 0,
@@ -329,6 +345,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
             return {
               outcome: 'failed',
               as_of_date,
+              intraday_slot,
               vectors_read,
               rankings_written: 0,
               book_size_long: 0,
@@ -340,6 +357,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
           return {
             outcome: 'failed',
             as_of_date,
+            intraday_slot,
             vectors_read,
             rankings_written: 0,
             book_size_long: 0,
@@ -359,6 +377,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
           return {
             outcome: 'failed',
             as_of_date,
+            intraday_slot,
             vectors_read,
             rankings_written: 0,
             book_size_long: 0,
@@ -384,7 +403,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         gics_sector: r.gics_sector,
         computed_at: as_of_iso,
         // DEC-070 clause (e) substrate dual-capture plumbing — daily writer = slot 0.
-        intraday_slot: 0,
+        intraday_slot,
       }));
 
       let rankings_written = 0;
@@ -397,6 +416,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
           return {
             outcome: 'failed',
             as_of_date,
+            intraday_slot,
             vectors_read,
             rankings_written,
             book_size_long: 0,
@@ -419,7 +439,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         ranker_source: b.ranker_source,
         computed_at: as_of_iso,
         // DEC-070 clause (e) substrate dual-capture plumbing — daily writer = slot 0.
-        intraday_slot: 0,
+        intraday_slot,
       }));
 
       let book_size_long = 0;
@@ -440,6 +460,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
           return {
             outcome: 'failed',
             as_of_date,
+            intraday_slot,
             vectors_read,
             rankings_written,
             book_size_long,
@@ -457,6 +478,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
       return {
         outcome: 'completed',
         as_of_date,
+        intraday_slot,
         vectors_read,
         rankings_written,
         book_size_long,

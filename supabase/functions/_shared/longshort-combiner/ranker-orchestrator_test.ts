@@ -217,7 +217,7 @@ function makeSupabase(opts: {
   return { supabase, calls };
 }
 
-Deno.test('(rorch-1) read filters: eq(operator_id), eq(as_of_date), is(excluded_reason,null)', async () => {
+Deno.test('(rorch-1) read filters: eq(operator_id), eq(as_of_date), eq(intraday_slot), is(excluded_reason,null)', async () => {
   const rows = Array.from({ length: 40 }, (_, i) =>
     fullIncludedRow(`T${i.toString().padStart(3, '0')}`, i * 0.1),
   );
@@ -226,9 +226,13 @@ Deno.test('(rorch-1) read filters: eq(operator_id), eq(as_of_date), is(excluded_
 
   assertEquals(calls.cfvSelect, 'ticker, features, gics_sector, coverage_count, excluded_reason');
   const eqs = calls.cfvFilters.filter((f) => f.op === 'eq');
-  assertEquals(eqs.length, 2);
+  // DEC-070 clause (d) / FP-057 Sub-step 3 — partial-assemble guard:
+  // the ranker's CFV read is now slot-eq-filtered so rank for slot N
+  // never poisons on slot-M rows (cross-slot row safety).
+  assertEquals(eqs.length, 3);
   assertEquals(eqs[0], { op: 'eq', col: 'operator_id', val: OPERATOR_ID });
   assertEquals(eqs[1], { op: 'eq', col: 'as_of_date', val: AS_OF_DATE });
+  assertEquals(eqs[2], { op: 'eq', col: 'intraday_slot', val: 0 });
   const isFilters = calls.cfvFilters.filter((f) => f.op === 'is');
   assertEquals(isFilters.length, 1);
   assertEquals(isFilters[0], { op: 'is', col: 'excluded_reason', val: null });
