@@ -734,6 +734,8 @@ export interface PlanRebalanceParams {
   leverage?: number;
   noopPct?: number;
   noopFloorUsd?: number;
+  /** DEC-070 clause (b): see ComputeDeltasParams.workingOrders. */
+  workingOrders?: readonly WorkingOrderView[];
 }
 
 export interface PlanRebalanceResult {
@@ -760,6 +762,7 @@ export function planRebalance(p: PlanRebalanceParams): PlanRebalanceResult {
     ts: p.ts,
     noopPct: p.noopPct,
     noopFloorUsd: p.noopFloorUsd,
+    workingOrders: p.workingOrders,
   });
   return { selected: sel.selected, deltas, summary: sel.summary };
 }
