@@ -79,6 +79,16 @@ import { AlpacaPositionFetcher } from '../longshort-broker/alpaca-position-fetch
 import { AlpacaLocateFetcher } from '../longshort-broker/alpaca-locate-fetcher.ts';
 import { AlpacaHaltStatusFetcher } from '../longshort-broker/alpaca-halt-status-fetcher.ts';
 import { AlpacaShortabilityFetcher } from '../longshort-broker/alpaca-shortability-fetcher.ts';
+// ── FEED-FIX (post-ACT-336 / DEC-068 clause-(r) in flight) ───────────────
+// PolygonQuoteFetcher REPLACES AlpacaQuoteFetcher at the BrokerQuoteFetcher
+// seam. The Q4 probe (corr 4237512b book) measured Alpaca IEX-only quotes
+// fabricating prices at median 58.63 bp / P95 265.91 bp divergence vs the
+// Polygon consolidated NBBO (gate 5 bp / 20 bp — tripped 11.7×/13.3×).
+// ENSG collapsed 689 bp → 28 bp. The verify_quote_freshness gate (5 s)
+// is PRESERVED — it now gates a real feed instead of a fabricated one.
+// Env-flag `LONGSHORT_QUOTE_FEED=alpaca` reverts to the legacy fetcher
+// (operator-only emergency lever; default is polygon).
+import { PolygonQuoteFetcher } from '../longshort-broker/polygon-quote-fetcher.ts';
 
 /** The four broker surfaces `advanceTick` needs + the in-flight
  *  reconstruction callable that satisfies the E3 SURFACE-1 invariant. */
@@ -184,6 +194,25 @@ export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {})
     || shortabilityAvailableEnv === ''
     || shortabilityAvailableEnv === 'true'
     || shortabilityAvailableEnv === '1';
+  // ── QUOTE-FEED SELECTION (FEED-FIX) ─────────────────────────────────
+  // Default = polygon (consolidated SIP via /v2/last/nbbo); operator
+  // can revert by setting LONGSHORT_QUOTE_FEED=alpaca. Polygon path
+  // requires POLYGON_API_KEY (already provisioned for the universe
+  // enrichment + Q4 probe paths).
+  const quoteFeed = (Deno.env.get('LONGSHORT_QUOTE_FEED') ?? 'polygon').toLowerCase();
+  let quoteFetcher;
+  if (quoteFeed === 'alpaca') {
+    quoteFetcher = new AlpacaQuoteFetcher(client);
+  } else {
+    const polyKey = Deno.env.get('POLYGON_API_KEY');
+    if (!polyKey) {
+      throw new Error(
+        'broker-bootstrap: POLYGON_API_KEY is required for the default polygon quote feed; ' +
+        'set the secret or override with LONGSHORT_QUOTE_FEED=alpaca to revert.',
+      );
+    }
+    quoteFetcher = new PolygonQuoteFetcher(polyKey);
+  }
   const base: BrokerInterfaces = {
     acceptanceFetcher: new AlpacaOrderAcceptanceFetcher(client),
     fillFetcher: new AlpacaFillFetcher(client),
@@ -191,7 +220,7 @@ export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {})
     canceller: new AlpacaOrderCanceller(client),
     reconstructInFlight: (ts: Date) => openOrders.listOpenInFlight(ts),
     // ── ACT-317 (E5.5 Phase-1) — placement-path adapters (LAZY). ────────
-    quoteFetcher: new AlpacaQuoteFetcher(client),
+    quoteFetcher,
     buyingPowerFetcher: new AlpacaBuyingPowerFetcher(client),
     positionFetcher: new AlpacaPositionFetcher(client),
     haltStatusFetcher: new AlpacaHaltStatusFetcher(client),
