@@ -1,10 +1,11 @@
 {
-  "_comment": "Root deno.json — Catalog #58 RESOLVED-structurally (Option 2). The root previously had NO deno.json, which made root/deno.lock the recurring victim of the Lovable Deno 2.x sandbox's v5 rewrites (no project-anchor to make lock-management deterministic). This file mirrors supabase/functions/deno.json's relevant constraints so the root is a first-class Deno project. The structural recurrence prevention is the CI auto-restore step (.github/workflows/strong-evidence.yml Gate 0a-pre) which regenerates any v5 lock back to v3 under the pinned Deno 1.46.3 BEFORE Gate 0a reads it — recurrence becomes self-healing instead of fail-loud.",
+  "_comment": "Root deno.json — Catalog #58 RESOLVED-structurally (Option 2). The root previously had NO deno.json, which made root/deno.lock the recurring victim of the Lovable Deno 2.x sandbox's v5 rewrites. This file anchors the root as a first-class Deno project. The structural recurrence prevention is the CI auto-restore step (.github/workflows/strong-evidence.yml Gate 0a-pre) which regenerates any v5 lock back to v3 under the pinned Deno 1.46.3 BEFORE Gate 0a reads it. NOTE on `exclude`: the top-level `exclude` field is APPLIED TO ALL SUBCOMMANDS including `deno test` — even when a specific file path under an excluded dir is passed explicitly on the CLI. Listing `supabase/functions/` here therefore caused Gate 3 (longshort-verifiers_test.ts under supabase/functions/_shared/) to fail with `error: No test modules found` (root cause of the Gate-3 RED after the self-heal landed). We scope exclusions to `test.exclude` (compile/cache discovery still walks the tree normally — covered by each subcommand's own filters and by the functions tree's own nested deno.json). DO NOT re-add `supabase/functions/` to the top-level `exclude`.",
   "lock": "deno.lock",
-  "exclude": [
-    "node_modules/",
-    "supabase/functions/",
-    "dist/",
-    "build/"
-  ]
+  "test": {
+    "exclude": [
+      "node_modules/",
+      "dist/",
+      "build/"
+    ]
+  }
 }
