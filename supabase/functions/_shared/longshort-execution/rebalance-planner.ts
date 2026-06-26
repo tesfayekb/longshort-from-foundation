@@ -685,9 +685,18 @@ export function computeDeltas(p: ComputeDeltasParams): ExecutionDelta[] {
       continue;
     }
 
+    // Side resolution: target wins, else current, else infer from the
+    // working order (orphan-working case: a sell-to-close that landed after
+    // the position cleared).
+    const sideFromWorking: 'long' | 'short' | null = !target && !current && working_adj !== 0
+      ? (p.workingOrders?.find((w) => w.symbol === symbol)?.side ?? null)
+      : null;
+    const resolvedSide: 'long' | 'short' =
+      target?.side ?? current?.side ?? sideFromWorking ?? 'long';
+
     out.push({
       symbol,
-      side: target?.side ?? current!.side,
+      side: resolvedSide,
       intent,
       delta_notional: intent === 'close' ? -current_mv : delta_notional,
       target_notional: (intent === 'close' || (!target && !current)) ? 0 : target_notional,
