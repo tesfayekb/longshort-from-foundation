@@ -76,6 +76,7 @@ export type FeatureAssemblyResult =
   | {
       outcome: 'completed';
       as_of_date: string;
+      intraday_slot: number;
       universe_size: number;
       persisted_count: number;
       included_count: number;
@@ -84,6 +85,7 @@ export type FeatureAssemblyResult =
   | {
       outcome: 'failed';
       as_of_date: string;
+      intraday_slot: number;
       universe_size: number;
       persisted_count: number;
       included_count: number;
@@ -102,7 +104,14 @@ function emptyExcludedCounter(): Record<ExcludedReason, number> {
 
 export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
   return {
-    async run(as_of: Date): Promise<FeatureAssemblyResult> {
+    async run(
+      as_of: Date,
+      opts?: { intraday_slot?: number },
+    ): Promise<FeatureAssemblyResult> {
+      // DEC-070 clause (d) / FP-057 Sub-step 3: intraday slot. Default = 0
+      // preserves the legacy daily-build identity (Sub-step 1 invariant).
+      // The intraday tick (longshort-combiner-tick) passes slot >= 1.
+      const intraday_slot = opts?.intraday_slot ?? 0;
       // Single as_of-derived timestamp; never wall-clock (DEC-034).
       const as_of_iso = as_of.toISOString();
       const as_of_date = as_of_iso.slice(0, 10);
@@ -131,6 +140,7 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         return {
           outcome: 'failed',
           as_of_date,
+          intraday_slot,
           universe_size: 0,
           persisted_count: 0,
           included_count: 0,
@@ -166,6 +176,7 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         return {
           outcome: 'failed',
           as_of_date,
+          intraday_slot,
           universe_size: 0,
           persisted_count: 0,
           included_count: 0,
@@ -220,6 +231,7 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         return {
           outcome: 'failed',
           as_of_date,
+          intraday_slot,
           universe_size: universe.length,
           persisted_count: 0,
           included_count: 0,
@@ -301,11 +313,10 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         coverage_count: r.coverage_count,
         excluded_reason: r.excluded_reason,
         computed_at: as_of_iso,
-        // DEC-070 clause (e) substrate dual-capture plumbing: daily writer =
-        // slot 0. Once intraday signals lift (FP-057 Sub-step 4), the
-        // intraday writer will set non-zero slots. Schema PK now requires
-        // this column.
-        intraday_slot: 0,
+        // DEC-070 clause (d) / FP-057 Sub-step 3: slot threaded from `opts`.
+        // Daily writers pass slot=0 (default); the intraday tick passes
+        // a monotonic slot N >= 1. Schema PK includes this column.
+        intraday_slot,
       }));
 
       let persisted_count = 0;
@@ -318,6 +329,7 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
           return {
             outcome: 'failed',
             as_of_date,
+            intraday_slot,
             universe_size: universe.length,
             persisted_count,
             included_count,
@@ -331,6 +343,7 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
       return {
         outcome: 'completed',
         as_of_date,
+        intraday_slot,
         universe_size: universe.length,
         persisted_count,
         included_count,

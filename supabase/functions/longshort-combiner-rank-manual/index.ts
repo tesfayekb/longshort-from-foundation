@@ -29,6 +29,8 @@ import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 import { createRankerOrchestrator } from '../_shared/longshort-combiner/ranker-orchestrator.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
+// DEC-070 clause (d) / FP-057 Sub-step 3: the daily/manual path owns slot 0.
+const DAILY_INTRADAY_SLOT = 0;
 
 Deno.serve(createHandler(async (req: Request) => {
   if (req.method !== 'POST') {
@@ -70,6 +72,7 @@ Deno.serve(createHandler(async (req: Request) => {
     metadata: {
       operator_id: DEFAULT_OPERATOR_ID,
       as_of: as_of.toISOString(),
+      intraday_slot: DAILY_INTRADAY_SLOT,
       trigger: 'manual',
     },
   });
@@ -95,6 +98,7 @@ Deno.serve(createHandler(async (req: Request) => {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
         as_of_date: result.as_of_date,
+        intraday_slot: result.intraday_slot,
         outcome: result.outcome,
         vectors_read: result.vectors_read,
         rankings_written: result.rankings_written,
@@ -131,6 +135,7 @@ Deno.serve(createHandler(async (req: Request) => {
       metadata: {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
+        intraday_slot: DAILY_INTRADAY_SLOT,
         error: e instanceof Error ? e.message : String(e),
         stage: 'orchestrator_throw',
         trigger: 'manual',

@@ -43,6 +43,11 @@ import { persistCronLastFire } from '../_shared/persist-cron-last-fire.ts';
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const JOB_REGISTRY_ID = 'longshort.combiner_assemble.compute';
 const KILL_SWITCH_ID = '__kill_switch__';
+// DEC-070 clause (d) / FP-057 Sub-step 3: the date-grain daily cron owns
+// slot 0 (Sub-step 1 invariant). The intraday tick assigns slot >= 1.
+// Tagging the .started / .completed / .skipped / .failed envelope here
+// makes the rank gate's slot-aware lookup strict for the daily path.
+const DAILY_INTRADAY_SLOT = 0;
 
 async function isRowDisarmed(id: string): Promise<boolean> {
   const { data } = await supabaseAdmin
@@ -69,6 +74,7 @@ Deno.serve(createHandler(async (req: Request) => {
     metadata: {
       operator_id: DEFAULT_OPERATOR_ID,
       as_of: as_of.toISOString(),
+      intraday_slot: DAILY_INTRADAY_SLOT,
       trigger: 'cron',
     },
   });
@@ -83,6 +89,7 @@ Deno.serve(createHandler(async (req: Request) => {
       metadata: {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
+        intraday_slot: DAILY_INTRADAY_SLOT,
         reason: 'global_kill_switch_active',
         trigger: 'cron',
       },
@@ -107,6 +114,7 @@ Deno.serve(createHandler(async (req: Request) => {
       metadata: {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
+        intraday_slot: DAILY_INTRADAY_SLOT,
         reason: 'job_disarmed',
         trigger: 'cron',
       },
@@ -139,6 +147,7 @@ Deno.serve(createHandler(async (req: Request) => {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
         as_of_date: result.as_of_date,
+        intraday_slot: result.intraday_slot,
         outcome: result.outcome,
         universe_size: result.universe_size,
         persisted_count: result.persisted_count,
@@ -177,6 +186,7 @@ Deno.serve(createHandler(async (req: Request) => {
       metadata: {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
+        intraday_slot: DAILY_INTRADAY_SLOT,
         error: e instanceof Error ? e.message : String(e),
         stage: 'orchestrator_throw',
         trigger: 'cron',

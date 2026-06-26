@@ -60,6 +60,11 @@ const ASSEMBLE_COMPLETED_ACTIONS = [
   'longshort.combiner.assemble.completed',
   'longshort.combiner.assemble.manual_completed',
 ];
+// DEC-070 clause (d) / FP-057 Sub-step 3: the date-grain daily cron owns
+// slot 0 (Sub-step 1 invariant). The intraday tick runs its own
+// slot-aware assemble.completed → rank for slot >= 1 via
+// longshort-combiner-tick.
+const DAILY_INTRADAY_SLOT = 0;
 
 async function isRowDisarmed(id: string): Promise<boolean> {
   const { data } = await supabaseAdmin
@@ -76,16 +81,29 @@ async function isRowDisarmed(id: string): Promise<boolean> {
  * Defensive: on query error returns false (treats as "not verifiable" →
  * gate skips the rank to preserve the structural guarantee).
  */
-async function assembleCompletedForAsOfDate(as_of_date: string): Promise<boolean> {
+/**
+ * DEC-070 clause (d) cross-cutting (g): the rank gate is now slot-aware.
+ * The daily path keys on slot 0; the intraday tick keys on its assigned
+ * monotonic slot. Without this widening, rank for slot N would fire on
+ * a partial slot-N assemble (some slot-N rows present ≠ slot-N
+ * `.completed` emitted) — the partial-assemble race. The orchestrator
+ * emits `.completed` ONLY AFTER the chunked UPSERT lands, so this gate
+ * is the structural guarantee of slot-N atomicity at the rank boundary.
+ */
+async function assembleCompletedForAsOfDateSlot(
+  as_of_date: string,
+  intraday_slot: number,
+): Promise<boolean> {
   const { data, error } = await supabaseAdmin
     .from('longshort_audit_logs')
     .select('id')
     .in('action', ASSEMBLE_COMPLETED_ACTIONS)
     .eq('metadata->>as_of_date', as_of_date)
+    .eq('metadata->>intraday_slot', String(intraday_slot))
     .limit(1);
   if (error) {
     console.error(
-      `[longshort-combiner-rank] assemble-completion gate query failed: ${error.message}`,
+      `[longshort-combiner-rank] assemble-completion gate query failed (slot=${intraday_slot}): ${error.message}`,
     );
     return false;
   }
@@ -109,6 +127,7 @@ Deno.serve(createHandler(async (req: Request) => {
       operator_id: DEFAULT_OPERATOR_ID,
       as_of: as_of.toISOString(),
       as_of_date,
+      intraday_slot: DAILY_INTRADAY_SLOT,
       trigger: 'cron',
     },
   });
@@ -123,6 +142,7 @@ Deno.serve(createHandler(async (req: Request) => {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
         as_of_date,
+        intraday_slot: DAILY_INTRADAY_SLOT,
         reason: 'global_kill_switch_active',
         trigger: 'cron',
       },
@@ -148,6 +168,7 @@ Deno.serve(createHandler(async (req: Request) => {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
         as_of_date,
+        intraday_slot: DAILY_INTRADAY_SLOT,
         reason: 'job_disarmed',
         trigger: 'cron',
       },
@@ -164,7 +185,7 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   // ── Gate 3: assemble-completion (per-as_of structural guarantee) ────────
-  if (!(await assembleCompletedForAsOfDate(as_of_date))) {
+  if (!(await assembleCompletedForAsOfDateSlot(as_of_date, DAILY_INTRADAY_SLOT))) {
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
       action: 'longshort.combiner.rank.skipped',
@@ -173,6 +194,7 @@ Deno.serve(createHandler(async (req: Request) => {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
         as_of_date,
+        intraday_slot: DAILY_INTRADAY_SLOT,
         reason: 'assemble_incomplete_for_as_of',
         trigger: 'cron',
       },
@@ -206,6 +228,7 @@ Deno.serve(createHandler(async (req: Request) => {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
         as_of_date: result.as_of_date,
+        intraday_slot: result.intraday_slot,
         outcome: result.outcome,
         vectors_read: result.vectors_read,
         rankings_written: result.rankings_written,
@@ -247,6 +270,7 @@ Deno.serve(createHandler(async (req: Request) => {
         operator_id: DEFAULT_OPERATOR_ID,
         as_of: as_of.toISOString(),
         as_of_date,
+        intraday_slot: DAILY_INTRADAY_SLOT,
         error: e instanceof Error ? e.message : String(e),
         stage: 'orchestrator_throw',
         trigger: 'cron',
