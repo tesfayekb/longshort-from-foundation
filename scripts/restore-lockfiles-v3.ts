@@ -106,6 +106,18 @@ function readVersionField(path: string): string | null {
   }
 }
 
+async function denoMajorVersion(): Promise<number> {
+  try {
+    const cmd = new Deno.Command('deno', { args: ['--version'], stdout: 'piped' });
+    const { stdout } = await cmd.output();
+    const txt = new TextDecoder().decode(stdout);
+    const m = txt.match(/deno\s+(\d+)\./);
+    return m ? Number(m[1]) : 1;
+  } catch {
+    return 1;
+  }
+}
+
 function walkTests(rootDir: string, suffix: string, excludeDirs: string[]): string[] {
   const out: string[] = [];
   const stack: string[] = [rootDir];
