@@ -301,6 +301,11 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         coverage_count: r.coverage_count,
         excluded_reason: r.excluded_reason,
         computed_at: as_of_iso,
+        // DEC-070 clause (e) substrate dual-capture plumbing: daily writer =
+        // slot 0. Once intraday signals lift (FP-057 Sub-step 4), the
+        // intraday writer will set non-zero slots. Schema PK now requires
+        // this column.
+        intraday_slot: 0,
       }));
 
       let persisted_count = 0;
@@ -308,7 +313,7 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         const chunk = persistPayload.slice(i, i + UPSERT_CHUNK_SIZE);
         const { error: upErr } = await ctx.supabase
           .from('combiner_feature_vectors')
-          .upsert(chunk, { onConflict: 'operator_id,as_of_date,ticker' });
+          .upsert(chunk, { onConflict: 'operator_id,as_of_date,ticker,intraday_slot' });
         if (upErr) {
           return {
             outcome: 'failed',

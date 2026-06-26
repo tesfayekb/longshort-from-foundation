@@ -316,7 +316,11 @@ export function createForwardReturnOrchestrator(
       }
 
       // ── Step 6: chunked UPSERT ──
-      const onConflict = 'operator_id,source_table,variant,seed_as_of_date,ticker,horizon_td';
+      // DEC-070 clause (a)/(e): onConflict now includes intraday_slot. The
+      // T+H horizon arithmetic in `accrueReturns` is UNCHANGED for slot 0
+      // (DEC-064 §6.1/6.2 algorithm-lock preserved — slot is an additive
+      // partition within seed_as_of_date, not a date-axis redefinition).
+      const onConflict = 'operator_id,source_table,variant,seed_as_of_date,ticker,horizon_td,intraday_slot';
       let rows_written = 0;
       for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
         const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE).map((r) => ({
@@ -333,6 +337,8 @@ export function createForwardReturnOrchestrator(
           horizon_close_date: r.horizon_close_date,
           price_source_status: r.price_source_status,
           computed_at: as_of_iso,
+          // DEC-070 clause (e) substrate dual-capture plumbing — daily writer = slot 0.
+          intraday_slot: 0,
         }));
         const { error: upErr } = await ctx.supabase
           .from('combiner_forward_returns')

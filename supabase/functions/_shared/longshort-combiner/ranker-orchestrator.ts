@@ -383,6 +383,8 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         ranker_source: r.ranker_source,
         gics_sector: r.gics_sector,
         computed_at: as_of_iso,
+        // DEC-070 clause (e) substrate dual-capture plumbing — daily writer = slot 0.
+        intraday_slot: 0,
       }));
 
       let rankings_written = 0;
@@ -390,7 +392,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         const chunk = rankingsPayload.slice(i, i + UPSERT_CHUNK_SIZE);
         const { error: upErr } = await ctx.supabase
           .from('combiner_rankings')
-          .upsert(chunk, { onConflict: 'operator_id,as_of_date,ticker' });
+          .upsert(chunk, { onConflict: 'operator_id,as_of_date,ticker,intraday_slot' });
         if (upErr) {
           return {
             outcome: 'failed',
@@ -416,6 +418,8 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         score: b.score,
         ranker_source: b.ranker_source,
         computed_at: as_of_iso,
+        // DEC-070 clause (e) substrate dual-capture plumbing — daily writer = slot 0.
+        intraday_slot: 0,
       }));
 
       let book_size_long = 0;
@@ -425,7 +429,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         const { error: upErr } = await ctx.supabase
           .from('combiner_book')
           .upsert(chunk, {
-            onConflict: 'operator_id,as_of_date,side,rank_within_side',
+            onConflict: 'operator_id,as_of_date,side,rank_within_side,intraday_slot',
           });
         if (upErr) {
           // Tally already-written rows from prior chunks for forensic value.
