@@ -131,7 +131,13 @@ async function regenerate(spec: LockSpec): Promise<void> {
   const lockRelative = spec.lockPath.startsWith(spec.cwd + '/')
     ? spec.lockPath.slice(spec.cwd.length + 1)
     : spec.lockPath;
-  args.push(`--lock=${lockRelative}`, '--lock-write');
+  args.push(`--lock=${lockRelative}`);
+  // Deno 1.x requires the explicit --lock-write flag to write a missing lock;
+  // Deno 2.x removed the flag (writing is implicit when --lock is given and
+  // the file is absent). Detect and adapt so this script is runnable under
+  // either binary — CI uses 1.46.3 (the production target), the Lovable
+  // sandbox uses 2.x (local-verification only).
+  if (await denoMajorVersion() < 2) args.push('--lock-write');
 
   let entryList: string[];
   if (spec.entrypoints.kind === 'static') {
