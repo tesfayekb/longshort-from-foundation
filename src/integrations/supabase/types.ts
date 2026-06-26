@@ -216,6 +216,7 @@ export type Database = {
           excluded_reason: string | null
           features: Json
           gics_sector: string | null
+          intraday_slot: number
           operator_id: string
           ticker: string
         }
@@ -226,6 +227,7 @@ export type Database = {
           excluded_reason?: string | null
           features: Json
           gics_sector?: string | null
+          intraday_slot?: number
           operator_id: string
           ticker: string
         }
@@ -236,6 +238,7 @@ export type Database = {
           excluded_reason?: string | null
           features?: Json
           gics_sector?: string | null
+          intraday_slot?: number
           operator_id?: string
           ticker?: string
         }
