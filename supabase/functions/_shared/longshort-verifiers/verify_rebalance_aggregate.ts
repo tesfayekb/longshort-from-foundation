@@ -30,6 +30,14 @@ export const VERIFY_REBALANCE_AGGREGATE_TOLERANCE = {
   ratio_upper: 1.10,
 };
 
+/** Optional tolerance override. Used by the assertion-closure factory to
+ *  thread env-driven band tightening (the STEP-D prove-by-fire path) WITHOUT
+ *  mutating the default contract. Pure-add; existing callers unaffected. */
+export interface RebalanceAggregateToleranceOverride {
+  ratio_lower?: number;
+  ratio_upper?: number;
+}
+
 // System-level — no internal-expected input beyond operator binding.
 export interface InternalRebalanceAggregate {
   // empty; ground truth is the broker aggregate itself; "expected" is the band, not a value
@@ -45,7 +53,10 @@ interface RebalanceAggregateDivergence extends Record<string, unknown> {
 
 export function buildVerifyRebalanceAggregateSpec(args: {
   operator_id: string;
+  tolerance?: RebalanceAggregateToleranceOverride;
 }): ReconcileCallSpec<InternalRebalanceAggregate, BrokerRebalanceAggregate> {
+  const lower = args.tolerance?.ratio_lower ?? VERIFY_REBALANCE_AGGREGATE_TOLERANCE.ratio_lower;
+  const upper = args.tolerance?.ratio_upper ?? VERIFY_REBALANCE_AGGREGATE_TOLERANCE.ratio_upper;
   return {
     call_name: 'verify_rebalance_aggregate',
     operator_id: args.operator_id,
@@ -53,7 +64,7 @@ export function buildVerifyRebalanceAggregateSpec(args: {
     symbol: null,
     tier: 'strong',
     tolerance_class: 'zero_tolerance',
-    tolerance: { ...VERIFY_REBALANCE_AGGREGATE_TOLERANCE },
+    tolerance: { ratio_lower: lower, ratio_upper: upper },
 
     compute_divergence: (_expected, observed): RebalanceAggregateDivergence => {
       const long = observed.long_gross_dollars;
@@ -64,8 +75,6 @@ export function buildVerifyRebalanceAggregateSpec(args: {
       const ratio = long === 0
         ? (short === 0 ? 1.0 : Number.POSITIVE_INFINITY)
         : short / long;
-      const lower = VERIFY_REBALANCE_AGGREGATE_TOLERANCE.ratio_lower;
-      const upper = VERIFY_REBALANCE_AGGREGATE_TOLERANCE.ratio_upper;
       const within_band = Number.isFinite(ratio) && ratio >= lower && ratio <= upper;
       return {
         long_gross_dollars: long,
@@ -90,12 +99,15 @@ export function buildVerifyRebalanceAggregateSpec(args: {
 }
 
 export async function verifyRebalanceAggregate(
-  args: { operator_id: string },
+  args: { operator_id: string; tolerance?: RebalanceAggregateToleranceOverride },
   fetcher: BrokerRebalanceAggregateFetcher,
   ts: Date,
   fetcher_source: FetcherSource,
 ): Promise<ReconcileResult> {
-  const spec = buildVerifyRebalanceAggregateSpec({ operator_id: args.operator_id });
+  const spec = buildVerifyRebalanceAggregateSpec({
+    operator_id: args.operator_id,
+    ...(args.tolerance ? { tolerance: args.tolerance } : {}),
+  });
   return reconcile(
     spec,
     async (callTs) => {
