@@ -121,7 +121,9 @@ jobs:
       # sandbox's v5 lock (toolchain-parity self-heals only on its own runner).
       # Regenerate before the warm-cache + gate steps consume the lock.
       - name: Auto-restore lockfiles to v3 (Catalog #58 self-heal)
-        run: deno run --allow-read --allow-write --allow-run --allow-env scripts/restore-lockfiles-v3.ts
+        # See toolchain-parity comment: --no-config --no-lock are required so
+        # Deno's startup doesn't trip on the v5 lock before the script can heal it.
+        run: deno run --no-config --no-lock --allow-read --allow-write --allow-run --allow-env scripts/restore-lockfiles-v3.ts
 
       - name: Warm Deno cache (root + supabase/functions)
         run: |
