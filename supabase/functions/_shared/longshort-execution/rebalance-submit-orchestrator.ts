@@ -326,10 +326,63 @@ export async function runRebalanceSubmit(
   // ── FULL_REBALANCE ─────────────────────────────────────────────────────
   const rankings = await deps.rankingsReader(operator_id);
 
+  // ── DEC-070 clause (c) — RANKING-FRESHNESS GATE ──────────────────────
+  // Uses the INJECTED ts (not wall-clock; DEC-034 clause 4). The gate is
+  // SKIPPED when no row carries computed_at (back-compat with legacy
+  // fixtures + the once-daily path's tests). For the production once-
+  // daily strategy: the daily ranking computed at ~10:30 is acted on
+  // within the same fire, so `ts - computed_at` is wall-clock-adjacent
+  // — comfortably under the 600s tolerance. The gate only bites when a
+  // ranking is genuinely stale (the intraday-cadence protection).
+  const tolerance_s = readRankingFreshnessToleranceS();
+  const latestComputedAt = latestRankingsComputedAt(rankings);
+  if (latestComputedAt !== null) {
+    const age_ms = ts.getTime() - latestComputedAt.getTime();
+    const age_s = age_ms / 1000;
+    if (age_s > tolerance_s) {
+      console.warn(
+        'longshort_rebalance.refused.rankings_stale',
+        JSON.stringify({
+          operator_id,
+          ts: ts.toISOString(),
+          latest_computed_at: latestComputedAt.toISOString(),
+          age_s,
+          tolerance_s,
+          correlation_id: correlationId,
+        }),
+      );
+      const resp = buildResponse({
+        mode: 'full_rebalance', operator_id, ts, correlationId,
+        preflight_summary: undefined,
+        submissions: [],
+        candidates: [],
+        htb_marks_persisted: [],
+      });
+      resp.refusal = {
+        reason: 'rankings_stale',
+        latest_computed_at: latestComputedAt.toISOString(),
+        tolerance_s,
+        age_s,
+      };
+      resp.working_orders_observed = 0;
+      return resp;
+    }
+  }
+
   const positions = await listOpenPositions.call(positionFetcher, ts);
   const currentPositions: CurrentPosition[] = positions.map(brokerPositionToCurrent);
   const bp = await buyingPowerFetcher.fetchBuyingPower(ts);
   const capitalBase = bp.account_equity;
+
+  // ── DEC-070 clause (b) — WORKING-ORDER VISIBILITY ─────────────────────
+  // Reuses the EXISTING broker.reconstructInFlight(ts) path (the same
+  // surface the advance-tick uses at tick-scheduler.ts:86). No new
+  // fetcher, no projection table — broker is authoritative in-flight
+  // (E3 SURFACE-1). The planner subtracts working notional from the
+  // effective-current so a name already moving toward target via a
+  // working order does not get double-placed (DW-164).
+  const inFlight = await broker.reconstructInFlight(ts);
+  const workingOrders: WorkingOrderView[] = inFlight.map(inFlightToWorkingView);
 
   const cap = SUBSTITUTION_SCAN_CAP_RANK;
   const candidates: PreflightCandidate[] = [];
@@ -370,6 +423,7 @@ export async function runRebalanceSubmit(
     allocationPct: req.allocationPct,
     noopPct: req.noopPct,
     noopFloorUsd: req.noopFloorUsd,
+    workingOrders,
   });
 
   const submissions = await submitRebalance({
@@ -448,6 +502,7 @@ export async function runRebalanceSubmit(
     submissions,
     candidates,
     htb_marks_persisted,
+    working_orders_observed: workingOrders.length,
   });
 }
 
