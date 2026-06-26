@@ -228,3 +228,46 @@ Deno.test('broker-bootstrap: module-load is creds-free (factory body is lazy —
   // invocation.
   assertEquals(typeof createLiveBrokerInterfaces, 'function');
 });
+
+// ── DW-163: rebalance-aggregate assertion closure is wired & threaded ──
+// The scheduler must invoke the injected closure POST-advance and surface
+// its result on TickSchedulerResult.rebalance_aggregate. This is the
+// proof-by-injection that the gate is wired (not orphaned).
+Deno.test('DW-163: rebalanceAggregateAssertion is invoked once and result is surfaced', async () => {
+  const { broker } = mkBroker([]);
+  const { writer } = captureEvents();
+  const calls: Date[] = [];
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+    rebalanceAggregateAssertion: async (ts) => {
+      calls.push(ts);
+      return {
+        outcome: 'false_positive_within_tolerance',
+        divergence: { long_gross_dollars: 1000, short_gross_dollars: 1000, ratio: 1.0, within_band: true },
+        event_id: 'evt-test-1',
+        action_taken: null,
+        band: { lower: 0.90, upper: 1.10 },
+      };
+    },
+  });
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].toISOString(), TS.toISOString());
+  assert(result.rebalance_aggregate !== null);
+  assertEquals(result.rebalance_aggregate!.outcome, 'false_positive_within_tolerance');
+});
+
+Deno.test('DW-163: rebalanceAggregateAssertion throw is caught and surfaced as null (tick survives)', async () => {
+  const { broker } = mkBroker([]);
+  const { writer } = captureEvents();
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+    rebalanceAggregateAssertion: async () => { throw new Error('boom'); },
+  });
+  assertEquals(result.rebalance_aggregate, null);
+});
