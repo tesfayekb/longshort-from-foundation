@@ -3037,7 +3037,7 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | Field | Value |
 |---|---|
 | **ID** | DW-143 (next-free after DW-142). |
-| **Status** | Open. Registered at DEC-068 / FP-056 / ACT-305 charter landing. v1 paper has no settlement; live-money territory. |
+| **Status** | **SUPERSEDED-BY-SPLIT (ACT-pending, 2026-06-26).** Original DW preserved as historical (umbrella tax/accounting placeholder). The conformance audit (ACT-pending — spec-vs-build) found that an umbrella DW reproduced the accidental-discovery problem it was meant to prevent: a single name hid five distinct verifier-shells over absent machinery. **Successors (granular, named, individually trackable pre-live blockers):** **DW-157** (wash-sale: events table + §7.7 Path A/B writer + §7.5/7.6 30-day conditional-loss blocking + §7.9 trim-loss + `verify_wash_sale_record` wiring); **DW-158** (longshort_lots FIFO UUID ledger + `verify_lot_record` wiring); **DW-159** (realized_pnl table + writer-at-exit + `verify_realized_pnl` wiring); **DW-160** (`verify_settlement_status` + T+1 settlement state); **DW-161** (Polygon corp-actions ingestion + internal CA store + `verify_corporate_action_clean` wiring). The borrow-rate strand previously implied by §3.3d / the umbrella is tracked as **DW-162** (`verify_borrow_rate` + `verify_borrow_persistence` + `BrokerBorrowRateFetcher`). DW-143 is preserved (NOT deleted) as the historical anchor; new work cites the successor IDs directly. |
 | **Tier** | A (live-money territory) — correctness on the tax + reconciliation surface. |
 | **Title** | §7.x settlement / lot accounting / wash-sale tracking (Strong+ FP scope). |
 | **Blocking Dependencies** | Phase-8 live-money authorization; tax/lot ledger schema. |
