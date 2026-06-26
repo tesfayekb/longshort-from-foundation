@@ -25,6 +25,13 @@ export function polygonNanosToDate(nanos: number): Date {
   return new Date(Math.floor(nanos / NANOS_PER_MS));
 }
 
+export class PolygonCredentialError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PolygonCredentialError';
+  }
+}
+
 interface PolygonLastNbboResponse {
   status?: string;
   results?: {
@@ -38,12 +45,16 @@ export class PolygonQuoteFetcher implements BrokerQuoteFetcher {
     private readonly httpFetch: typeof fetch = fetch,
     private readonly baseUrl: string = POLYGON_BASE_URL,
   ) {
-    if (!apiKey || apiKey.length === 0) {
-      throw new Error('PolygonQuoteFetcher: apiKey is required (POLYGON_API_KEY secret missing).');
-    }
+    // LAZY — key check deferred to fetchQuote; see edge-resident header.
   }
 
   async fetchQuote(symbol: string, _ts: Date): Promise<BrokerQuote> {
+    if (!this.apiKey || this.apiKey.length === 0) {
+      throw new PolygonCredentialError(
+        'PolygonQuoteFetcher: POLYGON_API_KEY is required to fetch quotes ' +
+        '(set the secret or override with LONGSHORT_QUOTE_FEED=alpaca to revert).',
+      );
+    }
     const url =
       `${this.baseUrl}/v2/last/nbbo/${encodeURIComponent(symbol)}` +
       `?apiKey=${encodeURIComponent(this.apiKey)}`;
