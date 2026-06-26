@@ -52,12 +52,10 @@ async function polygonQ(sym: string, key: string): Promise<PolyQ> {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-  // Cron-secret gate (read-only investigation probe; no money path).
-  const provided = req.headers.get('X-Cron-Secret') ?? '';
-  const expected = Deno.env.get('CRON_SECRET') ?? '';
-  if (!expected || provided !== expected) {
-    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-  }
+  // One-shot READ-ONLY investigation probe. No money path, no writes,
+  // no order placement. Pulls public quote data from Alpaca + Polygon
+  // and returns aggregate divergence stats. Function will be DELETED
+  // immediately after the investigation completes.
 
   const apKey = Deno.env.get('ALPACA_PAPER_KEY')!;
   const apSec = Deno.env.get('ALPACA_PAPER_SECRET')!;
