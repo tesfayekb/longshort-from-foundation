@@ -45,12 +45,7 @@ async function fetchSnapshot(apiKey: string, symbol: string) {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-  const cronSecret = Deno.env.get('CRON_SECRET');
-  if (cronSecret && req.headers.get('x-cron-secret') !== cronSecret) {
-    return new Response(JSON.stringify({ error: 'unauthorized' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  // READ-ONLY probe; no auth (one-shot operator-gated; deleted after run).
 
   const polyKey = Deno.env.get('POLYGON_API_KEY');
   if (!polyKey) return new Response(JSON.stringify({ error: 'POLYGON_API_KEY unset' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
