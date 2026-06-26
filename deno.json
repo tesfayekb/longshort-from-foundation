@@ -1,0 +1,11 @@
+{
+  "_comment": "Root deno.json — Catalog #58 RESOLVED-structurally (Option 2). The root previously had NO deno.json, which made root/deno.lock the recurring victim of the Lovable Deno 2.x sandbox's v5 rewrites (no project-anchor to make lock-management deterministic). This file mirrors supabase/functions/deno.json's relevant constraints so the root is a first-class Deno project. The structural recurrence prevention is the CI auto-restore step (.github/workflows/strong-evidence.yml Gate 0a-pre) which regenerates any v5 lock back to v3 under the pinned Deno 1.46.3 BEFORE Gate 0a reads it — recurrence becomes self-healing instead of fail-loud.",
+  "lock": "deno.lock",
+  "nodeModulesDir": false,
+  "exclude": [
+    "node_modules/",
+    "supabase/functions/",
+    "dist/",
+    "build/"
+  ]
+}
