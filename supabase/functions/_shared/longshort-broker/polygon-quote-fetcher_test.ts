@@ -9,7 +9,7 @@ import {
   polygonNanosToDate,
   NANOS_PER_MS,
 } from './polygon-quote-fetcher.ts';
-import { verifyQuoteFreshness } from '../longshort-verifiers/verify_quote_freshness.ts';
+import { buildVerifyQuoteFreshnessSpec } from '../longshort-verifiers/verify_quote_freshness.ts';
 
 function fixedFetch(status: number, body: string): typeof fetch {
   return ((..._args: unknown[]) =>
@@ -82,40 +82,43 @@ Deno.test('(5) PolygonQuoteFetcher: throws on malformed body (missing results.t)
 // freshness gate into either "always-pass" (every quote fresh) or
 // "always-fail" (every quote stale). The two cases below pin both ends.
 
+// Drive the freshness gate's pure compute_divergence + classify_outcome
+// directly (no DB writer). This exercises the SAME age arithmetic and the
+// SAME tolerance/classification reconcile() would use; it isolates the
+// nanos-conversion unit-correctness from the lifecycle's DB-write coupling.
+async function runFreshnessGate(fetcher: PolygonQuoteFetcher, callTsMs: number) {
+  const spec = buildVerifyQuoteFreshnessSpec({
+    symbol: 'AAPL',
+    operator_id: '00000000-0000-0000-0000-000000000001',
+  });
+  const observed = await fetcher.fetchQuote('AAPL', new Date(callTsMs));
+  const expected = { max_age_s: 5, call_ts_ms: callTsMs } as unknown as Parameters<typeof spec.compute_divergence>[0];
+  const divergence = spec.compute_divergence(expected, observed) as {
+    quote_age_s: number; max_age_s: number; age_exceeded_by_s: number;
+  };
+  const outcome = spec.classify_outcome(divergence, spec.tolerance);
+  return { outcome, divergence };
+}
+
 Deno.test('(6) freshness gate: 2s-old Polygon quote → false_positive_within_tolerance (< 5s)', async () => {
-  const callTsMs = KNOWN_MS + 2_000; // 2 seconds AFTER the broker quote
   const body = JSON.stringify({
     status: 'OK',
     results: { T: 'AAPL', p: 1, P: 2, s: 1, S: 1, t: KNOWN_NANOS, y: KNOWN_NANOS },
   });
   const f = new PolygonQuoteFetcher('test-key', fixedFetch(200, body));
-  const result = await verifyQuoteFreshness(
-    { symbol: 'AAPL', operator_id: '00000000-0000-0000-0000-000000000001' },
-    f,
-    new Date(callTsMs),
-    'live',
-  );
-  assertEquals(result.outcome, 'false_positive_within_tolerance');
-  const d = result.divergence as { quote_age_s: number };
-  // Sanity: the age is 2.0 (±epsilon) — proves nanos conversion + arithmetic.
-  assert(Math.abs(d.quote_age_s - 2) < 0.01, `age ${d.quote_age_s} should be ~2s`);
+  const { outcome, divergence } = await runFreshnessGate(f, KNOWN_MS + 2_000);
+  assertEquals(outcome, 'false_positive_within_tolerance');
+  assert(Math.abs(divergence.quote_age_s - 2) < 0.01, `age ${divergence.quote_age_s} should be ~2s`);
 });
 
 Deno.test('(7) freshness gate: 10s-old Polygon quote → failure_handled (> 5s max_age)', async () => {
-  const callTsMs = KNOWN_MS + 10_000; // 10 seconds AFTER the broker quote
   const body = JSON.stringify({
     status: 'OK',
     results: { T: 'AAPL', p: 1, P: 2, s: 1, S: 1, t: KNOWN_NANOS, y: KNOWN_NANOS },
   });
   const f = new PolygonQuoteFetcher('test-key', fixedFetch(200, body));
-  const result = await verifyQuoteFreshness(
-    { symbol: 'AAPL', operator_id: '00000000-0000-0000-0000-000000000001' },
-    f,
-    new Date(callTsMs),
-    'live',
-  );
-  assertEquals(result.outcome, 'failure_handled');
-  const d = result.divergence as { quote_age_s: number; age_exceeded_by_s: number };
-  assert(Math.abs(d.quote_age_s - 10) < 0.01, `age ${d.quote_age_s} should be ~10s`);
-  assert(d.age_exceeded_by_s > 0, 'age_exceeded_by_s must be positive');
+  const { outcome, divergence } = await runFreshnessGate(f, KNOWN_MS + 10_000);
+  assertEquals(outcome, 'failure_handled');
+  assert(Math.abs(divergence.quote_age_s - 10) < 0.01, `age ${divergence.quote_age_s} should be ~10s`);
+  assert(divergence.age_exceeded_by_s > 0, 'age_exceeded_by_s must be positive');
 });
