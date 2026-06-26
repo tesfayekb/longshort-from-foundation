@@ -14,11 +14,9 @@
  * Per the investigation prompt: thresholds for PAUSE recommendation are:
  *   median abs > 5bp  OR  p95 abs > 20bp  OR  directional bias > 60%
  */
-import { createClient } from 'jsr:@supabase/supabase-js@2';
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
 };
 
 const SYMBOLS = [
@@ -54,16 +52,12 @@ async function polygonQ(sym: string, key: string): Promise<PolyQ> {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-  // Superadmin gate
-  const auth = req.headers.get('Authorization') ?? '';
-  const supa = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
-    global: { headers: { Authorization: auth } },
-  });
-  const { data: u } = await supa.auth.getUser();
-  if (!u?.user) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-  const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-  const { data: isSA } = await admin.rpc('is_superadmin', { _user_id: u.user.id });
-  if (!isSA) return new Response(JSON.stringify({ error: 'superadmin_required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  // Cron-secret gate (read-only investigation probe; no money path).
+  const provided = req.headers.get('X-Cron-Secret') ?? '';
+  const expected = Deno.env.get('CRON_SECRET') ?? '';
+  if (!expected || provided !== expected) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
 
   const apKey = Deno.env.get('ALPACA_PAPER_KEY')!;
   const apSec = Deno.env.get('ALPACA_PAPER_SECRET')!;
