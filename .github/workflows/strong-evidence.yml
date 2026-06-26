@@ -43,6 +43,17 @@ jobs:
       - name: Install Node dependencies
         run: npm ci || npm install
 
+      # Catalog #58 RESOLVED-structurally (Option 2 auto-restore). The Lovable
+      # Deno 2.x sandbox silently rewrites either deno.lock to v5 on any
+      # `deno cache`/`deno test` invocation; CI's pinned Deno 1.46.3 reads v3
+      # only. Before Gate 0a observes the divergence, regenerate any v5 lock
+      # back to v3 under the pinned binary. Gate 0a remains armed as the
+      # post-heal assertion — if the regen produced anything other than v3,
+      # the gate still fires. Replaces the per-commit manual lock-bump dance
+      # (~5x this session). Script: scripts/restore-lockfiles-v3.ts.
+      - name: Gate 0a-pre — auto-restore lockfiles to v3 (Catalog #58 self-heal)
+        run: deno run --allow-read --allow-write --allow-run --allow-env scripts/restore-lockfiles-v3.ts
+
       # Check (a): both deno.lock files at version 3 (pure JSON read; never invokes
       # deno cache, so it cannot itself trigger a v5 rewrite — the load-bearing invariant).
       - name: Gate 0a — lockfile versions (both locks v3)
@@ -99,6 +110,12 @@ jobs:
           key: deno-${{ runner.os }}-${{ hashFiles('**/deno.lock') }}
           restore-keys: |
             deno-${{ runner.os }}-
+
+      # Catalog #58 self-heal — fresh checkout on this runner still sees the
+      # sandbox's v5 lock (toolchain-parity self-heals only on its own runner).
+      # Regenerate before the warm-cache + gate steps consume the lock.
+      - name: Auto-restore lockfiles to v3 (Catalog #58 self-heal)
+        run: deno run --allow-read --allow-write --allow-run --allow-env scripts/restore-lockfiles-v3.ts
 
       - name: Warm Deno cache (root + supabase/functions)
         run: |
