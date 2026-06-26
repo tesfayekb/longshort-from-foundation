@@ -23,6 +23,8 @@ import {
   type CurrentPosition,
   type ExecutionDelta,
   type RankingRow,
+  type WorkingOrderView,
+  RANKING_FRESHNESS_TOLERANCE_S,
   SUBSTITUTION_SCAN_CAP_RANK,
 } from './rebalance-planner.ts';
 import {
@@ -36,6 +38,7 @@ import {
   classifySubmissionEvent,
 } from './classify-submission-event.ts';
 import type { BrokerPosition } from '../longshort-broker-interfaces.ts';
+import type { InFlightOrder } from './state-machine.ts';
 import {
   createRejectionPropagator,
   createSupabaseHtbCacheWriter,
@@ -93,6 +96,19 @@ export interface RebalanceSubmitResponse {
   long_only_mode: boolean;
   shorts_skipped_locate_unavailable: string[];
   htb_marks_persisted: string[];
+  /** DEC-070 clause (c) — populated iff the planner refused to act because
+   *  the latest `combiner_rankings.computed_at` was older than the tolerance
+   *  vs the injected `ts`. When set, `submissions` is empty + counts zero. */
+  refusal?: {
+    reason: 'rankings_stale';
+    latest_computed_at: string | null;
+    tolerance_s: number;
+    age_s: number | null;
+  };
+  /** DEC-070 clause (b) — count of broker working orders observed at fire
+   *  time (informational; the planner subtracts these from effective
+   *  current before computing deltas). */
+  working_orders_observed?: number;
 }
 
 export interface RebalanceSubmitDeps {
