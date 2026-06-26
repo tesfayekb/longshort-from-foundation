@@ -114,6 +114,26 @@ export interface InFlightOrder {
   provenance: DeltaProvenance;
 }
 
+/**
+ * Filled-quantity hint for a broker-working order (DEC-070 clause b;
+ * FP-057 Sub-step 2). Optional + defaults to 0 so existing test fixtures
+ * and lifecycle paths keep working unchanged. Populated by the open-orders
+ * fetcher (`AlpacaOpenOrdersFetcher.listOpenInFlight`) when the broker
+ * reports a `partially_filled` order so the planner can subtract the
+ * already-filled segment when computing working-notional remainders.
+ *
+ * The filled segment is ALREADY in `position_market_value` (broker truth);
+ * the working segment uses `shares - (filled_qty ?? 0)`. Counting both
+ * without double-counting is the central correctness property tested in
+ * `rebalance-planner-workingorders_test.ts`.
+ */
+// Backwards-compatible augmentation: kept as a separate interface so the
+// canonical `InFlightOrder` shape (consumed by the lifecycle/state-machine
+// transitions) stays byte-identical.
+export interface InFlightOrderFilledHint {
+  filled_qty?: number;
+}
+
 // ── Events feeding the transition function ─────────────────────────
 
 export type StateMachineEvent =
