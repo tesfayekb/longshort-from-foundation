@@ -255,6 +255,7 @@ export type Database = {
           computed_at: string
           horizon_close_date: string | null
           horizon_td: number
+          intraday_slot: number
           operator_id: string
           price_source_status: string
           raw_return: number | null
@@ -270,6 +271,7 @@ export type Database = {
           computed_at?: string
           horizon_close_date?: string | null
           horizon_td: number
+          intraday_slot?: number
           operator_id: string
           price_source_status: string
           raw_return?: number | null
@@ -285,6 +287,7 @@ export type Database = {
           computed_at?: string
           horizon_close_date?: string | null
           horizon_td?: number
+          intraday_slot?: number
           operator_id?: string
           price_source_status?: string
           raw_return?: number | null
