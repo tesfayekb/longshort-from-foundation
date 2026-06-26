@@ -112,6 +112,13 @@ export interface InFlightOrder {
   /** Last observed elapsed-since-submit for Phase-1 (Path 1.C check). */
   pending_elapsed_s: number;
   provenance: DeltaProvenance;
+  /** DEC-070 clause (b) — broker-reported filled share count for a working
+   *  (partially_filled) order. Optional + default 0 so existing fixtures
+   *  stay green; populated by `AlpacaOpenOrdersFetcher`. The planner uses
+   *  `shares - (filled_qty ?? 0)` as the working remainder when computing
+   *  effective-current notional (the filled segment is already counted in
+   *  the broker position market value). */
+  filled_qty?: number;
 }
 
 // ── Events feeding the transition function ─────────────────────────

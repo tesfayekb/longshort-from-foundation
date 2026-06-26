@@ -109,6 +109,19 @@ export const NOOP_PCT = 0.02 as const;
  */
 export const NOOP_FLOOR_USD = 50 as const;
 
+/**
+ * DEC-070 clause (c) — RANKING_FRESHNESS_TOLERANCE: max age, in seconds,
+ * of the latest `combiner_rankings.computed_at` relative to the planner's
+ * injected `ts` (NEVER wall-clock — DEC-034 clause 4). Initial value 600s
+ * = 2 ticks × 5min per master-plan §11.0.7 #1; Phase-7 will tune per
+ * DEC-048's "cadence-is-config, Phase-7-measured" principle.
+ *
+ * The const is the DEFAULT; the orchestrator may override via the env-var
+ * `LONGSHORT_RANKING_FRESHNESS_TOLERANCE_S` (read at the boundary, not
+ * here — purity discipline j.4).
+ */
+export const RANKING_FRESHNESS_TOLERANCE_S = 600 as const;
+
 // ────────────────────────────────────────────────────────────────────────────
 // Typed errors (anti-phantom-defaults; no silent sentinels — DEC-034 (2)).
 // ────────────────────────────────────────────────────────────────────────────
@@ -172,6 +185,11 @@ export interface RankingRow {
   short_score: number;
   gics_sector: string | null;  // nullable per existing book-seeder fixtures
   ranker_source: string;
+  /** DEC-070 clause (c) — optional freshness anchor (ISO string of
+   *  `combiner_rankings.computed_at`). Optional so test fixtures that
+   *  don't model freshness keep working; the orchestrator's ranking-
+   *  freshness gate only bites when at least one row carries a value. */
+  computed_at?: string | null;
 }
 
 /**
@@ -214,6 +232,58 @@ export interface CurrentPosition {
   qty: number;              // signed
   market_value: number;     // signed; |market_value| is the dollar notional currently held
   current_price: number;    // > 0
+}
+
+/**
+ * Working-order projection consumed by the planner (DEC-070 clause b).
+ *
+ * Decoupled from `InFlightOrder` to keep the pure kernel free of the
+ * state-machine type surface — the orchestrator maps `reconstructInFlight()`
+ * output to this narrow shape. Carries the working REMAINDER price basis +
+ * size needed to compute `effective_current = position_mv + Σ working_notional`.
+ *
+ * Notional basis (load-bearing — see clause b prose): use the working
+ * order's `current_limit_price` (the price at which it will fill), NOT
+ * the live quote. The working order represents committed dollars at that
+ * limit; using the quote would double-jitter the delta against quote noise.
+ *
+ * Remaining-qty basis (load-bearing): `remaining = shares − (filled_qty ??
+ * 0)`. The filled segment is ALREADY counted in broker `market_value`; only
+ * the remainder represents incremental notional in flight.
+ */
+export interface WorkingOrderView {
+  symbol: string;
+  /** Position-side semantic the working order moves toward: `buy` open/increase
+   *  for a long → 'long'; `sell` close/decrease for a long → 'long'; etc. */
+  side: 'long' | 'short';
+  broker_side: 'buy' | 'sell';
+  /** Original order qty (broker-reported). */
+  shares: number;
+  /** Broker-reported filled qty for partially_filled orders; default 0. */
+  filled_qty?: number;
+  /** Working limit price — the notional basis. > 0. */
+  current_limit_price: number;
+}
+
+/**
+ * Compute the signed notional adjustment a working order contributes to
+ * effective-current. Convention mirrors `CurrentPosition.market_value`
+ * (long-position positive, short-position positive-magnitude with negative
+ * sign): a long-open BUY adds +notional; a long-close SELL subtracts
+ * notional; a short-open SELL adds −notional (drives mv more negative);
+ * a short-close BUY adds +notional (drives mv toward zero from below).
+ */
+export function workingOrderSignedNotional(o: WorkingOrderView): number {
+  const remaining = Math.max(0, o.shares - (o.filled_qty ?? 0));
+  if (!(remaining > 0) || !(o.current_limit_price > 0)) return 0;
+  const gross = remaining * o.current_limit_price;
+  // Sign rules: the working order moves position mv in the direction of
+  //   long+buy = +gross   (open/increase long)
+  //   long+sell = −gross  (decrease/close long)
+  //   short+sell = −gross (open/increase short, mv more negative)
+  //   short+buy = +gross  (decrease/close short, mv toward zero)
+  if (o.side === 'long') return o.broker_side === 'buy' ? +gross : -gross;
+  return o.broker_side === 'sell' ? -gross : +gross;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -503,6 +573,13 @@ export interface ComputeDeltasParams {
   ts: Date;
   noopPct?: number;
   noopFloorUsd?: number;
+  /** DEC-070 clause (b) — broker working orders (the in-flight set).
+   *  When provided, the delta is computed against
+   *  `effective_current = market_value + Σ workingOrderSignedNotional`
+   *  so a name whose working orders already move it toward target produces
+   *  a noop (the planner does not double-place). Optional + back-compat
+   *  default empty. */
+  workingOrders?: readonly WorkingOrderView[];
 }
 
 export function computeDeltas(p: ComputeDeltasParams): ExecutionDelta[] {
@@ -526,10 +603,27 @@ export function computeDeltas(p: ComputeDeltasParams): ExecutionDelta[] {
     currentBySymbol.set(c.symbol, c);
   }
 
+  // Σ signed working notional per symbol — for the effective-current
+  // adjustment. A symbol with no working orders yields 0 (no adjustment;
+  // back-compat with the once-daily path that never enters the orchestrator
+  // with a non-empty workingOrders set).
+  const workingNotionalBySymbol = new Map<string, number>();
+  if (p.workingOrders) {
+    for (const w of p.workingOrders) {
+      const adj = workingOrderSignedNotional(w);
+      if (adj === 0) continue;
+      workingNotionalBySymbol.set(
+        w.symbol,
+        (workingNotionalBySymbol.get(w.symbol) ?? 0) + adj,
+      );
+    }
+  }
+
   const out: ExecutionDelta[] = [];
   const allSymbols = new Set<string>([
     ...targetsBySymbol.keys(),
     ...currentBySymbol.keys(),
+    ...workingNotionalBySymbol.keys(),
   ]);
 
   for (const symbol of allSymbols) {
@@ -542,32 +636,70 @@ export function computeDeltas(p: ComputeDeltasParams): ExecutionDelta[] {
 
     const target_notional = target?.target_notional ?? 0;
     const current_mv = current?.market_value ?? 0;
-    const delta_notional = target_notional - current_mv;
+    const working_adj = workingNotionalBySymbol.get(symbol) ?? 0;
+    // effective_current = position_mv + Σ signed_working_notional.
+    // The working segment is in flight at the broker — placing another
+    // order against the same target would double-place (DW-164).
+    const effective_current_mv = current_mv + working_adj;
+    const delta_notional = target_notional - effective_current_mv;
     const noop_band = Math.max(noopPct * Math.abs(target_notional), noopFloor);
 
     let intent: DeltaIntent;
     if (!target && current) {
-      intent = 'close';
+      // Close-out path: subtract working adj from current_mv (a working
+      // sell-to-close already reduces the position the broker holds, so the
+      // remaining notional to close is `current_mv + working_adj` in
+      // magnitude — note: working_adj for a sell-to-close on a long is
+      // negative, which correctly shrinks the close-out delta). If working
+      // orders already drive it to ≤ noop, classify as noop.
+      if (Math.abs(effective_current_mv) <= noop_band) {
+        intent = 'noop';
+      } else {
+        intent = 'close';
+      }
     } else if (target && !current) {
       // |target| > 0 by construction (per_name_notional > 0 when book non-empty).
-      intent = Math.abs(target_notional) > 0 ? 'open' : 'noop';
+      // If a working order already moves us to within band of target, noop.
+      if (Math.abs(target_notional) <= 0) {
+        intent = 'noop';
+      } else if (Math.abs(delta_notional) <= noop_band) {
+        intent = 'noop';
+      } else {
+        intent = 'open';
+      }
     } else if (target && current) {
       if (Math.abs(delta_notional) <= noop_band) {
         intent = 'noop';
       } else {
-        intent = Math.abs(target_notional) > Math.abs(current_mv) ? 'increase' : 'decrease';
+        intent = Math.abs(target_notional) > Math.abs(effective_current_mv) ? 'increase' : 'decrease';
       }
+    } else if (working_adj !== 0) {
+      // No target, no position — but a working order exists (e.g. a partial
+      // fill is still in flight after the position closed). Surface as noop:
+      // the working order itself will land and a future tick will plan over
+      // the resulting (re-emerged) position. Avoid placing a contradictory
+      // order against ourselves.
+      intent = 'noop';
     } else {
       // Unreachable: symbol came from union of two non-empty sets.
       continue;
     }
 
+    // Side resolution: target wins, else current, else infer from the
+    // working order (orphan-working case: a sell-to-close that landed after
+    // the position cleared).
+    const sideFromWorking: 'long' | 'short' | null = !target && !current && working_adj !== 0
+      ? (p.workingOrders?.find((w) => w.symbol === symbol)?.side ?? null)
+      : null;
+    const resolvedSide: 'long' | 'short' =
+      target?.side ?? current?.side ?? sideFromWorking ?? 'long';
+
     out.push({
       symbol,
-      side: target?.side ?? current!.side,
+      side: resolvedSide,
       intent,
       delta_notional: intent === 'close' ? -current_mv : delta_notional,
-      target_notional: intent === 'close' ? 0 : target_notional,
+      target_notional: (intent === 'close' || (!target && !current)) ? 0 : target_notional,
       current_market_value: current_mv,
       noop_band_usd: noop_band,
       selection_reason: target?.selection_reason ?? null,
@@ -602,6 +734,8 @@ export interface PlanRebalanceParams {
   leverage?: number;
   noopPct?: number;
   noopFloorUsd?: number;
+  /** DEC-070 clause (b): see ComputeDeltasParams.workingOrders. */
+  workingOrders?: readonly WorkingOrderView[];
 }
 
 export interface PlanRebalanceResult {
@@ -628,6 +762,7 @@ export function planRebalance(p: PlanRebalanceParams): PlanRebalanceResult {
     ts: p.ts,
     noopPct: p.noopPct,
     noopFloorUsd: p.noopFloorUsd,
+    workingOrders: p.workingOrders,
   });
   return { selected: sel.selected, deltas, summary: sel.summary };
 }

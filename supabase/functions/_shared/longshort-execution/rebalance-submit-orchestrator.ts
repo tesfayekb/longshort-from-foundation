@@ -23,6 +23,8 @@ import {
   type CurrentPosition,
   type ExecutionDelta,
   type RankingRow,
+  type WorkingOrderView,
+  RANKING_FRESHNESS_TOLERANCE_S,
   SUBSTITUTION_SCAN_CAP_RANK,
 } from './rebalance-planner.ts';
 import {
@@ -36,6 +38,7 @@ import {
   classifySubmissionEvent,
 } from './classify-submission-event.ts';
 import type { BrokerPosition } from '../longshort-broker-interfaces.ts';
+import type { InFlightOrder } from './state-machine.ts';
 import {
   createRejectionPropagator,
   createSupabaseHtbCacheWriter,
@@ -93,6 +96,19 @@ export interface RebalanceSubmitResponse {
   long_only_mode: boolean;
   shorts_skipped_locate_unavailable: string[];
   htb_marks_persisted: string[];
+  /** DEC-070 clause (c) — populated iff the planner refused to act because
+   *  the latest `combiner_rankings.computed_at` was older than the tolerance
+   *  vs the injected `ts`. When set, `submissions` is empty + counts zero. */
+  refusal?: {
+    reason: 'rankings_stale';
+    latest_computed_at: string | null;
+    tolerance_s: number;
+    age_s: number | null;
+  };
+  /** DEC-070 clause (b) — count of broker working orders observed at fire
+   *  time (informational; the planner subtracts these from effective
+   *  current before computing deltas). */
+  working_orders_observed?: number;
 }
 
 export interface RebalanceSubmitDeps {
@@ -167,23 +183,80 @@ export function createSupabaseRankingsReader(): (operator_id: string) => Promise
   return async (operator_id: string): Promise<RankingRow[]> => {
     const { data: latest, error: e1 } = await supabaseAdmin
       .from('combiner_rankings')
-      .select('as_of_date')
+      .select('as_of_date, computed_at')
       .eq('operator_id', operator_id)
       .order('as_of_date', { ascending: false })
+      .order('computed_at', { ascending: false })
       .limit(1);
     if (e1) throw new Error(`combiner_rankings as_of_date read failed: ${e1.message}`);
     if (!latest || latest.length === 0) return [];
-    const as_of_date = (latest[0] as { as_of_date: string }).as_of_date;
+    const head = latest[0] as { as_of_date: string; computed_at: string | null };
+    const as_of_date = head.as_of_date;
 
     const cap = SUBSTITUTION_SCAN_CAP_RANK;
     const { data: rows, error: e2 } = await supabaseAdmin
       .from('combiner_rankings')
-      .select('ticker, long_rank, short_rank, long_score, short_score, gics_sector, ranker_source')
+      .select('ticker, long_rank, short_rank, long_score, short_score, gics_sector, ranker_source, computed_at')
       .eq('operator_id', operator_id)
       .eq('as_of_date', as_of_date)
       .or(`long_rank.lte.${cap},short_rank.lte.${cap}`);
     if (e2) throw new Error(`combiner_rankings rows read failed: ${e2.message}`);
     return (rows ?? []) as RankingRow[];
+  };
+}
+
+/**
+ * Read the configured ranking-freshness tolerance (seconds). Defaults to
+ * the planner's `RANKING_FRESHNESS_TOLERANCE_S` (600s = 2 ticks × 5min;
+ * §11.0.7 #1) unless `LONGSHORT_RANKING_FRESHNESS_TOLERANCE_S` is set in
+ * the environment. Read at the boundary, never inside the kernel (purity
+ * discipline j.4 + DEC-034 clause 4).
+ */
+export function readRankingFreshnessToleranceS(): number {
+  try {
+    const raw = (globalThis as { Deno?: { env: { get(k: string): string | undefined } } })
+      .Deno?.env.get('LONGSHORT_RANKING_FRESHNESS_TOLERANCE_S');
+    if (raw != null && raw !== '') {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  } catch {
+    // env access denied (e.g. test runner without --allow-env) → default.
+  }
+  return RANKING_FRESHNESS_TOLERANCE_S;
+}
+
+/**
+ * Extract the latest `computed_at` from a rankings set. Returns null if
+ * no row carries one (back-compat with fixtures that omit the field; the
+ * gate is then DISABLED for that call).
+ */
+function latestRankingsComputedAt(rows: readonly RankingRow[]): Date | null {
+  let best: number | null = null;
+  for (const r of rows) {
+    if (r.computed_at == null || r.computed_at === '') continue;
+    const t = Date.parse(r.computed_at);
+    if (!Number.isFinite(t)) continue;
+    if (best == null || t > best) best = t;
+  }
+  return best == null ? null : new Date(best);
+}
+
+/**
+ * Map a broker `InFlightOrder` to the planner's narrow `WorkingOrderView`.
+ * Note: in-flight orders the planner considers are those still working
+ * (phase1_pending or phase2_working — both states reconstructed by
+ * `AlpacaOpenOrdersFetcher`). The planner only cares about working
+ * remainder × limit_price; the lifecycle/state metadata is dropped here.
+ */
+function inFlightToWorkingView(o: InFlightOrder): WorkingOrderView {
+  return {
+    symbol: o.symbol,
+    side: o.side,
+    broker_side: o.broker_side,
+    shares: o.shares,
+    filled_qty: o.filled_qty ?? 0,
+    current_limit_price: o.current_limit_price,
   };
 }
 
@@ -253,10 +326,63 @@ export async function runRebalanceSubmit(
   // ── FULL_REBALANCE ─────────────────────────────────────────────────────
   const rankings = await deps.rankingsReader(operator_id);
 
+  // ── DEC-070 clause (c) — RANKING-FRESHNESS GATE ──────────────────────
+  // Uses the INJECTED ts (not wall-clock; DEC-034 clause 4). The gate is
+  // SKIPPED when no row carries computed_at (back-compat with legacy
+  // fixtures + the once-daily path's tests). For the production once-
+  // daily strategy: the daily ranking computed at ~10:30 is acted on
+  // within the same fire, so `ts - computed_at` is wall-clock-adjacent
+  // — comfortably under the 600s tolerance. The gate only bites when a
+  // ranking is genuinely stale (the intraday-cadence protection).
+  const tolerance_s = readRankingFreshnessToleranceS();
+  const latestComputedAt = latestRankingsComputedAt(rankings);
+  if (latestComputedAt !== null) {
+    const age_ms = ts.getTime() - latestComputedAt.getTime();
+    const age_s = age_ms / 1000;
+    if (age_s > tolerance_s) {
+      console.warn(
+        'longshort_rebalance.refused.rankings_stale',
+        JSON.stringify({
+          operator_id,
+          ts: ts.toISOString(),
+          latest_computed_at: latestComputedAt.toISOString(),
+          age_s,
+          tolerance_s,
+          correlation_id: correlationId,
+        }),
+      );
+      const resp = buildResponse({
+        mode: 'full_rebalance', operator_id, ts, correlationId,
+        preflight_summary: undefined,
+        submissions: [],
+        candidates: [],
+        htb_marks_persisted: [],
+      });
+      resp.refusal = {
+        reason: 'rankings_stale',
+        latest_computed_at: latestComputedAt.toISOString(),
+        tolerance_s,
+        age_s,
+      };
+      resp.working_orders_observed = 0;
+      return resp;
+    }
+  }
+
   const positions = await listOpenPositions.call(positionFetcher, ts);
   const currentPositions: CurrentPosition[] = positions.map(brokerPositionToCurrent);
   const bp = await buyingPowerFetcher.fetchBuyingPower(ts);
   const capitalBase = bp.account_equity;
+
+  // ── DEC-070 clause (b) — WORKING-ORDER VISIBILITY ─────────────────────
+  // Reuses the EXISTING broker.reconstructInFlight(ts) path (the same
+  // surface the advance-tick uses at tick-scheduler.ts:86). No new
+  // fetcher, no projection table — broker is authoritative in-flight
+  // (E3 SURFACE-1). The planner subtracts working notional from the
+  // effective-current so a name already moving toward target via a
+  // working order does not get double-placed (DW-164).
+  const inFlight = await broker.reconstructInFlight(ts);
+  const workingOrders: WorkingOrderView[] = inFlight.map(inFlightToWorkingView);
 
   const cap = SUBSTITUTION_SCAN_CAP_RANK;
   const candidates: PreflightCandidate[] = [];
@@ -297,6 +423,7 @@ export async function runRebalanceSubmit(
     allocationPct: req.allocationPct,
     noopPct: req.noopPct,
     noopFloorUsd: req.noopFloorUsd,
+    workingOrders,
   });
 
   const submissions = await submitRebalance({
@@ -375,6 +502,7 @@ export async function runRebalanceSubmit(
     submissions,
     candidates,
     htb_marks_persisted,
+    working_orders_observed: workingOrders.length,
   });
 }
 
@@ -503,6 +631,7 @@ function buildResponse(args: {
   submissions: SubmissionResult[];
   candidates: readonly PreflightCandidate[];
   htb_marks_persisted: string[];
+  working_orders_observed?: number;
 }): RebalanceSubmitResponse {
   const counts: Record<SubmissionResult['kind'], number> = {
     accepted: 0, rejected: 0, pending_timeout: 0,
@@ -526,7 +655,7 @@ function buildResponse(args: {
     ? args.candidates.filter((c) => c.side === 'short').map((c) => c.symbol)
     : [];
 
-  return {
+  const resp: RebalanceSubmitResponse = {
     status: 'ok',
     mode: args.mode,
     operator_id: args.operator_id,
@@ -541,4 +670,8 @@ function buildResponse(args: {
     shorts_skipped_locate_unavailable,
     htb_marks_persisted: args.htb_marks_persisted,
   };
+  if (args.working_orders_observed !== undefined) {
+    resp.working_orders_observed = args.working_orders_observed;
+  }
+  return resp;
 }

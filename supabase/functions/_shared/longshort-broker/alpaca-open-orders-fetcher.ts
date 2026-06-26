@@ -23,6 +23,7 @@ interface AlpacaOpenOrder {
   status: string;
   limit_price: string | null;
   submitted_at: string | null;
+  filled_qty?: string | null;
 }
 
 const RECONSTRUCTED_PROVENANCE: DeltaProvenance = {
@@ -73,6 +74,17 @@ export class AlpacaOpenOrdersFetcher {
       if (!(limit_price > 0)) continue;
       const qty = parseFloat(o.qty); // allow-bare-parsefloat: DW-058-B1
       if (!(qty > 0)) continue;
+      // DEC-070 clause (b): preserve the broker-reported filled segment so
+      // the planner subtracts it when computing the working remainder. Bad
+      // values (NaN / negative) collapse to 0 — the conservative choice
+      // (treats the whole qty as still working, which can only OVER-noop,
+      // never under-noop, preserving safety).
+      const filled_qty_raw = o.filled_qty != null && o.filled_qty !== ''
+        ? parseFloat(o.filled_qty) // allow-bare-parsefloat: DW-058-B1
+        : 0;
+      const filled_qty = Number.isFinite(filled_qty_raw) && filled_qty_raw > 0
+        ? Math.min(filled_qty_raw, qty)
+        : 0;
       const submitted = o.submitted_at ? new Date(o.submitted_at) : ts;
       const trade_type: TradeType = 'entry';
       out.push({
@@ -91,6 +103,7 @@ export class AlpacaOpenOrdersFetcher {
         accepted_at: state === 'phase2_working' ? submitted : null,
         pending_elapsed_s: Math.max(0, Math.floor((ts.getTime() - submitted.getTime()) / 1000)),
         provenance: RECONSTRUCTED_PROVENANCE,
+        filled_qty,
       });
     }
     return out;
