@@ -24,9 +24,11 @@
  *       error) returns `{outcome:'failed', failure_reason}` with ZERO
  *       partial write.
  *   (6) Chunked UPSERT into `combiner_book_shadow` with `onConflict:
- *       'operator_id,as_of_date,variant,side,rank_within_side'`. Every
- *       row carries `computed_at = as_of.toISOString()` (DEC-034 (4) —
- *       no wall-clock in the orchestrator).
+ *       'operator_id,as_of_date,variant,side,rank_within_side,intraday_slot'`
+ *       (DEC-070 clause a — additive intraday_slot superset PK rotation;
+ *       daily writer sets slot=0 per clause e). Every row carries
+ *       `computed_at = as_of.toISOString()` (DEC-034 (4) — no wall-clock
+ *       in the orchestrator).
  *
  * Does NOT write `combiner_rankings_shadow` (deferred; book-only at
  * 3.M-iii — see `phase-3m-shadow-measurement.md`).
@@ -123,6 +125,8 @@ interface PendingBookRow {
   score: number;
   ranker_source: typeof RANKER_SOURCE_SHADOW;
   computed_at: string;
+  /** DEC-070 clause (e) substrate dual-capture plumbing — daily writer = slot 0. */
+  intraday_slot: number;
 }
 
 export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorContext) {
@@ -274,6 +278,8 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
               score: b.score,
               ranker_source: RANKER_SOURCE_SHADOW,
               computed_at: as_of_iso,
+              // DEC-070 clause (e) — daily writer = slot 0.
+              intraday_slot: 0,
             });
           }
           perVariantSizes.push({
@@ -306,7 +312,9 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
       }
 
       // ── Step 6: chunked UPSERT into combiner_book_shadow ──
-      const onConflict = 'operator_id,as_of_date,variant,side,rank_within_side';
+      // DEC-070 clause (a): onConflict now includes intraday_slot.
+      const onConflict =
+        'operator_id,as_of_date,variant,side,rank_within_side,intraday_slot';
       for (let i = 0; i < pendingBook.length; i += UPSERT_CHUNK_SIZE) {
         const chunk = pendingBook.slice(i, i + UPSERT_CHUNK_SIZE);
         const { error: upErr } = await ctx.supabase

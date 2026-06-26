@@ -240,7 +240,7 @@ Deno.test('(orch-3) upsert ON CONFLICT keys + payload shape + computed_at == as_
   await createFeatureAssemblyOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
 
   assertEquals(calls.upsertCalls.length, 1);
-  assertEquals(calls.upsertCalls[0].onConflict, 'operator_id,as_of_date,ticker');
+  assertEquals(calls.upsertCalls[0].onConflict, 'operator_id,as_of_date,ticker,intraday_slot');
   const row = (calls.upsertCalls[0].payload as Array<Record<string, unknown>>)[0];
   assertEquals(row.operator_id, OPERATOR_ID);
   assertEquals(row.as_of_date, AS_OF_DATE);

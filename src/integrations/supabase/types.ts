@@ -137,6 +137,7 @@ export type Database = {
         Row: {
           as_of_date: string
           computed_at: string
+          intraday_slot: number
           operator_id: string
           rank_within_side: number
           ranker_source: string
@@ -147,6 +148,7 @@ export type Database = {
         Insert: {
           as_of_date: string
           computed_at?: string
+          intraday_slot?: number
           operator_id: string
           rank_within_side: number
           ranker_source: string
@@ -157,6 +159,7 @@ export type Database = {
         Update: {
           as_of_date?: string
           computed_at?: string
+          intraday_slot?: number
           operator_id?: string
           rank_within_side?: number
           ranker_source?: string
@@ -171,6 +174,7 @@ export type Database = {
           as_of_date: string
           computed_at: string
           inclusion_rule: string
+          intraday_slot: number
           k: number
           operator_id: string
           rank_within_side: number
@@ -184,6 +188,7 @@ export type Database = {
           as_of_date: string
           computed_at?: string
           inclusion_rule: string
+          intraday_slot?: number
           k: number
           operator_id: string
           rank_within_side: number
@@ -197,6 +202,7 @@ export type Database = {
           as_of_date?: string
           computed_at?: string
           inclusion_rule?: string
+          intraday_slot?: number
           k?: number
           operator_id?: string
           rank_within_side?: number
@@ -216,6 +222,7 @@ export type Database = {
           excluded_reason: string | null
           features: Json
           gics_sector: string | null
+          intraday_slot: number
           operator_id: string
           ticker: string
         }
@@ -226,6 +233,7 @@ export type Database = {
           excluded_reason?: string | null
           features: Json
           gics_sector?: string | null
+          intraday_slot?: number
           operator_id: string
           ticker: string
         }
@@ -236,6 +244,7 @@ export type Database = {
           excluded_reason?: string | null
           features?: Json
           gics_sector?: string | null
+          intraday_slot?: number
           operator_id?: string
           ticker?: string
         }
@@ -246,6 +255,7 @@ export type Database = {
           computed_at: string
           horizon_close_date: string | null
           horizon_td: number
+          intraday_slot: number
           operator_id: string
           price_source_status: string
           raw_return: number | null
@@ -261,6 +271,7 @@ export type Database = {
           computed_at?: string
           horizon_close_date?: string | null
           horizon_td: number
+          intraday_slot?: number
           operator_id: string
           price_source_status: string
           raw_return?: number | null
@@ -276,6 +287,7 @@ export type Database = {
           computed_at?: string
           horizon_close_date?: string | null
           horizon_td?: number
+          intraday_slot?: number
           operator_id?: string
           price_source_status?: string
           raw_return?: number | null
@@ -339,6 +351,7 @@ export type Database = {
           as_of_date: string
           computed_at: string
           gics_sector: string | null
+          intraday_slot: number
           long_rank: number
           long_score: number
           operator_id: string
@@ -351,6 +364,7 @@ export type Database = {
           as_of_date: string
           computed_at?: string
           gics_sector?: string | null
+          intraday_slot?: number
           long_rank: number
           long_score: number
           operator_id: string
@@ -363,6 +377,7 @@ export type Database = {
           as_of_date?: string
           computed_at?: string
           gics_sector?: string | null
+          intraday_slot?: number
           long_rank?: number
           long_score?: number
           operator_id?: string
@@ -402,6 +417,7 @@ export type Database = {
           as_of_date: string
           attributions: Json
           computed_at: string
+          intraday_slot: number
           model_id: string | null
           operator_id: string
           ticker: string
@@ -410,6 +426,7 @@ export type Database = {
           as_of_date: string
           attributions: Json
           computed_at?: string
+          intraday_slot?: number
           model_id?: string | null
           operator_id: string
           ticker: string
@@ -418,6 +435,7 @@ export type Database = {
           as_of_date?: string
           attributions?: Json
           computed_at?: string
+          intraday_slot?: number
           model_id?: string | null
           operator_id?: string
           ticker?: string
@@ -432,10 +450,15 @@ export type Database = {
           },
           {
             foreignKeyName: "combiner_shap_attribution_operator_id_as_of_date_ticker_fkey"
-            columns: ["operator_id", "as_of_date", "ticker"]
+            columns: ["operator_id", "as_of_date", "ticker", "intraday_slot"]
             isOneToOne: true
             referencedRelation: "combiner_rankings"
-            referencedColumns: ["operator_id", "as_of_date", "ticker"]
+            referencedColumns: [
+              "operator_id",
+              "as_of_date",
+              "ticker",
+              "intraday_slot",
+            ]
           },
         ]
       }
