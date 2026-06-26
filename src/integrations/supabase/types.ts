@@ -339,6 +339,7 @@ export type Database = {
           as_of_date: string
           computed_at: string
           gics_sector: string | null
+          intraday_slot: number
           long_rank: number
           long_score: number
           operator_id: string
@@ -351,6 +352,7 @@ export type Database = {
           as_of_date: string
           computed_at?: string
           gics_sector?: string | null
+          intraday_slot?: number
           long_rank: number
           long_score: number
           operator_id: string
@@ -363,6 +365,7 @@ export type Database = {
           as_of_date?: string
           computed_at?: string
           gics_sector?: string | null
+          intraday_slot?: number
           long_rank?: number
           long_score?: number
           operator_id?: string
@@ -402,6 +405,7 @@ export type Database = {
           as_of_date: string
           attributions: Json
           computed_at: string
+          intraday_slot: number
           model_id: string | null
           operator_id: string
           ticker: string
@@ -410,6 +414,7 @@ export type Database = {
           as_of_date: string
           attributions: Json
           computed_at?: string
+          intraday_slot?: number
           model_id?: string | null
           operator_id: string
           ticker: string
@@ -418,6 +423,7 @@ export type Database = {
           as_of_date?: string
           attributions?: Json
           computed_at?: string
+          intraday_slot?: number
           model_id?: string | null
           operator_id?: string
           ticker?: string
@@ -432,10 +438,15 @@ export type Database = {
           },
           {
             foreignKeyName: "combiner_shap_attribution_operator_id_as_of_date_ticker_fkey"
-            columns: ["operator_id", "as_of_date", "ticker"]
+            columns: ["operator_id", "as_of_date", "ticker", "intraday_slot"]
             isOneToOne: true
             referencedRelation: "combiner_rankings"
-            referencedColumns: ["operator_id", "as_of_date", "ticker"]
+            referencedColumns: [
+              "operator_id",
+              "as_of_date",
+              "ticker",
+              "intraday_slot",
+            ]
           },
         ]
       }
