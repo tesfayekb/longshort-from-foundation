@@ -35,6 +35,7 @@ import type { RejectionPropagator } from './cache-propagator-io.ts';
 import type { SameTickContradictoryPass } from './cache-propagator.ts';
 import type { StateMachineConfig } from './state-machine.ts';
 import type { BrokerInterfaces } from './broker-bootstrap.ts';
+import type { RebalanceAggregateAssertionResult } from './rebalance-aggregate-assertion.ts';
 
 export interface TickSchedulerParams {
   brokerFactory: () => BrokerInterfaces;
@@ -54,6 +55,14 @@ export interface TickSchedulerParams {
   initialLimitPrices?: ReadonlyMap<string, number>;
   config?: Partial<StateMachineConfig>;
   phase1AcceptanceTimeoutS?: number;
+  /** OPTIONAL — DW-163 post-fire dollar-neutrality assertion. When
+   *  injected, runTick invokes it AFTER advanceTick completes and
+   *  threads the result onto `TickSchedulerResult.rebalance_aggregate`.
+   *  MUST be broker-truth-sourced (see `buildRebalanceAggregateAssertion`).
+   *  Closure errors are caught + logged + surfaced as `null` so a fetch
+   *  hiccup does not kill the tick (the reconcile() pipe itself writes a
+   *  system_bug row on infrastructure failure). */
+  rebalanceAggregateAssertion?: (ts: Date) => Promise<RebalanceAggregateAssertionResult>;
 }
 
 export interface TickSchedulerResult extends AdvanceTickResult {
@@ -61,6 +70,12 @@ export interface TickSchedulerResult extends AdvanceTickResult {
    *  authoritative-broker set going IN). Diagnostic — surfaces "broker
    *  had nothing open this tick" vs. "broker had N working orders". */
   reconstructed_in_flight_count: number;
+  /** DW-163 — verify_rebalance_aggregate outcome from THIS tick's
+   *  post-fire broker-truth assertion, when the closure was injected.
+   *  `null` when not injected (legacy/test paths) OR when the closure
+   *  threw (caught + logged; reconcile() writes its own system_bug row
+   *  in that case). */
+  rebalance_aggregate: RebalanceAggregateAssertionResult | null;
 }
 
 /** Execute one tick: reconstruct in-flight from broker → advanceTick →
@@ -92,9 +107,30 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     phase1AcceptanceTimeoutS: p.phase1AcceptanceTimeoutS,
   });
 
+  // DW-163: BROKER-TRUTH post-fire dollar-neutrality assertion. Runs on
+  // the NEXT advance-tick after a placement fire, reading actual broker
+  // positions (planner-vs-planner would be a tautology). The verifier's
+  // reconcile() pipe writes the reconciliation_events row + executes
+  // failure_action (operator alert, no auto-retry) on band-violation —
+  // we just thread the outcome up so the edge fn can surface it on the
+  // audit row alongside still_in_flight / terminal counts.
+  let rebalance_aggregate: RebalanceAggregateAssertionResult | null = null;
+  if (p.rebalanceAggregateAssertion) {
+    try {
+      rebalance_aggregate = await p.rebalanceAggregateAssertion(p.ts);
+    } catch (e) {
+      console.error(
+        'longshort_rebalance_aggregate_assertion.failed',
+        e instanceof Error ? e.message : String(e),
+      );
+      rebalance_aggregate = null;
+    }
+  }
+
   return {
     still_in_flight: result.still_in_flight,
     terminal: result.terminal,
     reconstructed_in_flight_count: inFlight.length,
+    rebalance_aggregate,
   };
 }
