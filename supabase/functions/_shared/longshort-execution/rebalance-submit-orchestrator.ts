@@ -631,6 +631,7 @@ function buildResponse(args: {
   submissions: SubmissionResult[];
   candidates: readonly PreflightCandidate[];
   htb_marks_persisted: string[];
+  working_orders_observed?: number;
 }): RebalanceSubmitResponse {
   const counts: Record<SubmissionResult['kind'], number> = {
     accepted: 0, rejected: 0, pending_timeout: 0,
@@ -654,7 +655,7 @@ function buildResponse(args: {
     ? args.candidates.filter((c) => c.side === 'short').map((c) => c.symbol)
     : [];
 
-  return {
+  const resp: RebalanceSubmitResponse = {
     status: 'ok',
     mode: args.mode,
     operator_id: args.operator_id,
@@ -669,4 +670,8 @@ function buildResponse(args: {
     shorts_skipped_locate_unavailable,
     htb_marks_persisted: args.htb_marks_persisted,
   };
+  if (args.working_orders_observed !== undefined) {
+    resp.working_orders_observed = args.working_orders_observed;
+  }
+  return resp;
 }
