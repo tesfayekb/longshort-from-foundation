@@ -234,6 +234,58 @@ export interface CurrentPosition {
   current_price: number;    // > 0
 }
 
+/**
+ * Working-order projection consumed by the planner (DEC-070 clause b).
+ *
+ * Decoupled from `InFlightOrder` to keep the pure kernel free of the
+ * state-machine type surface — the orchestrator maps `reconstructInFlight()`
+ * output to this narrow shape. Carries the working REMAINDER price basis +
+ * size needed to compute `effective_current = position_mv + Σ working_notional`.
+ *
+ * Notional basis (load-bearing — see clause b prose): use the working
+ * order's `current_limit_price` (the price at which it will fill), NOT
+ * the live quote. The working order represents committed dollars at that
+ * limit; using the quote would double-jitter the delta against quote noise.
+ *
+ * Remaining-qty basis (load-bearing): `remaining = shares − (filled_qty ??
+ * 0)`. The filled segment is ALREADY counted in broker `market_value`; only
+ * the remainder represents incremental notional in flight.
+ */
+export interface WorkingOrderView {
+  symbol: string;
+  /** Position-side semantic the working order moves toward: `buy` open/increase
+   *  for a long → 'long'; `sell` close/decrease for a long → 'long'; etc. */
+  side: 'long' | 'short';
+  broker_side: 'buy' | 'sell';
+  /** Original order qty (broker-reported). */
+  shares: number;
+  /** Broker-reported filled qty for partially_filled orders; default 0. */
+  filled_qty?: number;
+  /** Working limit price — the notional basis. > 0. */
+  current_limit_price: number;
+}
+
+/**
+ * Compute the signed notional adjustment a working order contributes to
+ * effective-current. Convention mirrors `CurrentPosition.market_value`
+ * (long-position positive, short-position positive-magnitude with negative
+ * sign): a long-open BUY adds +notional; a long-close SELL subtracts
+ * notional; a short-open SELL adds −notional (drives mv more negative);
+ * a short-close BUY adds +notional (drives mv toward zero from below).
+ */
+export function workingOrderSignedNotional(o: WorkingOrderView): number {
+  const remaining = Math.max(0, o.shares - (o.filled_qty ?? 0));
+  if (!(remaining > 0) || !(o.current_limit_price > 0)) return 0;
+  const gross = remaining * o.current_limit_price;
+  // Sign rules: the working order moves position mv in the direction of
+  //   long+buy = +gross   (open/increase long)
+  //   long+sell = −gross  (decrease/close long)
+  //   short+sell = −gross (open/increase short, mv more negative)
+  //   short+buy = +gross  (decrease/close short, mv toward zero)
+  if (o.side === 'long') return o.broker_side === 'buy' ? +gross : -gross;
+  return o.broker_side === 'sell' ? -gross : +gross;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Intermediate (in-module, NOT exported as part of the public planRebalance
 // surface — but EXPORTED here for the dedicated unit tests of selectFinalTargets).
