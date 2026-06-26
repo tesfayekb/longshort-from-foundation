@@ -185,6 +185,11 @@ export interface RankingRow {
   short_score: number;
   gics_sector: string | null;  // nullable per existing book-seeder fixtures
   ranker_source: string;
+  /** DEC-070 clause (c) — optional freshness anchor (ISO string of
+   *  `combiner_rankings.computed_at`). Optional so test fixtures that
+   *  don't model freshness keep working; the orchestrator's ranking-
+   *  freshness gate only bites when at least one row carries a value. */
+  computed_at?: string | null;
 }
 
 /**
