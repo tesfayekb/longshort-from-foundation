@@ -573,6 +573,13 @@ export interface ComputeDeltasParams {
   ts: Date;
   noopPct?: number;
   noopFloorUsd?: number;
+  /** DEC-070 clause (b) — broker working orders (the in-flight set).
+   *  When provided, the delta is computed against
+   *  `effective_current = market_value + Σ workingOrderSignedNotional`
+   *  so a name whose working orders already move it toward target produces
+   *  a noop (the planner does not double-place). Optional + back-compat
+   *  default empty. */
+  workingOrders?: readonly WorkingOrderView[];
 }
 
 export function computeDeltas(p: ComputeDeltasParams): ExecutionDelta[] {
@@ -596,10 +603,27 @@ export function computeDeltas(p: ComputeDeltasParams): ExecutionDelta[] {
     currentBySymbol.set(c.symbol, c);
   }
 
+  // Σ signed working notional per symbol — for the effective-current
+  // adjustment. A symbol with no working orders yields 0 (no adjustment;
+  // back-compat with the once-daily path that never enters the orchestrator
+  // with a non-empty workingOrders set).
+  const workingNotionalBySymbol = new Map<string, number>();
+  if (p.workingOrders) {
+    for (const w of p.workingOrders) {
+      const adj = workingOrderSignedNotional(w);
+      if (adj === 0) continue;
+      workingNotionalBySymbol.set(
+        w.symbol,
+        (workingNotionalBySymbol.get(w.symbol) ?? 0) + adj,
+      );
+    }
+  }
+
   const out: ExecutionDelta[] = [];
   const allSymbols = new Set<string>([
     ...targetsBySymbol.keys(),
     ...currentBySymbol.keys(),
+    ...workingNotionalBySymbol.keys(),
   ]);
 
   for (const symbol of allSymbols) {
@@ -612,21 +636,50 @@ export function computeDeltas(p: ComputeDeltasParams): ExecutionDelta[] {
 
     const target_notional = target?.target_notional ?? 0;
     const current_mv = current?.market_value ?? 0;
-    const delta_notional = target_notional - current_mv;
+    const working_adj = workingNotionalBySymbol.get(symbol) ?? 0;
+    // effective_current = position_mv + Σ signed_working_notional.
+    // The working segment is in flight at the broker — placing another
+    // order against the same target would double-place (DW-164).
+    const effective_current_mv = current_mv + working_adj;
+    const delta_notional = target_notional - effective_current_mv;
     const noop_band = Math.max(noopPct * Math.abs(target_notional), noopFloor);
 
     let intent: DeltaIntent;
     if (!target && current) {
-      intent = 'close';
+      // Close-out path: subtract working adj from current_mv (a working
+      // sell-to-close already reduces the position the broker holds, so the
+      // remaining notional to close is `current_mv + working_adj` in
+      // magnitude — note: working_adj for a sell-to-close on a long is
+      // negative, which correctly shrinks the close-out delta). If working
+      // orders already drive it to ≤ noop, classify as noop.
+      if (Math.abs(effective_current_mv) <= noop_band) {
+        intent = 'noop';
+      } else {
+        intent = 'close';
+      }
     } else if (target && !current) {
       // |target| > 0 by construction (per_name_notional > 0 when book non-empty).
-      intent = Math.abs(target_notional) > 0 ? 'open' : 'noop';
+      // If a working order already moves us to within band of target, noop.
+      if (Math.abs(target_notional) <= 0) {
+        intent = 'noop';
+      } else if (Math.abs(delta_notional) <= noop_band) {
+        intent = 'noop';
+      } else {
+        intent = 'open';
+      }
     } else if (target && current) {
       if (Math.abs(delta_notional) <= noop_band) {
         intent = 'noop';
       } else {
-        intent = Math.abs(target_notional) > Math.abs(current_mv) ? 'increase' : 'decrease';
+        intent = Math.abs(target_notional) > Math.abs(effective_current_mv) ? 'increase' : 'decrease';
       }
+    } else if (working_adj !== 0) {
+      // No target, no position — but a working order exists (e.g. a partial
+      // fill is still in flight after the position closed). Surface as noop:
+      // the working order itself will land and a future tick will plan over
+      // the resulting (re-emerged) position. Avoid placing a contradictory
+      // order against ourselves.
+      intent = 'noop';
     } else {
       // Unreachable: symbol came from union of two non-empty sets.
       continue;
@@ -637,7 +690,7 @@ export function computeDeltas(p: ComputeDeltasParams): ExecutionDelta[] {
       side: target?.side ?? current!.side,
       intent,
       delta_notional: intent === 'close' ? -current_mv : delta_notional,
-      target_notional: intent === 'close' ? 0 : target_notional,
+      target_notional: (intent === 'close' || (!target && !current)) ? 0 : target_notional,
       current_market_value: current_mv,
       noop_band_usd: noop_band,
       selection_reason: target?.selection_reason ?? null,
