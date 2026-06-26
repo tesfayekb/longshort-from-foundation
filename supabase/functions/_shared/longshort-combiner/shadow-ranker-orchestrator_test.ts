@@ -239,7 +239,7 @@ Deno.test('(sorch-2) happy path — 12 variants × ≤20/side; tagging + onConfl
   assertEquals(calls.bookUpserts.length, 1);
   assertEquals(
     calls.bookUpserts[0].onConflict,
-    'operator_id,as_of_date,variant,side,rank_within_side',
+    'operator_id,as_of_date,variant,side,rank_within_side,intraday_slot',
   );
   const payload = calls.bookUpserts[0].payload;
   assertEquals(payload.length, 480);

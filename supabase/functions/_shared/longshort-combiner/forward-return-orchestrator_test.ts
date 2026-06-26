@@ -344,6 +344,6 @@ Deno.test('(forch-6) maturation-retry contract: success rows anti-joined; fetch_
   // typed-absence row was written under.
   assertEquals(
     calls.upsertChunks[0].onConflict,
-    'operator_id,source_table,variant,seed_as_of_date,ticker,horizon_td',
+    'operator_id,source_table,variant,seed_as_of_date,ticker,horizon_td,intraday_slot',
   );
 });

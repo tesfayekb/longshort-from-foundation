@@ -258,7 +258,7 @@ Deno.test('(rorch-2) happy path (model-absent) — 40 rows → fallback path byt
 
   // Rankings upsert
   assertEquals(calls.rankingsUpserts.length, 1);
-  assertEquals(calls.rankingsUpserts[0].onConflict, 'operator_id,as_of_date,ticker');
+  assertEquals(calls.rankingsUpserts[0].onConflict, 'operator_id,as_of_date,ticker,intraday_slot');
   assertEquals((calls.rankingsUpserts[0].payload as unknown[]).length, 40);
   const r0 = (calls.rankingsUpserts[0].payload as Array<Record<string, unknown>>)[0];
   assertEquals(r0.operator_id, OPERATOR_ID);
@@ -268,7 +268,7 @@ Deno.test('(rorch-2) happy path (model-absent) — 40 rows → fallback path byt
 
   // Book upsert
   assertEquals(calls.bookUpserts.length, 1);
-  assertEquals(calls.bookUpserts[0].onConflict, 'operator_id,as_of_date,side,rank_within_side');
+  assertEquals(calls.bookUpserts[0].onConflict, 'operator_id,as_of_date,side,rank_within_side,intraday_slot');
   const bookPayload = calls.bookUpserts[0].payload as Array<Record<string, unknown>>;
   assertEquals(bookPayload.length, 40);
   const sides = bookPayload.map((b) => b.side);
