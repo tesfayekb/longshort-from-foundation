@@ -109,6 +109,19 @@ export const NOOP_PCT = 0.02 as const;
  */
 export const NOOP_FLOOR_USD = 50 as const;
 
+/**
+ * DEC-070 clause (c) — RANKING_FRESHNESS_TOLERANCE: max age, in seconds,
+ * of the latest `combiner_rankings.computed_at` relative to the planner's
+ * injected `ts` (NEVER wall-clock — DEC-034 clause 4). Initial value 600s
+ * = 2 ticks × 5min per master-plan §11.0.7 #1; Phase-7 will tune per
+ * DEC-048's "cadence-is-config, Phase-7-measured" principle.
+ *
+ * The const is the DEFAULT; the orchestrator may override via the env-var
+ * `LONGSHORT_RANKING_FRESHNESS_TOLERANCE_S` (read at the boundary, not
+ * here — purity discipline j.4).
+ */
+export const RANKING_FRESHNESS_TOLERANCE_S = 600 as const;
+
 // ────────────────────────────────────────────────────────────────────────────
 // Typed errors (anti-phantom-defaults; no silent sentinels — DEC-034 (2)).
 // ────────────────────────────────────────────────────────────────────────────
