@@ -56,6 +56,10 @@ import {
   createRejectionPropagator,
   createSupabaseHtbCacheWriter,
 } from '../_shared/longshort-execution/cache-propagator-io.ts';
+import {
+  buildRebalanceAggregateAssertion,
+  createBrokerPositionAggregateFetcher,
+} from '../_shared/longshort-execution/rebalance-aggregate-assertion.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -148,12 +152,28 @@ Deno.serve(createHandler(async (req: Request) => {
       ),
       eventWriter,
     });
+    // DW-163: BROKER-TRUTH post-fire rebalance-aggregate assertion. We
+    // build the closure here so the broker factory is invoked exactly
+    // once per tick and the closure binds the same broker the advanceTick
+    // path drives. The aggregate-fetcher derives from listOpenPositions
+    // (fill-reality), NOT the planner's intended book — that's the whole
+    // point of post-fire broker-truth.
+    const broker = createLiveBrokerInterfaces();
+    const positionFetcher = broker.positionFetcher;
+    const rebalanceAggregateAssertion = positionFetcher
+      ? buildRebalanceAggregateAssertion({
+          operator_id: DEFAULT_OPERATOR_ID,
+          fetcher: createBrokerPositionAggregateFetcher(positionFetcher),
+          fetcher_source: 'live',
+        })
+      : undefined;
     const result = await runTick({
-      brokerFactory: createLiveBrokerInterfaces,
+      brokerFactory: () => broker,
       eventWriter,
       propagator,
       clock: productionClock,
       ts,
+      ...(rebalanceAggregateAssertion ? { rebalanceAggregateAssertion } : {}),
     });
 
     await writeStrategyAuditEvent({
@@ -169,6 +189,17 @@ Deno.serve(createHandler(async (req: Request) => {
         reconstructed_in_flight_count: result.reconstructed_in_flight_count,
         still_in_flight_count: result.still_in_flight.length,
         terminal_count: result.terminal.length,
+        // DW-163 — aggregate gate outcome lands on the audit row so the
+        // §22.5.1 audit-shape gate is one-stop for verification.
+        rebalance_aggregate: result.rebalance_aggregate
+          ? {
+              outcome: result.rebalance_aggregate.outcome,
+              divergence: result.rebalance_aggregate.divergence,
+              event_id: result.rebalance_aggregate.event_id,
+              action_taken: result.rebalance_aggregate.action_taken,
+              band: result.rebalance_aggregate.band,
+            }
+          : null,
         trigger: 'manual',
       },
     });
@@ -180,6 +211,7 @@ Deno.serve(createHandler(async (req: Request) => {
       reconstructed_in_flight_count: result.reconstructed_in_flight_count,
       still_in_flight_count: result.still_in_flight.length,
       terminal_count: result.terminal.length,
+      rebalance_aggregate: result.rebalance_aggregate,
       correlation_id: correlationId,
     });
   } catch (e) {

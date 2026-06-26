@@ -46,6 +46,10 @@ import {
   createRejectionPropagator,
   createSupabaseHtbCacheWriter,
 } from '../_shared/longshort-execution/cache-propagator-io.ts';
+import {
+  buildRebalanceAggregateAssertion,
+  createBrokerPositionAggregateFetcher,
+} from '../_shared/longshort-execution/rebalance-aggregate-assertion.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const STRATEGY_KEY = 'longshort';
@@ -144,12 +148,26 @@ Deno.serve(createHandler(async (req: Request) => {
       eventWriter,
     });
 
+    // DW-163: broker-truth post-fire dollar-neutrality assertion. Build
+    // closure here so the broker factory is invoked once + the same
+    // instance backs both advanceTick and the aggregate fetcher.
+    const broker = createLiveBrokerInterfaces();
+    const positionFetcher = broker.positionFetcher;
+    const rebalanceAggregateAssertion = positionFetcher
+      ? buildRebalanceAggregateAssertion({
+          operator_id,
+          fetcher: createBrokerPositionAggregateFetcher(positionFetcher),
+          fetcher_source: 'live',
+        })
+      : undefined;
+
     const result = await runTick({
-      brokerFactory: createLiveBrokerInterfaces,
+      brokerFactory: () => broker,
       eventWriter,
       propagator,
       clock: productionClock,
       ts,
+      ...(rebalanceAggregateAssertion ? { rebalanceAggregateAssertion } : {}),
     });
 
     await writeStrategyAuditEvent({
@@ -161,6 +179,15 @@ Deno.serve(createHandler(async (req: Request) => {
         reconstructed_in_flight_count: result.reconstructed_in_flight_count,
         still_in_flight_count: result.still_in_flight.length,
         terminal_count: result.terminal.length,
+        rebalance_aggregate: result.rebalance_aggregate
+          ? {
+              outcome: result.rebalance_aggregate.outcome,
+              divergence: result.rebalance_aggregate.divergence,
+              event_id: result.rebalance_aggregate.event_id,
+              action_taken: result.rebalance_aggregate.action_taken,
+              band: result.rebalance_aggregate.band,
+            }
+          : null,
       },
     });
 
@@ -171,6 +198,7 @@ Deno.serve(createHandler(async (req: Request) => {
       reconstructed_in_flight_count: result.reconstructed_in_flight_count,
       still_in_flight_count: result.still_in_flight.length,
       terminal_count: result.terminal.length,
+      rebalance_aggregate: result.rebalance_aggregate,
       correlation_id: correlationId,
     });
   } catch (e) {

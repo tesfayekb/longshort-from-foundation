@@ -3037,7 +3037,7 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | Field | Value |
 |---|---|
 | **ID** | DW-143 (next-free after DW-142). |
-| **Status** | Open. Registered at DEC-068 / FP-056 / ACT-305 charter landing. v1 paper has no settlement; live-money territory. |
+| **Status** | **SUPERSEDED-BY-SPLIT (ACT-pending, 2026-06-26).** Original DW preserved as historical (umbrella tax/accounting placeholder). The conformance audit (ACT-pending — spec-vs-build) found that an umbrella DW reproduced the accidental-discovery problem it was meant to prevent: a single name hid five distinct verifier-shells over absent machinery. **Successors (granular, named, individually trackable pre-live blockers):** **DW-157** (wash-sale: events table + §7.7 Path A/B writer + §7.5/7.6 30-day conditional-loss blocking + §7.9 trim-loss + `verify_wash_sale_record` wiring); **DW-158** (longshort_lots FIFO UUID ledger + `verify_lot_record` wiring); **DW-159** (realized_pnl table + writer-at-exit + `verify_realized_pnl` wiring); **DW-160** (`verify_settlement_status` + T+1 settlement state); **DW-161** (Polygon corp-actions ingestion + internal CA store + `verify_corporate_action_clean` wiring). The borrow-rate strand previously implied by §3.3d / the umbrella is tracked as **DW-162** (`verify_borrow_rate` + `verify_borrow_persistence` + `BrokerBorrowRateFetcher`). DW-143 is preserved (NOT deleted) as the historical anchor; new work cites the successor IDs directly. |
 | **Tier** | A (live-money territory) — correctness on the tax + reconciliation surface. |
 | **Title** | §7.x settlement / lot accounting / wash-sale tracking (Strong+ FP scope). |
 | **Blocking Dependencies** | Phase-8 live-money authorization; tax/lot ledger schema. |
@@ -3264,3 +3264,137 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future Owner Phase** | Post-cadence-rework (STREAM-3 design landed) AND/OR post-Phase-3.3 trained-combiner first-artifact (whichever comes first). Evaluation precedes any implementation. |
 | **Resolution shape** | (a) Backtest two candidate gates on accrued `combiner_rankings` + filled-position P&L: (i) age-bucket exclusion (drop names with top-K-age > N days from new-entry candidates); (ii) trajectory-tilt re-rank (penalize names whose 5-day score slope is negative). (b) Decide whether either gate clears a min-incremental-Sharpe threshold over the bare-level planner; if so, ratify via DEC addendum and wire into `rebalance-planner.ts` as a pre-`selectTopK` filter. (c) Re-evaluate after Phase-3.3 model lands. |
 | **Cross_ref** | ACT-336 (this registration + STREAM-3 dual-investigation parent); ACT-335 (Phase-3.3 maturation timeline — the partial-resolution dependency); ACT-334 (cron-arm — the cadence this gate refines); DEC-068 clauses (a–q) (the planner spec being refined); `supabase/functions/_shared/longshort-execution/rebalance-planner.ts` (the in-code anchor for the gate's eventual implementation); `combiner_rankings` table (the substrate the gate reads). |
+
+---
+
+### DW-157: §7.7 Wash-sale events table + writer + 30-day conditional-loss blocking + `verify_wash_sale_record` wiring
+
+| Field | Value |
+|---|---|
+| **ID** | DW-157 (DW-143 successor #1 of 6). |
+| **Status** | open. **PRE-LIVE BLOCKER** (tax / 1099-B correctness; §11.0.10 zero-tolerance). NOT a paper-v1 blocker (paper has no tax surface). |
+| **Tier** | A — money-path tax-reporting correctness. Wash-sale mis-attribution corrupts 1099-B basis and is operator-visible at tax time, not at fire time. |
+| **Title** | Author the `wash_sale_events` table, the §7.7 Path-A/B writer-at-realized-loss, the §7.5/7.6 30-day conditional-loss blocking gate on re-entry, the §7.9 trim-loss handler, AND wire `verify_wash_sale_record` against the resulting table. |
+| **Scope** | (a) Migration: `wash_sale_events(operator_id, symbol, lot_id, realized_loss_dollars, disallowed_dollars, replacement_lot_id, window_start_at, window_end_at, path, created_at)` per §7.7; (b) Writer-at-exit: on every realized-loss closure, evaluate Path-A (replacement within ±30d) vs Path-B (no replacement) and write the event; (c) Re-entry blocking: §7.5/§7.6 — block a new-entry on symbol X if any realized-loss row in [t-30d, t] without a discharged-disallow; (d) §7.9 trim-loss adjustment — partial-exit loss attribution; (e) wire `verify_wash_sale_record` to read the table and assert the writer's event against the observed broker-side closure. |
+| **Depends-on** | **DW-158 (lots ledger)** — wash-sale events reference `lot_id`; the lots ledger is the upstream substrate. |
+| **Blocks** | Phase-8 live-money authorization; any live exit-path placement (§7.7 is unconditional on realized losses). |
+| **Future Owner Phase** | Phase 7 (tax/accounting subsystem) or pre-Phase-8 gate. |
+| **Resolution shape** | Strong+ FP authoring migration + writer + gate + verifier wiring, with a backtest replay against accrued (paper) trade history once the lots ledger is hydrated. |
+| **Cross_ref** | DW-143 (superseded umbrella); DW-158 (upstream dependency); CROSSWIND §7.5 / §7.6 / §7.7 / §7.9 / §11.0.10; `supabase/functions/_shared/longshort-verifiers/verify_wash_sale_record.ts` (the shell admitting absent machinery); the conformance audit (ACT-pending). |
+
+---
+
+### DW-158: `longshort_lots` FIFO UUID ledger + `verify_lot_record` wiring
+
+| Field | Value |
+|---|---|
+| **ID** | DW-158 (DW-143 successor #2 of 6). |
+| **Status** | open. **PRE-LIVE BLOCKER** (cost basis truth — every lot's per-share basis at acquisition is the substrate every tax-surface verifier reads). NOT a paper-v1 blocker. |
+| **Tier** | A — money-path cost-basis correctness. Wrong basis → wrong realized P&L → wrong 1099-B → operator legal exposure. |
+| **Title** | Author the `longshort_lots` FIFO UUID ledger (per-fill cost-basis row), the open/close writers driven by fill events, and wire `verify_lot_record`. |
+| **Scope** | (a) Migration: `longshort_lots(lot_id uuid PK, operator_id, symbol, side, shares, basis_per_share, opened_at, closed_at, closing_event_id, ...)`; (b) writer-at-open: every BUY/SELL_TO_OPEN fill opens a new lot row (FIFO is the read-order discipline, not a column); (c) writer-at-close: every SELL/BUY_TO_COVER fill closes lots FIFO and records `closed_at` + `closing_event_id`; (d) wire `verify_lot_record` to assert the ledger's open/close shape against broker position deltas. |
+| **Depends-on** | none (substrate DW for the tax cluster). |
+| **Blocks** | DW-157 (wash-sale references lot_id), DW-159 (realized-P&L closes lots), DW-161 (CA adjustments mutate lot basis). |
+| **Future Owner Phase** | Phase 7 (tax/accounting subsystem) — sequenced FIRST in the cluster. |
+| **Resolution shape** | Strong+ FP authoring migration + open/close writers in the fill-event handler + verifier wiring. Backfill from accrued fill history (paper) is OPTIONAL — live-account ledger begins at first live fill. |
+| **Cross_ref** | DW-143 (superseded umbrella); DW-157 / DW-159 / DW-161 (downstream); CROSSWIND §7.1 / §7.2 (FIFO discipline); `supabase/functions/_shared/longshort-verifiers/verify_lot_record.ts` (the shell); the conformance audit (ACT-pending). |
+
+---
+
+### DW-159: `realized_pnl` table + writer-at-exit + `verify_realized_pnl` wiring
+
+| Field | Value |
+|---|---|
+| **ID** | DW-159 (DW-143 successor #3 of 6). |
+| **Status** | open. **PRE-LIVE BLOCKER** (P&L truth / tax). NOT a paper-v1 blocker (paper-side P&L observability is broker-reported, not ledger-reconciled). |
+| **Tier** | A — money-path P&L correctness (the "did we actually make money" surface). |
+| **Title** | Author `realized_pnl` table, the writer-at-exit (per closing-lot), and wire `verify_realized_pnl`. |
+| **Scope** | (a) Migration: `realized_pnl(event_id, operator_id, lot_id, symbol, side, shares, basis_per_share, exit_price_per_share, gross_pnl, wash_sale_adjustment, net_pnl, exit_at, ...)`; (b) writer fires per closed lot in the close-writer (DW-158 §c) — gross from basis vs exit; net after consulting DW-157 wash-sale disallow; (c) wire `verify_realized_pnl` to assert the writer's row against broker-side realized-P&L statements. |
+| **Depends-on** | **DW-158 (lots ledger)**, **DW-157 (wash-sale)**. |
+| **Blocks** | Phase-8 live-money authorization. |
+| **Future Owner Phase** | Phase 7, sequenced AFTER DW-158 and DW-157. |
+| **Resolution shape** | Strong+ FP authoring migration + writer extension to the close path + verifier wiring + a daily reconciliation against broker statements. |
+| **Cross_ref** | DW-143 (superseded umbrella); DW-157 / DW-158 (upstream); CROSSWIND §7.x; `supabase/functions/_shared/longshort-verifiers/verify_realized_pnl.ts` (the shell); the conformance audit (ACT-pending). |
+
+---
+
+### DW-160: `verify_settlement_status` + T+1 settlement state wiring
+
+| Field | Value |
+|---|---|
+| **ID** | DW-160 (DW-143 successor #4 of 6). |
+| **Status** | open. **PRE-LIVE BLOCKER** (cash availability + PDT-adjacent). NOT a paper-v1 blocker (paper accounts auto-settle; no T+1 surface). |
+| **Tier** | A — money-path cash-availability correctness (BP read pre-settle vs post-settle). |
+| **Title** | Add T+1 settlement state machine (per-fill `settled_at` projection) + wire `verify_settlement_status` to assert the local projection against the broker's settled-cash report. |
+| **Scope** | (a) `settlement_state` column or sibling table tracking `settles_at` per fill (T+1 next business day); (b) BP read at §7 pre-flight consults settled-vs-unsettled cash per regulatory class (PDT account flag affects the read); (c) `verify_settlement_status` reads broker `account.cash_settled` / equivalent and asserts the projection. |
+| **Depends-on** | DW-158 (lots ledger is the natural per-fill anchor, though a sibling table is also acceptable). |
+| **Blocks** | Phase-8 live-money authorization. |
+| **Future Owner Phase** | Phase 7 (tax/accounting subsystem) or pre-Phase-8 gate. |
+| **Resolution shape** | Strong+ FP authoring the settlement projection + BP consult adjustment + verifier wiring. |
+| **Cross_ref** | DW-143 (superseded umbrella); DW-158 (substrate); CROSSWIND §7.x; `supabase/functions/_shared/longshort-verifiers/verify_settlement_status.ts` (the shell); the conformance audit (ACT-pending). |
+
+---
+
+### DW-161: Polygon corp-actions ingestion + internal CA store + `verify_corporate_action_clean` wiring
+
+| Field | Value |
+|---|---|
+| **ID** | DW-161 (DW-143 successor #5 of 6). |
+| **Status** | open. **PRE-LIVE BLOCKER** (basis adjustments across splits/divs/mergers — silent-corruption risk if a held name splits between fill and close). NOT a paper-v1 blocker (paper-broker auto-adjusts; no internal ledger to reconcile). |
+| **Tier** | A — money-path basis correctness (a 2:1 split silently doubles shares + halves basis; without ingestion, the lots ledger drifts from broker truth). |
+| **Title** | Ingest Polygon corporate-actions feed into an internal `corporate_actions` store, apply lot-basis/share-count adjustments on ex-date, and wire `verify_corporate_action_clean` to assert no unapplied actions before placement. |
+| **Scope** | (a) Polygon CA endpoint integration (splits, divs, mergers, spin-offs); (b) internal `corporate_actions(symbol, action_type, ex_date, ratio, ...)` store; (c) per-ex-date job: apply ratio to open lots (DW-158); (d) wire `verify_corporate_action_clean` as a §7 pre-flight gate that asserts ZERO unapplied CAs for any placement-candidate symbol. |
+| **Depends-on** | DW-158 (lots are the adjustment target). |
+| **Blocks** | Phase-8 live-money authorization. |
+| **Future Owner Phase** | Phase 7 (tax/accounting subsystem). |
+| **Resolution shape** | Strong+ FP authoring Polygon CA fetcher (parity to existing `polygon-quote-fetcher.ts`) + ingestion job + ex-date applier + verifier wiring as a pre-flight gate. |
+| **Cross_ref** | DW-143 (superseded umbrella); DW-158 (substrate); CROSSWIND §7.x; `supabase/functions/_shared/longshort-verifiers/verify_corporate_action_clean.ts` (the shell); the conformance audit (ACT-pending). |
+
+---
+
+### DW-162: `verify_borrow_rate` + `verify_borrow_persistence` wiring + `BrokerBorrowRateFetcher` adapter
+
+| Field | Value |
+|---|---|
+| **ID** | DW-162 (DW-143 successor #6 of 6). |
+| **Status** | open. **PRE-LIVE BLOCKER** (real borrow-fee P&L attribution per §3.3d). NOT a paper-v1 blocker (paper has no borrow-fee surface; HTB-cache covers availability, not rate). |
+| **Tier** | A — money-path short-side P&L correctness (a missing borrow-fee accrual under-states short-leg costs; over time this corrupts realized-P&L and strategy-Sharpe attribution). |
+| **Title** | Author `BrokerBorrowRateFetcher` adapter + the daily borrow-rate ingest + the per-position borrow-fee accrual + wire BOTH `verify_borrow_rate` (snapshot) and `verify_borrow_persistence` (across-day stability of the live-account rate). |
+| **Scope** | (a) `BrokerBorrowRateFetcher` interface + Alpaca/Polygon implementation (whichever exposes per-symbol borrow rate on live accounts); (b) daily ingest job that snapshots rate per held-short symbol; (c) per-position fee accrual writer; (d) wire `verify_borrow_rate` (current snapshot) + `verify_borrow_persistence` (rate stability across N days). |
+| **Depends-on** | DW-158 (lots / per-position is the natural accrual target) for the accrual surface; the verifiers themselves are independent. |
+| **Blocks** | Phase-8 live-money authorization (short-side P&L attribution gate). |
+| **Future Owner Phase** | Phase 7 / pre-Phase-8 short-side readiness. |
+| **Resolution shape** | Strong+ FP authoring the fetcher (per ACT-317 broker-parity discipline) + ingest job + accrual writer + verifier wiring, paired with DW-155 (live-account shortability validation) as the short-side live-readiness bundle. |
+| **Cross_ref** | DW-143 (superseded umbrella); DW-155 (short-side live-readiness twin); CROSSWIND §3.3d / §11.0.7 #11, #12; the verifier shells `verify_borrow_rate.ts` / `verify_borrow_persistence.ts`; the conformance audit (ACT-pending). |
+
+---
+
+### DW-163: `verify_rebalance_aggregate` post-fire broker-truth assertion wiring (paper-relevant) — **CLOSED**
+
+| Field | Value |
+|---|---|
+| **ID** | DW-163 (next-free after DW-156 — registered + closed in the same turn per the audit-followup execution). |
+| **Status** | **CLOSED** (ACT-pending, 2026-06-26). Wired as a post-fire BROKER-TRUTH assertion on the advance-tick path; proven-by-fire via the spec-level tightened-band classification test (`spec classify with tightened override: forced-failure → failure_escalated`) + the pipe-test (`DW-163: rebalanceAggregateAssertion is invoked once and result is surfaced`). The runtime prove-by-fire (env-driven band tightening over a live broker fire) is operator-gated and runs at the un-pause turn. |
+| **Tier** | A — money-path book-shape safety gate. A dollar-neutrality skew that escapes the planner's intended book is exactly the kind of silent correctness defect this assertion catches (the planner ASKED for ±$N net but the broker FILLED a $5N net; the gate fires on the discrepancy). |
+| **Title** | Wire `verify_rebalance_aggregate` (spec §11.0.7 #17) as a post-fire broker-truth assertion at the `runTick` advance-path seam; surface outcome on the `tick_completed` audit row alongside `still_in_flight` / `terminal`. |
+| **Wiring summary** | (a) New module `supabase/functions/_shared/longshort-execution/rebalance-aggregate-assertion.ts` exposes `buildRebalanceAggregateAssertion(...)` + `createBrokerPositionAggregateFetcher(positionFetcher)` (derives `BrokerRebalanceAggregate` from `listOpenPositions` — FILL-REALITY, not planner-intent); (b) `tick-scheduler.ts` accepts optional `rebalanceAggregateAssertion?: (ts) => Promise<RebalanceAggregateAssertionResult>` and threads the result onto `TickSchedulerResult.rebalance_aggregate`; closure throws are caught + logged + surfaced as `null` (the reconcile() pipe writes its own system_bug row on infrastructure-failure per Commit-7 contract — tick survives); (c) `longshort-execute/index.ts` + `longshort-execute-cron/index.ts` build the closure from the live broker's `positionFetcher` and inject; outcome lands in `tick_completed` `metadata.rebalance_aggregate` for §22.5.1 audit-shape one-stop verification; (d) env-driven band override (`LONGSHORT_REBALANCE_AGGREGATE_BAND_LOWER` / `..._UPPER`) gated by half-set / non-numeric / inverted defensive-undefined (operator-footgun prevention) — exists EXCLUSIVELY for the STEP-D prove-by-fire procedure; default 0.90 / 1.10 stands when unset; (e) failure_action UNCHANGED — operator alert, `failure_escalated`, no auto-retry (zero-tolerance, system-level, symbol:null per §11.0.7). |
+| **Why broker-truth (not planner-vs-planner)** | The planner reading its own intended book is a tautology that always passes. Skew (partial fills, rejects-after-acceptance, mis-sized) shows up at the broker. The aggregate-fetcher is `createBrokerPositionAggregateFetcher(positionFetcher)`; the planner has no path to inject its intended book here. |
+| **Why advance-tick timing (not inline with submit)** | An inline assertion would block the placement path and require a settle-wait. The advance-tick already runs as the post-fire reconciliation cadence; running the aggregate assertion there reads the settled positions naturally + costs no extra orchestration. |
+| **Cross_ref** | The conformance audit (ACT-pending); CROSSWIND §11.0.7 #17 + §22.5.1; `supabase/functions/_shared/longshort-verifiers/verify_rebalance_aggregate.ts` (the spec); `supabase/functions/_shared/longshort-execution/rebalance-aggregate-assertion.ts` (the closure); `supabase/functions/_shared/longshort-execution/tick-scheduler.ts` (the wiring seam); `supabase/functions/longshort-execute/index.ts` + `supabase/functions/longshort-execute-cron/index.ts` (the dispatch sites); `supabase/functions/_shared/longshort-execution/rebalance-aggregate-assertion_test.ts` + `tick-scheduler_test.ts` (the proof-tests). |
+
+---
+
+### DW-164: Working-order visibility — planner blind to open broker orders (paper-relevant, cadence-rebuild prerequisite)
+
+| Field | Value |
+|---|---|
+| **ID** | DW-164 (next-free after DW-163). |
+| **Status** | open. **CADENCE-REBUILD PREREQUISITE** (STREAM-3) — tick-driven rebalance cannot ship until the planner can see what's already working at the broker, otherwise a 5-minute tick would re-place over already-open orders. NOT immediately blocking for the once-daily un-pause (the daily cadence resolves naturally between fires). |
+| **Tier** | A — money-path placement-correctness on the cadence rebuild. Blind re-planning under tick cadence is a duplicate-order / over-leverage risk. |
+| **Title** | Surface broker working-orders to the planner (`reconstructInFlight`-equivalent surfaced as planner input) so tick-driven rebalance can subtract working orders from the intended-delta before submission. |
+| **Scope** | (a) Planner input contract gains a `working_orders` parameter shaped like the advance-path's `InFlightOrder[]`; (b) `rebalance-submit-orchestrator.ts:256-257` (the current blind spot) consumes it; (c) delta computation subtracts working-order shares from the placement intent; (d) verifier coverage (existing `verify_position` extends to working-order completeness, OR a new verifier `verify_working_order_visibility` if scope warrants). |
+| **Depends-on** | none (the broker source is the same `reconstructInFlight` used by the advance path). |
+| **Blocks** | STREAM-3 cadence-rebuild ship; any tick-driven rebalance trigger. |
+| **Future Owner Phase** | STREAM-3 (cadence rebuild design + ship). |
+| **Resolution shape** | A focused FP that extends the planner input contract + threads broker working-orders through `rebalance-submit-orchestrator.ts` + subtracts at the delta computation. Test coverage: a planner-with-working-orders test asserting the placement intent excludes already-working shares. |
+| **Cross_ref** | The conformance audit (ACT-pending — accidental-discovery surfacing); STREAM-3 cadence-rebuild parent; ACT-336 (the un-pause investigation that surfaced the gap); `supabase/functions/_shared/longshort-execution/rebalance-submit-orchestrator.ts:256-257` (the blind spot anchor); CROSSWIND §4.4 / §122 (tick-cadence intent). |
