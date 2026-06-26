@@ -183,23 +183,80 @@ export function createSupabaseRankingsReader(): (operator_id: string) => Promise
   return async (operator_id: string): Promise<RankingRow[]> => {
     const { data: latest, error: e1 } = await supabaseAdmin
       .from('combiner_rankings')
-      .select('as_of_date')
+      .select('as_of_date, computed_at')
       .eq('operator_id', operator_id)
       .order('as_of_date', { ascending: false })
+      .order('computed_at', { ascending: false })
       .limit(1);
     if (e1) throw new Error(`combiner_rankings as_of_date read failed: ${e1.message}`);
     if (!latest || latest.length === 0) return [];
-    const as_of_date = (latest[0] as { as_of_date: string }).as_of_date;
+    const head = latest[0] as { as_of_date: string; computed_at: string | null };
+    const as_of_date = head.as_of_date;
 
     const cap = SUBSTITUTION_SCAN_CAP_RANK;
     const { data: rows, error: e2 } = await supabaseAdmin
       .from('combiner_rankings')
-      .select('ticker, long_rank, short_rank, long_score, short_score, gics_sector, ranker_source')
+      .select('ticker, long_rank, short_rank, long_score, short_score, gics_sector, ranker_source, computed_at')
       .eq('operator_id', operator_id)
       .eq('as_of_date', as_of_date)
       .or(`long_rank.lte.${cap},short_rank.lte.${cap}`);
     if (e2) throw new Error(`combiner_rankings rows read failed: ${e2.message}`);
     return (rows ?? []) as RankingRow[];
+  };
+}
+
+/**
+ * Read the configured ranking-freshness tolerance (seconds). Defaults to
+ * the planner's `RANKING_FRESHNESS_TOLERANCE_S` (600s = 2 ticks × 5min;
+ * §11.0.7 #1) unless `LONGSHORT_RANKING_FRESHNESS_TOLERANCE_S` is set in
+ * the environment. Read at the boundary, never inside the kernel (purity
+ * discipline j.4 + DEC-034 clause 4).
+ */
+export function readRankingFreshnessToleranceS(): number {
+  try {
+    const raw = (globalThis as { Deno?: { env: { get(k: string): string | undefined } } })
+      .Deno?.env.get('LONGSHORT_RANKING_FRESHNESS_TOLERANCE_S');
+    if (raw != null && raw !== '') {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  } catch {
+    // env access denied (e.g. test runner without --allow-env) → default.
+  }
+  return RANKING_FRESHNESS_TOLERANCE_S;
+}
+
+/**
+ * Extract the latest `computed_at` from a rankings set. Returns null if
+ * no row carries one (back-compat with fixtures that omit the field; the
+ * gate is then DISABLED for that call).
+ */
+function latestRankingsComputedAt(rows: readonly RankingRow[]): Date | null {
+  let best: number | null = null;
+  for (const r of rows) {
+    if (r.computed_at == null || r.computed_at === '') continue;
+    const t = Date.parse(r.computed_at);
+    if (!Number.isFinite(t)) continue;
+    if (best == null || t > best) best = t;
+  }
+  return best == null ? null : new Date(best);
+}
+
+/**
+ * Map a broker `InFlightOrder` to the planner's narrow `WorkingOrderView`.
+ * Note: in-flight orders the planner considers are those still working
+ * (phase1_pending or phase2_working — both states reconstructed by
+ * `AlpacaOpenOrdersFetcher`). The planner only cares about working
+ * remainder × limit_price; the lifecycle/state metadata is dropped here.
+ */
+function inFlightToWorkingView(o: InFlightOrder): WorkingOrderView {
+  return {
+    symbol: o.symbol,
+    side: o.side,
+    broker_side: o.broker_side,
+    shares: o.shares,
+    filled_qty: o.filled_qty ?? 0,
+    current_limit_price: o.current_limit_price,
   };
 }
 
