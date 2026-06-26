@@ -616,3 +616,44 @@ Conflating any two of these masks a future real defect and is a clause-(q) viola
 - **Operator sell-to-open probe** — the empirical falsification of clause (p)'s premise.
 - **`tmp-shortability-probe`** — the empirical confirmation of `assets.shortable`'s authority and variance.
 - **ACT-331** — this clause's authoring action; the REVISION-FIX landing the corrected mechanics + INC-81.
+
+## Clause (r) — Decision-Price Feed Fix: Polygon-SIP supersedes Alpaca IEX-only (un-pauses the once-daily strategy on correct prices; cadence rebuild remains separate)
+
+(Clauses (a)–(q) and prior addenda are BYTE-UNCHANGED by this clause; clause (r) is APPEND-ONLY. (r) is next-emitted after (q).)
+
+**ID**: DEC-068 clause (r).
+**Date**: 2026-06-26.
+**Authoring action**: ACT-337.
+**SUPERSEDES**: the operative posture that the decision-price feed is Alpaca `/v2/stocks/{symbol}/quotes/latest` (IEX-only top-of-book). **PRESERVES**: clause (k).7's `verify_quote_freshness` gate (max_age_s=5) — that gate binds regardless of feed and remains in force on the new feed.
+
+### THE FALSE OPERATIVE PREMISE (now corrected)
+
+The submitter's marketable-limit pricing read the Alpaca free-tier IEX-only quote endpoint. That endpoint returns the top-of-book at a SINGLE venue (IEX), which is frequently not the inside venue. The "mid" computed from such a quote is structurally meaningless when IEX is off-inside, and `verify_quote_freshness` does not — and was never designed to — catch this: freshness ≠ accuracy. The Q4 measurement (ACT-336, RTH 2026-06-26 over the live 40-name book) tripped both pre-committed evidence gates (median **58.63 bp**, **11.7×** the 5-bp gate; p95 **265.91 bp**, **13.3×** the 20-bp gate; max **689 bp** on ENSG with a 14%-wide intra-quote spread). The autonomous-trading crons (107/108) were operator-disarmed pending feed remediation.
+
+### THE CORRECTED MECHANICS (BINDING)
+
+1. **Feed**: `PolygonQuoteFetcher` (edge `supabase/functions/_shared/longshort-broker/polygon-quote-fetcher.ts` + src `src/features/longshort/services/broker/polygon/polygon-quote-fetcher.ts`) calling Polygon **`/v2/last/nbbo/{ticker}`** (consolidated SIP NBBO). Polygon "Stocks Advanced" tier confirmed real-time SIP-consolidated at STEP-A (gating verification probe, since deleted).
+2. **Unit correctness**: Polygon `results.t` is **nanoseconds**; `polygonNanosToDate(t) = new Date(t / 1_000_000)` returns epoch-ms `Date` matching the `verify_quote_freshness` consumer unit (`call_ts.getTime() - observed.ts.getTime()`). Test cases `polygon-quote-fetcher_test.ts` 6–7 drive the freshness gate end-to-end (2 s PASS, 10 s FAIL under the 5 s gate) — the unit chain Polygon→fetcher→verifier is proven correct; the "every quote looks stale / every quote looks fresh" trap is closed.
+3. **Bootstrap seam**: `broker-bootstrap.ts:194` injects `PolygonQuoteFetcher` by default. Emergency revert lever: `LONGSHORT_QUOTE_FEED=alpaca` env flag reverts to the legacy `AlpacaQuoteFetcher` without code change.
+4. **Freshness gate preserved**: `verify_quote_freshness` (max_age_s=5) binds unchanged. On the new feed it gates a real consolidated NBBO instead of a fabricated IEX-only mid.
+5. **Execution venue unchanged**: Orders still POST to Alpaca paper `/v2/orders`. Clause (r) DECOUPLES the price-read venue (Polygon SIP) from the order-route venue (Alpaca paper) per DW-148 resolution-shape option (b).
+
+### THE EVIDENCE (the load-bearing closure proof)
+
+STEP-C re-measurement (corr `2e0413ee`, RTH 2026-06-26 16:12:36Z, 23 live-book symbols): NBBO-vs-independent-Polygon-snapshot **median divergence 0.0 bp, p95 13.95 bp, max 20.9 bp**. Collapse vs IEX-baseline: **median 58.63→0.0 bp**, **p95 265.91→13.95 bp**, **max 689→20.9 bp (ENSG)**. Both pre-committed pause thresholds now PASS. Stale-skip rate 43.5% (10/23, mostly 5.5–6.7 s old) — honest per-symbol cadence on the consolidated feed, gated correctly by `verify_quote_freshness`; not a regression.
+
+### THE SCOPE INVARIANT (binding — clause (r) is feed-only)
+
+- **UN-PAUSES the once-daily strategy on correct prices.** Clause (r) closes the price-accuracy blocker. The operator may re-arm `cron.job` 107/108 (the daily rebalance + advance-tick) on the once-daily cadence once they choose to.
+- **CADENCE REBUILD REMAINS SEPARATE.** The intraday/event-driven cadence rework (the STREAM-3 charter) is a distinct future decision and not authorized by clause (r). The pause that the cadence-rebuild charter chose remains operator-discretionary.
+- **NO LIVE FIRE.** Clause (r) authorizes the paper feed swap; live-fire prerequisites (DW-138, DW-154, DW-155, INC-81 closure) are unchanged.
+- **`LONGSHORT_QUOTE_FEED` lever** is an operational safety, not a defaults-question: default = polygon; the lever exists to revert in seconds if Polygon's endpoint degrades.
+
+### CROSS-REFERENCES
+- **DW-148** — CLOSED by this clause (feed-accuracy gate satisfied; both pre-committed thresholds now PASS); pre-live data-tier dimension also discharged (no Alpaca upgrade required).
+- **Clause (k).7** — `verify_quote_freshness` gate preserved unchanged; clause (r) makes it gate a real feed.
+- **ACT-336** — the Q4 reframe + IEX baseline this clause measures against.
+- **ACT-337** — this clause's authoring action; STEP B–D execution.
+- **`supabase/functions/_shared/longshort-broker/polygon-quote-fetcher.ts`** — the in-code anchor.
+- **`supabase/functions/_shared/longshort-execution/broker-bootstrap.ts:194`** — the seam swap + revert lever.
+- **STREAM-3 cadence charter** — the orthogonal rebuild; not authorized here.
