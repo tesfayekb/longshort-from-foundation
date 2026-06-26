@@ -24,9 +24,11 @@
  *       error) returns `{outcome:'failed', failure_reason}` with ZERO
  *       partial write.
  *   (6) Chunked UPSERT into `combiner_book_shadow` with `onConflict:
- *       'operator_id,as_of_date,variant,side,rank_within_side'`. Every
- *       row carries `computed_at = as_of.toISOString()` (DEC-034 (4) —
- *       no wall-clock in the orchestrator).
+ *       'operator_id,as_of_date,variant,side,rank_within_side,intraday_slot'`
+ *       (DEC-070 clause a — additive intraday_slot superset PK rotation;
+ *       daily writer sets slot=0 per clause e). Every row carries
+ *       `computed_at = as_of.toISOString()` (DEC-034 (4) — no wall-clock
+ *       in the orchestrator).
  *
  * Does NOT write `combiner_rankings_shadow` (deferred; book-only at
  * 3.M-iii — see `phase-3m-shadow-measurement.md`).
