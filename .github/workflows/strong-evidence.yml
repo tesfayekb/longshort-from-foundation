@@ -52,7 +52,13 @@ jobs:
       # the gate still fires. Replaces the per-commit manual lock-bump dance
       # (~5x this session). Script: scripts/restore-lockfiles-v3.ts.
       - name: Gate 0a-pre — auto-restore lockfiles to v3 (Catalog #58 self-heal)
-        run: deno run --allow-read --allow-write --allow-run --allow-env scripts/restore-lockfiles-v3.ts
+        # --no-config --no-lock are MANDATORY: without them, pinned Deno 1.46.3
+        # reads root/deno.json on startup and tries to parse the v5 lock referenced
+        # by config-discovery — failing with "Unsupported lockfile version '5'"
+        # BEFORE the script gets a chance to delete it. The script itself only
+        # uses JSON.parse + fs + spawning child `deno cache` (which passes
+        # --lock= explicitly to a fresh-deleted lock), so it needs no config.
+        run: deno run --no-config --no-lock --allow-read --allow-write --allow-run --allow-env scripts/restore-lockfiles-v3.ts
 
       # Check (a): both deno.lock files at version 3 (pure JSON read; never invokes
       # deno cache, so it cannot itself trigger a v5 rewrite — the load-bearing invariant).
@@ -115,7 +121,9 @@ jobs:
       # sandbox's v5 lock (toolchain-parity self-heals only on its own runner).
       # Regenerate before the warm-cache + gate steps consume the lock.
       - name: Auto-restore lockfiles to v3 (Catalog #58 self-heal)
-        run: deno run --allow-read --allow-write --allow-run --allow-env scripts/restore-lockfiles-v3.ts
+        # See toolchain-parity comment: --no-config --no-lock are required so
+        # Deno's startup doesn't trip on the v5 lock before the script can heal it.
+        run: deno run --no-config --no-lock --allow-read --allow-write --allow-run --allow-env scripts/restore-lockfiles-v3.ts
 
       - name: Warm Deno cache (root + supabase/functions)
         run: |
