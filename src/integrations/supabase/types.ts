@@ -174,6 +174,7 @@ export type Database = {
           as_of_date: string
           computed_at: string
           inclusion_rule: string
+          intraday_slot: number
           k: number
           operator_id: string
           rank_within_side: number
@@ -187,6 +188,7 @@ export type Database = {
           as_of_date: string
           computed_at?: string
           inclusion_rule: string
+          intraday_slot?: number
           k: number
           operator_id: string
           rank_within_side: number
@@ -200,6 +202,7 @@ export type Database = {
           as_of_date?: string
           computed_at?: string
           inclusion_rule?: string
+          intraday_slot?: number
           k?: number
           operator_id?: string
           rank_within_side?: number
