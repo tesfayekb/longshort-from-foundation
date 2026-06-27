@@ -69,14 +69,14 @@ The audit is surfacing a cluster of CHEAP, scope-disciplined items that can be s
 | **DW-171** | PEAD classic-own-firm-SUE σ_proxy variant | **ACCRUAL-GATED** (NOT weekend) — needs ≥ 8 quarters of per-name actual/consensus pairs in `signal_observations` before std is stable | The compute path is cheap once data accrues; shadow stand-up is meaningful only after 8q | Promotion mutates CRITICAL §4.4.6 → DEC + Phase-7 measurement |
 | **DW-172** | PEAD T-0 consensus snapshot capture | YES — zero-cost forward action (new table + writer + pre-RTH cron via existing fetcher) | Vendor backfill impossible; cost of NOT starting now is ~3-month delay on Phase-7 walk-down ablation | The walk-down ablation itself is Phase-7 |
 | **DW-173** | SI level / DTC as-alpha shadow variant | YES — shadow stand-up | Existing fetcher + existing DTC column (MIG-131) + existing §6.5 harness; the data is already in the system | Promotion mutates CRITICAL Signal #5 → DEC + Phase-7 measurement |
+| **DEC-071 + DW-176** | **Reversal gate (news/catalyst) + magnitude cap (3σ trailing-60d) + ungated shadow ride-along** | **YES — CONSTRUCTION FIX (the audit's FIRST actual now-fix, not a measure-later variant)** | Cross-signal read in existing `reversal-orchestrator.ts`; same `as_of` semantics; existing `signal_observations` table; ungated shadow rides on §6.5 harness | This IS the promotion: DEC-071 charters the now-fix because the failure mode is GENUINELY UNMITIGATED today (§6.4 fallback sums additively, no interaction veto; trained combiner months away). Phase-7 (DW-177) ablates the 3σ + lookback parameters retrospectively. |
 
-Sequencing intent: execute the weekend-buildable rows (DW-170 + DW-172 + DW-173 — DW-171 stays accrual-gated) AFTER the remaining audits (#7, #1, #4, #8, #9, #3) complete, as one combined scope-disciplined PR per the operator's "review all first, then build together" framing. New weekend-buildable findings from the pending audits will land in this table as they're surfaced.
+Sequencing intent: execute the weekend-buildable rows (DW-170 + DW-172 + DW-173 + the DEC-071 construction fix bundled with the DW-176 ungated shadow ride-along — DW-171 stays accrual-gated) AFTER the remaining audits (#1, #4, #8, #9, #3) complete, as one combined scope-disciplined PR per the operator's "review all first, then build together" framing. The DEC-071 now-fix is the audit's FIRST construction fix (departure from the #6/#2/#5 shadow-stand-up-only pattern), justified by the unmitigated-gap + unambiguous-literature; the others remain measure-later shadow stand-ups. New weekend-buildable findings from the pending audits will land in this table as they're surfaced.
 
 **Anti-completion-theater note:** these shadow stand-ups are NOT promotions and do NOT change the live ranker / live execution / live PnL — they create the comparator series that Phase-7 (FP-058) requires to make a measured promotion decision instead of a fabricated one.
 
 ## Signals pending audit (in order)
 
-- **#7 short-term reversal** — next.
 - **#1 analyst revisions**.
 - **#4 insider transactions**.
 - **#8 news sentiment**.
@@ -85,7 +85,8 @@ Sequencing intent: execute the weekend-buildable rows (DW-170 + DW-172 + DW-173 
 
 ## Cross-references
 
-- Deferred-work register: `docs/08-planning/deferred-work-register.md` (DW-169 … DW-175 as of this writing).
+- Deferred-work register: `docs/08-planning/deferred-work-register.md` (DW-169 … DW-177 as of this writing).
 - Phase-7 measure-and-lock home: `docs/08-planning/feature-proposals.md` → FP-058.
-- Audit-action records: `docs/06-tracking/action-tracker.md` → ACT-350 (ledger creation + #6/#2 findings); **ACT-351** (#5 findings + DW-173/174/175 + weekend-build-list section).
+- Audit-action records: `docs/06-tracking/action-tracker.md` → ACT-350 (ledger creation + #6/#2 findings); ACT-351 (#5 findings + DW-173/174/175 + weekend-build-list section); **ACT-352 (#7 findings + DEC-071 now-fix charter + DW-176/177 + weekend-build-list now-fix row)**.
+- Decisions: `docs/decisions/DEC-071-reversal-cross-signal-gate-and-magnitude-cap.md` (the now-fix charter — PROPOSED, not yet built).
 - Authoritative signal specs: `docs/04-modules/longshort/design-source/` (CROSSWIND v0.9 — never edit).
