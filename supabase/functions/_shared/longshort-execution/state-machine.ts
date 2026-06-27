@@ -67,9 +67,12 @@ import type { OrderAcceptanceState } from '../longshort-broker-interfaces.ts';
 
 export type TradeType = 'entry' | 'rank_exit' | 'short_stop';
 
-/** Returns true iff E3 v1 handles this trade type natively. */
-export function isSupportedTradeType(t: TradeType): t is 'entry' | 'rank_exit' {
-  return t === 'entry' || t === 'rank_exit';
+/** DW-149 (Component 1) — `short_stop` is now natively supported. The
+ *  function is retained for back-compat (telemetry-shape callers reference
+ *  it) and returns true for all three trade types now that the §8.6.2
+ *  short-stop ladder is wired. */
+export function isSupportedTradeType(t: TradeType): t is TradeType {
+  return t === 'entry' || t === 'rank_exit' || t === 'short_stop';
 }
 
 // ── State enum ─────────────────────────────────────────────────────
@@ -182,6 +185,10 @@ export interface StateMachineConfig {
    *  ratification once paper replay surfaces the right cadence. */
   STEP_FILL_WAIT_S_ENTRY: number;
   STEP_FILL_WAIT_S_RANK_EXIT: number;
+  /** DW-149 — §8.6.2 short-stop fill-wait. Tighter than rank_exit (a
+   *  squeeze can't wait); 20s default matches the §8.6.2:152 parallel-
+   *  order trigger. */
+  STEP_FILL_WAIT_S_SHORT_STOP: number;
 }
 
 export const DEFAULT_STATE_MACHINE_CONFIG: StateMachineConfig = {
@@ -189,6 +196,7 @@ export const DEFAULT_STATE_MACHINE_CONFIG: StateMachineConfig = {
   WALL_CLOCK_CAP_S: 120,
   STEP_FILL_WAIT_S_ENTRY: 30,
   STEP_FILL_WAIT_S_RANK_EXIT: 60,
+  STEP_FILL_WAIT_S_SHORT_STOP: 20,
 };
 
 // ── Ladders (§8.6.2 verbatim) ──────────────────────────────────────
@@ -211,15 +219,27 @@ export const RANK_EXIT_LADDER: readonly LadderStep[] = [
   { cumulative_bps: 200 },
 ] as const;
 
-export function ladderFor(trade_type: 'entry' | 'rank_exit'): readonly LadderStep[] {
-  return trade_type === 'entry' ? ENTRY_LADDER : RANK_EXIT_LADDER;
+/** DW-149 — SHORT_STOP: step 0 initial (placed at +200bps already by the
+ *  evaluator) → terminal. Per-step fill-wait is short (20s); the parallel-
+ *  market-cover race lives at the evaluator (the §8.6.2:152 mechanic does
+ *  NOT cancel the limit — the kernel ladder is therefore a one-rung shelf). */
+export const SHORT_STOP_LADDER: readonly LadderStep[] = [
+  { cumulative_bps: 0 },
+] as const;
+
+export function ladderFor(trade_type: TradeType): readonly LadderStep[] {
+  if (trade_type === 'entry') return ENTRY_LADDER;
+  if (trade_type === 'rank_exit') return RANK_EXIT_LADDER;
+  return SHORT_STOP_LADDER;
 }
 
 export function stepFillWaitS(
-  trade_type: 'entry' | 'rank_exit',
+  trade_type: TradeType,
   config: StateMachineConfig,
 ): number {
-  return trade_type === 'entry' ? config.STEP_FILL_WAIT_S_ENTRY : config.STEP_FILL_WAIT_S_RANK_EXIT;
+  if (trade_type === 'entry') return config.STEP_FILL_WAIT_S_ENTRY;
+  if (trade_type === 'rank_exit') return config.STEP_FILL_WAIT_S_RANK_EXIT;
+  return config.STEP_FILL_WAIT_S_SHORT_STOP;
 }
 
 /**
@@ -302,20 +322,12 @@ function basePayload(o: InFlightOrder): Record<string, unknown> {
 export function nextState(input: NextStateInput): NextStateOutput {
   const { order, event, ts, config, initial_limit_price } = input;
 
-  // ── Defensive scope guard (DW-149) — first thing the kernel checks.
-  if (!isSupportedTradeType(order.trade_type)) {
-    const reason = `short_stop deferred to DW-149: trade_type='${order.trade_type}' not supported in E3 v1`;
-    return {
-      nextOrder: terminate(order, 'terminal_tier3_pause'),
-      sideEffects: [
-        { kind: 'scope_violation_error', order_id: order.order_id, reason },
-        emit('longshort.execution.scope_violation', 'tier3', 'failure_escalated', {
-          ...basePayload(order),
-          reason,
-        }),
-      ],
-    };
-  }
+  // ── DW-149 (Component 1) RESOLVED — the prior defensive scope guard
+  //    that terminated `short_stop` to tier3_pause is REMOVED. The
+  //    short_stop trade type is now natively handled by the ladder +
+  //    step-fill-wait helpers above (single-step ladder; 20s fill wait);
+  //    the §8.6.2:152 parallel-market-cover race lives at the evaluator
+  //    (`short-stop-evaluator.ts`), not in this pure kernel.
 
   // Already-terminal — no transition.
   if (isTerminal(order.state)) {
@@ -426,7 +438,7 @@ export function nextState(input: NextStateInput): NextStateOutput {
   // The wall-clock cap is anchored at accepted_at (PRESERVED across
   // escalation). The per-step timer is anchored at submitted_at (refreshed
   // on cancel-and-replace) so each ladder step gets its own fill window.
-  const trade_type = order.trade_type as 'entry' | 'rank_exit';
+  const trade_type = order.trade_type;
   const ladder = ladderFor(trade_type);
   const stepWait = stepFillWaitS(trade_type, config);
   const stepElapsed = elapsedS(ts, order.submitted_at);
