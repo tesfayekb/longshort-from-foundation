@@ -60,6 +60,11 @@ import {
   buildRebalanceAggregateAssertion,
   createBrokerPositionAggregateFetcher,
 } from '../_shared/longshort-execution/rebalance-aggregate-assertion.ts';
+import {
+  buildRebalanceAggregatePersistenceCheck,
+  createSupabaseAggregateHistoryReader,
+  createSupabaseAggregatePersistenceEventWriter,
+} from '../_shared/longshort-execution/rebalance-aggregate-persistence.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -167,6 +172,23 @@ Deno.serve(createHandler(async (req: Request) => {
           fetcher_source: 'live',
         })
       : undefined;
+    // FP-057 Sub-step 5 — rolling-window persistence check (the PAGER
+    // event; DW-163 + DW-149-B). Reads the just-written
+    // verify_rebalance_aggregate row (lte ts) so the in-tick fire is
+    // counted; latch + cooldown via reconciliation_events itself.
+    const rebalanceAggregatePersistenceCheck = rebalanceAggregateAssertion
+      ? buildRebalanceAggregatePersistenceCheck({
+          operator_id: DEFAULT_OPERATOR_ID,
+          fetcher_source: 'live',
+          reader: createSupabaseAggregateHistoryReader(
+            supabaseAdmin as unknown as Parameters<typeof createSupabaseAggregateHistoryReader>[0],
+            DEFAULT_OPERATOR_ID,
+          ),
+          writer: createSupabaseAggregatePersistenceEventWriter(
+            supabaseAdmin as unknown as Parameters<typeof createSupabaseAggregatePersistenceEventWriter>[0],
+          ),
+        })
+      : undefined;
     const result = await runTick({
       brokerFactory: () => broker,
       eventWriter,
@@ -174,6 +196,7 @@ Deno.serve(createHandler(async (req: Request) => {
       clock: productionClock,
       ts,
       ...(rebalanceAggregateAssertion ? { rebalanceAggregateAssertion } : {}),
+      ...(rebalanceAggregatePersistenceCheck ? { rebalanceAggregatePersistenceCheck } : {}),
     });
 
     await writeStrategyAuditEvent({
@@ -198,8 +221,10 @@ Deno.serve(createHandler(async (req: Request) => {
               event_id: result.rebalance_aggregate.event_id,
               action_taken: result.rebalance_aggregate.action_taken,
               band: result.rebalance_aggregate.band,
+              exempt_cause: result.rebalance_aggregate.exempt_cause,
             }
           : null,
+        rebalance_aggregate_persistence: result.rebalance_aggregate_persistence,
         trigger: 'manual',
       },
     });
@@ -212,6 +237,7 @@ Deno.serve(createHandler(async (req: Request) => {
       still_in_flight_count: result.still_in_flight.length,
       terminal_count: result.terminal.length,
       rebalance_aggregate: result.rebalance_aggregate,
+      rebalance_aggregate_persistence: result.rebalance_aggregate_persistence,
       correlation_id: correlationId,
     });
   } catch (e) {
