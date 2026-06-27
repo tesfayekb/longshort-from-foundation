@@ -46,12 +46,32 @@ import type {
   FinnhubEarningsFetcher,
   RawEarningsRow,
 } from '../shared/finnhub-earnings-fetcher.ts';
+import type { FinnhubEarningsCalendarFetcher } from '../shared/finnhub-earnings-calendar-fetcher.ts';
 import { computePead, type PeadSkipReason } from './compute-pead.ts';
 
 export interface PeadAdapterDeps {
   epsEstimate: FinnhubEpsEstimateFetcher;
   earnings: FinnhubEarningsFetcher;
+  /**
+   * FP-057 Sub-step 4b / DEC-070 cl.(f) — OPTIONAL event-calendar work-
+   * list pre-filter. When provided, the adapter fetches the calendar
+   * ONCE per (asOf-date) per isolate, caches the resulting reporter set,
+   * and SHORT-CIRCUITS the dual-Finnhub fetch for any ticker not on the
+   * set (returns `no_recent_earnings` typed skip with the `not in event
+   * work-list` detail string). This mirrors the orchestrator-side filter
+   * in pead-orchestrator.ts (Step 1b) so both paths produce identical
+   * scope reductions; the per-name PEAD VALUE is unchanged when the
+   * compute does run (the filter is SCOPE, not formula).
+   */
+  earningsCalendar?: FinnhubEarningsCalendarFetcher;
+  /** Calendar-day window for the work-list filter (default 8). */
+  worklistTrailingCalendarDays?: number;
 }
+
+/** Module-grain default mirrors the orchestrator constant; kept in-file
+ *  to avoid a cross-file import cycle through pead-orchestrator (which
+ *  imports adapter siblings transitively via registration). */
+const DEFAULT_WORKLIST_TRAILING_CALENDAR_DAYS = 8;
 
 /** Identity map; exists so a future widening of PeadSkipReason fails the
  *  type-check here rather than silently degrading. Mirrors the orchestrator's
@@ -61,8 +81,52 @@ function mapPeadSkip(reason: PeadSkipReason): SignalSkipReason {
 }
 
 export function createPeadAdapter(deps: PeadAdapterDeps): TickerComputeFn {
+  // Memoized work-list per (as_of_date) — one calendar fetch per isolate
+  // per run regardless of slice count. Map keyed by the YYYY-MM-DD slice
+  // so a long-running isolate spanning a midnight boundary refetches
+  // cleanly on the new date.
+  const worklistCache = new Map<string, Promise<Set<string> | null>>();
+  const trailingDays = deps.worklistTrailingCalendarDays
+    ?? DEFAULT_WORKLIST_TRAILING_CALENDAR_DAYS;
+
+  async function getWorklist(asOf: Date, asOfDate: string): Promise<Set<string> | null> {
+    if (!deps.earningsCalendar) return null;
+    const cached = worklistCache.get(asOfDate);
+    if (cached) return cached;
+    const p = (async (): Promise<Set<string> | null> => {
+      const fromMs = asOf.getTime() - trailingDays * 86_400_000;
+      const fromISODate = new Date(fromMs).toISOString().slice(0, 10);
+      const calRes = await deps.earningsCalendar!.fetchCalendar(fromISODate, asOfDate);
+      if (calRes.kind === 'unavailable') {
+        // Empty/gated calendar → EMPTY set (not null) so every ticker
+        // short-circuits to `no_recent_earnings`. NEVER fall through to
+        // an unfiltered full-universe fetch — that would silently re-
+        // introduce the saturation failure mode this filter exists to
+        // prevent (FP-057 Sub-step 4b STOP-condition).
+        return new Set<string>();
+      }
+      return calRes.tickers;
+    })();
+    worklistCache.set(asOfDate, p);
+    return p;
+  }
+
   return async ({ ticker, gicsSector: _gicsSector, asOf }): Promise<TickerComputeResult> => {
     const as_of_date = asOf.toISOString().slice(0, 10);
+
+    // ─── FP-057 4b: work-list pre-filter (cheap; one calendar fetch per
+    // isolate per asOf-date, memoized). Skip the dual-Finnhub fetch for
+    // names not on the trailing-window reporter set.
+    const worklist = await getWorklist(asOf, as_of_date);
+    if (worklist !== null && !worklist.has(ticker)) {
+      return {
+        kind: 'skip',
+        reason: 'no_recent_earnings',
+        detail:
+          `not in event work-list (no reporter in trailing-${trailingDays}-calendar-day ` +
+          `Finnhub /calendar/earnings window ending ${as_of_date}) — work-list scope filter`,
+      };
+    }
 
     let estResult: Awaited<ReturnType<FinnhubEpsEstimateFetcher['fetchEpsEstimates']>>;
     let earnResult: Awaited<ReturnType<FinnhubEarningsFetcher['fetchEarnings']>>;

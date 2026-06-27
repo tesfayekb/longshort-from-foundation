@@ -62,6 +62,7 @@ import { zScoreNormalizeWithinSector } from '../shared/z-score-normalize.ts';
 import { captureSignalObservations } from '../shared/missingness-capture.ts';
 import type { FinnhubEpsEstimateFetcher, RawEpsEstimateRow } from '../shared/finnhub-eps-estimate-fetcher.ts';
 import type { FinnhubEarningsFetcher, RawEarningsRow } from '../shared/finnhub-earnings-fetcher.ts';
+import type { FinnhubEarningsCalendarFetcher } from '../shared/finnhub-earnings-calendar-fetcher.ts';
 import { computePead, type PeadSkipReason } from './compute-pead.ts';
 
 /** Locked signal-id for Phase 3 combiner consumption. Do not rename. */
@@ -74,6 +75,17 @@ export const SIGNAL_ID = 'pead_sue_20d';
  * per-minute cap with margin for retries and the dual-axis verify path).
  */
 const DEFAULT_CONCURRENCY = 5;
+
+/**
+ * FP-057 Sub-step 4b / DEC-070 cl.(f) — default trailing earnings-calendar
+ * window for the event-driven work-list pre-filter (CALENDAR days, not
+ * trading days). 8 calendar days covers a trailing-5-trading-day span
+ * plus weekend slack — names that reported in this window are the
+ * "price-path-relevant / drift-still-developing" cohort. DISTINCT FROM
+ * the 60-trading-day output staleness gate inside `computePead` (which
+ * stays unchanged — it's the formula's own no_recent_earnings guard).
+ */
+export const DEFAULT_PEAD_WORKLIST_TRAILING_CALENDAR_DAYS = 8;
 
 interface UniverseRow {
   ticker: string;
@@ -93,6 +105,18 @@ export interface PeadOrchestratorContext
   extends Omit<SignalOrchestratorContext, 'priceHistory'> {
   epsEstimate: FinnhubEpsEstimateFetcher;
   earnings: FinnhubEarningsFetcher;
+  /**
+   * OPTIONAL: when supplied, the orchestrator fetches the trailing
+   * earnings calendar ONCE pre-loop, intersects with the loaded universe
+   * to derive the work-list, and runs the existing dual-Finnhub fetch +
+   * computePead ONLY for work-list names. When omitted, the orchestrator
+   * runs on the full universe (preserves the FP-044 behaviour for tests
+   * and any caller that intentionally wants a full sweep — e.g. the
+   * once-per-quarter backfill / replay paths).
+   */
+  earningsCalendar?: FinnhubEarningsCalendarFetcher;
+  /** Calendar-day window for the work-list filter (default 8). */
+  worklistTrailingCalendarDays?: number;
 }
 
 /** Map PEAD compute skip discriminants 1:1 to the SignalSkipReason enum.
@@ -164,10 +188,73 @@ export function createPeadOrchestrator(ctx: PeadOrchestratorContext) {
         };
       }
 
+      // ── Step 1b: optional event-calendar work-list pre-filter ────────
+      //
+      // FP-057 Sub-step 4b / DEC-070 cl.(f). When `earningsCalendar` is
+      // injected, we restrict the per-ticker dual-Finnhub fetch to the
+      // set of names that reported in the trailing window — typical
+      // size 10s–150 names vs the full ~840. Names filtered out are NOT
+      // added to `skipped`: by construction they would have hit
+      // `no_recent_earnings` inside computePead anyway (their last
+      // reported quarter pre-dates the window), so reporting them as
+      // skips would be noise. We DO surface `universe_size` as the
+      // POST-filter size so the run's row-count math is honest.
+      //
+      // WINDOW POLARITY: `from = as_of_date - N calendar days`,
+      // `to = as_of_date`. The 60-trading-day output gate inside
+      // computePead remains the authoritative staleness boundary for
+      // VALUE emission; the work-list is purely a SCOPE pre-filter and
+      // changes NO per-name PEAD value (only which names are computed).
+      let workUniverse: UniverseRow[] = universe;
+      if (ctx.earningsCalendar) {
+        const trailingDays = ctx.worklistTrailingCalendarDays
+          ?? DEFAULT_PEAD_WORKLIST_TRAILING_CALENDAR_DAYS;
+        const asOfMs = as_of.getTime();
+        const fromMs = asOfMs - trailingDays * 86_400_000;
+        const fromISODate = new Date(fromMs).toISOString().slice(0, 10);
+        const calResult = await ctx.earningsCalendar.fetchCalendar(
+          fromISODate,
+          as_of_date,
+        );
+        if (calResult.kind === 'unavailable') {
+          // Empty / gated calendar → empty work-list. Honest no-op run:
+          // outcome=completed with 0 rows; downstream combiner reads the
+          // prior day's slot-0 PEAD rows unchanged (signal_observations
+          // is upsert-by-(operator,signal,ticker,as_of_date), so no
+          // active deletion). NEVER fall through to a full-universe
+          // sweep — that would silently re-introduce the saturation
+          // failure mode this filter exists to prevent.
+          return {
+            outcome: 'completed',
+            signal_id: SIGNAL_ID,
+            as_of_date,
+            universe_size: 0,
+            persisted_count: 0,
+            skipped: [],
+            started_at,
+            completed_at: ts,
+          };
+        }
+        const calSet = calResult.tickers;
+        workUniverse = universe.filter((r) => calSet.has(r.ticker));
+        if (workUniverse.length === 0) {
+          return {
+            outcome: 'completed',
+            signal_id: SIGNAL_ID,
+            as_of_date,
+            universe_size: 0,
+            persisted_count: 0,
+            skipped: [],
+            started_at,
+            completed_at: ts,
+          };
+        }
+      }
+
       // ── Step 2: per-ticker dual-fetch + compute ──────────────────────
       const concurrency = ctx.concurrency ?? DEFAULT_CONCURRENCY;
       const perTicker = await pLimitedMap<UniverseRow, PerTickerResult>(
-        universe,
+        workUniverse,
         concurrency,
         async (row) => {
           const { ticker, gics_sector } = row;
@@ -355,7 +442,7 @@ export function createPeadOrchestrator(ctx: PeadOrchestratorContext) {
         outcome: 'completed',
         signal_id: SIGNAL_ID,
         as_of_date,
-        universe_size: universe.length,
+        universe_size: workUniverse.length,
         persisted_count: inserted,
         skipped: skips,
         started_at,

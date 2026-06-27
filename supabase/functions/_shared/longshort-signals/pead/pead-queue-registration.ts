@@ -42,6 +42,7 @@ import { productionQueueRegistry } from '../shared/queue-worker/queue-config.ts'
 import { createPeadAdapter } from './pead-queue-adapter.ts';
 import { FinnhubEpsEstimateFetcher } from '../shared/finnhub-eps-estimate-fetcher.ts';
 import { FinnhubEarningsFetcher } from '../shared/finnhub-earnings-fetcher.ts';
+import { FinnhubEarningsCalendarFetcher } from '../shared/finnhub-earnings-calendar-fetcher.ts';
 import { SIGNAL_ID } from './pead-orchestrator.ts';
 
 /** `job_registry.id` of the init cron — preserved per addendum §5 (the
@@ -79,6 +80,10 @@ export function registerPeadQueueConsumer(): void {
     fetchAndCompute: createPeadAdapter({
       epsEstimate: new FinnhubEpsEstimateFetcher(getFinnhubKeyOrThrow()),
       earnings: new FinnhubEarningsFetcher(getFinnhubKeyOrThrow()),
+      // FP-057 Sub-step 4b / DEC-070 cl.(f) — event-driven work-list
+      // pre-filter. Memoized inside the adapter per (as_of_date) so one
+      // isolate makes exactly ONE /calendar/earnings call per run.
+      earningsCalendar: new FinnhubEarningsCalendarFetcher(getFinnhubKeyOrThrow()),
     }),
   });
 }
