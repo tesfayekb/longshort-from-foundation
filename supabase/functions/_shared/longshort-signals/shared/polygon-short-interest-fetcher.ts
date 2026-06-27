@@ -95,6 +95,18 @@ export interface RawShortInterestReport {
   report_date: string;
   /** Raw share-count of shorted shares (NOT a percentage). */
   short_interest: number;
+  /**
+   * Days-to-cover (DTC) as reported by Polygon's
+   * `/stocks/v1/short-interest` endpoint (= `short_interest / avg_daily_volume`).
+   * STRICTLY a risk-side metric — used ONLY by the short-side pre-flight
+   * squeeze-avoidance gate (DW-165). MUST NEVER enter the combiner feature
+   * vector — per CROSSWIND §4.4.3 the alpha signal is SI-as-%-of-float;
+   * mixing DTC into the feature vector would silently change the signal's
+   * economics (this is the exact corruption the original `normalizeRow`
+   * comment warns about). The field is `null` when Polygon omits or
+   * returns a non-finite value (typed-absence, never a fabricated zero).
+   */
+  days_to_cover: number | null;
 }
 
 export type ShortInterestFetchResult =
@@ -105,13 +117,15 @@ interface PolygonShortInterestRow {
   settlement_date?: string;
   ticker?: string;
   short_interest?: number;
-  // The endpoint also returns `avg_daily_volume` + `days_to_cover` — both
-  // are ignored on purpose. `days_to_cover` is a different financial
-  // quantity (SI / ADV) and is NOT a substitute for SI-as-%-of-float
-  // (§4.4.3 spec); using it would silently change the signal's economics.
-  // The derivation of `si_pct_float` from `short_interest` is performed
-  // in the orchestrator using shares-outstanding from the reference
-  // endpoint.
+  avg_daily_volume?: number;
+  // `days_to_cover` is also returned by Polygon — Squeeze-Protection
+  // Component 2 (DW-165) now CARRIES it on the report alongside
+  // `short_interest`, but it remains STRICTLY a risk-gate input for the
+  // short-side pre-flight (squeeze avoidance). It is NEVER injected into
+  // `si_pct_float` and NEVER enters the feature vector — the SI-as-%-of-
+  // float signal derivation (§4.4.3) stays exactly as-is. See
+  // `RawShortInterestReport.days_to_cover` for the contract.
+  days_to_cover?: number;
 }
 
 interface PolygonShortInterestResponse {
@@ -131,7 +145,24 @@ function normalizeRow(row: PolygonShortInterestRow): RawShortInterestReport | nu
   // point); it is NOT a divide-by-zero concern here because the denominator
   // is shares-outstanding, set in the sibling fetcher.
   if (typeof row.short_interest === 'number' && Number.isFinite(row.short_interest) && row.short_interest >= 0) {
-    return { report_date, short_interest: row.short_interest };
+    // DTC: Polygon may emit `days_to_cover` directly OR allow derivation
+    // from `short_interest / avg_daily_volume`. Both paths are valid; we
+    // prefer the explicit field when present. Anti-phantom: a missing,
+    // non-finite, non-positive ADV, or otherwise non-finite DTC -> null
+    // (typed-absence, NEVER a fabricated 0 — 0-DTC would falsely PASS the
+    // pre-flight gate on a name that is actually un-coverable).
+    let dtc: number | null = null;
+    if (typeof row.days_to_cover === 'number' && Number.isFinite(row.days_to_cover) && row.days_to_cover >= 0) {
+      dtc = row.days_to_cover;
+    } else if (
+      typeof row.avg_daily_volume === 'number' &&
+      Number.isFinite(row.avg_daily_volume) &&
+      row.avg_daily_volume > 0
+    ) {
+      const derived = row.short_interest / row.avg_daily_volume;
+      if (Number.isFinite(derived) && derived >= 0) dtc = derived;
+    }
+    return { report_date, short_interest: row.short_interest, days_to_cover: dtc };
   }
   return null;
 }
