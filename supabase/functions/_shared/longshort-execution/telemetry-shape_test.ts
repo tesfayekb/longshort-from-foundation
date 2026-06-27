@@ -88,6 +88,7 @@ Deno.test('E_evidence_2: routed rejection event matches reconciliation_events co
     eventWriter: writer,
     clock: createFixedClock(TS),
     ts: TS,
+    shortStopEnabled: false,
   });
   assert(events.length > 0, 'expected at least one event');
   for (const e of events) assertEventShape(e, e.call_name);
@@ -126,6 +127,7 @@ Deno.test('E_evidence_2: clean accept tick emits zero failure events', withCreds
     eventWriter: { async emit(e) { events.push(e); } },
     clock: createFixedClock(TS),
     ts: TS,
+    shortStopEnabled: false,
   });
   // Clean accept emits no FAILURE (tier-2/tier-3) events. The kernel may
   // emit informational events on a successful transition; only the failure

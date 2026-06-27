@@ -21,9 +21,9 @@ interface AlpacaOrderPostBody {
   symbol: string;
   qty: string;
   side: 'buy' | 'sell';
-  type: 'limit';
+  type: 'limit' | 'market';
   time_in_force: 'day';
-  limit_price: string;
+  limit_price?: string;
   client_order_id: string;
 }
 
@@ -44,8 +44,9 @@ export class AlpacaOrderSubmitter implements BrokerOrderSubmitter {
       side: req.side,
       type: req.type,
       time_in_force: req.time_in_force,
-      limit_price: req.limit_price.toFixed(2),
       client_order_id: req.client_order_id,
+      // DW-149 (short-stop parallel cover): market orders OMIT limit_price.
+      ...(req.type === 'limit' ? { limit_price: req.limit_price.toFixed(2) } : {}),
     };
     const resp = await this.client.postJson<AlpacaOrderPostBody, AlpacaOrderPostResponse>(
       '/v2/orders',

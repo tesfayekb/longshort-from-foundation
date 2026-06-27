@@ -287,8 +287,13 @@ Deno.test('Wall-clock cap (>120s past accepted_at) → terminal_tier2_unfillable
   assert(events.some((e) => e.call_name === 'longshort.execution.tier2_unfillable_wallclock_cap'));
 });
 
-// ── defensive short-stop guard at the shell
-Deno.test('Defensive short-stop guard: terminates tier3_pause + scope_violation event', async () => {
+// ── DW-149 (Component 1) RESOLVED — the defensive short-stop guard is
+//    REMOVED. `short_stop` is now natively handled by the kernel ladder
+//    (single-step, 20s fill-wait) and the §8.6.2:152 parallel-cover race
+//    lives at the evaluator. A short_stop carried into the shell behaves
+//    like any other trade_type: pending under the timeout → no terminal,
+//    no scope_violation event.
+Deno.test('DW-149: short_stop carried into shell is natively handled (no scope_violation)', async () => {
   const order = mkOrder({ trade_type: 'short_stop' });
   const { writer, events } = mkWriter();
   const { submitter } = mkSubmitter();
@@ -304,8 +309,9 @@ Deno.test('Defensive short-stop guard: terminates tier3_pause + scope_violation 
     submitter, canceller, eventWriter: writer,
     clock: CLOCK, ts: PLUS(1),
   });
-  assertEquals(r.terminal[0].state, 'terminal_tier3_pause');
-  assert(events.some((e) => e.call_name === 'longshort.execution.scope_violation'));
+  assertEquals(r.terminal.length, 0);
+  assertEquals(r.still_in_flight.length, 1);
+  assert(!events.some((e) => e.call_name === 'longshort.execution.scope_violation'));
 });
 
 // ── fetcher throw maps to tier-3 (refuse silent skip)
