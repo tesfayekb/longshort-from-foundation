@@ -552,3 +552,85 @@ Deno.test('(17) divide-by-zero defense — zero shares cannot reach divider even
   assertEquals(zero.reason, 'missing_shares_outstanding');
   assertStringIncludes(zero.detail!, 'defensive');
 });
+
+Deno.test('(DW-165) daysToCoverWriter receives the latest DTC per ticker AND null is preserved', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+    { ticker: 'ILLQ', gics_sector: 'IT' },
+  ];
+  const { supabase } = makeSupabase({ universe });
+  // Fetcher returns reports with `days_to_cover` field. ASC-ordered (per fetcher contract).
+  const { fetcher } = makeFetcher({
+    AAPL: { kind: 'reports', reports: [
+      { report_date: '2026-04-30', short_interest: 0.08, days_to_cover: 3.0 },
+      { report_date: '2026-05-15', short_interest: 0.07, days_to_cover: 3.5 },
+      { report_date: '2026-05-31', short_interest: 0.06, days_to_cover: 4.2 },
+    ]},
+    MSFT: { kind: 'reports', reports: [
+      { report_date: '2026-04-30', short_interest: 0.05, days_to_cover: 1.1 },
+      { report_date: '2026-05-15', short_interest: 0.055, days_to_cover: 1.2 },
+      { report_date: '2026-05-31', short_interest: 0.06, days_to_cover: 9.7 },
+    ]},
+    ILLQ: { kind: 'reports', reports: [
+      { report_date: '2026-04-30', short_interest: 0.02, days_to_cover: null },
+      { report_date: '2026-05-15', short_interest: 0.025, days_to_cover: null },
+      { report_date: '2026-05-31', short_interest: 0.03, days_to_cover: null },
+    ]},
+  });
+  const upserts: Array<Array<{ ticker: string; latest_days_to_cover: number | null; report_date: string }>> = [];
+  const daysToCoverWriter = {
+    async upsertLatest(records: any[]) {
+      upserts.push(records.map((r) => ({
+        ticker: r.ticker,
+        latest_days_to_cover: r.latest_days_to_cover,
+        report_date: r.report_date,
+      })));
+      return { error: null };
+    },
+  };
+  const baseCtx = ctx(supabase, fetcher);
+  const res = await createShortInterestOrchestrator({ ...baseCtx, daysToCoverWriter }).run(AS_OF);
+  assertEquals(res.outcome, 'completed');
+  assertEquals(upserts.length, 1);
+  const byTicker = Object.fromEntries(upserts[0].map((r) => [r.ticker, r]));
+  // Latest report's DTC is what was carried (4.2, 9.7, null).
+  assertEquals(byTicker.AAPL.latest_days_to_cover, 4.2);
+  assertEquals(byTicker.MSFT.latest_days_to_cover, 9.7);
+  assertEquals(byTicker.ILLQ.latest_days_to_cover, null);
+  // report_date carries the LATEST (ASC-sorted last) settlement.
+  assertEquals(byTicker.AAPL.report_date, '2026-05-31');
+});
+
+Deno.test('(DW-165) no-contamination: DTC never appears in signal_observations payload', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+  ];
+  const { supabase, calls } = makeSupabase({ universe });
+  const { fetcher } = makeFetcher({
+    AAPL: { kind: 'reports', reports: [
+      { report_date: '2026-04-30', short_interest: 0.08, days_to_cover: 12.0 },
+      { report_date: '2026-05-15', short_interest: 0.07, days_to_cover: 13.0 },
+      { report_date: '2026-05-31', short_interest: 0.06, days_to_cover: 14.0 },
+    ]},
+    MSFT: { kind: 'reports', reports: [
+      { report_date: '2026-04-30', short_interest: 0.05, days_to_cover: 1.0 },
+      { report_date: '2026-05-15', short_interest: 0.055, days_to_cover: 1.0 },
+      { report_date: '2026-05-31', short_interest: 0.06, days_to_cover: 1.0 },
+    ]},
+  });
+  const daysToCoverWriter = { async upsertLatest() { return { error: null }; } };
+  const res = await createShortInterestOrchestrator({ ...ctx(supabase, fetcher), daysToCoverWriter }).run(AS_OF);
+  assertEquals(res.outcome, 'completed');
+  assert(calls.upsertPayloads.length > 0);
+  for (const batch of calls.upsertPayloads) {
+    for (const row of batch) {
+      // Hard invariant: DTC must NEVER be present on a signal_observations row.
+      assert(!('days_to_cover' in (row as Record<string, unknown>)),
+        'days_to_cover leaked into signal_observations');
+      assert(!('latest_days_to_cover' in (row as Record<string, unknown>)),
+        'latest_days_to_cover leaked into signal_observations');
+    }
+  }
+});
