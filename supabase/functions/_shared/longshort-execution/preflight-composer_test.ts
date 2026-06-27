@@ -362,7 +362,9 @@ Deno.test('preflight-composer: no ssrStatusFetcher → SHORT candidates record v
   assertEquals(out.summary.ssr_unavailable, true);
   const shortSkipped = out.skipped.get(preflightKey('TSLA', 'short'));
   assert(shortSkipped, 'short candidate must have skipped entry');
-  assertEquals(shortSkipped, ['verify_ssr_status']);
+  // DW-165 also adds verify_days_to_cover when no daysToCoverReader is
+  // injected — both gates are STRUCTURALLY ABSENT on this fixture.
+  assertEquals(shortSkipped, ['verify_ssr_status', 'verify_days_to_cover']);
   // LONG candidate does NOT record SSR skip — verify_ssr_status only applies
   // to short routing.
   assertEquals(out.skipped.get(preflightKey('AAPL', 'long')), undefined);
