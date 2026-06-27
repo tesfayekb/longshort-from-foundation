@@ -373,12 +373,13 @@ Deno.test('DW-149: aggregate band-violation co-occurring with short-stop fire â†
     eventWriter: writer,
     clock: createFixedClock(TS),
     ts: TS,
-    rebalanceAggregateAssertion: async () => ({
+    rebalanceAggregateAssertion: async (_ts, exempt_cause) => ({
       outcome: 'failure_escalated',
-      divergence: { long_gross_dollars: 10_000, short_gross_dollars: 8_000, ratio: 1.25, within_band: false },
+      divergence: { long_gross_dollars: 10_000, short_gross_dollars: 8_000, ratio: 1.25, within_band: false, exempt_cause: exempt_cause ?? null },
       event_id: 'evt-band-fail-1',
       action_taken: 'operator_alert',
       band: { lower: 0.90, upper: 1.10 },
+      exempt_cause: exempt_cause ?? null,
     }),
   });
   assert(result.short_stop_adjusted_aggregate, 'short_stop_adjusted_aggregate must be true when a short-stop fired alongside a band-violation');
@@ -393,12 +394,13 @@ Deno.test('DW-149: aggregate band-violation WITHOUT a short-stop fire â†’ short_
     eventWriter: writer,
     clock: createFixedClock(TS),
     ts: TS,
-    rebalanceAggregateAssertion: async () => ({
+    rebalanceAggregateAssertion: async (_ts, exempt_cause) => ({
       outcome: 'failure_escalated',
-      divergence: { long_gross_dollars: 10_000, short_gross_dollars: 8_000, ratio: 1.25, within_band: false },
+      divergence: { long_gross_dollars: 10_000, short_gross_dollars: 8_000, ratio: 1.25, within_band: false, exempt_cause: exempt_cause ?? null },
       event_id: 'evt-band-fail-2',
       action_taken: 'operator_alert',
       band: { lower: 0.90, upper: 1.10 },
+      exempt_cause: exempt_cause ?? null,
     }),
   });
   assertEquals(result.short_stop_adjusted_aggregate, false);
