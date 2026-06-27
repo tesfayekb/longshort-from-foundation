@@ -113,3 +113,91 @@ Deno.test('adapter: happy path returns kind=value with finite raw', async () => 
   assertEquals(r.kind, 'value');
   assert(Number.isFinite((r as unknown).raw));
 });
+
+// ── FP-057 Sub-step 4b — work-list pre-filter short-circuit ───────────
+
+function calendarFetcher(tickers: string[]) {
+  let calls = 0;
+  return {
+    get calls() { return calls; },
+    fetcher: {
+      async fetchCalendar(_f: string, _t: string) {
+        calls++;
+        return { kind: 'calendar' as const, tickers: new Set(tickers) };
+      },
+    },
+  };
+}
+
+Deno.test('adapter [4b]: ticker NOT in work-list → no_recent_earnings skip WITHOUT dual-fetch', async () => {
+  let estCalls = 0, earnCalls = 0;
+  const adapter = createPeadAdapter({
+    epsEstimate: { async fetchEpsEstimates() { estCalls++; return { kind: 'ok', rows: [] }; } } as unknown,
+    earnings: { async fetchEarnings() { earnCalls++; return { kind: 'ok', rows: [] }; } } as unknown,
+    earningsCalendar: calendarFetcher(['MSFT']).fetcher as never,
+  });
+  const r = await adapter({ ticker: 'AAPL', gicsSector: 'Tech', asOf: AS_OF });
+  assertEquals(r.kind, 'skip');
+  assertEquals((r as unknown).reason, 'no_recent_earnings');
+  assert(String((r as unknown).detail).includes('not in event work-list'));
+  // CRITICAL: zero Finnhub fetches for filtered-out names.
+  assertEquals(estCalls, 0);
+  assertEquals(earnCalls, 0);
+});
+
+Deno.test('adapter [4b]: ticker IN work-list → dual-fetch proceeds normally', async () => {
+  let estCalls = 0;
+  const adapter = createPeadAdapter({
+    epsEstimate: {
+      async fetchEpsEstimates() {
+        estCalls++;
+        return { kind: 'ok', rows: [
+          { period: '2026-05-31', epsAvg: 1.0, epsHigh: 1.2, epsLow: 0.8, numberAnalysts: 8 },
+        ] };
+      },
+    } as unknown,
+    earnings: earnFetcher({ kind: 'ok', rows: [
+      { period: '2026-05-31', actual: 1.5, estimate: 1.0 },
+    ] }),
+    earningsCalendar: calendarFetcher(['AAPL']).fetcher as never,
+  });
+  const r = await adapter({ ticker: 'AAPL', gicsSector: 'Tech', asOf: AS_OF });
+  assertEquals(r.kind, 'value');
+  assertEquals(estCalls, 1);
+});
+
+Deno.test('adapter [4b]: calendar fetched ONCE per as_of_date across many ticker calls (memoization)', async () => {
+  const cal = calendarFetcher(['AAPL']);
+  const adapter = createPeadAdapter({
+    epsEstimate: { async fetchEpsEstimates() { return { kind: 'ok', rows: [] }; } } as unknown,
+    earnings: { async fetchEarnings() { return { kind: 'ok', rows: [] }; } } as unknown,
+    earningsCalendar: cal.fetcher as never,
+  });
+  // 5 calls across the same as_of_date.
+  for (const t of ['AAPL', 'MSFT', 'GOOG', 'AMZN', 'NVDA']) {
+    await adapter({ ticker: t, gicsSector: 'Tech', asOf: AS_OF });
+  }
+  // Memoized: exactly ONE calendar fetch despite 5 ticker invocations.
+  assertEquals(cal.calls, 1);
+});
+
+Deno.test('adapter [4b]: empty calendar (unavailable) → every ticker short-circuits, NO full-universe fallback', async () => {
+  let estCalls = 0;
+  const emptyCal = {
+    async fetchCalendar() {
+      return { kind: 'unavailable' as const, reason: 'data_unavailable' as const };
+    },
+  };
+  const adapter = createPeadAdapter({
+    epsEstimate: { async fetchEpsEstimates() { estCalls++; return { kind: 'ok', rows: [] }; } } as unknown,
+    earnings: { async fetchEarnings() { return { kind: 'ok', rows: [] }; } } as unknown,
+    earningsCalendar: emptyCal as never,
+  });
+  for (const t of ['AAPL', 'MSFT', 'GOOG']) {
+    const r = await adapter({ ticker: t, gicsSector: 'Tech', asOf: AS_OF });
+    assertEquals(r.kind, 'skip');
+    assertEquals((r as unknown).reason, 'no_recent_earnings');
+  }
+  // STOP-condition: ZERO Finnhub fetches even though calendar said "unavailable".
+  assertEquals(estCalls, 0);
+});
