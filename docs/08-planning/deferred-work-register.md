@@ -3483,3 +3483,20 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future Owner Phase** | Phase-7 (post-live calibration). |
 | **Resolution shape** | A focused refinement FP; the observability metric to drive the calibration is the substitution-fallback rate already emitted on the DW-165 hard-exclude path (plus a recommended `dtc_downweight_observed` shadow series). |
 | **Cross_ref** | DW-165; DEC-067; §4.4.3. |
+
+---
+
+### DW-167: Polygon Options Advanced — full-universe intraday options-flow vendor
+
+| Field | Value |
+|---|---|
+| **ID** | DW-167. |
+| **Status** | CHARTERED 2026-06-28 at ACT-347 — VENDOR-GATED (procurement). |
+| **Tier** | B — meaningful intraday alpha lift; not pre-live blocker (the FP-057 Sub-step 4c dynamic-subset path captures ~85-90% of the available intraday options-flow alpha against Tradier's ~11-16 min sequential sweep). |
+| **Title** | Procure and integrate Polygon "Options Advanced" (≈ $200/mo) to enable a full-universe 5-min RTH options-flow sweep, replacing the Tradier-bottlenecked dynamic-subset path. |
+| **Scope** | (a) Procurement decision + contract; (b) `PolygonOptionsChainFetcher` parallel to `TradierOptionsChainFetcher` (same `OptionsChainFetcher` interface); (c) bulk snapshot endpoint wiring (removes the per-name sequential token-bucket bottleneck); (d) cron schedule swap — `longshort.options_flow.compute.intraday` from `*/15 14-19` (subset) → `*/5 14-19` (full-universe); (e) the dynamic-subset path (`options-flow-subset-resolver.ts`, MIG-133 sidecar) STAYS as a priority tier — even with vendor in place, the resolver's fresh-active union is the cheapest path to "tail becomes active intraday" coverage. |
+| **Depends-on** | Procurement budget approval; engineering capacity for the parallel fetcher + cron swap. |
+| **Blocks** | Nothing pre-live (Sub-step 4c subset path is the pre-live deliverable). |
+| **Future Owner Phase** | Post-live calibration (parallel to DW-166 the borrow-rate vendor charter). |
+| **Resolution shape** | A focused FP swapping the fetcher at registration time; the resolver, MIG-133 sidecar, and per-ticker adapter contract stay unchanged. |
+| **Cross_ref** | FP-057 Sub-step 4c; DW-166 (parallel vendor charter for borrow-rate); MIG-133 (`public.options_flow_daily_volume`); `supabase/functions/_shared/longshort-signals/options-flow/options-flow-subset-resolver.ts`; `supabase/functions/_shared/longshort-signals/options-flow/options-flow-queue-adapter.ts`; **ACT-347 (CHARTER)**. |
