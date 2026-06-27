@@ -471,7 +471,7 @@ Deno.test('runTick — threads exempt_cause to assertion AND invokes persistence
   const { broker } = mkBroker([]);
   const { writer } = captureEvents();
   let seenExempt: unknown = 'NOT_CALLED';
-  let persistenceTs: Date | null = null;
+  let persistenceTs: Date | null = null as Date | null;
   const result = await runTick({
     brokerFactory: () => broker,
     eventWriter: writer,
@@ -485,14 +485,15 @@ Deno.test('runTick — threads exempt_cause to assertion AND invokes persistence
         event_id: 'e1', action_taken: null, band: { lower: 0.9, upper: 1.1 }, exempt_cause: exempt_cause ?? null,
       };
     },
-    rebalanceAggregatePersistenceCheck: async (ts) => {
+    rebalanceAggregatePersistenceCheck: async (ts: Date) => {
       persistenceTs = ts;
       const r: PersistenceCheckOutcome = { escalated: false, reason: 'below_threshold', consecutive: 0, threshold: 3 };
       return r;
     },
   });
   assertEquals(seenExempt, null, 'no signals → exempt_cause must be null');
-  assertEquals(persistenceTs?.getTime(), TS.getTime(), 'persistence check uses THREADED ts');
+  assert(persistenceTs !== null, 'persistence check must be invoked');
+  assertEquals((persistenceTs as Date).getTime(), TS.getTime(), 'persistence check uses THREADED ts');
   assert(result.rebalance_aggregate_persistence !== null);
 });
 
