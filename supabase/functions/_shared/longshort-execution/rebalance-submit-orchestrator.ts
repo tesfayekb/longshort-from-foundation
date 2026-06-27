@@ -125,6 +125,12 @@ export interface RebalanceSubmitDeps {
   htbCacheReader?: HtbCacheReader;
   htbCacheClearer?: HtbCacheClearer;
   rejectionPropagator?: RejectionPropagator;
+  /**
+   * Optional injection of the short-side days-to-cover reader (DW-165).
+   * Defaults to the Supabase-backed reader in production; tests inject
+   * an in-memory double to exercise the gate without DB access.
+   */
+  daysToCoverReader?: DaysToCoverReader;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
