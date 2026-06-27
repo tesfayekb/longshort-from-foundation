@@ -10,9 +10,10 @@
  * NAME: a NEW handler (NOT a body-swap of `longshort-options-flow-
  * compute`). The daily handler stays AS-IS so cron-87's full-universe
  * sweep is bit-identical to pre-4c (operator-directed: "KEEP cron 87
- * AS-IS; ADD */15 14-19 * * 1-5"). Both handlers share the SAME
- * `signal_id='options_flow_imbalance_5d'` + the SAME registered queue
- * consumer; only the run's metadata.cadence tag distinguishes them.
+ * AS-IS; ADD every-15-min 14-19 UTC Mon-Fri" — i.e. RTH 15-minute
+ * cadence). Both handlers share the SAME `signal_id=
+ * 'options_flow_imbalance_5d'` + the SAME registered queue consumer;
+ * only the run's metadata.cadence tag distinguishes them.
  *
  * Wall-clock discipline (DEC-034 cl.4): `as_of` derives from
  * `productionClock.getWallClockTs()` — NO `new Date()` here.
