@@ -216,6 +216,10 @@ Sequencing intent: execute the weekend-buildable rows (DW-170 + DW-172 + DW-173 
 
 - **#3 options-flow**.
 
+*(Updated 2026-06-30 at ACT-357 — list now EMPTY; original line preserved above per Constitution Rule 8 to record the pre-#3-audit state.)*
+
+- **(none — 9-signal audit COMPLETE)**.
+
 ## Cross-references
 
 - Deferred-work register: `docs/08-planning/deferred-work-register.md` (DW-169 … DW-190 as of this writing).
