@@ -93,6 +93,7 @@ Deno.test('E_evidence_1 (replay): one phase1_pending accepted → still in-fligh
     eventWriter: writer,
     clock: createFixedClock(TS),
     ts: TS,
+    shortStopEnabled: false,
   });
   assertEquals(result.reconstructed_in_flight_count, 1);
   assertEquals(result.still_in_flight.length, 1);
@@ -132,6 +133,7 @@ Deno.test('E_evidence_1 (replay): phase2_working with broker fill → terminal_f
     eventWriter: writer,
     clock: createFixedClock(TS),
     ts: TS,
+    shortStopEnabled: false,
   });
   assertEquals(result.reconstructed_in_flight_count, 1);
   assertEquals(result.terminal.length, 1);
@@ -165,6 +167,7 @@ Deno.test('E_evidence_1 (replay): phase1_pending rejected → tier-2 terminal + 
     eventWriter: writer,
     clock: createFixedClock(TS),
     ts: TS,
+    shortStopEnabled: false,
   });
   assertEquals(result.reconstructed_in_flight_count, 1);
   assertEquals(result.terminal.length, 1);
