@@ -123,7 +123,7 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
   //   opt-out via `shortStopEnabled: false` for legacy/focused tests.
   let shortStop: ShortStopEvaluateResult | null = null;
   const shortStopEnabled = p.shortStopEnabled !== false;
-  if (shortStopEnabled) {
+  if (shortStopEnabled && broker.positionFetcher) {
     shortStop = await evaluateShortStops({
       positionFetcher: broker.positionFetcher,
       submitter: broker.submitter,
