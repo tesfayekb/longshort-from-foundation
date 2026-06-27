@@ -65,7 +65,7 @@ function findCancel(effs: readonly SideEffect[]): CancelAndReplaceEffect | undef
 }
 
 // ── trade-type guard helper
-Deno.test('isSupportedTradeType: entry+rank_exit only', () => {
+Deno.test('isSupportedTradeType: entry + rank_exit + short_stop (DW-149)', () => {
   assert(isSupportedTradeType('entry'));
   assert(isSupportedTradeType('rank_exit'));
   // DW-149 (Component 1) RESOLVED — short_stop now natively supported.
