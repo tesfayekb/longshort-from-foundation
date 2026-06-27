@@ -3355,7 +3355,7 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | Field | Value |
 |---|---|
 | **ID** | DW-162 (DW-143 successor #6 of 6). |
-| **Status** | open. **PRE-LIVE BLOCKER** (real borrow-fee P&L attribution per §3.3d). NOT a paper-v1 blocker (paper has no borrow-fee surface; HTB-cache covers availability, not rate). |
+| **Status** | **SUPERSEDED-BY-SPLIT (ACT-346, 2026-06-28).** The umbrella DW conflated TWO distinct deliverables with different vendor profiles: (i) the broker-emitted boolean ETB transition (buildable TODAY against Alpaca paper — `easy_to_borrow: true → false` IS a real squeeze precursor) and (ii) the numeric rate-magnitude monitor (VENDOR-GATED — Alpaca paper exposes no rate; needs IB API / S3 Partners / Markit Securities Finance / FIS Astec; a procurement decision). Mixing them held the buildable early-warning layer hostage to a vendor contract. **Successors:** **DW-162a** — easy_to_borrow transition monitor (the proxy, broker-emitted state change, NOT a fabricated rate; RESOLVED at ACT-346); **DW-162b** — vendor-gated rate-magnitude monitor + `verify_borrow_rate` rate-DRIFT branches (`bps_diff > 50`, `bps_diff ≥ 200`); **DW-166** — the procurement charter for the borrow-rate vendor (parallel to the options-flow / 4c vendor gate). DW-162 preserved (NOT deleted) as the historical anchor per the DW-143 split discipline; new work cites the successor IDs directly. |
 | **Tier** | A — money-path short-side P&L correctness (a missing borrow-fee accrual under-states short-leg costs; over time this corrupts realized-P&L and strategy-Sharpe attribution). |
 | **Title** | Author `BrokerBorrowRateFetcher` adapter + the daily borrow-rate ingest + the per-position borrow-fee accrual + wire BOTH `verify_borrow_rate` (snapshot) and `verify_borrow_persistence` (across-day stability of the live-account rate). |
 | **Scope** | (a) `BrokerBorrowRateFetcher` interface + Alpaca/Polygon implementation (whichever exposes per-symbol borrow rate on live accounts); (b) daily ingest job that snapshots rate per held-short symbol; (c) per-position fee accrual writer; (d) wire `verify_borrow_rate` (current snapshot) + `verify_borrow_persistence` (rate stability across N days). |
@@ -3363,7 +3363,60 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Blocks** | Phase-8 live-money authorization (short-side P&L attribution gate). |
 | **Future Owner Phase** | Phase 7 / pre-Phase-8 short-side readiness. |
 | **Resolution shape** | Strong+ FP authoring the fetcher (per ACT-317 broker-parity discipline) + ingest job + accrual writer + verifier wiring, paired with DW-155 (live-account shortability validation) as the short-side live-readiness bundle. |
-| **Cross_ref** | DW-143 (superseded umbrella); DW-155 (short-side live-readiness twin); CROSSWIND §3.3d / §11.0.7 #11, #12; the verifier shells `verify_borrow_rate.ts` / `verify_borrow_persistence.ts`; the conformance audit (ACT-pending). |
+| **Cross_ref** | DW-143 (superseded umbrella); DW-155 (short-side live-readiness twin); **DW-162a / DW-162b / DW-166 (successors)**; CROSSWIND §3.3d / §11.0.7 #11, #12; the verifier shells `verify_borrow_rate.ts` / `verify_borrow_persistence.ts`; the conformance audit (ACT-pending); **ACT-346 (split)**. |
+
+---
+
+### DW-162a: Squeeze Protection Component 3a — easy_to_borrow transition monitor (the proxy, EARLY-WARNING layer)
+
+| Field | Value |
+|---|---|
+| **ID** | DW-162a (DW-162 successor #1 of 2). |
+| **Status** | **RESOLVED 2026-06-28 at ACT-346 — Squeeze Protection Component 3a landed.** New monitor `etb-transition-monitor.ts` lists HELD shorts via broker-truth `listOpenPositions(ts)`, fetches `BrokerShortability` per symbol, resolves a usable boolean via `resolveEtbBoolean` (`easy_to_borrow=null AND shortable=true → SKIP — never coerce`; `easy_to_borrow=null AND shortable=false → false`; otherwise the broker boolean), persists to `public.short_etb_state_history` (MIG-132) idempotent on `(operator_id, symbol, observed_at)`, compares against the latest PRIOR observation, and emits a `short_etb_lost` STRUCTURED WARNING on `true → false`. The evaluator surface has NO submitter — the proxy WARNS only; the −15% short-stop (DW-149 Component 1) owns the auto-cover action layer. Wired into `tick-scheduler.ts:runTick` AFTER `evaluateShortStops` + BEFORE `advanceTick`, surfaced on `TickSchedulerResult.etb_transition`; closure failures caught + logged + surfaced `null` (tick survives vendor hiccup). Injected `ts` is the SOLE clock source (no `new Date()`; DEC-034 cl.4; wall-clock scanner CLEAN). Tests (10): held-shorts-only scope; true→false warning; false→true / no-change no-warning; first-observation persistence-only; typed-absence skip (no synthetic boolean); ts-verbatim; idempotency on repeat tick; WARNING-NOT-COVER structural assertion (compile-time check that no submitter field exists on the evaluator params); store-read-failure soft-skip. |
+| **Tier** | A — early-warning layer of the squeeze-protection charter; pre-live blocker complement to DW-149 (which fires AFTER the price damage) by surfacing the borrow-side cause BEFORE. |
+| **Title** | Detect `easy_to_borrow: true → false` flips on HELD shorts and emit `short_etb_lost` WARNINGS (no auto-cover) — the buildable broker-emitted proxy for the vendor-gated rate-magnitude monitor (DW-162b). |
+| **Resolution shape** | One focused execution turn: MIG-132 (`short_etb_state_history` table + idx + RLS), `etb-transition-monitor.ts` (`evaluateEtbTransitions` + `resolveEtbBoolean` + `createSupabaseEtbStateStore`), `tick-scheduler.ts` injection seam (`etbTransitionAssertion` optional closure), 10 unit tests + wall-clock scanner CLEAN. |
+| **Why a proxy, not a fabrication** | The boolean is broker-emitted state — Alpaca dropping a name from the ETB list IS the borrow demand surging (the same underlying phenomenon the rate-magnitude monitor would observe, through a coarser lens). It is NOT a synthesized rate. Honest limitations are documented (coarse — one bit, not magnitude; lagged — daily not intra-tick; false positives from routine ETB list churn). The −15% short-stop covers the action layer where the proxy is too coarse to act. |
+| **Why WARNING NOT COVER** | The proxy is coarser than a rate-magnitude trigger; treating an ETB flip as a forced-cover would convert an early-warning into an aggressive churner on every routine ETB-list refresh. The −15% short-stop (DW-149 Component 1) owns the force-cover action; this layer warns BEFORE the price damage so an operator can intervene. Structural compile-time assertion in the test suite prevents future regression to auto-cover. |
+| **Cross_ref** | DW-162 (split-parent); DW-149 (Component 1 — the action-layer complement); DW-162b (the vendor-gated twin); DW-166 (procurement charter); MIG-132 (`public.short_etb_state_history`); `supabase/functions/_shared/longshort-execution/etb-transition-monitor.ts` + `_test.ts`; `supabase/functions/_shared/longshort-execution/tick-scheduler.ts` (the `etbTransitionAssertion` injection seam); **ACT-346 (RESOLUTION)**; squeeze-protection charter; §2 axiom 3 (typed-absence); §9 SENTINEL (no fabricated rate); DEC-034 cl.4 (replay-determinism). |
+
+---
+
+### DW-162b: Vendor-gated numeric borrow-rate monitor + `verify_borrow_rate` rate-DRIFT branches
+
+| Field | Value |
+|---|---|
+| **ID** | DW-162b (DW-162 successor #2 of 2). |
+| **Status** | **open — VENDOR-GATED.** Cannot proceed against Alpaca paper (no `annual_rate_pct` field). Blocked on DW-166 procurement. Engineering seam pre-wired via `NullBorrowRateFetcher` (`supabase/functions/_shared/longshort-broker/null-borrow-rate-fetcher.ts`): implements `BrokerBorrowRateFetcher` against the live shortability fetcher, returns the REAL `is_htb` (derived from `!easy_to_borrow`), and ALWAYS THROWS `BorrowRateUnavailableError` on `fetchBorrowRate(...)` — fail-loud anti-sentinel (§9 SENTINEL forbidden). When a vendor lands, swap the adapter; the verifier wiring is ready. |
+| **Tier** | A — short-side P&L attribution correctness (a missing borrow-fee accrual under-states short-leg costs; over time corrupts realized-P&L and Sharpe attribution). |
+| **Title** | Numeric borrow-rate ingest + per-position borrow-fee accrual + activate `verify_borrow_rate` rate-DRIFT branches (`bps_diff > 50` warning, `bps_diff ≥ 200` failure_escalated) + wire `verify_borrow_persistence` for across-day stability. |
+| **Scope** | (a) Replace `NullBorrowRateFetcher` with a real-vendor `BrokerBorrowRateFetcher` (IB / S3 / Markit / FIS Astec — whichever DW-166 procures); (b) daily ingest of rate per held-short symbol; (c) per-position fee accrual writer (depends on DW-158 lots); (d) activate the rate-DRIFT branches of `verify_borrow_rate` (already implemented; today unreachable through `NullBorrowRateFetcher` because the fetch throws); (e) wire `verify_borrow_persistence` (across-day rate stability). |
+| **Why #7 stays STUBBED-vendor-gated** | `verify_borrow_rate.ts` rate-DRIFT branches (`bps_diff > 50`, `bps_diff ≥ 200`) ALREADY exist in the verifier shell. They require TWO numeric rates (internal + observed); `NullBorrowRateFetcher` provides ONLY the boolean `is_htb` (the HTB-block branch). The proxy exercises ONE branch of #7, NOT the drift branches. The audit classification remains `STUBBED-vendor-gated` (NOT relabel-to-IMPLEMENTED on the proxy alone). |
+| **Depends-on** | DW-166 (vendor procurement); DW-158 (lots/per-position is the natural accrual target). |
+| **Blocks** | Phase-8 live-money authorization (short-side P&L attribution gate); full #7 / #8 activation. |
+| **Future Owner Phase** | Phase 7 / pre-Phase-8 short-side readiness, post-DW-166 procurement. |
+| **Resolution shape** | Strong+ FP authoring the real-vendor `BrokerBorrowRateFetcher` (per ACT-317 broker-parity discipline) + ingest job + accrual writer + activate verifier branches, paired with DW-155 (live-account shortability validation) as the short-side live-readiness bundle. |
+| **Cross_ref** | DW-162 (split-parent); DW-162a (proxy twin); DW-166 (procurement); DW-158 (lots); DW-155 (live-readiness twin); CROSSWIND §3.3d / §11.0.7 #11, #12; the verifier shells `verify_borrow_rate.ts` / `verify_borrow_persistence.ts`; `NullBorrowRateFetcher` (the engineering seam awaiting the vendor); the conformance audit (ACT-pending). |
+
+---
+
+### DW-166: Borrow-rate vendor procurement (the procurement charter — gates DW-162b)
+
+| Field | Value |
+|---|---|
+| **ID** | DW-166 (next-free after DW-165-B). |
+| **Status** | **open — PROCUREMENT.** A procurement decision, NOT an engineering one. Parallel to the options-flow / FP-057 4c vendor gate. No engineering work proceeds against DW-162b until this charter resolves a vendor + contract. |
+| **Tier** | A — short-side P&L attribution correctness (gates the rate-magnitude monitor + the verifier #7 rate-DRIFT branches + full #8 activation). |
+| **Title** | Procure a numeric, per-symbol, time-series borrow-rate vendor that exposes `annual_rate_pct` on a refresh cadence suitable for an intra-session monitor. |
+| **Scope** | Evaluate candidates, contract, integration design (engineering implementation lives at DW-162b). |
+| **Vendor candidates surveyed** | (1) **Interactive Brokers** (`pyiborrowupdate` / TWS API) — per-symbol borrow rate refreshed during the session; requires IB account; cleanest engineering path; substantial operational lift (FIX/TWS gateway). (2) **S3 Partners BLACK** / **FIS Astec** / **Markit Securities Finance (IHS)** / **Hazeltree** — enterprise stock-loan data vendors; authoritative; expensive; contract-gated; the institutional answer. (3) **Alpaca Live (not paper)** — locate responses *sometimes* include a rate, but only post-locate and only for the locate's lifetime — not a monitor surface; marginal. **Tradier evaluated and rejected for rate-magnitude — options-data candidate only** (Tradier exposes no borrow rate; shorting via Tradier is constrained to a curated ETB-style list with order-time rejects, no pre-trade rate). **Polygon / IEX** do not publish borrow rates. |
+| **Why not Alpaca paper** | Alpaca paper exposes ONLY `easy_to_borrow: boolean | null` via `/v2/assets/{symbol}` — no numeric rate. The proxy (DW-162a) extracts maximum signal from what's available; the vendor gate cannot. |
+| **Why not fabricate** | §9 SENTINEL anti-pattern. A synthesized rate (0, NaN, -1, mean-of-prior, etc.) would silently corrupt every downstream consumer (`verify_borrow_rate` drift branches, fee accrual, P&L attribution). The `NullBorrowRateFetcher` (DW-162b seam) THROWS rather than fabricates — fail-loud, typed-absence per §2 axiom 3. |
+| **Depends-on** | none (a procurement decision). |
+| **Blocks** | DW-162b (engineering implementation); full activation of `verify_borrow_rate` rate-DRIFT branches; full activation of `verify_borrow_persistence` (paper-orthogonal but needs locate-fetcher); Phase-8 live-money authorization (short-side P&L attribution gate). |
+| **Future Owner Phase** | Pre-Phase-8 procurement. |
+| **Resolution shape** | A charter document at `docs/08-planning/charters/DW-166-borrow-rate-vendor.md` with: candidate matrix (engineering lift × data quality × cost × contract terms × refresh cadence), recommended decision, contract status, hand-off to DW-162b. Pattern mirrors the options-flow / 4c vendor gate. |
+| **Cross_ref** | DW-162 (split-parent); DW-162a (the proxy — what we ship without this); DW-162b (the engineering gated on this); DW-149 (Component 1 — the action-layer complement); CROSSWIND §3.3d / §11.0.7 #11, #12; FP-057 Sub-step 4c (parallel vendor gate); **ACT-346**. |
 
 ---
 

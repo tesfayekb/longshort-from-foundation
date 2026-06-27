@@ -1382,6 +1382,33 @@ export type Database = {
         }
         Relationships: []
       }
+      short_etb_state_history: {
+        Row: {
+          etb: boolean
+          observed_at: string
+          operator_id: string
+          recorded_at: string
+          source: string
+          symbol: string
+        }
+        Insert: {
+          etb: boolean
+          observed_at: string
+          operator_id: string
+          recorded_at?: string
+          source: string
+          symbol: string
+        }
+        Update: {
+          etb?: boolean
+          observed_at?: string
+          operator_id?: string
+          recorded_at?: string
+          source?: string
+          symbol?: string
+        }
+        Relationships: []
+      }
       short_interest_days_to_cover: {
         Row: {
           as_of_date: string

@@ -40,6 +40,7 @@ import {
   evaluateShortStops,
   type ShortStopEvaluateResult,
 } from './short-stop-evaluator.ts';
+import type { EtbTransitionResult } from './etb-transition-monitor.ts';
 
 export interface TickSchedulerParams {
   brokerFactory: () => BrokerInterfaces;
@@ -85,6 +86,14 @@ export interface TickSchedulerParams {
   /** OPTIONAL — env-resolved short-stop threshold override
    *  (`LONGSHORT_SHORT_STOP_THRESHOLD`). Defaults to `0.15`. */
   shortStopThreshold?: number;
+  /** DW-162a (Component 3a) — OPTIONAL early-warning closure. When
+   *  injected, runTick invokes it AFTER the short-stop evaluator and
+   *  BEFORE `advanceTick`. Detects `easy_to_borrow: true → false`
+   *  transitions on HELD shorts and emits `short_etb_lost` warnings
+   *  (NOT covers — the −15% short-stop owns the action layer).
+   *  Closure errors are caught + logged + surfaced as `null` so a
+   *  vendor hiccup does not kill the tick. */
+  etbTransitionAssertion?: (ts: Date) => Promise<EtbTransitionResult>;
 }
 
 export interface TickSchedulerResult extends AdvanceTickResult {
@@ -107,6 +116,10 @@ export interface TickSchedulerResult extends AdvanceTickResult {
    *  edge-fn surface uses this to demote the result to log-only (a
    *  forced cover legitimately breaks neutrality for one tick). */
   short_stop_adjusted_aggregate: boolean;
+  /** DW-162a — ETB-transition monitor outcome for this tick. `null`
+   *  when the closure was not injected OR threw (caught + logged).
+   *  WARNINGS ONLY — never fires a cover. */
+  etb_transition: EtbTransitionResult | null;
 }
 
 /** Execute one tick: reconstruct in-flight from broker → advanceTick →
@@ -135,6 +148,38 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     // cover enters THIS tick's advance-path (no 15-min lag).
     if (shortStop.fired_legs.length > 0) {
       inFlight = await broker.reconstructInFlight(p.ts);
+    }
+  }
+
+  // DW-162a (Component 3a) — early-WARNING layer. Runs AFTER the
+  // short-stop evaluator (so it observes the post-cover position set
+  // when a stop fired) and BEFORE advanceTick. Emits structured
+  // warnings on `easy_to_borrow: true → false`; does NOT submit any
+  // orders. Failure is non-fatal — the tick continues.
+  let etb_transition: EtbTransitionResult | null = null;
+  if (p.etbTransitionAssertion) {
+    try {
+      etb_transition = await p.etbTransitionAssertion(p.ts);
+      if (etb_transition.warnings.length > 0) {
+        for (const w of etb_transition.warnings) {
+          console.warn(
+            'longshort_short_etb_lost',
+            JSON.stringify({
+              ts: p.ts.toISOString(),
+              symbol: w.symbol,
+              prev_observed_at: w.prev_observed_at,
+              curr_observed_at: w.curr_observed_at,
+              note: 'DW-162a early-warning; broker dropped name from ETB list (borrow demand surged); no auto-cover (Component 1 owns action layer)',
+            }),
+          );
+        }
+      }
+    } catch (e) {
+      console.error(
+        'longshort_etb_transition_monitor.failed',
+        e instanceof Error ? e.message : String(e),
+      );
+      etb_transition = null;
     }
   }
 
@@ -207,5 +252,6 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     rebalance_aggregate,
     short_stop: shortStop,
     short_stop_adjusted_aggregate,
+    etb_transition,
   };
 }
