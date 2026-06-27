@@ -34,6 +34,7 @@ import type {
 import {
   verifyRebalanceAggregate,
   type RebalanceAggregateToleranceOverride,
+  type ExemptCause,
 } from '../longshort-verifiers/verify_rebalance_aggregate.ts';
 import type {
   FetcherSource,
@@ -50,6 +51,10 @@ export interface RebalanceAggregateAssertionResult {
   action_taken: string | null;
   /** Band actually used at this fire (after env override resolution). */
   band: { lower: number; upper: number };
+  /** FP-057 Sub-step 5 — the seam-supplied transient cause threaded
+   *  through to the persisted divergence. Re-emitted here so the caller
+   *  can build the per-tick audit log without re-reading the row. */
+  exempt_cause: ExemptCause | null;
 }
 
 /** Pure helper — derive `BrokerRebalanceAggregate` from broker positions.
@@ -129,16 +134,23 @@ export interface BuildAssertionClosureParams {
  *  Commit-7 contract). */
 export function buildRebalanceAggregateAssertion(
   p: BuildAssertionClosureParams,
-): (ts: Date) => Promise<RebalanceAggregateAssertionResult> {
+): (ts: Date, exempt_cause?: ExemptCause | null) => Promise<RebalanceAggregateAssertionResult> {
   const env = p.env ?? Deno.env;
   const override = readRebalanceAggregateBandOverride(env);
   const band = {
     lower: override?.ratio_lower ?? 0.90,
     upper: override?.ratio_upper ?? 1.10,
   };
-  return async (ts: Date): Promise<RebalanceAggregateAssertionResult> => {
+  return async (
+    ts: Date,
+    exempt_cause: ExemptCause | null = null,
+  ): Promise<RebalanceAggregateAssertionResult> => {
     const res = await verifyRebalanceAggregate(
-      { operator_id: p.operator_id, ...(override ? { tolerance: override } : {}) },
+      {
+        operator_id: p.operator_id,
+        ...(override ? { tolerance: override } : {}),
+        exempt_cause,
+      },
       p.fetcher,
       ts,
       p.fetcher_source,
@@ -149,6 +161,7 @@ export function buildRebalanceAggregateAssertion(
       event_id: res.event_id,
       action_taken: res.action_taken,
       band,
+      exempt_cause,
     };
   };
 }
