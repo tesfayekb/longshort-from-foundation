@@ -40,10 +40,43 @@
 - A "cut PEAD" verdict: STOP — PEAD's combiner-feature value is a Phase-7 measurement question (FP-058); do NOT cut pre-measurement; do NOT expect standalone weight.
 - A fabricated edge/Sharpe number on our universe: STOP — anti-fabrication.
 
+## #5 Short-interest-change (ΔSI, 30d) — audited 2026-06-30 (HEAD `635c1924`)
+
+**Verdict:** spec-correct baseline (NO now-change to `compute-short-interest-change.ts`) + THREE Phase-7 charters (one of them — the shadow stand-up — is **WEEKEND-BUILDABLE** to start the measurement clock now on free data).
+
+**One-liner:** the SI literature locates the predictive edge primarily in the LEVEL (Asquith/Pathak/Ritter 2005 *JFE* ≈ −2.15%/mo top-decile-shorted-low-IO; Boehmer/Jones/Zhang 2008 *JF* ≈ 1.16%/mo shorting-flow level) and ESPECIALLY in days-to-cover (Hong/Li/Ni/Scheinkman/Yan 2016 *JFE* canonical DTC > SI% result, ≈ 1.2%/mo), NOT in the change; our #5 is built on the weaker, more lag-sensitive CHANGE dimension; the stronger alpha (DTC) is already computed in our system but spent ONLY on risk (the DW-165 squeeze screen); DW-173 stands up the level/DTC shadow variant THIS WEEKEND via the §6.5 harness so it accrues free comparison data now (promotion decision Phase-7-gated under FP-058 — no model / no labels yet); the squeeze stack composes correctly (alpha proposes, screen disposes; no path lets alpha override the screen — a GME-class name is ranked-short by #5 but hard-excluded by DW-165); the daily-SI vendor procurement (DW-174) is deferred until the free ablation runs (no point de-lagging the CHANGE dimension if level/DTC dominates it).
+
+**Charters:**
+- **DW-173** — SI level / DTC as-alpha SHADOW variant. **WEEKEND-BUILDABLE shadow stand-up** (cheap: existing fetcher + existing DTC column from MIG-131 + existing §6.5 harness; ZERO change to live #5 / live ranker / squeeze screen). PROMOTION (replace ΔSI / stack / keep) stays Phase-7-gated with the ex-ante rule pinned now to avoid p-hacking: level/DTC beats ΔSI beyond NDCG@25 noise band → replace; both carry independent edge → stack; else keep ΔSI.
+- **DW-174** — Daily-SI vendor procurement charter (S3 / Ortex / S&P-Astec). Sister to DW-166. SEQUENCED AFTER DW-173 (the lag damages the CHANGE dimension most; if level/DTC dominates, de-lagging the CHANGE is the wrong spend). Pre-live nice-to-have, NOT a blocker.
+- **DW-175** — Phase-7 orthogonality (rank correlation ΔSI vs level/DTC → informs combiner regularization + stack-vs-replace shape) + DTC = 7 squeeze-gate sensitivity probe (alpha is continuous, gate is binary; informs soft-penalty vs hard-exclude — MEASUREMENT ONLY, does NOT loosen the screen).
+
+**Squeeze-composition confirmation (no fix required):** the composition between Signal #5 alpha and the DW-165 DTC ≥ 7 squeeze screen is CORRECT — alpha proposes (ranks), risk disposes (PreflightComposer hard planner-reject AFTER the rank); risk wins on its axis; the screen is a HARD gate, not a soft penalty. The DTC = 7 binary-vs-continuous seam → DW-175 sensitivity probe (Phase-7 measurement, not a now-change).
+
+**What was NOT chartered (and why):**
+- A now-change to `compute-short-interest-change.ts`: STOP — §4.4 Signal #5 is CRITICAL §4.3.5; promoting level/DTC pre-data is the fabricate-a-candidate anti-pattern FP-057 Sub-step 6 closed against.
+- A "cut #5" verdict: STOP — ΔSI may still carry independent edge as a stacked combiner feature; the FP-058 ablation answers this; do NOT cut pre-measurement.
+- Loosening the DW-165 DTC = 7 squeeze screen: STOP — the composition is correct; only the gate-shape sensitivity is a Phase-7 PROBE (DW-175), not a now-change.
+- A fabricated edge/Sharpe number on our universe: STOP — anti-fabrication.
+
+## Weekend build list (shadow stand-ups + zero-cost forward actions surfaced by the audit)
+
+The audit is surfacing a cluster of CHEAP, scope-disciplined items that can be stood up THIS WEEKEND to start accruing free comparison data / forward-action data — the PROMOTION decisions stay Phase-7-gated under FP-058. Operator intent (per this turn's framing): finish the full 9-signal audit first, then execute the weekend-buildable set together as one focused build.
+
+| DW | Title | Buildable now? | Why now is cheap | Why promotion is deferred |
+|---|---|---|---|---|
+| **DW-170** | Momentum signal-level shadow variants (σ-divide, residual-momentum) | YES — shadow stand-up | §6.5 harness exists; raw 12-1 baseline kept; variants compute alongside | Promotion would mutate CRITICAL §4.4.1 → DEC + Phase-7 measurement |
+| **DW-171** | PEAD classic-own-firm-SUE σ_proxy variant | **ACCRUAL-GATED** (NOT weekend) — needs ≥ 8 quarters of per-name actual/consensus pairs in `signal_observations` before std is stable | The compute path is cheap once data accrues; shadow stand-up is meaningful only after 8q | Promotion mutates CRITICAL §4.4.6 → DEC + Phase-7 measurement |
+| **DW-172** | PEAD T-0 consensus snapshot capture | YES — zero-cost forward action (new table + writer + pre-RTH cron via existing fetcher) | Vendor backfill impossible; cost of NOT starting now is ~3-month delay on Phase-7 walk-down ablation | The walk-down ablation itself is Phase-7 |
+| **DW-173** | SI level / DTC as-alpha shadow variant | YES — shadow stand-up | Existing fetcher + existing DTC column (MIG-131) + existing §6.5 harness; the data is already in the system | Promotion mutates CRITICAL Signal #5 → DEC + Phase-7 measurement |
+
+Sequencing intent: execute the weekend-buildable rows (DW-170 + DW-172 + DW-173 — DW-171 stays accrual-gated) AFTER the remaining audits (#7, #1, #4, #8, #9, #3) complete, as one combined scope-disciplined PR per the operator's "review all first, then build together" framing. New weekend-buildable findings from the pending audits will land in this table as they're surfaced.
+
+**Anti-completion-theater note:** these shadow stand-ups are NOT promotions and do NOT change the live ranker / live execution / live PnL — they create the comparator series that Phase-7 (FP-058) requires to make a measured promotion decision instead of a fabricated one.
+
 ## Signals pending audit (in order)
 
-- **#5 short-interest-change (30d)** — next.
-- **#7 short-term reversal**.
+- **#7 short-term reversal** — next.
 - **#1 analyst revisions**.
 - **#4 insider transactions**.
 - **#8 news sentiment**.
@@ -52,7 +85,7 @@
 
 ## Cross-references
 
-- Deferred-work register: `docs/08-planning/deferred-work-register.md` (DW-169 … DW-172 as of this writing).
+- Deferred-work register: `docs/08-planning/deferred-work-register.md` (DW-169 … DW-175 as of this writing).
 - Phase-7 measure-and-lock home: `docs/08-planning/feature-proposals.md` → FP-058.
-- Audit-action records: `docs/06-tracking/action-tracker.md` → ACT-350 (this ledger's creation + #6/#2 findings registration).
+- Audit-action records: `docs/06-tracking/action-tracker.md` → ACT-350 (ledger creation + #6/#2 findings); **ACT-351** (#5 findings + DW-173/174/175 + weekend-build-list section).
 - Authoritative signal specs: `docs/04-modules/longshort/design-source/` (CROSSWIND v0.9 — never edit).
