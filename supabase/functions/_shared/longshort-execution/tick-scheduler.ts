@@ -36,6 +36,8 @@ import type { SameTickContradictoryPass } from './cache-propagator.ts';
 import type { StateMachineConfig } from './state-machine.ts';
 import type { BrokerInterfaces } from './broker-bootstrap.ts';
 import type { RebalanceAggregateAssertionResult } from './rebalance-aggregate-assertion.ts';
+import type { ExemptCause } from '../longshort-verifiers/verify_rebalance_aggregate.ts';
+import type { PersistenceCheckOutcome } from './rebalance-aggregate-persistence.ts';
 import {
   evaluateShortStops,
   type ShortStopEvaluateResult,
@@ -67,7 +69,22 @@ export interface TickSchedulerParams {
    *  Closure errors are caught + logged + surfaced as `null` so a fetch
    *  hiccup does not kill the tick (the reconcile() pipe itself writes a
    *  system_bug row on infrastructure failure). */
-  rebalanceAggregateAssertion?: (ts: Date) => Promise<RebalanceAggregateAssertionResult>;
+  rebalanceAggregateAssertion?: (
+    ts: Date,
+    exempt_cause?: ExemptCause | null,
+  ) => Promise<RebalanceAggregateAssertionResult>;
+  /** OPTIONAL — FP-057 Sub-step 5 / DEC-070 clause (g) ⊗ DW-149-B. The
+   *  rolling-window persistence check. Invoked AFTER the per-tick
+   *  `rebalanceAggregateAssertion` has written its reconciliation_events
+   *  row, so the row this tick produced is visible to the
+   *  read-last-N-rows query. The closure manages cross-tick state via
+   *  the canonical `reconciliation_events` sink (NO new table — reads
+   *  the last N `verify_rebalance_aggregate` rows, counts CONSECUTIVE
+   *  unexplained, and escalates with latch + cooldown). Errors caught
+   *  + logged so a query hiccup does not kill the tick. */
+  rebalanceAggregatePersistenceCheck?: (
+    ts: Date,
+  ) => Promise<PersistenceCheckOutcome>;
   /** DW-149 (Component 1) — when `true`, runTick evaluates short-stop
    *  breaches BEFORE `advanceTick`. The evaluator force-covers any short
    *  position breaching `LONGSHORT_SHORT_STOP_THRESHOLD` (default 0.15)
@@ -116,6 +133,11 @@ export interface TickSchedulerResult extends AdvanceTickResult {
    *  edge-fn surface uses this to demote the result to log-only (a
    *  forced cover legitimately breaks neutrality for one tick). */
   short_stop_adjusted_aggregate: boolean;
+  /** FP-057 Sub-step 5 — rolling-window persistence-check outcome. `null`
+   *  when the check was not injected or threw. When escalated, the edge
+   *  fn / cron surfaces this on the audit row + the operator alert
+   *  derives from this object (NOT from per-tick `failure_escalated`). */
+  rebalance_aggregate_persistence: PersistenceCheckOutcome | null;
   /** DW-162a — ETB-transition monitor outcome for this tick. `null`
    *  when the closure was not injected OR threw (caught + logged).
    *  WARNINGS ONLY — never fires a cover. */
@@ -215,7 +237,17 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
   let rebalance_aggregate: RebalanceAggregateAssertionResult | null = null;
   if (p.rebalanceAggregateAssertion) {
     try {
-      rebalance_aggregate = await p.rebalanceAggregateAssertion(p.ts);
+      // FP-057 Sub-step 5 — derive exempt_cause from the in-process
+      // signals at THIS seam BEFORE invoking the assertion. Precedence:
+      //   short_stop > partial_fill > working_order
+      // Each tick is judged on its OWN signals; a stale prior-tick cause
+      // cannot silence the current tick (NON-COMPOUNDING by construction).
+      const exempt_cause = deriveExemptCause({
+        shortStop,
+        still_in_flight: result.still_in_flight,
+        terminal: result.terminal,
+      });
+      rebalance_aggregate = await p.rebalanceAggregateAssertion(p.ts, exempt_cause);
     } catch (e) {
       console.error(
         'longshort_rebalance_aggregate_assertion.failed',
@@ -225,24 +257,50 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     }
   }
 
-  // DW-149 — transient-vs-persistent annotation. A forced cover SHOULD
-  // break neutrality for one tick (working-as-designed); persistence
-  // detection (the cross-tick repeat) lives in the next tick's assertion
-  // history (out-of-scope for this in-process closure).
+  // FP-057 Sub-step 5 — GENERALIZED transient annotation. Was DW-149
+  // `short_stop_adjusted_aggregate` (short_stop-only); now
+  // `aggregate_band_break_exempted` (covers all three causes). Log-only
+  // per-tick; the PAGER fires off the persistence check below.
   const short_stop_adjusted_aggregate =
-    !!(shortStop && shortStop.short_stop_fired_count > 0
-       && rebalance_aggregate && rebalance_aggregate.outcome === 'failure_escalated');
-  if (short_stop_adjusted_aggregate) {
+    !!(rebalance_aggregate
+       && rebalance_aggregate.outcome === 'failure_escalated'
+       && rebalance_aggregate.exempt_cause === 'short_stop');
+  if (rebalance_aggregate
+      && rebalance_aggregate.outcome === 'failure_escalated'
+      && rebalance_aggregate.exempt_cause !== null) {
     console.warn(
-      'longshort_rebalance_aggregate.short_stop_adjusted',
+      'longshort_rebalance_aggregate.aggregate_band_break_exempted',
       JSON.stringify({
         ts: p.ts.toISOString(),
-        short_stop_fired_count: shortStop!.short_stop_fired_count,
-        breaches: shortStop!.breaches.map((b) => ({ symbol: b.symbol, loss_pct: b.loss_pct })),
-        aggregate_outcome: rebalance_aggregate!.outcome,
-        note: 'transient-expected-for-one-tick (DW-149); escalate only if persistent next tick',
+        exempt_cause: rebalance_aggregate.exempt_cause,
+        short_stop_fired_count: shortStop?.short_stop_fired_count ?? 0,
+        still_in_flight_count: result.still_in_flight.length,
+        aggregate_outcome: rebalance_aggregate.outcome,
+        note:
+          'transient-expected-for-one-tick (FP-057 sub5); persistence check ' +
+          'evaluates cross-tick state; does NOT advance unexplained counter',
       }),
     );
+  }
+
+  // FP-057 Sub-step 5 — rolling-window persistence check. Reads the
+  // last N reconciliation_events for call_name='verify_rebalance_aggregate'
+  // (including the row JUST written this tick), counts CONSECUTIVE
+  // unexplained, escalates ONCE at the threshold (latch + cooldown).
+  // RESET-ON-IN-BAND: any in-band tick wipes the counter. NON-COMPOUNDING:
+  // a stale exempt_cause from a prior tick does NOT silence the current
+  // tick — each tick is judged on its OWN exempt_cause.
+  let rebalance_aggregate_persistence: PersistenceCheckOutcome | null = null;
+  if (p.rebalanceAggregatePersistenceCheck && rebalance_aggregate !== null) {
+    try {
+      rebalance_aggregate_persistence = await p.rebalanceAggregatePersistenceCheck(p.ts);
+    } catch (e) {
+      console.error(
+        'longshort_rebalance_aggregate_persistence.failed',
+        e instanceof Error ? e.message : String(e),
+      );
+      rebalance_aggregate_persistence = null;
+    }
   }
 
   return {
@@ -252,6 +310,37 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     rebalance_aggregate,
     short_stop: shortStop,
     short_stop_adjusted_aggregate,
+    rebalance_aggregate_persistence,
     etb_transition,
   };
+}
+
+/** Derive the strongest exempt_cause attribution from this tick's
+ *  in-process signals. Pure function; the precedence is the single
+ *  source of truth (asserted in tests).
+ *
+ *  Precedence: `short_stop` > `partial_fill` > `working_order`.
+ *  Returns `null` when no transient cause applies — the row becomes a
+ *  persistent-pager candidate. */
+export function deriveExemptCause(args: {
+  shortStop: ShortStopEvaluateResult | null;
+  still_in_flight: AdvanceTickResult['still_in_flight'];
+  terminal: AdvanceTickResult['terminal'];
+}): ExemptCause | null {
+  if (args.shortStop && args.shortStop.short_stop_fired_count > 0) {
+    return 'short_stop';
+  }
+  // partial_fill: a terminal_filled order whose filled_qty is BETWEEN
+  // (0, shares_requested) — strictly partial. shares_requested=0 is
+  // defensive — never a partial.
+  for (const t of args.terminal) {
+    if (t.state === 'terminal_filled'
+        && t.shares_requested > 0
+        && t.filled_qty > 0
+        && t.filled_qty < t.shares_requested) {
+      return 'partial_fill';
+    }
+  }
+  if (args.still_in_flight.length > 0) return 'working_order';
+  return null;
 }

@@ -24,6 +24,9 @@ import type {
   ReconciliationEventWriter,
 } from './lifecycle-orchestrator.ts';
 import { runTick } from './tick-scheduler.ts';
+import { deriveExemptCause } from './tick-scheduler.ts';
+import type { PersistenceCheckOutcome } from './rebalance-aggregate-persistence.ts';
+import type { TerminalOrderResult } from './lifecycle-orchestrator.ts';
 import {
   createLiveBrokerInterfaces,
   LiveBrokerNotProvisionedError,
@@ -373,12 +376,13 @@ Deno.test('DW-149: aggregate band-violation co-occurring with short-stop fire �
     eventWriter: writer,
     clock: createFixedClock(TS),
     ts: TS,
-    rebalanceAggregateAssertion: async () => ({
+    rebalanceAggregateAssertion: async (_ts, exempt_cause) => ({
       outcome: 'failure_escalated',
-      divergence: { long_gross_dollars: 10_000, short_gross_dollars: 8_000, ratio: 1.25, within_band: false },
+      divergence: { long_gross_dollars: 10_000, short_gross_dollars: 8_000, ratio: 1.25, within_band: false, exempt_cause: exempt_cause ?? null },
       event_id: 'evt-band-fail-1',
       action_taken: 'operator_alert',
       band: { lower: 0.90, upper: 1.10 },
+      exempt_cause: exempt_cause ?? null,
     }),
   });
   assert(result.short_stop_adjusted_aggregate, 'short_stop_adjusted_aggregate must be true when a short-stop fired alongside a band-violation');
@@ -393,14 +397,139 @@ Deno.test('DW-149: aggregate band-violation WITHOUT a short-stop fire → short_
     eventWriter: writer,
     clock: createFixedClock(TS),
     ts: TS,
-    rebalanceAggregateAssertion: async () => ({
+    rebalanceAggregateAssertion: async (_ts, exempt_cause) => ({
       outcome: 'failure_escalated',
-      divergence: { long_gross_dollars: 10_000, short_gross_dollars: 8_000, ratio: 1.25, within_band: false },
+      divergence: { long_gross_dollars: 10_000, short_gross_dollars: 8_000, ratio: 1.25, within_band: false, exempt_cause: exempt_cause ?? null },
       event_id: 'evt-band-fail-2',
       action_taken: 'operator_alert',
       band: { lower: 0.90, upper: 1.10 },
+      exempt_cause: exempt_cause ?? null,
     }),
   });
   assertEquals(result.short_stop_adjusted_aggregate, false);
   assertEquals(result.rebalance_aggregate!.outcome, 'failure_escalated');
+});
+
+/* ── FP-057 Sub-step 5 — exempt_cause derivation + persistence wiring ── */
+
+function mkTerminal(over: Partial<TerminalOrderResult> = {}): TerminalOrderResult {
+  return {
+    order_id: 'o-t-1', client_order_id: 'cid-t', symbol: 'A', side: 'long',
+    intent: 'open', trade_type: 'entry', state: 'terminal_filled',
+    ladder_step: 0, final_limit_price: 100, shares_requested: 10, filled_qty: 10,
+    avg_fill_price: 100, accepted_at: TS.toISOString(), observed_at: TS.toISOString(),
+    provenance: PROV, ...over,
+  };
+}
+
+Deno.test('deriveExemptCause — null when no in-process signals', () => {
+  assertEquals(deriveExemptCause({ shortStop: null, still_in_flight: [], terminal: [] }), null);
+});
+Deno.test('deriveExemptCause — short_stop wins precedence over partial_fill + working_order', () => {
+  const partial = mkTerminal({ filled_qty: 4 });
+  const inflight = [mkOrder()];
+  const ss = { short_stop_fired_count: 1, fired_legs: [], breaches: [] } as unknown as Parameters<typeof deriveExemptCause>[0]['shortStop'];
+  assertEquals(
+    deriveExemptCause({ shortStop: ss, still_in_flight: inflight, terminal: [partial] }),
+    'short_stop',
+  );
+});
+Deno.test('deriveExemptCause — partial_fill wins over working_order when no short_stop', () => {
+  assertEquals(
+    deriveExemptCause({
+      shortStop: null,
+      still_in_flight: [mkOrder()],
+      terminal: [mkTerminal({ filled_qty: 4 })],
+    }),
+    'partial_fill',
+  );
+});
+Deno.test('deriveExemptCause — working_order when only still_in_flight present', () => {
+  assertEquals(
+    deriveExemptCause({ shortStop: null, still_in_flight: [mkOrder()], terminal: [] }),
+    'working_order',
+  );
+});
+Deno.test('deriveExemptCause — fully-filled terminal is NOT partial (filled_qty == shares_requested)', () => {
+  assertEquals(
+    deriveExemptCause({ shortStop: null, still_in_flight: [], terminal: [mkTerminal({ filled_qty: 10 })] }),
+    null,
+  );
+});
+Deno.test('deriveExemptCause — zero-fill terminal is NOT partial (filled_qty=0)', () => {
+  assertEquals(
+    deriveExemptCause({
+      shortStop: null,
+      still_in_flight: [],
+      terminal: [mkTerminal({ state: 'terminal_tier3_pause', filled_qty: 0 })],
+    }),
+    null,
+  );
+});
+
+Deno.test('runTick — threads exempt_cause to assertion AND invokes persistence check; pure pipe (no new Date)', async () => {
+  const { broker } = mkBroker([]);
+  const { writer } = captureEvents();
+  let seenExempt: unknown = 'NOT_CALLED';
+  let persistenceTs: Date | null = null as Date | null;
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+    rebalanceAggregateAssertion: async (_ts, exempt_cause) => {
+      seenExempt = exempt_cause;
+      return {
+        outcome: 'false_positive_within_tolerance',
+        divergence: { long_gross_dollars: 100, short_gross_dollars: 100, ratio: 1, within_band: true, exempt_cause: exempt_cause ?? null },
+        event_id: 'e1', action_taken: null, band: { lower: 0.9, upper: 1.1 }, exempt_cause: exempt_cause ?? null,
+      };
+    },
+    rebalanceAggregatePersistenceCheck: async (ts: Date) => {
+      persistenceTs = ts;
+      const r: PersistenceCheckOutcome = { escalated: false, reason: 'below_threshold', consecutive: 0, threshold: 3 };
+      return r;
+    },
+  });
+  assertEquals(seenExempt, null, 'no signals → exempt_cause must be null');
+  assert(persistenceTs !== null, 'persistence check must be invoked');
+  assertEquals((persistenceTs as Date).getTime(), TS.getTime(), 'persistence check uses THREADED ts');
+  assert(result.rebalance_aggregate_persistence !== null);
+});
+
+Deno.test('runTick — persistence check throw is caught + surfaced as null (does NOT kill the tick)', async () => {
+  const { broker } = mkBroker([]);
+  const { writer } = captureEvents();
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+    rebalanceAggregateAssertion: async (_ts, exempt_cause) => ({
+      outcome: 'failure_escalated',
+      divergence: { long_gross_dollars: 100, short_gross_dollars: 80, ratio: 0.8, within_band: false, exempt_cause: exempt_cause ?? null },
+      event_id: 'e2', action_taken: 'operator_alert', band: { lower: 0.9, upper: 1.1 }, exempt_cause: exempt_cause ?? null,
+    }),
+    rebalanceAggregatePersistenceCheck: () => Promise.reject(new Error('boom')),
+  });
+  assertEquals(result.rebalance_aggregate_persistence, null);
+  assertEquals(result.rebalance_aggregate?.outcome, 'failure_escalated');
+});
+
+Deno.test('runTick — persistence check is SKIPPED when aggregate assertion is absent or returned null', async () => {
+  const { broker } = mkBroker([]);
+  const { writer } = captureEvents();
+  let persistCalled = false;
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+    rebalanceAggregatePersistenceCheck: async () => {
+      persistCalled = true;
+      return { escalated: false, reason: 'below_threshold', consecutive: 0, threshold: 3 };
+    },
+  });
+  assertEquals(persistCalled, false, 'no aggregate row this tick → nothing to persist-check');
+  assertEquals(result.rebalance_aggregate_persistence, null);
 });
