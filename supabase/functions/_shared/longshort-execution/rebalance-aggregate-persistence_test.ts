@@ -118,10 +118,10 @@ Deno.test('counter — only exempt rows → 0 (no unexplained = no escalation)',
   assertEquals(countConsecutiveUnexplained(rows), 0);
 });
 
-Deno.test('counter — system_bug_strong rows SKIP (treated like exempt — neither reset nor advance)', () => {
+Deno.test('counter — system_bug rows SKIP (treated like exempt — neither reset nor advance)', () => {
   const rows: AggregateHistoryRow[] = [
     unexplained(t(0)),
-    { ts: t(60), outcome: 'system_bug_strong', exempt_cause: null },
+    { ts: t(60), outcome: 'system_bug', exempt_cause: null },
     unexplained(t(120)),
   ];
   assertEquals(countConsecutiveUnexplained(rows), 2);
