@@ -36,6 +36,10 @@ import type { SameTickContradictoryPass } from './cache-propagator.ts';
 import type { StateMachineConfig } from './state-machine.ts';
 import type { BrokerInterfaces } from './broker-bootstrap.ts';
 import type { RebalanceAggregateAssertionResult } from './rebalance-aggregate-assertion.ts';
+import {
+  evaluateShortStops,
+  type ShortStopEvaluateResult,
+} from './short-stop-evaluator.ts';
 
 export interface TickSchedulerParams {
   brokerFactory: () => BrokerInterfaces;
@@ -63,6 +67,24 @@ export interface TickSchedulerParams {
    *  hiccup does not kill the tick (the reconcile() pipe itself writes a
    *  system_bug row on infrastructure failure). */
   rebalanceAggregateAssertion?: (ts: Date) => Promise<RebalanceAggregateAssertionResult>;
+  /** DW-149 (Component 1) — when `true`, runTick evaluates short-stop
+   *  breaches BEFORE `advanceTick`. The evaluator force-covers any short
+   *  position breaching `LONGSHORT_SHORT_STOP_THRESHOLD` (default 0.15)
+   *  in the SAME tick (independent of the rebalance cadence). After a
+   *  fire, in-flight is RE-RECONSTRUCTED so the just-placed cover enters
+   *  this tick's advance-path — no 15-min lag. Defaults to `true`; legacy
+   *  callers / focused tests may opt out by setting `false`.
+   *  Aggregate-gate interaction: when the evaluator fires this tick AND
+   *  the post-fire aggregate assertion reports a band-violation, the
+   *  result is ANNOTATED `short_stop_adjusted: true` and LOGGED (not
+   *  operator-alerted) — a forced cover SHOULD break neutrality for one
+   *  tick (working-as-designed); persistence detection is left to the
+   *  next tick's aggregate verifier (cross-tick state lives outside this
+   *  in-process closure). */
+  shortStopEnabled?: boolean;
+  /** OPTIONAL — env-resolved short-stop threshold override
+   *  (`LONGSHORT_SHORT_STOP_THRESHOLD`). Defaults to `0.15`. */
+  shortStopThreshold?: number;
 }
 
 export interface TickSchedulerResult extends AdvanceTickResult {
@@ -76,6 +98,15 @@ export interface TickSchedulerResult extends AdvanceTickResult {
    *  threw (caught + logged; reconcile() writes its own system_bug row
    *  in that case). */
   rebalance_aggregate: RebalanceAggregateAssertionResult | null;
+  /** DW-149 — short-stop evaluator outcome for this tick. `null` when
+   *  the evaluator was disabled (legacy/test paths with
+   *  `shortStopEnabled: false`). */
+  short_stop: ShortStopEvaluateResult | null;
+  /** DW-149 — set true on `rebalance_aggregate` when an aggregate
+   *  band-violation co-occurred with a short-stop fire THIS tick. The
+   *  edge-fn surface uses this to demote the result to log-only (a
+   *  forced cover legitimately breaks neutrality for one tick). */
+  short_stop_adjusted_aggregate: boolean;
 }
 
 /** Execute one tick: reconstruct in-flight from broker → advanceTick →
@@ -83,7 +114,29 @@ export interface TickSchedulerResult extends AdvanceTickResult {
  *  broker fetches — everything routed through injected interfaces. */
 export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResult> {
   const broker = p.brokerFactory();
-  const inFlight = await broker.reconstructInFlight(p.ts);
+  let inFlight = await broker.reconstructInFlight(p.ts);
+
+  // DW-149 (Component 1) — squeeze circuit-breaker. SEAM (§8.6.2):
+  //   AFTER reconstructInFlight, BEFORE advanceTick, BEFORE the
+  //   rebalanceAggregateAssertion. A short breaching ≥15% force-covers
+  //   in the SAME tick, independent of the rebalance cadence. Default-on;
+  //   opt-out via `shortStopEnabled: false` for legacy/focused tests.
+  let shortStop: ShortStopEvaluateResult | null = null;
+  const shortStopEnabled = p.shortStopEnabled !== false;
+  if (shortStopEnabled) {
+    shortStop = await evaluateShortStops({
+      positionFetcher: broker.positionFetcher,
+      submitter: broker.submitter,
+      inFlight,
+      ts: p.ts,
+      threshold: p.shortStopThreshold,
+    });
+    // If a cover leg fired, RE-RECONSTRUCT in-flight so the just-placed
+    // cover enters THIS tick's advance-path (no 15-min lag).
+    if (shortStop.fired_legs.length > 0) {
+      inFlight = await broker.reconstructInFlight(p.ts);
+    }
+  }
 
   // Build initial-limit-prices map: caller-provided wins; else fall back
   // to each order's current_limit_price (the broker-working price).
@@ -127,10 +180,32 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     }
   }
 
+  // DW-149 — transient-vs-persistent annotation. A forced cover SHOULD
+  // break neutrality for one tick (working-as-designed); persistence
+  // detection (the cross-tick repeat) lives in the next tick's assertion
+  // history (out-of-scope for this in-process closure).
+  const short_stop_adjusted_aggregate =
+    !!(shortStop && shortStop.short_stop_fired_count > 0
+       && rebalance_aggregate && rebalance_aggregate.outcome === 'failure_escalated');
+  if (short_stop_adjusted_aggregate) {
+    console.warn(
+      'longshort_rebalance_aggregate.short_stop_adjusted',
+      JSON.stringify({
+        ts: p.ts.toISOString(),
+        short_stop_fired_count: shortStop!.short_stop_fired_count,
+        breaches: shortStop!.breaches.map((b) => ({ symbol: b.symbol, loss_pct: b.loss_pct })),
+        aggregate_outcome: rebalance_aggregate!.outcome,
+        note: 'transient-expected-for-one-tick (DW-149); escalate only if persistent next tick',
+      }),
+    );
+  }
+
   return {
     still_in_flight: result.still_in_flight,
     terminal: result.terminal,
     reconstructed_in_flight_count: inFlight.length,
     rebalance_aggregate,
+    short_stop: shortStop,
+    short_stop_adjusted_aggregate,
   };
 }
