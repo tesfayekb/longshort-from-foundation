@@ -307,16 +307,26 @@ Deno.test('pead-orchestrator [4b]: earnings-calendar work-list intersects univer
 
   let estCalls = 0;
   let earnCalls = 0;
+  const estRows: Record<string, ReturnType<typeof happyEst>> = {
+    AAA: happyEst(),
+    BBB: happyEst({ epsAvg: 1.30 }),
+    CCC: happyEst({ epsAvg: 1.50 }),
+  };
+  const earnRows: Record<string, ReturnType<typeof happyEarn>> = {
+    AAA: happyEarn(),
+    BBB: happyEarn({ actual: 1.45 }),
+    CCC: happyEarn({ actual: 1.55 }),
+  };
   const epsEstimate = {
     async fetchEpsEstimates(t: string) {
       estCalls++;
-      return { kind: 'estimates', rows: [happyEst()] };
+      return { kind: 'estimates', rows: [estRows[t] ?? happyEst()] };
     },
   };
   const earnings = {
     async fetchEarnings(t: string) {
       earnCalls++;
-      return { kind: 'earnings', rows: [happyEarn()] };
+      return { kind: 'earnings', rows: [earnRows[t] ?? happyEarn()] };
     },
   };
 
