@@ -117,10 +117,14 @@ export function registerOptionsFlowQueueConsumer(): void {
   // and the intraday subset resolver (cadence-gated internally — returns
   // null for daily-cadence runs, so cron-87 stays bit-identical to
   // pre-4c). The resolver memoizes per-asOf-date inside its closure.
-  const volumeWriter = createSupabaseOptionsFlowVolumeWriter(supabaseAdmin);
-  const volumeReader = createSupabaseOptionsFlowVolumeReader(supabaseAdmin);
+  const volumeWriter = createSupabaseOptionsFlowVolumeWriter(
+    supabaseAdmin as unknown as Parameters<typeof createSupabaseOptionsFlowVolumeWriter>[0],
+  );
+  const volumeReader = createSupabaseOptionsFlowVolumeReader(
+    supabaseAdmin as unknown as Parameters<typeof createSupabaseOptionsFlowVolumeReader>[0],
+  );
   const subsetResolver = createOptionsFlowSubsetResolver({
-    supabase: supabaseAdmin,
+    supabase: supabaseAdmin as unknown as Parameters<typeof createOptionsFlowSubsetResolver>[0]["supabase"],
     volumeReader,
     signalId: SIGNAL_ID,
     subsetN: parseSubsetNEnv(),
