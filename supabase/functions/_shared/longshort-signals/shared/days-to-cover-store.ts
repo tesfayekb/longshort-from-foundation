@@ -43,12 +43,27 @@ export interface DaysToCoverReader {
   read(ticker: string): Promise<number | null>;
 }
 
-// We type the supabase handle loosely (`SupabaseLike`) because tests
-// inject in-memory doubles and the live supabase-js client surfaces a
-// chained, thenable builder. Both write/read paths await the terminal
-// promise; that is the only contract this module relies on.
-// deno-lint-ignore no-explicit-any
-type SupabaseLike = any;
+// Structural contract this module relies on. Tests inject in-memory
+// doubles; the live supabase-js client surfaces a chained, thenable
+// builder. Both write/read paths await the terminal promise resolving
+// `{ data, error }`.
+interface DtcQueryResult {
+  data: ReadonlyArray<{ latest_days_to_cover: number | null }> | null;
+  error: { message: string } | null;
+}
+interface DtcSelectBuilder extends PromiseLike<DtcQueryResult> {
+  eq(column: string, value: string): DtcSelectBuilder;
+}
+interface DtcTableBuilder {
+  upsert(
+    payload: ReadonlyArray<Record<string, unknown>>,
+    options?: { onConflict?: string },
+  ): PromiseLike<{ error: { message: string } | null }>;
+  select(columns: string): DtcSelectBuilder;
+}
+interface SupabaseLike {
+  from(table: string): DtcTableBuilder;
+}
 
 export function createSupabaseDaysToCoverWriter(
   supabase: SupabaseLike,
