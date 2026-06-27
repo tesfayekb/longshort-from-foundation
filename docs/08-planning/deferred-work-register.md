@@ -3396,3 +3396,37 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future Owner Phase** | STREAM-3 (cadence rebuild design + ship). |
 | **Resolution shape** | A focused FP that extends the planner input contract + threads broker working-orders through `rebalance-submit-orchestrator.ts` + subtracts at the delta computation. Test coverage: a planner-with-working-orders test asserting the placement intent excludes already-working shares. |
 | **Cross_ref** | The conformance audit (ACT-pending — accidental-discovery surfacing); STREAM-3 cadence-rebuild parent; ACT-336 (the un-pause investigation that surfaced the gap); **ACT-338 (resolution-path ratification — [DEC-070](../decisions/DEC-070-longshort-cadence-rebuild.md) clause (b) + [FP-057](feature-proposals.md#fp-057) Sub-step 2)**; **ACT-340 (RESOLUTION — FP-057 Sub-step 2 landed: working-order visibility + ranking-freshness gate)**; `supabase/functions/_shared/longshort-execution/rebalance-submit-orchestrator.ts` (`runRebalanceSubmit` now reads `broker.reconstructInFlight(ts)` and forwards `workingOrders` to `planRebalance`); `supabase/functions/_shared/longshort-execution/rebalance-planner.ts` (`WorkingOrderView`, `workingOrderSignedNotional`, `computeDeltas({ workingOrders })`); CROSSWIND §4.4 / §122 (tick-cadence intent). |
+
+---
+
+### DW-165: Days-to-cover short-side entry screen — squeeze-avoidance pre-flight gate (Tier A, pre-live)
+
+| Field | Value |
+|---|---|
+| **ID** | DW-165. |
+| **Status** | **RESOLVED 2026-06-28 at ACT-345 — Squeeze Protection Component 2 landed.** `PolygonShortInterestFetcher` now carries `days_to_cover: number \| null` (typed-absence; derived from `short_interest / avg_daily_volume` when Polygon omits the explicit field) on each `RawShortInterestReport`. `ShortInterestOrchestrator` writes the latest DTC to a new sibling table `public.short_interest_days_to_cover` (MIG-131) via injected `DaysToCoverWriter`, even when the SI alpha-signal path is skipped (`insufficient_history`), maximizing pre-flight gate coverage. `PreflightComposer` adds `verify_days_to_cover` as a SHORT-side-only gate that reads via `DaysToCoverReader` and HARD-EXCLUDES short candidates with `DTC ≥ shortDtcExcludeThreshold` (reason=`high_days_to_cover`). NULL DTC = PASSING (typed-absence; logged via `summary.null_dtc_short_candidates` metric so the policy is observable). Long candidates are NEVER consulted. `rebalance-submit-orchestrator.ts` resolves the threshold at the boundary via `resolveShortDtcExcludeThreshold(env=LONGSHORT_DTC_SHORT_EXCLUDE_THRESHOLD)` (default `7.0`, strict finite-positive validation, same hardened pattern as `LONGSHORT_SHORT_STOP_THRESHOLD`). The existing planner substitution machinery (`MAX_SUBSTITUTION_ATTEMPTS_PER_SIDE_PER_DAY`, `one_fewer_fallbacks_short`) handles DTC-rejected candidates identically to sector-cap/eligibility rejects — no ranker change, no combiner change, no feature-vector contamination (the §4.4.3 economics invariant is preserved; DTC NEVER enters `combiner_feature_vectors.features`). Tests: 6 new `(DW-165)` cases in `preflight-composer_test.ts` (threshold-fail, threshold-pass, null-pass-with-metric, absent-reader skipped+`dtc_unavailable=true`, long-side-untouched, composite halt+DTC); fetcher + store + orchestrator suites green; full `longshort-execution` suite 210 passed. |
+| **Tier** | A — short-side risk filter; squeeze-avoidance layer; pre-live blocker (the avoidance complement to DW-149's −15% active circuit-breaker). |
+| **Title** | Days-to-cover short-side entry screen (avoidance layer) — keep squeeze-prone names out of the short book by hard-excluding short candidates with DTC ≥ threshold at the pre-flight gate. |
+| **Scope** | (a) Stop discarding `days_to_cover` at `PolygonShortInterestFetcher`; (b) carry through `ShortInterestOrchestrator` to a sibling `short_interest_days_to_cover` table (NOT the feature vector); (c) read at `PreflightComposer` via injected `DaysToCoverReader`; (d) hard-exclude short candidates with DTC ≥ threshold (reason `high_days_to_cover`); (e) null-DTC = passing with metric; (f) env-overridable threshold (default 7.0); (g) long candidates untouched. |
+| **Depends-on** | none (additive; reuses the existing SI fetch + the existing planner substitution path). |
+| **Blocks** | Pre-live arming of the SHORT book — without DTC screening, the short side ships without its squeeze-avoidance layer. |
+| **Future Owner Phase** | Pre-live (squeeze protection block, with DW-149 + DW-162). |
+| **Resolution shape** | Documented above. Down-weight curve (vs hard-exclude) deferred as **DW-165-B** — Phase-7 refinement gated on observed substitution-fallback rate; sizing surface lives at DEC-067. |
+| **Cross_ref** | Squeeze Protection Charter; DW-149 (active circuit-breaker — the complement); DW-162 (borrow-rate spike monitor — same protection block); **ACT-345 (RESOLUTION — Component 2 landed)**; MIG-131 (`public.short_interest_days_to_cover`); `supabase/functions/_shared/longshort-signals/shared/polygon-short-interest-fetcher.ts` (DTC carry); `supabase/functions/_shared/longshort-signals/shared/days-to-cover-store.ts` (writer/reader); `supabase/functions/_shared/longshort-signals/short-interest-change/short-interest-orchestrator.ts` (persist seam — NOT feature vector); `supabase/functions/_shared/longshort-execution/preflight-composer.ts` (`verify_days_to_cover` gate, `resolveShortDtcExcludeThreshold`); `supabase/functions/_shared/longshort-execution/rebalance-submit-orchestrator.ts` (threshold wiring at boundary); §4.4.3 (signal-economics no-contamination invariant). |
+
+---
+
+### DW-165-B: Days-to-cover down-weight curve (refinement of DW-165 hard-exclude)
+
+| Field | Value |
+|---|---|
+| **ID** | DW-165-B. |
+| **Status** | LOGGED 2026-06-28 at ACT-345 — Phase-7 refinement; gated on observed substitution-fallback rate from the DW-165 hard-exclude v1. |
+| **Tier** | C — refinement; pre-live blocker is satisfied by hard-exclude v1. |
+| **Title** | Replace DTC hard-exclude with a continuous down-weight curve (size-multiplier as a function of DTC) — if observed substitution-fallback rates on the hard-exclude path warrant a smoother treatment. |
+| **Scope** | (a) Define a continuous down-weight curve `f(DTC) → [0,1]` with monotone-decreasing shape; (b) thread through DEC-067 sizing surface (size-multiplier is a separate decision surface from the equal-weight-per-slot v1 sizing); (c) preserve the §4.4.3 no-contamination invariant (DTC stays out of the feature vector); (d) preserve the null-DTC = passing posture. |
+| **Depends-on** | DW-165 landed (yes); a sizing-multiplier surface ratified at DEC-067 (deferred). |
+| **Blocks** | Nothing pre-live. |
+| **Future Owner Phase** | Phase-7 (post-live calibration). |
+| **Resolution shape** | A focused refinement FP; the observability metric to drive the calibration is the substitution-fallback rate already emitted on the DW-165 hard-exclude path (plus a recommended `dtc_downweight_observed` shadow series). |
+| **Cross_ref** | DW-165; DEC-067; §4.4.3. |
