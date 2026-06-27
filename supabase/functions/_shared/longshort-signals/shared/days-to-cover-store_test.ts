@@ -57,8 +57,8 @@ Deno.test('writer: upsertLatest sends payload and surfaces error=null', async ()
   const { supabase, upserts } = makeSupabase({});
   const writer = createSupabaseDaysToCoverWriter(supabase);
   const { error } = await writer.upsertLatest([
-    { operator_id: OP, ticker: 'AAPL', as_of_date: '2026-06-08', latest_days_to_cover: 3.2, report_date: '2026-05-31' },
-    { operator_id: OP, ticker: 'TSLA', as_of_date: '2026-06-08', latest_days_to_cover: null,  report_date: '2026-05-31' },
+    { operator_id: OP, ticker: 'AAPL', as_of_date: '2026-06-08', latest_days_to_cover: 3.2, report_date: '2026-05-31', updated_at: '2026-06-08T00:00:00.000Z' },
+    { operator_id: OP, ticker: 'TSLA', as_of_date: '2026-06-08', latest_days_to_cover: null,  report_date: '2026-05-31', updated_at: '2026-06-08T00:00:00.000Z' },
   ]);
   assertEquals(error, null);
   assertEquals(upserts.length, 1);
