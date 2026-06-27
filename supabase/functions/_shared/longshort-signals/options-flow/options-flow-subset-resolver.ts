@@ -57,10 +57,7 @@
  */
 
 import type { OptionsFlowVolumeReader } from './options-flow-volume-store.ts';
-import type {
-  SupabaseChainedClient,
-  ChainedSelectBuilder,
-} from '../shared/supabase-chained-builder.ts';
+import type { SupabaseChainedClient } from '../shared/supabase-chained-builder.ts';
 
 /** The intraday signal IDs that feed the DYNAMIC ADDITIONS union. */
 export const NEWS_SIGNAL_ID = 'news_sentiment_7d';
