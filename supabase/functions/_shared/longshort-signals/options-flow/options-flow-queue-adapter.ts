@@ -51,9 +51,37 @@ import { SignalComputationError } from '../shared/signal-types.ts';
 import type { TradierOptionsChainFetcher } from '../shared/tradier-options-chain-fetcher.ts';
 import { computeOptionsFlow, MIN_DTE_DAYS } from './compute-options-flow.ts';
 import { pickQualifyingExpiration } from './options-flow-orchestrator.ts';
+import type { OptionsFlowSubsetResolver } from './options-flow-subset-resolver.ts';
+import type { OptionsFlowVolumeWriter } from './options-flow-volume-store.ts';
 
 export interface OptionsFlowAdapterDeps {
   tradier: TradierOptionsChainFetcher;
+  /**
+   * FP-057 Sub-step 4c — OPTIONAL intraday subset pre-filter. When
+   * provided AND the resolver returns a non-null set, the adapter
+   * SHORT-CIRCUITS the dual-Tradier fetch for any ticker not on the
+   * set (typed `no_qualifying_flow` skip with an "not in intraday
+   * subset" detail). Memoized per-asOf-date by the resolver closure
+   * itself; the adapter just queries.
+   *
+   * The DAILY full-universe run leaves this null (or the resolver
+   * returns null because no `cadence='intraday'` run is open) so the
+   * cron-87 path is bit-identical to pre-4c.
+   */
+  subsetResolver?: OptionsFlowSubsetResolver;
+  /**
+   * FP-057 Sub-step 4c (MIG-133) — OPTIONAL daily-volume persistence.
+   * On every VALUE-producing compute, the adapter upserts the freshly-
+   * computed `total_options_volume` (currently discarded post-compute)
+   * to the MIG-133 sidecar so the intraday resolver's base tier can
+   * read top-N by trailing-day volume.
+   *
+   * Persistence failures are SOFT — the compute's `raw_signal` is
+   * returned as-value regardless (the un-swept tail carries last-known
+   * via combiner staleness rules; the resolver tolerates an empty base
+   * tier via the UNION path).
+   */
+  volumeWriter?: OptionsFlowVolumeWriter;
 }
 
 export function createOptionsFlowAdapter(
@@ -61,6 +89,20 @@ export function createOptionsFlowAdapter(
 ): TickerComputeFn {
   return async ({ ticker, gicsSector: _gicsSector, asOf }): Promise<TickerComputeResult> => {
     try {
+      // ─── FP-057 4c — subset pre-filter (mirrors PEAD's getWorklist).
+      // Cheap; one resolver call per (ticker × isolate). Internal
+      // memoization owned by the resolver closure (per-asOf-date cache).
+      if (deps.subsetResolver) {
+        const subset = await deps.subsetResolver(asOf);
+        if (subset !== null && !subset.has(ticker)) {
+          return {
+            kind: 'skip',
+            reason: 'no_qualifying_flow',
+            detail:
+              'not in intraday subset (top-N by trailing-day options volume ∪ fresh-today catalyst/news-active)',
+          };
+        }
+      }
       const expRes = await deps.tradier.fetchExpirations(ticker);
       if (expRes.kind === 'unavailable') {
         return {
@@ -96,6 +138,30 @@ export function createOptionsFlowAdapter(
           reason: 'no_qualifying_flow',
           detail: `chain snapshot @ ${expiration}: ${chainRes.contracts.length} contracts, no qualifying smart-money prints`,
         };
+      }
+      // ─── FP-057 4c (MIG-133) — persist `day_options_volume` for the
+      // resolver's base tier. `computed_at = asOf.toISOString()`
+      // (DEC-034 cl.4 — NO new Date()). Soft-fail: on error, log to the
+      // engine's audit telemetry via a console.warn but STILL return
+      // the value (the compute is the authoritative output here).
+      if (deps.volumeWriter) {
+        try {
+          const { error } = await deps.volumeWriter.upsert({
+            ticker,
+            as_of_date: asOf.toISOString().slice(0, 10),
+            day_options_volume: computed.total_options_volume,
+            computed_at: asOf.toISOString(),
+          });
+          if (error) {
+            console.warn(
+              `options-flow-adapter: volume-writer soft-fail for ${ticker}: ${error.message}`,
+            );
+          }
+        } catch (e) {
+          console.warn(
+            `options-flow-adapter: volume-writer threw for ${ticker}: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
       }
       return { kind: 'value', raw: computed.raw_signal };
     } catch (err) {
