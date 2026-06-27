@@ -27,6 +27,13 @@ export interface DaysToCoverRecord {
   as_of_date: string;   // ISO yyyy-mm-dd of the orchestrator run
   latest_days_to_cover: number | null;
   report_date: string;  // settlement_date of the latest report used
+  /**
+   * Injected as_of-derived ISO timestamp (orchestrator's `ts = as_of.toISOString()`).
+   * Used verbatim as the row's `updated_at` so the write is replay-deterministic
+   * (DEC-034 clause 4 — no wall-clock in financial-path writers). Mirrors the
+   * sibling `signal_observations.computed_at = ts` threading.
+   */
+  updated_at: string;
 }
 
 export interface DaysToCoverWriter {
@@ -77,7 +84,7 @@ export function createSupabaseDaysToCoverWriter(
         as_of_date: r.as_of_date,
         latest_days_to_cover: r.latest_days_to_cover,
         report_date: r.report_date,
-        updated_at: new Date().toISOString(),
+        updated_at: r.updated_at,
       }));
       const { error } = await supabase
         .from('short_interest_days_to_cover')
