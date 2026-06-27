@@ -17,6 +17,7 @@ import {
   composePreflightResults,
   type PreflightCandidate,
   type PreflightComposerSummary,
+  resolveShortDtcExcludeThreshold,
 } from './preflight-composer.ts';
 import {
   planRebalance,
@@ -48,6 +49,10 @@ import {
   type HtbCacheReader,
   type HtbCacheClearer,
 } from './cache-propagator-io.ts';
+import {
+  createSupabaseDaysToCoverReader,
+  type DaysToCoverReader,
+} from '../longshort-signals/shared/days-to-cover-store.ts';
 import type { SameTickContradictoryPass } from './cache-propagator.ts';
 import { preflightKey } from './rebalance-planner.ts';
 
@@ -402,6 +407,21 @@ export async function runRebalanceSubmit(
     ?? createSupabaseHtbCacheReader(supabaseAdmin as unknown as Parameters<typeof createSupabaseHtbCacheReader>[0]);
   const htbCacheClearer = deps.htbCacheClearer
     ?? createSupabaseHtbCacheClearer(supabaseAdmin as unknown as Parameters<typeof createSupabaseHtbCacheClearer>[0]);
+  // DW-165 — short-side squeeze-avoidance reader + threshold are resolved
+  // at this boundary (env access stays out of the composer kernel). When
+  // a caller injects `deps.daysToCoverReader` (e.g. tests) we honour it;
+  // production wires the Supabase reader unconditionally so the gate
+  // fires on every short candidate.
+  const daysToCoverReader: DaysToCoverReader = deps.daysToCoverReader
+    ?? createSupabaseDaysToCoverReader(supabaseAdmin, operator_id);
+  const shortDtcExcludeThreshold = resolveShortDtcExcludeThreshold((k) => {
+    try {
+      return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } })
+        .Deno?.env.get(k);
+    } catch {
+      return undefined;
+    }
+  });
   const preflight = await composePreflightResults(
     { candidates, internal_expected_bp: bp.available_bp, ts },
     {
@@ -411,6 +431,8 @@ export async function runRebalanceSubmit(
       htbCache: { reader: htbCacheReader, clearer: htbCacheClearer },
       operator_id,
       fetcher_source: 'live',
+      daysToCoverReader,
+      shortDtcExcludeThreshold,
     },
   );
 
