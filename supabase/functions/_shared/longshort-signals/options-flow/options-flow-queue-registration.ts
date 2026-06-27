@@ -78,7 +78,7 @@ import { createOptionsFlowAdapter } from './options-flow-queue-adapter.ts';
 import { TradierOptionsChainFetcher } from '../shared/tradier-options-chain-fetcher.ts';
 import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
 import { SIGNAL_ID } from './options-flow-orchestrator.ts';
-import { supabaseAdmin } from '../../../supabase-admin.ts';
+import { supabaseAdmin } from '../../supabase-admin.ts';
 import { createSupabaseOptionsFlowVolumeWriter, createSupabaseOptionsFlowVolumeReader } from './options-flow-volume-store.ts';
 import { createOptionsFlowSubsetResolver } from './options-flow-subset-resolver.ts';
 
