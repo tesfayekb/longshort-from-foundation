@@ -32,6 +32,8 @@ import {
 import { createRejectionPropagator } from './cache-propagator-io.ts';
 import type { HtbCacheWriter } from './cache-propagator-io.ts';
 import type { HtbRecordWrite } from './cache-propagator.ts';
+import type { BrokerPosition, BrokerPositionFetcher } from '../longshort-broker-interfaces.ts';
+import { SHORT_STOP_LIMIT_COID_PREFIX } from './short-stop-evaluator.ts';
 
 const PROV: DeltaProvenance = {
   selection_reason: 'primary', substituted_from_symbol: null,
@@ -270,4 +272,135 @@ Deno.test('DW-163: rebalanceAggregateAssertion throw is caught and surfaced as n
     rebalanceAggregateAssertion: async () => { throw new Error('boom'); },
   });
   assertEquals(result.rebalance_aggregate, null);
+});
+
+// ── DW-149 (Component 1): squeeze circuit-breaker integration ───────────
+// Fabricates a -16% short via the position fetcher, threads it through
+// runTick, and confirms (1) the evaluator fires BEFORE advanceTick,
+// (2) the cover intent is emitted as a +200bps marketable limit,
+// (3) in-flight is RE-RECONSTRUCTED post-fire so the cover enters this
+//     tick's advance-path (no 15-min lag),
+// (4) the aggregate-gate transient-vs-persistent annotation activates
+//     when the post-fire aggregate reports a band-violation.
+function mkBrokerWithShortPosition(): {
+  broker: BrokerInterfaces;
+  reconstructCalls: { ts: Date }[];
+  submittedRequests: import('../longshort-broker-interfaces.ts').BrokerOrderRequest[];
+} {
+  const reconstructCalls: { ts: Date }[] = [];
+  const submittedRequests: import('../longshort-broker-interfaces.ts').BrokerOrderRequest[] = [];
+  const positions: BrokerPosition[] = [
+    { symbol: 'GME', qty: -10, avg_entry_price: 100, current_price: 116 } as BrokerPosition,
+  ];
+  const positionFetcher: BrokerPositionFetcher = {
+    async fetchPosition(symbol) { return positions.find((p) => p.symbol === symbol) ?? null; },
+    async listOpenPositions() { return positions; },
+  };
+  const broker: BrokerInterfaces = {
+    acceptanceFetcher: { async fetchOrderAcceptance() { throw new Error('unreachable'); } },
+    fillFetcher: { async fetchFill() { throw new Error('unreachable'); } },
+    submitter: {
+      async submitOrder(req) {
+        submittedRequests.push(req);
+        return { order_id: `o-${submittedRequests.length}`, client_order_id: req.client_order_id, status: 'accepted', submitted_at: TS };
+      },
+    },
+    canceller: { async cancelOrder() { /* MUST NOT be called on a parallel-cover path */ } },
+    positionFetcher,
+    async reconstructInFlight(ts) { reconstructCalls.push({ ts }); return []; },
+  };
+  return { broker, reconstructCalls, submittedRequests };
+}
+
+Deno.test('DW-149: -16% short fabricated via positionFetcher → cover intent fires this tick (+200bps limit)', async () => {
+  const { broker, reconstructCalls, submittedRequests } = mkBrokerWithShortPosition();
+  const { writer } = captureEvents();
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+  });
+  assert(result.short_stop !== null);
+  assertEquals(result.short_stop!.short_stop_fired_count, 1);
+  assertEquals(result.short_stop!.breaches[0].symbol, 'GME');
+  assertEquals(submittedRequests.length, 1);
+  assertEquals(submittedRequests[0].type, 'limit');
+  assertEquals(submittedRequests[0].side, 'buy');
+  assert(submittedRequests[0].client_order_id.startsWith(SHORT_STOP_LIMIT_COID_PREFIX));
+  // Post-fire RE-RECONSTRUCT: reconstructInFlight called TWICE (once before
+  // the evaluator, once after, so the new cover enters this tick's advance).
+  assertEquals(reconstructCalls.length, 2);
+});
+
+Deno.test('DW-149: -14% short does NOT breach → no cover, single reconstruct', async () => {
+  const { broker, reconstructCalls, submittedRequests } = mkBrokerWithShortPosition();
+  // mutate the position to -14% (below threshold)
+  (broker.positionFetcher as BrokerPositionFetcher).listOpenPositions = async () => [
+    { symbol: 'GME', qty: -10, avg_entry_price: 100, current_price: 114 } as BrokerPosition,
+  ];
+  const { writer } = captureEvents();
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+  });
+  assertEquals(result.short_stop!.short_stop_fired_count, 0);
+  assertEquals(submittedRequests.length, 0);
+  assertEquals(reconstructCalls.length, 1);
+});
+
+Deno.test('DW-149: shortStopEnabled=false fully bypasses evaluator (legacy opt-out)', async () => {
+  const { broker, submittedRequests } = mkBrokerWithShortPosition();
+  const { writer } = captureEvents();
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+    shortStopEnabled: false,
+  });
+  assertEquals(result.short_stop, null);
+  assertEquals(submittedRequests.length, 0);
+});
+
+Deno.test('DW-149: aggregate band-violation co-occurring with short-stop fire → short_stop_adjusted_aggregate=true (log not alert)', async () => {
+  const { broker } = mkBrokerWithShortPosition();
+  const { writer } = captureEvents();
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+    rebalanceAggregateAssertion: async () => ({
+      outcome: 'failure_escalated',
+      divergence: { long_gross_dollars: 10_000, short_gross_dollars: 8_000, ratio: 1.25, within_band: false },
+      event_id: 'evt-band-fail-1',
+      action_taken: 'operator_alert',
+      band: { lower: 0.90, upper: 1.10 },
+    }),
+  });
+  assert(result.short_stop_adjusted_aggregate, 'short_stop_adjusted_aggregate must be true when a short-stop fired alongside a band-violation');
+  assertEquals(result.rebalance_aggregate!.outcome, 'failure_escalated');
+});
+
+Deno.test('DW-149: aggregate band-violation WITHOUT a short-stop fire → short_stop_adjusted_aggregate=false (real violation, escalate normally)', async () => {
+  const { broker } = mkBroker([]); // no positionFetcher → evaluator skipped
+  const { writer } = captureEvents();
+  const result = await runTick({
+    brokerFactory: () => broker,
+    eventWriter: writer,
+    clock: createFixedClock(TS),
+    ts: TS,
+    rebalanceAggregateAssertion: async () => ({
+      outcome: 'failure_escalated',
+      divergence: { long_gross_dollars: 10_000, short_gross_dollars: 8_000, ratio: 1.25, within_band: false },
+      event_id: 'evt-band-fail-2',
+      action_taken: 'operator_alert',
+      band: { lower: 0.90, upper: 1.10 },
+    }),
+  });
+  assertEquals(result.short_stop_adjusted_aggregate, false);
+  assertEquals(result.rebalance_aggregate!.outcome, 'failure_escalated');
 });
