@@ -187,6 +187,151 @@ Deno.test('preflight-composer: SHORT not-htb-marked → locate IS called (consul
   assertEquals(locate.calls, 1);
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// DW-165 — Squeeze Protection Component 2 — days-to-cover SHORT-side gate.
+// ─────────────────────────────────────────────────────────────────────────
+
+function dtcReader(map: Record<string, number | null>): DaysToCoverReader & { calls: string[] } {
+  return {
+    calls: [] as string[],
+    async read(ticker: string) {
+      this.calls.push(ticker);
+      return Object.prototype.hasOwnProperty.call(map, ticker) ? map[ticker] : null;
+    },
+  } as DaysToCoverReader & { calls: string[] };
+}
+
+Deno.test('(DW-165) SHORT with DTC ≥ threshold fails with reason=high_days_to_cover + verify_days_to_cover marked failed', async () => {
+  const candidates: PreflightCandidate[] = [
+    { symbol: 'GME', side: 'short', requested_position_size: 1500 },
+  ];
+  const reader = dtcReader({ GME: 12.5 });
+  const out = await composePreflightResults(
+    { candidates, internal_expected_bp: 100_000, ts: TS },
+    baseDeps({
+      htbCache: { reader: htbReader(new Set()) },
+      ssrStatusFetcher: ssrStub('not_active'),
+      daysToCoverReader: reader,
+    }),
+  );
+  const r = out.results.get(preflightKey('GME', 'short'))!;
+  assertEquals(r.passed, false);
+  assertEquals(r.reason, 'high_days_to_cover');
+  assert(r.failed_verifiers.includes('verify_days_to_cover'));
+  assertEquals(out.summary.dtc_excluded_short_candidates, 1);
+  assertEquals(out.summary.null_dtc_short_candidates, 0);
+  assertEquals(out.summary.dtc_unavailable, false);
+  assertEquals(out.summary.dtc_threshold, DEFAULT_SHORT_DTC_EXCLUDE_THRESHOLD);
+});
+
+Deno.test('(DW-165) SHORT with DTC below threshold passes; reader is called', async () => {
+  const candidates: PreflightCandidate[] = [
+    { symbol: 'AAPL', side: 'short', requested_position_size: 1500 },
+  ];
+  const reader = dtcReader({ AAPL: 1.2 });
+  const out = await composePreflightResults(
+    { candidates, internal_expected_bp: 100_000, ts: TS },
+    baseDeps({
+      htbCache: { reader: htbReader(new Set()) },
+      ssrStatusFetcher: ssrStub('not_active'),
+      daysToCoverReader: reader,
+    }),
+  );
+  const r = out.results.get(preflightKey('AAPL', 'short'))!;
+  assertEquals(r.passed, true);
+  assertEquals(reader.calls, ['AAPL']);
+  assertEquals(out.summary.dtc_excluded_short_candidates, 0);
+});
+
+Deno.test('(DW-165) null DTC PASSES (typed-absence) AND increments null_dtc_short_candidates metric', async () => {
+  const candidates: PreflightCandidate[] = [
+    { symbol: 'ILLQ', side: 'short', requested_position_size: 1500 },
+  ];
+  const reader = dtcReader({ ILLQ: null });
+  const out = await composePreflightResults(
+    { candidates, internal_expected_bp: 100_000, ts: TS },
+    baseDeps({
+      htbCache: { reader: htbReader(new Set()) },
+      ssrStatusFetcher: ssrStub('not_active'),
+      daysToCoverReader: reader,
+    }),
+  );
+  const r = out.results.get(preflightKey('ILLQ', 'short'))!;
+  assertEquals(r.passed, true);
+  assertEquals(out.summary.null_dtc_short_candidates, 1);
+  assertEquals(out.summary.dtc_excluded_short_candidates, 0);
+});
+
+Deno.test('(DW-165) no daysToCoverReader → SHORT records verify_days_to_cover SKIPPED + dtc_unavailable=true', async () => {
+  const candidates: PreflightCandidate[] = [
+    { symbol: 'AAPL', side: 'short', requested_position_size: 1500 },
+  ];
+  const out = await composePreflightResults(
+    { candidates, internal_expected_bp: 100_000, ts: TS },
+    baseDeps({
+      htbCache: { reader: htbReader(new Set()) },
+      ssrStatusFetcher: ssrStub('not_active'),
+      // no daysToCoverReader
+    }),
+  );
+  const r = out.results.get(preflightKey('AAPL', 'short'))!;
+  assertEquals(r.passed, true);
+  const sk = out.skipped.get(preflightKey('AAPL', 'short')) ?? [];
+  assert(sk.includes('verify_days_to_cover'));
+  assertEquals(out.summary.dtc_unavailable, true);
+});
+
+Deno.test('(DW-165) LONG candidates are NEVER subjected to the DTC gate (short-side only)', async () => {
+  const candidates: PreflightCandidate[] = [
+    { symbol: 'GME', side: 'long', requested_position_size: 1500 },
+  ];
+  const reader = dtcReader({ GME: 99 /* would fail if applied */ });
+  const out = await composePreflightResults(
+    { candidates, internal_expected_bp: 100_000, ts: TS },
+    baseDeps({ daysToCoverReader: reader }),
+  );
+  const r = out.results.get(preflightKey('GME', 'long'))!;
+  assertEquals(r.passed, true);
+  // Reader was NEVER consulted for a long candidate.
+  assertEquals(reader.calls, []);
+  assertEquals(out.summary.dtc_excluded_short_candidates, 0);
+});
+
+Deno.test('(DW-165) DTC + halt composite → failed_verifiers carries BOTH; reason keeps preflight_failed: shape', async () => {
+  const candidates: PreflightCandidate[] = [
+    { symbol: 'GME', side: 'short', requested_position_size: 1500 },
+  ];
+  const reader = dtcReader({ GME: 20 });
+  const out = await composePreflightResults(
+    { candidates, internal_expected_bp: 100_000, ts: TS },
+    baseDeps({
+      haltStatusFetcher: haltStub(true),
+      htbCache: { reader: htbReader(new Set()) },
+      ssrStatusFetcher: ssrStub('not_active'),
+      daysToCoverReader: reader,
+    }),
+  );
+  const r = out.results.get(preflightKey('GME', 'short'))!;
+  assertEquals(r.passed, false);
+  assert(r.failed_verifiers.includes('verify_halt_status'));
+  assert(r.failed_verifiers.includes('verify_days_to_cover'));
+  assert(r.reason !== null && r.reason.startsWith('preflight_failed:'));
+});
+
+Deno.test('(DW-165) resolveShortDtcExcludeThreshold: env override + strict validation', () => {
+  // Default fall-back when env unset.
+  assertEquals(resolveShortDtcExcludeThreshold(() => undefined), DEFAULT_SHORT_DTC_EXCLUDE_THRESHOLD);
+  assertEquals(resolveShortDtcExcludeThreshold(() => ''), DEFAULT_SHORT_DTC_EXCLUDE_THRESHOLD);
+  // Valid override.
+  assertEquals(resolveShortDtcExcludeThreshold(() => '9.5'), 9.5);
+  // Reject non-finite / non-positive / garbage.
+  for (const bad of ['NaN', '0', '-1', '-2.5', 'abc', 'Infinity', '-Infinity']) {
+    let threw = false;
+    try { resolveShortDtcExcludeThreshold(() => bad); } catch { threw = true; }
+    assert(threw, `expected throw on "${bad}"`);
+  }
+});
+
 Deno.test('preflight-composer: system BP insufficient → EVERY candidate fails with verify_buying_power', async () => {
   const candidates: PreflightCandidate[] = [
     { symbol: 'AAPL', side: 'long', requested_position_size: 50_000 },
