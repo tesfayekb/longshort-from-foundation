@@ -38,6 +38,15 @@ export interface QueueInitContext {
   operator_id: string;
   config: QueueSignalConfig;
   as_of: Date;
+  /**
+   * FP-057 Sub-step 4c — OPTIONAL extra fields merged into the run row's
+   * `metadata` jsonb (in addition to the base `{ as_of, job_id, mode }`).
+   * Used by the options-flow intraday handler to tag a run with
+   * `cadence: 'intraday'` so the subset resolver can detect cadence-mode
+   * without a separate signal_id slot. Daily callers omit this argument
+   * → pre-4c metadata shape preserved bit-identically.
+   */
+  extraMetadata?: Record<string, unknown>;
 }
 
 export type QueueInitResult =
@@ -97,7 +106,7 @@ interface UniverseRow {
 const WORK_LIST_CURSOR_BATCH_SIZE = 500;
 
 export async function initQueueRun(ctx: QueueInitContext): Promise<QueueInitResult> {
-  const { supabase, operator_id, config, as_of } = ctx;
+  const { supabase, operator_id, config, as_of, extraMetadata } = ctx;
   const as_of_iso = as_of.toISOString();
   const as_of_date = as_of_iso.slice(0, 10);
 
@@ -183,7 +192,7 @@ export async function initQueueRun(ctx: QueueInitContext): Promise<QueueInitResu
       status: 'running',
       universe_size: universe.length,
       heartbeat_at: as_of_iso,
-      metadata: { as_of: as_of_iso, job_id: config.jobId, mode },
+      metadata: { as_of: as_of_iso, job_id: config.jobId, mode, ...(extraMetadata ?? {}) },
     })
     .select('run_id')
     .single();
