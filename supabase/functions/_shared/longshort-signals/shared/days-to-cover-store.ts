@@ -43,20 +43,15 @@ export interface DaysToCoverReader {
   read(ticker: string): Promise<number | null>;
 }
 
-type FromTable = {
-  from(table: string): {
-    upsert(records: unknown, options?: { onConflict?: string }): Promise<{ error: { message: string } | null }>;
-    select(cols: string): {
-      eq(col: string, val: string): {
-        in(col: string, vals: string[]): Promise<{ data: unknown; error: { message: string } | null }>;
-        eq(col: string, val: string): Promise<{ data: unknown; error: { message: string } | null }>;
-      };
-    };
-  };
-};
+// We type the supabase handle loosely (`SupabaseLike`) because tests
+// inject in-memory doubles and the live supabase-js client surfaces a
+// chained, thenable builder. Both write/read paths await the terminal
+// promise; that is the only contract this module relies on.
+// deno-lint-ignore no-explicit-any
+type SupabaseLike = any;
 
 export function createSupabaseDaysToCoverWriter(
-  supabase: FromTable,
+  supabase: SupabaseLike,
 ): DaysToCoverWriter {
   return {
     async upsertLatest(records) {
@@ -78,7 +73,7 @@ export function createSupabaseDaysToCoverWriter(
 }
 
 export function createSupabaseDaysToCoverReader(
-  supabase: FromTable,
+  supabase: SupabaseLike,
   operator_id: string,
 ): DaysToCoverReader {
   return {
