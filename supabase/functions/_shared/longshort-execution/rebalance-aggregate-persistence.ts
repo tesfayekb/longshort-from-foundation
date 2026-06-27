@@ -212,9 +212,15 @@ export function buildRebalanceAggregatePersistenceCheck(
     }
     // Optional click-through pointer: the first unexplained row scanned
     // (most-recent). Reader may not expose ids; degrade to null.
+    // The reader DTO may carry an `event_id` field even though the
+    // `AggregateHistoryRow` contract doesn't require it (the Supabase
+    // default reader attaches it for pager click-through). Narrow
+    // structurally via an unknown→record path; no `any`.
+    const firstRow = rows[0] as Record<string, unknown> | undefined;
     const last_unexplained_event_id =
-      // deno-lint-ignore no-explicit-any
-      (rows[0] as any)?.event_id ?? null;
+      firstRow && typeof firstRow['event_id'] === 'string'
+        ? (firstRow['event_id'] as string)
+        : null;
     const event_id = await p.writer.write({
       ts,
       operator_id: p.operator_id,
