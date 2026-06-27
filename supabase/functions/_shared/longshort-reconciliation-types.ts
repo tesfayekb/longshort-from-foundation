@@ -64,15 +64,6 @@ export type VerifyCallName =
   // type-name vs scope cleanup deferred).
   | 'verify_rebalance_aggregate_persistence';
 
-// FP-057 Sub-step 5 — header note (was a duplicated comment, removed below).
-// THE rolling-window
-// transient-vs-persistent escalator for #17. Distinct call_name so the
-// per-tick `verify_rebalance_aggregate` row (the audit fire) is cleanly
-// separable from the cross-tick PAGER event (which is what operators
-// actually wake up to). Same DW-069 precedent as `liveness_check` and
-// `longshort.rebalance.placement` (non-`verify_*` reconcile() identifier;
-// type-name vs scope cleanup deferred).
-
 /**
  * Provenance of the fetcher that produced a reconciliation_events row.
  * Encoded as data so the two-invocation liveness rule (FP-008.4 #11) can evaluate
