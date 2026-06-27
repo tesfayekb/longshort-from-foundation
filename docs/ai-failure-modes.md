@@ -337,6 +337,15 @@ Each entry MUST include:
 | **Resolution** | Reword inside JSDoc: write the cadence as prose ("every-15-min 14-19 UTC Mon-Fri" or "RTH 15-minute cadence") rather than the literal cron `*/15 * * * *`. The cron form belongs in the operator SQL (`sql/28_*`), not inside a JSDoc body. |
 | **Forward-binding** | Any handler/orchestrator JSDoc that documents a cron schedule must quote it in prose. If a future contributor restores the literal `*/N` form inside a `/** ... */` block, the lint gate fires immediately — but the structural prevention is "cron literals belong in SQL files, not in JSDoc preambles". |
 
+### Catalog #61 — Hand-rolled `SupabaseLike` builder interfaces drift from call-site usage
+
+| Field | Value |
+| --- | --- |
+| **Symptom** | Edge resolvers/stores hand-roll a partial `SupabaseLike` / chained-thenable interface enumerating only the methods (`eq`, `in`) the file happens to use at write-time. Later edits add `.order(...)` / `.limit(...)` or a second query returning a different row shape; the hand-rolled interface fails to type-check (TS2339 on the new method, or row-shape conflation across queries) or explodes into TS2589 "type instantiation excessively deep" from over-precise chained generics. |
+| **Firing** | 3× — (1) DTC store `days-to-cover-store.ts` (TS2589 from over-precise chained-thenable typing, ACT-345 REVISION-FIX); (2) options-flow subset resolver missing `.order` / `.limit` on `ObsSelectBuilder` (TS2339); (3) options-flow resolver conflating `signal_observations` (`{ ticker }`) and `signal_queue_runs` (`{ metadata }`) under a single row DTO. Both (2)+(3) caught by Gate 0c at ACT-347 REVISION-FIX. |
+| **Resolution** | Single shared generic chained-builder type at `supabase/functions/_shared/longshort-signals/shared/supabase-chained-builder.ts`: `ChainedSelectBuilder<TRow>` exposes the full method set (`eq` / `in` / `order` / `limit` + the thenable) and carries the row shape via `TRow`. Each query at the call site declares its own row shape via `select<TRow>(cols)` — queries against different tables cannot conflate result types. The resolver migrated to it; the DTC store migration is a follow-on (logged, not in-scope for the immediate REVISION-FIX). |
+| **Forward-binding** | New edge resolvers/stores MUST import `SupabaseChainedClient` / `ChainedSelectBuilder` from the shared module instead of hand-rolling a partial interface. Scope: edge `_shared/longshort-signals/**` only — `src/` production paths keep the typed Supabase client directly. If a future contributor re-introduces a hand-rolled `interface SupabaseLike` in an edge resolver/store, code-review must redirect to the shared type. |
+
 ## Quarterly Review Protocol (per §12.8)
 
 1. At each quarterly boundary, review action-tracker entries from the prior quarter for defect-class firings.

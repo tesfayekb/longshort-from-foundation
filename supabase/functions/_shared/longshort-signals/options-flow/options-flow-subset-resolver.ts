@@ -57,6 +57,7 @@
  */
 
 import type { OptionsFlowVolumeReader } from './options-flow-volume-store.ts';
+import type { SupabaseChainedClient } from '../shared/supabase-chained-builder.ts';
 
 /** The intraday signal IDs that feed the DYNAMIC ADDITIONS union. */
 export const NEWS_SIGNAL_ID = 'news_sentiment_7d';
@@ -79,35 +80,18 @@ export interface ResolveSubsetDeps {
   subsetN?: number;
 }
 
-/** Structural subset of the supabase client this resolver depends on. */
+/**
+ * Structural subset of the supabase client this resolver depends on.
+ * Backed by the SHARED generic chained-builder type (Catalog #61 structural
+ * prevention): each query at the call site declares its own row shape via the
+ * `TRow` parameter on `select<TRow>(cols)`, so the two distinct queries here
+ * (signal_observations → { ticker }, signal_queue_runs → { metadata }) cannot
+ * conflate their result types.
+ */
+export type SupabaseLike = SupabaseChainedClient;
+
 interface ObsRowDto { ticker: string }
-interface ObsQueryResult {
-  data: ReadonlyArray<ObsRowDto> | null;
-  error: { message: string } | null;
-}
-interface ObsSelectBuilder extends PromiseLike<ObsQueryResult> {
-  eq(column: string, value: unknown): ObsSelectBuilder;
-  in(column: string, values: ReadonlyArray<string>): ObsSelectBuilder;
-}
-interface RunRowDto {
-  metadata: Record<string, unknown> | null;
-}
-interface RunQueryResult {
-  data: ReadonlyArray<RunRowDto> | null;
-  error: { message: string } | null;
-}
-interface RunSelectBuilder extends PromiseLike<RunQueryResult> {
-  eq(column: string, value: unknown): RunSelectBuilder;
-  in(column: string, values: ReadonlyArray<string>): RunSelectBuilder;
-  order(column: string, opts: { ascending: boolean }): RunSelectBuilder;
-  limit(n: number): RunSelectBuilder;
-}
-interface TableBuilder {
-  select(columns: string): ObsSelectBuilder & RunSelectBuilder;
-}
-export interface SupabaseLike {
-  from(table: string): TableBuilder;
-}
+interface RunRowDto { metadata: Record<string, unknown> | null }
 
 /** ISO yyyy-mm-dd from a Date in UTC (no wall-clock leak). */
 function isoDate(d: Date): string {
@@ -198,7 +182,7 @@ async function isIntradayRun(deps: ResolveSubsetDeps, asOf: Date): Promise<boole
   const asOfDate = isoDate(asOf);
   const { data, error } = await deps.supabase
     .from('signal_queue_runs')
-    .select('metadata')
+    .select<RunRowDto>('metadata')
     .eq('signal_id', deps.signalId)
     .eq('as_of_date', asOfDate)
     .in('status', ['running', 'finalizing'])
@@ -218,7 +202,7 @@ async function fetchFreshActive(
   // pulls in carried-over stale rows.
   const { data, error } = await deps.supabase
     .from('signal_observations')
-    .select('ticker')
+    .select<ObsRowDto>('ticker')
     .in('signal_id', [CATALYST_SIGNAL_ID, NEWS_SIGNAL_ID])
     .eq('as_of_date', todayIso)
     .eq('is_present', true)
