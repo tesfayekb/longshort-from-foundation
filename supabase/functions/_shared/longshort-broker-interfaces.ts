@@ -449,9 +449,14 @@ export interface BrokerOrderRequest {
   symbol: string;
   qty: number;                       // integer whole shares
   side: 'buy' | 'sell';
-  type: 'limit';                     // §8.2 marketable-limit posture
+  /** §8.2 marketable-limit posture is `limit`. DW-149 adds `market` for
+   *  the short-stop parallel-cover leg (the §8.6.2:152 race — when the
+   *  limit cover is still pending past the short-stop Phase-1 timeout,
+   *  fire a PARALLEL market order WITHOUT cancelling the limit, race the
+   *  broker, cancel the loser). Market orders ignore `limit_price`. */
+  type: 'limit' | 'market';
   time_in_force: 'day';              // §8.2 TIF=DAY
-  limit_price: number;               // dollars; > 0
+  limit_price: number;               // dollars; > 0 for limit; ignored for market
   client_order_id: string;           // T8 idempotency key
 }
 
