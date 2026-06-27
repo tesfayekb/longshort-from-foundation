@@ -24,6 +24,9 @@ import type {
   ReconciliationEventWriter,
 } from './lifecycle-orchestrator.ts';
 import { runTick } from './tick-scheduler.ts';
+import { deriveExemptCause } from './tick-scheduler.ts';
+import type { PersistenceCheckOutcome } from './rebalance-aggregate-persistence.ts';
+import type { TerminalOrderResult } from './lifecycle-orchestrator.ts';
 import {
   createLiveBrokerInterfaces,
   LiveBrokerNotProvisionedError,
