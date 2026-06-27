@@ -160,3 +160,50 @@ Deno.test('(8) URL carries the apiKey, ticker, and settlement_date.lte=as_of', a
   assertStringIncludes(capturedUrl, `limit=${DEFAULT_SHORT_INTEREST_LIMIT}`);
   assertStringIncludes(capturedUrl, 'apiKey=test-key');
 });
+
+Deno.test('(9-DW165) carries explicit days_to_cover when Polygon returns it', async () => {
+  const fetcher = new PolygonShortInterestFetcher('test-key', async () =>
+    jsonResp({
+      results: [
+        { settlement_date: '2026-05-31', short_interest: 80_000_000, days_to_cover: 4.2 },
+      ],
+    }),
+  );
+  const out = await fetcher.fetchShortInterest('AAPL', AS_OF);
+  if (out.kind !== 'reports') throw new Error('unreachable');
+  assertEquals(out.reports[0].days_to_cover, 4.2);
+});
+
+Deno.test('(10-DW165) derives days_to_cover from short_interest / avg_daily_volume when missing', async () => {
+  const fetcher = new PolygonShortInterestFetcher('test-key', async () =>
+    jsonResp({
+      results: [
+        { settlement_date: '2026-05-31', short_interest: 10_000_000, avg_daily_volume: 2_000_000 },
+      ],
+    }),
+  );
+  const out = await fetcher.fetchShortInterest('AAPL', AS_OF);
+  if (out.kind !== 'reports') throw new Error('unreachable');
+  assertEquals(out.reports[0].days_to_cover, 5);
+});
+
+Deno.test('(11-DW165) absent or non-finite DTC inputs yield null (typed-absence, NOT fabricated zero)', async () => {
+  const fetcher = new PolygonShortInterestFetcher('test-key', async () =>
+    jsonResp({
+      results: [
+        // No avg_daily_volume, no explicit days_to_cover → null
+        { settlement_date: '2026-05-31', short_interest: 80_000_000 },
+        // ADV is 0 → divide-by-zero guard → null
+        { settlement_date: '2026-05-15', short_interest: 90_000_000, avg_daily_volume: 0 },
+        // ADV is NaN → null
+        { settlement_date: '2026-04-30', short_interest: 100_000_000, avg_daily_volume: Number.NaN },
+      ],
+    }),
+  );
+  const out = await fetcher.fetchShortInterest('AAPL', AS_OF);
+  if (out.kind !== 'reports') throw new Error('unreachable');
+  assertEquals(out.reports.length, 3);
+  for (const r of out.reports) {
+    assertEquals(r.days_to_cover, null);
+  }
+});

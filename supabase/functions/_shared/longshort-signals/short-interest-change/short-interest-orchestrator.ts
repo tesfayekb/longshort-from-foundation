@@ -95,6 +95,7 @@ import { zScoreNormalizeWithinSector } from '../shared/z-score-normalize.ts';
 import { captureSignalObservations } from '../shared/missingness-capture.ts';
 import type { PolygonShortInterestFetcher } from '../shared/polygon-short-interest-fetcher.ts';
 import type { PolygonSharesOutstandingFetcher } from '../shared/polygon-shares-outstanding-fetcher.ts';
+import type { DaysToCoverRecord, DaysToCoverWriter } from '../shared/days-to-cover-store.ts';
 import { type ClockReader, productionClock } from '../../longshort-clock.ts';
 
 /** Locked signal-id for Phase 3 combiner consumption. Do not rename. */
@@ -112,8 +113,29 @@ interface UniverseRow {
 }
 
 type PerTickerResult =
-  | { kind: 'value'; ticker: string; raw_signal: number; gics_sector: string | null }
-  | { kind: 'skip'; skip: SignalSkip };
+  | {
+    kind: 'value';
+    ticker: string;
+    raw_signal: number;
+    gics_sector: string | null;
+    latest_dtc: number | null;
+    latest_report_date: string | null;
+  }
+  | {
+    kind: 'skip';
+    skip: SignalSkip;
+    /**
+     * Even when a ticker is SKIPPED from the alpha-signal (e.g.
+     * `singleton_sector`, `insufficient_history`), its DTC is still
+     * captured here when the fetcher returned data — the pre-flight
+     * gate runs INDEPENDENT of signal-presence and benefits from DTC
+     * on every name Polygon returned. `null` when no fetch happened or
+     * the fetcher had no usable DTC.
+     */
+    ticker?: string;
+    latest_dtc?: number | null;
+    latest_report_date?: string | null;
+  };
 
 /**
  * Context for the short-interest orchestrator. Strict extension of
@@ -126,6 +148,17 @@ export interface ShortInterestOrchestratorContext
   extends Omit<SignalOrchestratorContext, 'priceHistory'> {
   shortInterest: PolygonShortInterestFetcher;
   sharesOutstanding: PolygonSharesOutstandingFetcher;
+  /**
+   * Optional writer for the latest-DTC sibling table that feeds the
+   * short-side pre-flight squeeze-avoidance gate (DW-165). When absent
+   * the orchestrator simply doesn't persist DTC — production wiring
+   * always provides this writer; tests omit it where DTC isn't exercised.
+   *
+   * IMPORTANT: DTC is written to `short_interest_days_to_cover` ONLY.
+   * It MUST NEVER appear in `signal_observations.value` or any other
+   * surface that feeds the combiner feature vector.
+   */
+  daysToCoverWriter?: DaysToCoverWriter;
   /**
    * Injectable wall-clock for orchestrator telemetry (`started_at` /
    * `completed_at`). Defaults to `productionClock`. Compute inputs and
@@ -260,6 +293,8 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
                     ? 'polygon 403: reference endpoint not entitled (shares-outstanding unavailable)'
                     : 'polygon reference endpoint returned no usable share_class_shares_outstanding',
                 },
+                ticker,
+                ...extractLatestDtc(siResult.reports),
               };
             }
 
@@ -280,12 +315,15 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
                   reason: 'missing_shares_outstanding',
                   detail: `defensive: shares=${shares} is not a positive finite number`,
                 },
+                ticker,
+                ...extractLatestDtc(siResult.reports),
               };
             }
             const reports: ShortInterestReport[] = siResult.reports.map((r) => ({
               report_date: r.report_date,
               si_pct_float: r.short_interest / shares,
             }));
+            const dtc = extractLatestDtc(siResult.reports);
             const raw_signal = computeShortInterestChange(reports);
             if (raw_signal === null) {
               return {
@@ -295,9 +333,18 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
                   reason: 'insufficient_history',
                   detail: `${reports.length} reports < ${SHORT_INTEREST_MIN_REPORTS} required`,
                 },
+                ticker,
+                ...dtc,
               };
             }
-            return { kind: 'value', ticker, raw_signal, gics_sector };
+            return {
+              kind: 'value',
+              ticker,
+              raw_signal,
+              gics_sector,
+              latest_dtc: dtc.latest_dtc,
+              latest_report_date: dtc.latest_report_date,
+            };
           } catch (err) {
             const message = err instanceof SignalComputationError
               ? err.message
@@ -366,6 +413,34 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
         };
       }
 
+      // ── Step 5b: persist latest-DTC sibling rows (DW-165) ────────────
+      // DTC lives in a SEPARATE table from the SI %-of-float observations.
+      // This site is the chokepoint enforcing the no-contamination
+      // invariant: DTC is fanned out to `short_interest_days_to_cover`
+      // and NEVER mixed into `signal_observations.value`.
+      if (ctx.daysToCoverWriter) {
+        const dtcRows: DaysToCoverRecord[] = [];
+        for (const r of perTicker) {
+          const ticker = r.kind === 'value' ? r.ticker : r.ticker;
+          if (!ticker) continue;
+          const latest_dtc = r.kind === 'value' ? r.latest_dtc : (r.latest_dtc ?? null);
+          const report_date = r.kind === 'value'
+            ? r.latest_report_date
+            : (r.latest_report_date ?? null);
+          if (!report_date) continue;
+          dtcRows.push({
+            operator_id: ctx.operator_id,
+            ticker,
+            as_of_date,
+            latest_days_to_cover: latest_dtc,
+            report_date,
+          });
+        }
+        if (dtcRows.length > 0) {
+          await ctx.daysToCoverWriter.upsertLatest(dtcRows);
+        }
+      }
+
       return {
         outcome: 'completed',
         signal_id: SIGNAL_ID,
@@ -377,5 +452,23 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
         completed_at: finalize(),
       };
     },
+  };
+}
+
+/**
+ * Extract the latest (most-recent settlement_date) `days_to_cover` value
+ * from a fetched SI report set. Reports are guaranteed ASC-sorted by the
+ * fetcher — the last entry is the latest. Returns `null` for both fields
+ * when the report set is empty.
+ */
+function extractLatestDtc(
+  reports: ReadonlyArray<{ report_date: string; days_to_cover?: number | null }>,
+): { latest_dtc: number | null; latest_report_date: string | null } {
+  if (reports.length === 0) return { latest_dtc: null, latest_report_date: null };
+  const latest = reports[reports.length - 1];
+  const dtc = latest.days_to_cover;
+  return {
+    latest_dtc: typeof dtc === 'number' && Number.isFinite(dtc) ? dtc : null,
+    latest_report_date: latest.report_date,
   };
 }
