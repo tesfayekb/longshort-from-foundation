@@ -285,3 +285,137 @@ function orchRun(supabase: unknown, fetchers: { epsEstimate: unknown; earnings: 
   });
   return orch.run(AS_OF);
 }
+
+// ── FP-057 Sub-step 4b — event-calendar work-list pre-filter ──────────
+
+function makeCalendar(tickers: string[]) {
+  return {
+    async fetchCalendar(_from: string, _to: string) {
+      return { kind: 'calendar' as const, tickers: new Set(tickers) };
+    },
+  };
+}
+
+Deno.test('pead-orchestrator [4b]: earnings-calendar work-list intersects universe; dual-fetch only for work-list names', async () => {
+  const universe = [
+    { ticker: 'AAA', gics_sector: 'Tech' },
+    { ticker: 'BBB', gics_sector: 'Tech' },
+    { ticker: 'CCC', gics_sector: 'Tech' },
+    { ticker: 'NOT_REPORTING', gics_sector: 'Tech' },
+  ];
+  const { supabase, calls } = makeSupabase({ universe });
+
+  let estCalls = 0;
+  let earnCalls = 0;
+  const epsEstimate = {
+    async fetchEpsEstimates(t: string) {
+      estCalls++;
+      return { kind: 'estimates', rows: [happyEst()] };
+    },
+  };
+  const earnings = {
+    async fetchEarnings(t: string) {
+      earnCalls++;
+      return { kind: 'earnings', rows: [happyEarn()] };
+    },
+  };
+
+  const orch = createPeadOrchestrator({
+    supabase: supabase as never,
+    operator_id: OPERATOR_ID,
+    epsEstimate: epsEstimate as never,
+    earnings: earnings as never,
+    earningsCalendar: makeCalendar(['AAA', 'BBB', 'CCC']) as never,
+    concurrency: 2,
+  });
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'completed');
+  // Universe size in the result REFLECTS the post-filter scope (honest count).
+  assertEquals(result.universe_size, 3);
+  // NOT_REPORTING was filtered BEFORE the dual-fetch — no Finnhub waste.
+  assertEquals(estCalls, 3);
+  assertEquals(earnCalls, 3);
+  assertEquals(result.persisted_count, 3);
+  // NOT_REPORTING is NOT in the skipped list — filter is silent scope, not a typed skip.
+  for (const s of result.skipped) {
+    assert(s.ticker !== 'NOT_REPORTING');
+  }
+  // Persisted rows are exactly the work-list intersection.
+  const persistedTickers = new Set(calls.upsertPayloads[0].map((r) => r.ticker));
+  assert(persistedTickers.has('AAA'));
+  assert(persistedTickers.has('BBB'));
+  assert(persistedTickers.has('CCC'));
+  assert(!persistedTickers.has('NOT_REPORTING'));
+});
+
+Deno.test('pead-orchestrator [4b]: empty calendar → outcome=completed with 0 rows, NO full-universe fallback (STOP-condition)', async () => {
+  const universe = [
+    { ticker: 'AAA', gics_sector: 'Tech' },
+    { ticker: 'BBB', gics_sector: 'Tech' },
+  ];
+  const { supabase, calls } = makeSupabase({ universe });
+  let estCalls = 0;
+  const epsEstimate = {
+    async fetchEpsEstimates(_t: string) { estCalls++; return { kind: 'estimates', rows: [happyEst()] }; },
+  };
+  const earnings = {
+    async fetchEarnings(_t: string) { return { kind: 'earnings', rows: [happyEarn()] }; },
+  };
+  const emptyCal = {
+    async fetchCalendar(_f: string, _t: string) {
+      return { kind: 'unavailable' as const, reason: 'data_unavailable' as const };
+    },
+  };
+  const orch = createPeadOrchestrator({
+    supabase: supabase as never,
+    operator_id: OPERATOR_ID,
+    epsEstimate: epsEstimate as never,
+    earnings: earnings as never,
+    earningsCalendar: emptyCal as never,
+    concurrency: 2,
+  });
+  const result = await orch.run(AS_OF);
+  assertEquals(result.outcome, 'completed');
+  assertEquals(result.universe_size, 0);
+  assertEquals(result.persisted_count, 0);
+  // CRITICAL: zero Finnhub dual-fetches occurred — the empty calendar
+  // path MUST NOT fall through to a full-universe sweep.
+  assertEquals(estCalls, 0);
+  // No upsert was even attempted (no rows to persist).
+  assertEquals(calls.upsertPayloads.length, 0);
+});
+
+Deno.test('pead-orchestrator [4b]: work-list filter is SCOPE, not formula — per-name PEAD value is identical with/without filter', async () => {
+  const universe = [{ ticker: 'AAA', gics_sector: 'Tech' }];
+  const fetchers = makeFetchers(
+    { AAA: { kind: 'estimates', rows: [happyEst()] } },
+    { AAA: { kind: 'earnings', rows: [happyEarn()] } },
+  );
+  // Baseline: no calendar.
+  const baseSb = makeSupabase({ universe });
+  const baseOrch = createPeadOrchestrator({
+    supabase: baseSb.supabase as never,
+    operator_id: OPERATOR_ID,
+    epsEstimate: fetchers.epsEstimate as never,
+    earnings: fetchers.earnings as never,
+    concurrency: 2,
+  });
+  await baseOrch.run(AS_OF);
+  const baseValue = baseSb.calls.upsertPayloads[0]?.find((r) => r.ticker === 'AAA')?.value;
+
+  // Filtered (singleton work-list): same value bit-identical.
+  const filtSb = makeSupabase({ universe });
+  const filtOrch = createPeadOrchestrator({
+    supabase: filtSb.supabase as never,
+    operator_id: OPERATOR_ID,
+    epsEstimate: fetchers.epsEstimate as never,
+    earnings: fetchers.earnings as never,
+    earningsCalendar: makeCalendar(['AAA']) as never,
+    concurrency: 2,
+  });
+  await filtOrch.run(AS_OF);
+  const filtValue = filtSb.calls.upsertPayloads[0]?.find((r) => r.ticker === 'AAA')?.value;
+  // Both paths produce the SAME value (filter is SCOPE, not formula).
+  // Note: singleton-sector z-score may yield null; the assertion is bit-equality.
+  assertEquals(baseValue, filtValue);
+});
