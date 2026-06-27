@@ -1382,6 +1382,33 @@ export type Database = {
         }
         Relationships: []
       }
+      short_interest_days_to_cover: {
+        Row: {
+          as_of_date: string
+          latest_days_to_cover: number | null
+          operator_id: string
+          report_date: string
+          ticker: string
+          updated_at: string
+        }
+        Insert: {
+          as_of_date: string
+          latest_days_to_cover?: number | null
+          operator_id: string
+          report_date: string
+          ticker: string
+          updated_at?: string
+        }
+        Update: {
+          as_of_date?: string
+          latest_days_to_cover?: number | null
+          operator_id?: string
+          report_date?: string
+          ticker?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       signal_compute_log: {
         Row: {
           as_of_date: string
