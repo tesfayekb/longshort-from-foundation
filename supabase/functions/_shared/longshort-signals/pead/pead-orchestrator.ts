@@ -206,7 +206,6 @@ export function createPeadOrchestrator(ctx: PeadOrchestratorContext) {
       // VALUE emission; the work-list is purely a SCOPE pre-filter and
       // changes NO per-name PEAD value (only which names are computed).
       let workUniverse: UniverseRow[] = universe;
-      let worklistMeta: { from: string; to: string; calendar_size: number; intersect_size: number } | null = null;
       if (ctx.earningsCalendar) {
         const trailingDays = ctx.worklistTrailingCalendarDays
           ?? DEFAULT_PEAD_WORKLIST_TRAILING_CALENDAR_DAYS;
@@ -238,12 +237,6 @@ export function createPeadOrchestrator(ctx: PeadOrchestratorContext) {
         }
         const calSet = calResult.tickers;
         workUniverse = universe.filter((r) => calSet.has(r.ticker));
-        worklistMeta = {
-          from: fromISODate,
-          to: as_of_date,
-          calendar_size: calSet.size,
-          intersect_size: workUniverse.length,
-        };
         if (workUniverse.length === 0) {
           return {
             outcome: 'completed',
