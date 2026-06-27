@@ -3880,3 +3880,68 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future Owner Phase** | Phase 7 (FP-058) — measure-and-lock home. |
 | **Resolution shape** | (a) On clear interaction-use winner: DEC-074 amendment FP restoring catalyst to a trained-combiner-only interaction-feature role (no fallback restoration); (b) on measured null: DEC dropping Signal #9 from the signal catalog on evidence (the parameter-free dispose path); (c) on conditioning-gate winner: a DEC adding catalyst-as-conditioning-gate as a distinct combiner feature shape (orthogonal to direct contribution). |
 | **Cross_ref** | DEC-074 (the now-fix this ablation evaluates against); DEC-075 clause (d) (the Phase-7 acceptance bar); DEC-057 §a (the half-life table calibrated here); `supabase/functions/_shared/longshort-signals/compute-active-catalyst.ts` (the unchanged kernel); `supabase/functions/_shared/longshort-combiner/ranker.ts` (the regime locus); literature: Da-Engelberg-Gao 2011 *J. Finance* "In Search of Attention" (salience-as-conditioning); Barber-Odean 2008 *RFS* "All That Glitters" (attention-induced buying then reversal — the catalyst-as-additive failure mode); Schwert 1996 (M&A drift horizons); Bernard-Thomas 1989 (PEAD drift horizons — the longest catalyst-window comparator); Savor 2012 (news-day vs no-news-day return decomposition); FP-058 (Phase-7 home); **ACT-356 (REGISTRATION)**. |
+
+### DW-191: Options-flow snapshot-proxy vs trade-tape IC delta — Phase-7, DW-167-gated
+
+| Field | Value |
+|---|---|
+| **ID** | DW-191. |
+| **Status** | **REGISTERED 2026-06-30 at ACT-357 — PHASE-7-GATED + DW-167-GATED**. The decision instrument that retires-or-retains the v1 same-day chain-snapshot proxy. |
+| **Tier** | A — settles the core construction question for Signal #3: is the v1 snapshot proxy a NOISY-BUT-DIRECTIONALLY-CORRECT version of the spec'd per-trade signed-flow, or a STRUCTURALLY DIFFERENT construct? The literature (Pan-Poteshman 2006; Easley-O'Hara-Srinivas 1998; Cremers-Weinbaum 2010 JFQA) is materially TAPE-DEPENDENT — the informed-initiator alpha lives in per-trade aggression / per-trade notional / sweeps / blocks that the snapshot cannot see. |
+| **Title** | Once Polygon Options Advanced (DW-167) lands the per-trade tape, compute IC of the v1 snapshot construct vs the spec'd per-trade signed-flow on the same universe / same window; quantify the IC delta and the rank-correlation across the two constructs. Recorded outcome: retain v1 as a CHEAP FALLBACK (if IC delta is small and rank-correlation is high) / RETIRE v1 (if IC delta is large or rank-correlation is low). |
+| **Why Phase-7 + DW-167** | Cannot measure tape-vs-snapshot delta without (i) the tape (DW-167) and (ii) accrued forward returns over a meaningful horizon. The v1 snapshot extrapolates a SINGLE end-of-day `last` vs closing NBBO direction to ALL day-volume — that is the structural gap; whether it survives noise-reduction or not is an empirical question. |
+| **Scope (at activation)** | (a) replay the per-trade tape over a shadow window with the spec's 5-day signed-flow construct (Pan-Poteshman direction inference per trade); (b) compute per-as-of IC of v1 vs tape-spec against forward returns at multiple horizons (1d / 5d / 20d); (c) compute rank-correlation of v1 vs tape-spec at the same as-of; (d) honest recommendation: retain / retire / stacked-combiner-feature. |
+| **Depends-on** | DW-167 (Polygon Options Advanced procurement — the tape itself); accrued forward returns; FP-058 activation. |
+| **Blocks** | Nothing today; v1 snapshot continues to run; only the retain-or-retire decision is gated. |
+| **Future Owner Phase** | Phase 7 (FP-058). |
+| **Resolution shape** | Recorded Phase-7 finding + (on a retire verdict) a DEC pinning the proxy retirement + (on a retain verdict) a DEC pinning v1 as the cheap fallback when the tape is unavailable. |
+| **Cross_ref** | DEC-046 (the snapshot-proxy approximation discipline); DW-167 (Polygon Options Advanced — the gating procurement); `supabase/functions/_shared/longshort-signals/compute-options-flow.ts`; `supabase/functions/_shared/longshort-signals/signed-flow-aggregator.ts`; literature: Pan-Poteshman 2006 *RFS* "The Information in Option Volume for Future Stock Prices"; Easley-O'Hara-Srinivas 1998 *J. Finance* "Option Volume and Stock Prices"; FP-058 (Phase-7 home); **ACT-357 (REGISTRATION)**. |
+
+### DW-192: Options-flow IV-spread (Cremers-Weinbaum 2010) snapshot-native sibling — NEAR-TERM new-construct candidate
+
+| Field | Value |
+|---|---|
+| **ID** | DW-192. |
+| **Status** | **REGISTERED 2026-06-30 at ACT-357 — CHARTERED as a NEAR-TERM new-construct candidate for the weekend slate (NOT auto-built as a now-fix; operator ranks against the slate)**. The HIGHEST-LEVERAGE near-term lever for Signal #3: deviations-from-put-call-parity / implied-volatility-spread is the ONE informed-options construct the literature confirms SURVIVES WITHOUT a trade tape (Cremers-Weinbaum 2010 *JFQA* "Deviations from Put-Call Parity and Stock Return Predictability"). |
+| **Tier** | A — informed-options-flow signal that is COMPUTABLE FROM CURRENT TRADIER DATA (per-contract NBBO + greeks; no tape, no DW-167). Our v1 does NOT compute it. Candidate to STRENGTHEN the snapshot regime BEFORE DW-167 lands (and to compose orthogonally with the eventual tape-based signal). |
+| **Title** | Build an IV-spread signal as a SEPARATE combiner feature distinct from `options_flow_imbalance_5d`. Per-name: take the at-the-money pair (nearest-to-spot strike at the front non-expiring monthly), compute `iv_spread = iv_call − iv_put` (weighted by open-interest per Cremers-Weinbaum 2010 §3 specification); aggregate across maturities; sign convention: positive `iv_spread` (call IV > put IV) → bullish demand pressure for upside skew → LONG-relevant z-score. |
+| **Classification (DEC-075 §b)** | **ADDITIVE-VALUED.** Signed directional contribution (call-IV > put-IV → bullish → positive z; call-IV < put-IV → bearish → negative z) maps monotonically to expected-return direction per Cremers-Weinbaum 2010 (≈ 50 bp/week long-short spread on US equities 1996-2005, robust to risk controls). Qualifies for `SIGNAL_IDS_FALLBACK_SUM` participation at activation, subject to standard Clause (f) per-signal classification re-confirmation. |
+| **Why charter-not-auto-build** | A NEW signal-construct, not a now-fix to an existing one. Requires a new compute function + persistence path + signal-catalog membership + tests + the standard signal-onboarding discipline. Belongs in the weekend-slate-ranking discussion, not a silent auto-build. Operator ranks against the rest of the weekend slate (DW-170 / DW-173 / DW-172 / DW-178 / DW-186 / DEC-071 / DEC-073 / DEC-074). |
+| **Scope (at activation)** | (a) new `compute-iv-spread.ts` under `_shared/longshort-signals/options-flow/` (or a new dir); (b) Tradier per-contract greeks fetcher reuse; (c) OI-weighted per-Cremers-Weinbaum aggregation; (d) signal-catalog addition (`iv_spread_atm_30d` or similar; ADDITIVE-VALUED per Clause (b)); (e) §6.5 harness ride-along + standard typed-absence + missingness-capture; (f) shadow ride-along ONLY initially (do NOT promote to fallback-sum without §6.5 harness evidence) — promotion is a separate DEC. |
+| **Depends-on** | Operator weekend-slate ranking; verified Tradier greeks-endpoint contract (per-contract `greeks.mid_iv` or equivalent — confirm before scoping) — confirming endpoint shape is a STEP-A precondition for any build authorization (anti-phantom). |
+| **Blocks** | Nothing today; charter-rank only. |
+| **Future Owner Phase** | Near-term weekend slate (build authorization conditional on operator ranking + STEP-A vendor-contract confirmation). |
+| **Resolution shape** | (a) ranked-out → charter held, no build; (b) ranked-in → build FP + shadow ride-along + later DEC for fallback-sum promotion conditional on §6.5 harness evidence. |
+| **Cross_ref** | DEC-046 (the snapshot approximation discipline that this signal sits within); DEC-075 §b/§f (classification gate + recurrence-prevention rule applied at activation); `supabase/functions/_shared/longshort-signals/compute-options-flow.ts` (the v1 sibling); literature: **Cremers-Weinbaum 2010 *JFQA* "Deviations from Put-Call Parity and Stock Return Predictability"** (the construct anchor); Bali-Hovakimian 2009 *Management Science* (call-put IV spread cross-section); An-Ang-Bali-Cakici 2014 *J. Finance* (call/put implied-vol changes); FP-058 (Phase-7 measurement at activation); **ACT-357 (REGISTRATION)**. |
+
+### DW-193: Options-flow decay-grid + event-conditional half-life — Phase-7, low priority
+
+| Field | Value |
+|---|---|
+| **ID** | DW-193. |
+| **Status** | **REGISTERED 2026-06-30 at ACT-357 — PHASE-7-GATED, LOW PRIORITY**. The current 5-day decay is IN-BAND with the literature (Pan-Poteshman 2006 reports informed-flow predictability concentrated in the 2-5 day window); the current half-life is neither wrong nor measured. |
+| **Tier** | B — modest tuning lever; ROI ceiling bounded because the decay is already in-band. |
+| **Title** | Phase-7 grid of decay half-lives (24h / 48h / 96h / 5d / 10d) plus event-conditional half-life (different decay for catalyst-coincident vs catalyst-absent observations — composes with DW-194). |
+| **Why Phase-7 only** | Pre-data tuning is silent ROI change (forbidden); event-conditional decay requires the trained combiner to express the interaction. |
+| **Scope (at activation)** | (a) §6.5 harness grid of half-lives on shadow variants; (b) event-conditional decay split (catalyst-coincident vs no-event); (c) recorded finding + (on a clear winner) DEC amendment FP. |
+| **Depends-on** | Accrued forward returns; FP-058 activation; composes with DW-194 measurement. |
+| **Blocks** | Nothing today; live 5-day decay continues. |
+| **Future Owner Phase** | Phase 7 (FP-058). |
+| **Resolution shape** | Recorded finding + (on a clear winner) DEC amendment FP. |
+| **Cross_ref** | DEC-046 (the construct); `compute-options-flow.ts` (the kernel); literature: Pan-Poteshman 2006 (the 2-5 day window anchor); DW-194 (composes); FP-058; **ACT-357 (REGISTRATION)**. |
+
+### DW-194: Options-flow × catalyst interaction ablation — Phase-7 trained-combiner bonus
+
+| Field | Value |
+|---|---|
+| **ID** | DW-194. |
+| **Status** | **REGISTERED 2026-06-30 at ACT-357 — PHASE-7-GATED**. The interaction lever — NOT a fallback-exclusion reason for #3 (the standalone signed component is real per Pan-Poteshman; #3 STAYS in `SIGNAL_IDS_FALLBACK_SUM`); the interaction is a Phase-7 trained-combiner bonus. |
+| **Tier** | B — Augustin-Brenner-Subrahmanyam 2019 documents a dramatic pre-M&A signed-options-flow spike (a real catalyst × options-flow interaction); the additive component is non-zero standalone, so the signal stays additive; the interaction is an INCREMENTAL combiner-feature lever, not a re-classification trigger. |
+| **Title** | Phase-7 ablation: options-flow standalone (additive baseline) vs options-flow × catalyst-flag interaction feature in the trained combiner. Measure incremental SHAP / leave-one-out lift of the interaction term over the additive baseline. |
+| **Why Phase-7 only** | Requires the trained combiner to express the interaction (LightGBM tree splits or explicit interaction feature); additive fallback cannot express it (DEC-075). Composes with DW-190 (catalyst-as-interaction) and DW-193 (event-conditional decay). |
+| **Scope (at activation)** | (a) define the interaction feature `options_flow × active_catalyst_flag` (or per-event-type variant); (b) measure SHAP / leave-one-out lift in the trained combiner; (c) honest verdict: keep as separate combiner feature / drop interaction term. Composes with DW-190 measurement (catalyst-as-interaction). |
+| **Depends-on** | Trained combiner (FP-058); composes with DW-190 + DW-193; orthogonal to DW-167 (works on v1 snapshot OR tape-based signal). |
+| **Blocks** | Nothing today. |
+| **Future Owner Phase** | Phase 7 (FP-058). |
+| **Resolution shape** | Recorded Phase-7 finding + (on positive incremental lift) DEC adding the interaction feature to the combiner feature set. |
+| **Cross_ref** | DEC-046 (#3 construction); DEC-057 (#9 catalyst construction); DEC-075 §c (classification — #3 stays additive; the interaction is a BONUS, not a re-classification trigger); literature: **Augustin-Brenner-Subrahmanyam 2019 *Management Science* "Informed Options Trading prior to Takeover Announcements: Insider Trading?"** (the interaction anchor); Cao-Chen-Griffin 2005 *J. Business* (informed options pre-takeover); DW-190 (catalyst-as-interaction sibling); DW-193 (decay sibling); FP-058 (Phase-7 home); **ACT-357 (REGISTRATION)**. |
