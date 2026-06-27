@@ -462,9 +462,13 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
  * when the report set is empty.
  */
 function extractLatestDtc(
-  reports: ReadonlyArray<{ report_date: string; days_to_cover: number | null }>,
+  reports: ReadonlyArray<{ report_date: string; days_to_cover?: number | null }>,
 ): { latest_dtc: number | null; latest_report_date: string | null } {
   if (reports.length === 0) return { latest_dtc: null, latest_report_date: null };
   const latest = reports[reports.length - 1];
-  return { latest_dtc: latest.days_to_cover, latest_report_date: latest.report_date };
+  const dtc = latest.days_to_cover;
+  return {
+    latest_dtc: typeof dtc === 'number' && Number.isFinite(dtc) ? dtc : null,
+    latest_report_date: latest.report_date,
+  };
 }
