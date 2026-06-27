@@ -580,7 +580,7 @@ Deno.test('(DW-165) daysToCoverWriter receives the latest DTC per ticker AND nul
   });
   const upserts: Array<Array<{ ticker: string; latest_days_to_cover: number | null; report_date: string }>> = [];
   const daysToCoverWriter = {
-    async upsertLatest(records: any[]) {
+    async upsertLatest(records: Array<{ ticker: string; latest_days_to_cover: number | null; report_date: string }>) {
       upserts.push(records.map((r) => ({
         ticker: r.ticker,
         latest_days_to_cover: r.latest_days_to_cover,

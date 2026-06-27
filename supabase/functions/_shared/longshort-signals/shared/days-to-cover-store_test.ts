@@ -10,6 +10,12 @@ function makeSupabase(opts: {
   readError?: { message: string };
   upsertError?: { message: string };
 }) {
+  type ReadResult = { data: Array<{ latest_days_to_cover: number | null }> | null; error: { message: string } | null };
+  interface MockBuilder extends PromiseLike<ReadResult> {
+    upsert(payload: unknown, opts?: unknown): Promise<{ error: { message: string } | null }>;
+    select(cols: string): MockBuilder;
+    eq(col: string, val: string): MockBuilder;
+  }
   const upserts: unknown[][] = [];
   const supabase = {
     from(table: string) {
@@ -18,7 +24,7 @@ function makeSupabase(opts: {
       }
       let filterTicker: string | null = null;
       let filterOp: string | null = null;
-      const builder: any = {
+      const builder: MockBuilder = {
         upsert(payload: unknown, _opts?: unknown) {
           upserts.push(payload as unknown[]);
           return Promise.resolve({ error: opts.upsertError ?? null });
@@ -29,7 +35,7 @@ function makeSupabase(opts: {
           if (col === 'operator_id') filterOp = val;
           return builder;
         },
-        then(onFul: any, onRej: any) {
+        then(onFul: (value: ReadResult) => unknown, onRej: (reason: unknown) => unknown) {
           if (opts.readError) {
             return Promise.resolve({ data: null, error: opts.readError }).then(onFul, onRej);
           }
