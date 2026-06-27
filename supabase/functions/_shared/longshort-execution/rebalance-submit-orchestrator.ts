@@ -419,7 +419,7 @@ export async function runRebalanceSubmit(
   // production wires the Supabase reader unconditionally so the gate
   // fires on every short candidate.
   const daysToCoverReader: DaysToCoverReader = deps.daysToCoverReader
-    ?? createSupabaseDaysToCoverReader(supabaseAdmin, operator_id);
+    ?? createSupabaseDaysToCoverReader(supabaseAdmin as unknown as Parameters<typeof createSupabaseDaysToCoverReader>[0], operator_id);
   const shortDtcExcludeThreshold = resolveShortDtcExcludeThreshold((k) => {
     try {
       return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } })
