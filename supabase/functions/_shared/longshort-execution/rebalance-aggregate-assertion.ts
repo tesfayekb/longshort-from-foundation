@@ -53,8 +53,10 @@ export interface RebalanceAggregateAssertionResult {
   band: { lower: number; upper: number };
   /** FP-057 Sub-step 5 — the seam-supplied transient cause threaded
    *  through to the persisted divergence. Re-emitted here so the caller
-   *  can build the per-tick audit log without re-reading the row. */
-  exempt_cause: ExemptCause | null;
+   *  can build the per-tick audit log without re-reading the row.
+   *  Optional for legacy mocks that pre-date this field; the production
+   *  closure ALWAYS sets it (null when no transient cause applies). */
+  exempt_cause?: ExemptCause | null;
 }
 
 /** Pure helper — derive `BrokerRebalanceAggregate` from broker positions.
