@@ -80,6 +80,7 @@ import type {
   HtbCacheClearer,
 } from './cache-propagator-io.ts';
 import type { FetcherSource } from '../longshort-reconciliation-types.ts';
+import type { DaysToCoverReader } from '../longshort-signals/shared/days-to-cover-store.ts';
 
 /**
  * COMPOSER ↔ VERIFIER LAYER DISTINCTION (load-bearing):
@@ -146,6 +147,34 @@ export interface PreflightComposerDeps {
   operator_id: string;
   /** Wired into every verify_* call as `fetcher_source`. Default 'live'. */
   fetcher_source?: FetcherSource;
+  /**
+   * Optional days-to-cover reader for the SHORT-SIDE squeeze-avoidance gate
+   * (DW-165 / Squeeze Protection Component 2). When INJECTED, every short
+   * candidate has its latest DTC read; DTC ≥ `shortDtcExcludeThreshold`
+   * fails the candidate with `failed_verifiers: ['verify_days_to_cover']`
+   * and `reason: 'high_days_to_cover'`. The pre-flight failure triggers
+   * the EXISTING planner-side substitution scan (per-side, asymmetric —
+   * long candidates are NEVER affected). When ABSENT, the gate is
+   * structurally skipped on every short candidate (`summary.dtc_unavailable
+   * = true`); short-side substitution still works via the other gates.
+   *
+   * NULL-DTC POLICY (DW-165): a null DTC value is PASSING (do NOT exclude
+   * on data gaps; the active −15% short-stop is the backstop). Null reads
+   * are counted in `summary.null_dtc_short_candidates` so the policy is
+   * observable — if squeeze events cluster on null-DTC names we revisit.
+   *
+   * NO-CONTAMINATION INVARIANT: DTC is read ONLY here, ONLY for short
+   * candidates, ONLY as a hard-exclude. It MUST NEVER enter the combiner
+   * feature vector (`combiner_feature_vectors.features`).
+   */
+  daysToCoverReader?: DaysToCoverReader;
+  /**
+   * Hard-exclude threshold for the short-side DTC gate (DW-165). Default
+   * 7.0 (Phase-7-calibrated; literature 5–10 day range). Operators
+   * override via `LONGSHORT_DTC_SHORT_EXCLUDE_THRESHOLD` (env), parsed
+   * with strict finite-positive validation at the composer caller.
+   */
+  shortDtcExcludeThreshold?: number;
 }
 
 export interface PreflightComposerInput {
@@ -182,6 +211,18 @@ export interface PreflightComposerSummary {
    *  absent). FALSE on Alpaca paper by default — clause (q) ratifies
    *  `/v2/assets.shortable` as the gate. */
   shortability_unavailable: boolean;
+  /**
+   * DW-165 — TRUE iff no `daysToCoverReader` was injected. The short-side
+   * squeeze-avoidance gate is structurally absent; the −15% short-stop is
+   * the sole squeeze backstop on this tick.
+   */
+  dtc_unavailable: boolean;
+  /** DW-165 — short candidates whose DTC was null (typed-absence; PASS + log). */
+  null_dtc_short_candidates: number;
+  /** DW-165 — short candidates hard-excluded for DTC ≥ threshold. */
+  dtc_excluded_short_candidates: number;
+  /** DW-165 — threshold actually used this tick (after env override). */
+  dtc_threshold: number;
   short_count: number;
   long_count: number;
 }
@@ -209,6 +250,11 @@ export async function composePreflightResults(
   const ssrUnavailable = deps.ssrStatusFetcher === undefined;
   const locateUnavailable = deps.locateFetcher === undefined;
   const shortabilityUnavailable = deps.shortabilityFetcher === undefined;
+  const dtcReader = deps.daysToCoverReader;
+  const dtcUnavailable = dtcReader === undefined;
+  const dtcThreshold = deps.shortDtcExcludeThreshold ?? DEFAULT_SHORT_DTC_EXCLUDE_THRESHOLD;
+  let nullDtcShortCandidates = 0;
+  let dtcExcludedShortCandidates = 0;
   // The pre-trade short gate is structurally ABSENT only when BOTH the
   // shortability fetcher and the locate fetcher are missing. Either one
   // present satisfies §11.0.7 #4 "skip short entry; do NOT default to
@@ -376,15 +422,44 @@ export async function composePreflightResults(
       } else {
         skippedHere.push('verify_ssr_status');
       }
+
+      // ── DW-165 SHORT-SIDE DAYS-TO-COVER (squeeze-avoidance) ──────────
+      // Hard-exclude when DTC ≥ threshold. Null DTC = PASS + log
+      // (typed-absence; the −15% short-stop is the active backstop).
+      // Reader missing entirely = SKIP (typed-absence on the whole gate,
+      // mirrors the SSR-skip shape). NO broker call here — read is
+      // table-local; therefore zero rate-limit footprint.
+      if (dtcReader === undefined) {
+        skippedHere.push('verify_days_to_cover');
+      } else {
+        const dtc = await dtcReader.read(c.symbol);
+        if (dtc === null) {
+          nullDtcShortCandidates++;
+          // PASS — no failed.push.
+        } else if (dtc >= dtcThreshold) {
+          failed.push('verify_days_to_cover');
+          dtcExcludedShortCandidates++;
+        }
+      }
     }
 
     const passed = failed.length === 0;
     if (passed) passedCount++;
     else failedCount++;
 
+    // DW-165: when verify_days_to_cover is the SOLE failure, surface the
+    // spec-mandated reason verbatim (`high_days_to_cover`) so substitution-
+    // scan telemetry can attribute the rejection. Composite failures keep
+    // the existing `preflight_failed:<verifiers>` shape for diagnosability.
+    const reasonStr = passed
+      ? null
+      : (failed.length === 1 && failed[0] === 'verify_days_to_cover')
+        ? 'high_days_to_cover'
+        : `preflight_failed:${failed.join(',')}`;
+
     results.set(key, {
       passed,
-      reason: passed ? null : `preflight_failed:${failed.join(',')}`,
+      reason: reasonStr,
       failed_verifiers: failed,
     });
     if (skippedHere.length > 0) skipped.set(key, skippedHere);
@@ -403,8 +478,42 @@ export async function composePreflightResults(
       ssr_unavailable: ssrUnavailable,
       locate_unavailable: locateUnavailable,
       shortability_unavailable: shortabilityUnavailable,
+      dtc_unavailable: dtcUnavailable,
+      null_dtc_short_candidates: nullDtcShortCandidates,
+      dtc_excluded_short_candidates: dtcExcludedShortCandidates,
+      dtc_threshold: dtcThreshold,
       short_count: shortCount,
       long_count: longCount,
     },
   };
+}
+
+/**
+ * Default short-side DTC exclude threshold (DW-165). Phase-7-calibrated
+ * starting value — literature 5–10 day range; 7 = midpoint. NO spec
+ * basis; the constant is re-tunable from a single site.
+ */
+export const DEFAULT_SHORT_DTC_EXCLUDE_THRESHOLD = 7.0;
+
+/**
+ * Resolve the short-side DTC exclude threshold from the env override
+ * `LONGSHORT_DTC_SHORT_EXCLUDE_THRESHOLD`, falling back to
+ * `DEFAULT_SHORT_DTC_EXCLUDE_THRESHOLD`. Mirrors the hardened parse
+ * pattern used for `LONGSHORT_SHORT_STOP_THRESHOLD`: strict `parseFloat`,
+ * `> 0`, finite — any malformed value throws with the offending input
+ * surfaced. Call this at the composer caller boundary (NOT inside the
+ * composer, which must stay free of `Deno.env` for testability).
+ */
+export function resolveShortDtcExcludeThreshold(
+  envGet: (name: string) => string | undefined,
+): number {
+  const raw = envGet('LONGSHORT_DTC_SHORT_EXCLUDE_THRESHOLD');
+  if (raw === undefined || raw === '') return DEFAULT_SHORT_DTC_EXCLUDE_THRESHOLD;
+  const v = parseFloat(raw);
+  if (!Number.isFinite(v) || v <= 0) {
+    throw new Error(
+      `LONGSHORT_DTC_SHORT_EXCLUDE_THRESHOLD must be a finite, positive number; got "${raw}"`,
+    );
+  }
+  return v;
 }
