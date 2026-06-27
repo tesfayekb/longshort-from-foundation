@@ -434,6 +434,7 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
             as_of_date,
             latest_days_to_cover: latest_dtc,
             report_date,
+            updated_at: ts,
           });
         }
         if (dtcRows.length > 0) {
