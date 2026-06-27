@@ -23,6 +23,8 @@ import {
   composePreflightResults,
   type PreflightCandidate,
   type PreflightComposerDeps,
+  resolveShortDtcExcludeThreshold,
+  DEFAULT_SHORT_DTC_EXCLUDE_THRESHOLD,
 } from './preflight-composer.ts';
 import { preflightKey } from './rebalance-planner.ts';
 import type {
@@ -39,6 +41,7 @@ import type {
   HtbCacheReader,
   HtbCacheClearer,
 } from './cache-propagator-io.ts';
+import type { DaysToCoverReader } from '../longshort-signals/shared/days-to-cover-store.ts';
 
 const TS = new Date('2026-06-24T20:30:00Z');
 const OP = '00000000-0000-0000-0000-000000000001';
