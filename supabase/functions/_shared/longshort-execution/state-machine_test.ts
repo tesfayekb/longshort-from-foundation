@@ -68,7 +68,8 @@ function findCancel(effs: readonly SideEffect[]): CancelAndReplaceEffect | undef
 Deno.test('isSupportedTradeType: entry+rank_exit only', () => {
   assert(isSupportedTradeType('entry'));
   assert(isSupportedTradeType('rank_exit'));
-  assert(!isSupportedTradeType('short_stop' as never));
+  // DW-149 (Component 1) RESOLVED — short_stop now natively supported.
+  assert(isSupportedTradeType('short_stop'));
 });
 
 // ── Phase-1 acceptance branches
@@ -257,16 +258,36 @@ Deno.test('Wall-clock cap (120s past accepted_at) → tier2_unfillable_skip BEFO
   assertExists(findEmit(sideEffects, 'longshort.execution.tier2_unfillable_wallclock_cap'));
 });
 
-Deno.test('Defensive short-stop guard: trade_type=short_stop → scope_violation_error + tier3_pause', () => {
-  const o = mkOrder({ trade_type: 'short_stop' });
+// DW-149 (Component 1) — short_stop is now supported. The pure kernel
+// treats it like a single-step ladder with the tighter 20s step fill-wait;
+// the §8.6.2:152 parallel-cover race is the evaluator's responsibility.
+Deno.test('short_stop: phase1 pending within timeout remains phase1_pending (no scope-violation)', () => {
+  const o = mkOrder({
+    trade_type: 'short_stop', side: 'short', broker_side: 'buy', intent: 'close',
+  });
   const { nextOrder, sideEffects } = nextState({
     order: o, initial_limit_price: 100,
     event: { kind: 'acceptance_observed', state: 'pending', rejection_tier: null, rejection_reason: null, pending_elapsed_s: 1 },
     ts: PLUS(1), config: CFG,
   });
-  assertEquals(nextOrder.state, 'terminal_tier3_pause');
-  assert(sideEffects.some((e) => e.kind === 'scope_violation_error'));
-  assertExists(findEmit(sideEffects, 'longshort.execution.scope_violation'));
+  assertEquals(nextOrder.state, 'phase1_pending');
+  assert(!sideEffects.some((e) => e.kind === 'scope_violation_error'));
+});
+
+Deno.test('short_stop: step_fill_wait is 20s (tighter than rank_exit)', () => {
+  // A short_stop in phase2_working past 20s with no fill should escalate
+  // (ladder is single-step, so escalation = terminal_tier2_unfillable_skip).
+  const o = mkOrder({
+    trade_type: 'short_stop', side: 'short', broker_side: 'buy', intent: 'close',
+    state: 'phase2_working', accepted_at: T0, submitted_at: T0,
+  });
+  const { nextOrder, sideEffects } = nextState({
+    order: o, initial_limit_price: 100,
+    event: { kind: 'fill_observed', filled: false, filled_qty: 0, avg_fill_price: null },
+    ts: PLUS(21), config: CFG,
+  });
+  assertEquals(nextOrder.state, 'terminal_tier2_unfillable_skip');
+  assertExists(findEmit(sideEffects, 'longshort.execution.tier2_unfillable_ladder_exhausted'));
 });
 
 Deno.test('Already-terminal carry-in → no transition, no side effects', () => {
