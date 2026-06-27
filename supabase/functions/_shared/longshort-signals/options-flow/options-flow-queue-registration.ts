@@ -78,6 +78,9 @@ import { createOptionsFlowAdapter } from './options-flow-queue-adapter.ts';
 import { TradierOptionsChainFetcher } from '../shared/tradier-options-chain-fetcher.ts';
 import type { HttpFetch } from '../../longshort-universe-interfaces.ts';
 import { SIGNAL_ID } from './options-flow-orchestrator.ts';
+import { supabaseAdmin } from '../../supabase-admin.ts';
+import { createSupabaseOptionsFlowVolumeWriter, createSupabaseOptionsFlowVolumeReader } from './options-flow-volume-store.ts';
+import { createOptionsFlowSubsetResolver } from './options-flow-subset-resolver.ts';
 
 /** `job_registry.id` of the init cron — preserved per MIG-078 (the
  *  FP-043 cron entry stays; its body is gutted to the enqueue shim). */
@@ -109,6 +112,19 @@ export function registerOptionsFlowQueueConsumer(): void {
     getTradierKeyOrThrow(),
     fetch as unknown as HttpFetch,
   );
+  // FP-057 Sub-step 4c — wire the MIG-133 volume writer (always-on; the
+  // daily cron-87 run populates it on every value-producing compute)
+  // and the intraday subset resolver (cadence-gated internally — returns
+  // null for daily-cadence runs, so cron-87 stays bit-identical to
+  // pre-4c). The resolver memoizes per-asOf-date inside its closure.
+  const volumeWriter = createSupabaseOptionsFlowVolumeWriter(supabaseAdmin);
+  const volumeReader = createSupabaseOptionsFlowVolumeReader(supabaseAdmin);
+  const subsetResolver = createOptionsFlowSubsetResolver({
+    supabase: supabaseAdmin,
+    volumeReader,
+    signalId: SIGNAL_ID,
+    subsetN: parseSubsetNEnv(),
+  });
   productionQueueRegistry.register({
     signalId: OPTIONS_FLOW_QUEUE_CONFIG.signalId,
     jobId: OPTIONS_FLOW_QUEUE_CONFIG.jobId,
@@ -117,7 +133,7 @@ export function registerOptionsFlowQueueConsumer(): void {
     sliceSize: OPTIONS_FLOW_QUEUE_CONFIG.sliceSize,
     heartbeatTimeoutSec: OPTIONS_FLOW_QUEUE_CONFIG.heartbeatTimeoutSec,
     stagingTtlSec: OPTIONS_FLOW_QUEUE_CONFIG.stagingTtlSec,
-    fetchAndCompute: createOptionsFlowAdapter({ tradier }),
+    fetchAndCompute: createOptionsFlowAdapter({ tradier, subsetResolver, volumeWriter }),
   });
 }
 
@@ -129,4 +145,11 @@ function getTradierKeyOrThrow(): string {
     );
   }
   return key;
+}
+
+function parseSubsetNEnv(): number | undefined {
+  const raw = Deno.env.get('OPTIONS_FLOW_INTRADAY_SUBSET_N');
+  if (raw === undefined) return undefined;
+  const v = Number.parseInt(raw, 10);
+  return Number.isFinite(v) && v > 0 ? v : undefined;
 }
