@@ -30,6 +30,22 @@ export const VERIFY_REBALANCE_AGGREGATE_TOLERANCE = {
   ratio_upper: 1.10,
 };
 
+/** FP-057 Sub-step 5 / DEC-070 clause (g) ⊗ DW-149-B.
+ *
+ *  A known-transient cause that legitimately breaks neutrality for ONE
+ *  tick. The persistence check (rolling-window cross-tick escalator)
+ *  treats exempt rows as "skip — do not advance the unexplained counter,
+ *  do NOT reset it either" (non-compounding by construction: each tick
+ *  is judged on its OWN exempt_cause; a stale prior-tick cause does not
+ *  silence a current unexplained tick).
+ *
+ *  Precedence when multiple causes co-occur (asserted at the seam, not
+ *  here): `short_stop` > `partial_fill` > `working_order`. The strongest
+ *  attribution wins so the audit row's `divergence.exempt_cause` cleanly
+ *  identifies WHY the tick was exempt.
+ */
+export type ExemptCause = 'short_stop' | 'partial_fill' | 'working_order';
+
 /** Optional tolerance override. Used by the assertion-closure factory to
  *  thread env-driven band tightening (the STEP-D prove-by-fire path) WITHOUT
  *  mutating the default contract. Pure-add; existing callers unaffected. */
@@ -49,14 +65,27 @@ interface RebalanceAggregateDivergence extends Record<string, unknown> {
   short_gross_dollars: number;
   ratio: number;
   within_band: boolean;
+  /** Set when the seam (tick-scheduler) detected a known-transient cause
+   *  for this tick. The per-tick `failure_escalated` outcome is unchanged
+   *  (audit trail per fire); the persistence check reads this field to
+   *  decide whether the tick advances the unexplained counter. `null` when
+   *  no exemption applies — the persistent-pager candidate. */
+  exempt_cause: ExemptCause | null;
 }
 
 export function buildVerifyRebalanceAggregateSpec(args: {
   operator_id: string;
   tolerance?: RebalanceAggregateToleranceOverride;
+  /** OPTIONAL — FP-057 Sub-step 5. The seam (tick-scheduler) supplies the
+   *  in-process exempt_cause attribution; we close over it so it lands on
+   *  `divergence.exempt_cause` in the reconciliation_events row. `null`
+   *  (or omitted) means the seam saw no transient cause — the row is a
+   *  pager-candidate for the persistence check. */
+  exempt_cause?: ExemptCause | null;
 }): ReconcileCallSpec<InternalRebalanceAggregate, BrokerRebalanceAggregate> {
   const lower = args.tolerance?.ratio_lower ?? VERIFY_REBALANCE_AGGREGATE_TOLERANCE.ratio_lower;
   const upper = args.tolerance?.ratio_upper ?? VERIFY_REBALANCE_AGGREGATE_TOLERANCE.ratio_upper;
+  const exempt_cause = args.exempt_cause ?? null;
   return {
     call_name: 'verify_rebalance_aggregate',
     operator_id: args.operator_id,
@@ -81,6 +110,7 @@ export function buildVerifyRebalanceAggregateSpec(args: {
         short_gross_dollars: short,
         ratio,
         within_band,
+        exempt_cause,
       };
     },
 
@@ -99,7 +129,11 @@ export function buildVerifyRebalanceAggregateSpec(args: {
 }
 
 export async function verifyRebalanceAggregate(
-  args: { operator_id: string; tolerance?: RebalanceAggregateToleranceOverride },
+  args: {
+    operator_id: string;
+    tolerance?: RebalanceAggregateToleranceOverride;
+    exempt_cause?: ExemptCause | null;
+  },
   fetcher: BrokerRebalanceAggregateFetcher,
   ts: Date,
   fetcher_source: FetcherSource,
@@ -107,6 +141,7 @@ export async function verifyRebalanceAggregate(
   const spec = buildVerifyRebalanceAggregateSpec({
     operator_id: args.operator_id,
     ...(args.tolerance ? { tolerance: args.tolerance } : {}),
+    ...(args.exempt_cause !== undefined ? { exempt_cause: args.exempt_cause } : {}),
   });
   return reconcile(
     spec,
