@@ -216,7 +216,7 @@ export function buildRebalanceAggregatePersistenceCheck(
     // `AggregateHistoryRow` contract doesn't require it (the Supabase
     // default reader attaches it for pager click-through). Narrow
     // structurally via an unknown→record path; no `any`.
-    const firstRow = rows[0] as Record<string, unknown> | undefined;
+    const firstRow = rows[0] as unknown as Record<string, unknown> | undefined;
     const last_unexplained_event_id =
       firstRow && typeof firstRow['event_id'] === 'string'
         ? (firstRow['event_id'] as string)
