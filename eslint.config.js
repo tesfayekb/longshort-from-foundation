@@ -38,6 +38,14 @@ export default tseslint.config(
     ],
     rules: {
       "@typescript-eslint/ban-ts-comment": "off",
+      // ACT-347 structural fix (REVISION-FIX after FP-057 Sub-step 4c):
+      // the "any-in-tests" class recurred 3× (DTC, SI orchestrator,
+      // options-flow resolver). Test files mocking chained, self-
+      // referential thenable DB builders legitimately need loose
+      // typing — the builder shape is throwaway. Relax no-explicit-any
+      // for _test.ts / scripts / fixtures ONLY; src/ and edge
+      // production code KEEP the discipline.
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
   // tailwind.config.ts uses CommonJS require() for plugin loading per Tailwind convention.
