@@ -1,5 +1,7 @@
 # Stage 3D — Phase 3 Integration Verification & Gate Closure
 
+> **CLOSED-HISTORICAL (ACT-365).** Platform Phase 3 closed — closure record at `docs/08-planning/phase-closures/phase-03-closure.md`. This stage plan is preserved for historical reference (Constitution Rule 8); it is NOT a live plan. Forward platform-status authority is `system-state.md`; forward longshort §10 phase status is `docs/08-planning/phase-status-ledger.md`.
+
 > **Status:** APPROVED — Executing  
 > **Owner:** Developer AI
 > **Created:** 2026-04-10  

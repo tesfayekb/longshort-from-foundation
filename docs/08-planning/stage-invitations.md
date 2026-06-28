@@ -1,5 +1,7 @@
 # Stage Plan: User Onboarding & Invitations
 
+> **CLOSED-HISTORICAL (ACT-365).** PLAN-INVITE-001 closed — closure record at `docs/08-planning/phase-closures/plan-invite-001-closure.md`. Preserved for historical reference (Constitution Rule 8); NOT a live plan.
+
 > **Plan ID:** PLAN-INVITE-001  
 > **DW Reference:** DW-035  
 > **Status:** approved  

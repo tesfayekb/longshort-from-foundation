@@ -1,6 +1,8 @@
 # Deferred Work Register
 
 > **Owner:** Project Lead | **Last Reviewed:** 2026-04-13
+>
+> **Cross-reference (ACT-365).** For phase-home + resolved-with-evidence status of every DW, see `docs/08-planning/phase-status-ledger.md` Part 4D (adoption) + Part 4E (backfill). Where this register and the ledger disagree on phase-home or closure status, the ledger wins.
 
 ## Purpose
 

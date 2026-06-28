@@ -1,6 +1,6 @@
 # Master Plan
 
-> **Owner:** Project Lead | **Last Reviewed:** 2026-04-12
+> **Owner:** Project Lead | **Last Reviewed:** 2026-04-12 *(cosmetically stale — body is current to 2026-06-26; flagged at ACT-365 capstone audit)*
 
 ## Purpose
 

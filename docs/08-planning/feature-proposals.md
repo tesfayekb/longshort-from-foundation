@@ -2,6 +2,8 @@
  
  ### FP-052 (3.0) — Combiner foundation + bootstrap ranker on the §6.4 documented degraded path
 
+> **Cross-reference (header pointer, ACT-365).** For §10 phase-state + the forward build-to-paper sequence, see `docs/08-planning/phase-status-ledger.md` (Parts 2 / 4D / 4E / 5). Part 4D binds each future-authored FP to adopt-or-defer-with-rationale every DW listed under its row.
+
 ### FP-052.2 (3.2) — DW-101 market-level regime features (SPY) implementing ratified DEC-066 (3.2-a authored; 3.2-b..3.2-e build sub-ladder scaffolded)
 
 | Field | Value |
