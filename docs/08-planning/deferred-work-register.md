@@ -3642,6 +3642,17 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 
 ### DW-176: Reversal ungated shadow variant — DEC-071 retrospective over-gating check (Phase-7 measurement)
 
+#### DW-173 ADDENDUM 2026-06-30 (Constitution Rule 8 — preserve original, append correction): shadow mechanism cross-ref correction + LIVE
+
+The DW-173 `Cross_ref` and `Scope (weekend stand-up)` rows above point at the §6.5 `combiner_shadow_variant_config` harness (MIG-100) as the build seam. **That cross-ref is incorrect** and was confirmed wrong during the EXECUTION turn that stood the shadow up. The correction (the original lines above are intentionally preserved per Rule 8):
+
+- `combiner_shadow_variant_config` is **ranker-tuning-only**. It carries `variant_name / inclusion_rule / k` rows that drive an alternate `ranker.ts` configuration over the SAME `SIGNAL_IDS_ALL`-derived feature vector read from `signal_observations`. It has no surface for introducing a NEW alpha series (no `signal_id` column, no compute-fork hook), so it **cannot hold** the `si_level` / `si_dtc` shadow series DW-173 needs.
+- The correct seam is **mechanism (2) — a per-signal SHADOW TABLE** (the DW-176 `reversal_ungated_observations` precedent): a physically separate table that the live feature-assembler does NOT read, so a shadow signal cannot leak into the live ranker via `signal_observations` ∩ `SIGNAL_IDS_ALL`.
+- BUILT under this corrected seam as **MIG-138** (`public.short_interest_alpha_shadow`, PK `(operator_id, variant, as_of_date, ticker)`, `variant ∈ {si_level, si_dtc}` CHECK, `raw_value double precision NULL` typed-absence, RLS + grants mirroring `reversal_ungated_observations`) + the shadow producer co-located in `short-interest-orchestrator.ts` (within-sector z-score per variant via the live `zScoreNormalizeWithinSector` helper; swallowed-failure telemetry; ZERO touch to `compute-short-interest.ts`, the live #5 `signal_observations` write, `SIGNAL_IDS_ALL`, or the DW-165 squeeze screen).
+- **Status update**: SHADOW STAND-UP → **LIVE** (writing rows on every #5 cycle). PROMOTION decision remains Phase-7-gated under FP-058 per the original entry. Promotion criterion (replace / stack / keep) unchanged.
+- **DW-170 inherits the same cross-ref error** (its momentum variants are compute-layer reconstructions of raw 12-1 / σ-divide / residual — they are NEW alpha series, not ranker-tuning rows). When DW-170 is sequenced it will need mechanism (2) — a compute-fork shadow producer writing to a dedicated `momentum_alpha_shadow` table (NOT `combiner_shadow_variant_config`). Flagged here so the same wrong path is not walked twice.
+- Cross_ref additions: MIG-138 (the shadow table); ACT-360 (this build + correction); DW-176 / `reversal_ungated_observations` (the precedent followed); `zScoreNormalizeWithinSector` (the comparability pin to live #5); the seam-investigation turn confirming `combiner_shadow_variant_config` is ranker-tuning-only.
+
 | Field | Value |
 |---|---|
 | **ID** | DW-176 (next-free after DW-175). |
