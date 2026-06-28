@@ -120,6 +120,16 @@ type PerTickerResult =
     gics_sector: string | null;
     latest_dtc: number | null;
     latest_report_date: string | null;
+    /**
+     * DW-173 shadow input — the live-derived si_pct_float at T (the
+     * latest report point), captured here so the shadow producer can
+     * z-score the LEVEL alpha alongside the live ΔSI without a
+     * round-trip and without touching the live compute. Same numeric
+     * value the compute already consumed for the ΔSI calculation.
+     * `null` is reserved for the (defensive) case where the latest
+     * report's si_pct_float is non-finite; never fabricated 0 (§9).
+     */
+    latest_si_pct_float: number | null;
   }
   | {
     kind: 'skip';
@@ -337,6 +347,15 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
                 ...dtc,
               };
             }
+            // DW-173: capture the latest si_pct_float (LEVEL alpha
+            // input). Same numeric value `computeShortInterestChange`
+            // consumed at index T; no round-trip, no re-derivation.
+            const latest_si_pct_float = reports.length > 0
+              ? (() => {
+                const v = reports[reports.length - 1].si_pct_float;
+                return Number.isFinite(v) ? v : null;
+              })()
+              : null;
             return {
               kind: 'value',
               ticker,
@@ -344,6 +363,7 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
               gics_sector,
               latest_dtc: dtc.latest_dtc,
               latest_report_date: dtc.latest_report_date,
+              latest_si_pct_float,
             };
           } catch (err) {
             const message = err instanceof SignalComputationError
