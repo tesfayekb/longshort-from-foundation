@@ -468,6 +468,12 @@ Deno.test('(14) DEC-071 — news precedence over catalyst when both fire', async
   assertEquals(msft.skip_reason, 'gated_by_catalyst');
   assertEquals(msft.is_present, false);
   assertEquals(msft.value, null);
+  // DEC-071 3b telemetry fix (MIG-136): orchestrator result carries
+  // gate_counts computed from the typed-absence rows actually emitted —
+  // news=1 (AAPL), catalyst=1 (MSFT, after news-precedence absorbed
+  // AAPL's catalyst overlap). Distinct from skipped[]; verified disjoint.
+  assertEquals(res.gate_counts, { gated_by_news: 1, gated_by_catalyst: 1 });
+  assertEquals(res.skipped, []);
 });
 
 Deno.test('(15) DEC-071 — gate_inputs_unavailable → RAW emit (no skip, no exclude)', async () => {
