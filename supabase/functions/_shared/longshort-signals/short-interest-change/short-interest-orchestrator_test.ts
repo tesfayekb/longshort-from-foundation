@@ -105,6 +105,16 @@ function makeSupabase(opts: {
           },
         };
       }
+      if (table === 'short_interest_alpha_shadow') {
+        // DW-173 — shadow writes are no-op in legacy fixtures; the
+        // dedicated shadow-producer tests live in
+        // `short-interest-orchestrator_dw-173-shadow_test.ts`.
+        return {
+          upsert(_payload: unknown[]) {
+            return Promise.resolve({ error: null, count: 0 });
+          },
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     },
   };
