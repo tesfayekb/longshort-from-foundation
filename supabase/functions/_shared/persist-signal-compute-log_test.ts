@@ -241,3 +241,25 @@ Deno.test('persistSignalComputeLog: skipped_detail is [] when no skips (clean fi
   await persistSignalComputeLog(supabase, baseResult({ skipped: [] }), OPERATOR_ID);
   assertEquals(calls[0].payload.skipped_detail, []);
 });
+
+// ── DEC-071 3b telemetry fix (MIG-136): gate_counts carrier ────────────────
+
+Deno.test('persistSignalComputeLog: gate_counts is NULL when orchestrator does not populate it (every non-reversal signal)', async () => {
+  const { supabase, calls } = makeSupabase({});
+  await persistSignalComputeLog(supabase, baseResult({ skipped: [] }), OPERATOR_ID);
+  assertEquals(calls[0].payload.gate_counts, null);
+});
+
+Deno.test('persistSignalComputeLog: gate_counts round-trips verbatim when orchestrator populates it', async () => {
+  const { supabase, calls } = makeSupabase({});
+  const result = baseResult({
+    signal_id: 'short_term_reversal_1w',
+    gate_counts: { gated_by_news: 90, gated_by_catalyst: 96 },
+  });
+  await persistSignalComputeLog(supabase, result, OPERATOR_ID);
+  assertEquals(calls[0].payload.gate_counts, { gated_by_news: 90, gated_by_catalyst: 96 });
+  // gate_counts does NOT leak into skip_counts — the three zombie keys
+  // remain seeded at 0, honoring the gated≠skipped category separation.
+  assertEquals((calls[0].payload.skip_counts as Record<string, number>).gated_by_news, 0);
+  assertEquals((calls[0].payload.skip_counts as Record<string, number>).gated_by_catalyst, 0);
+});
