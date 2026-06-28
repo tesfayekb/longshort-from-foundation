@@ -401,3 +401,169 @@ Deno.test('(11) determinism — same inputs produce identical persisted values +
 Deno.test('(12) signal_id locked = short_term_reversal_1w', () => {
   assertEquals(SIGNAL_ID, 'short_term_reversal_1w');
 });
+
+// ─── DEC-071 sub-step 3b: cross-signal gate tests ──────────────────────
+
+Deno.test('(13) DEC-071 — gated_by_news emits typed-absence row + shadow gate_decision', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+    { ticker: 'NVDA', gics_sector: 'IT' },
+  ];
+  const { supabase, calls } = makeSupabase({
+    universe,
+    newsPresent: ['AAPL'],
+  });
+  const { fetcher } = makePriceHistory({
+    AAPL: { kind: 'bars', bars: reversalHistory(100, 0.05) },
+    MSFT: { kind: 'bars', bars: reversalHistory(200, -0.02) },
+    NVDA: { kind: 'bars', bars: reversalHistory(50, 0.10) },
+  });
+  const res = await createReversalOrchestrator(ctx(supabase, fetcher)).run(AS_OF);
+  assertEquals(res.outcome, 'completed');
+  // 2 normal (MSFT, NVDA z-scored) + 1 gated (AAPL typed-absence)
+  assertEquals(calls.upsertPayloads.length, 1);
+  const payload = calls.upsertPayloads[0];
+  assertEquals(payload.length, 3);
+  const aapl = payload.find((r) => r.ticker === 'AAPL')!;
+  assertEquals(aapl.is_present, false);
+  assertEquals(aapl.value, null);
+  assertEquals(aapl.skip_reason, 'gated_by_news');
+  const msft = payload.find((r) => r.ticker === 'MSFT')!;
+  assertEquals(msft.is_present, true);
+  assert(typeof msft.value === 'number');
+  // Shadow: every value-ticker present with gate_decision tag.
+  assertEquals(calls.shadowUpserts.length, 1);
+  const shadow = calls.shadowUpserts[0];
+  assertEquals(shadow.length, 3);
+  const aaplShadow = shadow.find((r) => r.ticker === 'AAPL')!;
+  assertEquals(aaplShadow.gate_decision, 'gated_by_news');
+  assert(typeof aaplShadow.raw_value === 'number');
+  const msftShadow = shadow.find((r) => r.ticker === 'MSFT')!;
+  assertEquals(msftShadow.gate_decision, 'none');
+});
+
+Deno.test('(14) DEC-071 — news precedence over catalyst when both fire', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+    { ticker: 'NVDA', gics_sector: 'IT' },
+  ];
+  const { supabase, calls } = makeSupabase({
+    universe,
+    newsPresent: ['AAPL'],
+    catalystPresent: ['AAPL', 'MSFT'],
+  });
+  const { fetcher } = makePriceHistory({
+    AAPL: { kind: 'bars', bars: reversalHistory(100, 0.05) },
+    MSFT: { kind: 'bars', bars: reversalHistory(200, -0.02) },
+    NVDA: { kind: 'bars', bars: reversalHistory(50, 0.10) },
+  });
+  const res = await createReversalOrchestrator(ctx(supabase, fetcher)).run(AS_OF);
+  assertEquals(res.outcome, 'completed');
+  const payload = calls.upsertPayloads[0];
+  const aapl = payload.find((r) => r.ticker === 'AAPL')!;
+  assertEquals(aapl.skip_reason, 'gated_by_news'); // news beats catalyst
+  const msft = payload.find((r) => r.ticker === 'MSFT')!;
+  assertEquals(msft.skip_reason, 'gated_by_catalyst');
+  assertEquals(msft.is_present, false);
+  assertEquals(msft.value, null);
+});
+
+Deno.test('(15) DEC-071 — gate_inputs_unavailable → RAW emit (no skip, no exclude)', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+  ];
+  const { supabase, calls } = makeSupabase({
+    universe,
+    runs: ['news_sentiment_7d'], // catalyst job did NOT run
+    newsPresent: ['AAPL'], // even with news present, no gating triggers
+  });
+  const { fetcher } = makePriceHistory({
+    AAPL: { kind: 'bars', bars: reversalHistory(100, 0.05) },
+    MSFT: { kind: 'bars', bars: reversalHistory(200, -0.02) },
+  });
+  const res = await createReversalOrchestrator(ctx(supabase, fetcher)).run(AS_OF);
+  assertEquals(res.outcome, 'completed');
+  // Cross-signal observations read MUST NOT happen when precondition fails.
+  assertEquals(calls.crossSignalReads, 0);
+  // Both names emit normal rows (raw → z-scored, is_present=true, no skip_reason).
+  const payload = calls.upsertPayloads[0];
+  assertEquals(payload.length, 2);
+  for (const r of payload) {
+    assertEquals(r.is_present, true);
+    assert(typeof r.value === 'number');
+    assert(r.skip_reason === null || r.skip_reason === undefined);
+  }
+  // Shadow rows tagged gate_inputs_unavailable — no series gap.
+  const shadow = calls.shadowUpserts[0];
+  assertEquals(shadow.length, 2);
+  for (const r of shadow) {
+    assertEquals(r.gate_decision, 'gate_inputs_unavailable');
+  }
+});
+
+Deno.test('(16) DEC-071 — no news + no catalyst → byte-identical to pre-DEC-071', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+  ];
+  // Both precondition signals successful, but no per-ticker presence.
+  const { supabase, calls } = makeSupabase({ universe });
+  const { fetcher } = makePriceHistory({
+    AAPL: { kind: 'bars', bars: reversalHistory(100, 0.05) },
+    MSFT: { kind: 'bars', bars: reversalHistory(200, -0.02) },
+  });
+  const res = await createReversalOrchestrator(ctx(supabase, fetcher)).run(AS_OF);
+  assertEquals(res.outcome, 'completed');
+  const payload = calls.upsertPayloads[0];
+  for (const r of payload) {
+    assertEquals(r.is_present, true);
+    assert(typeof r.value === 'number');
+    assert(r.skip_reason === null || r.skip_reason === undefined);
+  }
+  // All shadow rows tagged 'none' (normal emit).
+  for (const r of calls.shadowUpserts[0]) {
+    assertEquals(r.gate_decision, 'none');
+  }
+});
+
+Deno.test('(17) DEC-071 — insufficient_history is NOT a gate; existing skip path unchanged', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+    { ticker: 'NEW',  gics_sector: 'IT' },
+  ];
+  const { supabase, calls } = makeSupabase({
+    universe,
+    newsPresent: ['NEW'], // even gated, the genuine-data-gap skip wins
+  });
+  const { fetcher } = makePriceHistory({
+    AAPL: { kind: 'bars', bars: reversalHistory(100, 0.05) },
+    MSFT: { kind: 'bars', bars: reversalHistory(200, -0.02) },
+    NEW:  { kind: 'bars', bars: makeBars(REVERSAL_MIN_BARS - 1, (i) => 10 + i) },
+  });
+  const res = await createReversalOrchestrator(ctx(supabase, fetcher)).run(AS_OF);
+  const reasons = res.skipped.map((s) => `${s.ticker}:${s.reason}`).sort();
+  assert(reasons.includes('NEW:insufficient_history'),
+    `expected NEW:insufficient_history, got ${reasons.join(',')}`);
+  // NEW gets NO shadow row (no raw_signal was computed).
+  const tickersInShadow = calls.shadowUpserts[0].map((r) => r.ticker);
+  assert(!tickersInShadow.includes('NEW'));
+});
+
+Deno.test('(18) DEC-071 — single batched cross-signal read', async () => {
+  const universe = [
+    { ticker: 'AAPL', gics_sector: 'IT' },
+    { ticker: 'MSFT', gics_sector: 'IT' },
+  ];
+  const { supabase, calls } = makeSupabase({ universe, newsPresent: ['AAPL'] });
+  const { fetcher } = makePriceHistory({
+    AAPL: { kind: 'bars', bars: reversalHistory(100, 0.05) },
+    MSFT: { kind: 'bars', bars: reversalHistory(200, -0.02) },
+  });
+  await createReversalOrchestrator(ctx(supabase, fetcher)).run(AS_OF);
+  assertEquals(calls.preconditionReads, 1);
+  assertEquals(calls.crossSignalReads, 1);
+});
