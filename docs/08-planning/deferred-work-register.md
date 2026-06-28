@@ -3947,6 +3947,23 @@ The DW-173 `Cross_ref` and `Scope (weekend stand-up)` rows above point at the §
 | **Resolution shape** | (a) ranked-out → charter held, no build; (b) ranked-in → build FP + shadow ride-along + later DEC for fallback-sum promotion conditional on §6.5 harness evidence. |
 | **Cross_ref** | DEC-046 (the snapshot approximation discipline that this signal sits within); DEC-075 §b/§f (classification gate + recurrence-prevention rule applied at activation); `supabase/functions/_shared/longshort-signals/compute-options-flow.ts` (the v1 sibling); literature: **Cremers-Weinbaum 2010 *JFQA* "Deviations from Put-Call Parity and Stock Return Predictability"** (the construct anchor); Bali-Hovakimian 2009 *Management Science* (call-put IV spread cross-section); An-Ang-Bali-Cakici 2014 *J. Finance* (call/put implied-vol changes); FP-058 (Phase-7 measurement at activation); **ACT-357 (REGISTRATION)**. |
 
+#### DW-192 ADDENDUM — STEP-A vendor-contract finding + STEP-B registration (appended 2026-06-28 per Constitution Rule 8; original charter row above PRESERVED VERBATIM)
+
+**Status update**: substrate **CONFIRMED** (STEP-A complete via ACT-157/ACT-158 temp-probe-then-delete pattern — probe `probe-tradier-iv-readonly` deployed, measured, and DELETED forward-only same turn). **HELD for next-cycle ranked build** — operator decision: new-signal-construct build is wrong-shape for the pre-Monday window; first sub-step at activation is **STEP-B (coverage-scoping)**, NOT compute.
+
+**STEP-A finding (measured, real probe counts — not estimates)**:
+
+- **(a) Parse surface**: `RawOptionGreeks.{bid_iv, mid_iv, ask_iv, smv_vol}` are typed AND extracted in `normalizeGreeks` (not comment-only). Caveat: `normalizeGreeks` nulls the whole greeks object when `delta` is non-finite, so IV-presence at the fetcher seam is conditioned on delta-presence. Tradier appears to populate them together — recorded, not a blocker.
+- **(b) mid_iv live-populated on our entitlement — CONFIRMED (not docs-only)**. RAW-payload populated counts (mid_iv > 0): **AAPL 100/100, IWM 166/166, SPY 297/346, PLUG 18/30**. `bid_iv` is SPARSE (SPY 87/346, AAPL 26/100) — the construct MUST use `mid_iv` (and/or `ask_iv`); `bid_iv` is NOT reliably populated on our entitlement.
+- **(c) Matched-strike both-sides-IV coverage (feasibility number)**: **AAPL 100% (50/50) / NTM 100%; IWM 100% (83/83) / NTM 100%; SPY 71.7% (124/173) / NTM 100%; PLUG 53.3% (8/15) / NTM 60%**. Verdict: COMPUTABLE on liquid names with full NTM coverage; DEGRADING on thin small-caps. The construct is liquidity-graded, not strictly universe-wide.
+- **(d) Absent IV returns `mid_iv: 0` — the fabricated-value trap, CONFIRMED on real data** (deep-ITM/OTM wing contracts: e.g. `SPY260629C00500000` `delta=0.9999 mid_iv=0`; PLUG wings `delta∈{0,1} mid_iv=0`). The probe correctly counted `mid_iv ≤ 0` as absent (per the §9 `>0` guard) — that is why SPY shows 71.7% and not higher. ~28% of SPY's contracts on the wings exhibit this shape.
+  - **SPEC REQUIREMENT (binding, pinned at this addendum for the eventual build — NOT implemented this turn)**: any IV-spread compute MUST treat `mid_iv <= 0` as **TYPED-ABSENT (§9)**, NEVER as a real 0% IV. The guard MUST be enforced at the **parse seam** (so no downstream consumer can accidentally read the raw zero). `isFiniteNumberOrNull` does NOT strip zeros today, so this is a **fetcher-level change** the build is required to include.
+- **(e) Feasibility**: **YES** — Cremers-Weinbaum IV-spread (OI-weighted `call_mid_iv − put_mid_iv` at matched strike/expiry, deviation-from-PCP) is computable from our EXISTING Tradier entitlement with NO new vendor surface, subject to (c) the liquidity-coverage caveat and (d) the `mid_iv <= 0` typed-absence guard as a hard spec requirement.
+
+**STEP-B (registered as DW-192's FIRST sub-step at activation — INVESTIGATION-class, no build)**: the (c) gradient (100% liquid / 53% thin) is a scoping question, not a blocker. STEP-B decides between **(i) universe-wide with typed-absence on thin names** (clean, but the signal goes NULL on exactly the thin small-caps where squeeze / short-stop risk is highest — interaction with DW-165 / DW-149 wants thought) OR **(ii) liquidity-screened sub-universe** (cleaner ROI but introduces a new universe-membership concept). Charter-level decision; investigation turn BEFORE a build slot, not during one. STEP-B must precede any compute-iv-spread / signal-catalog / persistence work.
+
+**Cross-ref additions**: ACT-157 / ACT-158 (the temp-probe pattern this STEP-A reused); ACT-361 (this STEP-A closeout); the probe `probe-tradier-iv-readonly` (DELETED forward-only).
+
 ### DW-193: Options-flow decay-grid + event-conditional half-life — Phase-7, low priority
 
 | Field | Value |
