@@ -224,7 +224,12 @@ Deno.test('(rorch-1) read filters: eq(operator_id), eq(as_of_date), eq(intraday_
   const { supabase, calls } = makeSupabase({ cfvRows: rows });
   await createRankerOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
 
-  assertEquals(calls.cfvSelect, 'ticker, features, gics_sector, coverage_count, excluded_reason');
+  // DEC-071 sub-step 3c — `gated_signals` joined to the projection so
+  // the ranker can distinguish sanctioned gated-null from bug-null.
+  assertEquals(
+    calls.cfvSelect,
+    'ticker, features, gics_sector, coverage_count, excluded_reason, gated_signals',
+  );
   const eqs = calls.cfvFilters.filter((f) => f.op === 'eq');
   // DEC-070 clause (d) / FP-057 Sub-step 3 — partial-assemble guard:
   // the ranker's CFV read is now slot-eq-filtered so rank for slot N
