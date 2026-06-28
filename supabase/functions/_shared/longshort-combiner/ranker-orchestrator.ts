@@ -133,6 +133,12 @@ type CFVReadRow = {
   gics_sector: string | null;
   coverage_count: number;
   excluded_reason: ExcludedReason | null;
+  /**
+   * DEC-071 sub-step 3c / MIG-137 — sanctioned-null marker. Persisted as
+   * jsonb; surfaces as a `string[]` of critical signal_ids when present.
+   * NULL or missing = legacy (no gated criticals on this row).
+   */
+  gated_signals: string[] | null;
 };
 
 export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
@@ -154,7 +160,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         cfvRows = await fetchAllRows<CFVReadRow>((from, to) =>
           ctx.supabase
             .from('combiner_feature_vectors')
-            .select('ticker, features, gics_sector, coverage_count, excluded_reason')
+            .select('ticker, features, gics_sector, coverage_count, excluded_reason, gated_signals')
             .eq('operator_id', ctx.operator_id)
             .eq('as_of_date', as_of_date)
             .eq('intraday_slot', intraday_slot)
@@ -193,6 +199,10 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         gics_sector: r.gics_sector,
         coverage_count: r.coverage_count,
         excluded_reason: r.excluded_reason,
+        // DEC-071 sub-step 3c — sanctioned-null marker. The ranker reads
+        // this to distinguish gated-null (skip, per-name DEC-074) from
+        // bug-null (still throws IncludedRowInvariantError).
+        gated_signals: r.gated_signals ?? null,
       }));
 
       // ── Step 2 (3.3b-i): model-gate. Read active models BEFORE the
