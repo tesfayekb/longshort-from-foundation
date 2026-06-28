@@ -56,6 +56,13 @@ export async function captureSignalObservations(
     // the MIG-101 column DEFAULT (byte-equivalent vs pre-DW-106-c). Only
     // the short-interest CARRY orchestrator sets `true` on `emit_carry`.
     carried_forward: r.carried_forward ?? false,
+    // DEC-071 sub-step 3a — optional typed-absence discriminator. Default-
+    // null semantics: every pre-DEC-071 orchestrator leaves `r.skip_reason`
+    // undefined, which coerces to `null` and matches the migration's
+    // nullable column (no DEFAULT) — byte-equivalent vs pre-DEC-071 for
+    // every existing writer. Only the reversal orchestrator (sub-step 3b)
+    // sets this on gated emits.
+    skip_reason: r.skip_reason ?? null,
   }));
 
   const { error, count } = await supabase
