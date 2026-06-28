@@ -462,6 +462,50 @@ export function createShortInterestOrchestrator(ctx: ShortInterestOrchestratorCo
         }
       }
 
+      // ── Step 5c: DW-173 shadow capture (si_level + si_dtc alpha) ─────
+      // Per-signal SHADOW table (mechanism 2 — see DW-173 register
+      // addendum; the §6.5 `combiner_shadow_variant_config` harness is
+      // ranker-tuning-only and cannot hold a new alpha series). Writes
+      // to `short_interest_alpha_shadow`, PHYSICALLY SEPARATE from
+      // `signal_observations` so the live feature-assembler cannot see
+      // it (the assembler reads `signal_observations` for
+      // `SIGNAL_IDS_ALL` only — a shadow signal_id there would leak).
+      //
+      // Within-sector z-score per variant mirrors live #5 (so Phase-7
+      // can compare comparable series). Typed-absence per §9: tickers
+      // with no usable input for a variant get NO row (matching DW-176
+      // reversal_ungated precedent — absence is recorded as absence-of-
+      // row, never a fabricated 0). Singleton-sector / missing-sector
+      // z-score outputs are also dropped (same precedent).
+      //
+      // Failure is telemetry-only — swallowed so the live signal-#5
+      // path cannot be moved by the shadow. signal_compute_log carries
+      // the run outcome; the Phase-7 reader detects gaps.
+      try {
+        const shadowRows = buildShortInterestShadowRows(
+          perTicker,
+          ctx.operator_id,
+          as_of_date,
+          computed_at,
+        );
+        if (shadowRows.length > 0) {
+          const { error: shadowErr } = await ctx.supabase
+            .from('short_interest_alpha_shadow')
+            .upsert(shadowRows, {
+              onConflict: 'operator_id,variant,as_of_date,ticker',
+              ignoreDuplicates: true,
+            });
+          if (shadowErr) {
+            // Telemetry-only — MUST NOT fail the live run. The Phase-7
+            // reader will detect the gap.
+          }
+        }
+      } catch (_e) {
+        // Defensive: any unexpected shadow-path throw is swallowed for
+        // the same must-not-move reason. The live path above is fully
+        // committed at this point.
+      }
+
       return {
         outcome: 'completed',
         signal_id: SIGNAL_ID,
@@ -492,4 +536,119 @@ function extractLatestDtc(
     latest_dtc: typeof dtc === 'number' && Number.isFinite(dtc) ? dtc : null,
     latest_report_date: latest.report_date,
   };
+}
+
+/**
+ * DW-173 shadow row builder — pure, no I/O. Produces zero-or-more
+ * `short_interest_alpha_shadow` rows from the per-ticker results.
+ *
+ * Two variants, each within-sector z-scored independently:
+ *   - `si_level`: input = `latest_si_pct_float` from value results
+ *     (level alpha, Asquith/Pathak/Ritter 2005 lineage).
+ *   - `si_dtc`:   input = `latest_dtc` from value AND skip results
+ *     (DTC alpha, Hong/Li/Ni/Scheinkman/Yan 2016 lineage). DTC is
+ *     captured even on alpha-skip paths (e.g. `missing_shares_outstanding`,
+ *     `insufficient_history`) because the underlying DTC fetch
+ *     succeeded — Phase-7 should see all available DTC observations.
+ *
+ * Z-score uses the live within-sector helper (clip ±3) for direct
+ * comparability to live #5 at Phase-7. Singleton/missing-sector cases
+ * yield no row (DW-176 absence-of-row precedent). Sign convention is
+ * NOT applied here — Phase-7 weights the level/DTC alpha as part of
+ * the promote/stack/keep ablation; baking a literature-prior sign into
+ * the shadow data would foreclose that measurement.
+ *
+ * Exported for test access; pure function.
+ */
+export function buildShortInterestShadowRows(
+  perTicker: ReadonlyArray<PerTickerResult>,
+  operator_id: string,
+  as_of_date: string,
+  computed_at: string,
+): Array<{
+  operator_id: string;
+  variant: 'si_level' | 'si_dtc';
+  as_of_date: string;
+  ticker: string;
+  raw_value: number;
+  gics_sector: string | null;
+  computed_at: string;
+}> {
+  // si_level: only value results carry the derived si_pct_float[T].
+  const levelInputs: Array<{ ticker: string; value: number | null; gics_sector: string | null }> = [];
+  // si_dtc: every result that surfaced a numeric latest_dtc (value OR skip).
+  const dtcInputs: Array<{ ticker: string; value: number | null; gics_sector: string | null }> = [];
+
+  for (const r of perTicker) {
+    if (r.kind === 'value') {
+      if (r.latest_si_pct_float !== null) {
+        levelInputs.push({
+          ticker: r.ticker,
+          value: r.latest_si_pct_float,
+          gics_sector: r.gics_sector,
+        });
+      }
+      if (r.latest_dtc !== null && r.latest_dtc !== undefined) {
+        dtcInputs.push({
+          ticker: r.ticker,
+          value: r.latest_dtc,
+          gics_sector: r.gics_sector,
+        });
+      }
+    } else {
+      // skip kind — DTC may be present even when alpha is skipped.
+      // gics_sector is not carried on skip results; the within-sector
+      // helper treats null sector as passthrough → null z-score → no
+      // shadow row (typed-absence). This is the correct behavior:
+      // without sector we cannot produce a comparable z-score.
+      const dtc = r.latest_dtc;
+      if (r.ticker && dtc !== null && dtc !== undefined) {
+        dtcInputs.push({ ticker: r.ticker, value: dtc, gics_sector: null });
+      }
+    }
+  }
+
+  const rows: Array<{
+    operator_id: string;
+    variant: 'si_level' | 'si_dtc';
+    as_of_date: string;
+    ticker: string;
+    raw_value: number;
+    gics_sector: string | null;
+    computed_at: string;
+  }> = [];
+
+  if (levelInputs.length > 0) {
+    const zLevel = zScoreNormalizeWithinSector(levelInputs);
+    for (const z of zLevel) {
+      if (z.value === null) continue; // singleton/missing-sector → no row
+      rows.push({
+        operator_id,
+        variant: 'si_level',
+        as_of_date,
+        ticker: z.ticker,
+        raw_value: z.value,
+        gics_sector: z.gics_sector,
+        computed_at,
+      });
+    }
+  }
+
+  if (dtcInputs.length > 0) {
+    const zDtc = zScoreNormalizeWithinSector(dtcInputs);
+    for (const z of zDtc) {
+      if (z.value === null) continue; // singleton/missing-sector → no row
+      rows.push({
+        operator_id,
+        variant: 'si_dtc',
+        as_of_date,
+        ticker: z.ticker,
+        raw_value: z.value,
+        gics_sector: z.gics_sector,
+        computed_at,
+      });
+    }
+  }
+
+  return rows;
 }
