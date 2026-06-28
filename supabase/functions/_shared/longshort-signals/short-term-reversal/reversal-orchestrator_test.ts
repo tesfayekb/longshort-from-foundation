@@ -47,13 +47,23 @@ function makeSupabase(opts: {
   latestError?: { message: string } | null;
   universeError?: { message: string } | null;
   upsertError?: { message: string } | null;
+  runs?: string[];
+  newsPresent?: string[];
+  catalystPresent?: string[];
+  shadowError?: { message: string } | null;
 }) {
   const calls = {
     upsertPayloads: [] as SignalRow[][],
     fromTables: [] as string[],
+    shadowUpserts: [] as Array<Array<Record<string, unknown>>>,
+    crossSignalReads: 0,
+    preconditionReads: 0,
   } satisfies MockCalls;
   const universe = opts.universe ?? [];
   const latestDate = universe.length > 0 ? LATEST_SNAPSHOT : null;
+  const runs = opts.runs ?? ['news_sentiment_7d', 'active_catalyst_flag'];
+  const newsP = new Set(opts.newsPresent ?? []);
+  const catP = new Set(opts.catalystPresent ?? []);
 
   const supabase = {
     from(table: string) {
@@ -84,13 +94,43 @@ function makeSupabase(opts: {
         return builder;
       }
       if (table === 'signal_observations') {
-        return {
+        const builder: Record<string, unknown> = {
+          select(_cols: string) { calls.crossSignalReads += 1; return builder; },
+          eq() { return builder; },
+          in() { return builder; },
+          then(onFul: unknown, onRej: unknown) {
+            const rows: Array<{ ticker: string; signal_id: string }> = [];
+            for (const t of newsP) rows.push({ ticker: t, signal_id: 'news_sentiment_7d' });
+            for (const t of catP) rows.push({ ticker: t, signal_id: 'active_catalyst_flag' });
+            return Promise.resolve({ data: rows, error: null }).then(onFul as any, onRej as any);
+          },
           upsert(payload: SignalRow[]) {
             calls.upsertPayloads.push(payload);
             return Promise.resolve({
               error: opts.upsertError ?? null,
               count: opts.upsertError ? null : payload.length,
             });
+          },
+        };
+        return builder;
+      }
+      if (table === 'signal_compute_log') {
+        const builder: Record<string, unknown> = {
+          select() { calls.preconditionReads += 1; return builder; },
+          eq() { return builder; },
+          in() { return builder; },
+          then(onFul: unknown, onRej: unknown) {
+            const data = runs.map((s) => ({ signal_id: s }));
+            return Promise.resolve({ data, error: null }).then(onFul as any, onRej as any);
+          },
+        };
+        return builder;
+      }
+      if (table === 'reversal_ungated_observations') {
+        return {
+          upsert(payload: Array<Record<string, unknown>>) {
+            calls.shadowUpserts.push(payload);
+            return Promise.resolve({ error: opts.shadowError ?? null });
           },
         };
       }
