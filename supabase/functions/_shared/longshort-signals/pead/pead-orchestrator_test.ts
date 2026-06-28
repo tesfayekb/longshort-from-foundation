@@ -68,6 +68,14 @@ function makeSupabase(opts: {
           },
         };
       }
+      if (table === 'pead_consensus_observations') {
+        // DW-172 — capture-only sink; tests don't assert on it here.
+        return {
+          upsert(_payload: unknown[]) {
+            return Promise.resolve({ error: null });
+          },
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     },
   };
