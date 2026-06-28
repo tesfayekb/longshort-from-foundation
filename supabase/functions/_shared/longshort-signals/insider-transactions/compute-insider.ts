@@ -27,20 +27,25 @@
  *      transactions remain after filtering (typed-absence → orchestrator
  *      `no_qualifying_transactions` skip → `is_present=0`).
  *
- * Spec-literal formula:
+ * Spec-literal formula (DEC-073 — buys-only, sign elided):
  *
- *   raw_signal = Σ_qualifying( shares × price × sign × role_weight × exp(-age/14) ) / market_cap
+ *   raw_signal = Σ_qualifying( shares × price × role_weight × exp(-age/14) ) / market_cap
  *
  *   age_days  = (as_of − transaction_date) in days  (NEVER negative)
- *   sign      = +1 for 'A' (acquired/purchase, bullish)
- *             = −1 for 'D' (disposed/sale,    bearish)
  *
- * Filter (load-bearing per §4.4.4):
+ * All surviving rows are open-market purchases ('P' / acquired='A'), so the
+ * legacy `× sign` factor is invariantly +1 and has been removed (DEC-073
+ * Option i). The signal is therefore non-negative; an only-sells name
+ * surfaces as typed-absence (`no_qualifying_transactions`), NOT a fabricated
+ * zero. The symmetric ±1 variant is preserved as a §6.5 shadow harness
+ * (DW-183 Phase-7 ablation) with its own compute entry-point; the EDGAR
+ * pipeline continues to persist S-rows so the shadow has data parity.
+ *
+ * Filter (load-bearing per §4.4.4, post-DEC-073):
  *   - Drop `record_type !== 'transaction'` (e.g. holding-only rows).
- *   - Keep `transaction_code === 'P'`           (open-market purchases — ALL).
- *   - Keep `transaction_code === 'S' && aff_10b5_one === false`
- *     (discretionary sales only; EXCLUDE 10b5-1 planned sales).
- *   - Drop everything else (M/C option exercises, A grants, G gifts, etc.).
+ *   - Keep `transaction_code === 'P'`  (open-market purchases — ALL).
+ *   - Drop everything else (ALL S — discretionary, 10b5-1, missing-flag
+ *     alike; M/C option exercises; A grants; G gifts; etc.).
  *
  * Wall-clock discipline (DEC-034 clause 4): all time arithmetic uses the
  * injected `as_of: Date` parameter. NO `Date.now()` / `new Date()` here.
@@ -138,18 +143,16 @@ export function filterQualifyingTransactions(rows: ReadonlyArray<Form4Row>): For
     ) {
       continue;
     }
-    // Code filter. P: all purchases included. S: discretionary only
-    // (aff_10b5_one === false — strict equality; missing flag means we
-    // cannot prove it was discretionary, so we EXCLUDE conservatively).
+    // DEC-073 buys-only: keep ONLY open-market purchases ('P'). Every
+    // other code (ALL 'S' — discretionary, 10b5-1, missing-flag alike;
+    // 'M'/'C' option exercises; 'A' grants; 'G' gifts; ...) drops at
+    // this single seam. The aff_10b5_one predicate is moot post-DEC-073
+    // (no S survives); the field continues to land in insider_form4_rows
+    // via the ingestion pipeline for the §6.5 symmetric shadow harness
+    // (DW-183 Phase-7 ablation), but is no longer read in compute.
     if (r.transaction_code === 'P') {
       out.push(r);
-      continue;
     }
-    if (r.transaction_code === 'S' && r.aff_10b5_one === false) {
-      out.push(r);
-      continue;
-    }
-    // Everything else (S w/ 10b5-1=true, M, C, A, G, ...) drops.
   }
   return out;
 }
@@ -202,13 +205,15 @@ export function computeInsiderSignal(
   for (const r of qualifying) {
     const weight = classifyRoleWeight(r);
     if (weight === null) continue;
-    const sign = r.transaction_acquired_disposed === 'A' ? 1 : -1;
     const age = ageDays(r.transaction_date!, as_of);
     if (!Number.isFinite(age)) continue;
     const decay = Math.exp(-age / DECAY_HALF_LIFE_DAYS);
     const dollars = (r.transaction_shares ?? 0) * (r.transaction_price_per_share ?? 0);
     if (!Number.isFinite(dollars) || dollars === 0) continue;
-    sum += dollars * sign * weight * decay;
+    // DEC-073 Option (i): the × sign factor is elided (was invariantly
+    // +1 because the filter now keeps only 'P'/'A' rows). The symmetric
+    // ±1 kernel lives in the shadow-variant entry-point, not here.
+    sum += dollars * weight * decay;
     counted++;
   }
 
