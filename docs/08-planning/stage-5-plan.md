@@ -1,5 +1,7 @@
 # Stage 5 Plan — Operations & Reliability
 
+> **CLOSED-HISTORICAL (ACT-365).** Platform Phase 5 closed — closure record at `docs/08-planning/phase-closures/phase-05-closure.md` (PLATFORM Phase 5; distinct from §10 Phase 5 per ledger Drift D3). Preserved for historical reference (Constitution Rule 8); NOT a live plan.
+
 > **Owner:** Project Lead | **Created:** 2026-04-12 | **Plan Version:** v10.1
 > **Modules:** PLAN-HEALTH-001, PLAN-JOBS-001
 > **Depends On:** Phase 4 complete (all modules), Phase 3.5 hardening complete

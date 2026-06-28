@@ -1,5 +1,7 @@
 # Stage 6 Plan — Hardening & System Validation
 
+> **CLOSED-HISTORICAL (ACT-365).** Platform Phase 6 closed — closure record at `docs/08-planning/phase-closures/phase-06-closure.md`. Preserved for historical reference (Constitution Rule 8); NOT a live plan.
+
 > **Owner:** Project Lead | **Created:** 2026-04-12 | **Plan Version:** v11.0 (extends v10.1)  
 > **Phase:** 6  
 > **Depends On:** Phase 5 CLOSED  
