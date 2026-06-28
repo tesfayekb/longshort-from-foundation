@@ -48,4 +48,14 @@ export interface SignalOrchestratorResult {
    * undefined (no field-shape pressure on other signals).
    */
   not_yet_knowable_excluded?: number;
+  /**
+   * DEC-071 sub-step 3b telemetry fix (MIG-136): per-gate-decision counts
+   * for typed-absence gated emits (e.g. `gated_by_news`, `gated_by_catalyst`).
+   * Categorically distinct from `skipped` — gated rows are deliberate
+   * suppressions (`is_present=false` + `skip_reason`), NOT failed computes.
+   * Optional: only orchestrators that produce gated rows (currently
+   * reversal) populate this; others leave it undefined and the persister
+   * writes NULL to `signal_compute_log.gate_counts`.
+   */
+  gate_counts?: Record<string, number> | null;
 }

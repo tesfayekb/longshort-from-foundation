@@ -383,7 +383,29 @@ export function createReversalOrchestrator(ctx: SignalOrchestratorContext) {
         skipped: skips,
         started_at,
         completed_at: ts,
+        // DEC-071 3b telemetry fix (MIG-136): per-gate-decision counts
+        // computed from the typed-absence rows actually emitted to
+        // `rows[]` (NOT from `skipped[]` — gated rows are deliberate
+        // suppressions, not skips). Source-of-truth is the rows we are
+        // about to persist; aligns with the §22.5.1 live-DB invariant.
+        gate_counts: countGatedRows(rows),
       };
     },
   };
+}
+
+/**
+ * DEC-071 3b telemetry fix (MIG-136): tally typed-absence gated emits by
+ * skip_reason. Pure helper, no I/O. Returns a stable-shape object so the
+ * persisted `gate_counts` is queryable by key even when a category is 0.
+ */
+function countGatedRows(
+  rows: ReadonlyArray<{ skip_reason?: string | null }>,
+): Record<'gated_by_news' | 'gated_by_catalyst', number> {
+  const counts = { gated_by_news: 0, gated_by_catalyst: 0 };
+  for (const r of rows) {
+    if (r.skip_reason === 'gated_by_news') counts.gated_by_news += 1;
+    else if (r.skip_reason === 'gated_by_catalyst') counts.gated_by_catalyst += 1;
+  }
+  return counts;
 }

@@ -54,6 +54,16 @@ export function aggregateSkipCounts(
     gated_by_news: 0,
     gated_by_catalyst: 0,
     gate_inputs_unavailable: 0,
+    // NOTE (DEC-071 3b telemetry fix, MIG-136): the three `gated_*` keys
+    // above are intentionally seeded-at-0 and NEVER incremented from
+    // SignalSkip[] — gated typed-absence emits go to the orchestrator's
+    // `rows[]` (with is_present=false + skip_reason), not `skipped[]`,
+    // so `aggregateSkipCounts` structurally cannot see them. The real
+    // per-gate counts live in the additive sibling field
+    // `signal_compute_log.gate_counts`, populated by orchestrators that
+    // gate (currently reversal). The keys remain in this seed only to
+    // preserve the historical `skip_counts` shape (additive contract);
+    // future schema cleanup may remove them in a deliberate migration.
     // ACT-215 (DEC-058 §(b) amendment): `no_acceptance_datetime` removed
     // from the enum and from this seed. Acceptance is now a discovery-time
     // NOT NULL schema invariant on `insider_accession_discovery_queue`
@@ -84,6 +94,12 @@ export async function persistSignalComputeLog(
       universe_size: result.universe_size,
       persisted_count: result.persisted_count,
       skip_counts,
+      // DEC-071 3b telemetry fix (MIG-136): per-gate-decision counts for
+      // typed-absence gated emits. Generic carrier — the persister does
+      // NOT compute this; each orchestrator decides whether it has gated
+      // rows and populates result.gate_counts. NULL for orchestrators
+      // that don't gate (every non-reversal signal today).
+      gate_counts: result.gate_counts ?? null,
       // FP-022 / C-F4: persist raw per-ticker SignalSkip[] alongside the
       // aggregate skip_counts. Both coexist — aggregate for stable-shape
       // monitoring queries, detail for per-ticker diagnosability of
