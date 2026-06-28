@@ -115,6 +115,7 @@ import {
   type NewsArticleEntry,
 } from './compute-news-sentiment.ts';
 import { SignalComputationError } from '../shared/signal-types.ts';
+import { captureNewsAttention } from './news-attention-capture.ts';
 
 /** Stable signal id — matches `signal_observations.signal_id` and DEC-056. */
 export const NEWS_SIGNAL_ID = 'news_sentiment_7d';
@@ -188,6 +189,12 @@ export function registerNewsSentimentQueueConsumer(): void {
     mode: NEWS_QUEUE_CONFIG.mode,
     pagesPerSlice: NEWS_QUEUE_CONFIG.pagesPerSlice,
     maxPages: NEWS_QUEUE_CONFIG.maxPages,
+    // DW-186a — opt the news consumer into the generic finalize-time
+    // meta-capture seam. The kernel emits `meta.articleCount` on every
+    // `kind: 'value'` result; the adapter persists only the
+    // observationally-real field (article_count). Capture-only — no
+    // effect on raw_signal, z-score, ranker, or PnL.
+    captureMeta: captureNewsAttention,
     fetchPage: async ({ cursorToken, asOf }): Promise<FeedPageResult> => {
       const outcome: NewsFeedPageOutcome = await getFetcher().fetchOnePage({
         cursorToken,
