@@ -383,6 +383,17 @@ export function createPeadOrchestrator(ctx: PeadOrchestratorContext) {
               ticker,
               raw_signal: result.value,
               gics_sector,
+              snapshot: {
+                report_period_date: eventEarn.period,
+                eps_actual: result.inputs_snapshot.epsActual,
+                consensus_eps_avg: result.inputs_snapshot.epsAvg,
+                eps_high: result.inputs_snapshot.epsHigh,
+                eps_low: result.inputs_snapshot.epsLow,
+                number_analysts: result.inputs_snapshot.numberAnalysts,
+                sigma_proxy: result.sigma_proxy,
+                sue: result.sue,
+                trading_days_since: result.trading_days_since,
+              },
             };
           } catch (err) {
             const message =
