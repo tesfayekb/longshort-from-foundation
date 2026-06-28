@@ -46,6 +46,52 @@ import {
   MARKET_24M_CUMULATIVE_RETURN_SIGNAL_ID,
   MARKET_REALIZED_VOL_6M_SIGNAL_ID,
 } from '../longshort-signals/market-regime/compute-regime.ts';
+import type { SignalSkipReason } from '../longshort-signals/shared/signal-types.ts';
+
+/**
+ * DEC-071 sub-step 3c — Reversal cross-signal gate carve-out.
+ *
+ * The reversal orchestrator (sub-step 3b) emits gated rows with
+ * `is_present=false` and `skip_reason ∈ {'gated_by_news','gated_by_catalyst'}`
+ * when a name is overshadowed by a fresh news/catalyst event on that day.
+ *
+ * THE GATED-NULL ≠ BUG-NULL KEYSTONE:
+ *
+ *   The §4.3.5 critical-coverage contract historically excluded any name
+ *   whose reversal (critical #7) was absent. Sub-step 3c carves out
+ *   GATED-ONLY: a reversal that is `is_present=false` with one of the
+ *   two gated skip_reasons above keeps the name INCLUDED (reversal
+ *   contributes nothing to the composite; per-name DEC-074 semantics).
+ *
+ *   A genuinely-missing reversal (no row / is_present=false with a
+ *   non-gated skip_reason / no skip_reason at all) STILL excludes the
+ *   name with `MISSING_CRITICAL_7`. The carve-out is GATED-ONLY — a
+ *   real data gap on a critical signal remains a hard exclusion.
+ *
+ *   `gate_inputs_unavailable` is NOT a gated row (the gate's hard
+ *   precondition failed → reversal computed normally), so it is NOT in
+ *   the gated set; insufficient_history / fetch_error / etc. are
+ *   genuine absences and stay excluded.
+ *
+ * Momentum (critical #6) is UNCHANGED — only reversal is gated by
+ * DEC-071. No carve-out for momentum.
+ */
+const REVERSAL_SIGNAL_ID = 'short_term_reversal_1w' as const;
+const GATED_REVERSAL_SKIP_REASONS = new Set<string>([
+  'gated_by_news',
+  'gated_by_catalyst',
+]);
+
+function isGatedReversal(obs: SignalObservationInput | undefined): boolean {
+  return (
+    obs !== undefined &&
+    obs.signal_id === REVERSAL_SIGNAL_ID &&
+    obs.is_present === false &&
+    obs.skip_reason !== null &&
+    obs.skip_reason !== undefined &&
+    GATED_REVERSAL_SKIP_REASONS.has(obs.skip_reason)
+  );
+}
 
 /**
  * FP-052.2 / DEC-066 — market-level regime broadcast (3.2-c).
@@ -97,6 +143,13 @@ export interface SignalObservationInput {
   is_present: boolean;
   /** GICS sector captured at compute time per the signal-row contract; may be null. */
   gics_sector: string | null;
+  /**
+   * DEC-071 sub-step 3c — gated-vs-missing discriminator. Carried verbatim
+   * from `signal_observations.skip_reason`. The carve-out reads ONLY this
+   * field on the reversal row to decide GATED (carve-out) vs MISSING
+   * (still excluded). `null` / `undefined` = legacy (non-gated) row.
+   */
+  skip_reason?: SignalSkipReason | string | null;
 }
 
 /** Universe-membership entry — orchestrator floors to the latest snapshot ≤ as_of. */
@@ -118,6 +171,18 @@ export interface FeatureVectorRow {
   gics_sector: string | null;
   coverage_count: number;
   excluded_reason: ExcludedReason | null;
+  /**
+   * DEC-071 sub-step 3c — sanctioned-null marker. Lists the critical
+   * signal_ids whose `features[<id>] = null` is GATED (per-name carve-out),
+   * NOT a bug. The ranker SKIPS criticals listed here (numerator and
+   * presentCount unchanged for that slot — DEC-074 per-name) and STILL
+   * THROWS `IncludedRowInvariantError` on a null critical NOT listed here
+   * (the §4.3.5 bug-detection invariant survives intact).
+   *
+   * `null` = no gated criticals on this row (legacy / byte-identical).
+   * Today the only signal that can appear here is `short_term_reversal_1w`.
+   */
+  gated_signals: string[] | null;
 }
 
 /** Result of the §4.3.5 gate evaluation for a single (operator, ticker). */
@@ -125,6 +190,14 @@ export interface GateOutcome {
   included: boolean;
   excludedReason: ExcludedReason | null;
   coverageCount: number;
+  /**
+   * DEC-071 sub-step 3c — set true only when reversal was carve-out-gated
+   * (`is_present=false` with `skip_reason ∈ gated_by_news|gated_by_catalyst`).
+   * Distinct from `critical7Present`: a normal-present reversal has
+   * `reversalGated=false` AND contributes to the composite; a gated
+   * reversal has `reversalGated=true` AND contributes nothing.
+   */
+  reversalGated: boolean;
 }
 
 /** "Absent" per §4.3.5 = no observation row OR `is_present === false`. */
@@ -175,25 +248,73 @@ export function applyGates(
   const sig7 = SIGNAL_IDS_CRITICAL[1]; // short_term_reversal_1w
   const critical6Present = isPresent(perTickerObs.get(sig6));
   const critical7Present = isPresent(perTickerObs.get(sig7));
+  // DEC-071 sub-step 3c — carve-out: reversal absent BUT gated by news
+  // or catalyst is treated as critical-coverage-SATISFIED (the name is
+  // rankable) while reversal contributes NOTHING to the composite. A
+  // normal-present reversal is NOT "gated" — only is_present=false with
+  // an explicitly gated skip_reason qualifies. Momentum (#6) is NEVER
+  // carved out — only reversal is gated by DEC-071.
+  const reversalGated = !critical7Present && isGatedReversal(perTickerObs.get(sig7));
 
   let nonCriticalPresent = 0;
   for (const id of SIGNAL_IDS_NON_CRITICAL) {
     if (isPresent(perTickerObs.get(id))) nonCriticalPresent++;
   }
 
+  // coverageCount mirrors what actually contributes to the composite
+  // (per-name DEC-074): a gated reversal is NOT counted toward coverage
+  // because it contributes nothing to the numerator/presentCount. The
+  // critical-coverage GATE is satisfied (the name is included), but the
+  // coverage AUDIT field reflects the contributing signals only.
   const criticalPresent = (critical6Present ? 1 : 0) + (critical7Present ? 1 : 0);
   const coverageCount = criticalPresent + nonCriticalPresent;
 
   if (!critical6Present) {
-    return { included: false, excludedReason: EXCLUDED_REASON.MISSING_CRITICAL_6, coverageCount };
+    return {
+      included: false,
+      excludedReason: EXCLUDED_REASON.MISSING_CRITICAL_6,
+      coverageCount,
+      reversalGated: false,
+    };
   }
   if (!critical7Present) {
-    return { included: false, excludedReason: EXCLUDED_REASON.MISSING_CRITICAL_7, coverageCount };
+    if (reversalGated) {
+      // GATED carve-out — name INCLUDED; reversal contributes nothing.
+      // Coverage gate still applies to the non-criticals below.
+      if (nonCriticalPresent < MIN_NON_CRITICAL_PRESENT) {
+        return {
+          included: false,
+          excludedReason: EXCLUDED_REASON.BELOW_COVERAGE,
+          coverageCount,
+          reversalGated: true,
+        };
+      }
+      return {
+        included: true,
+        excludedReason: null,
+        coverageCount,
+        reversalGated: true,
+      };
+    }
+    // GENUINELY MISSING reversal (non-gated skip / no row) → STILL exclude.
+    // The carve-out is GATED-ONLY; a real data gap on a critical signal
+    // remains a hard exclusion.
+    return {
+      included: false,
+      excludedReason: EXCLUDED_REASON.MISSING_CRITICAL_7,
+      coverageCount,
+      reversalGated: false,
+    };
   }
   if (nonCriticalPresent < MIN_NON_CRITICAL_PRESENT) {
-    return { included: false, excludedReason: EXCLUDED_REASON.BELOW_COVERAGE, coverageCount };
+    return {
+      included: false,
+      excludedReason: EXCLUDED_REASON.BELOW_COVERAGE,
+      coverageCount,
+      reversalGated: false,
+    };
   }
-  return { included: true, excludedReason: null, coverageCount };
+  return { included: true, excludedReason: null, coverageCount, reversalGated: false };
 }
 
 /**
@@ -232,6 +353,7 @@ function deriveSector(
 function buildFeaturesJsonb(
   perTickerObs: ReadonlyMap<SignalId, SignalObservationInput>,
   regime: RegimeFeatures,
+  reversalGated: boolean,
 ): Record<string, number | null> {
   // Insertion order is the contract — `JSON.stringify` will emit keys
   // in this exact sequence, making the output byte-deterministic.
@@ -239,6 +361,14 @@ function buildFeaturesJsonb(
 
   for (const id of SIGNAL_IDS_CRITICAL) {
     const obs = perTickerObs.get(id);
+    // DEC-071 sub-step 3c — gated reversal: features[reversal] = null
+    // (typed-absence, §9 — never a fabricated zero). The `gated_signals`
+    // marker on the FeatureVectorRow tells the ranker this null is
+    // sanctioned, not a bug.
+    if (id === REVERSAL_SIGNAL_ID && reversalGated) {
+      features[id] = null;
+      continue;
+    }
     // Gate (1) guarantees both criticals are present when we reach this
     // builder; the non-null assertion is enforced by the upstream gate.
     if (!obs || !obs.is_present || obs.value === null) {
@@ -319,7 +449,7 @@ export function assembleFeatureVectors(
     const gicsSector = deriveSector(perTickerObs);
 
     if (gate.included) {
-      const features = buildFeaturesJsonb(perTickerObs, regime);
+      const features = buildFeaturesJsonb(perTickerObs, regime, gate.reversalGated);
       // Defense-in-depth: lock the per-name + regime-broadcast key count.
       // 3.2-c additive: per-name catalog (EXPECTED_FEATURE_KEY_COUNT, 16)
       // + REGIME_FEATURE_COUNT (2). 3.2-d will fold the +2 into the catalog
@@ -342,6 +472,7 @@ export function assembleFeatureVectors(
         gics_sector: gicsSector,
         coverage_count: gate.coverageCount,
         excluded_reason: null,
+        gated_signals: gate.reversalGated ? [REVERSAL_SIGNAL_ID] : null,
       });
     } else {
       rows.push({
@@ -352,6 +483,7 @@ export function assembleFeatureVectors(
         gics_sector: gicsSector,
         coverage_count: gate.coverageCount,
         excluded_reason: gate.excludedReason,
+        gated_signals: null,
       });
     }
   }
