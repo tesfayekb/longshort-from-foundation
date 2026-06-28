@@ -24,8 +24,15 @@
  * Determinism contract (load-bearing):
  *
  *   (a) Summation iterates `SIGNAL_IDS_ALL` in catalog order. IEEE-754
- *       float addition is non-associative — the catalog order is the
- *       determinism guarantee for byte-identical re-runs / replay.
+ *   (a) Summation iterates `SIGNAL_IDS_FALLBACK_SUM` in catalog order
+ *       (DEC-074: `active_catalyst_flag` excluded — unsigned-positive
+ *       salience signal that mis-deploys as a direction-blind long-
+ *       tilt in an additive ranker; the fallback mean is computed only
+ *       over directionally-signed signals). IEEE-754 float addition is
+ *       non-associative — the catalog order is the determinism
+ *       guarantee for byte-identical re-runs / replay.
+ *       Catalyst remains in `SIGNAL_IDS_ALL` (feature surface intact
+ *       for the trained-combiner path; FP-058).
  *   (b) Rank assignment uses the (composite, ticker) sort key:
  *         long_rank  → composite DESC, ticker ASC
  *         short_rank → composite ASC,  ticker ASC
@@ -43,7 +50,7 @@ import type { FeatureVectorRow } from './feature-assembler.ts';
 import {
   SIGNAL_IDS_CRITICAL,
   SIGNAL_IDS_NON_CRITICAL,
-  SIGNAL_IDS_ALL,
+  SIGNAL_IDS_FALLBACK_SUM,
   nonCriticalIsPresentKey,
   nonCriticalValueKey,
   type SignalId,
@@ -103,8 +110,10 @@ export function computeComposite(row: FeatureVectorRow): {
   let presentCount = 0;
 
   // Iterate catalog order — float addition is non-associative; the
-  // SIGNAL_IDS_ALL sequence is the determinism guarantee.
-  for (const id of SIGNAL_IDS_ALL as readonly SignalId[]) {
+  // SIGNAL_IDS_FALLBACK_SUM sequence (DEC-074, catalyst-excluded) is
+  // the determinism guarantee. SIGNAL_IDS_ALL stays the feature-
+  // surface contract for assembler / shadow / trained-combiner paths.
+  for (const id of SIGNAL_IDS_FALLBACK_SUM as readonly SignalId[]) {
     if ((SIGNAL_IDS_CRITICAL as readonly string[]).includes(id)) {
       const v = row.features[id];
       if (v === null || v === undefined || typeof v !== 'number' || !Number.isFinite(v)) {
