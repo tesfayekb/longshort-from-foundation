@@ -257,13 +257,14 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         value: number | null;
         is_present: boolean;
         gics_sector: string | null;
+        skip_reason: string | null;
       };
       let sigRows: SigRow[];
       try {
         sigRows = await fetchAllRows<SigRow>((from, to) =>
           ctx.supabase
             .from('signal_observations')
-            .select('ticker, signal_id, value, is_present, gics_sector')
+            .select('ticker, signal_id, value, is_present, gics_sector, skip_reason')
             .eq('operator_id', ctx.operator_id)
             .eq('as_of_date', as_of_date)
             .in('signal_id', [...SIGNAL_IDS_ALL])
@@ -282,6 +283,11 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         value: r.value,
         is_present: r.is_present,
         gics_sector: r.gics_sector,
+        // DEC-071 sub-step 3c — gated-vs-missing discriminator. Carried
+        // verbatim so the assembler's reversal carve-out can distinguish
+        // GATED (gated_by_news|gated_by_catalyst → name included) from
+        // GENUINELY MISSING (excluded with MISSING_CRITICAL_7).
+        skip_reason: r.skip_reason,
       }));
 
       // ── Step 3: pure assembly (typed-absence; NO -999 per ADR-008a) ──
@@ -317,6 +323,11 @@ export function createFeatureAssemblyOrchestrator(ctx: FeatureAssemblyContext) {
         // Daily writers pass slot=0 (default); the intraday tick passes
         // a monotonic slot N >= 1. Schema PK includes this column.
         intraday_slot,
+        // DEC-071 sub-step 3c / MIG-137 — sanctioned-null marker. NULL for
+        // legacy rows (byte-identical when no reversal is gated for the
+        // name); a JSON array of critical signal_ids whose null is
+        // sanctioned otherwise (today only `short_term_reversal_1w`).
+        gated_signals: r.gated_signals,
       }));
 
       let persisted_count = 0;
