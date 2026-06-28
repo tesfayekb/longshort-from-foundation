@@ -42,6 +42,7 @@ function makeIncludedRow(ticker: string, composite: number): FeatureVectorRow {
     gics_sector: 'TECH',
     coverage_count: 9,
     excluded_reason: null,
+    gated_signals: null,
   };
 }
 
