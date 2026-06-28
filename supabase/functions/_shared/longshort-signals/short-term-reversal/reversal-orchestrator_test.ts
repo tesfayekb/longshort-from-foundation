@@ -22,6 +22,9 @@ type Behavior =
 type MockCalls = {
   upsertPayloads: SignalRow[][];
   fromTables: string[];
+  shadowUpserts: Array<Array<Record<string, unknown>>>;
+  crossSignalReads: number;
+  preconditionReads: number;
 };
 
 const OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
