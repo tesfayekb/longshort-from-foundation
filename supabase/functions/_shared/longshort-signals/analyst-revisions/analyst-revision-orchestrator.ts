@@ -81,6 +81,7 @@ import {
   type AnalystRevisionMeta,
 } from './compute-analyst-revision.ts';
 import type { RawPriceTargetRow } from './analyst-identity.ts';
+import { captureAnalystRevisions } from './analyst-revision-capture.ts';
 
 /** Locked signal_id (matches signal_registry row). Do NOT rename. */
 export const SIGNAL_ID = 'analyst_revision_drift';
@@ -356,6 +357,40 @@ export function createAnalystRevisionOrchestrator(
           persisted_count: 0,
           skipped: skips,
           failure_reason: `signal_observations persistence failed: ${persistErr.message}`,
+          started_at,
+          completed_at: finalize(),
+        };
+      }
+
+      // ── Stage 4d: DW-178 per-revision capture (capture-only) ────────
+      // Orchestrator-local (analyst is no-queue → no finalizer hook
+      // surface). Capture is post-persist of signal_observations;
+      // failure surfaces as `failed` so capture loss is never silent.
+      try {
+        await captureAnalystRevisions({
+          supabase: ctx.supabase,
+          operator_id: ctx.operator_id,
+          signal_id: SIGNAL_ID,
+          as_of_date,
+          computed_at,
+          rows: perSymbol
+            .filter(
+              (r): r is Extract<PerSymbolResult, { kind: 'value' }> =>
+                r.kind === 'value',
+            )
+            .map((r) => ({ ticker: r.ticker, meta: r.meta })),
+        });
+      } catch (captureErr) {
+        const message =
+          captureErr instanceof Error ? captureErr.message : String(captureErr);
+        return {
+          outcome: 'failed',
+          signal_id: SIGNAL_ID,
+          as_of_date,
+          universe_size: universe.length,
+          persisted_count: inserted,
+          skipped: skips,
+          failure_reason: `analyst_revision_observations capture failed: ${message}`,
           started_at,
           completed_at: finalize(),
         };

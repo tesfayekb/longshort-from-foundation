@@ -67,7 +67,12 @@
  * Owner: longshort (FP-047 Phase 2 — Signal #1)
  * Classification: shared infrastructure — pure compute, no I/O, no clock.
  */
-import { findSameAnalystPrior, parseFmpDate, type RawPriceTargetRow } from './analyst-identity.ts';
+import {
+  findSameAnalystPrior,
+  normalizeAnalystKey,
+  parseFmpDate,
+  type RawPriceTargetRow,
+} from './analyst-identity.ts';
 import type { SignalSkipReason } from '../shared/signal-types.ts';
 
 /** §4.4.5: trailing window in CALENDAR days (inclusive on both ends). */
@@ -117,6 +122,65 @@ export interface AnalystRevisionMeta {
   unrecoveredCount: number;
   /** In-window focal events dropped for non-finite/non-positive targets. */
   malformedCount: number;
+  /**
+   * DW-178 — per-event detail for each scored revision in `scoredCount`.
+   * One entry per scored revision (i.e. one entry per `scoredSum +=
+   * contribution` step in the compute loop). Purely additive
+   * observability — `scoredSum` is computed identically with or without
+   * this field. NOT populated for unrecovered or malformed focals
+   * (those remain typed-absence in the count fields above; writing a
+   * row for them would fabricate values — the DW-186a discipline).
+   *
+   * `direction === 0` IS a real observation (a reiteration: a same-
+   * analyst prior was recovered but newTarget === priorTarget). Those
+   * entries are written.
+   *
+   * Consumers (DW-178 capture adapter) write one
+   * `analyst_revision_observations` row per detail entry. Existing
+   * consumers (orchestrator skip taxonomy, signal_observations) are
+   * byte-unchanged — this field is additive TypeScript.
+   */
+  scoredRevisions: ReadonlyArray<ScoredRevisionDetail>;
+}
+
+/**
+ * DW-178 — per-event detail for ONE scored analyst revision.
+ *
+ * Pattern template for per-event captures (DW-172 PEAD T-0 consensus
+ * inherits this shape). Every field is fully resolved at the moment the
+ * compute loop pushes — no nullable observability slots, no fabricated
+ * defaults. The capture adapter (analyst-revision-capture.ts) maps this
+ * 1:1 to a row in `analyst_revision_observations`.
+ */
+export interface ScoredRevisionDetail {
+  /** Raw analyst name from the focal feed row (post-trim, pre-normalize). */
+  analystName: string;
+  /** Raw analyst company from the focal feed row. */
+  analystCompany: string;
+  /** `normalizeAnalystKey(...).name` — the identity key the prior search used. */
+  analystNameKey: string;
+  /** `normalizeAnalystKey(...).company` — the identity key the prior search used. */
+  analystCompanyKey: string;
+  /** `parseFmpDate(focal.publishedDate)` — focal event UTC ms. */
+  focalPublishedAtMs: number;
+  /** `parseFmpDate(prior.publishedDate)` — prior event UTC ms (always present for a scored revision). */
+  priorPublishedAtMs: number;
+  /** New target on the pair basis below. */
+  newTarget: number;
+  /** Prior target on the pair basis below. */
+  priorTarget: number;
+  /** `newTarget − priorTarget` — signed, pre-clip. */
+  targetDelta: number;
+  /** `(newTarget − priorTarget) / priorTarget` — signed pre-clip ratio. */
+  magnitudePct: number;
+  /** `signOf(targetDelta)` ∈ {−1, 0, +1}. 0 is REAL (reiterations). */
+  direction: number;
+  /** Post-clip decay-weighted addend: dir × min(|mag|, 0.50) × w × exp(-age/5). */
+  contribution: number;
+  /** `(asOf − focalMs) / MS_PER_DAY`. */
+  ageDays: number;
+  /** Which numeric pair fed the compute. `'adjusted'` iff both sides had finite adjPriceTarget > 0. */
+  pairBasis: 'adjusted' | 'raw';
 }
 
 export type AnalystRevisionComputeResult =
@@ -130,14 +194,14 @@ export type AnalystRevisionComputeResult =
 function resolvePair(
   focal: RawPriceTargetRow,
   prior: RawPriceTargetRow,
-): { newTarget: number; priorTarget: number } | null {
+): { newTarget: number; priorTarget: number; basis: 'adjusted' | 'raw' } | null {
   const fAdj = focal.adjPriceTarget;
   const pAdj = prior.adjPriceTarget;
   if (
     typeof fAdj === 'number' && Number.isFinite(fAdj) && fAdj > 0 &&
     typeof pAdj === 'number' && Number.isFinite(pAdj) && pAdj > 0
   ) {
-    return { newTarget: fAdj, priorTarget: pAdj };
+    return { newTarget: fAdj, priorTarget: pAdj, basis: 'adjusted' };
   }
   const fRaw = focal.priceTarget;
   const pRaw = prior.priceTarget;
@@ -145,7 +209,7 @@ function resolvePair(
     typeof fRaw === 'number' && Number.isFinite(fRaw) && fRaw > 0 &&
     typeof pRaw === 'number' && Number.isFinite(pRaw) && pRaw > 0
   ) {
-    return { newTarget: fRaw, priorTarget: pRaw };
+    return { newTarget: fRaw, priorTarget: pRaw, basis: 'raw' };
   }
   return null;
 }
@@ -175,6 +239,7 @@ export function computeAnalystRevision(
   let malformedCount = 0;
   let inWindowCount = 0;
   let allScoredZeroMagnitude = true;
+  const scoredRevisions: ScoredRevisionDetail[] = [];
 
   for (const focal of i.focalRows) {
     const focalMs = parseFmpDate(focal.publishedDate);
@@ -209,6 +274,25 @@ export function computeAnalystRevision(
     scoredSum += contribution;
     scoredCount++;
     if (clipped !== 0) allScoredZeroMagnitude = false;
+    // DW-178 — additive observability. Does NOT alter scoredSum.
+    const normKey = normalizeAnalystKey(focal.analystName, focal.analystCompany);
+    const priorMs = parseFmpDate(prior.row.publishedDate);
+    scoredRevisions.push({
+      analystName: focal.analystName,
+      analystCompany: focal.analystCompany,
+      analystNameKey: normKey.name,
+      analystCompanyKey: normKey.company,
+      focalPublishedAtMs: focalMs,
+      priorPublishedAtMs: priorMs,
+      newTarget: pair.newTarget,
+      priorTarget: pair.priorTarget,
+      targetDelta: delta,
+      magnitudePct: magnitude,
+      direction: dir,
+      contribution,
+      ageDays,
+      pairBasis: pair.basis,
+    });
   }
 
   if (inWindowCount === 0) {
@@ -251,6 +335,6 @@ export function computeAnalystRevision(
   return {
     kind: 'value',
     raw: scoredSum,
-    meta: { scoredCount, unrecoveredCount, malformedCount },
+    meta: { scoredCount, unrecoveredCount, malformedCount, scoredRevisions },
   };
 }

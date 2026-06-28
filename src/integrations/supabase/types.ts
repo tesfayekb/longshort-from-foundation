@@ -94,6 +94,72 @@ export type Database = {
           },
         ]
       }
+      analyst_revision_observations: {
+        Row: {
+          age_days: number
+          analyst_company: string
+          analyst_company_key: string
+          analyst_name: string
+          analyst_name_key: string
+          as_of_date: string
+          computed_at: string
+          contribution: number
+          direction: number
+          focal_published_at: string
+          magnitude_pct: number
+          new_target: number
+          operator_id: string
+          pair_basis: string
+          prior_published_at: string
+          prior_target: number
+          signal_id: string
+          target_delta: number
+          ticker: string
+        }
+        Insert: {
+          age_days: number
+          analyst_company: string
+          analyst_company_key: string
+          analyst_name: string
+          analyst_name_key: string
+          as_of_date: string
+          computed_at: string
+          contribution: number
+          direction: number
+          focal_published_at: string
+          magnitude_pct: number
+          new_target: number
+          operator_id: string
+          pair_basis: string
+          prior_published_at: string
+          prior_target: number
+          signal_id: string
+          target_delta: number
+          ticker: string
+        }
+        Update: {
+          age_days?: number
+          analyst_company?: string
+          analyst_company_key?: string
+          analyst_name?: string
+          analyst_name_key?: string
+          as_of_date?: string
+          computed_at?: string
+          contribution?: number
+          direction?: number
+          focal_published_at?: string
+          magnitude_pct?: number
+          new_target?: number
+          operator_id?: string
+          pair_basis?: string
+          prior_published_at?: string
+          prior_target?: number
+          signal_id?: string
+          target_delta?: number
+          ticker?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
