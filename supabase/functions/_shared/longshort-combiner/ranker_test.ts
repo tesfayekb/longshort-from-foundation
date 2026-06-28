@@ -63,6 +63,7 @@ function makeIncludedRow(
     gics_sector,
     coverage_count: coverageCount,
     excluded_reason: null,
+    gated_signals: null,
   };
 }
 
