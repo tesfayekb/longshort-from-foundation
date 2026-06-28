@@ -116,6 +116,8 @@ Two further measurement instruments unlock the remainder:
 
 ## 4. Measurement-Prerequisite Table
 
+> **SUPERSEDED-IN-PART (ACT-365).** The 4-tier ROI mental-model framing in §2 + the chokepoint map in §3 remain LIVE and authoritative. The per-DW status table in this §4 is **SUPERSEDED-IN-PART** by `docs/08-planning/phase-status-ledger.md` Parts 4D (adoption) + 4E (resolved-with-evidence) — consult the ledger for current live phase-home + closure status. The table below is preserved for historical framing (Constitution Rule 8).
+
 Per documented lever → unmet measurement prerequisite → status today.
 
 | Lever | Prerequisite | Status |
