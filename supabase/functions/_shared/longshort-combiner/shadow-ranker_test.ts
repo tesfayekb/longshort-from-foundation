@@ -101,6 +101,7 @@ function fullyGatedPair(
     gics_sector: 'TECH',
     coverage_count: 2 + nonCriticalsPresent.length,
     excluded_reason: null,
+    gated_signals: null,
   };
   return { live, shadowObs };
 }
