@@ -112,10 +112,29 @@ export function computeComposite(row: FeatureVectorRow): {
   // SIGNAL_IDS_FALLBACK_SUM sequence (DEC-074, catalyst-excluded) is
   // the determinism guarantee. SIGNAL_IDS_ALL stays the feature-
   // surface contract for assembler / shadow / trained-combiner paths.
+  // DEC-071 sub-step 3c — sanctioned-null set. A critical signal whose
+  // value is `null` AND whose id is listed in `row.gated_signals` is a
+  // GATED carve-out (per-name DEC-074: numerator + presentCount
+  // unchanged for that slot — skip without penalty). A critical signal
+  // whose value is `null` and id is NOT in `gated_signals` is a BUG
+  // (§4.3.5 gates should have excluded the row) — STILL THROWS. This
+  // separation is the keystone safety property of 3c: the bug-detection
+  // invariant survives intact.
+  const gatedSignals = row.gated_signals;
+  const gatedSet =
+    gatedSignals && gatedSignals.length > 0 ? new Set<string>(gatedSignals) : null;
   for (const id of SIGNAL_IDS_FALLBACK_SUM as readonly SignalId[]) {
     if ((SIGNAL_IDS_CRITICAL as readonly string[]).includes(id)) {
       const v = row.features[id];
       if (v === null || v === undefined || typeof v !== 'number' || !Number.isFinite(v)) {
+        if (v === null && gatedSet !== null && gatedSet.has(id)) {
+          // Sanctioned gated-null — DEC-071 sub-step 3c carve-out.
+          // Per-name DEC-074 semantics: numerator and presentCount are
+          // BOTH unchanged for this slot (drops from the sum AND from
+          // the denominator for this name only). NO symmetric-when-any-
+          // gated; NO fabricated zero. Continue to the next signal.
+          continue;
+        }
         throw new IncludedRowInvariantError(
           `ranker: ticker=${row.ticker} critical signal '${id}' is not a finite number ` +
             `(value=${JSON.stringify(v)}); §4.3.5 gates should have excluded this row`,
