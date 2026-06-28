@@ -99,6 +99,8 @@ ROI-improvement items (trainer quality / signal ablations / shadow variants) are
 
 The ROI-completeness audit found 40 ROI-class DWs absent from the ledger and lacking a named FP carrier. **Binding rule:** when each FP below is authored (per Drift D4 corrective + Part 3 RESERVED-BUT-UNAUTHORED gaps), it MUST adopt every DW listed under it as a named sub-step OR explicitly defer-with-rationale in the FP charter. Defer-without-rationale = governance violation under the Phase-Gate Protocol.
 
+> **Framing cross-reference.** The 4-tier ROI mental-model (Tier 1 decision-ready / Tier 2 measurement-accruing / Tier 3 paper-book-gated / Tier 4 vendor-gated) lives in `docs/04-modules/longshort/roi-roadmap.md` §2 and remains the canonical ROI framing. Its per-DW status table (§4) is **SUPERSEDED-IN-PART** by Parts 4D/4E of this ledger as of ACT-364 — consult here for live phase-home + closure evidence.
+
 | Absorbing FP (to be authored) | Adopted DWs | Class |
 |---|---|---|
 | **Phase-4 money-path FP** (the wash-sale / lot / PnL / settlement / CA cluster) | DW-157, DW-158, DW-159, DW-160, DW-161 (already named in Drift D4) | Hard pre-live (5) |
@@ -146,49 +148,93 @@ This ledger amendment closes the ROI-completeness audit. Changes (all additive p
 
 ## PART 5 — Remaining-Work Sequence (HEAD → Paper → Live)
 
+### Core insight — get-to-paper is DECOUPLED from the trained combiner
+
+Paper runs on the live §6.4 count-normalized fallback ranker (active per FP-052 / ACT-281; daily strategy un-paused per ACT-337 / DEC-068 (r)). The trained combiner (Phase 3.3) is label/calendar-gated — the evaluator returns `not_computable` / `not_yet` against current substrate, and T+10 forward-return labels accrue at a 10-RTH-day lag. The trained combiner promotes **later**, during paper, once labels accrue. **The build-to-paper critical path therefore does NOT include the trained combiner.** This decoupling is what makes the build window an engineering problem (compressible), not a calendar problem.
+
 ### BUILD side (compressible — engineering throughput-bound)
 
-```
-Phase 3.3 first-candidate promotion
-  ├─ combiner-train.yml weekly Sunday cron + combiner-models bucket EXIST
-  ├─ DW-168 (intraday-group lambdarank sanity gate) — promotion-trust precondition
-  └─ requires accrued substrate (slot-0 daily + slot-N intraday capture per FP-057 Sub-step 1, ACT-339, MIG-122…MIG-126)
-      ↓
-Phase 4 money-path infra (NO named FP — Drift D4; carrier = DW-157…DW-161)
-  ├─ DW-157  Wash-sale events + writer + verifier
-  ├─ DW-158  longshort_lots FIFO ledger + verifier
-  ├─ DW-159  realized_pnl writer-at-exit + verifier
-  ├─ DW-160  verify_settlement_status + T+1 wiring
-  └─ DW-161  Polygon corp-actions ingestion + verifier
-      ↓
-Phase 6 "Full Integration" aggregate (NO named FP — Drift D4)
-  ├─ DW-058  fetcher wiring (incl. B2 halt feed — HARD for live-order)
-  ├─ DW-060  periodic-sweep scheduler arming
-  ├─ DW-105  §1.4 state-machine
-  └─ DW-156  entry-freshness / signal-trajectory gate
-```
+**STEP 0 — Drift-D4 corrective FP authoring (~one focused week, not days).** Author the named FP carriers that Part 4D binds to:
+- **Phase-4 money-path FP** — adopts DW-157 / DW-158 / DW-159 / DW-160 / DW-161 as sub-steps.
+- **Phase-6 integration FP** — adopts core DW-058 / DW-060 / DW-105 / DW-156 + execution-branch cluster DW-138 / DW-139 / DW-140 / DW-141 / DW-142 / DW-144 / DW-151 / DW-152 / DW-153 + calibration knobs DW-145 / DW-146 / DW-147.
+- **FP-059 "Signal Substrate Hardening"** (pre-decided as the named carrier; FP-059 = next-free FP number at this authoring, FP-058 being highest extant) — adopts DW-093 / DW-094 / DW-095 / DW-097 / DW-098 / DW-114 / DW-130 / DW-132.
+- **Phase-3-residual carrier** (FP-052 sub-step 3.4 OR a new Phase-3-residual FP — operator decision at chartering) — adopts DW-100 / DW-101 / DW-106 / DW-109 / DW-110 / DW-135 / DW-136 / DW-168.
 
-### VALIDATION side (calendar-bound — non-compressible)
+Each FP MUST adopt-or-defer-with-rationale every DW in its Part 4D row (binding rule).
 
-```
-Phase 7 — Paper Validation
-  ├─ DW-061  Captured-Day-1 execution + §11.0.11 firing analysis
-  ├─ DW-062  ADR-002 Test 2 RTH re-run  ← HARD pre-short-side
-  └─ FP-058 activation (after BOTH preconditions met:
-              (i) intraday-trained candidate promoted via DW-168
-              (ii) ≥N weeks live intraday PnL vs daily-baseline shadow)
-      ↓
-Phase 8 — Small-Live (gated on the full 12-item Hard-Blocker Set in §4B)
-      ↓
-Phase 9 — Scale-Live
-```
+**STEP 4a — operator action, FIRST (arm EARLY, end of STEP 0 / start of STEP 1).** Operator arms `longshort.combiner_assemble.compute` + `longshort.combiner_rank.compute` via `sql/21_longshort_combiner_live_cron_schedule.sql` (§22.5.3). **SUBSTRATE CAPTURE ONLY** — execution cron stays disarmed; no orders fire. This starts the T+10 label-accrual clock **immediately**. This is the single highest-leverage schedule move in the build-to-paper window — forward-return labels can only pair to feature-vector rows that `combiner_assemble` actually wrote, so waiting until paper-arm burns the accrual window. DW-148 substrate is paper-ready (RESOLVED-BY-SUBSTITUTE, Polygon NBBO, ACT-337; see Part 4E) — the Alpaca data-tier feed gate is discharged and should NOT be re-litigated at this step.
 
-### Critical dependencies
+**STEP 1 — Phase-4 money-path infra** (the 5 hard pre-live blockers; ordered by substrate dependency):
+1. **DW-158** `longshort_lots` FIFO ledger + verifier — substrate every tax verifier reads; lands FIRST.
+2. **DW-157** wash-sale events + writer + verifier.
+3. **DW-159** `realized_pnl` writer-at-exit + verifier.
+4. **DW-160** `verify_settlement_status` + T+1 wiring.
+5. **DW-161** Polygon corp-actions ingestion + verifier.
 
-- Real-paper (Phase 7) is blocked by Phase 3.3 (trained combiner) **AND** Phase 4 money-path infra (sizing landed; tax/lot/PnL/settlement/CA NOT YET).
-- Phase 3.3 promotion is blocked by accrued substrate **AND** DW-168 sanity gate.
-- Cron arming for continuous paper-RTH execution is blocked by DW-060 **AND** DW-058-B2 (halt feed).
-- Trainer needs accrued forward labels → calendar-bound, NOT compressible.
+Each = table + writer + verifier wiring + §22.5.1 live-DB evidence in its closure.
+
+**STEP-1 ↔ STEP-2 soft dependency (NOTED, not asserted independent):** DW-058 fetcher wiring writes the broker-truth rows that DW-159 (`realized_pnl`) and DW-160 (`settlement`) verifiers reconcile against. Either front-load the relevant DW-058 fetcher sub-items into STEP 1, or honor the join-point at STEP-2 close. Do NOT claim STEP 1 is independent of STEP 2 — it isn't.
+
+**STEP 2 — Phase-6 integration.**
+- **DW-058-B2 halt feed** — PROBE-FIRST (see operator fork below).
+- **DW-058 remaining fetchers** + **DW-060** reconciliation-tick scheduling arming.
+- **DW-105** §1.4 book state-machine.
+- **DW-156** entry-freshness / signal-trajectory gate.
+- **Execution-branch cluster** (paper-relevant): DW-139 / DW-140 / DW-141 / DW-142 / DW-144 / DW-151 / DW-152 / DW-153.
+- **Verifier-suite status (cite accurately — do NOT say "verify_* wiring" generically):** DW-162 **SUPERSEDED-BY-SPLIT** at ACT-346 — DW-162a RESOLVED at ACT-346 (etb-transition monitor live), DW-162b OPEN-VENDOR-GATED, DW-166 OPEN-PROCUREMENT; DW-163 **RESOLVED** at ACT-348 (FP-057 Sub-step 5); DW-164 **RESOLVED** at ACT-340 (working-order visibility). **Open verifier work in this step = DW-162b (vendor-gated only) + the tax-verifier suite that lands inside STEP 1.**
+
+**STEP 3 — trainer-quality + ROI ride-alongs** (improve the eventually-promoted trained combiner; do NOT block paper arming):
+- DW-100 (multi-year FV backfill) / DW-101 (SPY-regime fetcher) / DW-106 (per-signal carry-forward) / DW-110 (forward-return retry obs) / DW-135 (cross-source open reconcile) / DW-136 (SHAP write path) / DW-168 (intraday-group lambdarank sanity gate).
+- **DW-109 (coverage-weighted shrinkage, ROI-CRITICAL) — REFRAMED as calendar-gated, NOT "ride alongside."** DEC-059's promotion rule (n ≥ 30 paired-post-heal-seed-days + p < 0.05 + T+1 / T+20 corroboration) makes DW-109's **PROMOTION VERDICT** calendar-bound just like the trainer. Build the shrinkage harness now; the promotion verdict runs in parallel with paper, not before paper-arm.
+- **DW-192** IV-spread signal — rides here AFTER its STEP-B coverage-scoping completes (precondition ratified at ACT-361: Tradier `mid_iv` substrate verified; deep-ITM/OTM wings return `<=0` and MUST be treated as typed-absent).
+- **Signal-substrate hardening** under FP-059 (per STEP 0): DW-093 / DW-094 / DW-095 / DW-097 / DW-098.
+- **NOTE — do NOT re-charter the PEAD walk-down capture.** DW-172 (T-0 consensus snapshot capture) RESOLVED at ACT-357; the walk-down ablation (DW-171) is accruing data now and the verdict is Phase-7-gated under FP-058.
+
+**STEP 4b — true paper arm (operator action, AFTER STEPS 1-3).** Operator arms the reconciliation tick + strategy execution cron on the paper-broker leg. **NOTE:** the once-daily strategy is ALREADY un-paused on the fallback ranker (ACT-337 / DEC-068 clause (r)); STEP 4b = scheduling it on the paper-broker leg, NOT unblocking the ranker. **PAPER BEGINS** — this is the build-to-paper finish line.
+
+### VALIDATION side (calendar-bound — runs AFTER paper starts; NON-compressible)
+
+**Phase 7a — long-only paper.** Gated on: STEPS 1-4 closed AND DW-061 (Captured Day 1 + §11.0.11 root-cause every firing) AND **DEC-075 classification gate** as a Phase-7 acceptance prerequisite (chartered governance precondition at ACT-356, §c classification confirmed at ACT-357 — 8 additive : 1 interaction-excluded, zero TBD; named here so it cannot be missed at Phase-7 entry). The trained combiner promotes during this phase once labels accrue and DW-168 sanity-gate clears. The ~19 open Phase-7 ablations (per Part 4F explicit enumeration row) are measured against accrued returns.
+
+**Phase 7b — short-side paper.** Gated on: 7a running AND **DW-062** (ADR-002 Test 2 RTH re-run — HARD pre-short-side) AND **DW-149-C** carryover (short-stop obligation persistence). **EXPLICIT NOTE:** the 7a / 7b split SURVIVES the SSR re-home rejection — the load-bearing facts gating 7b are DW-062 and DW-149-C, NOT SSR. SSR (DW-154 / DW-155) is **NOT a 7b gate** — it lives at Phase 8 (next row).
+
+**Phase 8 — small-live.** Gated on the FULL 12-item hard-blocker set, enumerated VERBATIM from Part 4B (no partial enumeration):
+1. **DW-058-B2** — Real halt feed.
+2. **DW-062** — ADR-002 Test 2 RTH re-run.
+3. **DW-154** — Reg-SHO SSR live source.
+4. **DW-155** — Live `assets.shortable` semantics.
+5. **DW-157** — Wash-sale events + writer + verifier.
+6. **DW-158** — `longshort_lots` FIFO ledger + verifier.
+7. **DW-159** — `realized_pnl` writer-at-exit + verifier.
+8. **DW-160** — `verify_settlement_status` + T+1 wiring.
+9. **DW-161** — Polygon corp-actions ingestion + verifier.
+10. **DW-162b + DW-166** — Numeric borrow-rate monitor + vendor procurement.
+11. **DW-149-C** — Short-stop obligation persistence (Component 1 carryover).
+12. **DW-150** — §8.9 `ssr_violation` rejection PAUSE-class.
+
+SSR (DW-154 / DW-155) lives HERE, NOT at Phase 7. Per DW-154 verbatim: **"NOT blocking for paper v1 — paper accounts carry no Reg SHO exposure — SSR is vestigial on paper"** (DEC-068 clause (n) typed-absence posture). Future sessions seeing "SSR" next to "Phase 8" MUST NOT re-litigate the homing on the basis of "shorts ⇒ SSR" — the typed-absence posture is the binding governance.
+
+**Phase 9 — scaled-live.** Inherits Phase-8 hard-blocker set; no additional named gates at this distance.
+
+### Operator decision-forks (must be answered before / during STEP 0)
+
+1. **Halt-feed (DW-058-B2) — PROBE-FIRST, not procure-first.** Polygon is already in-hand for NBBO (ACT-337). A ~1hr read-only probe (same shape as the IV-substrate probe at ACT-361) checks whether the existing Polygon tier surfaces halt / LULD status. Fork: **(a)** probe Polygon halt coverage → if present, default there with zero new procurement; **(b)** only if absent, escalate to a vendor decision. Default ordering: probe first.
+2. **FP-058 promotion methodology — TWO paired questions** (both must be answered before FP-058 can fire):
+   - **(i) N-weeks** — how many weeks of accrued live PnL before a trained-combiner candidate may promote.
+   - **(ii) Threshold** — what IC / Sharpe / forward-return bar a candidate must clear to satisfy DW-168 sanity. Without (ii), DW-168 cannot fire as a gate.
+3. **Vendor-gated ROI (DW-166 / DW-167 / DW-174 / DW-181)** — parallel procurement track; none mechanically block paper. Order at operator discretion.
+
+### Honest timeline (state plainly)
+
+- **BUILD-to-paper (STEPS 0 – 4)** — plausibly compressible within the typical 3-4 month strategy-build window; most architecture is already built; the genuine remaining build = Phase-4 money-path infra + halt feed + integration wiring. **Compressible** by engineering throughput.
+- **VALIDATION tail (Phase 7 – 8)** — 6-12 months, calendar-bound. Runs WHILE paper / small-live is active (NOT stalled). **NOT compressible** by any decision — gated by label accrual and observed-PnL evidence.
+
+### Critical dependencies (summary)
+
+- Real-paper (Phase 7) is blocked by Phase 4 money-path infra AND Phase 6 integration wiring. It is **NOT** blocked by the trained combiner (which promotes during paper, not before).
+- Trained-combiner promotion is blocked by accrued labels (calendar) AND DW-168 sanity gate (build) AND the methodology fork (i)+(ii) above (operator).
+- Cron arming for continuous paper-RTH execution is blocked by DW-060 AND DW-058-B2.
+- Trainer needs accrued forward labels → calendar-bound, NOT compressible. **STEP 4a starts the clock; do not delay it past STEP 0 close.**
 
 ---
 
