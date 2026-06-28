@@ -120,24 +120,42 @@ Deno.test('filter: drops record_type=holding rows (first gate)', () => {
   assertEquals(out.length, 1);
 });
 
-Deno.test('filter: keeps ALL P (purchases) regardless of 10b5-1 flag', () => {
+Deno.test('filter (DEC-073): keeps ALL P (purchases) regardless of 10b5-1 flag', () => {
   const out = filterQualifyingTransactions([
     row({ transaction_code: 'P', aff_10b5_one: false }),
     row({ transaction_code: 'P', aff_10b5_one: true }),
+    row({ transaction_code: 'P', aff_10b5_one: undefined }),
   ]);
-  assertEquals(out.length, 2);
+  assertEquals(out.length, 3);
 });
 
-Deno.test('filter: keeps S only when aff_10b5_one=false (load-bearing)', () => {
+Deno.test('filter (DEC-073 inverse pin): S ALWAYS drops, irrespective of aff_10b5_one', () => {
+  // Inverse of the pre-DEC-073 "keeps S only when aff_10b5_one=false"
+  // load-bearing pin: buys-only means EVERY S-row drops at this seam,
+  // regardless of the 10b5-1 flag value (false / true / missing). The
+  // aff_10b5_one predicate is moot in compute (the field stays on
+  // ingestion for the §6.5 shadow harness / DW-183).
   const out = filterQualifyingTransactions([
     row({ transaction_code: 'S', aff_10b5_one: false, transaction_acquired_disposed: 'D' }),
     row({ transaction_code: 'S', aff_10b5_one: true, transaction_acquired_disposed: 'D' }),
     row({ transaction_code: 'S', aff_10b5_one: undefined, transaction_acquired_disposed: 'D' }),
   ]);
-  // Only the explicit aff_10b5_one=false S survives. Missing flag is
-  // conservatively EXCLUDED — we cannot prove discretionary.
+  assertEquals(out.length, 0);
+});
+
+Deno.test('filter (DEC-073): buys-only spans {P, S±10b5, M, C, A, G} → ONLY P survives', () => {
+  const out = filterQualifyingTransactions([
+    row({ transaction_code: 'P' }),
+    row({ transaction_code: 'S', aff_10b5_one: false, transaction_acquired_disposed: 'D' }),
+    row({ transaction_code: 'S', aff_10b5_one: true, transaction_acquired_disposed: 'D' }),
+    row({ transaction_code: 'S', aff_10b5_one: undefined, transaction_acquired_disposed: 'D' }),
+    row({ transaction_code: 'M' }),
+    row({ transaction_code: 'C' }),
+    row({ transaction_code: 'A' }),
+    row({ transaction_code: 'G' }),
+  ]);
   assertEquals(out.length, 1);
-  assertEquals(out[0].aff_10b5_one, false);
+  assertEquals(out[0].transaction_code, 'P');
 });
 
 Deno.test('filter: drops M / C / A / G codes (option exercises, grants, gifts)', () => {
@@ -162,22 +180,29 @@ Deno.test('compute: pure-buy ticker → POSITIVE raw_signal (sign load-bearing)'
   assertEquals(res!.role_tier_source, ROLE_TIER_SOURCE);
 });
 
-Deno.test('compute: pure-discretionary-sale ticker → NEGATIVE raw_signal', () => {
+// DEC-073: the pre-DEC "pure-discretionary-sale → NEGATIVE raw_signal"
+// assertion is DELETED. Buys-only means the net-sell case it tested can
+// no longer exist — every S-row drops at the filter seam, and an
+// only-sells name surfaces as typed-absence (null) rather than a
+// negative raw_signal. The replacement pin is the only-sells →
+// typed-absence test below.
+
+Deno.test('compute (DEC-073): only-sells ticker → typed-absence (null), NOT a fabricated 0', () => {
+  // Replaces the pre-DEC "pure-discretionary-sale → NEGATIVE" pin.
+  // The orchestrator surfaces null as `no_qualifying_transactions`
+  // (is_present=0) — honest absence, not a fabricated zero.
   const rows = [
-    row({
-      transaction_code: 'S',
-      aff_10b5_one: false,
-      transaction_acquired_disposed: 'D',
-      transaction_shares: 1000,
-      transaction_price_per_share: 100,
-    }),
+    row({ transaction_code: 'S', aff_10b5_one: false, transaction_acquired_disposed: 'D' }),
+    row({ transaction_code: 'S', aff_10b5_one: true,  transaction_acquired_disposed: 'D' }),
   ];
   const res = computeInsiderSignal(rows, AS_OF, ONE_BILLION);
-  assert(res);
-  assert(res!.raw_signal < 0, `expected negative, got ${res!.raw_signal}`);
+  assertEquals(res, null, 'only-sells → typed-absence (no qualifying buys)');
 });
 
-Deno.test('compute: 10b5-1 sale EXCLUDED (would-be negative is suppressed)', () => {
+Deno.test('compute (DEC-073): ALL S drops (10b5-1 OR discretionary) — exclusion outcome unchanged, rationale broadened', () => {
+  // Pre-DEC: 10b5-1 was the lone S exclusion. Post-DEC: ALL S drops at
+  // the buys-only seam. The exclusion outcome (null) survives; the
+  // rationale broadens from "10b5-1 planned" to "all sells".
   const rows = [
     row({
       transaction_code: 'S',
@@ -189,6 +214,75 @@ Deno.test('compute: 10b5-1 sale EXCLUDED (would-be negative is suppressed)', () 
   ];
   const res = computeInsiderSignal(rows, AS_OF, ONE_BILLION);
   assertEquals(res, null, 'all rows filtered out → null (no qualifying)');
+});
+
+Deno.test('compute (DEC-073 sign-elision): raw_signal is non-negative whenever non-null', () => {
+  // Buys-only ⇒ every surviving contribution is + (dollars × weight ×
+  // decay, all non-negative). The × sign factor is dead-elided.
+  const fixtures: Form4Row[][] = [
+    [row({ transaction_code: 'P', officer_title: 'CEO' })],
+    [
+      row({ transaction_code: 'P', officer_title: 'CFO', transaction_date: '2026-05-01' }),
+      row({ transaction_code: 'P', officer_title: 'EVP, Sales', transaction_date: '2026-04-15' }),
+    ],
+    // mixed with sells — sells drop, residue still non-negative
+    [
+      row({ transaction_code: 'P', officer_title: 'CEO' }),
+      row({ transaction_code: 'S', aff_10b5_one: false, transaction_acquired_disposed: 'D' }),
+    ],
+  ];
+  for (const rows of fixtures) {
+    const res = computeInsiderSignal(rows, AS_OF, ONE_BILLION);
+    if (res !== null) {
+      assert(res.raw_signal >= 0, `expected >= 0, got ${res.raw_signal}`);
+    }
+  }
+});
+
+Deno.test('compute (DEC-073 must-not-move): only-buys name byte-identical to pre-DEC kernel', () => {
+  // Locality guarantee: dropping the S-branch + eliding × sign must be
+  // a NO-OP for a name whose qualifying set was already buys-only. The
+  // pre-DEC kernel for a buy row produced `dollars × (+1) × weight ×
+  // decay / market_cap`; the post-DEC kernel produces `dollars × weight
+  // × decay / market_cap`. Reproduce the expected value inline (the
+  // same arithmetic the pre-DEC kernel would have produced) and assert
+  // byte equality.
+  const rows = [
+    row({
+      transaction_code: 'P', transaction_acquired_disposed: 'A',
+      transaction_shares: 1000, transaction_price_per_share: 100,
+      transaction_date: '2026-06-08', // age=0 → decay=1
+      officer_title: 'CEO', // weight=1.0
+    }),
+  ];
+  const res = computeInsiderSignal(rows, AS_OF, ONE_BILLION);
+  assert(res);
+  // Pre-DEC: 1000 * 100 * (+1) * 1.0 * 1 / 1e9 = 1e-4
+  // Post-DEC: 1000 * 100 *        1.0 * 1 / 1e9 = 1e-4  → byte-identical
+  assertEquals(res!.raw_signal, 1e-4);
+});
+
+Deno.test('compute (DEC-073 must-move): buys + discretionary-sells → new raw = buys-only sum (sells stripped)', () => {
+  const buy = row({
+    transaction_code: 'P', transaction_acquired_disposed: 'A',
+    transaction_shares: 1000, transaction_price_per_share: 100,
+    transaction_date: '2026-06-08', officer_title: 'CEO',
+  });
+  const sell = row({
+    transaction_code: 'S', aff_10b5_one: false, transaction_acquired_disposed: 'D',
+    transaction_shares: 500, transaction_price_per_share: 110,
+    transaction_date: '2026-06-08', officer_title: 'CEO',
+  });
+  const mixed = computeInsiderSignal([buy, sell], AS_OF, ONE_BILLION);
+  const buysOnly = computeInsiderSignal([buy], AS_OF, ONE_BILLION);
+  assert(mixed && buysOnly);
+  // Post-DEC: the S contribution is stripped → mixed === buys-only.
+  assertEquals(mixed!.raw_signal, buysOnly!.raw_signal);
+  // And value strictly >= the pre-DEC mixed value would have been
+  // (which was buy − sell-contribution). Pin the directional claim.
+  const preDecMixed =
+    (1000 * 100 * 1 * 1.0 * 1 - 500 * 110 * 1 * 1.0 * 1) / ONE_BILLION;
+  assert(mixed!.raw_signal >= preDecMixed);
 });
 
 Deno.test('compute: spec-literal decay exp(-age/14) — age=14 → factor=exp(-1)≈0.368', () => {
@@ -278,6 +372,9 @@ Deno.test('compute: role_tier_source persisted as "title_heuristic" (DEC-044 vis
 Deno.test('compute: as_of is replay-deterministic (same inputs → same output)', () => {
   const rows = [
     row({ transaction_date: '2026-05-01', transaction_shares: 500, transaction_price_per_share: 80 }),
+    // DEC-073: the second row is an S; post-DEC it drops at the filter
+    // seam. Determinism property still holds (same inputs → same output)
+    // and the residue is the deterministic buys-only kernel.
     row({ transaction_date: '2026-04-15', transaction_code: 'S', aff_10b5_one: false, transaction_acquired_disposed: 'D', transaction_shares: 300, transaction_price_per_share: 90 }),
   ];
   const a = computeInsiderSignal(rows, AS_OF, ONE_BILLION);

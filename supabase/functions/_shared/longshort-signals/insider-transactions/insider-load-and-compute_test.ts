@@ -328,12 +328,22 @@ Deno.test('(C.1) end-to-end: 839 mass-balance invariant + hand-computed z-score 
       issuer_cik: '0000789019',
       owner_cik: '0002222222',
       accession_number: '0000789019-26-000001',
-      transaction_code: 'S',                 // discretionary sale (bearish)
-      transaction_acquired_disposed: 'D',
-      transaction_shares: 2000,
+      // DEC-073 buys-only: this fixture was previously a discretionary
+      // 'S' (sign=-1) producing the negative half of the ±√2/2 pin.
+      // Post-DEC-073 all S-rows drop at the compute filter (they would
+      // turn MSFT into a typed-absence skip and break the n=2 mass-
+      // balance). The pin's underlying property is that two same-sector
+      // values with DIFFERENT magnitudes produce z-scores of ±√2/2; we
+      // preserve it with a SMALLER 'P' for MSFT (still buys-only, but
+      // a different raw magnitude than AAPL so within-sector demeaning
+      // yields the opposite-sign z).
+      transaction_code: 'P',
+      transaction_acquired_disposed: 'A',
+      transaction_shares: 200,
       transaction_price_per_share: 60,
       officer_title: 'Chief Executive Officer',
-      aff_10b5_one: false,                   // discretionary — INCLUDED
+      // aff_10b5_one omitted — moot under DEC-073 (the compute filter
+      // no longer reads it; ingestion still persists it for the shadow).
     }),
     row({
       ticker: 'NOPR',
@@ -408,15 +418,17 @@ Deno.test('(C.1) end-to-end: 839 mass-balance invariant + hand-computed z-score 
     'NORW:no_qualifying_transactions',
   ]);
 
-  // Raw-signal SIGNS exit the staged seam. AAPL = purchase (sign=+1)
-  // → raw_signal > 0; MSFT = discretionary sale (sign=−1) → raw_signal < 0.
-  // The MAGNITUDES are byte-identical to what `.run()` previously
-  // computed; the n=2 z-arithmetic in (C.2) doesn't depend on them.
+  // DEC-073 buys-only: both raw_signals exit POSITIVE (both 'P'). The
+  // n=2 ±√2/2 z-arithmetic in (C.2) depends only on the two values
+  // DIFFERING, not on opposite signs — MSFT's smaller magnitude
+  // produces the negative half of the within-sector z post-demean.
   const byTickerRaw = new Map(values.map((v) => [v.ticker, v]));
   const aaplRaw = byTickerRaw.get('AAPL')!;
   const msftRaw = byTickerRaw.get('MSFT')!;
   assert(aaplRaw.raw_signal > 0, 'AAPL raw_signal positive (purchase)');
-  assert(msftRaw.raw_signal < 0, 'MSFT raw_signal negative (discretionary sale)');
+  assert(msftRaw.raw_signal > 0, 'MSFT raw_signal positive (purchase, DEC-073 buys-only)');
+  assert(msftRaw.raw_signal < aaplRaw.raw_signal,
+    'MSFT magnitude < AAPL — opposite-sign z under within-sector demean');
   assertEquals(aaplRaw.gics_sector, 'Tech');
   assertEquals(msftRaw.gics_sector, 'Tech');
 });
