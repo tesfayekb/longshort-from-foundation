@@ -287,6 +287,7 @@ export type Database = {
           coverage_count: number
           excluded_reason: string | null
           features: Json
+          gated_signals: Json | null
           gics_sector: string | null
           intraday_slot: number
           operator_id: string
@@ -298,6 +299,7 @@ export type Database = {
           coverage_count: number
           excluded_reason?: string | null
           features: Json
+          gated_signals?: Json | null
           gics_sector?: string | null
           intraday_slot?: number
           operator_id: string
@@ -309,6 +311,7 @@ export type Database = {
           coverage_count?: number
           excluded_reason?: string | null
           features?: Json
+          gated_signals?: Json | null
           gics_sector?: string | null
           intraday_slot?: number
           operator_id?: string
