@@ -69,6 +69,15 @@ interface StagingRow {
   ticker: string;
   gics_sector: string | null;
   raw_signal: number;
+  /**
+   * DW-186a — optional finalize-time meta payload propagated from the
+   * compute kernel's `TickerComputeResult` (feed-mode in-process; work-
+   * list in-process). Per-ticker mode round-trips staging through DB
+   * (line 156 re-select) where this channel does NOT survive — that
+   * path leaves `meta` undefined and is byte-unchanged. Capture-only:
+   * never consumed by the z-score path or the ranker.
+   */
+  meta?: unknown;
 }
 
 interface SkipRow {
@@ -173,6 +182,41 @@ export async function runQueueFinalizer(
   // ── 2. Within-sector z-score. Degenerate sectors (singleton OR std=0)
   //      emit value=null per the existing normalizer contract; the
   //      engine carries no divisor policy — Phase 2 addendum §7.
+
+  // ── 1b. DW-186a — generic finalize-time meta capture (signal-agnostic).
+  //      Invoked only when (a) the config supplies a captureMeta hook
+  //      AND (b) at least one staging row carries a non-undefined `meta`
+  //      payload. The per-ticker DB-round-trip path strips `meta` (line
+  //      156 re-select), so this branch fires effectively for feed-mode
+  //      and work-list-mode consumers that opt in.
+  //
+  //      Capture-only: zero effect on raw_signal, z-score, ranker, or
+  //      PnL. A capture failure transitions the run to failed (the
+  //      capture is a recorded side-effect of the same atomic finalize).
+  if (typeof config.captureMeta === 'function') {
+    const metaRows: Array<{ ticker: string; meta: unknown }> = [];
+    for (const s of staging) {
+      if (s.meta !== undefined && s.meta !== null) {
+        metaRows.push({ ticker: s.ticker, meta: s.meta });
+      }
+    }
+    if (metaRows.length > 0) {
+      try {
+        await config.captureMeta({
+          supabase,
+          operator_id,
+          signal_id: config.signalId,
+          as_of_date: runRow.as_of_date,
+          computed_at: as_of.toISOString(),
+          rows: metaRows,
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return await transitionToFailed(ctx, runRow, `captureMeta failed: ${msg}`);
+      }
+    }
+  }
+
   const zInputs = staging.map((s) => ({
     ticker: s.ticker,
     value: s.raw_signal,
@@ -361,6 +405,10 @@ async function buildFeedAggregates(
           ticker: u.ticker,
           gics_sector: u.gics_sector,
           raw_signal: result.raw,
+          // DW-186a — propagate the kernel's meta payload (in-process
+          // here; the DB staging round-trip used by per-ticker mode is
+          // bypassed in feed mode). Absent meta stays undefined.
+          meta: (result as { meta?: unknown }).meta,
         });
       }
     } else {
@@ -419,6 +467,9 @@ async function buildWorkListAggregates(
           ticker: r.ticker,
           gics_sector: r.gicsSector,
           raw_signal: r.result.raw,
+          // DW-186a — propagate the kernel's meta payload (in-process;
+          // work-list mode also bypasses the staging-table round-trip).
+          meta: (r.result as { meta?: unknown }).meta,
         });
       }
     } else {

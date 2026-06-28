@@ -122,6 +122,30 @@ export type FeedComputeFromItemsFn = (args: {
 }) => TickerComputeResult;
 
 /**
+ * DW-186a — generic producer-seam capture hook.
+ *
+ * Optional, signal-agnostic finalize-time hook invoked by the queue
+ * finalizer ONCE per run, AFTER staging is built and BEFORE z-score, with
+ * the per-ticker `meta` payload that the compute kernel returned
+ * (`TickerComputeResult & { kind: 'value', meta?: unknown }`).
+ *
+ * The seam is capture-only: it does NOT alter `raw_signal`, the z-score
+ * path, the ranker, or PnL. Signals that produce no meta (the default)
+ * never set this hook; the finalizer leaves their byte-paths unchanged.
+ *
+ * Inherited by DW-178 (analyst per-revision) and DW-172 (PEAD T-0
+ * consensus) once their stores are typed.
+ */
+export type FinalizeMetaCaptureFn = (args: {
+  supabase: import('@supabase/supabase-js').SupabaseClient;
+  operator_id: string;
+  signal_id: string;
+  as_of_date: string;
+  computed_at: string;
+  rows: ReadonlyArray<{ ticker: string; meta: unknown }>;
+}) => Promise<void>;
+
+/**
  * The reserved synthetic ticker used as the single cursor row in
  * sequential-feed mode. Underscore-prefixed and lowercase so it can
  * never collide with a real exchange-listed ticker (which are uppercase
@@ -180,6 +204,13 @@ export interface QueueSignalConfig {
   fetchPage?: FeedFetchPageFn;
   /** Per-universe-ticker aggregation (see {@link FeedComputeFromItemsFn}). */
   computeFromItems?: FeedComputeFromItemsFn;
+  /**
+   * DW-186a — optional finalize-time meta-capture hook
+   * (see {@link FinalizeMetaCaptureFn}). Signal-agnostic; defaults to
+   * undefined (no behavior change). Invoked only when at least one
+   * staging row carries a `meta` payload.
+   */
+  captureMeta?: FinalizeMetaCaptureFn;
   // ─── work-list mode fields (required when mode='work-list') ────────────
   /**
    * Items claimed per slice-worker invocation (work-list analogue of

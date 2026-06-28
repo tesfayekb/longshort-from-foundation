@@ -1187,6 +1187,33 @@ export type Database = {
         }
         Relationships: []
       }
+      news_attention_observations: {
+        Row: {
+          article_count: number
+          as_of_date: string
+          computed_at: string
+          operator_id: string
+          signal_id: string
+          ticker: string
+        }
+        Insert: {
+          article_count: number
+          as_of_date: string
+          computed_at: string
+          operator_id: string
+          signal_id: string
+          ticker: string
+        }
+        Update: {
+          article_count?: number
+          as_of_date?: string
+          computed_at?: string
+          operator_id?: string
+          signal_id?: string
+          ticker?: string
+        }
+        Relationships: []
+      }
       permissions: {
         Row: {
           created_at: string
