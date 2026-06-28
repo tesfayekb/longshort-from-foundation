@@ -1615,6 +1615,7 @@ export type Database = {
           as_of_date: string
           completed_at: string
           failure_reason: string | null
+          gate_counts: Json | null
           operator_id: string
           outcome: string
           persisted_count: number
@@ -1629,6 +1630,7 @@ export type Database = {
           as_of_date: string
           completed_at: string
           failure_reason?: string | null
+          gate_counts?: Json | null
           operator_id: string
           outcome: string
           persisted_count: number
@@ -1643,6 +1645,7 @@ export type Database = {
           as_of_date?: string
           completed_at?: string
           failure_reason?: string | null
+          gate_counts?: Json | null
           operator_id?: string
           outcome?: string
           persisted_count?: number
