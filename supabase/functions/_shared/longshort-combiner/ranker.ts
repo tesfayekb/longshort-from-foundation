@@ -23,7 +23,6 @@
  *
  * Determinism contract (load-bearing):
  *
- *   (a) Summation iterates `SIGNAL_IDS_ALL` in catalog order. IEEE-754
  *   (a) Summation iterates `SIGNAL_IDS_FALLBACK_SUM` in catalog order
  *       (DEC-074: `active_catalyst_flag` excluded — unsigned-positive
  *       salience signal that mis-deploys as a direction-blind long-
