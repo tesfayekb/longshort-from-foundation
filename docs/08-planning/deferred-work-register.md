@@ -3995,3 +3995,22 @@ The DW-173 `Cross_ref` and `Scope (weekend stand-up)` rows above point at the §
 | **Future Owner Phase** | Phase 7 (FP-058). |
 | **Resolution shape** | Recorded Phase-7 finding + (on positive incremental lift) DEC adding the interaction feature to the combiner feature set. |
 | **Cross_ref** | DEC-046 (#3 construction); DEC-057 (#9 catalyst construction); DEC-075 §c (classification — #3 stays additive; the interaction is a BONUS, not a re-classification trigger); literature: **Augustin-Brenner-Subrahmanyam 2019 *Management Science* "Informed Options Trading prior to Takeover Announcements: Insider Trading?"** (the interaction anchor); Cao-Chen-Griffin 2005 *J. Business* (informed options pre-takeover); DW-190 (catalyst-as-interaction sibling); DW-193 (decay sibling); FP-058 (Phase-7 home); **ACT-357 (REGISTRATION)**. |
+
+### DW-195: ESLint warning-debt cleanup pass (23 standing warnings)
+
+| Field | Value |
+|---|---|
+| **ID** | DW-195. |
+| **Status** | **REGISTERED 2026-06-28 at ACT-362 — BACKLOG, NOT BLOCKING**. Build is GREEN; the single failing ERROR (`prefer-const` in `probe-tradier-iv-readonly`) was resolved by the STEP-A probe deletion (ACT-361). The 23 remaining are warnings only. Fix is a SEPARATE deliberate next-cycle pass, not this turn. |
+| **Tier** | C — hygiene; no correctness / money-path / ROI implication. All warnings pre-date this session's now-fix / shadow / STEP-A work (none introduced by DEC-071 / DEC-073 / DEC-074 / DW-173 / DW-192). |
+| **Title** | Clear the 23 standing ESLint warnings surfaced at the toolchain-parity check (CI-verbatim `npx eslint .`). |
+| **Scope (at activation)** | Single dedicated commit. Run `npx eslint .` to enumerate the current full set (the count may drift), then resolve. |
+| **Inventory (known at registration — fixer enumerates the full set at fix-time)** | `react-hooks/exhaustive-deps` (3): `src/pages/admin/RoleDetailPage.tsx:180` (missing `USER_ROLE_PERMISSION_KEYS` dep); `src/pages/trading/longshort/execution/EquityGrowthChart.tsx:65` (`all` logical expression unmemoized); `src/pages/trading/longshort/execution/SignalAttribution.tsx:73` (`rows` logical expression unmemoized). Unused `eslint-disable` directive (5): `…/forward-return-accruer_test.ts:2`, `…/forward-return-orchestrator_test.ts:2`, `…/shadow-ranker-orchestrator_test.ts:2`, `…/signal-decay-accruer_test.ts:2` (all `@typescript-eslint/no-explicit-any` no longer needed post the eslint.config.js test-file carve-out), `…/quarterly-refresh-orchestrator.ts:342` (`no-console` no longer needed). Remaining ~15 warnings to total 23 are not enumerated here — fixer pulls the live list from the CI ESLint run. |
+| **Auto-fixable count** | ~11 of 23 are `eslint --fix`-able (the 5 unused-disable directives in particular). The 3 `react-hooks/exhaustive-deps` are NOT safely auto-fixable — they need manual behavior-preserving judgment. |
+| **Fix discipline (binding for the eventual pass)** | (a) Gate-4 is **CI-verbatim `npx eslint .`** per FP-047 forward-binding (NOT `deno lint` — different rule sets). (b) The 3 `react-hooks/exhaustive-deps` fixes MUST preserve component behavior — adding a dep or wrapping in `useMemo` / `useCallback` can change render semantics. Each fix verified to not alter the component's observable output (visual check on the preview + re-read the surrounding effect / memo). (c) Unused-disable removals are safe (they suppress nothing live). (d) Single dedicated commit so the cleanup diff is reviewable as cleanup; do NOT bundle into a feature commit. |
+| **Why deferred from this session** | Pre-existing debt surfaced at the toolchain-parity check; mixing the fix into the STEP-A closeout would violate scope discipline (no helpful refactoring). Registered now so it is tracked, not forgotten. |
+| **Depends-on** | Nothing. |
+| **Blocks** | Nothing. |
+| **Future Owner Phase** | Next maintenance window. |
+| **Resolution shape** | One commit titled "DW-195 — ESLint warning-debt cleanup pass" with the CI ESLint output before / after in the commit body (zero warnings post). |
+| **Cross_ref** | FP-047 (Gate-4 CI-verbatim discipline); ACT-361 (STEP-A closeout that surfaced the inventory at the parity check); ACT-362 (this REGISTRATION). |
