@@ -65,6 +65,46 @@ export type NonCriticalSignalId = typeof SIGNAL_IDS_NON_CRITICAL[number];
 export type SignalId = typeof SIGNAL_IDS_ALL[number];
 
 /**
+ * DEC-074 — fallback-ranker summation set (catalyst-excluded).
+ *
+ * The fallback `computeComposite` iterates this 8-entry set instead of
+ * `SIGNAL_IDS_ALL`. `active_catalyst_flag` (Signal #9) is UNSIGNED —
+ * always ≥ 0, a salience/event-presence intensity, never a direction.
+ * In an additive ranker an unsigned-positive contribution becomes a
+ * direction-blind long-tilt for every catalyst-present name; DEC-074
+ * removes it from the sum (and, equivalently, from `presentCount` —
+ * the loop never visits it) so the fallback mean is computed only
+ * over directionally-signed signals.
+ *
+ * Catalyst REMAINS in `SIGNAL_IDS_ALL` — it is computed, persisted,
+ * and emitted in the per-name feature vector exactly as today, so the
+ * trained-combiner feature surface (LGBM inference; FP-058) is
+ * untouched and zero rework is required when the model-active path
+ * takes over from fallback.
+ *
+ * Order-preservation contract: this tuple's entries appear in the
+ * SAME relative order as in `SIGNAL_IDS_ALL` (catalyst excised in
+ * place). Float addition is non-associative; catalog order is the
+ * byte-identical-replay guarantee for `computeComposite`. Hand-
+ * written `as const` tuple — NOT a runtime `.filter()` — so the
+ * order contract is enforced at the type level and the catalog-drift
+ * sentinel (`signal-catalog_test.ts`) pins each slot literally.
+ */
+export const SIGNAL_IDS_FALLBACK_SUM = [
+  // 2 criticals (Signals #6, #7) — order matches SIGNAL_IDS_CRITICAL.
+  'cross_sectional_momentum_12_1',
+  'short_term_reversal_1w',
+  // 6 non-criticals — order matches SIGNAL_IDS_NON_CRITICAL minus #9
+  // (`active_catalyst_flag` excised; all other slots in place).
+  'analyst_revision_drift',          // Signal #1
+  'pead_sue_20d',                    // Signal #2
+  'options_flow_imbalance_5d',       // Signal #3
+  'insider_transactions_90d',        // Signal #4
+  'news_sentiment_7d',               // Signal #5
+  'short_interest_change_30d',       // Signal #8
+] as const;
+
+/**
  * §4.3.5 L402 minimum-coverage floor: at least 3 of 7 non-critical
  * signals must be present (= 5 of 9 with the 2 criticals). Below this
  * floor the name is excluded as `below_coverage_threshold`.
