@@ -17,6 +17,7 @@ import {
   REGIME_FEATURE_COUNT,
   SIGNAL_IDS_ALL,
   SIGNAL_IDS_CRITICAL,
+  SIGNAL_IDS_FALLBACK_SUM,
   SIGNAL_IDS_NON_CRITICAL,
   TOTAL_SIGNAL_COUNT,
   nonCriticalIsPresentKey,
@@ -75,4 +76,27 @@ Deno.test('catalog: excluded-reason literals match MIG-099 CHECK values verbatim
 Deno.test('catalog: feature-key helpers emit `<id>__value` / `<id>__is_present`', () => {
   assertEquals(nonCriticalValueKey('analyst_revision_drift'), 'analyst_revision_drift__value');
   assertEquals(nonCriticalIsPresentKey('analyst_revision_drift'), 'analyst_revision_drift__is_present');
+});
+
+// ── DEC-074 fallback-sum-set drift sentinel ───────────────────────────
+
+Deno.test('DEC-074: SIGNAL_IDS_FALLBACK_SUM = SIGNAL_IDS_ALL minus active_catalyst_flag, order-preserved', () => {
+  // 8 entries: 2 criticals + 6 non-criticals (catalyst excised).
+  assertEquals(SIGNAL_IDS_FALLBACK_SUM.length, 8);
+  // Catalyst MUST NOT appear in the fallback sum set.
+  assertEquals(SIGNAL_IDS_FALLBACK_SUM.includes('active_catalyst_flag' as never), false);
+  // Every other signal MUST appear, in the SAME relative order as SIGNAL_IDS_ALL.
+  const expected = SIGNAL_IDS_ALL.filter((id) => id !== 'active_catalyst_flag');
+  assertEquals([...SIGNAL_IDS_FALLBACK_SUM], expected);
+});
+
+Deno.test('DEC-074: catalyst REMAINS in SIGNAL_IDS_ALL (feature surface intact for trained combiner)', () => {
+  // Catalyst is excluded only from the fallback SUM, not from the
+  // catalog / feature-vector / persistence path. Trained-combiner
+  // (FP-058) consumes SIGNAL_IDS_ALL via the assembler and MUST still
+  // see catalyst as a feature.
+  assertEquals(SIGNAL_IDS_ALL.includes('active_catalyst_flag'), true);
+  assertEquals(SIGNAL_IDS_NON_CRITICAL.includes('active_catalyst_flag'), true);
+  assertEquals(TOTAL_SIGNAL_COUNT, 9);
+  assertEquals(EXPECTED_FEATURE_KEY_COUNT, 18);
 });

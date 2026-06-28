@@ -89,7 +89,7 @@ Deno.test('computeComposite: minimum-coverage row (2 criticals + exactly 3 non-c
   assertAlmostEquals(composite, 0.3, 1e-12);
 });
 
-Deno.test('computeComposite: full coverage (all 9 signals present) → composite = sum / 9', () => {
+Deno.test('computeComposite: full coverage (all 9 signals present) → catalyst excluded (DEC-074), composite = sum / 8', () => {
   const row = makeIncludedRow('CCC', [1.0, 1.0], {
     analyst_revision_drift: 1.0,
     pead_sue_20d: 1.0,
@@ -100,8 +100,57 @@ Deno.test('computeComposite: full coverage (all 9 signals present) → composite
     active_catalyst_flag: 1.0,
   });
   const { composite, presentCount } = computeComposite(row);
-  assertEquals(presentCount, 9);
+  // DEC-074: catalyst is excluded from both numerator AND presentCount.
+  // 8 signals each at 1.0 → mean still 1.0; presentCount is 8 (not 9).
+  assertEquals(presentCount, 8);
   assertAlmostEquals(composite, 1.0, 1e-12);
+});
+
+// ── DEC-074 catalyst-exclusion pins ───────────────────────────────────
+
+Deno.test('DEC-074: catalyst-absent name composite is BYTE-IDENTICAL to a no-catalyst world (must-not-move)', () => {
+  // A name with NO catalyst contributes nothing to numerator/presentCount
+  // for catalyst today (isPresent===0 skips both). Excluding catalyst
+  // from the iterated set therefore changes NOTHING for this cohort.
+  const row = makeIncludedRow('NOCAT', [0.7, -0.3], {
+    analyst_revision_drift: 0.4,
+    pead_sue_20d: -0.2,
+    options_flow_imbalance_5d: 0.1,
+    // catalyst absent
+  });
+  const { composite, presentCount } = computeComposite(row);
+  // numerator = 0.7 + (-0.3) + 0.4 + (-0.2) + 0.1 = 0.7 ; / 5 = 0.14
+  assertEquals(presentCount, 5);
+  assertAlmostEquals(composite, 0.14, 1e-12);
+});
+
+Deno.test('DEC-074: a large catalyst value does NOT move the composite (exclusion proven by extremum)', () => {
+  // Same signals as NOCAT above, but add a huge catalyst value. If the
+  // exclusion is wired correctly the composite is IDENTICAL to NOCAT;
+  // if catalyst leaked into the sum the composite would jump.
+  const row = makeIncludedRow('CAT', [0.7, -0.3], {
+    analyst_revision_drift: 0.4,
+    pead_sue_20d: -0.2,
+    options_flow_imbalance_5d: 0.1,
+    active_catalyst_flag: 999.0, // would dominate the mean if not excluded
+  });
+  const { composite, presentCount } = computeComposite(row);
+  assertEquals(presentCount, 5, 'catalyst MUST NOT increment presentCount');
+  assertAlmostEquals(composite, 0.14, 1e-12, 'catalyst MUST NOT enter numerator');
+});
+
+Deno.test('DEC-074: matched pair — catalyst-present and catalyst-absent names with identical other signals have identical composites', () => {
+  const otherSignals = {
+    analyst_revision_drift: 0.5,
+    pead_sue_20d: 0.25,
+    options_flow_imbalance_5d: -0.1,
+  } as const;
+  const withCat = makeIncludedRow('WITH', [0.3, 0.2], { ...otherSignals, active_catalyst_flag: 1.0 });
+  const withoutCat = makeIncludedRow('WITHOUT', [0.3, 0.2], { ...otherSignals });
+  const a = computeComposite(withCat);
+  const b = computeComposite(withoutCat);
+  assertEquals(a.presentCount, b.presentCount, 'catalyst exclusion makes presentCount symmetric across the catalyst boundary');
+  assertAlmostEquals(a.composite, b.composite, 1e-12, 'catalyst contribution removed → matched composites');
 });
 
 Deno.test('computeComposite: typed-absence — value=null + is_present=0 is correctly skipped (never coerced to 0 in arithmetic)', () => {
