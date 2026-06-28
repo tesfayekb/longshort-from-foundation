@@ -95,6 +95,25 @@ export type PeadComputeResult =
       sue: number;
       sigma_proxy: number;
       trading_days_since: number;
+      /**
+       * DW-172 — T-0 consensus snapshot capture. Additive, pure
+       * passthrough of the function's own inputs (already in scope).
+       * The value/sue/sigma_proxy/trading_days_since arithmetic is
+       * BYTE-UNCHANGED — this field only echoes inputs the compute
+       * already received, exposing them across the orchestrator
+       * boundary (where they were previously dropped at the value
+       * branch). Capture-only: not consumed by the live signal /
+       * z-score / ranker. Per DEC-053, persisting this T-0 snapshot
+       * forward lets a true T-5 consensus series accrue (~3 mo
+       * horizon) for Phase-7 walk-down ablation.
+       */
+      inputs_snapshot: {
+        epsActual: number;
+        epsAvg: number;
+        epsHigh: number;
+        epsLow: number;
+        numberAnalysts: number;
+      };
     }
   | { kind: 'skip'; reason: PeadSkipReason; detail: string };
 
@@ -166,5 +185,18 @@ export function computePead(i: PeadInputs): PeadComputeResult {
 
   const sue = (i.epsActual - i.epsAvg) / sigma_proxy;
   const value = sue * Math.exp(-trading_days_since / PEAD_HALF_LIFE_TRADING_DAYS);
-  return { kind: 'value', value, sue, sigma_proxy, trading_days_since };
+  return {
+    kind: 'value',
+    value,
+    sue,
+    sigma_proxy,
+    trading_days_since,
+    inputs_snapshot: {
+      epsActual: i.epsActual,
+      epsAvg: i.epsAvg,
+      epsHigh: i.epsHigh,
+      epsLow: i.epsLow,
+      numberAnalysts: i.numberAnalysts,
+    },
+  };
 }
