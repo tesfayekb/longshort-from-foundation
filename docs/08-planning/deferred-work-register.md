@@ -3140,6 +3140,14 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Status** | **CLOSED** (feed-accuracy gate satisfied — both pre-committed thresholds now PASS on the SIP-consolidated feed). DW-148's pre-live dimension is also discharged: the live cut-over inherits the Polygon-SIP feed; no Alpaca data-tier upgrade is required. |
 | **Cross_ref** | DEC-068 clause (r) (ratifies Polygon-SIP as the decision-price feed; supersedes the Alpaca IEX-only path); ACT-337 (this closure + STEP B–D execution); ACT-336 (the reframe + Q4 baseline this closure measures against); `supabase/functions/_shared/longshort-broker/polygon-quote-fetcher.ts` (the in-code anchor); `supabase/functions/_shared/longshort-execution/broker-bootstrap.ts:194` (the seam swap + `LONGSHORT_QUOTE_FEED` revert lever); DW-138 (Alpaca secrets — orthogonal; the placement-execution venue stays Alpaca paper). |
 
+#### DW-148 STATUS-NORMALIZATION ADDENDUM (ACT-363, 2026-06-28) — canonical status set per Drift D2 of `phase-status-ledger.md`
+
+| Field | Value |
+|-------|-------|
+| **Canonical Status** | **RESOLVED-BY-SUBSTITUTE (Polygon NBBO, ACT-337, 2026-06-26).** Supersedes the multi-status reading caused by the original `open` line (L3109) + the REFRAME `OPEN-CRITICAL` line (L3126) + the CLOSURE `CLOSED` line (L3140) co-existing in the same entry. Per Constitution Rule 8, the prior status lines are PRESERVED above as the audit trail; THIS addendum normalizes the canonical pointer for downstream readers. |
+| **Why "by-substitute" rather than "closed"** | The original DW asked whether to UPGRADE Alpaca to Algo Trader Plus. That question was discharged by SUBSTITUTING the decision-price feed (Polygon `/v2/last/nbbo`) rather than by ANSWERING the upgrade question — the Alpaca data-tier decision became moot. The pre-live dimension is fully discharged: the live cut-over inherits the Polygon-SIP feed; no Alpaca data-tier upgrade is required. |
+| **Cross_ref** | `docs/08-planning/phase-status-ledger.md` §6 Drift D2 (this normalization is recorded there as the in-source resolution); ACT-337 (substitute implementation); ACT-363 (this normalization). |
+
 ### DW-149: Short-stop execution branch — Component 1 (≥15% P&L monitor + intent producer) RESOLVED (ACT-344)
 
 | Field | Value |
