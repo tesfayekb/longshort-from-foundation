@@ -250,6 +250,52 @@ export type SignalSkipReason =
                              // carries `acceptanceDateTime` for ANY
                              // observed Form-4 shape; live-verified
                              // 2026-06-14).
+  | 'gated_by_news'          // DEC-071 sub-step 3a / Signal #7 reversal —
+                             // §4.3.5 critical-coverage CARVE-OUT marker.
+                             // The reversal value was computed and is
+                             // finite, but the orchestrator suppresses it
+                             // because Signal #8 (news_sentiment_7d) is
+                             // PRESENT for the same (ticker, as_of_date) —
+                             // the recent move is news-explained, so
+                             // fading it is unsound. The assembler treats
+                             // this row as COVERAGE-SATISFIED (the name
+                             // stays ranked on its other 8 signals) per
+                             // the DEC-071 gated-≠-missing carve-out;
+                             // contrast genuinely-absent reversal
+                             // (skip_reason in {insufficient_history,
+                             // fetch_error, ...}) which still excludes
+                             // the name via MISSING_CRITICAL_7. The raw
+                             // pre-gate value is captured in
+                             // `reversal_ungated_observations` (DW-176).
+  | 'gated_by_catalyst'      // DEC-071 sub-step 3a / Signal #7 reversal —
+                             // §4.3.5 carve-out marker. Symmetric to
+                             // `gated_by_news`: the reversal is
+                             // suppressed because Signal #9
+                             // (active_catalyst_flag) is PRESENT for the
+                             // same (ticker, as_of_date) — the recent
+                             // move is catalyst-explained, so fading it
+                             // is unsound. Coverage-satisfied; raw value
+                             // shadowed in `reversal_ungated_observations`.
+                             // News takes precedence when both fire:
+                             // a row is `gated_by_news` xor `gated_by_catalyst`,
+                             // never both, per the orchestrator's
+                             // precedence rule.
+  | 'gate_inputs_unavailable' // DEC-071 sub-step 3a / Signal #7 reversal —
+                             // HARD PRECONDITION failure marker. The
+                             // reversal orchestrator's news/catalyst
+                             // signal_compute_log lookup found that
+                             // EITHER #8 or #9 has not successfully run
+                             // for the as_of_date. The orchestrator
+                             // therefore falls back to UN-GATED emit
+                             // (raw reversal value persisted, no skip);
+                             // this enum value is reserved for the
+                             // shadow-table `gate_decision` column and
+                             // for run-metadata telemetry — it is NEVER
+                             // written to `signal_observations.skip_reason`
+                             // because the fallback emit is a present
+                             // row, not a typed-absence. Listed here so
+                             // the union is exhaustive for the
+                             // ungated-shadow writer's typing.
   ;
 
 export interface SignalSkip {
