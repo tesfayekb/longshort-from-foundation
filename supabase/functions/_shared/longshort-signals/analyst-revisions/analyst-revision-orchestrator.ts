@@ -81,6 +81,7 @@ import {
   type AnalystRevisionMeta,
 } from './compute-analyst-revision.ts';
 import type { RawPriceTargetRow } from './analyst-identity.ts';
+import { captureAnalystRevisions } from './analyst-revision-capture.ts';
 
 /** Locked signal_id (matches signal_registry row). Do NOT rename. */
 export const SIGNAL_ID = 'analyst_revision_drift';
