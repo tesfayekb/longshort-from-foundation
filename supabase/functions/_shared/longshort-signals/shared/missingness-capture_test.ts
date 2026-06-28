@@ -71,6 +71,10 @@ Deno.test('(2) single row → UPSERT called with correct shape + correct conflic
     // DW-106-c-i passthrough: SignalRow without `carried_forward` coerces
     // to `false` in the payload (matches MIG-101 column DEFAULT).
     carried_forward: false,
+    // DEC-071 sub-step 3a passthrough: SignalRow without skip_reason
+    // coerces to null (matches the nullable column, byte-equivalent for
+    // pre-DEC-071 writers).
+    skip_reason: null,
   }]);
   assertEquals(calls[0].opts, {
     onConflict: 'operator_id,signal_id,as_of_date,ticker',
