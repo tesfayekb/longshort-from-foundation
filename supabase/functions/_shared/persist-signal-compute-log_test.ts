@@ -83,6 +83,9 @@ Deno.test('aggregateSkipCounts: empty array yields all-zero stable shape', () =>
     no_catalyst_events_in_window: 0,
     ticker_to_cik_unresolved: 0,
     no_primary_doc: 0,
+    gated_by_news: 0,
+    gated_by_catalyst: 0,
+    gate_inputs_unavailable: 0,
   });
 });
 
@@ -116,6 +119,9 @@ Deno.test('aggregateSkipCounts: per-reason counts aggregate correctly', () => {
     no_catalyst_events_in_window: 0,
     ticker_to_cik_unresolved: 0,
     no_primary_doc: 0,
+    gated_by_news: 0,
+    gated_by_catalyst: 0,
+    gate_inputs_unavailable: 0,
   });
 });
 
@@ -206,6 +212,9 @@ Deno.test('persistSignalComputeLog: skip_counts JSON shape is stable when no ski
     no_catalyst_events_in_window: 0,
     ticker_to_cik_unresolved: 0,
     no_primary_doc: 0,
+    gated_by_news: 0,
+    gated_by_catalyst: 0,
+    gate_inputs_unavailable: 0,
   });
 });
 

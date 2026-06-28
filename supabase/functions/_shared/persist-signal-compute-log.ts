@@ -19,8 +19,8 @@ import type { SignalSkip, SignalSkipReason } from '../_shared/longshort-signals/
 
 /**
  * Aggregate per-ticker SignalSkip[] into a { reason: count } shape for the
- * signal_compute_log.skip_counts column. All four enum values are seeded to
- * 0 so the JSON shape is stable across runs.
+ * signal_compute_log.skip_counts column. All enum values are seeded to 0
+ * so the JSON shape is stable across runs.
  */
 export function aggregateSkipCounts(
   skips: ReadonlyArray<SignalSkip>,
@@ -45,6 +45,15 @@ export function aggregateSkipCounts(
     no_catalyst_events_in_window: 0,
     ticker_to_cik_unresolved: 0,
     no_primary_doc: 0,
+    // DEC-071 sub-step 3a: reversal cross-signal gate reasons. The first
+    // two can legitimately increment when reversal is suppressed by a
+    // same-day news/catalyst event. `gate_inputs_unavailable` is reserved
+    // for the shadow gate_decision + telemetry channel and is NEVER
+    // written as a SignalSkip.reason — it remains 0 here by contract;
+    // a non-zero would surface a misrouted telemetry tag.
+    gated_by_news: 0,
+    gated_by_catalyst: 0,
+    gate_inputs_unavailable: 0,
     // ACT-215 (DEC-058 §(b) amendment): `no_acceptance_datetime` removed
     // from the enum and from this seed. Acceptance is now a discovery-time
     // NOT NULL schema invariant on `insider_accession_discovery_queue`
