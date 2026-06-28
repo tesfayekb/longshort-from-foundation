@@ -467,6 +467,25 @@ export function createPeadOrchestrator(ctx: PeadOrchestratorContext) {
         };
       }
 
+      // ── Step 5b: DW-172 — T-0 consensus snapshot capture ─────────────
+      // Orchestrator-local, post-persist, capture-only. ONE row per
+      // scored ticker (kind:'value' result — real SUE was computed).
+      // Typed-absence skips (pead_panel_below_floor / zero_dispersion /
+      // no_recent_earnings) get NO row by construction — they are not
+      // in the perTicker value branch. Errors throw and surface;
+      // capture failure does NOT mask the successful signal persist.
+      const captureRows: PeadConsensusCaptureRow[] = perTicker
+        .filter((r): r is Extract<PerTickerResult, { kind: 'value' }> => r.kind === 'value')
+        .map((r) => ({ ticker: r.ticker, snapshot: r.snapshot }));
+      await capturePeadConsensus({
+        supabase: ctx.supabase,
+        operator_id: ctx.operator_id,
+        signal_id: SIGNAL_ID,
+        as_of_date,
+        computed_at,
+        rows: captureRows,
+      });
+
       return {
         outcome: 'completed',
         signal_id: SIGNAL_ID,
