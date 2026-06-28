@@ -64,6 +64,7 @@ import type { FinnhubEpsEstimateFetcher, RawEpsEstimateRow } from '../shared/fin
 import type { FinnhubEarningsFetcher, RawEarningsRow } from '../shared/finnhub-earnings-fetcher.ts';
 import type { FinnhubEarningsCalendarFetcher } from '../shared/finnhub-earnings-calendar-fetcher.ts';
 import { computePead, type PeadSkipReason } from './compute-pead.ts';
+import { capturePeadConsensus, type PeadConsensusCaptureRow } from './pead-consensus-capture.ts';
 
 /** Locked signal-id for Phase 3 combiner consumption. Do not rename. */
 export const SIGNAL_ID = 'pead_sue_20d';
@@ -93,7 +94,24 @@ interface UniverseRow {
 }
 
 type PerTickerResult =
-  | { kind: 'value'; ticker: string; raw_signal: number; gics_sector: string | null }
+  | {
+      kind: 'value';
+      ticker: string;
+      raw_signal: number;
+      gics_sector: string | null;
+      /** DW-172 — additive carry; orchestrator-local capture only. */
+      snapshot: {
+        report_period_date: string;
+        eps_actual: number;
+        consensus_eps_avg: number;
+        eps_high: number;
+        eps_low: number;
+        number_analysts: number;
+        sigma_proxy: number;
+        sue: number;
+        trading_days_since: number;
+      };
+    }
   | { kind: 'skip'; skip: SignalSkip };
 
 /**
@@ -365,6 +383,17 @@ export function createPeadOrchestrator(ctx: PeadOrchestratorContext) {
               ticker,
               raw_signal: result.value,
               gics_sector,
+              snapshot: {
+                report_period_date: eventEarn.period,
+                eps_actual: result.inputs_snapshot.epsActual,
+                consensus_eps_avg: result.inputs_snapshot.epsAvg,
+                eps_high: result.inputs_snapshot.epsHigh,
+                eps_low: result.inputs_snapshot.epsLow,
+                number_analysts: result.inputs_snapshot.numberAnalysts,
+                sigma_proxy: result.sigma_proxy,
+                sue: result.sue,
+                trading_days_since: result.trading_days_since,
+              },
             };
           } catch (err) {
             const message =
@@ -437,6 +466,25 @@ export function createPeadOrchestrator(ctx: PeadOrchestratorContext) {
           completed_at: ts,
         };
       }
+
+      // ── Step 5b: DW-172 — T-0 consensus snapshot capture ─────────────
+      // Orchestrator-local, post-persist, capture-only. ONE row per
+      // scored ticker (kind:'value' result — real SUE was computed).
+      // Typed-absence skips (pead_panel_below_floor / zero_dispersion /
+      // no_recent_earnings) get NO row by construction — they are not
+      // in the perTicker value branch. Errors throw and surface;
+      // capture failure does NOT mask the successful signal persist.
+      const captureRows: PeadConsensusCaptureRow[] = perTicker
+        .filter((r): r is Extract<PerTickerResult, { kind: 'value' }> => r.kind === 'value')
+        .map((r) => ({ ticker: r.ticker, snapshot: r.snapshot }));
+      await capturePeadConsensus({
+        supabase: ctx.supabase,
+        operator_id: ctx.operator_id,
+        signal_id: SIGNAL_ID,
+        as_of_date,
+        computed_at,
+        rows: captureRows,
+      });
 
       return {
         outcome: 'completed',

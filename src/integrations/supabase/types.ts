@@ -1280,6 +1280,57 @@ export type Database = {
         }
         Relationships: []
       }
+      pead_consensus_observations: {
+        Row: {
+          as_of_date: string
+          computed_at: string
+          consensus_eps_avg: number
+          eps_actual: number
+          eps_high: number
+          eps_low: number
+          number_analysts: number
+          operator_id: string
+          report_period_date: string
+          sigma_proxy: number
+          signal_id: string
+          sue: number
+          ticker: string
+          trading_days_since: number
+        }
+        Insert: {
+          as_of_date: string
+          computed_at: string
+          consensus_eps_avg: number
+          eps_actual: number
+          eps_high: number
+          eps_low: number
+          number_analysts: number
+          operator_id: string
+          report_period_date: string
+          sigma_proxy: number
+          signal_id: string
+          sue: number
+          ticker: string
+          trading_days_since: number
+        }
+        Update: {
+          as_of_date?: string
+          computed_at?: string
+          consensus_eps_avg?: number
+          eps_actual?: number
+          eps_high?: number
+          eps_low?: number
+          number_analysts?: number
+          operator_id?: string
+          report_period_date?: string
+          sigma_proxy?: number
+          signal_id?: string
+          sue?: number
+          ticker?: string
+          trading_days_since?: number
+        }
+        Relationships: []
+      }
       permissions: {
         Row: {
           created_at: string
