@@ -95,6 +95,53 @@ ROI-improvement items (trainer quality / signal ablations / shadow variants) are
 
 - **DW-157 → DW-161 carry "ACT-pending" registration tags** in `deferred-work-register.md`. The split itself was authoritative (Drift D6 / DW-143 umbrella supersession) but the registering ACT was not stamped. Next governance turn should stamp a single backfill ACT covering the five entries.
 
+### 4D — Adopted-by-Future-FP Register (ROI-completeness amendment, ACT-364)
+
+The ROI-completeness audit found 40 ROI-class DWs absent from the ledger and lacking a named FP carrier. **Binding rule:** when each FP below is authored (per Drift D4 corrective + Part 3 RESERVED-BUT-UNAUTHORED gaps), it MUST adopt every DW listed under it as a named sub-step OR explicitly defer-with-rationale in the FP charter. Defer-without-rationale = governance violation under the Phase-Gate Protocol.
+
+| Absorbing FP (to be authored) | Adopted DWs | Class |
+|---|---|---|
+| **Phase-4 money-path FP** (the wash-sale / lot / PnL / settlement / CA cluster) | DW-157, DW-158, DW-159, DW-160, DW-161 (already named in Drift D4) | Hard pre-live (5) |
+| **Phase-6 integration FP** (cadence-architecture aggregate) | **Core (from D4):** DW-058, DW-060, DW-105, DW-156. **Execution-branch cluster:** DW-138 (Alpaca live capital fetcher), DW-139 (§8.6.1.1 parallel-order branch), DW-140 (§8.7 partial-fill discipline), DW-141 (§8.8 modify-vs-cancel), DW-142 (§8.10 LULD-aware re-quote), DW-144 (§8.9 PAUSE-class + kill-switch surface), DW-151 (`pdt_block` PAUSE), DW-152 (persistent-BP detection), DW-153 (htb TTL refinement, paper-evidence-gated). **Calibration-debt knobs** (may be folded into a sub-step or split off): DW-145, DW-146, DW-147. | NTB execution-correctness + calibration |
+| **Phase-3 trainer/combiner FP carrier** (FP-052 sub-step 3.4 OR a new Phase-3-residual FP) | DW-100 (multi-year FV backfill), DW-101 (SPY-regime fetcher + features), DW-106 (per-signal carry-forward), DW-109 (coverage-weighted shrinkage — ROI-CRITICAL), DW-110 (forward-return retry obs / `horizon_pending`), DW-135 (cross-source open-price reconcile — promotes `signal_decay_returns` from single-source), DW-136 (SHAP write path — gates §4.1 / §6.5.6 / §8.7 v2 measurement), DW-168 (intraday-group lambdarank sanity gate, already named in Phase-3 row — re-cited here for completeness). | NTB combiner / trainer quality |
+| **Signal-substrate-hardening FP** (new FP carrier OR adopted under existing signal-family FPs by signal #) | **Signal #4 (insider):** DW-093 (DEF-14A NEO enrichment), DW-094 (EDGAR direct rebuild — INC-70). **Signal #3 (options-flow):** DW-095 (cursor-drain rebuild — DEC-047). **Signal #9 (catalyst):** DW-097 (bmo/amc session-anchor enrichment), DW-098 (NYSE-calendar holiday-aware stepper). **Cross-signal substrate:** DW-114 (insider silence detection — producer 403 before R1 heartbeat + green-but-empty consumer mask), DW-130 (SI date-floor + `deriveStaleness` `n/a`-fallthrough hardening), DW-132 (`liveClock` migration on momentum / reversal / pead / options-flow orchestrators). | NTB substrate fidelity |
+| **Low-priority refinements (homed, flagged LOW-PRI)** | DW-165-B (DTC down-weight curve — refinement of DW-165 hard-exclude); DW-167 (Polygon Options Advanced vendor procurement — vendor-gated, adopts under whichever FP charters the options-flow vendor switch); DW-174 (Daily-SI vendor procurement — vendor-gated); DW-181 (Analyst II All-America Research vendor — vendor-gated, LARGEST analyst-skill lever). | Vendor-gated / refinement |
+
+**Coverage attestation:** every ROI-class DW in the register that was ABSENT from the ledger at the audit (40 items) is now homed in one of the rows above. Nothing in the audit's "ABSENT" set remains homeless.
+
+### 4E — RESOLVED-BUT-LEDGER-SILENT (status-backfill record, ACT-364)
+
+Items the register marks RESOLVED that the ledger was previously silent on. Recorded here so future sessions cannot re-charter shipped work.
+
+| DW / DEC | Closure evidence | Note |
+|---|---|---|
+| **DW-172** (PEAD T-0 consensus snapshot capture) | **RESOLVED ACT-357** (time-sensitive capture; landed in the consolidated weekend-bundle PR) | Capture step only; the walk-down ablation remains Phase-7 |
+| **DW-178** (Analyst per-revision-outcome CAPTURE) | **RESOLVED ACT-357** (time-sensitive capture) | The per-analyst weighting (DW-179) remains Phase-7 |
+| **DW-186a** (News articleCount attention capture — narrowed scope from DW-186) | **RESOLVED-PARTIAL ACT-357** (`captureMeta` seam at queue-finalizer + `news_attention_observations(article_count NOT NULL)`; §22.5.1 live-DB verified) | DW-186b (PR-excluded + unmapped-publisher streams) remains OPEN under Part 4D Phase-7 set |
+| **DW-173** (SI level / DTC as-alpha shadow) | **STOOD-UP ACT-360** (MIG-138 `short_interest_alpha_shadow`; mechanism-2 per-signal shadow table) | Promotion decision FP-058-gated; shadow series accruing |
+| **DW-176** (Reversal ungated shadow ride-along under DEC-071) | **LIVE ACT-358 / ACT-359** (MIG-135 `reversal_ungated_observations` accruing; 652 none + 96 catalyst + 90 news shadow rows verified at sub-step 3b closure 2026-06-26) | The Phase-7 retrospective over-gating check itself remains under DW-177 |
+| **DW-149 Component 1** (≥15% short-stop P&L monitor + intent producer) | **RESOLVED ACT-344** (re-cited from Drift D8 for completeness) | DW-149-C carryover remains in Part 4B row 11 |
+| **DW-165** (Days-to-cover short-side entry screen) | **RESOLVED ACT-345** (re-cited from Drift D8) | DW-165-B down-weight refinement remains in Part 4D row 5 |
+| **DW-162a** (ETB transition monitor) | **RESOLVED ACT-346** (re-cited from Drift D5/D8) | DW-162b / DW-166 vendor strands remain in Part 4B row 10 |
+| **DW-163 (+ DW-149-B)** (rolling-window aggregate gate, transient-vs-persistent) | **RESOLVED ACT-348** (FP-057 Sub-step 5) | — |
+| **DW-148** (Alpaca data-tier decision) | **RESOLVED-BY-SUBSTITUTE ACT-337** (Polygon NBBO; re-cited from Drift D2) | Pre-live dimension discharged; live cut-over inherits Polygon SIP |
+| **DEC-071** (Reversal news/catalyst cross-signal gate; magnitude cap deferred) | **RATIFIED + BUILT (NEWS∪CATALYST scope) ACT-358** (sub-steps 3a–3c code; MIG-134 `skip_reason` + MIG-135 ungated-observations + MIG-137 `gated_signals` JSONB). Clause (b) 3σ magnitude-cap DEFERRED at build (recorded at ACT-359); ablation lives under DW-177. | Audit's 1st now-fix |
+| **DEC-073** (Insider buys-only — drop sell-side) | **RESOLVED ACT-357** (one-line filter at `compute-insider.ts:32-36`; symmetric shadow comparator under DW-183) | Audit's 2nd now-fix |
+| **DEC-074** (Catalyst conditioning-only in additive fallback) | **RESOLVED ACT-357** (`SIGNAL_IDS_FALLBACK_SUM` swap in `ranker.ts`; catalyst remains in `SIGNAL_IDS_ALL` / trained-combiner path) | Audit's 3rd now-fix |
+| **DEC-072** (Analyst credibility-weight v1.1 brokerage-tier proxy) | **CHARTERED — BUILD-DEFERRED** per Clause (d) (post-audit weekend-slate ranking; larger lever is DW-179 per-analyst accuracy weight, itself Phase-7-gated) | Charter-deferred |
+| **DEC-075** (Additive-Fallback Regime structural limits + classification gate + Phase-7 acceptance bar) | **CHARTERED governance rule** (ACT-356; §c classification CONFIRMED at ACT-357: 8 additive : 1 interaction-excluded; ZERO TBD) | Governance-only; no code |
+
+### 4F — Amendment scope record (ACT-364)
+
+This ledger amendment closes the ROI-completeness audit. Changes (all additive per Constitution Rule 8):
+
+1. **Phase-2 row "etc." replaced** with the explicit Phase-7 ablation enumeration (see Phase-2 amendment row above; full set: 23 open + 5 resolved-but-co-located).
+2. **Part 4D Adopted-by-Future-FP Register added** — every previously-absent ROI DW now has a named absorbing FP, with the binding rule that FP authors MUST adopt-or-defer-with-rationale.
+3. **Part 4E Status-backfill record added** — 10 RESOLVED DWs + 5 DECs cited with closing-ACT evidence so the ledger reflects HEAD.
+4. **Phase-8 row leverage-DEC home added** — DW-137 (Phase-8 leverage authorization DEC) now homed in the Phase-8 amendment row above.
+5. **`docs/06-tracking/signal-roi-audit-findings.md` discrepancy resolved** — the file DOES exist (286 lines, audited 9/9 signals, closure summary at L216–248); the prior audit's "not present on disk" finding was a miss. Sweep result: every promotable finding in that document is already represented in Part 4D (Phase-7 set, substrate hardening, calibration knobs) or Part 4E (RESOLVED-with-evidence); zero additional ROI items surfaced.
+6. **Coverage re-attestation:** with these amendments, every ROI-class DW in `deferred-work-register.md` is now either REPRESENTED in a phase row, ADOPTED in Part 4D, or RECORDED-RESOLVED in Part 4E. Zero ROI absences.
+
 ---
 
 ## PART 5 — Remaining-Work Sequence (HEAD → Paper → Live)
