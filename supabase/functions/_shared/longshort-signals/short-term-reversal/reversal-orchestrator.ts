@@ -37,6 +37,18 @@ import { captureSignalObservations } from '../shared/missingness-capture.ts';
 /** Locked signal-id string for Phase 3 combiner consumption. Do not rename. */
 export const SIGNAL_ID = 'short_term_reversal_1w';
 
+/**
+ * DEC-071 sub-step 3b — cross-signal gate dependencies. Reversal is
+ * suppressed at emit when news (#8) or catalyst (#9) is PRESENT for the
+ * same (ticker, as_of_date). The orchestrator reads these signal IDs
+ * from signal_observations after verifying via signal_compute_log that
+ * both producers have a SUCCESSFUL run on the same as_of_date (the hard
+ * precondition — absence-of-row ≠ absence-of-news, §9 anti-phantom).
+ */
+const NEWS_SIGNAL_ID = 'news_sentiment_7d';
+const CATALYST_SIGNAL_ID = 'active_catalyst_flag';
+const SHADOW_TABLE = 'reversal_ungated_observations';
+
 const DEFAULT_CONCURRENCY = 20;
 /** Lookback in CALENDAR days. Must span REVERSAL_MIN_BARS=7 TRADING days
  *  + headroom for holiday clusters. Trading/calendar ratio ≈ 252/365 ≈
@@ -56,6 +68,8 @@ interface UniverseRow {
 type PerTickerResult =
   | { kind: 'value'; ticker: string; raw_signal: number; gics_sector: string | null }
   | { kind: 'skip'; skip: SignalSkip };
+
+type GateDecision = 'none' | 'gated_by_news' | 'gated_by_catalyst' | 'gate_inputs_unavailable';
 
 export function createReversalOrchestrator(ctx: SignalOrchestratorContext) {
   return {
@@ -125,6 +139,57 @@ export function createReversalOrchestrator(ctx: SignalOrchestratorContext) {
         };
       }
 
+      // ── DEC-071 sub-step 3b precondition: news/catalyst run gate ──────
+      // Query signal_compute_log for SUCCESSFUL runs of #8 + #9 on the
+      // SAME as_of_date. If either is missing, we cannot safely gate —
+      // the absence of a signal_observations row could mean "no news" OR
+      // "the news job never ran"; the precondition disambiguates. On
+      // pipeline gap → SAFE FALLBACK: emit raw reversal values for all
+      // names (pre-DEC-071 status quo, NOT a skip, NOT an exclusion);
+      // shadow rows carry gate_decision='gate_inputs_unavailable'.
+      const { data: runRows, error: runErr } = await ctx.supabase
+        .from('signal_compute_log')
+        .select('signal_id')
+        .eq('operator_id', ctx.operator_id)
+        .eq('as_of_date', as_of_date)
+        .in('signal_id', [NEWS_SIGNAL_ID, CATALYST_SIGNAL_ID])
+        .eq('outcome', 'completed');
+      if (runErr) {
+        throw new Error(
+          `reversal-orchestrator: signal_compute_log precondition read failed: ${runErr.message}`,
+        );
+      }
+      const seenSignals = new Set(
+        (runRows ?? []).map((r) => (r as { signal_id: string }).signal_id),
+      );
+      const gateInputsAvailable =
+        seenSignals.has(NEWS_SIGNAL_ID) && seenSignals.has(CATALYST_SIGNAL_ID);
+
+      // ── Cross-signal presence map (only when gate is armed) ──────────
+      // Single batched read on SAME as_of_date (no T+1 look-ahead).
+      // "Present" = is_present===true (reading the VALUE would be wrong —
+      // neutral news still means news happened).
+      const newsPresent = new Set<string>();
+      const catalystPresent = new Set<string>();
+      if (gateInputsAvailable) {
+        const { data: obsRows, error: obsErr } = await ctx.supabase
+          .from('signal_observations')
+          .select('ticker, signal_id')
+          .eq('operator_id', ctx.operator_id)
+          .eq('as_of_date', as_of_date)
+          .in('signal_id', [NEWS_SIGNAL_ID, CATALYST_SIGNAL_ID])
+          .eq('is_present', true);
+        if (obsErr) {
+          throw new Error(
+            `reversal-orchestrator: cross-signal observations read failed: ${obsErr.message}`,
+          );
+        }
+        for (const r of (obsRows ?? []) as Array<{ ticker: string; signal_id: string }>) {
+          if (r.signal_id === NEWS_SIGNAL_ID) newsPresent.add(r.ticker);
+          else if (r.signal_id === CATALYST_SIGNAL_ID) catalystPresent.add(r.ticker);
+        }
+      }
+
       // ── Step 2: per-ticker fetch + raw reversal signal ────────────────
       const concurrency = ctx.concurrency ?? DEFAULT_CONCURRENCY;
       const perTicker = await pLimitedMap<UniverseRow, PerTickerResult>(
@@ -175,14 +240,38 @@ export function createReversalOrchestrator(ctx: SignalOrchestratorContext) {
       );
 
       // ── Step 3: within-sector z-score ────────────────────────────────
-      const values = perTicker
-        .filter((r): r is Extract<PerTickerResult, { kind: 'value' }> => r.kind === 'value')
-        .map((r) => ({ ticker: r.ticker, value: r.raw_signal, gics_sector: r.gics_sector }));
+      const valueResults = perTicker
+        .filter((r): r is Extract<PerTickerResult, { kind: 'value' }> => r.kind === 'value');
       const skips: SignalSkip[] = perTicker
         .filter((r): r is Extract<PerTickerResult, { kind: 'skip' }> => r.kind === 'skip')
         .map((r) => r.skip);
 
-      const zScored = zScoreNormalizeWithinSector(values);
+      // ── DEC-071 sub-step 3b: partition value-tickers by gate decision ─
+      // The gate ONLY removes a ticker from the z-score normalization
+      // pool when gateInputsAvailable AND (news_present OR catalyst_present).
+      // gate_inputs_unavailable → pre-DEC-071 path (all values z-scored).
+      // News precedence: news beats catalyst when both fire.
+      const gateDecisions = new Map<string, GateDecision>();
+      const rawByTicker = new Map<string, number>();
+      const normalValues: Array<{ ticker: string; value: number; gics_sector: string | null }> = [];
+      for (const v of valueResults) {
+        rawByTicker.set(v.ticker, v.raw_signal);
+        let decision: GateDecision = 'none';
+        if (!gateInputsAvailable) {
+          decision = 'gate_inputs_unavailable';
+        } else if (newsPresent.has(v.ticker)) {
+          decision = 'gated_by_news';
+        } else if (catalystPresent.has(v.ticker)) {
+          decision = 'gated_by_catalyst';
+        }
+        gateDecisions.set(v.ticker, decision);
+        // gate_inputs_unavailable + none both participate in z-score.
+        if (decision === 'none' || decision === 'gate_inputs_unavailable') {
+          normalValues.push({ ticker: v.ticker, value: v.raw_signal, gics_sector: v.gics_sector });
+        }
+      }
+
+      const zScored = zScoreNormalizeWithinSector(normalValues);
 
       // ── Step 4: rows + attributed sector-related skips ───────────────
       const computed_at = ts;
@@ -212,6 +301,30 @@ export function createReversalOrchestrator(ctx: SignalOrchestratorContext) {
         });
       }
 
+      // DEC-071 sub-step 3b: emit GATED typed-absence rows for tickers
+      // suppressed by the news/catalyst cross-signal gate. value=null,
+      // is_present=false, skip_reason ∈ {'gated_by_news','gated_by_catalyst'}.
+      // Per §9 anti-phantom: NEVER a fabricated zero. These rows do NOT
+      // participate in z-score normalization (they're not in normalValues).
+      // gate_inputs_unavailable does NOT reach this branch — those tickers
+      // emit normally (raw → z-score) above.
+      for (const v of valueResults) {
+        const d = gateDecisions.get(v.ticker);
+        if (d === 'gated_by_news' || d === 'gated_by_catalyst') {
+          rows.push({
+            operator_id: ctx.operator_id,
+            signal_id: SIGNAL_ID,
+            ticker: v.ticker,
+            as_of_date,
+            value: null,
+            is_present: false,
+            gics_sector: v.gics_sector,
+            computed_at,
+            skip_reason: d,
+          });
+        }
+      }
+
       // ── Step 5: persist ──────────────────────────────────────────────
       const { inserted, error: persistErr } = await captureSignalObservations(ctx.supabase, rows);
       if (persistErr) {
@@ -226,6 +339,39 @@ export function createReversalOrchestrator(ctx: SignalOrchestratorContext) {
           started_at,
           completed_at: ts,
         };
+      }
+
+      // ── DEC-071 sub-step 3b / DW-176: ungated shadow capture ─────────
+      // ALWAYS write a shadow row for every ticker that produced a
+      // numeric raw_signal — including the 'none' (normal-emit) and
+      // 'gate_inputs_unavailable' (precondition fallback) cases. No
+      // series gap; raw_value is the pre-gate computeReversal output
+      // (NEVER re-derived, NEVER fabricated). ON CONFLICT DO NOTHING
+      // mirrors the idempotent-overwrite ban on the shadow series.
+      const shadowRows = valueResults.map((v) => ({
+        operator_id: ctx.operator_id,
+        signal_id: SIGNAL_ID,
+        as_of_date,
+        ticker: v.ticker,
+        raw_value: v.raw_signal,
+        gate_decision: gateDecisions.get(v.ticker) ?? 'none',
+        computed_at,
+      }));
+      if (shadowRows.length > 0) {
+        const { error: shadowErr } = await ctx.supabase
+          .from(SHADOW_TABLE)
+          .upsert(shadowRows, {
+            onConflict: 'operator_id,signal_id,as_of_date,ticker',
+            ignoreDuplicates: true,
+          });
+        if (shadowErr) {
+          // Shadow failure is telemetry-only — it MUST NOT fail the
+          // live signal path (the gate decision and the present rows
+          // are already persisted). The Phase-7 reader will detect the
+          // gap and surface it; the live ranking is unaffected.
+          // We swallow here to preserve the must-not-move on the normal
+          // path; signal_compute_log carries the run outcome.
+        }
       }
 
       return {
