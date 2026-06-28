@@ -64,6 +64,7 @@ import type { FinnhubEpsEstimateFetcher, RawEpsEstimateRow } from '../shared/fin
 import type { FinnhubEarningsFetcher, RawEarningsRow } from '../shared/finnhub-earnings-fetcher.ts';
 import type { FinnhubEarningsCalendarFetcher } from '../shared/finnhub-earnings-calendar-fetcher.ts';
 import { computePead, type PeadSkipReason } from './compute-pead.ts';
+import { capturePeadConsensus, type PeadConsensusCaptureRow } from './pead-consensus-capture.ts';
 
 /** Locked signal-id for Phase 3 combiner consumption. Do not rename. */
 export const SIGNAL_ID = 'pead_sue_20d';
@@ -93,7 +94,24 @@ interface UniverseRow {
 }
 
 type PerTickerResult =
-  | { kind: 'value'; ticker: string; raw_signal: number; gics_sector: string | null }
+  | {
+      kind: 'value';
+      ticker: string;
+      raw_signal: number;
+      gics_sector: string | null;
+      /** DW-172 — additive carry; orchestrator-local capture only. */
+      snapshot: {
+        report_period_date: string;
+        eps_actual: number;
+        consensus_eps_avg: number;
+        eps_high: number;
+        eps_low: number;
+        number_analysts: number;
+        sigma_proxy: number;
+        sue: number;
+        trading_days_since: number;
+      };
+    }
   | { kind: 'skip'; skip: SignalSkip };
 
 /**
