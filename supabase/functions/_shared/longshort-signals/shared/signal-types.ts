@@ -54,6 +54,21 @@ export interface SignalRow {
    * (`feature-assembler_carry-flag-isolation_test.ts` pins this).
    */
   carried_forward?: boolean;
+  /**
+   * DEC-071 sub-step 3a — typed-absence discriminator for the assembler.
+   *
+   * NULL on present rows AND on legacy skip rows (the missingness-capture
+   * mapper coerces `undefined` to NULL via column DEFAULT, which is
+   * byte-equivalent to pre-DEC-071 behavior for every existing
+   * orchestrator). Set to one of the §4.3.5-carve-out reasons
+   * (`'gated_by_news'` / `'gated_by_catalyst'` / `'gate_inputs_unavailable'`)
+   * by the reversal orchestrator on a typed-absence emit when the
+   * cross-signal gate fires. The `signal_observations_value_is_present_check`
+   * remains the structural invariant — a gated row is still
+   * `(value=null, is_present=false)` — so `skip_reason` is an ADDITIONAL
+   * axis, never a replacement.
+   */
+  skip_reason?: SignalSkipReason | null;
 }
 
 /**
