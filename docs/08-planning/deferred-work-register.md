@@ -3552,6 +3552,10 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Resolution shape** | A Phase-7 ablation FP under FP-058; on PASS for Variant 2, a DEC mutating §4.4.1 (signal-change, NOT sizing-change); on FAIL/marginal, the variant is DECLINED with a recorded finding; raw 12-1 stays. |
 | **Cross_ref** | FP-058; DEC-066 (signal-representation lock — promotion would mutate it); §4.4.1 (the spec-literal raw 12-1); §6.5 (shadow-variant harness); DW-169 (the higher-conviction risk-layer companion — sequence first); the Signal ROI audit findings ledger; literature: Blitz/Huij/Martens *JIM* 2011 (residual momentum); the σ-divide weak-support note from the audit; **ACT-350 (REGISTRATION)**. |
 
+#### DW-170 ADDENDUM 2026-06-30 (Constitution Rule 8 — preserve original, append correction): shadow-mechanism cross-ref FLAG (inherited from DW-173 finding)
+
+The DW-170 `Title` / `Scope` / `Cross_ref` rows above point at `combiner_shadow_variant_config` (§6.5) as the harness for Variants 1 + 2. **That cross-ref inherits the same error confirmed in the DW-173 build (see DW-173 ADDENDUM below)**: `combiner_shadow_variant_config` is ranker-tuning-only — it carries `variant_name / inclusion_rule / k` rows over the SAME `SIGNAL_IDS_ALL`-derived feature vector and has no surface for introducing a NEW alpha series. DW-170's σ-divide and residual-momentum variants are NEW compute-layer signal series, not ranker-tuning rows; they need **mechanism (2)** — a compute-fork shadow producer writing to a dedicated `momentum_alpha_shadow` table (PK + variant CHECK + RLS mirroring `short_interest_alpha_shadow` / `reversal_ungated_observations`). When DW-170 is sequenced for build, follow the DW-173 / MIG-138 template; do NOT walk the `combiner_shadow_variant_config` path. NO build today; this is a forward-flag only. Cross_ref add: DW-173 ADDENDUM (the seam reconciliation); MIG-138 (the template); ACT-360 (the build that surfaced the inherited error).
+
 ### DW-171: PEAD σ_proxy standardization ablation — analyst-dispersion-range (current) vs classic own-firm-time-series-SUE
 
 | Field | Value |
