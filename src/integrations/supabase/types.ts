@@ -1586,6 +1586,36 @@ export type Database = {
         }
         Relationships: []
       }
+      short_interest_alpha_shadow: {
+        Row: {
+          as_of_date: string
+          computed_at: string
+          gics_sector: string | null
+          operator_id: string
+          raw_value: number | null
+          ticker: string
+          variant: string
+        }
+        Insert: {
+          as_of_date: string
+          computed_at: string
+          gics_sector?: string | null
+          operator_id: string
+          raw_value?: number | null
+          ticker: string
+          variant: string
+        }
+        Update: {
+          as_of_date?: string
+          computed_at?: string
+          gics_sector?: string | null
+          operator_id?: string
+          raw_value?: number | null
+          ticker?: string
+          variant?: string
+        }
+        Relationships: []
+      }
       short_interest_days_to_cover: {
         Row: {
           as_of_date: string
