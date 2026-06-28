@@ -69,6 +69,15 @@ interface StagingRow {
   ticker: string;
   gics_sector: string | null;
   raw_signal: number;
+  /**
+   * DW-186a — optional finalize-time meta payload propagated from the
+   * compute kernel's `TickerComputeResult` (feed-mode in-process; work-
+   * list in-process). Per-ticker mode round-trips staging through DB
+   * (line 156 re-select) where this channel does NOT survive — that
+   * path leaves `meta` undefined and is byte-unchanged. Capture-only:
+   * never consumed by the z-score path or the ranker.
+   */
+  meta?: unknown;
 }
 
 interface SkipRow {
@@ -361,6 +370,10 @@ async function buildFeedAggregates(
           ticker: u.ticker,
           gics_sector: u.gics_sector,
           raw_signal: result.raw,
+          // DW-186a — propagate the kernel's meta payload (in-process
+          // here; the DB staging round-trip used by per-ticker mode is
+          // bypassed in feed mode). Absent meta stays undefined.
+          meta: (result as { meta?: unknown }).meta,
         });
       }
     } else {
@@ -419,6 +432,9 @@ async function buildWorkListAggregates(
           ticker: r.ticker,
           gics_sector: r.gicsSector,
           raw_signal: r.result.raw,
+          // DW-186a — propagate the kernel's meta payload (in-process;
+          // work-list mode also bypasses the staging-table round-trip).
+          meta: (r.result as { meta?: unknown }).meta,
         });
       }
     } else {
