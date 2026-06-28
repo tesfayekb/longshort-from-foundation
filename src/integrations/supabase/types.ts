@@ -1457,6 +1457,36 @@ export type Database = {
         }
         Relationships: []
       }
+      reversal_ungated_observations: {
+        Row: {
+          as_of_date: string
+          computed_at: string
+          gate_decision: string
+          operator_id: string
+          raw_value: number | null
+          signal_id: string
+          ticker: string
+        }
+        Insert: {
+          as_of_date: string
+          computed_at: string
+          gate_decision: string
+          operator_id: string
+          raw_value?: number | null
+          signal_id: string
+          ticker: string
+        }
+        Update: {
+          as_of_date?: string
+          computed_at?: string
+          gate_decision?: string
+          operator_id?: string
+          raw_value?: number | null
+          signal_id?: string
+          ticker?: string
+        }
+        Relationships: []
+      }
       role_permissions: {
         Row: {
           id: string
@@ -1733,6 +1763,7 @@ export type Database = {
           is_present: boolean
           operator_id: string
           signal_id: string
+          skip_reason: string | null
           ticker: string
           value: number | null
         }
@@ -1744,6 +1775,7 @@ export type Database = {
           is_present: boolean
           operator_id: string
           signal_id: string
+          skip_reason?: string | null
           ticker: string
           value?: number | null
         }
@@ -1755,6 +1787,7 @@ export type Database = {
           is_present?: boolean
           operator_id?: string
           signal_id?: string
+          skip_reason?: string | null
           ticker?: string
           value?: number | null
         }
