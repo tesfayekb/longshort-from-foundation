@@ -54,6 +54,14 @@ function makeSupabase(opts: {
             },
           };
         }
+        if (table === 'analyst_revision_observations') {
+          // DW-178 capture sink — accept all writes (capture-only).
+          return {
+            upsert(_payload: unknown[], _opts: unknown) {
+              return Promise.resolve({ error: null });
+            },
+          };
+        }
         throw new Error(`unexpected table: ${table}`);
       },
     },
