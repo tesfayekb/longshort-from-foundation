@@ -1058,6 +1058,8 @@ export type Database = {
           reason: string | null
           set_at: string
           set_by: string | null
+          set_by_kind: string | null
+          source_ref: string | null
           state: Database["public"]["Enums"]["kill_switch_state"]
           strategy_key: string
         }
@@ -1066,6 +1068,8 @@ export type Database = {
           reason?: string | null
           set_at?: string
           set_by?: string | null
+          set_by_kind?: string | null
+          source_ref?: string | null
           state?: Database["public"]["Enums"]["kill_switch_state"]
           strategy_key: string
         }
@@ -1074,6 +1078,8 @@ export type Database = {
           reason?: string | null
           set_at?: string
           set_by?: string | null
+          set_by_kind?: string | null
+          source_ref?: string | null
           state?: Database["public"]["Enums"]["kill_switch_state"]
           strategy_key?: string
         }
@@ -2664,6 +2670,15 @@ export type Database = {
         Args: {
           p_operator_id?: string
           p_reason: string
+          p_strategy_key: string
+        }
+        Returns: Json
+      }
+      kill_switch_system_pause: {
+        Args: {
+          p_operator_id?: string
+          p_reason: string
+          p_source_ref: string
           p_strategy_key: string
         }
         Returns: Json
