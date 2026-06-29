@@ -300,9 +300,7 @@ Deno.test('DW-202 guard — Supabase writer insert-row keys are a subset of real
       };
     },
   };
-  // deno-lint-ignore-file no-explicit-any
-  // (no `any` used — fakeSupabase shape matches SupabaseLike structurally
-  // via the writer's narrowing — pass through unknown→typed cast.)
+  // fakeSupabase passed via unknown→typed cast; no `any` used.
   const writer = createSupabaseAggregatePersistenceEventWriter(
     fakeSupabase as unknown as Parameters<typeof createSupabaseAggregatePersistenceEventWriter>[0],
   );
