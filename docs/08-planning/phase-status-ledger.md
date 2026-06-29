@@ -80,11 +80,13 @@ THIS ledger is the **authoritative phase/task pointer** for the CROSSWIND §10 l
 | 2 | **DW-062** | ADR-002 Test 2 RTH re-run | Fill-independence assumption underpins v0 fallback safety claim |
 | 3 | **DW-154** | Reg-SHO SSR live source | "Live-fire ratification MUST NOT proceed with SSR as typed-absence" |
 | 4 | **DW-155** | Live `assets.shortable` semantics | Live DEC MUST cite DW-155 closure evidence |
-| 5 | **DW-157** | Wash-sale events + writer + verifier | §11.0.10 zero-tolerance; 1099-B correctness |
-| 6 | **DW-158** | `longshort_lots` FIFO ledger + verifier | Cost-basis truth (substrate every tax verifier reads) |
-| 7 | **DW-159** | `realized_pnl` writer-at-exit + verifier | P&L truth |
-| 8 | **DW-160** | `verify_settlement_status` + T+1 wiring | Cash availability + PDT-adjacent |
-| 9 | **DW-161** | Polygon corp-actions ingestion + verifier | Silent-corruption risk on splits/divs/mergers |
+| 5 | **DW-157** | Wash-sale events + writer + verifier | §11.0.10 zero-tolerance; 1099-B correctness — **BUILT (FP-061 sub-step 4M.3, MIG-141/ACT-374) — broker-reconciliation PENDING FP-062** |
+| 6 | **DW-158** | `longshort_lots` FIFO ledger + verifier | Cost-basis truth (substrate every tax verifier reads) — **BUILT (FP-061 sub-step 4M.1, MIG-139/ACT-370) — broker-reconciliation PENDING FP-062** |
+| 7 | **DW-159** | `realized_pnl` writer-at-exit + verifier | P&L truth — **BUILT (FP-061 sub-steps 4M.5a + 4M.5b, MIG-140/ACT-372 + MIG-142/ACT-376) — broker-reconciliation PENDING FP-062** |
+| 8 | **DW-160** | `verify_settlement_status` + T+1 wiring | Cash availability + PDT-adjacent — **BUILT (FP-061 sub-steps 4M.1 + 4M.2, MIG-139/ACT-370 + MIG-143/ACT-377) — broker-reconciliation PENDING FP-062** |
+| 9 | **DW-161** | Polygon corp-actions ingestion + verifier | Silent-corruption risk on splits/divs/mergers — **BUILT (FP-061 sub-step 4M.4, MIG-144/ACT-378) — broker-reconciliation PENDING FP-062** |
+
+> **Note (rows 5–9, BUILT ≠ DISCHARGED):** the internal substrate (tables, writers, composer plug-ins, verifier reader-wires) is built under FP-061 (CLOSED in-entry 2026-06-29 at ACT-380). The soft-dependent verifier shells (`verify_lot_record` / `verify_wash_sale_record` / `verify_realized_pnl` / `verify_settlement_status` / `verify_corporate_action_clean` / `verify_year_end_tax_record`) flip mock→real only when **FP-062** lands the broker fetchers (DW-058 cluster + successors **DW-196** broker-1099-B, **DW-197** merger/spinoff CA source, **DW-198** cash-dividend accrual, **DW-199** broker CA basis fetcher). Rows retain "PRE-LIVE BLOCKER (Phase 8)" status until FP-062 closes and a Phase-8-gate re-verification stamps full discharge.
 | 10 | **DW-162b + DW-166** | Numeric borrow-rate monitor + vendor procurement | Rate-DRIFT verifier branches; squeeze early-warning |
 | 11 | **DW-149-C** | Short-stop obligation persistence (Component 1 carryover) | Currently single-tick fire-and-let-broker-race |
 | 12 | **DW-150** | §8.9 `ssr_violation` rejection PAUSE-class | Same-tick race-window logic |
