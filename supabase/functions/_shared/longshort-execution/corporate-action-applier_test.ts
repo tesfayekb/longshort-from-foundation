@@ -38,7 +38,7 @@ import type {
 
 // ── In-memory fake DB + client ────────────────────────────────────────
 
-interface FakeRow extends Record<string, unknown> {}
+type FakeRow = Record<string, unknown>;
 interface FakeDb {
   corporate_actions: FakeRow[];
   longshort_lots: FakeRow[];
