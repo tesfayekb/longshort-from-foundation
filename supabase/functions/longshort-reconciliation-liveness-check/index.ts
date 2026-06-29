@@ -30,13 +30,16 @@
  *     refresh's 'live' cross-check must NOT satisfy the periodic-sweep liveness contract).
  *   - 'unknown' is excluded (pre-MIG-059 backfill; no evidence of live observation).
  *
- * Permission: longshort.manage (this job halts the sweep — manage-tier authority).
+ * Permission: cron-only via verifyCronSecret (FP-062 sub-step 6I.3c-pre / ACT-389 —
+ * system-level cron path; CRON_SECRET IS the authorization, mirroring
+ * longshort-universe-quarterly-refresh). Self-contained — "no external invoke; the
+ * observed is the verdict itself" — so no UI caller exists and no manual sibling
+ * is needed. Halt-authority is enforced by pg_cron-only invocation discipline.
  * Method: POST (correlation_id propagation via canonical handler).
  */
 
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
-import { authenticateRequest } from '../_shared/authenticate-request.ts';
-import { checkPermissionOrThrow } from '../_shared/authorization.ts';
+import { verifyCronSecret } from '../_shared/cron-auth.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
@@ -197,8 +200,11 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(405, 'Method not allowed', { correlationId: crypto.randomUUID() });
   }
 
-  const ctx = await authenticateRequest(req);
-  await checkPermissionOrThrow(ctx.user.id, 'longshort.manage');
+  // FP-062 sub-step 6I.3c-pre / ACT-389 — cron-only auth (see header). The
+  // handler-local correlationId mirrors quarterly-refresh's cron-only pattern.
+  const correlationId = crypto.randomUUID();
+  const cronAuthError = verifyCronSecret(req);
+  if (cronAuthError) return cronAuthError;
 
   const ts = productionClock.getWallClockTs();
 
@@ -210,7 +216,7 @@ Deno.serve(createHandler(async (req: Request) => {
       {
         liveness_check_ts: ts.toISOString(),
         verdict,
-        correlation_id: ctx.correlationId,
+        correlation_id: correlationId,
       },
       200,
     );
@@ -237,6 +243,6 @@ Deno.serve(createHandler(async (req: Request) => {
   // retry + alerting fires on the 5xx (the rung-(b) we don't have an emit helper for yet).
   return apiError(500, 'reconciliation_liveness_stop', {
     code: 'RECONCILIATION_LIVENESS_STOP',
-    correlationId: ctx.correlationId,
+    correlationId,
   });
 }));
