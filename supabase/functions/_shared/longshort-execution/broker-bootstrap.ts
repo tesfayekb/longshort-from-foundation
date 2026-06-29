@@ -70,6 +70,13 @@ import { AlpacaOrderSubmitter } from '../longshort-broker/alpaca-order-submitter
 import { AlpacaFillFetcher } from '../longshort-broker/alpaca-fill-fetcher.ts';
 import { AlpacaOrderCanceller } from '../longshort-broker/alpaca-order-canceller.ts';
 import { AlpacaOpenOrdersFetcher } from '../longshort-broker/alpaca-open-orders-fetcher.ts';
+// ACT-403 (Finding-B Option-1) — recently-filled fetcher. Composed into
+// `reconstructInFlight` so fills that completed between ticks are routed
+// through the existing fill-poll → terminal_filled → LotLedgerSink path.
+import {
+  AlpacaRecentlyFilledOrdersFetcher,
+  DEFAULT_RECENT_FILL_LOOKBACK_S,
+} from '../longshort-broker/alpaca-recently-filled-orders-fetcher.ts';
 // ACT-317 (E5.5 Phase-1) — placement-path adapters. Required by the §7
 // preflight composer (halt + locate + position) and by the Phase-2 trigger
 // (quote + buying-power for submitRebalance; position for planRebalance
@@ -187,6 +194,15 @@ export class LiveBrokerNotProvisionedError extends Error {
 export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {}): BrokerInterfaces {
   const client = new AlpacaPaperClient(config);
   const openOrders = new AlpacaOpenOrdersFetcher(client);
+  const recentlyFilled = new AlpacaRecentlyFilledOrdersFetcher(client);
+  // ACT-403 — lookback window. Default 2× the 15-min tick interval
+  // (1800s). Survives one missed tick; idempotency holds via
+  // `source_order_id` dedup at `writeOpenLot` + MIG-148 unique index.
+  const lookbackEnv = Deno.env.get('LONGSHORT_RECENT_FILL_LOOKBACK_S');
+  const parsedLookback = lookbackEnv ? Number(lookbackEnv) : NaN;
+  const recentFillLookbackS = Number.isFinite(parsedLookback) && parsedLookback > 0
+    ? parsedLookback
+    : DEFAULT_RECENT_FILL_LOOKBACK_S;
   // ── DEC-068 clause (p) ENV-FLAG GATE ─────────────────────────────────────
   // ALPACA_PAPER_LOCATE_AVAILABLE is the declarative posture flag for the
   // short-availability source. Default `false` on paper (Alpaca paper does
@@ -234,7 +250,31 @@ export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {})
     fillFetcher: new AlpacaFillFetcher(client),
     submitter: new AlpacaOrderSubmitter(client),
     canceller: new AlpacaOrderCanceller(client),
-    reconstructInFlight: (ts: Date) => openOrders.listOpenInFlight(ts),
+    // ACT-403 — MERGE open + recently-filled. The kernel's fill-poll path
+    // observes filled:true on the recently-filled entries → terminal_filled
+    // emits → LotLedgerSink fires. Idempotency on re-observation across
+    // overlapping windows is enforced at the writer seam.
+    reconstructInFlight: async (ts: Date) => {
+      const [open, filled] = await Promise.all([
+        openOrders.listOpenInFlight(ts),
+        recentlyFilled.listRecentlyFilledAsInFlight(ts, recentFillLookbackS),
+      ]);
+      // Defensive dedup by order_id in case an order races between buckets
+      // (status flipped open→filled in the millisecond between calls).
+      const seen = new Set<string>();
+      const merged: typeof open[number][] = [];
+      for (const o of open) {
+        if (seen.has(o.order_id)) continue;
+        seen.add(o.order_id);
+        merged.push(o);
+      }
+      for (const o of filled) {
+        if (seen.has(o.order_id)) continue;
+        seen.add(o.order_id);
+        merged.push(o);
+      }
+      return merged;
+    },
     // ── ACT-317 (E5.5 Phase-1) — placement-path adapters (LAZY). ────────
     quoteFetcher,
     buyingPowerFetcher: new AlpacaBuyingPowerFetcher(client),
