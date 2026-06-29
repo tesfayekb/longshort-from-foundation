@@ -113,6 +113,7 @@ const washSaleFetcher: BrokerWashSaleRecordFetcher = {
       status: 'block_active',
       block_until: null,
       attached_to_lot_id: null,
+      fetched_at: new Date(0),
     };
   },
 };
@@ -120,7 +121,7 @@ const lotRecordFetcher: BrokerLotRecordFetcher = {
   async fetchLotRecord(lot_id: string, _ts: Date): Promise<BrokerLotRecord> {
     return {
       lot_id, symbol: '', entry_ts: new Date(0), qty: 0, cost_basis: 0,
-      side: 'long', status: 'open', locate_id: null,
+      side: 'long', status: 'open', locate_id: null, fetched_at: new Date(0),
     };
   },
 };
