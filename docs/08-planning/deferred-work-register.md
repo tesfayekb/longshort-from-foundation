@@ -3314,7 +3314,7 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | Field | Value |
 |---|---|
 | **ID** | DW-159 (DW-143 successor #3 of 6). |
-| **Status** | open. **PRE-LIVE BLOCKER** (P&L truth / tax). NOT a paper-v1 blocker (paper-side P&L observability is broker-reported, not ledger-reconciled). |
+| **Status** | **RESOLVED-WITH-SCOPE-AMENDMENT** (2026-06-29 / ACT-376 / Rule 8 additive). Original scope row preserved below verbatim. **Amendment:** the separate `realized_pnl(event_id, ...)` table proposed in the original scope is **SUPERSEDED by column-on-lots** per the **DW-160 binding decision** — `verify_realized_pnl` is per-trade-scalar (`InternalRealizedPnL{trade_id, claimed_pnl}`) with no aggregation key, and CROSSWIND §7.6 step 8 mandates the column-on-lots shape. The realized-PnL columns live on `longshort_lots` directly: `realized_pnl` (MIG-140, 4M.5a / ACT-372) + `net_pnl` and `wash_sale_adjustment` (MIG-142, 4M.5b / ACT-376). The year-end aggregator (`year-end-tax-aggregator.ts`) + the broker-gated `verify_year_end_tax_record` shell replace the original table's tax-reporting role. Broker-1099-B activation tracked under successor **DW-196**. |
 | **Tier** | A — money-path P&L correctness (the "did we actually make money" surface). |
 | **Title** | Author `realized_pnl` table, the writer-at-exit (per closing-lot), and wire `verify_realized_pnl`. |
 | **Scope** | (a) Migration: `realized_pnl(event_id, operator_id, lot_id, symbol, side, shares, basis_per_share, exit_price_per_share, gross_pnl, wash_sale_adjustment, net_pnl, exit_at, ...)`; (b) writer fires per closed lot in the close-writer (DW-158 §c) — gross from basis vs exit; net after consulting DW-157 wash-sale disallow; (c) wire `verify_realized_pnl` to assert the writer's row against broker-side realized-P&L statements. |
@@ -3322,7 +3322,7 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Blocks** | Phase-8 live-money authorization. |
 | **Future Owner Phase** | Phase 7, sequenced AFTER DW-158 and DW-157. |
 | **Resolution shape** | Strong+ FP authoring migration + writer extension to the close path + verifier wiring + a daily reconciliation against broker statements. |
-| **Cross_ref** | DW-143 (superseded umbrella); DW-157 / DW-158 (upstream); CROSSWIND §7.x; `supabase/functions/_shared/longshort-verifiers/verify_realized_pnl.ts` (the shell); the conformance audit (ACT-pending). |
+| **Cross_ref** | DW-143 (superseded umbrella); DW-157 / DW-158 (upstream); DW-160 (column-on-lots precedent the amendment follows); DW-196 (broker-1099-B activation successor); CROSSWIND §7.6 step 8 / §7.x; `supabase/functions/_shared/longshort-verifiers/verify_realized_pnl.ts` (per-trade scalar shell); `supabase/functions/_shared/longshort-verifiers/verify_year_end_tax_record.ts` (year-end aggregate shell, 4M.5b); `supabase/functions/_shared/longshort-execution/year-end-tax-aggregator.ts` (the 8949/Schedule D rollup); MIG-140 (realized_pnl column); MIG-142 (net_pnl + wash_sale_adjustment columns); ACT-372 (4M.5a); ACT-376 (4M.5b + this amendment); the conformance audit. |
 
 ---
 
