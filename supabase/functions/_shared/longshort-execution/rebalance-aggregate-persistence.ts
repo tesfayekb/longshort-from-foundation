@@ -60,6 +60,31 @@ export const PERSIST_CALL_NAME = 'verify_rebalance_aggregate_persistence' as con
 export const PERSIST_ACTION =
   'persistent_band_violation_operator_alert_N_consecutive_ticks' as const;
 
+/** DW-202 structural guard reference — the real writable column set on
+ *  `public.reconciliation_events` per
+ *  supabase/migrations/20260522100100_step_6_2_reconciliation_events.sql.
+ *  `event_id` is auto-gen PK and excluded from inserts. Any writer in
+ *  this module MUST emit only keys from this set; the test suite asserts
+ *  the subset invariant so a future drift fails at author time, not at
+ *  PostgREST schema-cache miss time (DW-202 silent-failure class). */
+export const RECONCILIATION_EVENTS_WRITABLE_COLUMNS = Object.freeze([
+  'operator_id',
+  'ts',
+  'engine_version',
+  'call_name',
+  'tier',
+  'symbol',
+  'expected_value',
+  'observed_value',
+  'divergence',
+  'tolerance',
+  'outcome',
+  'failure_action',
+  'phase_0b_run_id',
+  'pr_evidence_ref',
+  'notes',
+] as const);
+
 export function parsePersistN(env: { get(name: string): string | undefined }): number {
   const raw = env.get('LONGSHORT_REBALANCE_AGGREGATE_PERSIST_N');
   if (raw === undefined) return DEFAULT_PERSIST_N;
