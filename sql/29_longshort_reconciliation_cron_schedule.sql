@@ -168,12 +168,12 @@ SELECT cron.schedule(
 -- fetcher_source='live' rows on each of the three verify surfaces:
 --
 --   SELECT
---     date_trunc('minute', created_at) AS tick_minute,
---     verify_kind,
+--     date_trunc('minute', ts) AS tick_minute,
+--     call_name,
 --     count(*) FILTER (WHERE fetcher_source = 'live') AS live_rows
 --   FROM public.reconciliation_events
---   WHERE created_at >= now() - interval '15 minutes'
---     AND verify_kind IN (
+--   WHERE ts >= now() - interval '15 minutes'
+--     AND call_name IN (
 --       'verify_buying_power',
 --       'verify_position',
 --       'verify_universe_membership'
@@ -184,7 +184,7 @@ SELECT cron.schedule(
 --   Expected:
 --     - at least 2 distinct tick_minute values (two consecutive sweeps)
 --     - for each tick_minute, live_rows >= 1 on each of the three
---       verify_kind values
+--       call_name values
 --
 --   This satisfies the FP-062-ADD-03 Amendment 4 verification AC.
 --   PASTE all four step outputs into the FP-062 6I.3c closure record.
