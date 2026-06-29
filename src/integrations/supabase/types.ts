@@ -203,6 +203,7 @@ export type Database = {
         Row: {
           as_of_date: string
           computed_at: string
+          entered_at: string | null
           intraday_slot: number
           operator_id: string
           rank_within_side: number
@@ -210,10 +211,12 @@ export type Database = {
           score: number
           side: string
           ticker: string
+          transition_reason: string | null
         }
         Insert: {
           as_of_date: string
           computed_at?: string
+          entered_at?: string | null
           intraday_slot?: number
           operator_id: string
           rank_within_side: number
@@ -221,10 +224,12 @@ export type Database = {
           score: number
           side: string
           ticker: string
+          transition_reason?: string | null
         }
         Update: {
           as_of_date?: string
           computed_at?: string
+          entered_at?: string | null
           intraday_slot?: number
           operator_id?: string
           rank_within_side?: number
@@ -232,6 +237,7 @@ export type Database = {
           score?: number
           side?: string
           ticker?: string
+          transition_reason?: string | null
         }
         Relationships: []
       }
