@@ -83,6 +83,7 @@ import type { FetcherSource } from '../longshort-reconciliation-types.ts';
 import type { DaysToCoverReader } from '../longshort-signals/shared/days-to-cover-store.ts';
 import type { WashSaleBlockReader } from './wash-sale-writer.ts';
 import type { UnsettledCashReader } from './settlement-reconciler.ts';
+import type { UnappliedCorporateActionReader } from './corporate-action-applier.ts';
 
 /**
  * COMPOSER ↔ VERIFIER LAYER DISTINCTION (load-bearing):
@@ -215,6 +216,23 @@ export interface PreflightComposerDeps {
    * FP-062 lands.
    */
   unsettledCashReader?: UnsettledCashReader;
+  /**
+   * FP-061 sub-step 4M.4 / ACT-378 — §7 BLOCK on unapplied corporate
+   * actions. Typed-absence dep. When INJECTED, every candidate (long AND
+   * short) is checked against `corporate_actions` for any row with
+   * `ex_date <= ts AND applied_at IS NULL`; per-candidate BLOCK with
+   * reason `unapplied_corporate_action` and metadata `{action_type,
+   * ex_date}`. When ABSENT, the gate is structurally skipped on every
+   * candidate (`summary.unapplied_corporate_action_unchecked=true`),
+   * mirroring the wash_sale_block / unsettled_cash typed-absence shape.
+   *
+   * SAFETY-FIRST: this gate fires on BOTH sides — a split or merger that
+   * has not yet propagated through our applier means the lot ledger basis
+   * is stale for the symbol; entering ANY new position before the applier
+   * runs would write a row at the wrong reference basis. The gate clears
+   * the moment the applier stamps `applied_at`.
+   */
+  unappliedCorporateActionReader?: UnappliedCorporateActionReader;
 }
 
 export interface PreflightComposerInput {
@@ -282,6 +300,11 @@ export interface PreflightComposerSummary {
    *  composer SUBTRACTED from broker `available_bp` before the
    *  `bpInsufficient` check. 0 when `unsettled_cash_unavailable=true`. */
   unsettled_cash_deployed: number;
+  /** FP-061 sub-step 4M.4 — TRUE iff no `unappliedCorporateActionReader`
+   *  was injected; CA gate was structurally skipped on every candidate. */
+  unapplied_corporate_action_unchecked: boolean;
+  /** FP-061 sub-step 4M.4 — candidates excluded for an unapplied CA. */
+  corporate_action_blocked_candidates: number;
 }
 
 export interface PreflightComposerOutput {
@@ -350,6 +373,20 @@ export async function composePreflightResults(
   const bpInsufficient = effectiveAvailableBp < requestedTotal;
   void input.internal_expected_bp; // reserved for the Phase-2 trigger audit envelope
 
+  // ── FP-061 sub-step 4M.4 — §7 BLOCK on unapplied corporate actions.
+  //    Single batched read across all candidate symbols (one DB call), then
+  //    per-candidate lookup in the returned map. Typed-absence: when reader
+  //    is not injected, the gate is structurally skipped on every candidate.
+  const caReader = deps.unappliedCorporateActionReader;
+  const caUnchecked = caReader === undefined;
+  let caBlocked = 0;
+  const caMap = caReader
+    ? await caReader.fetchUnapplied(
+        input.candidates.map((c) => c.symbol),
+        input.ts,
+      )
+    : new Map<string, { action_type: string; ex_date: Date }>();
+
   const results = new Map<PreflightKey, PreflightResult>();
   const skipped = new Map<PreflightKey, readonly string[]>();
   let passedCount = 0;
@@ -368,6 +405,15 @@ export async function composePreflightResults(
     // System-level BP failure short-circuits every candidate per §11.0.7 #9.
     if (bpInsufficient) {
       failed.push('verify_buying_power');
+    }
+
+    // ── FP-061 4M.4 CORPORATE-ACTION GATE (both sides). ───────────────────
+    // Table-local read (single batched query above). Zero broker calls.
+    if (caReader === undefined) {
+      skippedHere.push('verify_corporate_action_clean');
+    } else if (caMap.has(c.symbol)) {
+      failed.push('verify_corporate_action_clean');
+      caBlocked++;
     }
 
     // ── HALT (every candidate). ──
@@ -555,6 +601,8 @@ export async function composePreflightResults(
           ? 'wash_sale_block'
         : (failed.length === 1 && failed[0] === 'verify_wash_sale_pending_review')
           ? 'wash_sale_pending_review'
+        : (failed.length === 1 && failed[0] === 'verify_corporate_action_clean')
+          ? 'unapplied_corporate_action'
         : `preflight_failed:${failed.join(',')}`;
 
     results.set(key, {
@@ -589,6 +637,8 @@ export async function composePreflightResults(
       wash_sale_pending_review_long_candidates: washSalePendingReviewLong,
       unsettled_cash_unavailable: unsettledCashUnavailable,
       unsettled_cash_deployed: unsettledCashDeployed,
+      unapplied_corporate_action_unchecked: caUnchecked,
+      corporate_action_blocked_candidates: caBlocked,
     },
   };
 }
