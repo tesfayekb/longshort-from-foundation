@@ -41,8 +41,11 @@
  * Other verifiers (verify_short_availability / verify_borrow_*) dispatch from
  * order-execution code at Phase 5 (per-order-submit), not from periodic sweep.
  *
- * Permission: longshort.view (per system-state observability discipline; longshort.execute
- * is Phase 5+ territory).
+ * Permission: cron-only via verifyCronSecret (FP-062 sub-step 6I.3c-pre / ACT-389 —
+ * system-level cron path; the CRON_SECRET IS the authorization, mirroring
+ * longshort-universe-quarterly-refresh). No live UI caller exists; if one is added
+ * later, extract a separate manual sibling per the split-handler precedent — do NOT
+ * widen this handler's auth surface to dual-auth.
  *
  * Method: POST (correlation_id propagation via canonical handler).
  */
