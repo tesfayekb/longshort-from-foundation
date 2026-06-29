@@ -39,6 +39,13 @@ export interface InternalLotRecord {
   side: 'long' | 'short';
   status: string;
   locate_id: string | null;
+  /** FP-061 sub-step 4M.5a additive — exit columns (NULL while open).
+   *  NOT in COMPARED_FIELDS: the verifier's exact-match contract is unchanged;
+   *  these fields are surfaced for downstream consumers (4M.3 wash-sale) only. */
+  exit_ts?: Date | null;
+  exit_price?: number | null;
+  realized_pnl?: number | null;
+  wash_sale_status?: 'pending' | 'clean' | 'disallowed' | null;
 }
 
 interface LotRecordDivergence extends Record<string, unknown> {
