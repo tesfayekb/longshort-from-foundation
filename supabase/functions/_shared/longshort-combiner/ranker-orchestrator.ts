@@ -56,6 +56,14 @@ import { computeRankings, IncludedRowInvariantError, type RankingRow } from './r
 import { seedBook, BookOverlapError } from './book-seeder.ts';
 import { RANKER_SOURCE_FALLBACK } from './ranker-constants.ts';
 import {
+  applyBookStateMachine,
+  seedAllAsSeeded,
+  type BookRowWithTransition,
+  type BookRejection,
+} from './book-state-machine.ts';
+import { loadPriorBook, type PriorBookSupabaseClient } from './prior-book-loader.ts';
+import { loadRecentExits, type RecentExitsSupabaseClient } from './recent-exits-loader.ts';
+import {
   parseLgbmTreeDump,
   scoreLgbm,
   featuresToOrderedArray,
@@ -438,8 +446,58 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         rankings_written += chunk.length;
       }
 
+      // ── Step 3.5 (FP-062 6I.4 / DW-105 §1.4): apply book state-machine ──
+      // Hysteresis 21-30, cap-25 (no bumping), conditional 31-day re-entry
+      // block (loss-only; pnl>=0 → no block). The state-machine is PURE
+      // (asOfDate/asOfIso inputs); the loaders are thin I/O shells.
+      // Daily writer is slot 0 (DEC-070 (e)); intraday slots only see
+      // prior-book history from their own slot to preserve substrate
+      // independence — the rotation invariant.
+      let bookWithTransitions: BookRowWithTransition[];
+      let bookRejections: BookRejection[] = [];
+      try {
+        const priorBook = await loadPriorBook({
+          supabase: ctx.supabase as unknown as PriorBookSupabaseClient,
+          operator_id: ctx.operator_id,
+          as_of_date,
+          intraday_slot,
+        });
+        if (priorBook.length === 0) {
+          // First-run / gap case — preserve pre-MIG-147 backfill semantics.
+          bookWithTransitions = seedAllAsSeeded(book, as_of_iso);
+        } else {
+          const recentExits = await loadRecentExits({
+            supabase: ctx.supabase as unknown as RecentExitsSupabaseClient,
+            operator_id: ctx.operator_id,
+            as_of_date,
+          });
+          const sm = applyBookStateMachine({
+            priorBook,
+            todayRankings: rankings,
+            candidates: book,
+            recentExits,
+            asOfDate: as_of_date,
+            asOfIso: as_of_iso,
+          });
+          bookWithTransitions = sm.rows;
+          bookRejections = sm.rejected;
+        }
+      } catch (e) {
+        return {
+          outcome: 'failed',
+          as_of_date,
+          intraday_slot,
+          vectors_read,
+          rankings_written,
+          book_size_long: 0,
+          book_size_short: 0,
+          ranker_source: ranker_source_literal,
+          failure_reason: `book_state_machine_failed: ${(e as Error).message}`,
+        };
+      }
+
       // ── Step 4: persist book (chunked UPSERT; computed_at = as_of) ──
-      const bookPayload = book.map((b) => ({
+      const bookPayload = bookWithTransitions.map((b) => ({
         operator_id: ctx.operator_id,
         as_of_date,
         side: b.side,
@@ -450,6 +508,9 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
         computed_at: as_of_iso,
         // DEC-070 clause (e) substrate dual-capture plumbing — daily writer = slot 0.
         intraday_slot,
+        // FP-062 6I.4 / DW-105 §1.4 descriptive columns (MIG-147).
+        entered_at: b.entered_at,
+        transition_reason: b.transition_reason,
       }));
 
       let book_size_long = 0;
@@ -483,6 +544,33 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
       for (const row of bookPayload) {
         if (row.side === 'long') book_size_long++;
         else book_size_short++;
+      }
+
+      // ── Step 4.5: emit transition audit (best-effort; never fails the run) ──
+      // Single audit row carrying transition counts + rejected rows so
+      // the §1.4 state machine is observable without a new table.
+      if (bookWithTransitions.length > 0 || bookRejections.length > 0) {
+        const counts = { seeded: 0, held: 0, entered: 0, re_entered: 0 };
+        for (const r of bookWithTransitions) counts[r.transition_reason]++;
+        try {
+          await ctx.supabase.from('longshort_audit_logs').insert({
+            operator_id: ctx.operator_id,
+            action: 'combiner.book_transitions',
+            target_type: 'combiner_book',
+            target_id: `${as_of_date}#slot${intraday_slot}`,
+            metadata: {
+              fp: 'FP-062',
+              sub_step: '6I.4',
+              dw: 'DW-105',
+              as_of_date,
+              intraday_slot,
+              counts,
+              rejected: bookRejections,
+            },
+          });
+        } catch {
+          // Best-effort — audit failure does NOT fail the orchestrator run.
+        }
       }
 
       return {
