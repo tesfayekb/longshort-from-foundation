@@ -601,6 +601,8 @@ export async function composePreflightResults(
           ? 'wash_sale_block'
         : (failed.length === 1 && failed[0] === 'verify_wash_sale_pending_review')
           ? 'wash_sale_pending_review'
+        : (failed.length === 1 && failed[0] === 'verify_corporate_action_clean')
+          ? 'unapplied_corporate_action'
         : `preflight_failed:${failed.join(',')}`;
 
     results.set(key, {
