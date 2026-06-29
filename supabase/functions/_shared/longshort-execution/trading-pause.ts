@@ -24,14 +24,18 @@
 export const LONGSHORT_STRATEGY_KEY = 'longshort';
 
 export interface SupabaseLike {
-  // deno-lint-ignore no-explicit-any
-  rpc(fn: string, args: Record<string, unknown>): Promise<{ data: any; error: any }>;
+  rpc(
+    fn: string,
+    args: Record<string, unknown>,
+  ): Promise<{ data: unknown; error: { message: string } | null }>;
   from(table: string): {
     select(cols: string): {
       eq(col: string, val: string): {
         eq(col: string, val: string): {
-          // deno-lint-ignore no-explicit-any
-          maybeSingle(): Promise<{ data: any; error: any }>;
+          maybeSingle(): Promise<{
+            data: { state: string } | null;
+            error: { message: string } | null;
+          }>;
         };
       };
     };
