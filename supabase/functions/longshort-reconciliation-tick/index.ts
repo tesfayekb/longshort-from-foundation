@@ -127,6 +127,24 @@ export function classifyTickDisposition(
 // Operator UUID per DEC-031 F-2 standalone-operator-id default
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
+// BOOTSTRAP PLACEHOLDERS for the internal-expected reconciliation side (DW-138 —
+// FP-062 6I.3c / ACT-393). The verify_* reconcilers compare internal-belief vs
+// broker-truth. Pre-first-trade, no internal equity-snapshot/lot state exists to
+// seed these (`longshort_equity_snapshots` is write-only-after-rebalance), so
+// these are honest placeholders that CORRECTLY escalate against a live
+// never-traded paper account (the failure_escalated rows observed at 6I.3c
+// closure are TRUE-positives — the truth being "internal expectation is a
+// tracked DW-138 stub"). They resolve naturally when DW-138 wires the real
+// internal equity/position source on the tick-handler expected-state seeding
+// surface. Do NOT seed these from a broker snapshot — that would make
+// expected==observed by construction (tautology) and defeat the drift detection
+// the verifier exists for (§9 anti-phantom rule from the other side: a visible
+// sentinel replaced by an invisible tautology).
+const BOOTSTRAP_PLACEHOLDER_EXPECTED_BP_USD = 100_000;      // DW-138 — verify_buying_power expected side
+const BOOTSTRAP_PLACEHOLDER_PROBE_SYMBOL = 'AAPL';          // DW-138 — verify_position probe symbol
+const BOOTSTRAP_PLACEHOLDER_EXPECTED_QTY = 0;               // DW-138 — verify_position expected qty
+const BOOTSTRAP_PLACEHOLDER_EXPECTED_COST_BASIS = 0;        // DW-138 — verify_position expected cost basis
+
 // FP-008 sub-step 8.7 / ACT-113 — LIVE universe-membership fetcher backed by
 // supabaseAdmin reads of `universe_membership` + `hard_exclusions` (MIG-050 +
 // MIG-051). Replaces the prior mock-universe fetcher per Surface 1 Option A
@@ -167,7 +185,7 @@ Deno.serve(createHandler(async (req: Request) => {
     const bpResult = await verifyBuyingPower(
       {
         operator_id: DEFAULT_OPERATOR_ID,
-        expected_bp: 100000,
+        expected_bp: BOOTSTRAP_PLACEHOLDER_EXPECTED_BP_USD,
         requested_position_size: 0,
       },
       broker.buyingPowerFetcher!,
@@ -219,9 +237,9 @@ Deno.serve(createHandler(async (req: Request) => {
   try {
     const posResult = await verifyPosition(
       {
-        symbol: 'AAPL',
-        expected_qty: 0,
-        expected_cost_basis: 0,
+        symbol: BOOTSTRAP_PLACEHOLDER_PROBE_SYMBOL,
+        expected_qty: BOOTSTRAP_PLACEHOLDER_EXPECTED_QTY,
+        expected_cost_basis: BOOTSTRAP_PLACEHOLDER_EXPECTED_COST_BASIS,
         operator_id: DEFAULT_OPERATOR_ID,
       },
       broker.positionFetcher!,
