@@ -313,6 +313,7 @@ export async function closeLots(
     //     diagnostic-only — they do NOT clear broker_confirmed_pnl.
     let verify_result: ReconcileResult | null = null;
     try {
+      // gate-13-allow: post-mutation verify per §7.6 step 7-8 — verify_realized_pnl reconciles the realized-PnL number AFTER the exit is recorded on the lot (realized PnL is not knowable until close); this is the spec-sanctioned post-mutation reconcile, not a verify-after-mutation defect.
       verify_result = await verifyRealizedPnL(
         {
           trade_id: inp.exit_trade_id,
