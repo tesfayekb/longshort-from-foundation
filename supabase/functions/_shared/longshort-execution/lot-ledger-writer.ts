@@ -32,6 +32,9 @@ import { supabaseAdmin } from '../supabase-admin.ts';
 import { tradingDaysAfter } from '../longshort-universe/shared/trading-days.ts';
 import type { BrokerFillResult } from '../longshort-broker-interfaces.ts';
 import type { InternalLotRecord } from '../longshort-verifiers/verify_lot_record.ts';
+import type { BrokerRealizedPnLFetcher } from '../longshort-broker-interfaces.ts';
+import type { FetcherSource, ReconcileResult } from '../longshort-reconciliation-types.ts';
+import { verifyRealizedPnL } from '../longshort-verifiers/verify_realized_pnl.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -95,6 +98,29 @@ export interface ClosedLot {
   cost_basis: number;
   entry_ts: Date;
   closed_at: Date;
+  /** FP-061 sub-step 4M.5a — per-exit fields populated by closeLots.
+   *  4M.3 consumes broker_confirmed_pnl + verify outcome to gate Path A
+   *  (broker confirms loss → write wash_sale_events) vs Path B
+   *  (broker disagrees → re_entry_blocked_pending_review). */
+  exit_ts: Date;
+  exit_price: number;
+  realized_pnl: number;
+  wash_sale_status: 'pending';
+  broker_confirmed_pnl: number | null;
+  verify_result: ReconcileResult | null;
+}
+
+/**
+ * FP-061 sub-step 4M.5a — per-lot exit context the close-writer requires.
+ *
+ *   - `exit_price`: comes from the broker exit fill. Typed-absence-throw if
+ *     null/<=0 — NO sentinel/default per §11.0.7 anti-phantom + STOP-conditions.
+ *   - `exit_trade_id`: the broker fill's trade_id; feeds verify_realized_pnl.
+ */
+export interface CloseLotInput {
+  lot_id: string;
+  exit_price: number;
+  exit_trade_id: string;
 }
 
 /**
@@ -157,30 +183,159 @@ export async function writeOpenLot(
  * those are 4M.5 and 4M.3 respectively. It only flips status and returns
  * the lineage rows so the consumers can take it from here.
  */
+/**
+ * Close-writer (FP-061 sub-step 4M.5a — extended from the 4M.1 stub).
+ *
+ * Per CloseLotInput, exit_price + exit_trade_id come from the BROKER exit
+ * fill. The writer:
+ *
+ *   1. Per-lot, computes sign-aware realized_pnl off ClosedLot.side
+ *      (the strategy-intent side, NOT broker_side — a short-cover is
+ *      broker_side='buy' but closes a 'short' lot):
+ *        long:  (exit_price − cost_basis) × qty
+ *        short: (cost_basis − exit_price) × qty
+ *
+ *   2. UPDATEs the row with status='closed', exit_ts, exit_price,
+ *      realized_pnl, wash_sale_status='pending' (§7.6 step 8 — 4M.3 later
+ *      resolves to 'clean' or 'disallowed').
+ *
+ *   3. Fires `verify_realized_pnl` per closed lot — SOFT-DEPENDENT on the
+ *      real BrokerRealizedPnLFetcher per FP-061 charter (mock path until
+ *      FP-062 / DW-058 lands; mirrors FP-057 verify_rebalance_aggregate
+ *      precedent).
+ *
+ *   4. Surfaces broker_confirmed_pnl + verify_result on the returned
+ *      ClosedLot — the seam 4M.3 reads to choose Path A vs Path B. This
+ *      writer does NOT implement wash-sale logic.
+ *
+ * Pre-conditions (throw, no sentinel):
+ *   - inputs.length === 0 → return [] (short-circuit, no DB call, no fetch)
+ *   - any input with exit_price == null OR exit_price <= 0 → throw
+ *   - exit_trade_id required (non-empty) → throw
+ *
+ * `closed_at` here is the exit_ts the rows are stamped with: it comes from
+ * the broker fill, NOT from Date.now() — caller responsibility.
+ */
 export async function closeLots(
-  lot_ids: readonly string[],
+  inputs: readonly CloseLotInput[],
   closed_at: Date,
+  fetcher: BrokerRealizedPnLFetcher,
+  fetcher_source: FetcherSource,
   client: LotLedgerClient = supabaseAdmin as unknown as LotLedgerClient,
 ): Promise<ClosedLot[]> {
-  if (lot_ids.length === 0) return [];
-  const { data, error } = await client
-    .from('longshort_lots')
-    .update({ status: 'closed', closed_at: closed_at.toISOString() })
-    .in('lot_id', lot_ids)
-    .select('lot_id, symbol, side, qty, cost_basis, entry_ts');
-  if (error) {
-    throw new Error(`longshort_lots_close_failed: ${error.message}`);
+  if (inputs.length === 0) return [];
+
+  // Per-input precondition — typed absence, no defaulting.
+  for (const inp of inputs) {
+    if (inp.exit_price == null || !(inp.exit_price > 0)) {
+      throw new Error(
+        `closeLots: precondition violated — lot_id=${inp.lot_id} exit_price=${inp.exit_price}`,
+      );
+    }
+    if (!inp.exit_trade_id || inp.exit_trade_id.length === 0) {
+      throw new Error(
+        `closeLots: precondition violated — lot_id=${inp.lot_id} missing exit_trade_id`,
+      );
+    }
   }
-  const rows = data ?? [];
-  return rows.map((r) => ({
-    lot_id: String(r.lot_id),
-    symbol: String(r.symbol),
-    side: r.side as 'long' | 'short',
-    qty: Number(r.qty),
-    cost_basis: Number(r.cost_basis),
-    entry_ts: new Date(String(r.entry_ts)),
-    closed_at,
-  }));
+
+  const byLotId = new Map(inputs.map((i) => [i.lot_id, i] as const));
+  const lot_ids = inputs.map((i) => i.lot_id);
+
+  // Two-phase UPDATE: we need each row's side+cost_basis+qty BEFORE we can
+  // compute realized_pnl, so first read the existing rows, then write per-lot
+  // exits one by one (a single UPDATE can't apply per-row computed values
+  // through this narrow client). The pre-read also surfaces missing lots.
+  const closed: ClosedLot[] = [];
+  for (const lot_id of lot_ids) {
+    const inp = byLotId.get(lot_id)!;
+    const existing = await client
+      .from('longshort_lots')
+      .select('lot_id, symbol, side, qty, cost_basis, entry_ts')
+      .eq('lot_id', lot_id)
+      .single();
+    if (existing.error) {
+      throw new Error(`longshort_lots_read_for_close_failed: ${existing.error.message}`);
+    }
+    if (!existing.data) {
+      throw new Error(`longshort_lots_close_missing: lot_id=${lot_id}`);
+    }
+    const side = existing.data.side as 'long' | 'short';
+    const qty = Number(existing.data.qty);
+    const cost_basis = Number(existing.data.cost_basis);
+    const realized_pnl = side === 'long'
+      ? (inp.exit_price - cost_basis) * qty
+      : (cost_basis - inp.exit_price) * qty;
+
+    const upd = await client
+      .from('longshort_lots')
+      .update({
+        status: 'closed',
+        closed_at: closed_at.toISOString(),
+        exit_ts: closed_at.toISOString(),
+        exit_price: inp.exit_price,
+        realized_pnl,
+        wash_sale_status: 'pending',
+      })
+      .in('lot_id', [lot_id])
+      .select('lot_id, symbol, side, qty, cost_basis, entry_ts');
+    if (upd.error) {
+      throw new Error(`longshort_lots_close_failed: ${upd.error.message}`);
+    }
+
+    // FP-061 SOFT-DEPENDENT BROKER FETCHER — see FP-057
+    // verify_rebalance_aggregate precedent. The real Alpaca-paper
+    // BrokerRealizedPnLFetcher lands in FP-062 / DW-058. Until then the
+    // verifier fires against the contract-complete mock-fetcher path.
+    // TODO(FP-062): flip `fetcher` to the real broker-side reader at the
+    // call site below; this writer is unchanged.
+    let verify_result: ReconcileResult | null = null;
+    let broker_confirmed_pnl: number | null = null;
+    try {
+      verify_result = await verifyRealizedPnL(
+        {
+          trade_id: inp.exit_trade_id,
+          symbol: String(existing.data.symbol),
+          claimed_pnl: realized_pnl,
+          operator_id: '00000000-0000-0000-0000-000000000001',
+        },
+        fetcher,
+        closed_at,
+        fetcher_source,
+      );
+      const div = verify_result.divergence as { broker_confirmed_pnl?: number };
+      if (typeof div?.broker_confirmed_pnl === 'number') {
+        broker_confirmed_pnl = div.broker_confirmed_pnl;
+      }
+    } catch (e) {
+      // Verifier dispatch failure does NOT poison the close-writer
+      // (mirrors lifecycle-orchestrator propagator pattern). 4M.3 will
+      // see verify_result===null and route to Path B pending-review.
+      verify_result = null;
+      broker_confirmed_pnl = null;
+      // Surface the error in the lot's wash_sale_status remains 'pending';
+      // diagnostic-only swallow per DEC-034 narrow exception (verify is
+      // observation, not the source-of-truth write).
+      void e;
+    }
+
+    closed.push({
+      lot_id,
+      symbol: String(existing.data.symbol),
+      side,
+      qty,
+      cost_basis,
+      entry_ts: new Date(String(existing.data.entry_ts)),
+      closed_at,
+      exit_ts: closed_at,
+      exit_price: inp.exit_price,
+      realized_pnl,
+      wash_sale_status: 'pending',
+      broker_confirmed_pnl,
+      verify_result,
+    });
+  }
+  return closed;
 }
 
 /**
@@ -199,7 +354,7 @@ export async function readInternalLotRecord(
 ): Promise<InternalLotRecord> {
   const { data, error } = await client
     .from('longshort_lots')
-    .select('lot_id, symbol, entry_ts, qty, cost_basis, side, status, locate_id')
+    .select('lot_id, symbol, entry_ts, qty, cost_basis, side, status, locate_id, exit_ts, exit_price, realized_pnl, wash_sale_status')
     .eq('lot_id', lot_id)
     .single();
   if (error) {
@@ -217,5 +372,13 @@ export async function readInternalLotRecord(
     side: data.side as 'long' | 'short',
     status: String(data.status),
     locate_id: data.locate_id == null ? null : String(data.locate_id),
+    // FP-061 sub-step 4M.5a additive — NOT in verify_lot_record COMPARED_FIELDS
+    // (verifier exact-match contract unchanged); surfaced for 4M.3 consumption.
+    exit_ts: data.exit_ts == null ? null : new Date(String(data.exit_ts)),
+    exit_price: data.exit_price == null ? null : Number(data.exit_price),
+    realized_pnl: data.realized_pnl == null ? null : Number(data.realized_pnl),
+    wash_sale_status: data.wash_sale_status == null
+      ? null
+      : (String(data.wash_sale_status) as 'pending' | 'clean' | 'disallowed'),
   };
 }
