@@ -202,6 +202,41 @@ function makeSupabase(opts: {
         if (opts.bookUpsertErr) return Promise.resolve({ error: opts.bookUpsertErr });
         return Promise.resolve({ error: null });
       },
+      // FP-062 6I.4 — prior-book-loader probe. Default: empty → gap case
+      // → state-machine falls back to seedAllAsSeeded (byte-identical
+      // book payload, plus transition_reason='seeded' + entered_at).
+      select(_cols: string) {
+        const builder: Record<string, unknown> = {
+          eq() { return builder; },
+          lt() { return builder; },
+          order() { return builder; },
+          limit() {
+            return Promise.resolve({ data: [], error: null });
+          },
+        };
+        return builder;
+      },
+    };
+  }
+
+  // FP-062 6I.4 — longshort_lots reader for recent-exits-loader. Returns
+  // empty data; the state-machine's 31-day-block set is then empty.
+  function lotsBuilder() {
+    const builder: Record<string, unknown> = {
+      select(_cols: string) { return builder; },
+      eq() { return builder; },
+      gte() { return builder; },
+      not() { return builder; },
+      limit() { return Promise.resolve({ data: [], error: null }); },
+    };
+    return builder;
+  }
+
+  // FP-062 6I.4 — longshort_audit_logs sink. Insert is best-effort and
+  // the orchestrator swallows failures; we accept-and-discard.
+  function auditBuilder() {
+    return {
+      insert(_row: unknown) { return Promise.resolve({ error: null }); },
     };
   }
 
@@ -211,6 +246,8 @@ function makeSupabase(opts: {
       if (table === 'combiner_model_registry') return registryBuilder();
       if (table === 'combiner_rankings') return rankingsBuilder();
       if (table === 'combiner_book') return bookBuilder();
+      if (table === 'longshort_lots') return lotsBuilder();
+      if (table === 'longshort_audit_logs') return auditBuilder();
       throw new Error(`unexpected table ${table}`);
     },
   };
