@@ -274,6 +274,14 @@ export interface PreflightComposerSummary {
   /** FP-061 sub-step 4M.3 — long candidates excluded for an open
    *  wash_sale_pending_review (§7.7 Path B operator queue). */
   wash_sale_pending_review_long_candidates: number;
+  /** FP-061 sub-step 4M.2 / ACT-377 — TRUE iff no `unsettledCashReader`
+   *  was injected; the §7 BP-read used the RAW broker `available_bp`
+   *  without the settled-vs-unsettled subtraction. */
+  unsettled_cash_unavailable: boolean;
+  /** FP-061 sub-step 4M.2 — dollars deployed on OPEN+pending lots that the
+   *  composer SUBTRACTED from broker `available_bp` before the
+   *  `bpInsufficient` check. 0 when `unsettled_cash_unavailable=true`. */
+  unsettled_cash_deployed: number;
 }
 
 export interface PreflightComposerOutput {
