@@ -85,8 +85,10 @@ Deno.test('(f) source sentinel — handler does NOT swallow infrastructure_failu
   assertStringIncludes(src, 'classifyTickDisposition(results)');
   // The halting branch must call apiError, not apiSuccess.
   assertStringIncludes(src, "apiError(status, 'reconciliation_tick_escalated'");
-  // NOT-FOR-LIVE-INVOCATION docstring guard present.
-  assertStringIncludes(src, 'NOT FOR LIVE INVOCATION');
+  // Positive invariant (post-ACT-384): handler wires the real broker fetcher
+  // factory — the mock-era NOT-FOR-LIVE marker was correctly removed when
+  // createLiveBrokerInterfaces replaced MOCK_BP_FETCHER/MOCK_POSITION_FETCHER.
+  assertStringIncludes(src, 'createLiveBrokerInterfaces');
   // Negative sentinel: there must be NO line that pushes infrastructure_failure
   // and unconditionally returns apiSuccess in a catch tail (the pre-Commit-7
   // phantom-success shape).
