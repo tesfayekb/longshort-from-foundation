@@ -81,6 +81,7 @@ import type {
 } from './cache-propagator-io.ts';
 import type { FetcherSource } from '../longshort-reconciliation-types.ts';
 import type { DaysToCoverReader } from '../longshort-signals/shared/days-to-cover-store.ts';
+import type { WashSaleBlockReader } from './wash-sale-writer.ts';
 
 /**
  * COMPOSER ↔ VERIFIER LAYER DISTINCTION (load-bearing):
@@ -175,6 +176,26 @@ export interface PreflightComposerDeps {
    * with strict finite-positive validation at the composer caller.
    */
   shortDtcExcludeThreshold?: number;
+  /**
+   * FP-061 sub-step 4M.3 — LONG-side wash-sale block reader. Typed-absence
+   * dep. When INJECTED, every LONG candidate is checked against:
+   *   (a) wash_sale_events with status='block_active' AND block_until > ts
+   *       (§7.7 Path A re-entry block — §1.4 IRS wash-sale rule); fail
+   *       reason `wash_sale_block`.
+   *   (b) wash_sale_pending_review with status='open' for the symbol
+   *       (§7.7 Path B operator-review queue — broker disagreed on the
+   *       loss number, can't re-enter until resolved); fail reason
+   *       `wash_sale_pending_review`.
+   * When ABSENT, the gate is structurally skipped on every LONG candidate
+   * (`summary.wash_sale_unavailable = true`). The check is LONG-ONLY by
+   * design — §1.4 re-entry block applies to re-establishing the LONG
+   * position only; the short side has its own DTC + ETB squeeze gates.
+   *
+   * NO BROKER CALL: both reads are table-local (the writer is
+   * `wash-sale-writer.ts`; both tables live in our DB). Zero rate-limit
+   * footprint; cheap to call on every long candidate every tick.
+   */
+  washSaleBlockReader?: WashSaleBlockReader;
 }
 
 export interface PreflightComposerInput {
@@ -225,6 +246,15 @@ export interface PreflightComposerSummary {
   dtc_threshold: number;
   short_count: number;
   long_count: number;
+  /** FP-061 sub-step 4M.3 — TRUE iff no `washSaleBlockReader` was injected.
+   *  Long-side wash-sale gate structurally absent on this tick. */
+  wash_sale_unavailable: boolean;
+  /** FP-061 sub-step 4M.3 — long candidates excluded for an active
+   *  wash_sale_events block_until > ts (§1.4 / §7.7 Path A). */
+  wash_sale_blocked_long_candidates: number;
+  /** FP-061 sub-step 4M.3 — long candidates excluded for an open
+   *  wash_sale_pending_review (§7.7 Path B operator queue). */
+  wash_sale_pending_review_long_candidates: number;
 }
 
 export interface PreflightComposerOutput {
@@ -255,6 +285,11 @@ export async function composePreflightResults(
   const dtcThreshold = deps.shortDtcExcludeThreshold ?? DEFAULT_SHORT_DTC_EXCLUDE_THRESHOLD;
   let nullDtcShortCandidates = 0;
   let dtcExcludedShortCandidates = 0;
+  // FP-061 sub-step 4M.3 — long-side wash-sale gate state.
+  const washSaleReader = deps.washSaleBlockReader;
+  const washSaleUnavailable = washSaleReader === undefined;
+  let washSaleBlockedLong = 0;
+  let washSalePendingReviewLong = 0;
   // The pre-trade short gate is structurally ABSENT only when BOTH the
   // shortability fetcher and the locate fetcher are missing. Either one
   // present satisfies §11.0.7 #4 "skip short entry; do NOT default to
@@ -441,6 +476,27 @@ export async function composePreflightResults(
           dtcExcludedShortCandidates++;
         }
       }
+    } else {
+      // ── FP-061 4M.3 LONG-SIDE WASH-SALE BLOCK (§1.4 / §7.7) ────────────
+      // Two table-local reads against our own DB. NO broker call. Long-only
+      // by §1.4 — the re-entry block applies to re-establishing the long
+      // position; the short side has DTC + ETB gates already above. Reader
+      // missing entirely = SKIP (typed-absence, mirrors DTC/SSR shape).
+      if (washSaleReader === undefined) {
+        skippedHere.push('verify_wash_sale_block');
+      } else {
+        const active = await washSaleReader.hasActiveBlock(c.symbol, input.ts);
+        if (active) {
+          failed.push('verify_wash_sale_block');
+          washSaleBlockedLong++;
+        } else {
+          const pending = await washSaleReader.hasPendingReview(c.symbol);
+          if (pending) {
+            failed.push('verify_wash_sale_pending_review');
+            washSalePendingReviewLong++;
+          }
+        }
+      }
     }
 
     const passed = failed.length === 0;
@@ -455,6 +511,10 @@ export async function composePreflightResults(
       ? null
       : (failed.length === 1 && failed[0] === 'verify_days_to_cover')
         ? 'high_days_to_cover'
+        : (failed.length === 1 && failed[0] === 'verify_wash_sale_block')
+          ? 'wash_sale_block'
+        : (failed.length === 1 && failed[0] === 'verify_wash_sale_pending_review')
+          ? 'wash_sale_pending_review'
         : `preflight_failed:${failed.join(',')}`;
 
     results.set(key, {
@@ -484,6 +544,9 @@ export async function composePreflightResults(
       dtc_threshold: dtcThreshold,
       short_count: shortCount,
       long_count: longCount,
+      wash_sale_unavailable: washSaleUnavailable,
+      wash_sale_blocked_long_candidates: washSaleBlockedLong,
+      wash_sale_pending_review_long_candidates: washSalePendingReviewLong,
     },
   };
 }
