@@ -55,6 +55,10 @@ import {
   createSupabaseAggregateHistoryReader,
   createSupabaseAggregatePersistenceEventWriter,
 } from '../_shared/longshort-execution/rebalance-aggregate-persistence.ts';
+// ACT-403 (Finding-B Option-1) — entry-only LotLedgerSink. Closes the
+// production-wiring gap surfaced during DW-201 root-cause: terminal_filled
+// fires but no lot_ledger seam was wired, so `longshort_lots` never accrued.
+import { createEntryLotLedgerSink } from '../_shared/longshort-execution/entry-lot-ledger-sink.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const STRATEGY_KEY = 'longshort';
@@ -192,6 +196,7 @@ Deno.serve(createHandler(async (req: Request) => {
       ts,
       ...(rebalanceAggregateAssertion ? { rebalanceAggregateAssertion } : {}),
       ...(rebalanceAggregatePersistenceCheck ? { rebalanceAggregatePersistenceCheck } : {}),
+      lotLedgerSink: createEntryLotLedgerSink({ operator_id }),
     });
 
     await writeStrategyAuditEvent({
