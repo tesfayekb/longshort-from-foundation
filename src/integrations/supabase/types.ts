@@ -2387,6 +2387,127 @@ export type Database = {
           },
         ]
       }
+      wash_sale_events: {
+        Row: {
+          attached_to_lot_id: string | null
+          block_until: string | null
+          created_at: string
+          disallowed_amount: number | null
+          event_id: string
+          exit_ts: string
+          lot_ids_affected: string[]
+          operator_id: string
+          outcome: string
+          realized_loss: number
+          source_lot_ids: string[]
+          status: string
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          attached_to_lot_id?: string | null
+          block_until?: string | null
+          created_at?: string
+          disallowed_amount?: number | null
+          event_id?: string
+          exit_ts: string
+          lot_ids_affected: string[]
+          operator_id?: string
+          outcome: string
+          realized_loss: number
+          source_lot_ids: string[]
+          status: string
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          attached_to_lot_id?: string | null
+          block_until?: string | null
+          created_at?: string
+          disallowed_amount?: number | null
+          event_id?: string
+          exit_ts?: string
+          lot_ids_affected?: string[]
+          operator_id?: string
+          outcome?: string
+          realized_loss?: number
+          source_lot_ids?: string[]
+          status?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wash_sale_events_attached_to_lot_id_fkey"
+            columns: ["attached_to_lot_id"]
+            isOneToOne: false
+            referencedRelation: "longshort_lots"
+            referencedColumns: ["lot_id"]
+          },
+        ]
+      }
+      wash_sale_pending_review: {
+        Row: {
+          broker_pnl: number | null
+          context: string
+          created_at: string
+          flagged_ts: string
+          internal_pnl: number
+          operator_id: string
+          pending_id: string
+          resolution_event_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          source_lot_ids: string[]
+          status: string
+          symbol: string
+          updated_at: string
+          verify_outcome: string | null
+        }
+        Insert: {
+          broker_pnl?: number | null
+          context: string
+          created_at?: string
+          flagged_ts: string
+          internal_pnl: number
+          operator_id?: string
+          pending_id?: string
+          resolution_event_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_lot_ids: string[]
+          status?: string
+          symbol: string
+          updated_at?: string
+          verify_outcome?: string | null
+        }
+        Update: {
+          broker_pnl?: number | null
+          context?: string
+          created_at?: string
+          flagged_ts?: string
+          internal_pnl?: number
+          operator_id?: string
+          pending_id?: string
+          resolution_event_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_lot_ids?: string[]
+          status?: string
+          symbol?: string
+          updated_at?: string
+          verify_outcome?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wash_sale_pending_review_resolution_fk"
+            columns: ["operator_id", "resolution_event_id"]
+            isOneToOne: false
+            referencedRelation: "wash_sale_events"
+            referencedColumns: ["operator_id", "event_id"]
+          },
+        ]
+      }
     }
     Views: {
       reconciliation_events_daily_agg: {
