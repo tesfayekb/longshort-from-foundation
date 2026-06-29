@@ -531,6 +531,66 @@ export type Database = {
           },
         ]
       }
+      corporate_actions: {
+        Row: {
+          action_type: string
+          announced_at: string | null
+          applied_at: string | null
+          applied_lot_count: number | null
+          basis_allocation_pct: number | null
+          ca_id: string
+          cash_per_share: number | null
+          created_at: string
+          ex_date: string
+          operator_id: string
+          ratio_denominator: number | null
+          ratio_numerator: number | null
+          source: string
+          source_payload: Json | null
+          successor_symbol: string | null
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          action_type: string
+          announced_at?: string | null
+          applied_at?: string | null
+          applied_lot_count?: number | null
+          basis_allocation_pct?: number | null
+          ca_id?: string
+          cash_per_share?: number | null
+          created_at?: string
+          ex_date: string
+          operator_id?: string
+          ratio_denominator?: number | null
+          ratio_numerator?: number | null
+          source?: string
+          source_payload?: Json | null
+          successor_symbol?: string | null
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          announced_at?: string | null
+          applied_at?: string | null
+          applied_lot_count?: number | null
+          basis_allocation_pct?: number | null
+          ca_id?: string
+          cash_per_share?: number | null
+          created_at?: string
+          ex_date?: string
+          operator_id?: string
+          ratio_denominator?: number | null
+          ratio_numerator?: number | null
+          source?: string
+          source_payload?: Json | null
+          successor_symbol?: string | null
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cron_last_fire: {
         Row: {
           completed_at: string | null
