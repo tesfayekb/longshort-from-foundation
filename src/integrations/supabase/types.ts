@@ -1108,6 +1108,7 @@ export type Database = {
           expected_settlement_ts: string | null
           locate_id: string | null
           lot_id: string
+          net_pnl: number | null
           operator_id: string
           qty: number
           realized_pnl: number | null
@@ -1117,6 +1118,7 @@ export type Database = {
           status: string
           symbol: string
           updated_at: string
+          wash_sale_adjustment: number
           wash_sale_status: string | null
         }
         Insert: {
@@ -1129,6 +1131,7 @@ export type Database = {
           expected_settlement_ts?: string | null
           locate_id?: string | null
           lot_id?: string
+          net_pnl?: number | null
           operator_id?: string
           qty: number
           realized_pnl?: number | null
@@ -1138,6 +1141,7 @@ export type Database = {
           status?: string
           symbol: string
           updated_at?: string
+          wash_sale_adjustment?: number
           wash_sale_status?: string | null
         }
         Update: {
@@ -1150,6 +1154,7 @@ export type Database = {
           expected_settlement_ts?: string | null
           locate_id?: string | null
           lot_id?: string
+          net_pnl?: number | null
           operator_id?: string
           qty?: number
           realized_pnl?: number | null
@@ -1159,6 +1164,7 @@ export type Database = {
           status?: string
           symbol?: string
           updated_at?: string
+          wash_sale_adjustment?: number
           wash_sale_status?: string | null
         }
         Relationships: []

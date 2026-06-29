@@ -3314,7 +3314,7 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | Field | Value |
 |---|---|
 | **ID** | DW-159 (DW-143 successor #3 of 6). |
-| **Status** | open. **PRE-LIVE BLOCKER** (P&L truth / tax). NOT a paper-v1 blocker (paper-side P&L observability is broker-reported, not ledger-reconciled). |
+| **Status** | **RESOLVED-WITH-SCOPE-AMENDMENT** (2026-06-29 / ACT-376 / Rule 8 additive). Original scope row preserved below verbatim. **Amendment:** the separate `realized_pnl(event_id, ...)` table proposed in the original scope is **SUPERSEDED by column-on-lots** per the **DW-160 binding decision** — `verify_realized_pnl` is per-trade-scalar (`InternalRealizedPnL{trade_id, claimed_pnl}`) with no aggregation key, and CROSSWIND §7.6 step 8 mandates the column-on-lots shape. The realized-PnL columns live on `longshort_lots` directly: `realized_pnl` (MIG-140, 4M.5a / ACT-372) + `net_pnl` and `wash_sale_adjustment` (MIG-142, 4M.5b / ACT-376). The year-end aggregator (`year-end-tax-aggregator.ts`) + the broker-gated `verify_year_end_tax_record` shell replace the original table's tax-reporting role. Broker-1099-B activation tracked under successor **DW-196**. |
 | **Tier** | A — money-path P&L correctness (the "did we actually make money" surface). |
 | **Title** | Author `realized_pnl` table, the writer-at-exit (per closing-lot), and wire `verify_realized_pnl`. |
 | **Scope** | (a) Migration: `realized_pnl(event_id, operator_id, lot_id, symbol, side, shares, basis_per_share, exit_price_per_share, gross_pnl, wash_sale_adjustment, net_pnl, exit_at, ...)`; (b) writer fires per closed lot in the close-writer (DW-158 §c) — gross from basis vs exit; net after consulting DW-157 wash-sale disallow; (c) wire `verify_realized_pnl` to assert the writer's row against broker-side realized-P&L statements. |
@@ -3322,7 +3322,7 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Blocks** | Phase-8 live-money authorization. |
 | **Future Owner Phase** | Phase 7, sequenced AFTER DW-158 and DW-157. |
 | **Resolution shape** | Strong+ FP authoring migration + writer extension to the close path + verifier wiring + a daily reconciliation against broker statements. |
-| **Cross_ref** | DW-143 (superseded umbrella); DW-157 / DW-158 (upstream); CROSSWIND §7.x; `supabase/functions/_shared/longshort-verifiers/verify_realized_pnl.ts` (the shell); the conformance audit (ACT-pending). |
+| **Cross_ref** | DW-143 (superseded umbrella); DW-157 / DW-158 (upstream); DW-160 (column-on-lots precedent the amendment follows); DW-196 (broker-1099-B activation successor); CROSSWIND §7.6 step 8 / §7.x; `supabase/functions/_shared/longshort-verifiers/verify_realized_pnl.ts` (per-trade scalar shell); `supabase/functions/_shared/longshort-verifiers/verify_year_end_tax_record.ts` (year-end aggregate shell, 4M.5b); `supabase/functions/_shared/longshort-execution/year-end-tax-aggregator.ts` (the 8949/Schedule D rollup); MIG-140 (realized_pnl column); MIG-142 (net_pnl + wash_sale_adjustment columns); ACT-372 (4M.5a); ACT-376 (4M.5b + this amendment); the conformance audit. |
 
 ---
 
@@ -4024,3 +4024,18 @@ The DW-173 `Cross_ref` and `Scope (weekend stand-up)` rows above point at the §
 | **Future Owner Phase** | Next maintenance window. |
 | **Resolution shape** | One commit titled "DW-195 — ESLint warning-debt cleanup pass" with the CI ESLint output before / after in the commit body (zero warnings post). |
 | **Cross_ref** | FP-047 (Gate-4 CI-verbatim discipline); ACT-361 (STEP-A closeout that surfaced the inventory at the parity check); ACT-362 (this REGISTRATION). |
+
+### DW-196: Broker 1099-B / Form 8949 fetcher activation + `verify_year_end_tax_record` live wire
+
+| Field | Value |
+|---|---|
+| **ID** | DW-196. |
+| **Status** | **REGISTERED 2026-06-29 at ACT-376 — BROKER-GATED, PRE-LIVE BLOCKER (year-end tax reporting).** NOT a paper-v1 blocker: Alpaca paper issues NO 1099-B / Form 8949 — there is no broker-side year-end document to reconcile against until live trading is provisioned. The interface (`BrokerYearEndTaxFetcher` in `supabase/functions/_shared/longshort-broker-interfaces.ts`) and the verifier shell (`supabase/functions/_shared/longshort-verifiers/verify_year_end_tax_record.ts`) ship with the soft-dependent SHELL today; `BrokerYearEndTaxFetcherNotProvisionedError` + `outcome: 'not_provisioned'` route preserves typed-absence until activation. Mirrors the FP-057 `verify_rebalance_aggregate` precedent and the FP-061 4M.5a `BrokerRealizedPnLFetcher` soft-dependent pattern. |
+| **Tier** | A — money-path tax-reporting correctness (a 1099-B mismatch is an IRS-reporting defect; Strong+ retention per CROSSWIND §11.0.10). |
+| **Title** | Activate a real `BrokerYearEndTaxFetcher` implementation (Alpaca live `/v2/account/...` 1099-B endpoint when live trading is provisioned) and flip the `verify_year_end_tax_record` call site from `fetcher: null` (or `NotProvisioned`) to the live fetcher. |
+| **Scope** | (a) Implement `AlpacaYearEndTaxFetcher` against the live-trading 1099-B / Form 8949 download endpoint (paper has no such endpoint — must wait on live provisioning). (b) Pass-through the existing `BrokerYearEndTaxConfirm` shape ({short_term, long_term} × {proceeds, cost_basis, wash_sale_adjustment, net_pnl}). (c) Wire the live fetcher at the year-end reconciliation call site (annual job — to be scheduled). (d) The verifier shell's zero-tolerance (`0.01` USD per axis) escalation path is already in place; activation flips `outcome: 'not_provisioned'` to `outcome: 'matched'` / `'divergence_escalated'`. (e) Operator alert pipeline on `divergence_escalated` (1099-B mismatch = IRS-reporting defect). |
+| **Depends-on** | Live-trading provisioning (the only source of a real 1099-B); FP-062 / DW-058 (broker MOVE cluster — the live Alpaca client surface this fetcher sits on top of); FP-061 4M.5b (this turn — the aggregator + verifier shell + interface). |
+| **Blocks** | Phase-8 live-money authorization (year-end tax-reporting closure requires a real reconciliation, not the `not_provisioned` shell). |
+| **Future Owner Phase** | FP-062 broker MOVE cluster (the natural home — same Alpaca-live client surface) or the next live-trading enablement FP. |
+| **Resolution shape** | One commit adding `AlpacaYearEndTaxFetcher` + the wire-up + the annual reconciliation job + an end-to-end test against the broker's 1099-B (synthetic year). Drops `BrokerYearEndTaxFetcherNotProvisionedError` raises from the call site (the class can stay for diagnostic). |
+| **Cross_ref** | DW-159 (parent — resolved-with-scope-amendment at ACT-376; this DW is the broker-1099-B successor); MIG-142 (the `net_pnl` + `wash_sale_adjustment` columns the aggregator + verifier read); ACT-376 (REGISTRATION + FP-061 4M.5b build); FP-057 verify_rebalance_aggregate (the broker-truth flip precedent the activation will follow); FP-061-ADD-01 (4M.5b is terminal in the ladder); FP-062 / DW-058 (broker MOVE cluster); CROSSWIND §11.0.10 (Strong+ tier — year-end ground-truth reconciliation against broker 1099-B / Form 8949). |

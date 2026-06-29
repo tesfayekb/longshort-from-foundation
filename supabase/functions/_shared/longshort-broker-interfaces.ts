@@ -429,6 +429,48 @@ export interface BrokerRebalanceAggregateFetcher {
 }
 
 // ────────────────────────────────────────────────────────────────────
+// FP-061 sub-step 4M.5b additions — terminal year-end 1099-B / Form 8949
+// reconciliation. SOFT-DEPENDENT: broker-1099-B fetch is not available on
+// Alpaca paper (paper issues no 1099-B); the real adapter lands when live
+// trading is provisioned. Interface-only here; verify_year_end_tax_record
+// guards against the absence with NotProvisioned envelope mirroring the
+// FP-057 verify_rebalance_aggregate precedent.
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Broker-side year-end tax confirm. Shaped to a Form 8949 / 1099-B
+ * summary rather than per-lot rows so the verifier can assert in
+ * aggregate (short-term + long-term totals) — the broker's 1099-B is the
+ * authoritative tax document, and per-lot reconciliation is the internal
+ * aggregator's job (year-end-tax-aggregator.ts).
+ */
+export interface BrokerYearEndTaxConfirm {
+  tax_year: number;
+  short_term_proceeds: number;
+  short_term_cost_basis: number;
+  short_term_wash_sale_adjustment: number; // positive magnitude
+  short_term_net_pnl: number;
+  long_term_proceeds: number;
+  long_term_cost_basis: number;
+  long_term_wash_sale_adjustment: number;  // positive magnitude
+  long_term_net_pnl: number;
+  fetched_at: Date;
+}
+
+export interface BrokerYearEndTaxFetcher {
+  /**
+   * Strong+ tier — tax/regulatory retention indefinite. Zero-tolerance per
+   * §11.0.9 line 234 (any non-trivial divergence escalates immediately —
+   * a 1099-B mismatch is an IRS-reporting defect).
+   *
+   * SOFT-DEPENDENT: no real impl today (Alpaca paper issues no 1099-B).
+   * The verify_year_end_tax_record shell guards against absence with a
+   * NotProvisioned envelope until DW-196 activates this fetcher.
+   */
+  fetchYearEndTaxRecord(tax_year: number, ts: Date): Promise<BrokerYearEndTaxConfirm>;
+}
+
+// ────────────────────────────────────────────────────────────────────
 // FP-056 E2 additions (DEC-068 clause k — sequential submitter contract).
 // ────────────────────────────────────────────────────────────────────
 
