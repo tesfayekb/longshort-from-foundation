@@ -56,6 +56,14 @@ export interface LotLedgerClient {
           data: Record<string, unknown> | null;
           error: { message: string } | null;
         }>;
+        // ACT-403 — idempotency pre-check on source_order_id. Returns
+        // the (possibly null) existing row WITHOUT throwing on zero-rows
+        // (distinct from `single()` which errors on PGRST116). Uses
+        // limit(1) so the structural-client stays narrow.
+        limit(n: number): Promise<{
+          data: Array<Record<string, unknown>> | null;
+          error: { message: string } | null;
+        }>;
       };
     };
   };
@@ -156,6 +164,35 @@ export async function writeOpenLot(
     throw new Error(
       `writeOpenLot: precondition violated — filled=${fill.filled} qty=${fill.filled_qty} px=${fill.avg_fill_price}`,
     );
+  }
+  // ACT-403 (Finding-B Option-1) — IDEMPOTENCY on source_order_id.
+  // The reconstruction path now re-feeds recently-filled broker orders
+  // across an overlapping 2× tick-interval window. A filled order seen
+  // on two consecutive ticks MUST record ONCE. DB safety net = MIG-148
+  // partial unique index `longshort_lots(source_order_id) WHERE
+  // source_order_id IS NOT NULL`; this in-code pre-check is the
+  // user-visible early return (no throw, no double-insert race).
+  if (ctx.source_order_id) {
+    const existing = await client
+      .from('longshort_lots')
+      .select('lot_id, entry_ts, qty, cost_basis, side, expected_settlement_ts')
+      .eq('source_order_id', ctx.source_order_id)
+      .limit(1);
+    if (existing.error) {
+      throw new Error(`longshort_lots_dedup_read_failed: ${existing.error.message}`);
+    }
+    const prior = existing.data && existing.data.length > 0 ? existing.data[0] : null;
+    if (prior) {
+      return {
+        lot_id: String(prior.lot_id),
+        symbol: ctx.symbol,
+        entry_ts: new Date(String(prior.entry_ts)),
+        qty: Number(prior.qty),
+        cost_basis: Number(prior.cost_basis),
+        side: String(prior.side) as 'long' | 'short',
+        expected_settlement_ts: new Date(String(prior.expected_settlement_ts)),
+      };
+    }
   }
   const lot_id = crypto.randomUUID();
   const expected_settlement_ts = tradingDaysAfter(entry_ts, 1);
