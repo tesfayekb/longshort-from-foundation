@@ -3209,6 +3209,44 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Resolution shape** | A follow-up that authors: (i) the rolling-window query helper (likely a SECURITY DEFINER function reading from `reconciliation_events` with a `(call_name, ts)` index — already covered by MIG-082 `idx_recon_events_call_name_ts`); (ii) the classifier upgrade in `cache-propagator.ts`; (iii) the kill-switch invocation on the persistent-BP path. |
 | **Cross_ref** | FP-056 E4 / ACT-312 (the v1 HYBRID resolution this defers from); DEC-068 clause (e); §8.9 L268 (the `insufficient_buying_power` row of the propagation table); §8.6.1 L121 (the 3-in-1h rolling-window spec anchor); E3's `rejection-classifier.ts` (the existing classifier this would upgrade). |
 
+#### DW-152 — SUPERSEDED-IN-PART addendum (FP-062 6I.6b / ACT-397, 2026-06-29)
+
+The original Resolution-shape clause (ii) ("the classifier upgrade in
+`cache-propagator.ts`") is **SUPERSEDED** by the 6I.6a-precedent
+sibling-seam architecture (Constitution Rule 8 — original text preserved
+above, verbatim, with this pointer). Operative resolution as built in
+ACT-397:
+
+- (i) Rolling-window query helper: `createSupabaseBpRejectionHistoryReader`
+  in `supabase/functions/_shared/longshort-execution/bp-rejection-persistence.ts`.
+  Reads `reconciliation_events` filtered by `call_name='broker_rejection_propagation'`
+  AND `divergence->>'propagation_class'='transient_bp'`, ordered ts DESC.
+  Backed by `idx_recon_events_call_name_ts` (MIG-082) — no new index,
+  no new table.
+- (ii) **SUPERSEDED** — promotion is NOT a `cache-propagator.ts` upgrade.
+  Per 6I.6a's resolution, §8.9 PAUSE-class routing is a sibling seam
+  to the NO-PAUSE cache-write surface (mixing entangles htb-write-fail
+  with pause-fail). The promotion lives in a new pure module +
+  io-shell (`buildBpRejectionPersistenceCheck`) injected into
+  `tick-scheduler.ts runTick` AFTER `advanceTick` — mirroring the
+  `rebalanceAggregatePersistenceCheck` shape, NOT touching
+  `cache-propagator.ts`.
+- (iii) Pause routing: account-wide `pauseAccount` (trading-pause.ts,
+  6I.5) — NOT per-symbol. §8.6.1 L121 "on this account" verbatim.
+  Operator clears via existing `kill_switch_resume` (prior_origin
+  preserved). Latch via `isAccountPaused` prevents per-tick re-fire
+  while already paused.
+
+Semantics distinct from `rebalance-aggregate-persistence` (DEC-070 cl.g):
+ROLLING time-window (NOT reset-on-in-band) — persistent under-funding
+is episodic; a one-tick fill between rejections does NOT clear the
+condition. Defaults `LONGSHORT_BP_PERSISTENCE_N=3`,
+`LONGSHORT_BP_PERSISTENCE_WINDOW_S=3600`.
+
+Status: **closed-as-built**. Cross-ref: ACT-397; FP-062 6I.6b;
+`bp-rejection-persistence.ts`; `tick-scheduler.ts` (`bpRejectionPersistenceCheck`
+seam); 6I.6a precedent (`account-pause-escalator.ts`, ACT-396).
+
 ### DW-153: Calendar-aware htb TTL refinement — paper-evidence-gated; v1 ships 24h wall-clock (DEC-068 addendum / ACT-313)
 
 | Field | Value |
