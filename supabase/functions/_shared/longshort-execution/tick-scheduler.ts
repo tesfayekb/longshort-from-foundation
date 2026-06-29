@@ -320,6 +320,27 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     }
   }
 
+  // FP-062 6I.6b / DW-152 — ROLLING-window persistent-BP detector.
+  // Same seam (AFTER advanceTick) so any broker BP-rejection this tick
+  // has already landed in reconciliation_events via cache-propagator-io,
+  // and is therefore visible to the rolling-window count. Sibling to
+  // the rebalance-aggregate persistence check above; different filter
+  // (broker_rejection_propagation + propagation_class='transient_bp')
+  // and different counting semantics (time-window, not consecutive).
+  // Threshold-cross routes to pauseAccount (account-wide soft_pause).
+  let bp_rejection_persistence: BpPersistenceCheckOutcome | null = null;
+  if (p.bpRejectionPersistenceCheck) {
+    try {
+      bp_rejection_persistence = await p.bpRejectionPersistenceCheck(p.ts);
+    } catch (e) {
+      console.error(
+        'longshort_bp_rejection_persistence.failed',
+        e instanceof Error ? e.message : String(e),
+      );
+      bp_rejection_persistence = null;
+    }
+  }
+
   return {
     still_in_flight: result.still_in_flight,
     terminal: result.terminal,
@@ -328,6 +349,7 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     short_stop: shortStop,
     short_stop_adjusted_aggregate,
     rebalance_aggregate_persistence,
+    bp_rejection_persistence,
     etb_transition,
   };
 }
