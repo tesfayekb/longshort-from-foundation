@@ -363,13 +363,19 @@ Deno.test('preflight-composer: no ssrStatusFetcher → SHORT candidates record v
   const shortSkipped = out.skipped.get(preflightKey('TSLA', 'short'));
   assert(shortSkipped, 'short candidate must have skipped entry');
   // DW-165 also adds verify_days_to_cover when no daysToCoverReader is
-  // injected — both gates are STRUCTURALLY ABSENT on this fixture.
-  assertEquals(shortSkipped, ['verify_ssr_status', 'verify_days_to_cover']);
+  // injected. FP-061 4M.4 (ACT-378) adds verify_corporate_action_clean
+  // when no unappliedCorporateActionReader is injected. All three gates
+  // are STRUCTURALLY ABSENT on this fixture; the CA gate is appended
+  // first (both sides), so order is: CA, SSR, DTC.
+  assertEquals(shortSkipped, ['verify_corporate_action_clean', 'verify_ssr_status', 'verify_days_to_cover']);
   // LONG candidate does NOT record SSR skip — verify_ssr_status only applies
   // to short routing. FP-061 4M.3: the long side has its own wash-sale gate
   // which is structurally absent here (no washSaleBlockReader injected), so
   // 'verify_wash_sale_block' appears in the long candidate's skipped list.
-  assertEquals(out.skipped.get(preflightKey('AAPL', 'long')), ['verify_wash_sale_block']);
+  assertEquals(
+    out.skipped.get(preflightKey('AAPL', 'long')),
+    ['verify_corporate_action_clean', 'verify_wash_sale_block'],
+  );
   // Short candidate STILL passes here (halt clean, htb clean, BP sufficient,
   // SSR is documented absent — composer does NOT synthesize SSR-clear, but
   // it also does not fabricate a failure where no signal exists; the audit
