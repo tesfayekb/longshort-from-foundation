@@ -62,6 +62,7 @@ import {
 import { classifyRejection } from './rejection-classifier.ts';
 import type { RejectionPropagator } from './cache-propagator-io.ts';
 import type { SameTickContradictoryPass } from './cache-propagator.ts';
+import type { AccountPauseEscalator } from './account-pause-escalator.ts';
 
 // ── Reconciliation event writer interface ──────────────────────────
 
@@ -142,6 +143,13 @@ export interface AdvanceTickParams {
    *  kernel's tier-tag event but skip the cache propagation. Production
    *  callers MUST inject it. */
   propagator?: RejectionPropagator;
+  /** OPTIONAL — FP-062 6I.6a / DW-151. When injected, broker rejections
+   *  classified tier-3 pdt_block flow through the PAUSE-class account-
+   *  pause seam AFTER the propagator call (sibling seam — propagator owns
+   *  cache writes; this owns account-state writes). Backward-compatible:
+   *  legacy callers that don't pass this still get the kernel's tier-3
+   *  event but skip the auto-pause. Production callers MUST inject it. */
+  accountPauseEscalator?: AccountPauseEscalator;
   /** OPTIONAL — per-tick snapshot of §7 pre-flight verifier PASSes that
    *  would have caught a rejection. The propagator uses this for system_bug
    *  classification (§8.9 L274-275). Defaults to empty. */
@@ -440,6 +448,29 @@ export async function advanceTick(p: AdvanceTickParams): Promise<AdvanceTickResu
           p.ts,
         );
       }
+    }
+
+    // ── 3c. FP-062 6I.6a / DW-151 — PAUSE-class account-pause seam.
+    //   Sibling to the propagator: gated on the same rejected-ack branch
+    //   but routes the kernel-tagged tier (not the reason directly) +
+    //   the pdt-token classifier. Pure classifier filters to pdt_block;
+    //   non-pdt tier-3 (ssr_violation → DW-150; persistent-BP → 6I.6b)
+    //   returns null and the seam is a no-op. Optional-chained so
+    //   legacy callers that don't inject the escalator skip auto-pause
+    //   while the kernel-emitted tier-3 event still fires.
+    if (
+      p.accountPauseEscalator &&
+      event.kind === 'acceptance_observed' &&
+      event.state === 'rejected'
+    ) {
+      await p.accountPauseEscalator.escalatePdtBlock({
+        order_id: original.order_id,
+        client_order_id: original.client_order_id,
+        symbol: original.symbol,
+        rejection_reason: event.rejection_reason,
+        rejection_tier: event.rejection_tier,
+        ts: p.ts,
+      });
     }
 
     // ── 4. Partition.
