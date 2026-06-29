@@ -231,7 +231,8 @@ Deno.test('4M.4: stock_dividend mutates identically to split', async () => {
   const client = makeClient(db);
   await runCorporateActionApplier({ as_of: AS_OF, client });
   const post = db.longshort_lots[0];
-  assertEquals(Number(post.qty), 110);
+  // floating-point: 100 * 11/10 may yield 110.00000000000001
+  assertEquals(Math.round(Number(post.qty) * 1e8) / 1e8, 110);
   // basis = 50 × 10/11 ≈ 45.4545...
   assertEquals(Math.round(Number(post.cost_basis) * 10000), Math.round((50 * 10 / 11) * 10000));
   // Invariant.
