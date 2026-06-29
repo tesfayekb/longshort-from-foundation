@@ -161,13 +161,16 @@ Deno.test('evaluatePredicates — clean handler → no violation', () => {
   assertEquals(v.length, 0);
 });
 
-Deno.test('resolveJobStateFromMigrations — current repo: sweep resolves enabled=false; clean at Gate-15 baseline', async () => {
+Deno.test('resolveJobStateFromMigrations — current repo: both reconciliation jobs resolve enabled=true (MIG-145); Gate-15 STILL clean (handler MOCK-marker-free, P1 does not fire)', async () => {
   const state = await resolveJobStateFromMigrations();
   const sweep = state.get('longshort.reconciliation_periodic_sweep');
-  assertEquals(sweep?.enabled, false, 'sweep MUST resolve to enabled=false after MIG-058');
+  assertEquals(sweep?.enabled, true, 'sweep resolves enabled=true after MIG-145 (6I.3b re-enable); MIG-058 disarm superseded');
   assertEquals(sweep?.handler_path, 'supabase/functions/longshort-reconciliation-tick/index.ts');
 
-  // Baseline: Gate-15 must be clean.
+  const liveness = state.get('longshort.reconciliation_liveness_check');
+  assertEquals(liveness?.enabled, true, 'liveness_check resolves enabled=true after MIG-145 (armed FIRST per watcher-first ordering)');
+
+  // Load-bearing safety invariant: Gate-15 must be clean even in the armed state.
   const violations = evaluatePredicates(state.values(), (path) => {
     try { return Deno.readTextFileSync(path); }
     catch (e) { if (e instanceof Deno.errors.NotFound) return null; throw e; }
