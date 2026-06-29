@@ -18,12 +18,14 @@ import { assert, assertEquals, assertRejects, assertThrows } from 'https://deno.
 import {
   buildRebalanceAggregatePersistenceCheck,
   countConsecutiveUnexplained,
+  createSupabaseAggregatePersistenceEventWriter,
   DEFAULT_PERSIST_COOLDOWN_S,
   DEFAULT_PERSIST_N,
   parsePersistCooldownS,
   parsePersistN,
   PERSIST_ACTION,
   PERSIST_CALL_NAME,
+  RECONCILIATION_EVENTS_WRITABLE_COLUMNS,
   type AggregateHistoryReader,
   type AggregateHistoryRow,
   type PersistenceEventWriter,
@@ -265,4 +267,69 @@ Deno.test('closure — reader throw propagates (caller swallow contract is at th
 Deno.test('constants — PERSIST_CALL_NAME + PERSIST_ACTION are stable strings (pager attribution)', () => {
   assertEquals(PERSIST_CALL_NAME, 'verify_rebalance_aggregate_persistence');
   assertEquals(PERSIST_ACTION, 'persistent_band_violation_operator_alert_N_consecutive_ticks');
+});
+
+/* ───── DW-202 structural guard — writer payload key-set MUST be a
+ * subset of real reconciliation_events columns. This is the test that
+ * would have caught the action_taken→failure_action drift at author
+ * time (lockfile-drift-guard class), not after live silent-pager
+ * failure. ───── */
+Deno.test('DW-202 guard — Supabase writer insert-row keys are a subset of real reconciliation_events columns', async () => {
+  let capturedRow: Record<string, unknown> | null = null;
+  const fakeSupabase = {
+    from(_table: string) {
+      return {
+        select(_cols: string) {
+          throw new Error('not used in writer test');
+        },
+        insert(row: Record<string, unknown>) {
+          capturedRow = row;
+          return {
+            select(_cols: string) {
+              return {
+                single() {
+                  return Promise.resolve({
+                    data: { event_id: 'evt-test' },
+                    error: null,
+                  });
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  // deno-lint-ignore-file no-explicit-any
+  // (no `any` used — fakeSupabase shape matches SupabaseLike structurally
+  // via the writer's narrowing — pass through unknown→typed cast.)
+  const writer = createSupabaseAggregatePersistenceEventWriter(
+    fakeSupabase as unknown as Parameters<typeof createSupabaseAggregatePersistenceEventWriter>[0],
+  );
+  const eventId = await writer.write({
+    ts: TS,
+    operator_id: opId,
+    consecutive: 3,
+    threshold: 3,
+    cooldown_s: 3600,
+    fetcher_source: 'live',
+    last_unexplained_event_id: 'evt-prior',
+  });
+  assertEquals(eventId, 'evt-test');
+  assert(capturedRow !== null, 'writer did not call .insert');
+  const writable = new Set<string>(RECONCILIATION_EVENTS_WRITABLE_COLUMNS);
+  const row: Record<string, unknown> = capturedRow!;
+  const offenders = Object.keys(row).filter((k) => !writable.has(k));
+  assertEquals(
+    offenders,
+    [],
+    `writer row contains keys not present on reconciliation_events: ${offenders.join(', ')}`,
+  );
+  // DW-202 regression specifics: failure_action carries the PERSIST_ACTION
+  // value (the historical `action_taken` key MUST be absent).
+  assertEquals(row['failure_action'], PERSIST_ACTION);
+  assert(!('action_taken' in row), 'top-level action_taken must not appear (DW-202)');
+  assert(!('fetcher_source' in row), 'fetcher_source must live inside divergence (DW-202)');
+  const divergence = row['divergence'] as Record<string, unknown>;
+  assertEquals(divergence['fetcher_source'], 'live');
 });
