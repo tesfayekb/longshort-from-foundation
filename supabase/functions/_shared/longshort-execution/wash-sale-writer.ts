@@ -311,6 +311,7 @@ async function evaluateOne(
   // IS the post-write reconciliation, not a verify-after-mutation defect.
   let wash_verify_result: ReconcileResult | null = null;
   try {
+    // gate-13-allow: post-mutation verify per §7.7 step 1→2 / §7.9 step 2 — wash_sale_events row verified for persistence immediately after write.
     wash_verify_result = await verifyWashSaleRecord(
       {
         operator_id: deps.operator_id,
@@ -405,6 +406,7 @@ async function applySection7_8(
   let lot_verify_result: ReconcileResult | null = null;
   try {
     const expected = await readInternalLotRecord(target.lot_id, deps.lotClient);
+    // gate-13-allow: post-mutation verify per §7.8 step 5→6 — cost-basis adjustment IS the action being verified.
     lot_verify_result = await verifyLotRecord(
       { operator_id: args.operator_id, expected },
       deps.lotRecordFetcher,
@@ -437,6 +439,7 @@ async function applySection7_8(
   // post-mutation reconcile per §7.8.
   let wash_verify_result: ReconcileResult | null = null;
   try {
+    // gate-13-allow: post-mutation verify per §7.8 step 7→8 — wash_sale_events disallowed_loss_attached row verified after write.
     wash_verify_result = await verifyWashSaleRecord(
       {
         operator_id: args.operator_id,
