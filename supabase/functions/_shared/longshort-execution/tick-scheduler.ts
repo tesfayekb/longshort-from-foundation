@@ -38,6 +38,7 @@ import type { BrokerInterfaces } from './broker-bootstrap.ts';
 import type { RebalanceAggregateAssertionResult } from './rebalance-aggregate-assertion.ts';
 import type { ExemptCause } from '../longshort-verifiers/verify_rebalance_aggregate.ts';
 import type { PersistenceCheckOutcome } from './rebalance-aggregate-persistence.ts';
+import type { BpPersistenceCheckOutcome } from './bp-rejection-persistence.ts';
 import {
   evaluateShortStops,
   type ShortStopEvaluateResult,
@@ -85,6 +86,19 @@ export interface TickSchedulerParams {
   rebalanceAggregatePersistenceCheck?: (
     ts: Date,
   ) => Promise<PersistenceCheckOutcome>;
+  /** OPTIONAL — FP-062 6I.6b / DW-152. The rolling-window persistent-BP
+   *  detector. Reads `reconciliation_events` for `broker_rejection_propagation`
+   *  rows whose `divergence.propagation_class='transient_bp'` within the
+   *  last LONGSHORT_BP_PERSISTENCE_WINDOW_S; on count ≥
+   *  LONGSHORT_BP_PERSISTENCE_N AND not-already-paused, calls
+   *  `pauseAccount` (account-wide soft_pause) per §8.6.1 L121. Sibling
+   *  to `rebalanceAggregatePersistenceCheck` — different filter, ROLLING
+   *  (not consecutive), broker rejections only (pre-flight skips are
+   *  book-managed). Errors caught + logged so a query/RPC hiccup does
+   *  not kill the tick. */
+  bpRejectionPersistenceCheck?: (
+    ts: Date,
+  ) => Promise<BpPersistenceCheckOutcome>;
   /** DW-149 (Component 1) — when `true`, runTick evaluates short-stop
    *  breaches BEFORE `advanceTick`. The evaluator force-covers any short
    *  position breaching `LONGSHORT_SHORT_STOP_THRESHOLD` (default 0.15)
@@ -138,6 +152,9 @@ export interface TickSchedulerResult extends AdvanceTickResult {
    *  fn / cron surfaces this on the audit row + the operator alert
    *  derives from this object (NOT from per-tick `failure_escalated`). */
   rebalance_aggregate_persistence: PersistenceCheckOutcome | null;
+  /** FP-062 6I.6b — persistent-BP detector outcome for this tick.
+   *  `null` when the closure was not injected OR threw. */
+  bp_rejection_persistence: BpPersistenceCheckOutcome | null;
   /** DW-162a — ETB-transition monitor outcome for this tick. `null`
    *  when the closure was not injected OR threw (caught + logged).
    *  WARNINGS ONLY — never fires a cover. */
@@ -303,6 +320,27 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     }
   }
 
+  // FP-062 6I.6b / DW-152 — ROLLING-window persistent-BP detector.
+  // Same seam (AFTER advanceTick) so any broker BP-rejection this tick
+  // has already landed in reconciliation_events via cache-propagator-io,
+  // and is therefore visible to the rolling-window count. Sibling to
+  // the rebalance-aggregate persistence check above; different filter
+  // (broker_rejection_propagation + propagation_class='transient_bp')
+  // and different counting semantics (time-window, not consecutive).
+  // Threshold-cross routes to pauseAccount (account-wide soft_pause).
+  let bp_rejection_persistence: BpPersistenceCheckOutcome | null = null;
+  if (p.bpRejectionPersistenceCheck) {
+    try {
+      bp_rejection_persistence = await p.bpRejectionPersistenceCheck(p.ts);
+    } catch (e) {
+      console.error(
+        'longshort_bp_rejection_persistence.failed',
+        e instanceof Error ? e.message : String(e),
+      );
+      bp_rejection_persistence = null;
+    }
+  }
+
   return {
     still_in_flight: result.still_in_flight,
     terminal: result.terminal,
@@ -311,6 +349,7 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     short_stop: shortStop,
     short_stop_adjusted_aggregate,
     rebalance_aggregate_persistence,
+    bp_rejection_persistence,
     etb_transition,
   };
 }
