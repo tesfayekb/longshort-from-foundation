@@ -51,8 +51,7 @@ Deno.serve(createHandler(async (req: Request) => {
       flipped: result.flipped,
       correlation_id: correlationId,
     });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return apiError(500, 'settlement_reconciler_failed', { correlationId, details: msg });
+  } catch (_e) {
+    return apiError(500, 'settlement_reconciler_failed', { correlationId });
   }
 }));
