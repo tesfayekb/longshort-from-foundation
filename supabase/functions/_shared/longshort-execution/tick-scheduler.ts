@@ -30,6 +30,7 @@ import {
   advanceTick,
   type AdvanceTickResult,
   type ReconciliationEventWriter,
+  type LotLedgerSink,
 } from './lifecycle-orchestrator.ts';
 import type { RejectionPropagator } from './cache-propagator-io.ts';
 import type { SameTickContradictoryPass } from './cache-propagator.ts';
@@ -125,6 +126,12 @@ export interface TickSchedulerParams {
    *  Closure errors are caught + logged + surfaced as `null` so a
    *  vendor hiccup does not kill the tick. */
   etbTransitionAssertion?: (ts: Date) => Promise<EtbTransitionResult>;
+  /** ACT-403 (Finding-B Option-1) — OPTIONAL lot-ledger sink. Threaded
+   *  through to advanceTick at the terminal_filled seam. Production wires
+   *  an entry-only sink at the edge-fn composition root (exit-side closeLots
+   *  wiring is FP-061 sub-step 4M.4 follow-up). Idempotent on
+   *  source_order_id via writeOpenLot pre-check + MIG-148 unique index. */
+  lotLedgerSink?: LotLedgerSink;
 }
 
 export interface TickSchedulerResult extends AdvanceTickResult {
@@ -242,6 +249,7 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     ts: p.ts,
     config: p.config,
     phase1AcceptanceTimeoutS: p.phase1AcceptanceTimeoutS,
+    ...(p.lotLedgerSink ? { lotLedgerSink: p.lotLedgerSink } : {}),
   });
 
   // DW-163: BROKER-TRUTH post-fire dollar-neutrality assertion. Runs on
