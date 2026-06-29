@@ -52,6 +52,7 @@ import type {
   BrokerLocateFetcher,
   BrokerHaltStatusFetcher,
   BrokerShortabilityFetcher,
+  BrokerCorporateActionFetcher,
 } from '../longshort-broker-interfaces.ts';
 import type { InFlightOrder } from './state-machine.ts';
 // ACT-316 (E6-build-revision) — edge-resident Alpaca adapters. Prior to ACT-316
@@ -79,6 +80,14 @@ import { AlpacaPositionFetcher } from '../longshort-broker/alpaca-position-fetch
 import { AlpacaLocateFetcher } from '../longshort-broker/alpaca-locate-fetcher.ts';
 import { AlpacaHaltStatusFetcher } from '../longshort-broker/alpaca-halt-status-fetcher.ts';
 import { AlpacaShortabilityFetcher } from '../longshort-broker/alpaca-shortability-fetcher.ts';
+// FP-062 sub-step 6I.2b (ACT-382) — real CA basis cross-check. The fetcher
+// COMPOSES the internal stand-in for recent-action provenance (paper exposes
+// no CA-feed) and overlays the real `/v2/positions/{symbol}.avg_entry_price`
+// vs internal `cost_basis` comparison. The internal stand-in remains as the
+// creds-free CI fallback at the verifier call site (§2 axiom 2 — cross-check
+// posture; internal stand-in is NOT deleted).
+import { AlpacaCorporateActionFetcher } from '../longshort-broker/alpaca-corporate-action-fetcher.ts';
+import { createInternalCorporateActionStatusFetcher } from './internal-corporate-action-status-fetcher.ts';
 // ── FEED-FIX (post-ACT-336 / DEC-068 clause-(r) in flight) ───────────────
 // PolygonQuoteFetcher REPLACES AlpacaQuoteFetcher at the BrokerQuoteFetcher
 // seam. The Q4 probe (corr 4237512b book) measured Alpaca IEX-only quotes
@@ -135,6 +144,13 @@ export interface BrokerInterfaces {
    *  the §7 composer takes its shortability-typed-absence path; when
    *  ALSO `locateFetcher` is absent the trigger declares `long_only_mode`. */
   shortabilityFetcher?: BrokerShortabilityFetcher;
+  /** §11.0.7 #11 corporate-action basis cross-check (FP-062 6I.2b / DW-199).
+   *  Real impl composes `createInternalCorporateActionStatusFetcher`
+   *  (recent-action provenance) with Alpaca `/v2/positions/{symbol}`
+   *  `avg_entry_price` (broker-truth basis). Consumed at the
+   *  `verifyCorporateActionClean(..., fetcher, ...)` call site with a
+   *  graceful fallback to the internal stand-in for creds-free CI. */
+  corporateActionFetcher?: BrokerCorporateActionFetcher;
   // SSR DETERMINATION (Phase-1 report): Alpaca paper does NOT expose SSR
   // cleanly — no public REST endpoint surfacing SSR state. Per §2 axiom
   // (typed absence, NOT a synthetic 'SSR clear' sentinel) the §7 preflight
@@ -231,5 +247,16 @@ export function createLiveBrokerInterfaces(config: AlpacaPaperClientConfig = {})
   if (shortabilityAvailable) {
     base.shortabilityFetcher = new AlpacaShortabilityFetcher(client);
   }
+  // ── FP-062 sub-step 6I.2b (ACT-382) — REAL CA basis cross-check. ──────
+  // Lazy / creds-free construction (network only at first fetch). The
+  // internal stand-in is composed (NOT replaced); it remains the source of
+  // truth for the recent-action provenance fields (paper has no CA feed).
+  // The 3 stay-soft seams (RealizedPnL / Settlement / YearEndTax) are
+  // STRUCTURALLY unserveable by Alpaca paper — re-affirmed verbatim in the
+  // FP-062 6I.2b ledger; they remain on their internal stand-ins.
+  base.corporateActionFetcher = new AlpacaCorporateActionFetcher(
+    client,
+    createInternalCorporateActionStatusFetcher(),
+  );
   return base;
 }
