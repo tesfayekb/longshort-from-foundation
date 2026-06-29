@@ -81,6 +81,12 @@ Deno.test('E_evidence_1 (replay): one phase1_pending accepted → still in-fligh
           { id: 'O-1', client_order_id: cid, symbol: 'AAPL', qty: '10', side: 'buy', status: 'new', limit_price: '180.50', submitted_at: SUBMITTED },
         ]), { status: 200 }),
       },
+      // ACT-403 — recently-filled bucket. Empty: this test exercises the
+      // open-orders → accept transition, not the recently-filled path.
+      {
+        method: 'GET', pathPrefix: '/v2/orders?status=closed',
+        respond: () => new Response('[]', { status: 200 }),
+      },
       {
         method: 'GET', pathPrefix: '/v2/orders/O-1',
         respond: () => new Response(JSON.stringify({ id: 'O-1', symbol: 'AAPL', status: 'accepted', submitted_at: SUBMITTED }), { status: 200 }),
@@ -110,6 +116,12 @@ Deno.test('E_evidence_1 (replay): phase2_working with broker fill → terminal_f
   // For this test we want the FILL fetcher to drive the transition — but the
   // reconstruct path uses status to choose initial state, so we use
   // 'partially_filled' which maps to phase2_working at reconstruction.
+  //
+  // ACT-403: the recently-filled bucket is scripted EMPTY here so the
+  // terminal_filled transition is genuinely driven by the fill-poll path
+  // (open→partially_filled reconstruction → /v2/orders/O-2 fill observation
+  // → terminal_filled), not by the recently-filled shortcut. This preserves
+  // the original test intent (proving fill-poll → terminal_filled).
   const broker = createLiveBrokerInterfaces({
     baseUrlOverride: 'http://localhost',
     fetchImpl: scriptedFetch([
@@ -118,6 +130,10 @@ Deno.test('E_evidence_1 (replay): phase2_working with broker fill → terminal_f
         respond: () => new Response(JSON.stringify([
           { id: 'O-2', client_order_id: cid, symbol: 'MSFT', qty: '5', side: 'buy', status: 'partially_filled', limit_price: '300.00', submitted_at: SUBMITTED },
         ]), { status: 200 }),
+      },
+      {
+        method: 'GET', pathPrefix: '/v2/orders?status=closed',
+        respond: () => new Response('[]', { status: 200 }),
       },
       {
         method: 'GET', pathPrefix: '/v2/orders/O-2',
@@ -152,6 +168,10 @@ Deno.test('E_evidence_1 (replay): phase1_pending rejected → tier-2 terminal + 
         respond: () => new Response(JSON.stringify([
           { id: 'O-3', client_order_id: cid, symbol: 'NVDA', qty: '3', side: 'buy', status: 'new', limit_price: '500.00', submitted_at: SUBMITTED },
         ]), { status: 200 }),
+      },
+      {
+        method: 'GET', pathPrefix: '/v2/orders?status=closed',
+        respond: () => new Response('[]', { status: 200 }),
       },
       {
         method: 'GET', pathPrefix: '/v2/orders/O-3',
