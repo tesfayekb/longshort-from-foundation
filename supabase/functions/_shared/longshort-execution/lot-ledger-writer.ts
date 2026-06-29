@@ -285,12 +285,33 @@ export async function closeLots(
 
     // FP-061 SOFT-DEPENDENT BROKER FETCHER — see FP-057
     // verify_rebalance_aggregate precedent. The real Alpaca-paper
-    // BrokerRealizedPnLFetcher lands in FP-062 / DW-058. Until then the
-    // verifier fires against the contract-complete mock-fetcher path.
-    // TODO(FP-062): flip `fetcher` to the real broker-side reader at the
-    // call site below; this writer is unchanged.
-    let verify_result: ReconcileResult | null = null;
+    // BrokerRealizedPnLFetcher lands in FP-062 / DW-058. Until then we
+    // read broker_confirmed_pnl from the contract-complete mock-fetcher
+    // path; verify_realized_pnl is fired SEPARATELY for the
+    // reconciliation_events audit write.
+    //
+    // TODO(FP-062): flip the injected `fetcher` to the real Alpaca
+    // broker-side reader at the call site; this writer is unchanged.
+    //
+    // (1) read broker-confirmed PnL directly so 4M.3 always has a
+    //     ground-truth number, even if the verifier event-write fails.
     let broker_confirmed_pnl: number | null = null;
+    try {
+      const confirm = await fetcher.fetchRealizedPnL(inp.exit_trade_id, closed_at);
+      if (typeof confirm.broker_confirmed_pnl === 'number') {
+        broker_confirmed_pnl = confirm.broker_confirmed_pnl;
+      }
+    } catch (e) {
+      // 4M.3 will see broker_confirmed_pnl===null and route to Path B
+      // (re_entry_blocked_pending_review). DEC-034 narrow exception:
+      // observation surface, not the source-of-truth write.
+      broker_confirmed_pnl = null;
+      void e;
+    }
+
+    // (2) fire the verifier for the audit-event write. Errors here are
+    //     diagnostic-only — they do NOT clear broker_confirmed_pnl.
+    let verify_result: ReconcileResult | null = null;
     try {
       verify_result = await verifyRealizedPnL(
         {
@@ -303,19 +324,8 @@ export async function closeLots(
         closed_at,
         fetcher_source,
       );
-      const div = verify_result.divergence as { broker_confirmed_pnl?: number };
-      if (typeof div?.broker_confirmed_pnl === 'number') {
-        broker_confirmed_pnl = div.broker_confirmed_pnl;
-      }
     } catch (e) {
-      // Verifier dispatch failure does NOT poison the close-writer
-      // (mirrors lifecycle-orchestrator propagator pattern). 4M.3 will
-      // see verify_result===null and route to Path B pending-review.
       verify_result = null;
-      broker_confirmed_pnl = null;
-      // Surface the error in the lot's wash_sale_status remains 'pending';
-      // diagnostic-only swallow per DEC-034 narrow exception (verify is
-      // observation, not the source-of-truth write).
       void e;
     }
 
