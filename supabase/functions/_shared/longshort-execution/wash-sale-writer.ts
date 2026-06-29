@@ -434,6 +434,22 @@ async function applySection7_8(
   const ins = await deps.client.from('wash_sale_events').insert(row);
   if (ins.error) throw new Error(`section_7_8_wash_sale_events_insert_failed: ${ins.error.message}`);
 
+  // FP-061 4M.5b / MIG-142 — apply the net-PnL adjustment to the CLOSED
+  // source lot (NOT the held target — the target receives the cost-basis
+  // bump above; the disallowed loss attributes to the lot whose loss it
+  // was). Join on source_lot_ids per the spec: the closed lot's
+  // deductible loss is reduced by the positive disallowed_amount.
+  //   net_pnl = realized_pnl + wash_sale_adjustment  (PLUS, not minus —
+  //   −500 loss + 500 disallowance = 0 net taxable; sign error = 1099-B
+  //   defect.) Failures here are observation-surface (audit trail will
+  //   still carry the wash_sale_events row); the per-lot column update
+  //   is the derived 1099-B projection.
+  for (const source_lot_id of args.exclude_lot_ids) {
+    try {
+      await applyNetPnlAdjustment(source_lot_id, absLoss, deps.lotClient);
+    } catch (_e) { /* projection-update failure is non-fatal — wash_sale_events row is the durable record */ }
+  }
+
   // gate-13-allow: post-mutation verify per §7.8 step 7→8 — wash_sale_events
   // row verified for persistence immediately after write; spec-sanctioned
   // post-mutation reconcile per §7.8.
@@ -468,6 +484,60 @@ async function applySection7_8(
     lot_verify_result,
     wash_verify_result,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// FP-061 sub-step 4M.5b / MIG-142 — net-PnL writer.
+//
+// Updates the CLOSED source lot's wash_sale_adjustment + net_pnl columns
+// when a §7.8 disallowance attributes a positive magnitude to it.
+//
+// SIGN DISCIPLINE (IRS crux):
+//   - disallowed_amount: stored POSITIVE magnitude (Math.abs at the caller).
+//   - realized_pnl:      signed (negative = loss).
+//   - net_pnl = realized_pnl + wash_sale_adjustment.
+//     A −500 loss + 500 disallowance = 0 net taxable. PLUS, never minus.
+//
+// Pure DB write — no verify pair, no Gate-13 surface (net_pnl is a derived
+// 1099-B projection, not a verify_*-gated mutation).
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function applyNetPnlAdjustment(
+  source_closed_lot_id: string,
+  disallowed_amount: number,
+  client: LotLedgerClient,
+): Promise<void> {
+  if (!(disallowed_amount >= 0)) {
+    throw new Error(
+      `applyNetPnlAdjustment: disallowed_amount must be positive magnitude (got ${disallowed_amount})`,
+    );
+  }
+  // Read first to compute the new value (the narrow LotLedgerClient does
+  // not expose UPDATE...FROM/SET col = col + $; a read-then-write is
+  // adequate — §7.8 is per-loss-sale single-writer, not high-concurrency).
+  const read = await client
+    .from('longshort_lots')
+    .select('lot_id, realized_pnl, wash_sale_adjustment')
+    .eq('lot_id', source_closed_lot_id)
+    .single();
+  if (read.error) {
+    throw new Error(`applyNetPnlAdjustment_read_failed: ${read.error.message}`);
+  }
+  if (!read.data) {
+    throw new Error(`applyNetPnlAdjustment_missing: lot_id=${source_closed_lot_id}`);
+  }
+  const realized_pnl = Number(read.data.realized_pnl ?? 0);
+  const prior_adj = Number(read.data.wash_sale_adjustment ?? 0);
+  const new_adj = prior_adj + disallowed_amount;
+  const new_net = realized_pnl + new_adj;
+  const upd = await client
+    .from('longshort_lots')
+    .update({ wash_sale_adjustment: new_adj, net_pnl: new_net })
+    .in('lot_id', [source_closed_lot_id])
+    .select('lot_id');
+  if (upd.error) {
+    throw new Error(`applyNetPnlAdjustment_update_failed: ${upd.error.message}`);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
