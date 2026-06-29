@@ -290,6 +290,12 @@ export async function closeLots(
         exit_price: inp.exit_price,
         realized_pnl,
         wash_sale_status: 'pending',
+        // FP-061 4M.5b / MIG-142 — seed net_pnl = realized_pnl at close.
+        // wash_sale_adjustment defaults 0 (no disallowance known at close).
+        // applyNetPnlAdjustment (wash-sale-writer) updates BOTH columns
+        // when §7.8 fires asynchronously after the close-write.
+        wash_sale_adjustment: 0,
+        net_pnl: realized_pnl,
       })
       .in('lot_id', [lot_id])
       .select('lot_id, symbol, side, qty, cost_basis, entry_ts');
