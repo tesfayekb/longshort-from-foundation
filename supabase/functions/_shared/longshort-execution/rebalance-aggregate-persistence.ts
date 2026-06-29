@@ -60,6 +60,31 @@ export const PERSIST_CALL_NAME = 'verify_rebalance_aggregate_persistence' as con
 export const PERSIST_ACTION =
   'persistent_band_violation_operator_alert_N_consecutive_ticks' as const;
 
+/** DW-202 structural guard reference — the real writable column set on
+ *  `public.reconciliation_events` per
+ *  supabase/migrations/20260522100100_step_6_2_reconciliation_events.sql.
+ *  `event_id` is auto-gen PK and excluded from inserts. Any writer in
+ *  this module MUST emit only keys from this set; the test suite asserts
+ *  the subset invariant so a future drift fails at author time, not at
+ *  PostgREST schema-cache miss time (DW-202 silent-failure class). */
+export const RECONCILIATION_EVENTS_WRITABLE_COLUMNS = Object.freeze([
+  'operator_id',
+  'ts',
+  'engine_version',
+  'call_name',
+  'tier',
+  'symbol',
+  'expected_value',
+  'observed_value',
+  'divergence',
+  'tolerance',
+  'outcome',
+  'failure_action',
+  'phase_0b_run_id',
+  'pr_evidence_ref',
+  'notes',
+] as const);
+
 export function parsePersistN(env: { get(name: string): string | undefined }): number {
   const raw = env.get('LONGSHORT_REBALANCE_AGGREGATE_PERSIST_N');
   if (raw === undefined) return DEFAULT_PERSIST_N;
@@ -341,10 +366,14 @@ export function createSupabaseAggregatePersistenceEventWriter(
         symbol: null,
         tier: 'strong',
         outcome: 'failure_escalated',
-        action_taken: PERSIST_ACTION,
+        // DW-202 fix: the real column is `failure_action` (text). The
+        // historical `action_taken` key was not a column — every write
+        // silently failed with PostgREST schema-cache miss and the seam
+        // (tick-scheduler.ts) swallowed it, so the §11.0.9 zero-tolerance
+        // operator-pager never fired. PERSIST_ACTION value is unchanged.
+        failure_action: PERSIST_ACTION,
         ts: args.ts.toISOString(),
         engine_version: ENGINE_VERSION,
-        fetcher_source: args.fetcher_source,
         expected_value: null,
         observed_value: null,
         tolerance: { threshold: args.threshold, cooldown_s: args.cooldown_s },
@@ -352,6 +381,10 @@ export function createSupabaseAggregatePersistenceEventWriter(
           consecutive: args.consecutive,
           threshold: args.threshold,
           last_unexplained_event_id: args.last_unexplained_event_id,
+          // fetcher_source is NOT a reconciliation_events column; carried
+          // in the divergence jsonb so pager attribution is preserved
+          // without a schema change. (DW-202 full-payload-alignment.)
+          fetcher_source: args.fetcher_source,
         },
       };
       const { data, error } = await supabase
