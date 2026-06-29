@@ -108,6 +108,15 @@ export interface ClosedLot {
   wash_sale_status: 'pending';
   broker_confirmed_pnl: number | null;
   verify_result: ReconcileResult | null;
+  /** FP-061 sub-step 4M.3 — caller-supplied discriminator. `true` =
+   *  partial-size reduction of a held position (§7.9 trim path: writes
+   *  wash_sale_events record-portion but does NOT add to re_entry_blocked,
+   *  always chains §7.8 on remaining shares). `false` = full exit (§7.7
+   *  Path A: writes wash_sale_events + computes block_until = exit_ts + 31
+   *  CALENDAR days + adds symbol to the derived re_entry_blocked set).
+   *  Set by the lifecycle orchestrator at the terminal-fill seam where
+   *  full-exit vs trim is known. */
+  is_trim: boolean;
 }
 
 /**
@@ -121,6 +130,11 @@ export interface CloseLotInput {
   lot_id: string;
   exit_price: number;
   exit_trade_id: string;
+  /** FP-061 sub-step 4M.3 — see ClosedLot.is_trim. Optional on the input
+   *  surface for backwards-compatibility with 4M.5a callers; defaults to
+   *  `false` (full-exit semantics). The lifecycle orchestrator MUST pass
+   *  `true` explicitly for §7.9 trim closes. */
+  is_trim?: boolean;
 }
 
 /**
@@ -344,9 +358,91 @@ export async function closeLots(
       wash_sale_status: 'pending',
       broker_confirmed_pnl,
       verify_result,
+      is_trim: inp.is_trim ?? false,
     });
   }
   return closed;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// FP-061 sub-step 4M.3 — FIFO-earliest-open-lot helper.
+//
+// EXTRACTED HERE (not in wash-sale-writer.ts) so future sub-step 4M.4
+// (the lot-selector for exits) inherits the same §7.4 FIFO ordering
+// invariant: ORDER BY entry_ts ASC, lot_id ASC (UUID tiebreaker per
+// CROSSWIND §7.4 V1 Option B). Grep-confirmed at FP-061 4M.3 investigation
+// time: NO FIFO helper existed prior to this sub-step.
+//
+// Used by §7.8 retroactive cost-basis attachment (wash-sale-writer.ts
+// apply_7_8) to find the earliest still-held lot in the 30-day window.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Narrow read surface the FIFO helper needs. Distinct from LotLedgerClient
+ * because the helper does a range query (gte / lte) + a NOT-IN exclude
+ * that the writer-flavored client doesn't expose. Tests inject a fake.
+ */
+export interface FifoLotReader {
+  /**
+   * Returns the FIFO-earliest open lot for `symbol` whose `entry_ts`
+   * falls inside `[from_ts, to_ts]` (inclusive) AND whose lot_id is NOT
+   * in `exclude_lot_ids`. Returns `null` if no such lot exists.
+   *
+   * Ordering MUST be: ORDER BY entry_ts ASC, lot_id ASC LIMIT 1 (§7.4
+   * FIFO + UUID tiebreaker). The lot_id tiebreaker keeps the helper
+   * deterministic when two lots share the same entry_ts.
+   */
+  selectFifoEarliestOpenInWindow(args: {
+    symbol: string;
+    from_ts: Date;
+    to_ts: Date;
+    exclude_lot_ids: readonly string[];
+  }): Promise<{
+    lot_id: string;
+    entry_ts: Date;
+    qty: number;
+    cost_basis: number;
+  } | null>;
+}
+
+/**
+ * Default `FifoLotReader` backed by `supabaseAdmin`. Caller-facing
+ * convenience — tests should inject the interface directly.
+ */
+export function createSupabaseFifoLotReader(): FifoLotReader {
+  // deno-lint-ignore no-explicit-any
+  const client = supabaseAdmin as any;
+  return {
+    async selectFifoEarliestOpenInWindow({ symbol, from_ts, to_ts, exclude_lot_ids }) {
+      let q = client
+        .from('longshort_lots')
+        .select('lot_id, entry_ts, qty, cost_basis')
+        .eq('symbol', symbol)
+        .eq('status', 'open')
+        .gte('entry_ts', from_ts.toISOString())
+        .lte('entry_ts', to_ts.toISOString());
+      if (exclude_lot_ids.length > 0) {
+        // PostgREST `not.in.(...)` filter.
+        q = q.not('lot_id', 'in', `(${exclude_lot_ids.map((id) => `"${id}"`).join(',')})`);
+      }
+      const { data, error } = await q
+        .order('entry_ts', { ascending: true })
+        .order('lot_id', { ascending: true })
+        .limit(1);
+      if (error) {
+        throw new Error(`selectFifoEarliestOpenInWindow_failed: ${(error as { message?: string }).message ?? 'unknown'}`);
+      }
+      const rows = (data ?? []) as Array<{ lot_id: string; entry_ts: string; qty: number; cost_basis: number }>;
+      if (rows.length === 0) return null;
+      const r = rows[0];
+      return {
+        lot_id: String(r.lot_id),
+        entry_ts: new Date(String(r.entry_ts)),
+        qty: Number(r.qty),
+        cost_basis: Number(r.cost_basis),
+      };
+    },
+  };
 }
 
 /**
