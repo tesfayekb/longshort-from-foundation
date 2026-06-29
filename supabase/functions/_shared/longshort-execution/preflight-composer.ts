@@ -334,7 +334,20 @@ export async function composePreflightResults(
   // System-level failure short-circuits every candidate.
   const bp = await deps.buyingPowerFetcher.fetchBuyingPower(input.ts);
   const bpObserved = bp.available_bp;
-  const bpInsufficient = bp.available_bp < requestedTotal;
+  // ── FP-061 sub-step 4M.2 / ACT-377 — §7 BP-read settled-vs-unsettled.
+  //    Subtract OPEN+pending deployed cash (internal-authoritative via
+  //    longshort_lots.settlement_state) before the insufficient check.
+  //    The broker settled-funds cross-check (Alpaca cash vs
+  //    cash_withdrawable) is SOFT-DEPENDENT on FP-062
+  //    AlpacaBuyingPowerFetcher; until it lands, our internal lot state
+  //    is the source of truth for the on-tick subtraction.
+  const unsettledCashReader = deps.unsettledCashReader;
+  const unsettledCashUnavailable = unsettledCashReader === undefined;
+  const unsettledCashDeployed = unsettledCashReader
+    ? await unsettledCashReader.readUnsettledDeployedCash(deps.operator_id)
+    : 0;
+  const effectiveAvailableBp = bp.available_bp - unsettledCashDeployed;
+  const bpInsufficient = effectiveAvailableBp < requestedTotal;
   void input.internal_expected_bp; // reserved for the Phase-2 trigger audit envelope
 
   const results = new Map<PreflightKey, PreflightResult>();
