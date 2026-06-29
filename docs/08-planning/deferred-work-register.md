@@ -2243,6 +2243,16 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **implemented_by_action** | — |
 | **implemented_in_plan_version** | — |
 
+#### ADDENDUM (Rule 8 — additive, original preserved above) — FP-062 6I.4 / ACT-398
+
+| Field | Value |
+|---|---|
+| **date_appended** | 2026-06-29 (ACT-398 — FP-062 sub-step 6I.4 implementation). |
+| **realized_pnl_source** | The conditional 31-day re-entry block reads realized P&L from `public.longshort_lots.realized_pnl` (numeric) joined to `public.longshort_lots.exit_ts` (timestamptz) WHERE `status='closed'`. There is NO `longshort_realized_pnl` table — FP-061 grounded realized-P&L on `longshort_lots` directly (grep-confirmed). The 2026-06-18 DW-105 entry predated FP-061; this addendum grounds the dependency literal. Partial-fill closures are aggregated SUM(realized_pnl) per (operator_id, symbol, side, exit_date); the SIGN of the SUM is the `pnl_sign` consumed by the pure state-machine. |
+| **status** | implemented_in_part — §1.4 hysteresis/cap-25/no-bumping/entry-rank/exit-rank/conditional-31-day-block all live; the dual-criterion-exit + passive-holds extensions remain explicitly DEFERRED per the original entry (v1 pure ranking-based exit by spec). |
+| **closure_artifacts** | MIG-147 (combiner_book `entered_at` + `transition_reason`); `supabase/functions/_shared/longshort-combiner/book-state-machine.ts` (pure); `prior-book-loader.ts` + `recent-exits-loader.ts` (thin I/O, structurally typed — no `any`); `ranker-orchestrator.ts` Step 3.5 wiring + `longshort_audit_logs action='combiner.book_transitions'` emission. 11 replay-deterministic tests. |
+| **related_actions** | ACT-398. |
+
 ### DW-106: Combiner — per-signal carry-forward design (evidence-driven post-3.0c)
 
 | Field | Value |
