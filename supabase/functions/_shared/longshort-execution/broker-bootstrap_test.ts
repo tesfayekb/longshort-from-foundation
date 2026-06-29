@@ -66,11 +66,20 @@ Deno.test('broker-bootstrap: reconstructInFlight maps cid→intent + filters non
     // Step escalation cid
     { id: 'O-4', client_order_id: `lse-NVDA-open-${tsMs}-step1`, symbol: 'NVDA', qty: '3', side: 'buy', status: 'accepted', limit_price: '500', submitted_at: submitted },
   ];
+  // ACT-403 — recently-filled fetcher (status=closed&after=…) is invoked
+  // alongside the open-orders fetcher inside reconstructInFlight. Script
+  // an empty closed-set so this test continues to exercise the open-path
+  // mapping + lse-filter contract end-to-end (merge is a no-op when the
+  // closed bucket is empty). The exact `after` ISO is derived from TS −
+  // DEFAULT_RECENT_FILL_LOOKBACK_S (1800s) → 2026-06-24T20:00:00.000Z.
+  const afterIso = new Date(TS.getTime() - 1800 * 1000).toISOString();
+  const closedKey = `GET /v2/orders?status=closed&after=${encodeURIComponent(afterIso)}&limit=500&direction=asc`;
   const broker = createLiveBrokerInterfaces({
     baseUrlOverride: 'http://localhost',
     fetchImpl: scriptedFetch({
       'GET /v2/orders?status=open&limit=500&direction=asc': () =>
         new Response(JSON.stringify(openResp), { status: 200 }),
+      [closedKey]: () => new Response('[]', { status: 200 }),
     }),
   });
   const inFlight = await broker.reconstructInFlight(TS);

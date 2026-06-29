@@ -73,6 +73,11 @@ Deno.test('E_evidence_2: routed rejection event matches reconciliation_events co
           { id: 'O-R', client_order_id: cid, symbol: 'NVDA', qty: '3', side: 'buy', status: 'new', limit_price: '500.00', submitted_at: SUBMITTED },
         ]), { status: 200 });
       }
+      // ACT-403 — recently-filled bucket, empty (this test exercises the
+      // rejection-routing telemetry shape, not the recently-filled path).
+      if (u.pathname === '/v2/orders' && u.search.startsWith('?status=closed')) {
+        return new Response('[]', { status: 200 });
+      }
       if (u.pathname === '/v2/orders/O-R') {
         return new Response(JSON.stringify({
           id: 'O-R', symbol: 'NVDA', status: 'rejected', rejected_reason: 'asset is currently halted', submitted_at: SUBMITTED,
@@ -112,6 +117,9 @@ Deno.test('E_evidence_2: clean accept tick emits zero failure events', withCreds
         return new Response(JSON.stringify([
           { id: 'O-A', client_order_id: cid, symbol: 'AAPL', qty: '10', side: 'buy', status: 'new', limit_price: '180.50', submitted_at: SUBMITTED },
         ]), { status: 200 });
+      }
+      if (u.pathname === '/v2/orders' && u.search.startsWith('?status=closed')) {
+        return new Response('[]', { status: 200 });
       }
       if (u.pathname === '/v2/orders/O-A') {
         return new Response(JSON.stringify({
