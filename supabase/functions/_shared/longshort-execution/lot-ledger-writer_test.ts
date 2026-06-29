@@ -303,3 +303,34 @@ Deno.test('readInternalLotRecord: returns COMPARED_FIELDS-shaped record', async 
   assertEquals(rec.status, 'open');
   assertEquals(rec.locate_id, 'loc-abc');
 });
+
+// ACT-403 (Finding-B Option-1) — idempotency on source_order_id.
+// The recently-filled reconstruction window is overlapping (2× tick
+// interval). A filled order re-observed on the next tick MUST record
+// ONCE; writeOpenLot's pre-check returns the EXISTING lot rather than
+// inserting a duplicate row.
+Deno.test('writeOpenLot: dedups on source_order_id (Finding-B safety)', async () => {
+  const client = makeFakeClient();
+  const entry_ts = new Date('2026-06-29T19:45:00Z');
+  const first = await writeOpenLot(
+    makeFill(10, 50),
+    { symbol: 'MSFT', side: 'long', source_order_id: 'broker-ord-42' },
+    entry_ts,
+    client,
+  );
+  assertEquals(client.rows.length, 1);
+
+  // Same source_order_id → next tick re-observes the same fill.
+  const second = await writeOpenLot(
+    makeFill(10, 50),
+    { symbol: 'MSFT', side: 'long', source_order_id: 'broker-ord-42' },
+    new Date('2026-06-29T20:00:00Z'), // later tick
+    client,
+  );
+  // EXACTLY one row in the ledger.
+  assertEquals(client.rows.length, 1);
+  // Same lot_id returned (caller sees the existing lineage).
+  assertEquals(second.lot_id, first.lot_id);
+  // entry_ts is the ORIGINAL entry, not the re-observation ts.
+  assertEquals(second.entry_ts.toISOString(), entry_ts.toISOString());
+});
