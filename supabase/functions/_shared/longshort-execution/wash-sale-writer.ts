@@ -406,7 +406,7 @@ async function applySection7_8(
   try {
     const expected = await readInternalLotRecord(target.lot_id, deps.lotClient);
     lot_verify_result = await verifyLotRecord(
-      { ...expected, operator_id: args.operator_id },
+      { operator_id: args.operator_id, expected },
       deps.lotRecordFetcher,
       ts,
       deps.fetcher_source,
