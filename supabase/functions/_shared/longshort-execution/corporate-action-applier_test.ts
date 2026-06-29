@@ -396,7 +396,7 @@ Deno.test('4M.4: UnappliedCorporateActionReader returns earliest unapplied per s
       const out = new Map<string, { action_type: string; ex_date: Date }>();
       // Replicate the production reader using our fake client to verify
       // the same SELECT-shape works end-to-end.
-      const { data, error } = await (client as CorporateActionApplierClient)
+      const { data, error } = await (client as unknown as import('./corporate-action-applier.ts').UnappliedCorporateActionReaderClient)
         .from('corporate_actions')
         .select('symbol, action_type, ex_date')
         .is('applied_at', null)
