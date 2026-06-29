@@ -127,7 +127,7 @@ const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
 // FP-008 sub-step 8.7 / ACT-113 — LIVE universe-membership fetcher backed by
 // supabaseAdmin reads of `universe_membership` + `hard_exclusions` (MIG-050 +
-// MIG-051). Replaces former MOCK_UNIVERSE_FETCHER per Surface 1 Option A
+// MIG-051). Replaces the prior mock-universe fetcher per Surface 1 Option A
 // (verifier signature unchanged; transition lands at fetcher layer).
 const LIVE_UNIVERSE_FETCHER = createUniverseMembershipFetcher({
   supabaseAdmin,
