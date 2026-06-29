@@ -1103,51 +1103,63 @@ export type Database = {
           cost_basis: number
           created_at: string
           entry_ts: string
+          exit_price: number | null
+          exit_ts: string | null
           expected_settlement_ts: string | null
           locate_id: string | null
           lot_id: string
           operator_id: string
           qty: number
+          realized_pnl: number | null
           settlement_state: string
           side: string
           source_order_id: string | null
           status: string
           symbol: string
           updated_at: string
+          wash_sale_status: string | null
         }
         Insert: {
           closed_at?: string | null
           cost_basis: number
           created_at?: string
           entry_ts: string
+          exit_price?: number | null
+          exit_ts?: string | null
           expected_settlement_ts?: string | null
           locate_id?: string | null
           lot_id?: string
           operator_id?: string
           qty: number
+          realized_pnl?: number | null
           settlement_state?: string
           side: string
           source_order_id?: string | null
           status?: string
           symbol: string
           updated_at?: string
+          wash_sale_status?: string | null
         }
         Update: {
           closed_at?: string | null
           cost_basis?: number
           created_at?: string
           entry_ts?: string
+          exit_price?: number | null
+          exit_ts?: string | null
           expected_settlement_ts?: string | null
           locate_id?: string | null
           lot_id?: string
           operator_id?: string
           qty?: number
+          realized_pnl?: number | null
           settlement_state?: string
           side?: string
           source_order_id?: string | null
           status?: string
           symbol?: string
           updated_at?: string
+          wash_sale_status?: string | null
         }
         Relationships: []
       }

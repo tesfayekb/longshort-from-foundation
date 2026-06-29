@@ -21,7 +21,28 @@ import {
   readInternalLotRecord,
   type LotLedgerClient,
 } from './lot-ledger-writer.ts';
-import type { BrokerFillResult } from '../longshort-broker-interfaces.ts';
+import type {
+  BrokerFillResult,
+  BrokerRealizedPnLConfirm,
+  BrokerRealizedPnLFetcher,
+} from '../longshort-broker-interfaces.ts';
+
+function makeFetcher(confirmedPnl: number): BrokerRealizedPnLFetcher & { calls: string[] } {
+  const calls: string[] = [];
+  return {
+    calls,
+    async fetchRealizedPnL(trade_id: string, ts: Date): Promise<BrokerRealizedPnLConfirm> {
+      calls.push(trade_id);
+      return {
+        trade_id,
+        symbol: 'X',
+        broker_confirmed_pnl: confirmedPnl,
+        trade_ts: ts,
+        fetched_at: ts,
+      };
+    },
+  };
+}
 
 function makeFakeClient(): LotLedgerClient & { rows: Record<string, unknown>[] } {
   const rows: Record<string, unknown>[] = [];
@@ -142,7 +163,14 @@ Deno.test('closeLots: marks status=closed and emits typed ClosedLot[]', async ()
     client,
   );
   const closed_at = new Date('2026-06-30T15:00:00Z');
-  const closed = await closeLots([opened.lot_id], closed_at, client);
+  const fetcher = makeFetcher(500);  // claimed = (110-100)*50 = 500
+  const closed = await closeLots(
+    [{ lot_id: opened.lot_id, exit_price: 110, exit_trade_id: 'trd-2' }],
+    closed_at,
+    fetcher,
+    'mock',
+    client,
+  );
   assertEquals(closed.length, 1);
   assertEquals(closed[0].lot_id, opened.lot_id);
   assertEquals(closed[0].symbol, 'MSFT');
@@ -151,15 +179,103 @@ Deno.test('closeLots: marks status=closed and emits typed ClosedLot[]', async ()
   assertEquals(closed[0].cost_basis, 100);
   assertEquals(closed[0].entry_ts.toISOString(), entry_ts.toISOString());
   assertEquals(closed[0].closed_at.toISOString(), closed_at.toISOString());
+  // 4M.5a additions:
+  assertEquals(closed[0].exit_price, 110);
+  assertEquals(closed[0].exit_ts.toISOString(), closed_at.toISOString());
+  assertEquals(closed[0].realized_pnl, 500);  // long: (110-100)*50
+  assertEquals(closed[0].wash_sale_status, 'pending');
+  assertEquals(closed[0].broker_confirmed_pnl, 500);
+  // verify_result may be null in unit-test env (no DB-backed
+  // reconciliation_events writer); broker_confirmed_pnl is the
+  // ground-truth seam 4M.3 consumes and IS asserted above.
+  // fetcher is called twice per lot: once directly for broker_confirmed_pnl,
+  // once inside verifyRealizedPnL.
+  assertEquals(fetcher.calls.length >= 1, true);
+  assertEquals(fetcher.calls[0], 'trd-2');
   // Underlying row was mutated.
   assertEquals(client.rows[0].status, 'closed');
   assertEquals(client.rows[0].closed_at, closed_at.toISOString());
+  assertEquals(client.rows[0].exit_price, 110);
+  assertEquals(client.rows[0].realized_pnl, 500);
+  assertEquals(client.rows[0].wash_sale_status, 'pending');
 });
 
 Deno.test('closeLots: empty input returns empty list (no DB call)', async () => {
   const client = makeFakeClient();
-  const out = await closeLots([], new Date(), client);
+  const out = await closeLots([], new Date(), makeFetcher(0), 'mock', client);
   assertEquals(out, []);
+});
+
+Deno.test('closeLots: SHORT realized_pnl is sign-inverted (cost − exit) × qty', async () => {
+  // Short opens at 50, covers at 40 → realized_pnl = (50 - 40) * 10 = +100 (gain).
+  const client = makeFakeClient();
+  const opened = await writeOpenLot(
+    makeFill(10, 50),
+    { symbol: 'TSLA', side: 'short', source_order_id: 'ord-s1', locate_id: 'loc-x' },
+    new Date('2026-06-29T19:45:00Z'),
+    client,
+  );
+  const fetcher = makeFetcher(100);
+  const closed = await closeLots(
+    [{ lot_id: opened.lot_id, exit_price: 40, exit_trade_id: 'trd-s1' }],
+    new Date('2026-06-30T15:00:00Z'),
+    fetcher,
+    'mock',
+    client,
+  );
+  assertEquals(closed[0].side, 'short');
+  assertEquals(closed[0].realized_pnl, 100);  // short cover at lower price = gain
+
+  // And a losing short: cover ABOVE entry → negative PnL.
+  const opened2 = await writeOpenLot(
+    makeFill(5, 20),
+    { symbol: 'NVDA', side: 'short', source_order_id: 'ord-s2' },
+    new Date('2026-06-29T19:45:00Z'),
+    client,
+  );
+  const closed2 = await closeLots(
+    [{ lot_id: opened2.lot_id, exit_price: 25, exit_trade_id: 'trd-s2' }],
+    new Date('2026-06-30T15:00:00Z'),
+    makeFetcher(-25),
+    'mock',
+    client,
+  );
+  assertEquals(closed2[0].realized_pnl, -25);  // (20-25)*5 = -25 (loss on cover)
+});
+
+Deno.test('closeLots: missing exit_price throws (no sentinel/default)', async () => {
+  const client = makeFakeClient();
+  const opened = await writeOpenLot(
+    makeFill(10, 10),
+    { symbol: 'A', side: 'long', source_order_id: 'ord-p' },
+    new Date('2026-06-29T19:45:00Z'),
+    client,
+  );
+  await assertRejects(
+    () =>
+      closeLots(
+        // deno-lint-ignore no-explicit-any
+        [{ lot_id: opened.lot_id, exit_price: null as any, exit_trade_id: 'trd-p' }],
+        new Date(),
+        makeFetcher(0),
+        'mock',
+        client,
+      ),
+    Error,
+    'precondition violated',
+  );
+  await assertRejects(
+    () =>
+      closeLots(
+        [{ lot_id: opened.lot_id, exit_price: 100, exit_trade_id: '' }],
+        new Date(),
+        makeFetcher(0),
+        'mock',
+        client,
+      ),
+    Error,
+    'precondition violated',
+  );
 });
 
 Deno.test('readInternalLotRecord: returns COMPARED_FIELDS-shaped record', async () => {
