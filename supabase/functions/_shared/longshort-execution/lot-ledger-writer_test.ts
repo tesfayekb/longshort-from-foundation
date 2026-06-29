@@ -83,6 +83,12 @@ function makeFakeClient(): LotLedgerClient & { rows: Record<string, unknown>[] }
                     ? { data: { ...found }, error: null }
                     : { data: null, error: { message: 'not_found' } };
                 },
+                // ACT-403 — idempotency pre-check on source_order_id.
+                // deno-lint-ignore require-await
+                async limit(n: number) {
+                  const found = rows.filter((r) => String(r[col]) === val).slice(0, n);
+                  return { data: found.map((r) => ({ ...r })), error: null };
+                },
               };
             },
           };
