@@ -1,22 +1,29 @@
 /**
  * longshort-reconciliation-tick — Periodic-sweep edge function for reconciliation engine.
  *
- * NOT FOR LIVE INVOCATION. The handler uses mock BP/position fetchers; the live
- * universe fetcher is wired but the broker fetchers are placeholders pending sub-step
- * 6.7 Alpaca integration. The Commit 7 disposition-routing fix (this file) MUST be
- * shipped before any cron schedule activates this function — otherwise infrastructure
- * failures and escalated outcomes would phantom-succeed to HTTP 200 (the #9 vector).
+ * Handler readiness: BP + position fetchers are now REAL via
+ * `createLiveBrokerInterfaces` (FP-062 sub-step 6I.2a-remaining / ACT-384 — DW-060
+ * condition-1). The universe-membership fetcher remains the live supabaseAdmin-
+ * backed reader. A verify_halt_status dispatch is INTENTIONALLY not added here —
+ * it splits to post-6I.1b (the halt-probe defines symbol-set + cadence; designing
+ * the dispatch against an un-run probe would be premature).
+ *
+ * Cron is STILL DISARMED at the registry level (MIG-058 unchanged). Re-enable
+ * lands at 6I.3a (two-invocation liveness rule wiring) + 6I.3b (explicit
+ * re-enable migration). The Commit 7 disposition router (this file) remains the
+ * required pre-condition so infrastructure failures + escalated outcomes do not
+ * phantom-succeed to HTTP 200 (the #9 vector).
  *
  * Registry-level disarm (FP-008.4 Commit 8 / MIG-058): this handler is disarmed at
  * the registry level — `job_registry.enabled = false` for
  * `longshort.reconciliation_periodic_sweep` per MIG-058. MIG-045's enablement
  * conflated registry-readiness (verifier set complete, dispatch function exists)
  * with handler-readiness (real broker fetchers, fail-loud disposition, liveness
- * detection). Re-enablement requires ALL THREE of: (1) real broker fetchers
- * (FP-006 sub-step 6.7 — Alpaca paper) replacing MOCK_BP_FETCHER / MOCK_POSITION_FETCHER;
- * (2) the two-invocation liveness rule (FP-008.4 #11 second commit) — two consecutive
- * ticks producing zero real verify rows = DEFECT → STOP; (3) an explicit re-enable
- * migration citing MIG-058 and confirming (1)+(2) landed.
+ * detection). Re-enablement requires ALL THREE of: (1) real broker fetchers —
+ * SATISFIED by ACT-384 via createLiveBrokerInterfaces (this file); (2) the
+ * two-invocation liveness rule (FP-008.4 #11 second commit) — PENDING 6I.3a; (3)
+ * an explicit re-enable migration citing MIG-058 and confirming (1)+(2) landed —
+ * PENDING 6I.3b.
  *
  * Purpose: dispatches a subset of verify_*'s in batch per the scheduled job
  * `longshort.reconciliation_periodic_sweep` (activated at sub-step 6.3d via MIG-045).
@@ -52,10 +59,7 @@ import {
   verifyUniverseMembership,
   verifyBuyingPower,
 } from '../_shared/longshort-verifiers/index.ts';
-import type {
-  BrokerPositionFetcher,
-  BrokerBuyingPowerFetcher,
-} from '../_shared/longshort-broker-interfaces.ts';
+import { createLiveBrokerInterfaces } from '../_shared/longshort-execution/broker-bootstrap.ts';
 import type { ReconciliationOutcome } from '../_shared/longshort-reconciliation-types.ts';
 
 /**
@@ -106,41 +110,17 @@ export function classifyTickDisposition(
   return { status: halt ? 500 : 200, halt };
 }
 
-// MOCK FETCHERS for 6.3d. Real broker integration lands at sub-step 6.7. These mocks
-// satisfy the BrokerXxxFetcher contracts with deterministic canned responses so the
-// dispatch path can be exercised end-to-end without real broker access.
-//
-// IMPORTANT: this file is the SOLE place where mock fetchers live in production edge
-// function code. Sub-step 6.7 replaces these with real-broker-backed implementations
-// from a new `_shared/longshort-broker-alpaca.ts` module.
-//
-// FP-008.4 Commit 9 / MIG-059 — all three verify dispatches below tag fetcher_source='mock'
-// because this handler uses MOCK_BP_FETCHER + MOCK_POSITION_FETCHER (and is NOT-FOR-LIVE
-// as a unit). These flip to 'live' at sub-step 6.7 when real broker fetchers land. The
-// LIVE_UNIVERSE_FETCHER below is a real fetcher, but it shares this dispatch site's
-// provenance tag because the periodic sweep's liveness predicate is whole-handler scoped:
-// a tick that ONLY exercises universe-membership (no real BP / no real position) is not
-// "live broker observation" by the rule's definition (call_name-scoped to broker calls).
-// At 6.7 the BP + position fetchers go live and all three tags become 'live'.
-
-const MOCK_POSITION_FETCHER: BrokerPositionFetcher = {
-  // deno-lint-ignore require-await
-  async fetchPosition(_symbol: string, _ts: Date) {
-    // 6.3d mock: return null (no position) for deterministic dispatch validation
-    return null;
-  },
-};
-
-const MOCK_BP_FETCHER: BrokerBuyingPowerFetcher = {
-  // deno-lint-ignore require-await
-  async fetchBuyingPower(ts: Date) {
-    return {
-      available_bp: 100000,
-      account_equity: 100000,
-      fetched_at: ts,
-    };
-  },
-};
+// FP-062 sub-step 6I.2a-remaining / ACT-384 — BP + position fetchers are now LIVE
+// via createLiveBrokerInterfaces (constructed inside the handler body below, NOT at
+// module top-level, so module-load stays creds-free for CI). All three verify
+// dispatches below tag fetcher_source='live' under the whole-handler-scoped
+// liveness predicate: the tick is a live broker observation, and the live
+// universe-membership fetcher shares the tick's provenance (call_name-scoped to
+// broker calls — a tick exercising real BP + real position IS a live broker
+// observation, and UMS inherits that tag because it dispatches on the same tick).
+// This rationale stays load-bearing for 6I.3a's two-invocation liveness predicate.
+// A verify_halt_status dispatch is NOT added here — it splits to post-6I.1b
+// (probe defines symbol-set + cadence).
 
 // Operator UUID per DEC-031 F-2 standalone-operator-id default
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
@@ -165,6 +145,13 @@ Deno.serve(createHandler(async (req: Request) => {
   // Top-of-call-chain wall-clock read per DEC-034 clause (4) injected-clock discipline.
   const ts = productionClock.getWallClockTs();
 
+  // Live broker interfaces — constructed lazily inside the handler body so module
+  // load remains creds-free (unit tests exercise only the pure classifier).
+  // The production factory always populates buyingPowerFetcher + positionFetcher
+  // per broker-bootstrap; the `!` reflects a type carve-out for advance-path test
+  // helpers, not runtime nullability.
+  const broker = createLiveBrokerInterfaces();
+
   const results: TickResult[] = [];
 
   // verify_buying_power — once per tick (system-level)
@@ -175,9 +162,9 @@ Deno.serve(createHandler(async (req: Request) => {
         expected_bp: 100000,
         requested_position_size: 0,
       },
-      MOCK_BP_FETCHER,
+      broker.buyingPowerFetcher!,
       ts,
-      'mock',
+      'live',
     );
     results.push({ call: 'verify_buying_power', outcome: bpResult.outcome });
   } catch (err) {
@@ -202,7 +189,7 @@ Deno.serve(createHandler(async (req: Request) => {
         },
         LIVE_UNIVERSE_FETCHER,
         ts,
-        'mock',
+        'live',
       );
       results.push({
         call: 'verify_universe_membership',
@@ -229,9 +216,9 @@ Deno.serve(createHandler(async (req: Request) => {
         expected_cost_basis: 0,
         operator_id: DEFAULT_OPERATOR_ID,
       },
-      MOCK_POSITION_FETCHER,
+      broker.positionFetcher!,
       ts,
-      'mock',
+      'live',
     );
     results.push({ call: 'verify_position', outcome: posResult.outcome, symbol: 'AAPL' });
   } catch (err) {
