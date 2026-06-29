@@ -196,6 +196,24 @@ export interface PreflightComposerDeps {
    * footprint; cheap to call on every long candidate every tick.
    */
   washSaleBlockReader?: WashSaleBlockReader;
+  /**
+   * FP-061 sub-step 4M.2 / ACT-377 — §7 BP-read settled-vs-unsettled
+   * distinction. Typed-absence dep. When INJECTED, the composer subtracts
+   * the deployed-cash-on-pending-lots from the broker-observed
+   * `available_bp` BEFORE the `bpInsufficient` check (settled-lot cash
+   * is available against new requests under T+1; pending-lot cash is
+   * NOT). When ABSENT, the composer uses the raw broker `available_bp`
+   * (legacy pre-4M.2 behavior) and `summary.unsettled_cash_unavailable`
+   * is TRUE.
+   *
+   * SOFT-DEPENDENT broker cross-check: the broker settled-funds
+   * cross-check (Alpaca `account.cash` vs `account.cash_withdrawable`)
+   * is FP-062 (`AlpacaBuyingPowerFetcher` real path). The internal
+   * `settled_at` on `longshort_lots` (MIG-143) is authoritative for
+   * the on-tick subtraction; the broker cross-check flips real when
+   * FP-062 lands.
+   */
+  unsettledCashReader?: UnsettledCashReader;
 }
 
 export interface PreflightComposerInput {
