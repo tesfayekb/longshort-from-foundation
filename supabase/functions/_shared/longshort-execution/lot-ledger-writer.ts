@@ -410,8 +410,7 @@ export interface FifoLotReader {
  * convenience — tests should inject the interface directly.
  */
 export function createSupabaseFifoLotReader(): FifoLotReader {
-  // deno-lint-ignore no-explicit-any
-  const client = supabaseAdmin as any;
+  const client = supabaseAdmin as unknown as FifoLotReaderClient;
   return {
     async selectFifoEarliestOpenInWindow({ symbol, from_ts, to_ts, exclude_lot_ids }) {
       let q = client
