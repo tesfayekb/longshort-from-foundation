@@ -178,11 +178,13 @@ export async function runMultiPendingHarness(config: RunHarnessConfig): Promise<
       await config.client.getJson(`/v2/orders/${order1.id}`).catch(() => null);
       const cancel1 = await fetch(`${config.client['baseUrl' as keyof typeof config.client] ?? 'https://paper-api.alpaca.markets'}/v2/orders/${order1.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } });
       alpacaResponses.push({ cancel_1: cancel1.status });
+      await cancel1.body?.cancel();
     } catch (_) { /* cleanup best-effort */ }
     if (order2 && !order2Rejected) {
       try {
         const cancel2 = await fetch(`${config.client['baseUrl' as keyof typeof config.client] ?? 'https://paper-api.alpaca.markets'}/v2/orders/${order2.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } });
         alpacaResponses.push({ cancel_2: cancel2.status });
+        await cancel2.body?.cancel();
       } catch (_) { /* cleanup best-effort */ }
     }
 
@@ -471,11 +473,13 @@ export async function runMultiPendingHarness(config: RunHarnessConfig): Promise<
 
     // Cleanup
     try {
-      await fetch(`https://paper-api.alpaca.markets/v2/orders/${order1.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } });
+      const cleanup1 = await fetch(`https://paper-api.alpaca.markets/v2/orders/${order1.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } });
+      await cleanup1.body?.cancel();
     } catch (_) { /* cleanup best-effort */ }
     if (order2) {
       try {
-        await fetch(`https://paper-api.alpaca.markets/v2/orders/${order2.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } });
+        const cleanup2 = await fetch(`https://paper-api.alpaca.markets/v2/orders/${order2.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } });
+        await cleanup2.body?.cancel();
       } catch (_) { /* cleanup best-effort */ }
     }
 
@@ -551,10 +555,10 @@ export async function runMultiPendingHarness(config: RunHarnessConfig): Promise<
 
     // Cleanup
     if (order1) {
-      try { await fetch(`https://paper-api.alpaca.markets/v2/orders/${order1.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } }); } catch (_) { /* best-effort */ }
+      try { const r = await fetch(`https://paper-api.alpaca.markets/v2/orders/${order1.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } }); await r.body?.cancel(); } catch (_) { /* best-effort */ }
     }
     if (order2) {
-      try { await fetch(`https://paper-api.alpaca.markets/v2/orders/${order2.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } }); } catch (_) { /* best-effort */ }
+      try { const r = await fetch(`https://paper-api.alpaca.markets/v2/orders/${order2.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } }); await r.body?.cancel(); } catch (_) { /* best-effort */ }
     }
 
     const status: TestStatus = order1 && order2 ? 'pass' : 'inconclusive';
@@ -596,8 +600,8 @@ export async function runMultiPendingHarness(config: RunHarnessConfig): Promise<
     alpacaResponses.push({ clock: clock });
 
     // Cleanup
-    try { await fetch(`https://paper-api.alpaca.markets/v2/orders/${order1.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } }); } catch (_) { /* best-effort */ }
-    try { await fetch(`https://paper-api.alpaca.markets/v2/orders/${order2.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } }); } catch (_) { /* best-effort */ }
+    try { const r = await fetch(`https://paper-api.alpaca.markets/v2/orders/${order1.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } }); await r.body?.cancel(); } catch (_) { /* best-effort */ }
+    try { const r = await fetch(`https://paper-api.alpaca.markets/v2/orders/${order2.id}`, { method: 'DELETE', headers: { 'APCA-API-KEY-ID': Deno.env.get('ALPACA_PAPER_KEY') ?? '', 'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_PAPER_SECRET') ?? '' } }); await r.body?.cancel(); } catch (_) { /* best-effort */ }
 
     const bothAccepted = (order1.status === 'accepted' || order1.status === 'new' || order1.status === 'pending_new') && (order2.status === 'accepted' || order2.status === 'new' || order2.status === 'pending_new');
     const status: TestStatus = bothAccepted ? 'pass' : 'inconclusive';
