@@ -65,6 +65,9 @@ import {
   createSupabaseAggregateHistoryReader,
   createSupabaseAggregatePersistenceEventWriter,
 } from '../_shared/longshort-execution/rebalance-aggregate-persistence.ts';
+// ACT-403 (Finding-B Option-1) — entry-only LotLedgerSink. Mirrors the
+// longshort-execute-cron wiring so manual-trigger ticks also accrue lots.
+import { createEntryLotLedgerSink } from '../_shared/longshort-execution/entry-lot-ledger-sink.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -197,6 +200,7 @@ Deno.serve(createHandler(async (req: Request) => {
       ts,
       ...(rebalanceAggregateAssertion ? { rebalanceAggregateAssertion } : {}),
       ...(rebalanceAggregatePersistenceCheck ? { rebalanceAggregatePersistenceCheck } : {}),
+      lotLedgerSink: createEntryLotLedgerSink({ operator_id: DEFAULT_OPERATOR_ID }),
     });
 
     await writeStrategyAuditEvent({
