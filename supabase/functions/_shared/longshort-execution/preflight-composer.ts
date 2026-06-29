@@ -81,6 +81,7 @@ import type {
 } from './cache-propagator-io.ts';
 import type { FetcherSource } from '../longshort-reconciliation-types.ts';
 import type { DaysToCoverReader } from '../longshort-signals/shared/days-to-cover-store.ts';
+import type { WashSaleBlockReader } from './wash-sale-writer.ts';
 
 /**
  * COMPOSER ↔ VERIFIER LAYER DISTINCTION (load-bearing):
