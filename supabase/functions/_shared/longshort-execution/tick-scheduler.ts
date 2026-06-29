@@ -312,9 +312,22 @@ export async function runTick(p: TickSchedulerParams): Promise<TickSchedulerResu
     try {
       rebalance_aggregate_persistence = await p.rebalanceAggregatePersistenceCheck(p.ts);
     } catch (e) {
+      // DW-202 — the persistence pager is the §11.0.9 zero-tolerance
+      // operator-pager surface; a swallowed write-failure here is itself
+      // a silent-failure class. Tick MUST survive (a persistence-write
+      // failure must not halt reconciliation), but the swallow is
+      // observability-tagged so DW-200's job-alert-evaluation pipeline
+      // can detect future swallows from edge logs without needing a new
+      // system_metrics writer wired into this seam (DW-200 follow-up).
       console.error(
-        'longshort_rebalance_aggregate_persistence.failed',
-        e instanceof Error ? e.message : String(e),
+        JSON.stringify({
+          event: 'longshort_rebalance_aggregate_persistence.failed',
+          dw_ref: 'DW-202',
+          observability_followup: 'DW-200',
+          metric_key: 'rebalance_aggregate_persistence.write_failed',
+          ts: p.ts.toISOString(),
+          error: e instanceof Error ? e.message : String(e),
+        }),
       );
       rebalance_aggregate_persistence = null;
     }
