@@ -587,6 +587,8 @@ export async function composePreflightResults(
       wash_sale_unavailable: washSaleUnavailable,
       wash_sale_blocked_long_candidates: washSaleBlockedLong,
       wash_sale_pending_review_long_candidates: washSalePendingReviewLong,
+      unsettled_cash_unavailable: unsettledCashUnavailable,
+      unsettled_cash_deployed: unsettledCashDeployed,
     },
   };
 }
