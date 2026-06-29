@@ -82,6 +82,7 @@ import type {
 import type { FetcherSource } from '../longshort-reconciliation-types.ts';
 import type { DaysToCoverReader } from '../longshort-signals/shared/days-to-cover-store.ts';
 import type { WashSaleBlockReader } from './wash-sale-writer.ts';
+import type { UnsettledCashReader } from './settlement-reconciler.ts';
 
 /**
  * COMPOSER ↔ VERIFIER LAYER DISTINCTION (load-bearing):
