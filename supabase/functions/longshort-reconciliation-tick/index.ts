@@ -41,15 +41,17 @@
  * Other verifiers (verify_short_availability / verify_borrow_*) dispatch from
  * order-execution code at Phase 5 (per-order-submit), not from periodic sweep.
  *
- * Permission: longshort.view (per system-state observability discipline; longshort.execute
- * is Phase 5+ territory).
+ * Permission: cron-only via verifyCronSecret (FP-062 sub-step 6I.3c-pre / ACT-389 —
+ * system-level cron path; the CRON_SECRET IS the authorization, mirroring
+ * longshort-universe-quarterly-refresh). No live UI caller exists; if one is added
+ * later, extract a separate manual sibling per the split-handler precedent — do NOT
+ * widen this handler's auth surface to dual-auth.
  *
  * Method: POST (correlation_id propagation via canonical handler).
  */
 
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
-import { authenticateRequest } from '../_shared/authenticate-request.ts';
-import { checkPermissionOrThrow } from '../_shared/authorization.ts';
+import { verifyCronSecret } from '../_shared/cron-auth.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
@@ -139,8 +141,14 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(405, 'Method not allowed', { correlationId: crypto.randomUUID() });
   }
 
-  const ctx = await authenticateRequest(req);
-  await checkPermissionOrThrow(ctx.user.id, 'longshort.view');
+  // FP-062 sub-step 6I.3c-pre / ACT-389 — cron-only auth (system-level cron path),
+  // mirroring longshort-universe-quarterly-refresh. pg_cron's only credential is
+  // CRON_SECRET via X-Cron-Secret; user-JWT auth would 401 the cron caller. No live
+  // UI caller exists for this handler (grounding: every reconciliation-tick reference
+  // in src/ + edge fns is doc/comment-only), so no manual sibling is needed.
+  const correlationId = crypto.randomUUID();
+  const cronAuthError = verifyCronSecret(req);
+  if (cronAuthError) return cronAuthError;
 
   // Top-of-call-chain wall-clock read per DEC-034 clause (4) injected-clock discipline.
   const ts = productionClock.getWallClockTs();
@@ -235,7 +243,7 @@ Deno.serve(createHandler(async (req: Request) => {
     tick_ts: ts.toISOString(),
     verifiers_dispatched: results.length,
     results,
-    correlation_id: ctx.correlationId,
+    correlation_id: correlationId,
   };
   if (halt) {
     // Per-call disposition (escalated / system_bug / infrastructure_failure)
@@ -244,7 +252,7 @@ Deno.serve(createHandler(async (req: Request) => {
     // disposition signal; cron-level retry + alerting fires on the 5xx.
     return apiError(status, 'reconciliation_tick_escalated', {
       code: 'RECONCILIATION_TICK_ESCALATED',
-      correlationId: ctx.correlationId,
+      correlationId,
     });
   }
   return apiSuccess(body, status);
