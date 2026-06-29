@@ -1097,6 +1097,60 @@ export type Database = {
         }
         Relationships: []
       }
+      longshort_lots: {
+        Row: {
+          closed_at: string | null
+          cost_basis: number
+          created_at: string
+          entry_ts: string
+          expected_settlement_ts: string | null
+          locate_id: string | null
+          lot_id: string
+          operator_id: string
+          qty: number
+          settlement_state: string
+          side: string
+          source_order_id: string | null
+          status: string
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          cost_basis: number
+          created_at?: string
+          entry_ts: string
+          expected_settlement_ts?: string | null
+          locate_id?: string | null
+          lot_id?: string
+          operator_id?: string
+          qty: number
+          settlement_state?: string
+          side: string
+          source_order_id?: string | null
+          status?: string
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          cost_basis?: number
+          created_at?: string
+          entry_ts?: string
+          expected_settlement_ts?: string | null
+          locate_id?: string | null
+          lot_id?: string
+          operator_id?: string
+          qty?: number
+          settlement_state?: string
+          side?: string
+          source_order_id?: string | null
+          status?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       longshort_reconciliation_state: {
         Row: {
           call_name: string
