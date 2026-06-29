@@ -1,6 +1,23 @@
 -- =============================================================================
 -- FP-057 Sub-step 4a-regime — SPY market-regime cron lift (operator-OOB)
 --
+-- =============================================================================
+-- DEFERRED — DO NOT APPLY (ACT-366, 2026-06-29; HEAD ce2fdfc4)
+-- =============================================================================
+-- This pre-RTH lift (`55 13 * * 1-5`) is **DEFERRED**. On 2026-06-29 the
+-- operator unscheduled the duplicate regime cron (`cron.unschedule(115)` —
+-- the pre-RTH entry this artifact seeded) and reverted
+-- `job_registry.schedule` for `longshort.spy_regime.compute` back to
+-- `45 22 * * 1-5` to match the live post-RTH cron (jobid 106). The chain
+-- downstream of regime (assemble @ 23:35, execution path) remains on the
+-- post-RTH cadence per FP-057 Sub-step 6 close — the cadence rebuild
+-- shipped infrastructure-READY, not infrastructure-LIVE (DEC-070 cl.(h),
+-- ACT-349). RE-ARM ONLY under build-to-paper Step 4a
+-- (`docs/08-planning/phase-status-ledger.md` Part 5) when the full chain
+-- lifts in lock-step. SQL body below preserved verbatim (Constitution
+-- Rule 8 — additive); deferral is header-only. See ACT-366.
+-- =============================================================================
+--
 -- PURPOSE: lift `longshort.spy_regime.compute` from the once-daily post-market
 -- schedule ('0 19 * * 1-5') to a once-pre-RTH schedule ('55 13 * * 1-5'), so
 -- the per-date regime row is present BEFORE the first intraday combiner-tick
