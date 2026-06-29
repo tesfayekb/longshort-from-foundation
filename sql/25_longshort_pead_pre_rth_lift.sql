@@ -1,6 +1,31 @@
 -- =============================================================================
 -- FP-057 Sub-step 4b — PEAD pre-RTH cron lift (operator-OOB)
 --
+-- =============================================================================
+-- DEFERRED — DO NOT APPLY (ACT-366, 2026-06-29; HEAD ce2fdfc4)
+-- =============================================================================
+-- This pre-RTH lift (`55 13 * * 1-5`) is **DEFERRED**. On 2026-06-29 the
+-- operator reverted `job_registry.schedule` for `longshort.pead.compute`
+-- back to `0 23 * * 1-5` to match the live post-RTH cron (jobid 88, never
+-- moved). The chain downstream of PEAD remains on the post-RTH cadence
+-- per FP-057 Sub-step 6 close — the cadence rebuild shipped
+-- infrastructure-READY, not infrastructure-LIVE (DEC-070 cl.(h), ACT-349).
+-- RE-ARM the SCHEDULE ONLY under build-to-paper Step 4a
+-- (`docs/08-planning/phase-status-ledger.md` Part 5) when the full chain
+-- lifts in lock-step.
+--
+-- NOTE — deferral SCOPE: the cron SCHEDULE is what is deferred. The
+-- earnings-calendar work-list pre-filter (orchestrator change shipped at
+-- FP-057 Sub-step 4b; pead-queue-registration.ts) is CORRECT AT ANY
+-- CADENCE — it collapses Finnhub call-count from full-universe to
+-- recently-reported-names and is event-driven by ticker, not by clock.
+-- The pre-filter STAYS LIVE under the post-RTH cadence; nothing about
+-- the revert disturbs it.
+--
+-- SQL body below preserved verbatim (Constitution Rule 8 — additive);
+-- deferral is header-only. See ACT-366.
+-- =============================================================================
+--
 -- PURPOSE: shift `longshort.pead.compute` from the once-daily post-market
 -- schedule ('0 23 * * 1-5') to a once-pre-RTH schedule ('55 13 * * 1-5'),
 -- so the day's PEAD signal_observations rows are present (intraday_slot=0)
