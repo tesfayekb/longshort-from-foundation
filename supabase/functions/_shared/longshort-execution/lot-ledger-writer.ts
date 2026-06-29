@@ -409,6 +409,30 @@ export interface FifoLotReader {
  * Default `FifoLotReader` backed by `supabaseAdmin`. Caller-facing
  * convenience — tests should inject the interface directly.
  */
+/**
+ * Narrow read surface for the FIFO helper. Mirrors the structural-client
+ * pattern used by LotLedgerClient — keeps the supabaseAdmin cast off `any`
+ * and ESLint-clean (no-explicit-any).
+ */
+export interface FifoLotReaderClient {
+  from(table: string): {
+    select(cols: string): {
+      eq(col: string, val: string): {
+        eq(col: string, val: string): {
+          gte(col: string, val: string): {
+            lte(col: string, val: string): FifoLotReaderQuery;
+          };
+        };
+      };
+    };
+  };
+}
+interface FifoLotReaderQuery {
+  not(col: string, op: string, val: string): FifoLotReaderQuery;
+  order(col: string, opts: { ascending: boolean }): FifoLotReaderQuery;
+  limit(n: number): Promise<{ data: unknown[] | null; error: { message: string } | null }>;
+}
+
 export function createSupabaseFifoLotReader(): FifoLotReader {
   const client = supabaseAdmin as unknown as FifoLotReaderClient;
   return {
