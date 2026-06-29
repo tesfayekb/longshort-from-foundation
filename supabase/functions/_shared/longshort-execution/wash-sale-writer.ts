@@ -509,8 +509,7 @@ export interface WashSaleBlockReaderClient {
  * `wash_sale_pending_review` open rows) — zero broker calls, indexed.
  */
 export function createSupabaseWashSaleBlockReader(): WashSaleBlockReader {
-  // deno-lint-ignore no-explicit-any
-  const client = supabaseAdmin as any;
+  const client = supabaseAdmin as unknown as WashSaleBlockReaderClient;
   return {
     async hasActiveBlock(symbol, ts) {
       const { data, error } = await client
