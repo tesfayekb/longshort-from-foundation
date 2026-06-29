@@ -14,8 +14,8 @@
  */
 
 import { parseArgs } from 'https://deno.land/std@0.224.0/cli/parse_args.ts';
-import { AlpacaPaperClient } from '../src/features/longshort/services/broker/alpaca/alpaca-paper-client.ts';
-import { runMultiPendingHarness } from '../src/features/longshort/services/broker/alpaca/multi-pending-harness.ts';
+import { AlpacaPaperClient } from '../supabase/functions/_shared/longshort-broker/alpaca-paper-client.ts';
+import { runMultiPendingHarness } from '../supabase/functions/_shared/longshort-broker/multi-pending-harness.ts';
 
 export interface RunArgs {
   symbol: string;
