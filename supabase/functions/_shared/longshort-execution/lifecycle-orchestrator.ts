@@ -146,6 +146,16 @@ export interface AdvanceTickParams {
    *  would have caught a rejection. The propagator uses this for system_bug
    *  classification (§8.9 L274-275). Defaults to empty. */
   sameTickContradictoryPasses?: readonly SameTickContradictoryPass[];
+  /** OPTIONAL — FP-061 sub-step 4M.1 / DW-158. When injected, fires once per
+   *  `terminal_filled` order at the fill-snapshot seam, immediately after the
+   *  terminal partition is set. Receives the InFlightOrder + the
+   *  BrokerFillResult-shaped snapshot + ts. The caller decides whether to
+   *  invoke `writeOpenLot` (entry fills) vs `closeLots` (exit fills) based on
+   *  `order.intent` — the orchestrator does NOT classify entry-vs-exit to
+   *  preserve the mock-buildable contract and avoid coupling the broker shell
+   *  to lot-ledger DB writes. Back-compat: legacy callers that don't pass
+   *  this still get TerminalOrderResult[] unchanged. */
+  lotLedgerSink?: LotLedgerSink;
   /** Injected clock — passed through for fetcher calls; the kernel uses `ts` directly. */
   clock: ClockReader;
   ts: Date;
@@ -161,6 +171,21 @@ export interface AdvanceTickResult {
 }
 
 const DEFAULT_PHASE1_TIMEOUT_S = 10;
+
+/** FP-061 sub-step 4M.1 / DW-158 — narrow callback for the lot-ledger wire.
+ *  Production wiring constructs a BrokerFillResult from fillSnap and calls
+ *  `writeOpenLot` (entry) or `closeLots` (exit). */
+export interface LotLedgerSink {
+  onTerminalFilled(
+    order: InFlightOrder,
+    fill: {
+      filled_qty: number;
+      avg_fill_price: number | null;
+      observed_at: Date;
+    },
+    ts: Date,
+  ): Promise<void>;
+}
 
 function mergeConfig(c?: Partial<StateMachineConfig>): StateMachineConfig {
   return { ...DEFAULT_STATE_MACHINE_CONFIG, ...(c ?? {}) };
@@ -425,6 +450,36 @@ export async function advanceTick(p: AdvanceTickParams): Promise<AdvanceTickResu
       const avg_fill_price =
         finalOrder.state === 'terminal_filled' ? (fillSnap?.avg_fill_price ?? null) : null;
       terminal.push(toTerminal(finalOrder, p.ts, filled_qty, avg_fill_price));
+
+      // FP-061 sub-step 4M.1 / DW-158: fire the lot-ledger sink at the
+      // fill-snapshot seam. Only on terminal_filled (where the fill snapshot
+      // is authoritative). Failures here MUST NOT poison the tick — the
+      // tick has already locked the terminal partition; we emit a
+      // diagnostic event and continue (consistent with the propagator-throw
+      // pattern at L399-417).
+      if (p.lotLedgerSink && finalOrder.state === 'terminal_filled') {
+        try {
+          await p.lotLedgerSink.onTerminalFilled(
+            finalOrder,
+            { filled_qty, avg_fill_price, observed_at: p.ts },
+            p.ts,
+          );
+        } catch (err) {
+          await p.eventWriter.emit(
+            {
+              call_name: 'longshort.execution.lot_ledger_sink_threw',
+              tier: 'tier3',
+              outcome: 'failure_escalated',
+              payload: {
+                order_id: finalOrder.order_id,
+                symbol: finalOrder.symbol,
+                error: err instanceof Error ? err.message : String(err),
+              },
+            },
+            p.ts,
+          );
+        }
+      }
     } else {
       still.push(finalOrder);
     }
