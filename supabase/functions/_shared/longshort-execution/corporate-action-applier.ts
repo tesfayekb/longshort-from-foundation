@@ -377,7 +377,6 @@ async function applyOne(
           filled: true,
           filled_qty: lot.qty,
           avg_fill_price: childPerShareBasis,
-          last_event_ts: as_of,
           fetched_at: as_of,
         };
         await writeOpenLot(
