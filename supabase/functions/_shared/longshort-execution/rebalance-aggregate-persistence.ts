@@ -341,10 +341,14 @@ export function createSupabaseAggregatePersistenceEventWriter(
         symbol: null,
         tier: 'strong',
         outcome: 'failure_escalated',
-        action_taken: PERSIST_ACTION,
+        // DW-202 fix: the real column is `failure_action` (text). The
+        // historical `action_taken` key was not a column — every write
+        // silently failed with PostgREST schema-cache miss and the seam
+        // (tick-scheduler.ts) swallowed it, so the §11.0.9 zero-tolerance
+        // operator-pager never fired. PERSIST_ACTION value is unchanged.
+        failure_action: PERSIST_ACTION,
         ts: args.ts.toISOString(),
         engine_version: ENGINE_VERSION,
-        fetcher_source: args.fetcher_source,
         expected_value: null,
         observed_value: null,
         tolerance: { threshold: args.threshold, cooldown_s: args.cooldown_s },
@@ -352,6 +356,10 @@ export function createSupabaseAggregatePersistenceEventWriter(
           consecutive: args.consecutive,
           threshold: args.threshold,
           last_unexplained_event_id: args.last_unexplained_event_id,
+          // fetcher_source is NOT a reconciliation_events column; carried
+          // in the divergence jsonb so pager attribution is preserved
+          // without a schema change. (DW-202 full-payload-alignment.)
+          fetcher_source: args.fetcher_source,
         },
       };
       const { data, error } = await supabase
