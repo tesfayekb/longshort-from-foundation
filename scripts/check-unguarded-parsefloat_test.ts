@@ -17,7 +17,7 @@ Deno.test('findViolationInLine — parseFloat with Number.isNaN guard OK', () =>
 });
 
 Deno.test('findViolationInLine — DW-058-B1 override annotation respected', () => {
-  const v = findViolationInLine('  qty: parseFloat(resp.qty), // allow-bare-parsefloat: DW-058-B1', 'src/features/longshort/services/broker/alpaca/alpaca-position-fetcher.ts', 30);
+  const v = findViolationInLine('  qty: parseFloat(resp.qty), // allow-bare-parsefloat: DW-058-B1', 'supabase/functions/_shared/longshort-broker/alpaca-position-fetcher.ts', 30);
   assertEquals(v, null);
 });
 
