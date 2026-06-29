@@ -82,6 +82,7 @@ import type {
 import type { FetcherSource } from '../longshort-reconciliation-types.ts';
 import type { DaysToCoverReader } from '../longshort-signals/shared/days-to-cover-store.ts';
 import type { WashSaleBlockReader } from './wash-sale-writer.ts';
+import type { UnsettledCashReader } from './settlement-reconciler.ts';
 
 /**
  * COMPOSER ↔ VERIFIER LAYER DISTINCTION (load-bearing):
@@ -196,6 +197,24 @@ export interface PreflightComposerDeps {
    * footprint; cheap to call on every long candidate every tick.
    */
   washSaleBlockReader?: WashSaleBlockReader;
+  /**
+   * FP-061 sub-step 4M.2 / ACT-377 — §7 BP-read settled-vs-unsettled
+   * distinction. Typed-absence dep. When INJECTED, the composer subtracts
+   * the deployed-cash-on-pending-lots from the broker-observed
+   * `available_bp` BEFORE the `bpInsufficient` check (settled-lot cash
+   * is available against new requests under T+1; pending-lot cash is
+   * NOT). When ABSENT, the composer uses the raw broker `available_bp`
+   * (legacy pre-4M.2 behavior) and `summary.unsettled_cash_unavailable`
+   * is TRUE.
+   *
+   * SOFT-DEPENDENT broker cross-check: the broker settled-funds
+   * cross-check (Alpaca `account.cash` vs `account.cash_withdrawable`)
+   * is FP-062 (`AlpacaBuyingPowerFetcher` real path). The internal
+   * `settled_at` on `longshort_lots` (MIG-143) is authoritative for
+   * the on-tick subtraction; the broker cross-check flips real when
+   * FP-062 lands.
+   */
+  unsettledCashReader?: UnsettledCashReader;
 }
 
 export interface PreflightComposerInput {
@@ -255,6 +274,14 @@ export interface PreflightComposerSummary {
   /** FP-061 sub-step 4M.3 — long candidates excluded for an open
    *  wash_sale_pending_review (§7.7 Path B operator queue). */
   wash_sale_pending_review_long_candidates: number;
+  /** FP-061 sub-step 4M.2 / ACT-377 — TRUE iff no `unsettledCashReader`
+   *  was injected; the §7 BP-read used the RAW broker `available_bp`
+   *  without the settled-vs-unsettled subtraction. */
+  unsettled_cash_unavailable: boolean;
+  /** FP-061 sub-step 4M.2 — dollars deployed on OPEN+pending lots that the
+   *  composer SUBTRACTED from broker `available_bp` before the
+   *  `bpInsufficient` check. 0 when `unsettled_cash_unavailable=true`. */
+  unsettled_cash_deployed: number;
 }
 
 export interface PreflightComposerOutput {
@@ -307,7 +334,20 @@ export async function composePreflightResults(
   // System-level failure short-circuits every candidate.
   const bp = await deps.buyingPowerFetcher.fetchBuyingPower(input.ts);
   const bpObserved = bp.available_bp;
-  const bpInsufficient = bp.available_bp < requestedTotal;
+  // ── FP-061 sub-step 4M.2 / ACT-377 — §7 BP-read settled-vs-unsettled.
+  //    Subtract OPEN+pending deployed cash (internal-authoritative via
+  //    longshort_lots.settlement_state) before the insufficient check.
+  //    The broker settled-funds cross-check (Alpaca cash vs
+  //    cash_withdrawable) is SOFT-DEPENDENT on FP-062
+  //    AlpacaBuyingPowerFetcher; until it lands, our internal lot state
+  //    is the source of truth for the on-tick subtraction.
+  const unsettledCashReader = deps.unsettledCashReader;
+  const unsettledCashUnavailable = unsettledCashReader === undefined;
+  const unsettledCashDeployed = unsettledCashReader
+    ? await unsettledCashReader.readUnsettledDeployedCash(deps.operator_id)
+    : 0;
+  const effectiveAvailableBp = bp.available_bp - unsettledCashDeployed;
+  const bpInsufficient = effectiveAvailableBp < requestedTotal;
   void input.internal_expected_bp; // reserved for the Phase-2 trigger audit envelope
 
   const results = new Map<PreflightKey, PreflightResult>();
@@ -547,6 +587,8 @@ export async function composePreflightResults(
       wash_sale_unavailable: washSaleUnavailable,
       wash_sale_blocked_long_candidates: washSaleBlockedLong,
       wash_sale_pending_review_long_candidates: washSalePendingReviewLong,
+      unsettled_cash_unavailable: unsettledCashUnavailable,
+      unsettled_cash_deployed: unsettledCashDeployed,
     },
   };
 }

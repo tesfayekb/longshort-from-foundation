@@ -1112,6 +1112,7 @@ export type Database = {
           operator_id: string
           qty: number
           realized_pnl: number | null
+          settled_at: string | null
           settlement_state: string
           side: string
           source_order_id: string | null
@@ -1135,6 +1136,7 @@ export type Database = {
           operator_id?: string
           qty: number
           realized_pnl?: number | null
+          settled_at?: string | null
           settlement_state?: string
           side: string
           source_order_id?: string | null
@@ -1158,6 +1160,7 @@ export type Database = {
           operator_id?: string
           qty?: number
           realized_pnl?: number | null
+          settled_at?: string | null
           settlement_state?: string
           side?: string
           source_order_id?: string | null

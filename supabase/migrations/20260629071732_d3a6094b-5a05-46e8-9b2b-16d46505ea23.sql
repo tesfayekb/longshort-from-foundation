@@ -1,0 +1,1 @@
+ALTER TABLE public.longshort_lots ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ NULL;
