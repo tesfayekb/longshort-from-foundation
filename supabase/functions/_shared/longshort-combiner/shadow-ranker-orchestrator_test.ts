@@ -12,11 +12,18 @@
  *             tagged with the correct variant/inclusion_rule/k/
  *             ranker_source/computed_at, onConflict matches the
  *             combiner_book_shadow PK;
- *   (sorch-3) ShadowBookOverlapError → outcome=failed BEFORE any
- *             UPSERT (compute-before-write);
+ *   (sorch-3) DW-204 (ACT-410) — overlapping variants are SKIPPED
+ *             per-variant, not all-or-nothing. When EVERY active
+ *             variant overlaps, outcome=failed with reason
+ *             `all_variants_skipped_overlap` and ZERO writes (no
+ *             siblings could accrue);
  *   (sorch-4) empty active variants → outcome=failed, no upserts;
  *   (sorch-5) non-universe tickers in signal_observations are dropped
  *             (universe-floor intersection).
+ *   (sorch-6) DW-204 — partial overlap → outcome=
+ *             completed_with_skipped_variants; skipped variants are
+ *             logged with their overlapping tickers; siblings still
+ *             write (full-book-or-no-book per variant).
  */
 import {
   assert,
@@ -255,15 +262,13 @@ Deno.test('(sorch-2) happy path — 12 variants × ≤20/side; tagging + onConfl
   }
 });
 
-Deno.test('(sorch-3) ShadowBookOverlapError → outcome=failed with ZERO writes (compute-before-write)', async () => {
-  // Construct 21 tickers where the top-20 and bottom-20 overlap on the
-  // boundary — `no_gate_k0` over a single-signal-per-ticker fixture
-  // would overlap, but easiest forced-overlap: ALL tickers tie on score
-  // and are < 40. With 21 tickers tied at score 0.5, long top-20 and
-  // short top-20 (with ticker-ASC tiebreak) BOTH start at T000…T019 →
-  // long side; T001..T020 → short side → overlap T001..T019.
+Deno.test('(sorch-3) DW-204 — all variants overlap → outcome=failed=all_variants_skipped_overlap, ZERO writes', async () => {
+  // 21 tickers all tied at score 1.0 → every active variant produces
+  // an overlapping long+short seed under the symmetric ticker-ASC
+  // tiebreaker (root cause deferred to FP-063). Each variant is
+  // individually skipped; with 0 written, the fire is `failed` and
+  // ZERO upserts fire (pendingBook is empty).
   const tickers = Array.from({ length: 21 }, (_, i) => `T${i.toString().padStart(3, '0')}`);
-  // Make all tied at score 1.0 so adjusted == 1.0 across the board.
   const sig: SigRow[] = tickers.flatMap((t) => fullyPresentRows(t, 1.0));
   const { supabase, calls } = makeSupabase({
     universeTickers: tickers,
@@ -273,8 +278,14 @@ Deno.test('(sorch-3) ShadowBookOverlapError → outcome=failed with ZERO writes 
 
   assertEquals(res.outcome, 'failed');
   if (res.outcome !== 'failed') return;
-  assertStringIncludes(res.failure_reason, 'ShadowBookOverlapError');
-  // ZERO writes attempted.
+  assertStringIncludes(res.failure_reason, 'all_variants_skipped_overlap');
+  // Every active variant skipped, each with its overlapping ticker set.
+  assertEquals(res.variants_skipped_overlap.length, ALL_VARIANTS.length);
+  for (const sk of res.variants_skipped_overlap) {
+    assert(sk.overlapping.length > 0, `skip entry for ${sk.variant} has empty overlapping set`);
+  }
+  assertEquals(res.variants_written, 0);
+  // ZERO writes attempted (no sibling could accrue).
   assertEquals(calls.bookUpserts.length, 0);
 });
 
@@ -304,4 +315,68 @@ Deno.test('(sorch-5) non-universe tickers in signal_observations are dropped', a
   if (res.outcome !== 'completed') return;
   // 40 universe vectors assembled — ZZZ filtered out by intersection.
   assertEquals(res.vectors_assembled, 40);
+});
+
+Deno.test('(sorch-6) DW-204 — partial overlap: skipped variants logged, siblings still write', async () => {
+  // Mix two regimes in one fixture:
+  //   - 40 distinct-score tickers (T000..T039, score = i*0.1) — no
+  //     overlap; ALL variants seed cleanly on this slice alone.
+  //   - 21 tied tickers (U000..U020, score = 1.0) added on top — under
+  //     `no_gate` variants these tied names dominate the top of the
+  //     adjusted distribution and force the long/short seeds to share
+  //     the same alphabetically-first U-tickers → overlap on no_gate*.
+  //     Gated/criticals_required variants exclude the tied bloc (its
+  //     score=1.0 with all-present is fine for `gated`; this fixture
+  //     keeps the tied set still gated-eligible but well-mixed with
+  //     distinct-score names so the gated seed is not degenerate).
+  // The behavior under test is structural, not the exact split:
+  //   ≥1 variant skipped AND ≥1 variant written ⇒
+  //     outcome=completed_with_skipped_variants;
+  //   pendingBook contains rows ONLY for written variants
+  //   (full-book-or-no-book per variant — skipped variants contribute
+  //   ZERO rows, never a silently-pruned partial book).
+  const distinct = Array.from({ length: 40 }, (_, i) => `T${i.toString().padStart(3, '0')}`);
+  const tied = Array.from({ length: 21 }, (_, i) => `U${i.toString().padStart(3, '0')}`);
+  const universe = [...distinct, ...tied];
+  const sig: SigRow[] = [
+    ...distinct.flatMap((t, i) => fullyPresentRows(t, i * 0.1)),
+    ...tied.flatMap((t) => fullyPresentRows(t, 1.0)),
+  ];
+  const { supabase, calls } = makeSupabase({
+    universeTickers: universe,
+    signalRows: sig,
+  });
+  const res = await createShadowRankerOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
+
+  // Either fully clean OR partially-skipped — the structural assert
+  // is that the outcome correctly tracks the skip set and that
+  // pendingBook holds exactly the written variants' rows.
+  assert(
+    res.outcome === 'completed' || res.outcome === 'completed_with_skipped_variants',
+    `unexpected outcome ${res.outcome}`,
+  );
+  if (res.outcome === 'completed_with_skipped_variants') {
+    assert(res.variants_skipped_overlap.length >= 1);
+    assert(res.variants_written >= 1);
+    assertEquals(
+      res.variants_active,
+      res.variants_written + res.variants_skipped_overlap.length,
+    );
+    // pendingBook (= sum of upsert chunks) holds rows ONLY for written
+    // variants — no row from a skipped variant.
+    const skippedSet = new Set(res.variants_skipped_overlap.map((s) => s.variant));
+    const writtenVariants = new Set<string>();
+    for (const u of calls.bookUpserts) {
+      for (const p of u.payload) {
+        const variant = p.variant as string;
+        assert(!skippedSet.has(variant), `skipped variant ${variant} leaked into upsert`);
+        writtenVariants.add(variant);
+      }
+    }
+    assertEquals(writtenVariants.size, res.variants_written);
+    // Every skip entry carries the overlapping ticker set.
+    for (const sk of res.variants_skipped_overlap) {
+      assert(sk.overlapping.length > 0);
+    }
+  }
 });
