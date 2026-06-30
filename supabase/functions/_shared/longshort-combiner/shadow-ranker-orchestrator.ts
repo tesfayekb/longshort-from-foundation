@@ -19,10 +19,20 @@
  *       observations — NO EXCLUSION at this layer; inclusion is the
  *       per-variant ranker's job.
  *   (5) For EACH active variant, compute `computeRankingsShadow` +
- *       `seedShadowBook` IN MEMORY. ALL 12 variants computed before
- *       any UPSERT. A `ShadowBookOverlapError` (or any thrown ranker
- *       error) returns `{outcome:'failed', failure_reason}` with ZERO
- *       partial write.
+ *       `seedShadowBook` IN MEMORY. ALL active variants computed before
+ *       any UPSERT. DW-204 (ACT-410) — the per-variant compute is
+ *       individually try/wrapped: a `ShadowBookOverlapError` thrown by
+ *       one variant SKIPS that variant (recorded with its overlapping
+ *       tickers in `variants_skipped_overlap`) while sibling variants
+ *       continue and write. Per-variant invariant is preserved:
+ *       full-book-or-no-book (a skipped variant writes NOTHING that
+ *       day — never a silently-pruned book). Any non-overlap throw
+ *       still fails the whole fire with ZERO partial write
+ *       (`unexpected_ranker_error`). The tiebreaker root cause (live
+ *       + shadow share a symmetric `ticker ASC` tie) is deferred to
+ *       FP-063 — this is blast-radius containment only, not a
+ *       structural fix; the gated_k0 ≡ live_gated DEC-059 invariant
+ *       is untouched.
  *   (6) Chunked UPSERT into `combiner_book_shadow` with `onConflict:
  *       'operator_id,as_of_date,variant,side,rank_within_side,intraday_slot'`
  *       (DEC-070 clause a — additive intraday_slot superset PK rotation;
@@ -71,6 +81,17 @@ export interface PerVariantSize {
   short: number;
 }
 
+/** DW-204 (ACT-410) — per-variant overlap-skip metadata.
+ * `overlapping` is the ticker set that appeared on BOTH long+short
+ * seed sides for this variant (root cause: symmetric ticker ASC
+ * tiebreaker straddling a tied composite block — see FP-063). */
+export interface SkippedOverlapVariant {
+  variant: string;
+  inclusion_rule: InclusionRule;
+  k: number;
+  overlapping: readonly string[];
+}
+
 export type ShadowRankerOrchestratorResult =
   | {
       outcome: 'completed';
@@ -82,6 +103,22 @@ export type ShadowRankerOrchestratorResult =
       vectors_assembled: number;
       total_book_rows: number;
       per_variant_sizes: PerVariantSize[];
+      variants_skipped_overlap: SkippedOverlapVariant[];
+      ranker_source: typeof RANKER_SOURCE_SHADOW;
+    }
+  | {
+      // DW-204 — at least one variant skipped on overlap AND at least
+      // one variant wrote. The fire is NOT failed (substrate accrues).
+      outcome: 'completed_with_skipped_variants';
+      as_of_date: string;
+      variants_active: number;
+      variants_written: number;
+      universe_size: number;
+      observations_read: number;
+      vectors_assembled: number;
+      total_book_rows: number;
+      per_variant_sizes: PerVariantSize[];
+      variants_skipped_overlap: SkippedOverlapVariant[];
       ranker_source: typeof RANKER_SOURCE_SHADOW;
     }
   | {
@@ -94,6 +131,7 @@ export type ShadowRankerOrchestratorResult =
       vectors_assembled: number;
       total_book_rows: number;
       per_variant_sizes: PerVariantSize[];
+      variants_skipped_overlap: SkippedOverlapVariant[];
       ranker_source: typeof RANKER_SOURCE_SHADOW;
       failure_reason: string;
     };
@@ -148,6 +186,7 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
         vectors_assembled: 0,
         total_book_rows: 0,
         per_variant_sizes: [],
+        variants_skipped_overlap: [],
         ranker_source: RANKER_SOURCE_SHADOW,
         ...partial,
         failure_reason,
@@ -251,55 +290,75 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
       // ── Step 4: pure shadow assembly (NO exclusion) ──
       const vectors = assembleShadowVectors(observations);
 
-      // ── Step 5: compute ALL 12 variants in memory FIRST ──
+      // ── Step 5: compute ALL active variants in memory FIRST ──
+      // DW-204 (ACT-410) — per-variant try/catch. A ShadowBookOverlapError
+      // skips that one variant (logged) while siblings continue. Any
+      // OTHER throw rethrows → outer catch → fail-the-fire with zero
+      // partial write (a real ranker error is not a skippable overlap).
       const pendingBook: PendingBookRow[] = [];
       const perVariantSizes: PerVariantSize[] = [];
+      const variantsSkippedOverlap: SkippedOverlapVariant[] = [];
+      const pendingByVariant = new Map<string, PendingBookRow[]>();
       try {
         for (const v of variants) {
-          const ranked = computeRankingsShadow(vectors, {
-            inclusionRule: v.inclusion_rule,
-            k: v.k,
-          });
-          const seeded = seedShadowBook(ranked, BOOK_SEED_SIZE);
-          let longCount = 0;
-          let shortCount = 0;
-          for (const b of seeded) {
-            if (b.side === 'long') longCount++;
-            else shortCount++;
-            pendingBook.push({
-              operator_id: ctx.operator_id,
-              as_of_date,
+          try {
+            const ranked = computeRankingsShadow(vectors, {
+              inclusionRule: v.inclusion_rule,
+              k: v.k,
+            });
+            const seeded = seedShadowBook(ranked, BOOK_SEED_SIZE);
+            // Stage rows in a per-variant buffer so the full-book-or-no-book
+            // invariant is local: if seeding throws partway, this variant's
+            // staged rows never reach pendingBook.
+            const variantRows: PendingBookRow[] = [];
+            let longCount = 0;
+            let shortCount = 0;
+            for (const b of seeded) {
+              if (b.side === 'long') longCount++;
+              else shortCount++;
+              variantRows.push({
+                operator_id: ctx.operator_id,
+                as_of_date,
+                variant: v.variant,
+                inclusion_rule: v.inclusion_rule,
+                k: v.k,
+                side: b.side,
+                rank_within_side: b.rank_within_side,
+                ticker: b.ticker,
+                score: b.score,
+                ranker_source: RANKER_SOURCE_SHADOW,
+                computed_at: as_of_iso,
+                // DEC-070 clause (e) — daily writer = slot 0.
+                intraday_slot: 0,
+              });
+            }
+            pendingByVariant.set(v.variant, variantRows);
+            for (const r of variantRows) pendingBook.push(r);
+            perVariantSizes.push({
               variant: v.variant,
               inclusion_rule: v.inclusion_rule,
               k: v.k,
-              side: b.side,
-              rank_within_side: b.rank_within_side,
-              ticker: b.ticker,
-              score: b.score,
-              ranker_source: RANKER_SOURCE_SHADOW,
-              computed_at: as_of_iso,
-              // DEC-070 clause (e) — daily writer = slot 0.
-              intraday_slot: 0,
+              long: longCount,
+              short: shortCount,
             });
+          } catch (e) {
+            if (e instanceof ShadowBookOverlapError) {
+              // DW-204 — skip this variant; do NOT write a partial book.
+              // Siblings continue. FP-063 will fix the tiebreaker root.
+              variantsSkippedOverlap.push({
+                variant: v.variant,
+                inclusion_rule: v.inclusion_rule,
+                k: v.k,
+                overlapping: e.overlapping,
+              });
+              continue;
+            }
+            // Non-overlap throw — propagate to the outer catch and fail
+            // the entire fire (real ranker errors are not skippable).
+            throw e;
           }
-          perVariantSizes.push({
-            variant: v.variant,
-            inclusion_rule: v.inclusion_rule,
-            k: v.k,
-            long: longCount,
-            short: shortCount,
-          });
         }
       } catch (e) {
-        if (e instanceof ShadowBookOverlapError) {
-          return emptyResult(`${e.name}: ${e.message}`, {
-            variants_active: variants.length,
-            universe_size: universeSet.size,
-            observations_read: sigRows.length,
-            vectors_assembled: vectors.length,
-          });
-        }
-        // Unexpected throw — surface as failed (no partial write).
         return emptyResult(
           `unexpected_ranker_error: ${(e as Error).message}`,
           {
@@ -307,12 +366,34 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
             universe_size: universeSet.size,
             observations_read: sigRows.length,
             vectors_assembled: vectors.length,
+            variants_skipped_overlap: variantsSkippedOverlap,
           },
         );
       }
 
+      const variantsWritten = perVariantSizes.length;
+
+      // DW-204 — if EVERY active variant overlapped, there is nothing to
+      // write. Surface as failed with an explicit reason (distinct from
+      // the pre-fix all-12-throw behavior, but semantically equivalent
+      // for the "no substrate today" outcome).
+      if (variantsWritten === 0) {
+        return emptyResult('all_variants_skipped_overlap', {
+          variants_active: variants.length,
+          universe_size: universeSet.size,
+          observations_read: sigRows.length,
+          vectors_assembled: vectors.length,
+          variants_skipped_overlap: variantsSkippedOverlap,
+        });
+      }
+
       // ── Step 6: chunked UPSERT into combiner_book_shadow ──
-      // DEC-070 clause (a): onConflict now includes intraday_slot.
+      // DEC-070 clause (a): onConflict includes intraday_slot.
+      // DW-204: pendingBook contains rows for `variantsWritten` variants
+      // only (skipped variants contributed zero rows). The variant column
+      // is part of the conflict key, so skipped variants' (operator_id,
+      // as_of_date, variant=<skipped>) book partitions remain untouched
+      // — no row corruption across variants.
       const onConflict =
         'operator_id,as_of_date,variant,side,rank_within_side,intraday_slot';
       for (let i = 0; i < pendingBook.length; i += UPSERT_CHUNK_SIZE) {
@@ -331,24 +412,30 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
             vectors_assembled: vectors.length,
             total_book_rows: 0,
             per_variant_sizes: perVariantSizes,
+            variants_skipped_overlap: variantsSkippedOverlap,
             ranker_source: RANKER_SOURCE_SHADOW,
             failure_reason: `combiner_book_shadow upsert failed at chunk offset ${i}: ${upErr.message}`,
           };
         }
       }
 
-      return {
-        outcome: 'completed',
+      // DW-204 — outcome differentiates clean vs partial-but-accruing.
+      const baseSuccess = {
         as_of_date,
         variants_active: variants.length,
-        variants_written: variants.length,
+        variants_written: variantsWritten,
         universe_size: universeSet.size,
         observations_read: sigRows.length,
         vectors_assembled: vectors.length,
         total_book_rows: pendingBook.length,
         per_variant_sizes: perVariantSizes,
+        variants_skipped_overlap: variantsSkippedOverlap,
         ranker_source: RANKER_SOURCE_SHADOW,
-      };
+      } as const;
+      if (variantsSkippedOverlap.length > 0) {
+        return { outcome: 'completed_with_skipped_variants', ...baseSuccess };
+      }
+      return { outcome: 'completed', ...baseSuccess };
     },
   };
 }
