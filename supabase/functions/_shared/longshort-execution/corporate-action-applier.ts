@@ -505,6 +505,7 @@ export async function runCorporateActionApplier(
     // wall clock ONCE via `productionClock.getWallClockTs()`.
     let verify_result: ReconcileResult | null = null;
     try {
+      // gate-13-allow: post-mutation verify per §7.8/§11.0.7 #11 -- verify_corporate_action_clean reconciles CA basis AFTER applied_at stamp (spec-sanctioned post-mutation reconcile; diagnostic-only, does not break applier mutation).
       verify_result = await verifyCorporateActionClean(
         { symbol: rec.symbol, operator_id },
         caFetcher,
