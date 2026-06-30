@@ -23,6 +23,8 @@ import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { createLiveBrokerInterfaces } from '../_shared/longshort-execution/broker-bootstrap.ts';
 import { createSupabaseReconciliationEventWriter } from '../_shared/longshort-execution/reconciliation-event-writer.ts';
+import { snapshotRebalanceRankings } from '../_shared/longshort-execution/rebalance-ranking-snapshot-writer.ts';
+import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import {
   runRebalanceSubmit,
   createSupabaseRankingsReader,
@@ -124,6 +126,17 @@ Deno.serve(createHandler(async (req: Request) => {
       rankingsReader: createSupabaseRankingsReader(),
       ts,
     }, correlationId);
+
+    // FP-062 ranking-snapshot sidecar (MIG-149). Fire-and-forget,
+    // independent read, ABSOLUTE separation from the submit path.
+    // Submit-reference computed_at is not obtainable from the success
+    // result without a signature change to runRebalanceSubmit, so we
+    // pass undefined → snapshot records skew-unknowable (honest null).
+    try {
+      await snapshotRebalanceRankings(supabaseAdmin, operator_id);
+    } catch (snapErr) {
+      console.error('[longshort-rebalance-submit] ranking-snapshot sidecar failed (non-blocking):', snapErr);
+    }
 
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
