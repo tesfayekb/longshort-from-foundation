@@ -29,6 +29,46 @@ import { apiError } from '../_shared/api-error.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { runCorporateActionApplier } from '../_shared/longshort-execution/corporate-action-applier.ts';
+// FP-062 6I.2b gap (b) / ACT-413 — inject the real bootstrap-composed CA
+// fetcher so production exercises the AlpacaCorporateActionFetcher path
+// (composing the internal stand-in for recent-action provenance).
+//
+// STAY-SOFT IS FETCHER-ONLY (DW-199): if `AlpacaPaperClient` construction
+// throws (creds absent in CI / preview), we fall back to the bare internal
+// stand-in — the verifier wire itself still fires at the producing seam.
+// The mock→real fetcher flip stays deferred to DW-199; this edge fn is
+// the production composition root that opts into the real fetcher when
+// creds are provisioned.
+//
+// TAUTOLOGICAL-BUT-LOAD-BEARING ON PAPER: even the real fetcher composes
+// the internal stand-in for the recent-action provenance fields (paper
+// has no CA feed). The applier-ran confirmation + reconciliation_events
+// emission are the value on paper; the real broker basis cross-check
+// arrives with DW-199.
+import {
+  AlpacaPaperClient,
+  AlpacaCredentialError,
+} from '../_shared/longshort-broker/alpaca-paper-client.ts';
+import { AlpacaCorporateActionFetcher } from '../_shared/longshort-broker/alpaca-corporate-action-fetcher.ts';
+import { createInternalCorporateActionStatusFetcher } from '../_shared/longshort-execution/internal-corporate-action-status-fetcher.ts';
+import type { BrokerCorporateActionFetcher } from '../_shared/longshort-broker-interfaces.ts';
+
+function resolveCorporateActionFetcher(): BrokerCorporateActionFetcher {
+  try {
+    return new AlpacaCorporateActionFetcher(
+      new AlpacaPaperClient(),
+      createInternalCorporateActionStatusFetcher(),
+    );
+  } catch (e) {
+    if (e instanceof AlpacaCredentialError) {
+      // Creds-free path (CI / preview): fall back to the bare internal
+      // stand-in. Verifier wire still fires (tautological-but-load-bearing
+      // — confirms applier ran + emits reconciliation_events row).
+      return createInternalCorporateActionStatusFetcher();
+    }
+    throw e;
+  }
+}
 
 Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
@@ -39,7 +79,8 @@ Deno.serve(createHandler(async (req: Request) => {
   const as_of = productionClock.getWallClockTs();
 
   try {
-    const result = await runCorporateActionApplier({ as_of });
+    const corporateActionFetcher = resolveCorporateActionFetcher();
+    const result = await runCorporateActionApplier({ as_of, corporateActionFetcher });
     if (result.rows_applied > 0) {
       await writeStrategyAuditEvent({
         strategyKey: 'longshort',
