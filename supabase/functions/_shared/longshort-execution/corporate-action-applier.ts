@@ -56,8 +56,17 @@ import {
   type LotLedgerClient,
   type CloseLotInput,
 } from './lot-ledger-writer.ts';
-import type { BrokerFillResult, BrokerRealizedPnLFetcher } from '../longshort-broker-interfaces.ts';
-import type { FetcherSource } from '../longshort-reconciliation-types.ts';
+import type {
+  BrokerFillResult,
+  BrokerRealizedPnLFetcher,
+  BrokerCorporateActionFetcher,
+} from '../longshort-broker-interfaces.ts';
+import type { FetcherSource, ReconcileResult } from '../longshort-reconciliation-types.ts';
+// FP-062 sub-step 6I.2b gap (b) / ACT-413 — verifier wire at the
+// producing seam (mirrors verifyRealizedPnL @ lot-ledger-writer.ts:374
+// and verifyLotRecord / verifyWashSaleRecord @ wash-sale-writer.ts).
+import { verifyCorporateActionClean } from '../longshort-verifiers/verify_corporate_action_clean.ts';
+import { createInternalCorporateActionStatusFetcher } from './internal-corporate-action-status-fetcher.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -132,6 +141,31 @@ export interface CorporateActionApplierInput {
   /** Soft-dependent (FP-062). Required only if merger-cash rows are
    *  present in the run. */
   realizedPnlFetcher?: BrokerRealizedPnLFetcher;
+  /**
+   * FP-062 sub-step 6I.2b gap (b) / ACT-413 — corporate-action verifier
+   * fetcher. Wired at the post-`applied_at` seam in `runCorporateActionApplier`.
+   *
+   * STAY-SOFT IS FETCHER-ONLY (DW-199): when absent, the applier falls back
+   * to `createInternalCorporateActionStatusFetcher()`. The FP-062-ADD-01
+   * "STAY-SOFT" re-affirmation applies to the FETCHER dimension (Alpaca
+   * paper structurally can't surface real per-trade realized-PnL / T+1
+   * settlement / 1099-B → those FETCHERS stay on internal stand-ins). It
+   * does NOT apply to the VERIFIER-WIRE dimension — the 3 wired siblings
+   * (verifyRealizedPnL @ lot-ledger-writer.ts:374, verifyLotRecord +
+   * verifyWashSaleRecord @ wash-sale-writer.ts:315/410/459) prove the
+   * verifier-wire happens NOW. The mock→real fetcher flip stays deferred
+   * to DW-199.
+   *
+   * TAUTOLOGICAL-BUT-LOAD-BEARING ON PAPER:
+   * `createInternalCorporateActionStatusFetcher` returns
+   * `broker_basis_adjusted = (applied_at IS NOT NULL)`, so on paper the
+   * verify just confirms the applier executed. That IS the value on paper:
+   * (1) catches applier-didn't-run, (2) emits the `reconciliation_events`
+   * row that feeds the two-invocation liveness rule. The real broker CA
+   * cross-check arrives with DW-199 (Alpaca `/v2/positions/{symbol}`
+   * `avg_entry_price` vs internal `cost_basis`).
+   */
+  corporateActionFetcher?: BrokerCorporateActionFetcher;
 }
 
 export interface AppliedActionSummary {
@@ -139,6 +173,11 @@ export interface AppliedActionSummary {
   symbol: string;
   action_type: ActionType;
   applied_lot_count: number;
+  /** FP-062 6I.2b gap (b) / ACT-413 — diagnostic-only verifier result
+   *  threaded back from the post-`applied_at` reconcile. `null` when the
+   *  verify threw (errors are swallowed — applier mutation remains the
+   *  source of truth; the verify is a reconciliation observation). */
+  verify_result?: ReconcileResult | null;
 }
 
 export interface CorporateActionApplierResult {
@@ -414,6 +453,14 @@ export async function runCorporateActionApplier(
   const operator_id = input.operator_id ?? DEFAULT_OPERATOR_ID;
   const client = input.client ?? (supabaseAdmin as unknown as CorporateActionApplierClient);
   const fetcher_source: FetcherSource = input.fetcher_source ?? 'live';
+  // FP-062 6I.2b gap (b) / ACT-413 — verifier-fetcher fallback. The
+  // bootstrap-composed `AlpacaCorporateActionFetcher` (composing the
+  // internal stand-in) is injected by the edge fn in production; tests
+  // and creds-free CI take the internal-stand-in fallback. STAY-SOFT is
+  // FETCHER-ONLY (see input.corporateActionFetcher docs) — the verifier
+  // wire itself fires NOW, mirroring the 3 wired siblings.
+  const caFetcher: BrokerCorporateActionFetcher =
+    input.corporateActionFetcher ?? createInternalCorporateActionStatusFetcher();
 
   const recs = await readUnappliedActions(client, input.as_of);
   const applied: AppliedActionSummary[] = [];
@@ -438,11 +485,41 @@ export async function runCorporateActionApplier(
     if (upd.error) {
       throw new Error(`corporate_action_applier_stamp_failed: ca_id=${rec.ca_id} ${upd.error.message}`);
     }
+    // ── FP-062 6I.2b gap (b) / ACT-413 — verify_corporate_action_clean wire ──
+    // gate-13-allow: post-mutation verify per §7.8/§11.0.7 #11 — the
+    // applier's `applied_at` stamp IS the mutation that the verify
+    // reconciles against (on paper the verify confirms the applier ran;
+    // on the broker-truth path that lands with DW-199 it confirms the
+    // broker propagated the basis). Mirrors the existing gate-13-allow
+    // sites at lines 269/296/301/321/366/374 + the sibling verifyRealizedPnL
+    // @ lot-ledger-writer.ts:373.
+    //
+    // DIAGNOSTIC-ONLY: a verify throw must NOT break the applier mutation
+    // path. The applier's persisted lot mutations + stamped `applied_at`
+    // remain the source of truth; the verify is the reconciliation
+    // observation (mirrors lot-ledger-writer.ts:385-388 "Errors here are
+    // diagnostic-only").
+    //
+    // NO WALL-CLOCK: ts = `input.as_of` (injected). The shared module
+    // never calls `Date.now()` / `new Date()`. The edge-fn sources the
+    // wall clock ONCE via `productionClock.getWallClockTs()`.
+    let verify_result: ReconcileResult | null = null;
+    try {
+      verify_result = await verifyCorporateActionClean(
+        { symbol: rec.symbol, operator_id },
+        caFetcher,
+        input.as_of,
+        fetcher_source,
+      );
+    } catch (_e) {
+      verify_result = null;
+    }
     applied.push({
       ca_id: rec.ca_id,
       symbol: rec.symbol,
       action_type: rec.action_type,
       applied_lot_count: count,
+      verify_result,
     });
   }
 
