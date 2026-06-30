@@ -1,0 +1,100 @@
+name: dw168-probes
+
+# Weekly read-only DW-168 sanity probes (FP-066 WAVE-1, ACT-424).
+# R1-R5 invariants:
+#   R1 read combiner_feature_vectors + combiner_forward_returns ONLY
+#   R2 zero writes — JSONL to stdout + uploaded as artifact
+#   R3 zero edit to trainer.py / ndcgAtK / lgbm-inference.ts
+#   R4 zero candidate fabrication (probes are observational only)
+#   R5 DEC-070 (h).2 slot-merge is by-design — probes SUPPLY evidence
+#
+# Required repository secrets (operator-provisioned, reused — no new secret):
+#   SUPABASE_PROJECT_REF
+#   SUPABASE_SERVICE_ROLE_KEY
+
+on:
+  schedule:
+    # 06:00 UTC Monday — after weekend accrual, before the operator's RTH week.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dw168-probes
+  cancel-in-progress: false
+
+jobs:
+  probes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Guard - required secrets present
+        run: |
+          if [ -z "${{ secrets.SUPABASE_PROJECT_REF }}" ]; then
+            echo "::error::SUPABASE_PROJECT_REF GitHub secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY GitHub secret is not set"
+            exit 1
+          fi
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: training/combiner/requirements.txt
+
+      - name: Install dependencies (hash-locked)
+        working-directory: training/combiner
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements.txt
+
+      - name: Run S1a — label-tie-ratio
+        working-directory: training/combiner
+        env:
+          SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          mkdir -p probe-output
+          python -m scripts.dw168_probes.label_tie_ratio | tee probe-output/s1a-label-tie-ratio.jsonl
+
+      - name: Run S1b — group-cardinality
+        working-directory: training/combiner
+        env:
+          SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python -m scripts.dw168_probes.group_cardinality | tee probe-output/s1b-group-cardinality.jsonl
+
+      - name: Run S1c — feature-variation
+        working-directory: training/combiner
+        env:
+          SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python -m scripts.dw168_probes.feature_variation | tee probe-output/s1c-feature-variation.jsonl
+
+      - name: Summarize warnings
+        working-directory: training/combiner
+        run: |
+          echo "## DW-168 probe summary" >> "$GITHUB_STEP_SUMMARY"
+          for f in probe-output/*.jsonl; do
+            line=$(tail -n 1 "$f")
+            echo "- \`$f\`: $line" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload probe artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dw168-probe-output
+          path: training/combiner/probe-output/*.jsonl
+          if-no-files-found: error
+          retention-days: 90
