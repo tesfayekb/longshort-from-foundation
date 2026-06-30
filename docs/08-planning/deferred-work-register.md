@@ -3088,6 +3088,16 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Resolution shape** | A future DEC clause (or standalone DEC) that ratifies `NOOP_PCT` + `NOOP_FLOOR_USD` against empirical drift evidence, with explicit rationale + the calibration source cited verbatim. Until then, the constants live in `supabase/functions/_shared/longshort-execution/rebalance-planner.ts` as documented exports and are referenced in `function-index.md` (rebalance-planner row) and FP-056 (E1 noop-tolerance DEC-RATIFICATION DEFERRAL row). |
 | **Cross_ref** | FP-056 E1 (the build that introduces them at ACT-307); `function-index.md` `rebalance-planner` entry; DEC-068 (clauses a–k ratified — clause (k) ratifies cross-symbol ordering + §8.2 pricing constants at ACT-309; noop-band ratification awaits its own future amendment clause / standalone DEC per this DW's Future Owner Phase row); ACT-307; ACT-309 (the clause-(k) charter that reassigned the working-name "k" away from noop-band). |
 
+#### DW-145-ADD-01 (Rule 8 additive, appended 2026-06-30 at ACT-415 — DEC-076 clause (a) v1-default ratification + supersession trigger)
+
+**Status transition:** `open` → `open-RATIFIED-V1-PENDING-EMPIRICAL-RECALIBRATION` (mirrors the `open-CONTAINED` shape DW-204 uses at ACT-410). **Original DW-145 fields above are PRESERVED VERBATIM (Constitution Rule 8); this addendum is appended-only.**
+
+**Ratification:** DEC-076 clause (a) supplies the DEC governance home for the already-in-code v1 values `NOOP_PCT = 0.02` (`rebalance-planner.ts:102`) and `NOOP_FLOOR_USD = 50` (`rebalance-planner.ts:110`). NO VALUE CHANGE — the constants stay byte-identical; this addendum records the DEC home only. The discharge closes the FP-062 sub-step 6I.7 roll-up gap (d) "UNAUTHORED" condition for this DW (the §14 + Rule-2 "silent default" failure-mode this gap exists to prevent).
+
+**Supersession trigger (DEC-076 clause (d) named, pre-authorized):** a follow-on DEC authored against the **empirical drift histogram** measured from E3-replay-fixture surface + one paper window's worth of `longshort.execution.*` events (per the original DW-145 "Blocking Dependencies" / "Future Owner Phase" rows above). Until that DEC lands, the v1 values in DEC-076 clause (a) are AUTHORITATIVE. This is a governance HOME, NOT a value LOCK — the calibration ROI stays fully capturable.
+
+**Cross_ref (addendum-specific):** DEC-076 clause (a) + clause (d) (the ratification + the supersession trigger); DEC-076 clause (e) (this DW transition); ACT-415 (this DEC + addendum landing); ACT-411 (the FP-062 Status roll-up that named this DW under open gap (d)); ACT-307 (the original E1-build that surfaced the constants); Constitution Rule 8 (original DW-145 fields preserved verbatim above).
+
 ### DW-146: §8.2 marketable-limit buffer-width Phase-0 / replay-evidence ratification (`PRICE_OFFSET_NORMAL_USD`, `PRICE_OFFSET_HIGH_PRICED_USD`, `HIGH_PRICED_THRESHOLD_USD`)
 
 | Field | Value |
@@ -3102,6 +3112,16 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Resolution shape** | A future DEC clause or standalone DEC that ratifies the three buffer-width constants against empirical fill-evidence, with the calibration source cited verbatim (the paper window's fill-event range, the NORMAL/HIGH_PRICED tier-bucket statistics, and the chosen revision rationale if any value changes). The `TIER_SELECTION_PRICE=mid` operator-affirmed gap-resolution (clause (k).3) is revisitable at the same checkpoint. |
 | **Cross_ref** | DEC-068 clause (k).3 (the constants table) + clause (k).7 (the explicit DW-146 reservation); CROSSWIND_SPEC.md §8.2 L756/758 ("Phase 0 validates buffer width"); FP-056 E2 (the submitter module that introduces them); FP-056 E3 (the replay-evidence checkpoint that ratifies them); ACT-309. |
 
+#### DW-146-ADD-01 (Rule 8 additive, appended 2026-06-30 at ACT-415 — DEC-076 clause (b) Tier-A v1-default ratification + supersession trigger)
+
+**Status transition:** `open` → `open-RATIFIED-V1-PENDING-EMPIRICAL-RECALIBRATION` (mirrors the `open-CONTAINED` shape DW-204 uses at ACT-410). **Tier remains A — money-path pricing constants. Original DW-146 fields above are PRESERVED VERBATIM (Constitution Rule 8); this addendum is appended-only.**
+
+**Ratification:** DEC-076 clause (b) supplies the DEC governance home for the already-in-code v1 values `PRICE_OFFSET_NORMAL_USD = 0.01` (`pricing.ts:40`), `PRICE_OFFSET_HIGH_PRICED_USD = 0.05` (`pricing.ts:47`), and `HIGH_PRICED_THRESHOLD_USD = 500.00` (`pricing.ts:54`). NO VALUE CHANGE — the constants stay byte-identical. The boundary operator is `>=` (INCLUSIVE — cited verbatim from `pricing.ts:173`: `const offset = mid >= threshold ? offHigh : offNormal;`); a mid of exactly `$500.00` selects the HIGH_PRICED 5¢ tier. This is Tier-A money-path — every paper order routes through `computeLimitPrice` and through these three constants — so the DEC home closes the precise §14 + Rule-2 "silent default" failure-mode the FP-062 gap-(d) condition was instituted to prevent.
+
+**Supersession trigger (DEC-076 clause (d) named, pre-authorized):** a follow-on DEC authored against **paper-window fill-evidence by tier** (NORMAL / HIGH_PRICED tier-bucketed marketable-limit win-rate vs. miss-rate) per the original DW-146 "Blocking Dependencies" / "Resolution shape" rows above; the §8.2 spec's reserved *"Phase 0 validates buffer width"* is the underlying authority. Until that DEC lands, the v1 values in DEC-076 clause (b) are AUTHORITATIVE. This is a governance HOME, NOT a value LOCK — the calibration ROI stays fully capturable (and pre-live).
+
+**Cross_ref (addendum-specific):** DEC-076 clause (b) + clause (d) (the ratification + the supersession trigger); DEC-076 clause (e) (this DW transition); ACT-415 (this DEC + addendum landing); ACT-411 (the FP-062 Status roll-up that named this DW under open gap (d)); ACT-309 (the original E2-build that surfaced the constants in `pricing.ts`); DEC-068 clause (k).3 + clause (k).7 (the original constants table + the explicit DW-146 reservation); CROSSWIND_SPEC.md §8.2 L756/758; `pricing_test.ts` ("$499.95/$500.05 straddle (mid=500.00) → HIGH_PRICED (inclusive)" — the inclusive-boundary lock test); Constitution Rule 8 (original DW-146 fields preserved verbatim above).
+
 ### DW-147: `QUOTE_MAX_STALENESS_S` ratification (the `verify_quote_freshness` noise-tolerant ROI knob)
 
 | Field | Value |
@@ -3115,6 +3135,16 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **Future Owner Phase** | Phase-5 paper-exec — amend DEC-068 (clause (k) amendment row OR new clause) at the E3 replay-evidence checkpoint, OR ratify in a standalone verifier-tolerance DEC. |
 | **Resolution shape** | A future DEC that ratifies `QUOTE_MAX_STALENESS_S` against the empirical paper-window quote-age distribution (p50 / p95 / p99 by symbol tier) with the calibration source cited verbatim. |
 | **Cross_ref** | DEC-068 clause (k).7 (the explicit DW-147 reservation); `supabase/functions/_shared/longshort-verifiers/verify_quote_freshness.ts` (the verifier implementation; `VERIFY_QUOTE_FRESHNESS_TOLERANCE.max_age_s = 5`); CROSSWIND §11.0.7 #3 (*"Default max_age_s = 5"*); FP-056 E3 (the replay-evidence checkpoint that ratifies); ACT-309. |
+
+#### DW-147-ADD-01 (Rule 8 additive, appended 2026-06-30 at ACT-415 — DEC-076 clause (c) v1-default ratification + supersession trigger)
+
+**Status transition:** `open` → `open-RATIFIED-V1-PENDING-EMPIRICAL-RECALIBRATION` (mirrors the `open-CONTAINED` shape DW-204 uses at ACT-410). **Tier remains B — noise-tolerant verifier knob (failure-action `mtm_skipped_quote_stale`, not order-block). Original DW-147 fields above are PRESERVED VERBATIM (Constitution Rule 8); this addendum is appended-only.**
+
+**Ratification:** DEC-076 clause (c) supplies the DEC governance home for the already-in-code v1 value `QUOTE_MAX_STALENESS_S = VERIFY_QUOTE_FRESHNESS_TOLERANCE.max_age_s` (= `5`) at `order-submitter.ts:78`, sourced from `verify_quote_freshness.ts` (`VERIFY_QUOTE_FRESHNESS_TOLERANCE.max_age_s = 5`). NO VALUE CHANGE — the constant stays byte-identical.
+
+**Supersession trigger (DEC-076 clause (d) named, pre-authorized):** a follow-on DEC authored against the **per-symbol quote-age histogram** (p50 / p95 / p99 by symbol tier) from one paper window's quote-fetch latency + observed `quote.ts` lag, per the original DW-147 "Blocking Dependencies" / "Resolution shape" rows above. Until that DEC lands, the v1 value in DEC-076 clause (c) is AUTHORITATIVE. This is a governance HOME, NOT a value LOCK — the calibration ROI stays fully capturable.
+
+**Cross_ref (addendum-specific):** DEC-076 clause (c) + clause (d) (the ratification + the supersession trigger); DEC-076 clause (e) (this DW transition); ACT-415 (this DEC + addendum landing); ACT-411 (the FP-062 Status roll-up that named this DW under open gap (d)); DEC-068 clause (k).7 (the original DW-147 reservation); CROSSWIND §11.0.7 #3; Constitution Rule 8 (original DW-147 fields preserved verbatim above).
 
 ### DW-148: PRE-LIVE Alpaca data-tier decision (Algo Trader Plus subscription for real-time full-market SIP quotes vs. free-tier IEX-real-time quotes)
 
