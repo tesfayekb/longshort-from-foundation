@@ -20,10 +20,15 @@
  *
  * Fire-and-forget: callers MUST wrap in try/catch so failure cannot
  * propagate to the submit response.
+ *
+ * Client typing mirrors the established sibling pattern
+ * (`persist-signal-compute-log.ts`, `persist-cron-last-fire.ts`): the
+ * `SupabaseClient` type is imported from the canonical
+ * `@supabase/supabase-js` specifier resolved via
+ * `supabase/functions/deno.json` (DW-082 A1.b / Gate 14). No alias.
  */
 
-// deno-lint-ignore no-explicit-any
-type AnySupabase = any;
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface RankingsHeadRow {
   as_of_date: string;
@@ -59,7 +64,7 @@ export interface SnapshotResult {
 const SNAPSHOT_SCAN_CAP_RANK = 1000;
 
 export async function snapshotRebalanceRankings(
-  supabase: AnySupabase,
+  supabase: SupabaseClient,
   operator_id: string,
   opts?: { submit_reference_computed_at?: string | null },
 ): Promise<SnapshotResult> {
