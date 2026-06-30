@@ -298,7 +298,6 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
       const pendingBook: PendingBookRow[] = [];
       const perVariantSizes: PerVariantSize[] = [];
       const variantsSkippedOverlap: SkippedOverlapVariant[] = [];
-      const pendingByVariant = new Map<string, PendingBookRow[]>();
       try {
         for (const v of variants) {
           try {
@@ -332,7 +331,6 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
                 intraday_slot: 0,
               });
             }
-            pendingByVariant.set(v.variant, variantRows);
             for (const r of variantRows) pendingBook.push(r);
             perVariantSizes.push({
               variant: v.variant,
