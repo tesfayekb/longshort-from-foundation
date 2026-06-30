@@ -34,6 +34,8 @@ import type { LotLedgerClient } from './lot-ledger-writer.ts';
 import type {
   BrokerRealizedPnLConfirm,
   BrokerRealizedPnLFetcher,
+  BrokerCorporateActionFetcher,
+  BrokerCorporateActionSnapshot,
 } from '../longshort-broker-interfaces.ts';
 
 // ── In-memory fake DB + client ────────────────────────────────────────
@@ -170,6 +172,42 @@ function makeRealizedPnlFetcher(confirmed: number): BrokerRealizedPnLFetcher {
         trade_ts: ts,
         fetched_at: ts,
       };
+    },
+  };
+}
+
+// ── FP-062 6I.2b gap (b) / ACT-413 — CA verifier fetcher test doubles ──
+function makeCaFetcher(opts: {
+  recent: boolean;
+  applied: boolean;
+  hours_since?: number;
+  callLog?: string[];
+}): BrokerCorporateActionFetcher {
+  return {
+    async fetchCorporateActionSnapshot(
+      symbol: string,
+      _lookback_days: number,
+      ts: Date,
+    ): Promise<BrokerCorporateActionSnapshot> {
+      opts.callLog?.push(symbol);
+      const hours = opts.hours_since ?? 1;
+      return {
+        symbol,
+        recent_action_within_lookback: opts.recent,
+        action_type: opts.recent ? 'split' : null,
+        action_ts: opts.recent ? new Date(ts.getTime() - hours * 3_600_000) : null,
+        broker_basis_adjusted: opts.applied,
+        hours_since_action: opts.recent ? hours : null,
+        fetched_at: ts,
+      };
+    },
+  };
+}
+
+function makeThrowingCaFetcher(): BrokerCorporateActionFetcher {
+  return {
+    fetchCorporateActionSnapshot() {
+      return Promise.reject(new Error('verify_blew_up_on_purpose'));
     },
   };
 }
@@ -431,4 +469,53 @@ Deno.test('4M.4: UnappliedCorporateActionReader returns earliest unapplied per s
   assertEquals(map.get('AAPL')?.ex_date.toISOString().slice(0, 10), '2026-07-05');
   assertEquals(map.has('MSFT'), false); // already applied
   assertEquals(map.has('NVDA'), false); // no row
+});
+
+// ── (13) ACT-413 — verify fires post-applied_at with injected fetcher ─
+Deno.test('ACT-413: verifyCorporateActionClean fires post-applied_at with injected fetcher', async () => {
+  const lot = seedLot('AAPL', 10, 200);
+  const ca = seedCa('split', { ratio_numerator: 2, ratio_denominator: 1 });
+  const db = makeFakeDb({ corporate_actions: [ca], longshort_lots: [lot] });
+  const client = makeClient(db);
+  const calls: string[] = [];
+  const caFetcher = makeCaFetcher({ recent: true, applied: true, callLog: calls });
+  const result = await runCorporateActionApplier({
+    as_of: AS_OF, client, corporateActionFetcher: caFetcher,
+  });
+  assertEquals(calls, ['AAPL']);  // fetcher invoked exactly once for the applied symbol
+  assertExists(result.applied[0].verify_result);
+  // applied_at is stamped BEFORE the verify fires (post-mutation reconcile).
+  assertEquals(String(db.corporate_actions[0].applied_at), AS_OF.toISOString());
+});
+
+// ── (14) ACT-413 — verify error is diagnostic-only; applier survives ──
+Deno.test('ACT-413: verify error is swallowed diagnostic-only; applier mutation persists', async () => {
+  const lot = seedLot('AAPL', 10, 200);
+  const ca = seedCa('split', { ratio_numerator: 2, ratio_denominator: 1 });
+  const db = makeFakeDb({ corporate_actions: [ca], longshort_lots: [lot] });
+  const client = makeClient(db);
+  const result = await runCorporateActionApplier({
+    as_of: AS_OF, client, corporateActionFetcher: makeThrowingCaFetcher(),
+  });
+  // Applier did NOT throw; mutation persisted; stamp persisted.
+  assertEquals(result.rows_applied, 1);
+  assertEquals(Number(db.longshort_lots[0].qty), 20);
+  assertEquals(String(db.corporate_actions[0].applied_at), AS_OF.toISOString());
+  // verify_result is null (error swallowed).
+  assertEquals(result.applied[0].verify_result, null);
+});
+
+// ── (15) ACT-413 — no-op (count=0) case still fires the verify ────────
+Deno.test('ACT-413: applied_lot_count=0 still fires verify post-stamp', async () => {
+  const ca = seedCa('split', { ratio_numerator: 2, ratio_denominator: 1 });
+  const db = makeFakeDb({ corporate_actions: [ca], longshort_lots: [] });
+  const client = makeClient(db);
+  const calls: string[] = [];
+  const result = await runCorporateActionApplier({
+    as_of: AS_OF, client,
+    corporateActionFetcher: makeCaFetcher({ recent: false, applied: false, callLog: calls }),
+  });
+  assertEquals(result.applied[0].applied_lot_count, 0);
+  assertEquals(calls, ['AAPL']);  // verify still fired
+  assertExists(result.applied[0].verify_result);
 });
