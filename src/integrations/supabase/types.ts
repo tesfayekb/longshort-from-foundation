@@ -1244,6 +1244,51 @@ export type Database = {
         }
         Relationships: []
       }
+      longshort_rebalance_ranking_snapshot: {
+        Row: {
+          as_of_date: string
+          generation_skew: boolean
+          gics_sector: string | null
+          operator_id: string
+          rank_within_side: number
+          ranker_source: string
+          score: number
+          side: string
+          snapshot_computed_at: string
+          snapshotted_at: string
+          submit_reference_computed_at: string | null
+          ticker: string
+        }
+        Insert: {
+          as_of_date: string
+          generation_skew?: boolean
+          gics_sector?: string | null
+          operator_id: string
+          rank_within_side: number
+          ranker_source: string
+          score: number
+          side: string
+          snapshot_computed_at: string
+          snapshotted_at?: string
+          submit_reference_computed_at?: string | null
+          ticker: string
+        }
+        Update: {
+          as_of_date?: string
+          generation_skew?: boolean
+          gics_sector?: string | null
+          operator_id?: string
+          rank_within_side?: number
+          ranker_source?: string
+          score?: number
+          side?: string
+          snapshot_computed_at?: string
+          snapshotted_at?: string
+          submit_reference_computed_at?: string | null
+          ticker?: string
+        }
+        Relationships: []
+      }
       longshort_reconciliation_state: {
         Row: {
           call_name: string

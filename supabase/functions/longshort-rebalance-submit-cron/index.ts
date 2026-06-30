@@ -52,6 +52,7 @@ import {
 } from '../_shared/longshort-execution/rebalance-submit-orchestrator.ts';
 import { createLiveBrokerInterfaces } from '../_shared/longshort-execution/broker-bootstrap.ts';
 import { createSupabaseReconciliationEventWriter } from '../_shared/longshort-execution/reconciliation-event-writer.ts';
+import { snapshotRebalanceRankings } from '../_shared/longshort-execution/rebalance-ranking-snapshot-writer.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const STRATEGY_KEY = 'longshort';
@@ -158,6 +159,16 @@ Deno.serve(createHandler(async (req: Request) => {
       rankingsReader: createSupabaseRankingsReader(),
       ts,
     }, correlationId);
+
+    // FP-062 ranking-snapshot sidecar (MIG-149). Fire-and-forget,
+    // independent read, ABSOLUTE separation from the submit path. Cron
+    // parity with the manual edge-fn: the cron is the actual daily
+    // fire-path so attribution capture must mirror here.
+    try {
+      await snapshotRebalanceRankings(supabaseAdmin, operator_id);
+    } catch (snapErr) {
+      console.error('[longshort-rebalance-submit-cron] ranking-snapshot sidecar failed (non-blocking):', snapErr);
+    }
 
     await writeStrategyAuditEvent({
       strategyKey: STRATEGY_KEY,
