@@ -158,6 +158,18 @@ The keystone is settled here (additive `intraday_slot` superset key, single-tran
 - `supabase/functions/_shared/longshort-signals/shared/queue-worker/` (live FP-045 engine; signal-cadence lift per clause (f)).
 - `training/combiner/` (trainer-query parity for intraday-slot per clause (e)).
 
+### Clause (i) — RATIFIED: daily-cadence signal vintage under intraday cadence (the DW-203 gap closure)
+
+The intraday combiner-tick MUST NOT advance `as_of_date` to `current_date` for vector composition until that day's CRITICAL daily-cadence signals (`SIGNAL_IDS_CRITICAL` — currently `cross_sectional_momentum_12_1` #6, `short_term_reversal_1w` #7) exist in `signal_observations` for `current_date`. Rationale: the daily-cadence producers fire EOD (20:00–23:00 UTC); a morning intraday tick claiming `current_date` composes vectors that 100%-exclude on `missing_critical_signal_6`, producing an empty book and zero orders (the DW-203 starvation). The canonical fix is a producer-completeness GATE on the tick's `as_of_date` selection (the SKIP variant, ACT-407): if the critical signals are absent for `current_date`, the tick performs NO write and emits `longshort.combiner.tick.skipped` with `reason:'critical_signals_absent'`; it does not advance until the EOD daily window completes.
+
+(i).1 — T8 replay-determinism PRESERVED. This fix is in the tick's `as_of_date` SELECTION, NOT the assembler's signal lookup. The assembler's strict `.eq('as_of_date', floor)` (`feature-assembler-orchestrator.ts:16-18`) is UNCHANGED — switching it to `<=` would regress T8 replay-determinism and is explicitly forbidden.
+
+(i).2 — the canonical EOD path is unaffected. Cron 102 (23:35 UTC) runs after the daily producers, so the critical signals exist by then; it builds `current_date` normally. Only the PRE-producer morning tick gates.
+
+(i).3 — B2 (intraday-on-prior-daily-base) DEFERRED as a refinement. The B1 SKIP variant captures essentially all the value (today's daily signals don't exist in the morning regardless; the after-EOD window is covered by cron 102). B2 (recording daily-signal vintage per slot to enable intraday-on-prior-daily composition) is registered as a deferred refinement FP, to be built only if post-trade analysis shows the morning-window vintage gap costs measurable basis points. B2 must preserve T8 (no `<=` filter).
+
+Cross-references: DW-203 (the gap); ACT-407 (the B1 build); `feature-assembler-orchestrator.ts:16-18` (the T8-protected strict `.eq`); `SIGNAL_IDS_CRITICAL` (the gate predicate); `longshort-combiner-tick` (the gated surface); cron 102 (the unaffected EOD path).
+
 ## Status
 
 active.
