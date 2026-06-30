@@ -27,6 +27,10 @@ import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 import { createRankerOrchestrator } from '../_shared/longshort-combiner/ranker-orchestrator.ts';
+import {
+  resolveManualAsOf,
+  readReplayFlag,
+} from '../_shared/longshort-combiner/resolve-manual-as-of.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 // DEC-070 clause (d) / FP-057 Sub-step 3: the daily/manual path owns slot 0.
@@ -62,6 +66,14 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(400, 'as_of_in_future', { correlationId });
   }
 
+  // DW-203-ADD-03 / ACT-428 Fix A: wall-clock as_of for today's manual fire
+  // matches cron/tick freshness semantics (computed_at must be wall-clock-
+  // fresh to pass the §11.0.7 rebalance gate); explicit replay:true preserves
+  // prior-day determinism stamping (T8 / DEC-034 (4)). Caller is the manual
+  // handler — the ranker stays path-polymorphic, the gate stays untouched.
+  const replay = readReplayFlag(bodyRaw);
+  const effectiveAsOf = resolveManualAsOf(as_of, now, replay);
+
   await writeStrategyAuditEvent({
     strategyKey: 'longshort',
     action: 'longshort.combiner.rank.manual_triggered',
@@ -71,7 +83,9 @@ Deno.serve(createHandler(async (req: Request) => {
     userAgent: authCtx.userAgent ?? undefined,
     metadata: {
       operator_id: DEFAULT_OPERATOR_ID,
-      as_of: as_of.toISOString(),
+      as_of: effectiveAsOf.toISOString(),
+      as_of_parsed: as_of.toISOString(),
+      replay,
       intraday_slot: DAILY_INTRADAY_SLOT,
       trigger: 'manual',
     },
@@ -82,7 +96,7 @@ Deno.serve(createHandler(async (req: Request) => {
       supabase: supabaseAdmin,
       operator_id: DEFAULT_OPERATOR_ID,
     });
-    const result = await orch.run(as_of);
+    const result = await orch.run(effectiveAsOf);
 
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
@@ -96,7 +110,9 @@ Deno.serve(createHandler(async (req: Request) => {
       userAgent: authCtx.userAgent ?? undefined,
       metadata: {
         operator_id: DEFAULT_OPERATOR_ID,
-        as_of: as_of.toISOString(),
+        as_of: effectiveAsOf.toISOString(),
+        as_of_parsed: as_of.toISOString(),
+        replay,
         as_of_date: result.as_of_date,
         intraday_slot: result.intraday_slot,
         outcome: result.outcome,
@@ -113,7 +129,9 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiSuccess({
       status: 'ok',
       operator_id: DEFAULT_OPERATOR_ID,
-      as_of: as_of.toISOString(),
+      as_of: effectiveAsOf.toISOString(),
+      as_of_parsed: as_of.toISOString(),
+      replay,
       as_of_date: result.as_of_date,
       outcome: result.outcome,
       vectors_read: result.vectors_read,
@@ -134,7 +152,9 @@ Deno.serve(createHandler(async (req: Request) => {
       userAgent: authCtx.userAgent ?? undefined,
       metadata: {
         operator_id: DEFAULT_OPERATOR_ID,
-        as_of: as_of.toISOString(),
+        as_of: effectiveAsOf.toISOString(),
+        as_of_parsed: as_of.toISOString(),
+        replay,
         intraday_slot: DAILY_INTRADAY_SLOT,
         error: e instanceof Error ? e.message : String(e),
         stage: 'orchestrator_throw',
