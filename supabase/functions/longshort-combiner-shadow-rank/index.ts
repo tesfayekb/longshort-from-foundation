@@ -69,12 +69,17 @@ Deno.serve(createHandler(async (req: Request) => {
     });
     const result = await orch.run(as_of);
 
+    // DW-204 (ACT-410) — `completed_with_skipped_variants` is a SUCCESS
+    // outcome (≥1 variant wrote). Only `failed` marks the fire as failed.
+    const isSuccess =
+      result.outcome === 'completed' ||
+      result.outcome === 'completed_with_skipped_variants';
+
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
-      action:
-        result.outcome === 'completed'
-          ? 'longshort.combiner.shadow_rank.completed'
-          : 'longshort.combiner.shadow_rank.failed',
+      action: isSuccess
+        ? 'longshort.combiner.shadow_rank.completed'
+        : 'longshort.combiner.shadow_rank.failed',
       correlationId,
       metadata: {
         operator_id: DEFAULT_OPERATOR_ID,
@@ -88,6 +93,9 @@ Deno.serve(createHandler(async (req: Request) => {
         vectors_assembled: result.vectors_assembled,
         total_book_rows: result.total_book_rows,
         per_variant_sizes: result.per_variant_sizes,
+        // DW-204 — surface per-variant overlap skips for the FP-063
+        // tiebreaker-frequency evidence stream.
+        variants_skipped_overlap: result.variants_skipped_overlap,
         ranker_source: result.ranker_source,
         failure_reason: result.outcome === 'failed' ? result.failure_reason : undefined,
         trigger: 'cron',
@@ -97,7 +105,7 @@ Deno.serve(createHandler(async (req: Request) => {
     await persistCronLastFire(
       supabaseAdmin,
       JOB_REGISTRY_ID,
-      result.outcome === 'completed' ? 'success' : 'failed',
+      isSuccess ? 'success' : 'failed',
       result.outcome === 'failed' ? (result.failure_reason ?? null) : null,
     );
 
@@ -114,6 +122,7 @@ Deno.serve(createHandler(async (req: Request) => {
       vectors_assembled: result.vectors_assembled,
       total_book_rows: result.total_book_rows,
       per_variant_sizes: result.per_variant_sizes,
+      variants_skipped_overlap: result.variants_skipped_overlap,
       ranker_source: result.ranker_source,
       failure_reason: result.outcome === 'failed' ? result.failure_reason : undefined,
       correlation_id: correlationId,

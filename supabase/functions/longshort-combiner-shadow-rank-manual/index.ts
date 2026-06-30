@@ -79,12 +79,17 @@ Deno.serve(createHandler(async (req: Request) => {
     });
     const result = await orch.run(as_of);
 
+    // DW-204 (ACT-410) — `completed_with_skipped_variants` is a SUCCESS
+    // outcome (≥1 variant wrote). Only `failed` marks the fire as failed.
+    const isSuccess =
+      result.outcome === 'completed' ||
+      result.outcome === 'completed_with_skipped_variants';
+
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
-      action:
-        result.outcome === 'completed'
-          ? 'longshort.combiner.shadow_rank.manual_completed'
-          : 'longshort.combiner.shadow_rank.manual_failed',
+      action: isSuccess
+        ? 'longshort.combiner.shadow_rank.manual_completed'
+        : 'longshort.combiner.shadow_rank.manual_failed',
       actorId: authCtx.user.id,
       correlationId,
       ipAddress: authCtx.ipAddress ?? undefined,
@@ -101,6 +106,7 @@ Deno.serve(createHandler(async (req: Request) => {
         vectors_assembled: result.vectors_assembled,
         total_book_rows: result.total_book_rows,
         per_variant_sizes: result.per_variant_sizes,
+        variants_skipped_overlap: result.variants_skipped_overlap,
         ranker_source: result.ranker_source,
         failure_reason: result.outcome === 'failed' ? result.failure_reason : undefined,
         trigger: 'manual',
@@ -120,6 +126,7 @@ Deno.serve(createHandler(async (req: Request) => {
       vectors_assembled: result.vectors_assembled,
       total_book_rows: result.total_book_rows,
       per_variant_sizes: result.per_variant_sizes,
+      variants_skipped_overlap: result.variants_skipped_overlap,
       ranker_source: result.ranker_source,
       failure_reason: result.outcome === 'failed' ? result.failure_reason : undefined,
       correlation_id: correlationId,
