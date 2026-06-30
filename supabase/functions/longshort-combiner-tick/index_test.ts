@@ -130,9 +130,61 @@ Deno.test('(t9) slot is threaded into BOTH assemble.run AND rank.run (slot-aware
 });
 
 Deno.test('(t10) failure-handling contract: 500 reserved for unexpected throw (skips and orchestrator-failed return 200)', () => {
-  // apiError(500, ...) only on dirty-bit-read / slot-assignment / orch throw.
-  // assemble-failed and rank-failed go via apiSuccess.
+  // apiError(500, ...) only on critical-signal-read (DW-203 / ACT-407) /
+  // dirty-bit-read / slot-assignment / orch throw. assemble-failed and
+  // rank-failed go via apiSuccess.
   const errorCalls = (CODE_ONLY.match(/apiError\(500/g) ?? []).length;
-  assert(errorCalls === 3,
-    `expected exactly 3 apiError(500) sites (dirty-bit-read, slot-assignment, orchestrator throw); got ${errorCalls}`);
+  assert(errorCalls === 4,
+    `expected exactly 4 apiError(500) sites (critical-signal-read, dirty-bit-read, slot-assignment, orchestrator throw); got ${errorCalls}`);
+});
+
+Deno.test('(t11) DW-203 / ACT-407 — critical-signal presence gate reuses SIGNAL_IDS_CRITICAL (no hardcoded literals)', () => {
+  // The gate MUST import the canonical critical-signal catalog constant
+  // (Catalog #50: no hardcoded signal_id literals). The probe must use
+  // `.in('signal_id', SIGNAL_IDS_CRITICAL ...)` against signal_observations
+  // for as_of_date=current_date, and skip with reason
+  // 'critical_signals_absent' BEFORE the dirty-bit poll / orchestrator.
+  assert(
+    HANDLER_SOURCE.includes(
+      "import { SIGNAL_IDS_CRITICAL } from '../_shared/longshort-combiner/signal-catalog.ts'",
+    ),
+    'must import SIGNAL_IDS_CRITICAL from signal-catalog (no hardcoded literals — Catalog #50)',
+  );
+  assert(
+    CODE_ONLY.includes("'cross_sectional_momentum_12_1'") === false,
+    'must NOT hardcode the cross_sectional_momentum_12_1 literal — reuse SIGNAL_IDS_CRITICAL',
+  );
+  assert(
+    CODE_ONLY.includes("'short_term_reversal_1w'") === false,
+    'must NOT hardcode the short_term_reversal_1w literal — reuse SIGNAL_IDS_CRITICAL',
+  );
+  assert(
+    CODE_ONLY.includes("reason: 'critical_signals_absent'"),
+    'missing critical_signals_absent skip reason',
+  );
+  // Skip emit must precede the assembler construction (BEFORE the recompute path).
+  const orchIdx = CODE_ONLY.indexOf('createFeatureAssemblyOrchestrator(');
+  const skipIdx = CODE_ONLY.indexOf("reason: 'critical_signals_absent'");
+  assert(orchIdx > 0 && skipIdx > 0 && skipIdx < orchIdx,
+    'critical_signals_absent skip must emit BEFORE assembler construction');
+});
+
+Deno.test('(t12) DW-203 — gate runs BEFORE the dirty-bit poll (starvation avoidance, not dirty-bit re-fire)', () => {
+  const criticalIdx = CODE_ONLY.indexOf('criticalSignalsPresentForDate(');
+  const dirtyIdx = CODE_ONLY.indexOf('maxSignalComputedAt(');
+  assert(criticalIdx > 0, 'missing criticalSignalsPresentForDate call');
+  assert(dirtyIdx > 0, 'missing maxSignalComputedAt call');
+  assert(criticalIdx < dirtyIdx,
+    'critical-signal presence gate must run BEFORE the dirty-bit read (cannot starve a 100%-excluded write)');
+});
+
+Deno.test('(t13) DW-203 — presence probe uses strict .eq on as_of_date (T8 replay-determinism preserved)', () => {
+  // The probe loads signal_observations with strict equality on as_of_date
+  // (no <= relaxation). The fix lives in the TICK's as_of_date selection,
+  // NOT in the assembler's lookup operator.
+  const fn = CODE_ONLY.split('async function criticalSignalsPresentForDate')[1] ?? '';
+  assert(fn.includes(".eq('as_of_date', as_of_date)"),
+    'presence probe must use strict .eq on as_of_date (T8 invariant)');
+  assert(!fn.includes(".lte('as_of_date'") && !fn.includes(".lt('as_of_date'"),
+    'presence probe must NOT use <= / < on as_of_date (T8 regression)');
 });
