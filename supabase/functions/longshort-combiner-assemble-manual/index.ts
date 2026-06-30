@@ -26,6 +26,10 @@ import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 import { createFeatureAssemblyOrchestrator } from '../_shared/longshort-combiner/feature-assembler-orchestrator.ts';
+import {
+  resolveManualAsOf,
+  readReplayFlag,
+} from '../_shared/longshort-combiner/resolve-manual-as-of.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 // DEC-070 clause (d) / FP-057 Sub-step 3: the daily/manual path owns
@@ -62,6 +66,15 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(400, 'as_of_in_future', { correlationId });
   }
 
+  // DW-203-ADD-03 / ACT-428 Fix A: wall-clock as_of for today's manual fire
+  // matches cron/tick freshness semantics (computed_at must be wall-clock-
+  // fresh to pass the §11.0.7 rebalance gate); explicit replay:true preserves
+  // prior-day determinism stamping (T8 / DEC-034 (4)). The assemble + rank
+  // manual handlers MUST agree on the as_of they build for, or the rank
+  // reads a different as_of_date than assemble wrote — identical resolver.
+  const replay = readReplayFlag(bodyRaw);
+  const effectiveAsOf = resolveManualAsOf(as_of, now, replay);
+
   await writeStrategyAuditEvent({
     strategyKey: 'longshort',
     action: 'longshort.combiner.assemble.manual_triggered',
@@ -71,7 +84,9 @@ Deno.serve(createHandler(async (req: Request) => {
     userAgent: authCtx.userAgent ?? undefined,
     metadata: {
       operator_id: DEFAULT_OPERATOR_ID,
-      as_of: as_of.toISOString(),
+      as_of: effectiveAsOf.toISOString(),
+      as_of_parsed: as_of.toISOString(),
+      replay,
       intraday_slot: DAILY_INTRADAY_SLOT,
       trigger: 'manual',
     },
@@ -82,7 +97,7 @@ Deno.serve(createHandler(async (req: Request) => {
       supabase: supabaseAdmin,
       operator_id: DEFAULT_OPERATOR_ID,
     });
-    const result = await orch.run(as_of);
+    const result = await orch.run(effectiveAsOf);
 
     // Dual-trail discipline: outcome='failed' from orchestrator → manual_failed
     // event, but the handler still returns 200 with the failure body so the
@@ -99,7 +114,9 @@ Deno.serve(createHandler(async (req: Request) => {
       userAgent: authCtx.userAgent ?? undefined,
       metadata: {
         operator_id: DEFAULT_OPERATOR_ID,
-        as_of: as_of.toISOString(),
+        as_of: effectiveAsOf.toISOString(),
+        as_of_parsed: as_of.toISOString(),
+        replay,
         as_of_date: result.as_of_date,
         intraday_slot: result.intraday_slot,
         outcome: result.outcome,
@@ -115,7 +132,9 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiSuccess({
       status: 'ok',
       operator_id: DEFAULT_OPERATOR_ID,
-      as_of: as_of.toISOString(),
+      as_of: effectiveAsOf.toISOString(),
+      as_of_parsed: as_of.toISOString(),
+      replay,
       as_of_date: result.as_of_date,
       outcome: result.outcome,
       universe_size: result.universe_size,
@@ -135,7 +154,9 @@ Deno.serve(createHandler(async (req: Request) => {
       userAgent: authCtx.userAgent ?? undefined,
       metadata: {
         operator_id: DEFAULT_OPERATOR_ID,
-        as_of: as_of.toISOString(),
+        as_of: effectiveAsOf.toISOString(),
+        as_of_parsed: as_of.toISOString(),
+        replay,
         intraday_slot: DAILY_INTRADAY_SLOT,
         error: e instanceof Error ? e.message : String(e),
         stage: 'orchestrator_throw',
