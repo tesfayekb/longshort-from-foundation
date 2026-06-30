@@ -76,6 +76,12 @@ function makeClient(db: FakeDb): CorporateActionApplierClient & LotLedgerClient 
                 const found = rows.find((r) => String(r[col1]) === val1);
                 return Promise.resolve({ data: found ?? null, error: null });
               },
+              // lot-ledger-writer dedup pre-check (ACT-403):
+              // .select(...).eq('source_order_id', val).limit(1)
+              limit(n: number) {
+                const filtered = rows.filter((r) => String(r[col1]) === val1).slice(0, n);
+                return Promise.resolve({ data: filtered as FakeRow[], error: null });
+              },
             };
           },
           // applier read of unapplied CA rows: .is('applied_at',null).lte('ex_date',ymd).order(..)
