@@ -69,6 +69,7 @@ import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { createFeatureAssemblyOrchestrator } from '../_shared/longshort-combiner/feature-assembler-orchestrator.ts';
 import { createRankerOrchestrator } from '../_shared/longshort-combiner/ranker-orchestrator.ts';
 import { persistCronLastFire } from '../_shared/persist-cron-last-fire.ts';
+import { SIGNAL_IDS_CRITICAL } from '../_shared/longshort-combiner/signal-catalog.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const JOB_REGISTRY_ID = 'longshort.combiner.tick';
@@ -81,6 +82,44 @@ async function isRowDisarmed(id: string): Promise<boolean> {
     .eq('id', id)
     .maybeSingle();
   return data ? data.enabled === false : false;
+}
+
+/**
+ * DW-203 / ACT-407 — critical-signal presence probe.
+ *
+ * Returns true iff EVERY id in `SIGNAL_IDS_CRITICAL` has at least one
+ * `signal_observations` row for `as_of_date` (operator-scoped). Used as
+ * the morning-tick starvation gate: if the daily-cadence producers
+ * (Signal #6 cross_sectional_momentum_12_1 is the hard exclusion gate;
+ * Signal #7 short_term_reversal_1w) have not yet emitted for today, the
+ * tick MUST NOT advance `as_of_date` to current_date — composing
+ * vectors against that floor would 100%-exclude on
+ * `missing_critical_signal_6` and starve the rank → book → fills chain.
+ *
+ * The canonical EOD combiner (cron 102 at 23:35) runs AFTER the daily
+ * producers, so signals are present by then → this gate is a no-op for
+ * the EOD path. Only the pre-producer morning tick is affected.
+ *
+ * Strict equality on as_of_date — preserves T8 replay-determinism
+ * (feature-assembler-orchestrator.ts:16-18). This is a GATE on the
+ * tick's chosen as_of_date, NOT a relaxation of the assembler's
+ * strict `.eq` signal load.
+ */
+async function criticalSignalsPresentForDate(as_of_date: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('signal_observations')
+    .select('signal_id')
+    .eq('operator_id', DEFAULT_OPERATOR_ID)
+    .eq('as_of_date', as_of_date)
+    .in('signal_id', SIGNAL_IDS_CRITICAL as unknown as string[]);
+  if (error) {
+    throw new Error(`criticalSignalsPresentForDate failed: ${error.message}`);
+  }
+  const present = new Set<string>((data ?? []).map((r) => (r as { signal_id: string }).signal_id));
+  for (const id of SIGNAL_IDS_CRITICAL) {
+    if (!present.has(id)) return false;
+  }
+  return true;
 }
 
 /** Latest computed_at for any signal observation today (dirty-bit basis). */
@@ -204,7 +243,67 @@ Deno.serve(createHandler(async (req: Request) => {
     });
   }
 
-  // ── Gate 3: dirty-bit poll (DEC-070 clause d) ───────────────────────────
+  // ── Gate 3 (DW-203 / ACT-407): critical-signal presence ─────────────────
+  // Morning-tick starvation gate. If the daily-cadence producers have not
+  // yet emitted Signal #6 / #7 for `as_of_date=current_date` (EOD window
+  // 20:00-23:00 UTC), composing vectors here would 100%-exclude on
+  // `missing_critical_signal_6`. SKIP shape (variant (a)): no recompute
+  // until the daily base lands; the dirty-bit poll naturally re-fires
+  // later when the producers emit. Preferred over FLOOR-HOLD per
+  // operator-authorized DW-203 B1 — cannot write a 100%-excluded set,
+  // which is the whole bug. Canonical 23:35 EOD path unaffected
+  // (signals present by then → gate is no-op).
+  let criticalPresent: boolean;
+  try {
+    criticalPresent = await criticalSignalsPresentForDate(as_of_date);
+  } catch (e) {
+    await writeStrategyAuditEvent({
+      strategyKey: 'longshort',
+      action: 'longshort.combiner.tick.failed',
+      correlationId,
+      metadata: {
+        operator_id: DEFAULT_OPERATOR_ID,
+        as_of: as_of_iso,
+        as_of_date,
+        error: e instanceof Error ? e.message : String(e),
+        stage: 'critical_signal_presence_read',
+        trigger: 'tick',
+      },
+    });
+    await persistCronLastFire(
+      supabaseAdmin,
+      JOB_REGISTRY_ID,
+      'failed',
+      e instanceof Error ? e.message : String(e),
+    );
+    return apiError(500, 'cron_combiner_tick_critical_signal_read_failed', { correlationId });
+  }
+  if (!criticalPresent) {
+    await writeStrategyAuditEvent({
+      strategyKey: 'longshort',
+      action: 'longshort.combiner.tick.skipped',
+      correlationId,
+      metadata: {
+        operator_id: DEFAULT_OPERATOR_ID,
+        as_of: as_of_iso,
+        as_of_date,
+        reason: 'critical_signals_absent',
+        critical_signal_ids: [...SIGNAL_IDS_CRITICAL],
+        trigger: 'tick',
+      },
+    });
+    await persistCronLastFire(supabaseAdmin, JOB_REGISTRY_ID, 'success', null);
+    return apiSuccess({
+      status: 'ok',
+      outcome: 'skipped',
+      reason: 'critical_signals_absent',
+      as_of: as_of_iso,
+      as_of_date,
+      correlation_id: correlationId,
+    });
+  }
+
+  // ── Gate 4: dirty-bit poll (DEC-070 clause d) ───────────────────────────
   let maxSig: string | null;
   let maxRank: string | null;
   try {
