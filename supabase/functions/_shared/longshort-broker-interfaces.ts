@@ -36,6 +36,17 @@ export interface BrokerPosition {
   //    via its own CurrentPosition shape and throws on absence at its boundary.
   market_value?: number;   // dollars; signed (negative for shorts). Alpaca: positions.market_value.
   current_price?: number;  // dollars per share, last mark. Alpaca: positions.current_price.
+  // ── FP-068 W1 additive extensions (ACT-438) — operator Portfolio view P&L
+  //    surfacing. These fields come back on Alpaca `/v2/positions` natively;
+  //    they are OPTIONAL on the interface to preserve byte-identical behavior
+  //    for every existing consumer (verify_position #1, the FP-056 E1 planner,
+  //    the FP-062 CA basis cross-check) — none of which read them today.
+  //    Typed-absence (undefined) when the broker omits the field; NEVER
+  //    fabricated 0 (fake $0 P&L would silently mis-render as "flat" and
+  //    misinform the operator; §2 axiom typed-Optional discipline).
+  unrealized_pl?: number;          // dollars; since-fill unrealized P&L per Alpaca.
+  unrealized_intraday_pl?: number; // dollars; today's session unrealized P&L per Alpaca.
+  lastday_price?: number;          // dollars per share; prior session close per Alpaca.
 }
 
 export interface BrokerPositionFetcher {
