@@ -3,7 +3,26 @@
 | Field | Value |
 |---|---|
 | **ID** | FP-068 (next-free confirmed by grep: FP-067 was highest, 2026-07-01). |
-| **Status** | **W2 BUILT (2026-07-01, ACT-439).** W1 BUILT (ACT-438); W2 (interval auto-refresh + book-total footer + long/short filter) BUILT (ACT-439). W3 (broker equity curve), W4 (optional cache) remain PENDING — each a separate authorization gate. Charter turn was ACT-437. |
+| **Status** | **W3 BUILT (2026-07-01, ACT-442).** W1 BUILT (ACT-438); W2 BUILT (ACT-439); W3 (broker-truth equity curve + internal overlay + Long/Short per-side + optional SPY toggle, mounted in Execution + Portfolio) BUILT (ACT-442). W4 (optional cache) remains PENDING. Charter turn was ACT-437. |
+
+**FP-068-ADD-03 (2026-07-01, ACT-442) — W3 shipped (Rule-8 additive; prior W1/W2 scope preserved verbatim below).**
+
+What landed in W3 (all read-only; money-path UNTOUCHED):
+- **STEP A — new broker portfolio-history fetcher.** `supabase/functions/_shared/longshort-broker/alpaca-portfolio-history-fetcher.ts` — new `AlpacaPortfolioHistoryFetcher` on the shared `AlpacaPaperClient` (GET `/v2/account/portfolio/history`). Inherits the INC-77 paper-only URL allow-list at client construction (`PaperOnlyViolationError` per DEC-068 (f)+(k).8) — the new fetcher CANNOT be repointed at the live host. GET-only, no writes. Typed-absence reshape: broker samples where `equity` is null are DROPPED, never fabricated as 0.
+- **STEP B — read-only edge fn.** `supabase/functions/longshort-portfolio-history-readonly/` — mirrors the W1 positions fn: `createHandler` + `authenticateRequest` + `checkPermissionOrThrow('longshort.view')` + `productionClock.getWallClockTs()` (NO raw `new Date()` — scanner-clean per ACT-441). Accepts `?range=1D|1W|1M|3M|6M|1Y|ALL` + `?include_spy=true` (off by default). Maps range → Alpaca (period, timeframe). SPY (when toggled) via `PolygonPriceHistoryFetcher` — typed-absence: on missing key OR fetch failure the fn returns `spy: null` rather than throwing (broker curve renders regardless).
+- **STEP C — 4-series equity chart.** `src/pages/trading/longshort/execution/EquityGrowthChart.tsx` refactored from single-series `AreaChart` → `ComposedChart` with four base series + optional SPY:
+  - **BROKER-TRUTH total** — solid `hsl(var(--primary))`, 2.5px — Alpaca portfolio/history equity (the paper account's own equity). Visually dominant.
+  - **INTERNAL account_equity (MIG-121 snapshot)** — dashed `hsl(var(--muted-foreground))`, 1.5px — the two-witness overlay; broker-vs-internal drift renders visibly (the DW-207 pre-lot-ledger orphan gap is intentionally surfaced until liquidation).
+  - **INTERNAL Long MV** — step `hsl(var(--success))`, 1.25px, `stepAfter` — per-rebalance cadence.
+  - **INTERNAL Short MV** — step `hsl(var(--destructive))`, 1.25px, `stepAfter` — per-rebalance cadence.
+  - **SPY (optional)** — dotted `hsl(var(--info))`, 1.25px `strokeDasharray="2 4"`, off by default via `Switch` — Polygon daily closes normalized to the first broker-equity sample (relative-return comparison, not dollars).
+  - Legend labels each series unambiguously ("Broker-truth total (Alpaca)" vs "Internal snapshot (MIG-121)" vs "Internal — Long MV (derived)" vs "Internal — Short MV (derived)" vs "SPY (normalized to broker start)") so broker-truth is never confused with internal-derived. Footer note explains the per-side step cadence is "as of last rebalance" (not a data gap).
+- **STEP D — mount in both pages.** Execution Equity tab keeps `<EquityGrowthChart />` (now the 4-series version — internal `account_equity` preserved as an overlay, nothing lost). Portfolio page (`PortfolioHubPage.tsx`) gains a new `Equity curve` tab hosting the same chart.
+
+W3 STOP-conditions honored: (a) READ-ONLY, money-path-UNTOUCHED — new fetcher is GET-only + inherits the INC-77 paper guard, new edge fn is read-only, NO writes, NO rebalance/submit/execute, NO migration, NO cron change; (b) INJECTED CLOCK — the new edge fn sources `ts` from `productionClock.getWallClockTs()`, no raw `new Date()` (wall-clock scanner CLEAN — 0 violations); (c) VISUAL DISCIPLINE — broker-truth (primary) vs internal-derived (muted / success / destructive) styled and labeled distinctly; (d) TYPED-ABSENCE — broker gaps drop rather than fabricate; SPY `null` when unavailable; per-side step + "as of last rebalance" note; (e) SPY OFF by default (toggle); (f) both `deno.lock` remain v5.
+
+Files touched in W3: `supabase/functions/_shared/longshort-broker/alpaca-portfolio-history-fetcher.ts` (NEW); `supabase/functions/longshort-portfolio-history-readonly/index.ts` (NEW); `src/pages/trading/longshort/execution/EquityGrowthChart.tsx` (refactored to 4-series ComposedChart + SPY toggle); `src/pages/trading/longshort/PortfolioHubPage.tsx` (added Equity-curve tab); `docs/08-planning/feature-proposals.md` (this addendum); `docs/06-tracking/action-tracker.md` (ACT-442).
+
 
 **FP-068-ADD-02 (2026-07-01, ACT-439) — W2 shipped (Rule-8 additive; W1 scope preserved verbatim below).**
 
