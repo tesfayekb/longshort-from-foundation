@@ -198,10 +198,12 @@ Deno.test('(t14) DW-206 Fix B — tick imports the SHARED critical-signals-prese
     ),
     'tick must import the shared helper (single source of truth with shadow-rank path)',
   );
-  // Tick must NOT re-inline the presence query — no direct
-  // signal_observations select of `signal_id` in this handler.
+  // Tick must NOT re-inline the presence query — the shared helper is
+  // the ONLY site selecting `signal_id` from signal_observations. (The
+  // tick still reads `computed_at` for the dirty-bit poll — that's a
+  // different probe.)
   assert(
-    !CODE_ONLY.includes(".from('signal_observations')"),
-    'tick must NOT re-inline signal_observations reads — delegate to the shared helper (DW-206 Fix B)',
+    !CODE_ONLY.includes(".select('signal_id')"),
+    'tick must NOT re-inline the presence query — delegate to the shared helper (DW-206 Fix B)',
   );
 });
