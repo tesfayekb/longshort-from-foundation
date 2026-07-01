@@ -290,7 +290,13 @@ Deno.test('(sorch-3) DW-204 — all variants overlap → outcome=failed=all_vari
 });
 
 Deno.test('(sorch-4) empty active variants → outcome=failed=no_active_variants, no upserts', async () => {
-  const { supabase, calls } = makeSupabase({ variants: [] });
+  // DW-206 Fix B (ACT-434): supply critical-signal rows so the Step 0
+  // presence gate passes; this test targets the empty-variants failure,
+  // not the critical-absent skip (which is covered by sorch-7).
+  const criticalRows: SigRow[] = SIGNAL_IDS_CRITICAL.map((id) => ({
+    ticker: 'AAA', signal_id: id, value: 1, is_present: true, gics_sector: 'IT',
+  }));
+  const { supabase, calls } = makeSupabase({ variants: [], signalRows: criticalRows });
   const res = await createShadowRankerOrchestrator({ supabase, operator_id: OPERATOR_ID }).run(AS_OF);
   assertEquals(res.outcome, 'failed');
   if (res.outcome !== 'failed') return;
