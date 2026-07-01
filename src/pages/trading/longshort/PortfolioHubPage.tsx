@@ -30,6 +30,7 @@ import { PortfolioReconciliationBanner } from './portfolio/PortfolioReconciliati
 import { usePortfolioPositions } from './portfolio/usePortfolioPositions';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 function formatRelative(ts: number | null): string {
   if (ts === null) return '—';
@@ -45,6 +46,13 @@ export default function PortfolioHubPage() {
   const lots = query.data?.internal_lots ?? [];
   const updatedAt = query.dataUpdatedAt || null;
 
+  // W2: 1s ticker so the "Ns ago" stamp ticks live between auto-refetches.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => (t + 1) % 1_000_000), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -59,7 +67,10 @@ export default function PortfolioHubPage() {
           ) : query.isLoading ? (
             <span>Loading…</span>
           ) : (
-            <span>Last updated {formatRelative(updatedAt)}</span>
+            <span>
+              Last updated {formatRelative(updatedAt)} · auto-refresh 25s
+              {query.isFetching ? ' · refreshing…' : ''}
+            </span>
           )}
         </div>
         <Button
