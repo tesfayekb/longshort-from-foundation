@@ -53,9 +53,12 @@ export function usePortfolioPositions() {
       if (error) throw error;
       return data as PortfolioPositionsPayload;
     },
-    // W1: no interval refresh; manual refresh via Refresh button (see page).
+    // W2 (ACT-439): interval auto-refresh (~25s). Paused when tab hidden so
+    // we don't hammer the broker API when the operator isn't looking. Manual
+    // Refresh button on the page remains and is additive.
     refetchOnWindowFocus: false,
-    refetchInterval: false,
-    staleTime: 30_000,
+    refetchInterval: 25_000,
+    refetchIntervalInBackground: false,
+    staleTime: 20_000,
   });
 }

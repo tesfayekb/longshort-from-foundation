@@ -8,16 +8,20 @@
  * (Alpaca does not return a fill timestamp on /v2/positions). Typed-absence
  * ("—") when there is no matching lot or the field is null; NEVER fabricated 0.
  */
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
 import { daysHeldFrom, findEarliestLotFor } from './reconcile';
+import { fmtPrice, PnlCell, sumPriced, type SideFilter } from './format';
+import { SideFilterControl } from './SideFilterControl';
 import type { BrokerPositionRow, InternalLotRow } from './usePortfolioPositions';
 
 interface Props {
@@ -26,33 +30,22 @@ interface Props {
   isLoading: boolean;
 }
 
-const fmtUsd = (v: number | null | undefined) =>
-  v === null || v === undefined || !Number.isFinite(v)
-    ? '—'
-    : v.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
-
-const fmtPrice = (v: number | null | undefined) =>
-  v === null || v === undefined || !Number.isFinite(v) ? '—' : `$${v.toFixed(2)}`;
-
-function PnlCell({ v }: { v: number | null | undefined }) {
-  if (v === null || v === undefined || !Number.isFinite(v)) {
-    return <span className="text-muted-foreground">—</span>;
-  }
-  const cls =
-    v > 0
-      ? 'text-green-600 dark:text-green-500'
-      : v < 0
-        ? 'text-red-600 dark:text-red-500'
-        : 'text-muted-foreground';
-  return <span className={`font-mono ${cls}`}>{fmtUsd(v)}</span>;
-}
-
 export function PortfolioBrokerTab({ positions, lots, isLoading }: Props) {
+  const [filter, setFilter] = useState<SideFilter>('all');
+  const filtered = useMemo(
+    () => (filter === 'all' ? positions : positions.filter((p) => p.side === filter)),
+    [positions, filter],
+  );
+  const totals = useMemo(() => computeBookTotals(filtered), [filtered]);
+
   return (
     <div className="space-y-3">
-      <div className="text-xs text-muted-foreground">
-        BROKER-TRUTH — a mirror of the Alpaca paper account. Distinct from the
-        reconciled internal ledger tab.
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs text-muted-foreground">
+          BROKER-TRUTH — a mirror of the Alpaca paper account. Distinct from the
+          reconciled internal ledger tab.
+        </div>
+        <SideFilterControl value={filter} onChange={setFilter} />
       </div>
       <div className="rounded-lg border border-border overflow-hidden">
         <Table>
@@ -74,14 +67,16 @@ export function PortfolioBrokerTab({ positions, lots, isLoading }: Props) {
                   Loading…
                 </TableCell>
               </TableRow>
-            ) : positions.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
-                  No open broker positions.
+                  {positions.length === 0
+                    ? 'No open broker positions.'
+                    : `No ${filter} broker positions.`}
                 </TableCell>
               </TableRow>
             ) : (
-              positions.map((p) => {
+              filtered.map((p) => {
                 const lot = findEarliestLotFor(lots, p.symbol, p.side);
                 const days = lot ? daysHeldFrom(lot.entry_ts) : null;
                 return (
@@ -119,8 +114,74 @@ export function PortfolioBrokerTab({ positions, lots, isLoading }: Props) {
               })
             )}
           </TableBody>
+          {!isLoading && filtered.length > 0 ? (
+            <TableFooter>
+              <BookTotalRow label="Long book" totals={totals.long} show={filter !== 'short'} />
+              <BookTotalRow label="Short book" totals={totals.short} show={filter !== 'long'} />
+              <BookTotalRow label="Net" totals={totals.net} show={filter === 'all'} bold />
+            </TableFooter>
+          ) : null}
         </Table>
       </div>
     </div>
+  );
+}
+
+/** Aggregate daily + since-fill P&L for a set of broker positions.
+ *  Typed-absence: null P&L excluded from sum; "(n of m priced)" flags partial. */
+function computeBookTotals(rows: BrokerPositionRow[]) {
+  const bucket = (side: 'long' | 'short' | 'all') => {
+    const subset = side === 'all' ? rows : rows.filter((r) => r.side === side);
+    return {
+      count: subset.length,
+      daily: sumPriced(subset.map((r) => r.unrealized_intraday_pl)),
+      sinceFill: sumPriced(subset.map((r) => r.unrealized_pl)),
+    };
+  };
+  return { long: bucket('long'), short: bucket('short'), net: bucket('all') };
+}
+
+interface BookTotals {
+  count: number;
+  daily: ReturnType<typeof sumPriced>;
+  sinceFill: ReturnType<typeof sumPriced>;
+}
+
+function PartialNote({ priced, total }: { priced: number; total: number }) {
+  if (total === 0 || priced === total) return null;
+  return (
+    <span className="ml-1 text-[10px] text-muted-foreground">
+      ({priced} of {total} priced)
+    </span>
+  );
+}
+
+function BookTotalRow({
+  label,
+  totals,
+  show,
+  bold,
+}: {
+  label: string;
+  totals: BookTotals;
+  show: boolean;
+  bold?: boolean;
+}) {
+  if (!show || totals.count === 0) return null;
+  const cls = bold ? 'font-semibold' : '';
+  return (
+    <TableRow className={cls}>
+      <TableCell colSpan={5} className="text-right text-xs uppercase tracking-wide text-muted-foreground">
+        {label} · {totals.count} {totals.count === 1 ? 'position' : 'positions'}
+      </TableCell>
+      <TableCell className="text-right">
+        <PnlCell v={totals.daily.sum} />
+        <PartialNote priced={totals.daily.priced} total={totals.daily.total} />
+      </TableCell>
+      <TableCell className="text-right">
+        <PnlCell v={totals.sinceFill.sum} />
+        <PartialNote priced={totals.sinceFill.priced} total={totals.sinceFill.total} />
+      </TableCell>
+    </TableRow>
   );
 }
