@@ -178,13 +178,30 @@ Deno.test('(t12) DW-203 — gate runs BEFORE the dirty-bit poll (starvation avoi
     'critical-signal presence gate must run BEFORE the dirty-bit read (cannot starve a 100%-excluded write)');
 });
 
-Deno.test('(t13) DW-203 — presence probe uses strict .eq on as_of_date (T8 replay-determinism preserved)', () => {
-  // The probe loads signal_observations with strict equality on as_of_date
-  // (no <= relaxation). The fix lives in the TICK's as_of_date selection,
-  // NOT in the assembler's lookup operator.
-  const fn = CODE_ONLY.split('async function criticalSignalsPresentForDate')[1] ?? '';
-  assert(fn.includes(".eq('as_of_date', as_of_date)"),
-    'presence probe must use strict .eq on as_of_date (T8 invariant)');
-  assert(!fn.includes(".lte('as_of_date'") && !fn.includes(".lt('as_of_date'"),
-    'presence probe must NOT use <= / < on as_of_date (T8 regression)');
+Deno.test('(t13) DW-203 / DW-206 Fix B — presence probe uses strict .eq on as_of_date (T8 replay-determinism preserved)', async () => {
+  // The probe lives in the SHARED helper `critical-signals-present.ts`
+  // (ACT-434 extraction; the tick imports it — see t14). Assertion
+  // moves with the code: strict `.eq` on as_of_date, no <= / < relaxation.
+  const SHARED_SOURCE = await Deno.readTextFile(
+    new URL('../_shared/longshort-combiner/critical-signals-present.ts', import.meta.url),
+  );
+  assert(SHARED_SOURCE.includes(".eq('as_of_date', as_of_date)"),
+    'shared presence probe must use strict .eq on as_of_date (T8 invariant)');
+  assert(!SHARED_SOURCE.includes(".lte('as_of_date'") && !SHARED_SOURCE.includes(".lt('as_of_date'"),
+    'shared presence probe must NOT use <= / < on as_of_date (T8 regression)');
+});
+
+Deno.test('(t14) DW-206 Fix B — tick imports the SHARED critical-signals-present helper (no duplicated logic)', () => {
+  assert(
+    HANDLER_SOURCE.includes(
+      "from '../_shared/longshort-combiner/critical-signals-present.ts'",
+    ),
+    'tick must import the shared helper (single source of truth with shadow-rank path)',
+  );
+  // Tick must NOT re-inline the presence query — no direct
+  // signal_observations select of `signal_id` in this handler.
+  assert(
+    !CODE_ONLY.includes(".from('signal_observations')"),
+    'tick must NOT re-inline signal_observations reads — delegate to the shared helper (DW-206 Fix B)',
+  );
 });
