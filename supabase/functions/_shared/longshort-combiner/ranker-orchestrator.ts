@@ -75,6 +75,7 @@ import {
   FeatureOrderHashMismatchError,
   type LoadedModelArtifact,
 } from './model-artifact-loader.ts';
+import { writeFallbackShapAttributions } from './shap-attribution-writer.ts';
 
 /** Per-row chunk size for the bulk UPSERTs. Matches the 3.0b-ii
  * assembler — well under PostgREST URL/JSON payload limits. */
@@ -544,6 +545,26 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
       for (const row of bookPayload) {
         if (row.side === 'long') book_size_long++;
         else book_size_short++;
+      }
+
+      // ── FP-067 W1 (ACT-433 / MIG-150) — fallback per-signal
+      // decomposition sidecar. Fire-and-forget (R1), fallback-branch
+      // only (LGBM path uses SHAP tree-path — W2). Failure here CANNOT
+      // propagate to the money-path; caught and logged, then swallowed.
+      if (ranker_source_literal === RANKER_SOURCE_FALLBACK) {
+        try {
+          await writeFallbackShapAttributions(ctx.supabase, {
+            operator_id: ctx.operator_id,
+            as_of_date,
+            intraday_slot,
+          });
+        } catch (shapErr) {
+          // eslint-disable-next-line no-console
+          console.error(
+            '[ranker-orchestrator] shap-attribution sidecar failed (non-blocking):',
+            (shapErr as Error).message,
+          );
+        }
       }
 
       // ── Step 4.5: emit transition audit (best-effort; never fails the run) ──
