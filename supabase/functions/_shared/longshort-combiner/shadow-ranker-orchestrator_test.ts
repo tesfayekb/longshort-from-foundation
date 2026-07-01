@@ -380,3 +380,63 @@ Deno.test('(sorch-6) DW-204 — partial overlap: skipped variants logged, siblin
     }
   }
 });
+
+Deno.test('(sorch-7) DW-206 Fix B — critical_signals_absent skips WHOLE run: zero variant reads, zero universe reads, zero book writes', async () => {
+  // signalRows contain NON-critical signals ONLY → shared helper
+  // returns false → orchestrator returns outcome=skipped with
+  // reason=critical_signals_absent BEFORE it touches
+  // combiner_shadow_variant_config / universe_membership / book upsert.
+  const nonCriticalOnly: SigRow[] = [];
+  for (const id of SIGNAL_IDS_NON_CRITICAL) {
+    nonCriticalOnly.push({
+      ticker: 'AAA',
+      signal_id: id,
+      value: 1,
+      is_present: true,
+      gics_sector: 'IT',
+    });
+  }
+  const { supabase, calls } = makeSupabase({
+    universeTickers: ['AAA'],
+    signalRows: nonCriticalOnly,
+  });
+
+  const res = await createShadowRankerOrchestrator({
+    supabase,
+    operator_id: OPERATOR_ID,
+  }).run(AS_OF);
+
+  assertEquals(res.outcome, 'skipped');
+  assertEquals((res as any).reason, 'critical_signals_absent');
+  assertEquals(res.variants_written, 0);
+  assertEquals(res.total_book_rows, 0);
+
+  // WHOLE-RUN skip: no book upserts, no universe reads.
+  assertEquals(calls.bookUpserts.length, 0, 'skip must NOT write any combiner_book_shadow rows');
+  assertEquals(calls.universeRanges.length, 0, 'skip must run BEFORE the universe read');
+  assertEquals(calls.variantSelect, '', 'skip must run BEFORE the variant-config read');
+
+  // critical_signal_ids surfaces the catalog ids for the audit envelope.
+  assertEquals(
+    [...(res as any).critical_signal_ids].sort(),
+    [...SIGNAL_IDS_CRITICAL].sort(),
+  );
+});
+
+Deno.test('(sorch-8) DW-206 Fix B — criticals present → orchestrator proceeds (no false skip)', async () => {
+  // Full row set (all criticals + non-criticals) → helper returns true
+  // → orchestrator runs Steps 1-6 as before.
+  const tickers = Array.from({ length: 40 }, (_, i) => `T${i.toString().padStart(3, '0')}`);
+  const sig: SigRow[] = tickers.flatMap((t, i) => fullyPresentRows(t, i * 0.1));
+  const { supabase, calls } = makeSupabase({
+    universeTickers: tickers,
+    signalRows: sig,
+  });
+  const res = await createShadowRankerOrchestrator({
+    supabase,
+    operator_id: OPERATOR_ID,
+  }).run(AS_OF);
+  assert(res.outcome === 'completed' || res.outcome === 'completed_with_skipped_variants',
+    `expected happy-path outcome, got ${res.outcome}`);
+  assert(calls.bookUpserts.length > 0, 'happy path must write books');
+});
