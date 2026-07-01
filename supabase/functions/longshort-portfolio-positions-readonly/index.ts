@@ -64,7 +64,11 @@ Deno.serve(createHandler(async (req: Request) => {
     fetched_at: ts.toISOString(),
     broker_positions: brokerPositions.map((p) => ({
       symbol: p.symbol,
-      side: p.side ?? (p.qty < 0 ? 'short' : 'long'),
+      // BrokerPosition does not carry an explicit `side`; Alpaca signs `qty`
+      // (negative for shorts). Derive here for the UI join key. Zero-qty
+      // is defensively treated as 'long' (should never occur on an open
+      // position; broker returns no row when flat).
+      side: p.qty < 0 ? 'short' : 'long',
       qty: p.qty,
       avg_entry_price: p.avg_entry_price,
       current_price: p.current_price ?? null,
