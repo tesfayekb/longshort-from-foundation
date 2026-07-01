@@ -24,6 +24,7 @@ import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 import { createLiveBrokerInterfaces } from '../_shared/longshort-execution/broker-bootstrap.ts';
 import { createSupabaseReconciliationEventWriter } from '../_shared/longshort-execution/reconciliation-event-writer.ts';
 import { snapshotRebalanceRankings } from '../_shared/longshort-execution/rebalance-ranking-snapshot-writer.ts';
+import { classifyRebalanceOutcome } from '../_shared/longshort-execution/rebalance-outcome-classify.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import {
   runRebalanceSubmit,
@@ -153,6 +154,11 @@ Deno.serve(createHandler(async (req: Request) => {
         long_only_mode: result.long_only_mode,
         shorts_skipped_locate_unavailable: result.shorts_skipped_locate_unavailable,
         htb_marks_persisted: result.htb_marks_persisted,
+        // DW-208 Fix 2 (DW-208-ADD-03) — surface the refusal envelope + classify
+        // the outcome so a refused rebalance is never indistinguishable from a
+        // healthy no-op (§9 phantom-success elimination). Additive only.
+        refusal: result.refusal ?? null,
+        outcome_class: classifyRebalanceOutcome(result),
       },
     });
 

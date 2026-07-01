@@ -4585,3 +4585,52 @@ Fix 1 → **RESOLVED-BUILT** when a clean automated fire is observed end-to-end:
 
 **Cross-ref:** DEC-078 (T-1 basis ratification, this DEC's home); DEC-070 clause (c) (freshness gate — UNTOUCHED); DW-208-ADD-01 (the confirmed two-part root cause this fix addresses); DW-207 / DW-207-ADD-01 (orphan self-close — bonus test rides on Fix 1's clean fire); DW-138 (AAPL/BP — separate, not addressed here); Fix 2 (audit-surface — independent, still authorization-pending); jobs 51 / 76 / 110 (the three crons operator reschedules); ACT-448 (this entry).
 
+#### DW-208-ADD-03 (Rule 8, ACT-449) — Fix 2 audit-surface BUILT; §9 phantom-success eliminated by construction
+
+**Change:** additive audit-metadata only. Both `longshort.rebalance.completed` emitters (cron + manual) now surface `result.refusal` and derive an explicit `outcome_class` label. Rebalance behaviour is UNCHANGED — the planner still refuses/submits exactly as before; only the audit trail improves.
+
+**Files touched (behavioural surface):**
+
+- `supabase/functions/_shared/longshort-execution/rebalance-outcome-classify.ts` (new; shared classifier — single source of truth so cron and manual can never drift).
+- `supabase/functions/_shared/longshort-execution/rebalance-outcome-classify_test.ts` (new; 5 tests — one per branch + refusal-precedence + empty-counts).
+- `supabase/functions/longshort-rebalance-submit-cron/index.ts` (import + two lines added to the completed metadata block at :177).
+- `supabase/functions/longshort-rebalance-submit/index.ts` (import + two lines added to the completed metadata block at :148 — identical shape to the cron path).
+
+**Metadata additions (both handlers, identical):**
+
+```
+refusal: result.refusal ?? null,
+outcome_class: classifyRebalanceOutcome(result),
+```
+
+**Outcome classes (derived from the existing `RebalanceSubmitResponse` — no orchestrator change):**
+
+| Class | Condition | Meaning |
+| --- | --- | --- |
+| `refused_<reason>` (e.g. `refused_rankings_stale`) | `result.refusal` present | The DEC-070 clause (c) freshness gate (or any future refusal reason) declined to act. Was previously invisible in the audit trail — only in `console.warn`. |
+| `submitted` | no refusal AND any `submission_counts[k] > 0` | The rebalance planned and placed at least one order. |
+| `no_op` | no refusal AND every `submission_counts[k] === 0` | The rebalance ran, planned, and legitimately had nothing to do (target matched current, empty selection, etc.). Distinct from a refusal. |
+
+**Verification:**
+
+- `refusal` and `outcome_class` present in the metadata for both cron and manual completed emits (grep-confirmable at cron `:177–186` and manual `:148–158`).
+- Classifier tests: 5/5 pass (`deno test` on `rebalance-outcome-classify_test.ts`) — refused / submitted / no_op / refusal-precedence / empty-counts branches all covered.
+- Additive: existing `submission_counts`, `ssr_unavailable`, `long_only_mode`, `shorts_skipped_locate_unavailable`, `htb_marks_persisted`, `shorts_placed_without_ssr_check_count` fields intact.
+- Both handlers changed (Stop-Condition: fixing only one → violation). Identical metadata shape.
+- No orchestrator computation added — classification derives from `refusal` + `submission_counts` already on `RebalanceSubmitResponse` (:97, :107–112).
+- No `new Date()` — audit event ordering unchanged; `ts` remains the injected clock.
+- No money-path change — rebalance behaviour unchanged.
+- Both `deno.lock` remain v5.
+
+**What Fix 2 does NOT do (explicit non-changes):**
+
+- Does NOT change the rebalance decision logic (planner, freshness gate, executor).
+- Does NOT change any existing audit-metadata field.
+- Does NOT relax the DEC-070 clause (c) 600s tolerance (Fix 1 territory, DEC-078 / DW-208-ADD-02).
+- Does NOT resolve DW-138 (AAPL/BP hardcoded placeholders — separate).
+- Does NOT depend on Fix 1 landing — the two fixes are orthogonal (Fix 1 unblocks the automated path; Fix 2 makes every outcome legible whether Fix 1 has landed or not).
+
+**Disposition:** DW-208 Fix 2 → **RESOLVED-BUILT**. §9 phantom-success surface eliminated by construction for `longshort.rebalance.completed` — a refused rebalance and a healthy no-op now have distinct, explicit `outcome_class` values in every audit event. DW-208 overall status: Fix 1 = governance-ratified, cron-reschedule operator-pending (DW-208-ADD-02); Fix 2 = built (this entry). DW-208 closes when Fix 1's clean end-to-end fire lands.
+
+**Cross-ref:** DW-208 / DW-208-ADD-01 / DW-208-ADD-02 (root cause + Fix 1 governance); §9 (phantom-success banned pattern this fix eliminates); DEC-070 clause (c) (the refusal reason this makes visible); `rebalance-submit-orchestrator.ts:97` (`submission_counts`); `:107–112` (`refusal` envelope); `longshort-rebalance-submit-cron/index.ts:177–186` (cron completed metadata — now surfaces refusal + outcome_class); `longshort-rebalance-submit/index.ts:148–158` (manual completed metadata — identical additions); `_shared/longshort-execution/rebalance-outcome-classify.ts` (shared classifier — cron/manual drift-proof); ACT-449 (this entry).
+
