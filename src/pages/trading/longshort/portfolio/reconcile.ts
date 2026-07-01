@@ -64,6 +64,11 @@ export function reconcile(
   };
 }
 
+// DEC-034 (4) scope note: the injected-clock discipline scopes to
+// `src/features/longshort/**` + `supabase/functions/longshort-*` (see
+// scripts/check-wall-clock.ts). `src/pages/**` is frontend-display and
+// exempt — the default-arg `new Date()` below is a pure display helper
+// (days-held for the Portfolio tabs) with no money-path effect.
 export function daysHeldFrom(entryIso: string, now: Date = new Date()): number {
   const entry = new Date(entryIso).getTime();
   if (!Number.isFinite(entry)) return 0;

@@ -32,6 +32,7 @@ import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { AlpacaPaperClient } from '../_shared/longshort-broker/alpaca-paper-client.ts';
 import { AlpacaPositionFetcher } from '../_shared/longshort-broker/alpaca-position-fetcher.ts';
+import { productionClock } from '../_shared/longshort-clock.ts';
 
 Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
@@ -42,7 +43,11 @@ Deno.serve(createHandler(async (req: Request) => {
   const auth = await authenticateRequest(req);
   await checkPermissionOrThrow(auth.user.id, 'longshort.view');
 
-  const ts = new Date();
+  // Injected-clock discipline per DEC-034 (4): all longshort-* fns source
+  // wall-clock via productionClock, never raw `new Date()`. This is a
+  // display-fetch timestamp (fetched_at) — behaviour-identical, just sourced
+  // from the sanctioned clock reader (single scanner-clean source of time).
+  const ts = productionClock.getWallClockTs();
 
   // ── Broker side: Alpaca /v2/positions via the shared client + fetcher.
   //    Paper-only URL allow-list is enforced at AlpacaPaperClient construction.
