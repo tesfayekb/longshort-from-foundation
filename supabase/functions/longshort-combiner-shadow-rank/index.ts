@@ -71,9 +71,13 @@ Deno.serve(createHandler(async (req: Request) => {
 
     // DW-204 (ACT-410) — `completed_with_skipped_variants` is a SUCCESS
     // outcome (≥1 variant wrote). Only `failed` marks the fire as failed.
+    // DW-204 (ACT-410) — `completed_with_skipped_variants` is SUCCESS.
+    // DW-206 Fix B (ACT-434) — `skipped` (critical_signals_absent) is
+    // ALSO SUCCESS (no writes, natural re-fire once producers land).
     const isSuccess =
       result.outcome === 'completed' ||
-      result.outcome === 'completed_with_skipped_variants';
+      result.outcome === 'completed_with_skipped_variants' ||
+      result.outcome === 'skipped';
 
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
