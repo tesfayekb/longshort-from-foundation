@@ -197,7 +197,7 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
 
       const emptyResult = (
         failure_reason: string,
-        partial: Partial<ShadowRankerOrchestratorResult> = {},
+        partial: Partial<Omit<ShadowRankerOrchestratorResult, 'outcome' | 'failure_reason' | 'reason' | 'critical_signal_ids'>> = {},
       ): ShadowRankerOrchestratorResult => ({
         outcome: 'failed',
         as_of_date,
