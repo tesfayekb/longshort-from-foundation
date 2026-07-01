@@ -39,7 +39,7 @@ type RangeKey = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL';
 const RANGE_TABLE: Record<RangeKey, { params: PortfolioHistoryParams; spyLookbackDays: number }> = {
   '1D':  { params: { period: '1D',  timeframe: '5Min' }, spyLookbackDays: 7   },
   '1W':  { params: { period: '7D',  timeframe: '1H'   }, spyLookbackDays: 14  },
-  '1M':  { params: { period: '1M',  timeframe: '1H'   }, spyLookbackDays: 45  },
+  '1M':  { params: { period: '1M',  timeframe: '1D'   }, spyLookbackDays: 45  },
   '3M':  { params: { period: '3M',  timeframe: '1D'   }, spyLookbackDays: 100 },
   '6M':  { params: { period: '6M',  timeframe: '1D'   }, spyLookbackDays: 200 },
   '1Y':  { params: { period: '1A',  timeframe: '1D'   }, spyLookbackDays: 400 },
