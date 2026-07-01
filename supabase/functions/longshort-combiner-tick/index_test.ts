@@ -170,10 +170,16 @@ Deno.test('(t11) DW-203 / ACT-407 — critical-signal presence gate reuses SIGNA
 });
 
 Deno.test('(t12) DW-203 — gate runs BEFORE the dirty-bit poll (starvation avoidance, not dirty-bit re-fire)', () => {
-  const criticalIdx = CODE_ONLY.indexOf('criticalSignalsPresentForDate(');
-  const dirtyIdx = CODE_ONLY.indexOf('maxSignalComputedAt(');
-  assert(criticalIdx > 0, 'missing criticalSignalsPresentForDate call');
-  assert(dirtyIdx > 0, 'missing maxSignalComputedAt call');
+  // DW-206 Fix B completion (ACT-435): the tick's inline
+  // criticalSignalsPresentForDate definition has been DELETED; the
+  // shared helper is imported and awaited directly at the call site.
+  // Anchor on `await …(` so we match CALL SITES (both are only
+  // awaited), not the local `async function maxSignalComputedAt`
+  // declaration that lexically precedes the handler.
+  const criticalIdx = CODE_ONLY.indexOf('await criticalSignalsPresentForDate(');
+  const dirtyIdx = CODE_ONLY.indexOf('await maxSignalComputedAt(');
+  assert(criticalIdx > 0, 'missing awaited criticalSignalsPresentForDate call');
+  assert(dirtyIdx > 0, 'missing awaited maxSignalComputedAt call');
   assert(criticalIdx < dirtyIdx,
     'critical-signal presence gate must run BEFORE the dirty-bit read (cannot starve a 100%-excluded write)');
 });
