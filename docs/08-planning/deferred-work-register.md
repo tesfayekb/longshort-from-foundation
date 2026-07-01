@@ -2256,6 +2256,20 @@ HIGH — lost deferred items cause permanent scope gaps and untested security pa
 | **closure_artifacts** | MIG-147 (combiner_book `entered_at` + `transition_reason`); `supabase/functions/_shared/longshort-combiner/book-state-machine.ts` (pure); `prior-book-loader.ts` + `recent-exits-loader.ts` (thin I/O, structurally typed — no `any`); `ranker-orchestrator.ts` Step 3.5 wiring + `longshort_audit_logs action='combiner.book_transitions'` emission. 11 replay-deterministic tests. |
 | **related_actions** | ACT-398. |
 
+#### DW-109-ADD-01 (Rule 8 — additive, original + prior addendum preserved above) — 2026-06-30 gate-ablation READ-OUT + 07-22 re-read anchor / ACT-430
+
+| Field | Value |
+|---|---|
+| **date_appended** | 2026-06-30 (ACT-430). |
+| **read_out_scope** | DW-109 shadow harness (`combiner_book_shadow`, variant-keyed) — 12 arms = `INCLUSION_RULES ∈ {no_gate, criticals_required, gated}` × `k ∈ {0, 3, 5, 10}` — accruing since 2026-06-16; paired forward returns read-out 2026-06-30 across the 2026-06-16 → 2026-06-30 window. |
+| **book_divergence** | Arms genuinely pick different books: name-set divergence 70-95% vs the `gated_k0` live-analogue baseline (real shadow selection, NOT spec-shadow). The harness is measuring what it was designed to measure. |
+| **verdict — (a) critical-gate cost** | **INDETERMINATE.** Relaxed arms (`no_gate`, `criticals_required`) show +3 to +19 bp vs gated at **h=1** but −50 to −85 bp at **h=5**. Sign-flip across horizons on 2-5 settled seed-days = noise-dominated, not signal. Per-arm SE ≈ tens of bp — same magnitude as every observed Δ. No gate-flip is warranted on this evidence per DW-109's own DEC-059 pre-registered rule (T+5 primary; n≥30; ≥15 bp; T+1/T+20 same-sign corroboration). |
+| **verdict — (b) coverage-floor k** | **DIRECTIONALLY SUGGESTIVE, NOT PROMOTABLE.** `k=3` and `k=5` modestly beat `k=0` and `k=10` consistently across both h=1 and h=5 (+8 to +32 bp) — a weak signal that the current floor is not obviously wrong. Sample is far too thin to promote a k-change. |
+| **horizon sufficiency — TOO-EARLY** | Settled seed-days: **h=1 → 5 days**, **h=5 → 2 days**, **h=10 → ZERO rows settled**. h=10 is the label horizon DW-109 was authored against (see DEC-059 T+5 primary + T+1/T+20 corroboration). Sign-flip between h=1 and h=5 on 2-5 seed-days is the diagnostic signature of noise dominance, not directional information. |
+| **decision this turn** | **NO gate-flip; NO k-change; NO variant promotion.** DEC-059's promote-only-on-settled-evidence rule is the load-bearing reason — promoting on sign-flipping 2-5-day evidence would burn the pre-registration clause and license a symmetric future violation. |
+| **RE-READ ANCHOR** | **2026-07-22** for h=10 (~15 settled seed-days accrued past 2026-06-16), or **2026-07-10** for a first h=5 look (~7 seed-days). **Both anchors are CONTINGENT on the gated baseline being complete** — see the DW-206 shadow-cron-timing defect registered THIS turn; the 07-22 re-read is GATED on DW-206 Fix A landing (baseline continuity). Reading 07-22 without Fix A would inherit 3+ weeks of asymmetric gated-arm thinning and produce a systematically biased delta. |
+| **cross_ref** | ACT-430 (this addendum); DW-206 (the shadow-cron-timing defect this re-read is gated on); DW-203 (the critical-present guard DW-206 Fix B ports to the shadow path); DW-204 (shadow harness continuity); DEC-059 (the pre-registered promotion rule this read-out honors); `combiner_book_shadow` (the substrate); `supabase/functions/_shared/longshort-combiner/shadow-ranker.ts:12` (the gated-arm `!(c6 && c7)` structural dependency the DW-206 timing defect starves); Constitution Rule 8 (original DW-109 + 6I.4 addendum PRESERVED VERBATIM above; this is appended-only). |
+
 ### DW-106: Combiner — per-signal carry-forward design (evidence-driven post-3.0c)
 
 | Field | Value |
