@@ -325,7 +325,7 @@ export function EquityGrowthChart() {
                     type="stepAfter"
                     dataKey="long_mv"
                     name="Internal — Long MV (derived)"
-                    stroke="hsl(var(--chart-2))"
+                    stroke="hsl(var(--success))"
                     strokeWidth={1.25}
                     dot={{ r: 2 }}
                     connectNulls
@@ -336,7 +336,7 @@ export function EquityGrowthChart() {
                     type="stepAfter"
                     dataKey="short_mv"
                     name="Internal — Short MV (derived)"
-                    stroke="hsl(var(--chart-3))"
+                    stroke="hsl(var(--destructive))"
                     strokeWidth={1.25}
                     dot={{ r: 2 }}
                     connectNulls
@@ -347,7 +347,7 @@ export function EquityGrowthChart() {
                       type="monotone"
                       dataKey="spy_normalized"
                       name="SPY (normalized to broker start)"
-                      stroke="hsl(var(--chart-4))"
+                      stroke="hsl(var(--info))"
                       strokeWidth={1.25}
                       strokeDasharray="2 4"
                       dot={false}
