@@ -25,6 +25,10 @@ interface AlpacaPositionResponse {
   side: 'long' | 'short';
   market_value?: string;
   current_price?: string;
+  // FP-068 W1 (ACT-438) additive — surfaced by Alpaca /v2/positions natively.
+  unrealized_pl?: string;
+  unrealized_intraday_pl?: string;
+  lastday_price?: string;
 }
 
 export class AlpacaPositionFetcher implements BrokerPositionFetcher {
@@ -60,6 +64,16 @@ function mapPosition(resp: AlpacaPositionResponse, ts: Date): BrokerPosition {
   }
   if (typeof resp.current_price === 'string' && resp.current_price.length > 0) {
     out.current_price = parseFloat(resp.current_price); // allow-bare-parsefloat: DW-058-B1
+  }
+  // FP-068 W1 additive — typed-absence (never fabricated 0).
+  if (typeof resp.unrealized_pl === 'string' && resp.unrealized_pl.length > 0) {
+    out.unrealized_pl = parseFloat(resp.unrealized_pl); // allow-bare-parsefloat: DW-058-B1
+  }
+  if (typeof resp.unrealized_intraday_pl === 'string' && resp.unrealized_intraday_pl.length > 0) {
+    out.unrealized_intraday_pl = parseFloat(resp.unrealized_intraday_pl); // allow-bare-parsefloat: DW-058-B1
+  }
+  if (typeof resp.lastday_price === 'string' && resp.lastday_price.length > 0) {
+    out.lastday_price = parseFloat(resp.lastday_price); // allow-bare-parsefloat: DW-058-B1
   }
   return out;
 }
