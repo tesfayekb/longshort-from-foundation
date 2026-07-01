@@ -4543,3 +4543,45 @@ So `currentPositions` **IS** broker-sourced on the production `full_rebalance` p
 
 **Cross-ref:** §9 (phantom-success surface — the pattern Fix 2 eliminates); DEC-070 clause (c) (the freshness gate — working correctly, not a defect); DW-138 (the AAPL/BP hardcoded placeholders — separate DW); DW-207 / DW-207-ADD-01 (orphan self-close, gated on Fix 1); migration `20260625173743` line 11 (rebalance cron `30 14 * * 1-5`); migration `20260621095443` line 85 (ranker cron `50 23 * * 1-5`); `rebalance-submit-orchestrator.ts:348–381` (freshness gate — correct); `:355` (`console.warn` refusal — the only surface today); `:379` (refusal early-return — before position fetch); `:383` (`listOpenPositions` — never reached on refusal); `:671–681` (`?? true` defaults — source of the false `long_only_mode=true` telemetry); `longshort-rebalance-submit-cron/index.ts:173–186` (audit event — omits `refusal`); `longshort-rebalance-submit/index.ts:143` (manual path — same omission); `longshort-reconciliation-tick/index.ts:143–146` (DW-138 placeholders); ACT-447 (this correction).
 
+#### DW-208-ADD-02 (Rule 8, ACT-448) — Fix 1 cadence plan RATIFIED (DEC-078); operator-applied cron reschedule recorded; close criteria set
+
+**Decisions ratified (operator, 2026-07-01):**
+
+- **Decision 1 — T-1 close basis for critical signals #6 & #7: APPROVED.** Ratified as **DEC-078** (`docs/decisions/DEC-078-critical-signals-t-minus-1-close-basis.md`). The two critical-gate signals (`cross_sectional_momentum_12_1`, `short_term_reversal_1w`) compute on T-1 (prior-day) close data — enables pre-rebalance intraday runs. Factor math UNCHANGED (both already trailing-window). Rationale: 12-1 momentum definitionally excludes the last month; 1w reversal is a trailing-week factor; standard factor-book practice; T8 replay-determinism is cleaner on T-1 (fully settled before the trading day opens).
+- **Decision 2 — freshness margin: (b) SHIFT REBALANCE, do NOT widen tolerance.** Schedule-over-threshold. The 600s tolerance is UNTOUCHED — it just caught a real 52,800s staleness on 2026-07-01 14:30; widening it would erase that protection (ROI-guardrails: threshold-weakening as silent action is forbidden). The rebalance shifts 14:30 → 14:35 UTC to fire after the 14:30 intraday tick's fresh re-rank.
+
+**Fix 1 cron reschedule plan (OPERATOR-APPLIED under §22.5.3 — NOT via Lovable migration tool):**
+
+| Job | Name | Old schedule | New schedule | Notes |
+| --- | --- | --- | --- | --- |
+| 51 | `longshort-momentum-compute` | `0 20 * * 1-5` | `30 13 * * 1-5` | 13:30 UTC — before the 14:00 intraday tick. Inputs (quarterly universe + Polygon price-history API) available pre-13:30, so moving earlier does not starve. Writes `as_of_date = today` on T-1 close data (per DEC-078). |
+| 76 | `longshort-reversal-compute` | `0 20 * * 1-5` | `30 13 * * 1-5` | Same rationale as job 51. |
+| 110 | `longshort.rebalance.daily` | `30 14 * * 1-5` | `35 14 * * 1-5` | Fires after the 14:30 intraday tick's fresh re-rank; keeps the 600s gate tight. |
+
+**Freshness tolerance (DEC-070 clause (c)): UNTOUCHED at 600s.** Explicit non-change.
+
+**Fix 1 CLOSE CRITERIA (falsifiable, testable on NEXT trading day's automated cycle):**
+
+Fix 1 → **RESOLVED-BUILT** when a clean automated fire is observed end-to-end:
+
+1. Momentum (job 51) + reversal (job 76) land at ~13:30 UTC with `as_of_date = today`.
+2. The 14:00 UTC intraday tick runs, finds both critical signals present (T8 strict `as_of_date` equality passes), does NOT skip on the critical-signal gate, and writes a fresh intraday rank to `combiner_rankings`.
+3. The 14:35 UTC rebalance cron reads the fresh ranking (age ≤ 600s), passes the DEC-070 clause (c) freshness gate (no `rankings_stale` refusal).
+4. Rebalance plans and submits: either **non-zero intents** (LIVE) OR a **legitimate classified no-op** (empty-selection / all-matched — once Fix 2 audit-surface lands, this is auditable; pre-Fix-2, non-zero intents are the cleaner signal).
+
+**Fix 1 → INCOMPLETE** if the rebalance still refuses `rankings_stale` after the reschedule (investigate: producer failure, tick failure, ranker failure, or a still-hidden dependency).
+
+**BONUS test riding on the same fire (DW-207 self-close prediction):** the 9 remaining legacy broker orphans should self-close. Chain: rebalance passes freshness → reaches `listOpenPositions` (orchestrator `:383`) → broker-sourced current includes the 9 orphans → planner sees them absent from target book → emits close intents → executor closes. If observed → **DW-207 self-close CONFIRMED**. If orphans persist across a successful rebalance → **DW-207 REOPENS** (the close-emit branch failed for a reason not surfaced by inspection).
+
+**What this ADD does NOT do (explicit non-changes):**
+
+- Does NOT change factor math for signals #6/#7 (DEC-078 scope: scheduling only).
+- Does NOT widen the 600s freshness tolerance (rejected in favor of schedule-shift).
+- Does NOT change the critical-signal gate semantics (T8 strict `as_of_date` equality preserved).
+- Does NOT extend T-1 basis to non-critical signals (news/catalyst/analyst/options-flow/regime keep existing cadences).
+- Does NOT touch Fix 2 (audit-surface §9 defect) — Fix 2 remains buildable-on-authorization, independent of Fix 1.
+- Does NOT resolve DW-138 (AAPL/BP hardcoded placeholders remain separate).
+- Does NOT apply the cron changes via Lovable — they are operator-applied Dashboard changes (§22.5.3).
+
+**Cross-ref:** DEC-078 (T-1 basis ratification, this DEC's home); DEC-070 clause (c) (freshness gate — UNTOUCHED); DW-208-ADD-01 (the confirmed two-part root cause this fix addresses); DW-207 / DW-207-ADD-01 (orphan self-close — bonus test rides on Fix 1's clean fire); DW-138 (AAPL/BP — separate, not addressed here); Fix 2 (audit-surface — independent, still authorization-pending); jobs 51 / 76 / 110 (the three crons operator reschedules); ACT-448 (this entry).
+
