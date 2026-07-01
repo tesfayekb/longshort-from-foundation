@@ -34,6 +34,10 @@ import { useEffect, useState } from 'react';
 
 function formatRelative(ts: number | null): string {
   if (ts === null) return '—';
+  // DEC-034 (4) scope note: injected-clock discipline scopes to
+  // `src/features/longshort/**` + `supabase/functions/longshort-*` (see
+  // scripts/check-wall-clock.ts). This is frontend display-only ("Ns ago"
+  // ticker) — no money-path effect.
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
