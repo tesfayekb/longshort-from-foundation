@@ -129,7 +129,7 @@ export function EquityGrowthChart() {
     return all.filter((row) => new Date(row.ts).getTime() >= cutoff);
   }, [all, range]);
 
-  const brokerPoints = brokerQuery.data?.broker.points ?? [];
+  const brokerPoints = brokerQuery.data?.broker?.points ?? [];
   const spyBars = brokerQuery.data?.spy?.bars ?? [];
 
   // Merge broker + snapshot + SPY by ts_ms. Typed-absence: missing keys → undefined
