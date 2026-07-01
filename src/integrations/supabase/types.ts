@@ -495,6 +495,7 @@ export type Database = {
           intraday_slot: number
           model_id: string | null
           operator_id: string
+          side: string
           ticker: string
         }
         Insert: {
@@ -504,6 +505,7 @@ export type Database = {
           intraday_slot?: number
           model_id?: string | null
           operator_id: string
+          side: string
           ticker: string
         }
         Update: {
@@ -513,6 +515,7 @@ export type Database = {
           intraday_slot?: number
           model_id?: string | null
           operator_id?: string
+          side?: string
           ticker?: string
         }
         Relationships: [
@@ -526,7 +529,7 @@ export type Database = {
           {
             foreignKeyName: "combiner_shap_attribution_operator_id_as_of_date_ticker_fkey"
             columns: ["operator_id", "as_of_date", "ticker", "intraday_slot"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "combiner_rankings"
             referencedColumns: [
               "operator_id",
