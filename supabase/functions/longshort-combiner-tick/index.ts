@@ -70,6 +70,7 @@ import { createFeatureAssemblyOrchestrator } from '../_shared/longshort-combiner
 import { createRankerOrchestrator } from '../_shared/longshort-combiner/ranker-orchestrator.ts';
 import { persistCronLastFire } from '../_shared/persist-cron-last-fire.ts';
 import { SIGNAL_IDS_CRITICAL } from '../_shared/longshort-combiner/signal-catalog.ts';
+import { criticalSignalsPresentForDate as sharedCriticalSignalsPresentForDate } from '../_shared/longshort-combiner/critical-signals-present.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const JOB_REGISTRY_ID = 'longshort.combiner.tick';
@@ -87,39 +88,20 @@ async function isRowDisarmed(id: string): Promise<boolean> {
 /**
  * DW-203 / ACT-407 — critical-signal presence probe.
  *
- * Returns true iff EVERY id in `SIGNAL_IDS_CRITICAL` has at least one
- * `signal_observations` row for `as_of_date` (operator-scoped). Used as
- * the morning-tick starvation gate: if the daily-cadence producers
- * (Signal #6 cross_sectional_momentum_12_1 is the hard exclusion gate;
- * Signal #7 short_term_reversal_1w) have not yet emitted for today, the
- * tick MUST NOT advance `as_of_date` to current_date — composing
- * vectors against that floor would 100%-exclude on
- * `missing_critical_signal_6` and starve the rank → book → fills chain.
- *
- * The canonical EOD combiner (cron 102 at 23:35) runs AFTER the daily
- * producers, so signals are present by then → this gate is a no-op for
- * the EOD path. Only the pre-producer morning tick is affected.
- *
- * Strict equality on as_of_date — preserves T8 replay-determinism
- * (feature-assembler-orchestrator.ts:16-18). This is a GATE on the
- * tick's chosen as_of_date, NOT a relaxation of the assembler's
- * strict `.eq` signal load.
+ * Local adapter over the shared `critical-signals-present.ts` helper
+ * (DW-206 Fix B / ACT-434 — extracted from the previous inline copy so
+ * the shadow-rank path can share the EXACT same logic; behavior here
+ * is byte-identical to the pre-extraction inline probe). Test-sentinels
+ * (t11-t13 in index_test.ts) continue to verify the strict `.eq`
+ * `as_of_date`, the `SIGNAL_IDS_CRITICAL` catalog import (no hardcoded
+ * literals), and the emit-ordering guarantees.
  */
 async function criticalSignalsPresentForDate(as_of_date: string): Promise<boolean> {
-  const { data, error } = await supabaseAdmin
-    .from('signal_observations')
-    .select('signal_id')
-    .eq('operator_id', DEFAULT_OPERATOR_ID)
-    .eq('as_of_date', as_of_date)
-    .in('signal_id', SIGNAL_IDS_CRITICAL as unknown as string[]);
-  if (error) {
-    throw new Error(`criticalSignalsPresentForDate failed: ${error.message}`);
-  }
-  const present = new Set<string>((data ?? []).map((r) => (r as { signal_id: string }).signal_id));
-  for (const id of SIGNAL_IDS_CRITICAL) {
-    if (!present.has(id)) return false;
-  }
-  return true;
+  return sharedCriticalSignalsPresentForDate(
+    supabaseAdmin,
+    DEFAULT_OPERATOR_ID,
+    as_of_date,
+  );
 }
 
 /** Latest computed_at for any signal observation today (dirty-bit basis). */

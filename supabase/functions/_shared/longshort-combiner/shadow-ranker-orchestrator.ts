@@ -45,7 +45,8 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from './paginated-read.ts';
-import { SIGNAL_IDS_ALL } from './signal-catalog.ts';
+import { SIGNAL_IDS_ALL, SIGNAL_IDS_CRITICAL } from './signal-catalog.ts';
+import { criticalSignalsPresentForDate } from './critical-signals-present.ts';
 import {
   assembleShadowVectors,
   type ShadowObservationInput,
@@ -134,6 +135,27 @@ export type ShadowRankerOrchestratorResult =
       variants_skipped_overlap: SkippedOverlapVariant[];
       ranker_source: typeof RANKER_SOURCE_SHADOW;
       failure_reason: string;
+    }
+  | {
+      // DW-206 Fix B (ACT-434) — WHOLE-RUN skip when the daily-cadence
+      // critical producers (Signal #6 / #7) have not yet emitted for
+      // `as_of_date`. Ports the tick's Gate-3 into the shadow path so
+      // the gated arm cannot write zero-includable seeds on a
+      // critical-absent fire (the 06-30 gap). Full-book-or-no-book at
+      // the RUN scope: no variant writes anything.
+      outcome: 'skipped';
+      as_of_date: string;
+      variants_active: 0;
+      variants_written: 0;
+      universe_size: 0;
+      observations_read: 0;
+      vectors_assembled: 0;
+      total_book_rows: 0;
+      per_variant_sizes: [];
+      variants_skipped_overlap: [];
+      ranker_source: typeof RANKER_SOURCE_SHADOW;
+      reason: 'critical_signals_absent';
+      critical_signal_ids: readonly string[];
     };
 
 type VariantConfigRow = {
@@ -175,7 +197,7 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
 
       const emptyResult = (
         failure_reason: string,
-        partial: Partial<ShadowRankerOrchestratorResult> = {},
+        partial: Partial<Omit<ShadowRankerOrchestratorResult, 'outcome' | 'failure_reason' | 'reason' | 'critical_signal_ids'>> = {},
       ): ShadowRankerOrchestratorResult => ({
         outcome: 'failed',
         as_of_date,
@@ -191,6 +213,39 @@ export function createShadowRankerOrchestrator(ctx: ShadowRankerOrchestratorCont
         ...partial,
         failure_reason,
       });
+
+      // ── Step 0 (DW-206 Fix B / ACT-434): critical-signal presence gate ──
+      // Ports the tick's DW-203 Gate-3 into the shadow path via the shared
+      // helper (single source of truth — prevents tick↔shadow drift). If
+      // the daily-cadence producers have not yet emitted Signal #6 / #7
+      // for as_of_date, the gated arm's ranker would exclude the entire
+      // universe on `missing_critical_signal_6` and write a false
+      // zero-includable seed — corrupting the DW-109 gate-ablation
+      // baseline. Skip is WHOLE-RUN (honors the per-variant
+      // full-book-or-no-book invariant at the run scope: no variant
+      // writes anything).
+      const criticalPresent = await criticalSignalsPresentForDate(
+        ctx.supabase,
+        ctx.operator_id,
+        as_of_date,
+      );
+      if (!criticalPresent) {
+        return {
+          outcome: 'skipped',
+          as_of_date,
+          variants_active: 0,
+          variants_written: 0,
+          universe_size: 0,
+          observations_read: 0,
+          vectors_assembled: 0,
+          total_book_rows: 0,
+          per_variant_sizes: [],
+          variants_skipped_overlap: [],
+          ranker_source: RANKER_SOURCE_SHADOW,
+          reason: 'critical_signals_absent',
+          critical_signal_ids: [...SIGNAL_IDS_CRITICAL],
+        };
+      }
 
       // ── Step 1: active variants ──
       const { data: variantRows, error: variantErr } = await ctx.supabase
