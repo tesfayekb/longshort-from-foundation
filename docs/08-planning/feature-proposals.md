@@ -3,7 +3,19 @@
 | Field | Value |
 |---|---|
 | **ID** | FP-068 (next-free confirmed by grep: FP-067 was highest, 2026-07-01). |
-| **Status** | **W1 BUILT (2026-07-01, ACT-438).** W2 (interval-refresh poller), W3 (broker equity curve), W4 (optional cache) remain PENDING — each a separate authorization gate. Charter turn was ACT-437. |
+| **Status** | **W2 BUILT (2026-07-01, ACT-439).** W1 BUILT (ACT-438); W2 (interval auto-refresh + book-total footer + long/short filter) BUILT (ACT-439). W3 (broker equity curve), W4 (optional cache) remain PENDING — each a separate authorization gate. Charter turn was ACT-437. |
+
+**FP-068-ADD-02 (2026-07-01, ACT-439) — W2 shipped (Rule-8 additive; W1 scope preserved verbatim below).**
+
+What landed in W2 (all read-only client-side; money-path UNTOUCHED):
+- **STEP A — interval auto-refresh.** `usePortfolioPositions.ts` flipped from `refetchInterval: false` → `refetchInterval: 25_000` with `refetchIntervalInBackground: false` (paused when tab hidden — no broker-API hammering when the operator isn't looking). Manual `Refresh` button and `Last updated` stamp are KEPT (additive, not replacement). `PortfolioHubPage` adds a 1s ticker so the "Ns ago" text ticks live between refetches; stamp now reads "Last updated Ns ago · auto-refresh 25s [· refreshing…]". Honest framing: this is interval-refresh, NOT streaming.
+- **STEP B — book-total footer rows.** New shared helpers `src/pages/trading/longshort/portfolio/format.ts` (`fmtUsd`, `fmtPrice`, `PnlCell`, `SideFilter`, `sumPriced`) — lifts the duplicated formatters out of the two tabs so the footer + row cells share one source of truth. `sumPriced` returns `{sum, priced, total}` and EXCLUDES null/undefined/NaN from the sum (typed-absence honesty — never fabricated 0); the footer renders `(n of m priced)` when `priced < total`. Broker tab footer shows Long / Short / Net rows for daily P&L + since-fill P&L; Internal tab footer shows Long / Short / Net for since-fill P&L (no daily on the ledger side — that's a broker-mark field).
+- **STEP C — long/short filter.** New `SideFilterControl.tsx` (segmented All / Long / Short built on `Button`). Applied to BOTH the Broker and Internal tabs. Drives both the row list AND the footer totals — filtered-to-Long shows only long rows + the Long book total (Net + Short rows hide); filtered-to-Short symmetrical; All shows all three footer rows.
+
+W2 STOP-conditions honored: (a) READ-ONLY, money-path-UNTOUCHED — pure client-side aggregation over the W1 read-only fetch, no new writes/RPCs/edge fns; (b) typed-absence in totals — null P&L excluded + partial-flagged, never fabricated 0; (c) interval paused when tab hidden; (d) manual Refresh + "last updated" stamp KEPT (additive); (e) NO streaming/websocket; (f) both `deno.lock` remain v5.
+
+Files touched in W2: `src/pages/trading/longshort/portfolio/usePortfolioPositions.ts` (interval on + background pause); `src/pages/trading/longshort/PortfolioHubPage.tsx` (1s ticker + updated stamp text); `src/pages/trading/longshort/portfolio/PortfolioBrokerTab.tsx` (filter state + `TableFooter` book totals; migrated helpers to `format.ts`); `src/pages/trading/longshort/portfolio/PortfolioInternalTab.tsx` (filter state + `TableFooter` book totals; migrated helpers to `format.ts`); `src/pages/trading/longshort/portfolio/format.ts` (NEW — shared formatters + `sumPriced`); `src/pages/trading/longshort/portfolio/SideFilterControl.tsx` (NEW — segmented control).
+
 
 **FP-068-ADD-01 (2026-07-01, ACT-438) — W1 shipped (Rule-8 additive; W1 scope in the charter body above preserved verbatim).**
 
