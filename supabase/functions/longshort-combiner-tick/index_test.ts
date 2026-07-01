@@ -170,8 +170,19 @@ Deno.test('(t11) DW-203 / ACT-407 — critical-signal presence gate reuses SIGNA
 });
 
 Deno.test('(t12) DW-203 — gate runs BEFORE the dirty-bit poll (starvation avoidance, not dirty-bit re-fire)', () => {
-  const criticalIdx = CODE_ONLY.indexOf('criticalSignalsPresentForDate(');
-  const dirtyIdx = CODE_ONLY.indexOf('maxSignalComputedAt(');
+  // DW-206 Fix B completion (ACT-435): the tick's inline
+  // criticalSignalsPresentForDate definition has been DELETED; the
+  // shared helper is imported and awaited directly at the call site.
+  // Anchor on `await …(` so we match CALL SITES (both are only
+  // awaited), not the local `async function maxSignalComputedAt`
+  // declaration that lexically precedes the handler.
+  // Use lastIndexOf so we anchor on the CALL site, not the local
+  // `async function maxSignalComputedAt` declaration (which lexically
+  // precedes the handler). The presence probe no longer has a local
+  // declaration (DW-206 Fix B completion / ACT-435), but lastIndexOf
+  // keeps the assertion robust either way.
+  const criticalIdx = CODE_ONLY.lastIndexOf('criticalSignalsPresentForDate(');
+  const dirtyIdx = CODE_ONLY.lastIndexOf('maxSignalComputedAt(');
   assert(criticalIdx > 0, 'missing criticalSignalsPresentForDate call');
   assert(dirtyIdx > 0, 'missing maxSignalComputedAt call');
   assert(criticalIdx < dirtyIdx,

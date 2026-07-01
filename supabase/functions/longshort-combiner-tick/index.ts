@@ -70,7 +70,7 @@ import { createFeatureAssemblyOrchestrator } from '../_shared/longshort-combiner
 import { createRankerOrchestrator } from '../_shared/longshort-combiner/ranker-orchestrator.ts';
 import { persistCronLastFire } from '../_shared/persist-cron-last-fire.ts';
 import { SIGNAL_IDS_CRITICAL } from '../_shared/longshort-combiner/signal-catalog.ts';
-import { criticalSignalsPresentForDate as sharedCriticalSignalsPresentForDate } from '../_shared/longshort-combiner/critical-signals-present.ts';
+import { criticalSignalsPresentForDate } from '../_shared/longshort-combiner/critical-signals-present.ts';
 
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 const JOB_REGISTRY_ID = 'longshort.combiner.tick';
@@ -83,25 +83,6 @@ async function isRowDisarmed(id: string): Promise<boolean> {
     .eq('id', id)
     .maybeSingle();
   return data ? data.enabled === false : false;
-}
-
-/**
- * DW-203 / ACT-407 — critical-signal presence probe.
- *
- * Local adapter over the shared `critical-signals-present.ts` helper
- * (DW-206 Fix B / ACT-434 — extracted from the previous inline copy so
- * the shadow-rank path can share the EXACT same logic; behavior here
- * is byte-identical to the pre-extraction inline probe). Test-sentinels
- * (t11-t13 in index_test.ts) continue to verify the strict `.eq`
- * `as_of_date`, the `SIGNAL_IDS_CRITICAL` catalog import (no hardcoded
- * literals), and the emit-ordering guarantees.
- */
-async function criticalSignalsPresentForDate(as_of_date: string): Promise<boolean> {
-  return sharedCriticalSignalsPresentForDate(
-    supabaseAdmin,
-    DEFAULT_OPERATOR_ID,
-    as_of_date,
-  );
 }
 
 /** Latest computed_at for any signal observation today (dirty-bit basis). */
@@ -237,7 +218,13 @@ Deno.serve(createHandler(async (req: Request) => {
   // (signals present by then → gate is no-op).
   let criticalPresent: boolean;
   try {
-    criticalPresent = await criticalSignalsPresentForDate(as_of_date);
+    // DW-206 Fix B (ACT-434) / completion (ACT-435): call the SHARED
+    // helper directly — single source of truth with the shadow-rank path.
+    criticalPresent = await criticalSignalsPresentForDate(
+      supabaseAdmin,
+      DEFAULT_OPERATOR_ID,
+      as_of_date,
+    );
   } catch (e) {
     await writeStrategyAuditEvent({
       strategyKey: 'longshort',
