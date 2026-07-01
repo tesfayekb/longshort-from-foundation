@@ -28,6 +28,7 @@ import { PortfolioBrokerTab } from './portfolio/PortfolioBrokerTab';
 import { PortfolioInternalTab } from './portfolio/PortfolioInternalTab';
 import { PortfolioReconciliationBanner } from './portfolio/PortfolioReconciliationBanner';
 import { usePortfolioPositions } from './portfolio/usePortfolioPositions';
+import { PortfolioClosedTodayTab } from './portfolio/PortfolioClosedTodayTab';
 import EquityGrowthChart from './execution/EquityGrowthChart';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
@@ -115,6 +116,11 @@ export default function PortfolioHubPage() {
                 isLoading={query.isLoading}
               />
             ),
+          },
+          {
+            value: 'closed-today',
+            label: 'Closed today',
+            content: <PortfolioClosedTodayTab />,
           },
           {
             value: 'equity',
