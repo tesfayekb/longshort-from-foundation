@@ -176,10 +176,15 @@ Deno.test('(t12) DW-203 — gate runs BEFORE the dirty-bit poll (starvation avoi
   // Anchor on `await …(` so we match CALL SITES (both are only
   // awaited), not the local `async function maxSignalComputedAt`
   // declaration that lexically precedes the handler.
-  const criticalIdx = CODE_ONLY.indexOf('await criticalSignalsPresentForDate(');
-  const dirtyIdx = CODE_ONLY.indexOf('await maxSignalComputedAt(');
-  assert(criticalIdx > 0, 'missing awaited criticalSignalsPresentForDate call');
-  assert(dirtyIdx > 0, 'missing awaited maxSignalComputedAt call');
+  // Use lastIndexOf so we anchor on the CALL site, not the local
+  // `async function maxSignalComputedAt` declaration (which lexically
+  // precedes the handler). The presence probe no longer has a local
+  // declaration (DW-206 Fix B completion / ACT-435), but lastIndexOf
+  // keeps the assertion robust either way.
+  const criticalIdx = CODE_ONLY.lastIndexOf('criticalSignalsPresentForDate(');
+  const dirtyIdx = CODE_ONLY.lastIndexOf('maxSignalComputedAt(');
+  assert(criticalIdx > 0, 'missing criticalSignalsPresentForDate call');
+  assert(dirtyIdx > 0, 'missing maxSignalComputedAt call');
   assert(criticalIdx < dirtyIdx,
     'critical-signal presence gate must run BEFORE the dirty-bit read (cannot starve a 100%-excluded write)');
 });
