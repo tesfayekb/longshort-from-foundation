@@ -4634,3 +4634,79 @@ outcome_class: classifyRebalanceOutcome(result),
 
 **Cross-ref:** DW-208 / DW-208-ADD-01 / DW-208-ADD-02 (root cause + Fix 1 governance); §9 (phantom-success banned pattern this fix eliminates); DEC-070 clause (c) (the refusal reason this makes visible); `rebalance-submit-orchestrator.ts:97` (`submission_counts`); `:107–112` (`refusal` envelope); `longshort-rebalance-submit-cron/index.ts:177–186` (cron completed metadata — now surfaces refusal + outcome_class); `longshort-rebalance-submit/index.ts:148–158` (manual completed metadata — identical additions); `_shared/longshort-execution/rebalance-outcome-classify.ts` (shared classifier — cron/manual drift-proof); ACT-449 (this entry).
 
+---
+
+## DW-209 — Slot-blind rebalance rankings read (multi-slot ingestion → book_size inflation, breadth collapse, nondeterministic per-name notional)
+
+**Status:** RESOLVED-BUILT (this commit — Fix A + Fix B). Armed but unfired: job 110 operator-disarmed 2026-07-02 pending this fix; operator owns re-arm. HEAD before fix: `54904b59`.
+
+**Tier:** A — order-submission path defect, armed by the DW-208 cadence fix; would fire on the first clean intraday-tick + rebalance sequence.
+
+**Mechanism (reconciled 2026-07-02 — Lovable live report + supervisor grep, mutually confirmed):**
+
+`createSupabaseRankingsReader` (`_shared/longshort-execution/rebalance-submit-orchestrator.ts:193`) head-picks the newest `(as_of_date, computed_at)` row via `.order(as_of_date DESC).order(computed_at DESC).limit(1)` — correct. The subsequent body-read (`:208-214`) filters ONLY `.eq('as_of_date', ...)` with NO `intraday_slot` scope. Under MIG-122's slot keystone (`combiner_rankings.intraday_slot smallint`), the intraday tick writes a NEW slot per re-rank (06-30 evidence: 40 slots × ~103 tickers → 3,833 rows for a single `as_of_date`). The planner therefore receives duplicate tickers across slot vintages.
+
+Selection (`rebalance-planner.ts:434-529`) accepts each duplicate: there is NO per-ticker guard on the candidate scan — the only `Set` (`consumedSubs`) is substitution bookkeeping. Consequences: `book_size` inflates (duplicate count, not unique tickers); sector caps saturate on duplicate clusters; substitution attempts burn out; breadth collapses. `computeDeltas` (`rebalance-planner.ts:590`) later collapses to unique tickers via a last-write-wins `Map<symbol, SelectedTarget>` — this is where the shape becomes visible: `per_name_notional = capital_base / inflated_book_size` (40-slot day → ≈ 0.06 % vs intended 2.5 %) and the surviving vintage is Map-insertion-order dependent (T8 determinism violation).
+
+**Reconciliation note (audit trail):** supervisor's initial "no dedup anywhere" claim was REFUTED by Lovable's `rebalance-planner.ts:590` grep evidence. The blast shape is deflation / breadth-collapse / nondeterminism — NOT duplicate order submission. Both agents now agree on the mechanism and shape.
+
+**Consumer audit (from the live investigation, 2026-07-02):**
+
+| # | Site | Slot posture | Disposition |
+| --- | --- | --- | --- |
+| 1 | `rebalance-submit-orchestrator.ts:193` `createSupabaseRankingsReader` | slot-blind body-read (`.eq('as_of_date')` only) | **PRIMARY — fixed this commit (Fix A)** |
+| 2 | `rebalance-ranking-snapshot-writer.ts:104-113` `snapshotRebalanceRankings` | slot-blind body-read (mirror of #1) — attribution corruption | **fixed this commit (Fix B, shared helper)** |
+| 3 | `target-position-orchestrator.ts:116-120` | slot-blind BUT SAFE — sector invariant per ticker across slots | no change |
+| 4 / 5 | intraday-tick reads (dirty-bit / seed) | intentionally cross-slot | no change |
+
+**Why 07-01 didn't burn:** the 07-01 14:30 UTC cron fire was refused for staleness (DEC-070 (c) 600 s tolerance) BEFORE the slot-blind body-read produced planner input. The 06-30 16:13 UTC manual fire ran single-slot by accident (slot-1 tick landed 16:15:03, after the 16:13:20 trigger).
+
+**Fix landed (this commit — ACT-450):**
+
+- **Fix A — Reader generation-scope.** `createSupabaseRankingsReader` now uses the shared `pickLatestRankingsGeneration` helper (returns 3-tuple `{as_of_date, intraday_slot, computed_at}`) and body-reads `.eq('as_of_date', gen.as_of_date).eq('intraday_slot', gen.intraday_slot)`. `RankingRow` gains optional `intraday_slot?: number` (additive; provenance-only; downstream selection unchanged). Empty-case behaviour preserved (helper returns `null` → reader returns `[]`, same as prior `latest.length === 0` branch → same downstream refusal path).
+- **Fix B — Shared helper.** New `_shared/longshort-execution/rankings-generation-picker.ts` exports `pickLatestRankingsGeneration(supabase, operator_id): Promise<{as_of_date, intraday_slot, computed_at} | null>`. Consumed by BOTH the orchestrator reader (#1) and the snapshot writer (#2) — the sidecar now snapshots exactly the generation the planner traded. Drift between reader and sidecar impossible by construction.
+- **Deploy.** Both `longshort-rebalance-submit` and `longshort-rebalance-submit-cron` redeployed (the `_shared/` change requires it). Deploy ALSO activates the ACT-449 `outcome_class` classifier live — it was committed at `54904b59` but had never been carried by a deploy.
+
+**What Fix does NOT do (explicit non-changes — Stop-Conditions honoured):**
+
+- Does NOT modify planner selection logic (`rebalance-planner.ts:434-529`) — scoped input makes the `:590` last-write-wins Map a no-op dedup by construction.
+- Does NOT modify `computeDeltas`.
+- Does NOT modify the DEC-070 (c) freshness gate — the gate now certifies the same generation it trades (coherent by construction; no tolerance change).
+- Does NOT modify cron schedules — job 110 stays operator-disarmed; operator owns re-arm.
+- Does NOT alter empty-case semantics — helper `null` → reader `[]` (identical downstream refusal).
+- `deno.lock` remains v5.
+
+**Tests (all pass under `deno test --allow-net --allow-env`):**
+
+- E1 (multi-slot): head-pick returns the LATEST slot by `(as_of_date, computed_at)` DESC — 3 mixed-slot fixture rows → `intraday_slot=2` selected.
+- E3 / E4 (determinism + shared-helper symmetry): repeated invocations return the same generation tuple; the same helper feeds both consumers.
+- Empty-case: helper returns `null` when no rows exist (preserves prior reader semantics).
+- E2 (planner over scoped input): validated at the seam where the defect lived (the reader); the existing `rebalance-planner_test.ts` suite already asserts unique-ticker `book_size` = unique count and `per_name_notional` at intended scale over unique-ticker fixtures — Fix A guarantees the planner sees a unique-ticker slice by construction.
+
+**Cross-ref:** DW-208 / DW-208-ADD-01 (cadence fix that armed this defect); DW-208-ADD-03 / ACT-449 (`outcome_class` classifier — now live via this deploy); MIG-122 (`intraday_slot` keystone); DEC-070 (c) (600 s freshness gate — untouched); T8 (determinism); §9 (phantom-success — refusal envelope now legible via ACT-449); `rebalance-submit-orchestrator.ts:193` (reader); `rebalance-ranking-snapshot-writer.ts:104-113` (sidecar); `rebalance-planner.ts:434-529` (selection — unchanged); `rebalance-planner.ts:590` (last-write-wins Map — now a no-op dedup); `_shared/longshort-execution/rankings-generation-picker.ts` (new shared helper); ACT-450 (this landing).
+
+---
+
+## DW-210 — Intraday thin-book breadth (morning book vs EOD benchmark)
+
+**Status:** OPEN — measurement-first, NO fix this commit. Operator-gated.
+
+**Tier:** B — ROI-adjacent; not a correctness defect. Structural consequence of the DW-208 cadence fix + DEC-078's scope decision.
+
+**Observation:** at 14:35 UTC (post-DW-208 cadence) the `as_of=today` book carries: (a) critical signals #6 / #7 at 13:30 UTC (T-1 close basis, DEC-078); (b) the intraday non-criticals (news / catalyst / analyst). It does NOT yet carry: short-interest (THE breadth-mover — 835 obs on the 06-30 fixture; carry job runs 22:30 UTC), PEAD, insider, options-flow — all EOD-only producers. Consequence: the traded morning book is structurally thinner than the 88-name EOD benchmark. 06-30 pattern: 20 pre-short-interest names vs 88 post-short-interest.
+
+**Why now:** DW-203-B2 previously deferred this concern on the premise "first fills come from the EOD book on next-day cadence." That premise is INVALIDATED by the DW-208 cadence fix — fills now originate from the 14:35 UTC morning book. DEC-078 explicitly did NOT extend the T-1 close basis to non-criticals; the scope of that decision is critical signals only.
+
+**Decision fork (operator-gated on measured evidence):**
+
+1. Accept the thin morning book (ROI cost = the breadth delta vs EOD benchmark, in bp).
+2. Extend T-1 close basis to selected non-criticals (short-interest is the highest-leverage candidate).
+3. Reschedule the EOD producer cadences to land pre-14:15 UTC.
+
+**Evidence gate:** first breadth read against live data must be taken AFTER the first clean 14:15 UTC intraday-tick lands post-Fix (today or next automated cadence day). Decision consumes: (a) measured book-name-count delta morning vs EOD; (b) DW-203-B2's original bp-cost evidence.
+
+**Non-scope of this commit:** DW-210 registers the concern and pins the measurement plan — no code change, no schedule change, no DEC ratification.
+
+**Cross-ref:** DW-208-ADD-01 / ACT-447 (cadence root cause); DW-208-ADD-02 / DEC-078 / ACT-448 (T-1 scope decision — explicitly criticals-only); DW-203-B2 (deferred-breadth premise now invalidated); MIG-122 (slot keystone); short-interest carry job (22:30 UTC); ACT-450 (this landing).
+
+
