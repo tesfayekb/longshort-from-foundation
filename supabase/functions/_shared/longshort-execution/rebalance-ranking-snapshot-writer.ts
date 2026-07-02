@@ -29,11 +29,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-interface RankingsHeadRow {
-  as_of_date: string;
-  computed_at: string | null;
-}
+import { pickLatestRankingsGeneration } from './rankings-generation-picker.ts';
 
 interface RankingsBodyRow {
   ticker: string;
@@ -68,22 +64,11 @@ export async function snapshotRebalanceRankings(
   operator_id: string,
   opts?: { submit_reference_computed_at?: string | null },
 ): Promise<SnapshotResult> {
-  // Step 1 — head read (mirrors orchestrator reader at lines 195-201).
-  const headResp = await supabase
-    .from('combiner_rankings')
-    .select('as_of_date, computed_at')
-    .eq('operator_id', operator_id)
-    .order('as_of_date', { ascending: false })
-    .order('computed_at', { ascending: false })
-    .limit(1);
-
-  if (headResp.error) {
-    throw new Error(
-      `snapshotRebalanceRankings head read failed: ${headResp.error.message}`,
-    );
-  }
-  const latest = (headResp.data ?? []) as RankingsHeadRow[];
-  if (latest.length === 0) {
+  // Step 1 — head-pick via the shared helper (DW-209 Fix B). This is the
+  // SAME helper the orchestrator reader consumes → the snapshot rows
+  // describe exactly the generation the planner traded.
+  const head = await pickLatestRankingsGeneration(supabase, operator_id);
+  if (head == null) {
     return {
       snapshotted: 0,
       generation_skew: false,
@@ -91,7 +76,6 @@ export async function snapshotRebalanceRankings(
       submit_reference_computed_at: opts?.submit_reference_computed_at ?? null,
     };
   }
-  const head = latest[0];
   const snapshot_computed_at = head.computed_at;
   if (snapshot_computed_at == null) {
     // The orchestrator tolerates a null head computed_at by treating the
@@ -105,7 +89,8 @@ export async function snapshotRebalanceRankings(
     };
   }
 
-  // Step 2 — body read (mirrors orchestrator reader at lines 208-214).
+  // Step 2 — body read scoped to the picked generation (DW-209 Fix A/B
+  // parity — filters on both as_of_date AND intraday_slot).
   const bodyResp = await supabase
     .from('combiner_rankings')
     .select(
@@ -113,6 +98,7 @@ export async function snapshotRebalanceRankings(
     )
     .eq('operator_id', operator_id)
     .eq('as_of_date', head.as_of_date)
+    .eq('intraday_slot', head.intraday_slot)
     .or(
       `long_rank.lte.${SNAPSHOT_SCAN_CAP_RANK},short_rank.lte.${SNAPSHOT_SCAN_CAP_RANK}`,
     );
