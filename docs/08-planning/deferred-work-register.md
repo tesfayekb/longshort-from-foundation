@@ -4710,3 +4710,50 @@ Selection (`rebalance-planner.ts:434-529`) accepts each duplicate: there is NO p
 **Cross-ref:** DW-208-ADD-01 / ACT-447 (cadence root cause); DW-208-ADD-02 / DEC-078 / ACT-448 (T-1 scope decision — explicitly criticals-only); DW-203-B2 (deferred-breadth premise now invalidated); MIG-122 (slot keystone); short-interest carry job (22:30 UTC); ACT-450 (this landing).
 
 
+## DW-211 — Regime producer cadence vs strict same-day assemble read (deferred MIG-129 lift; 2026-07-02 full-day assemble failure)
+
+**Status:** RESOLVED-BUILT (backfill live; automated close pending 2026-07-03 13:55 fire). Operator re-armed the ratified MIG-129 cron lift + this same-day manual backfill via the cron-path handler.
+
+**Tier:** A — assemble-path blocker; broke the entire 2026-07-02 intraday tick chain (14:00-14:55 UTC observed, would have continued through 19:55 UTC) and caused the 14:35 UTC rebalance to refuse `rankings_stale`.
+
+**Mechanism (grep-grounded, reconciled):**
+
+1. The assembler's Step-1.5 regime read is **strict same-day**: `.eq('as_of_date', as_of)` on `REGIME_SIGNAL_IDS = { market_24m_cumulative_return, market_realized_vol_6m }`, both required present + non-null. In force since 2026-06-28.
+2. The only automated producer is cron job 106 at `45 22 * * 1-5` (post-RTH). The pre-RTH lift `55 13 * * 1-5` was ratified in FP-057 Sub-step 4a-regime / MIG-129 / `sql/24_longshort_spy_regime_intraday_lift.sql` but **deferred on 2026-06-29** via `cron.unschedule(115)`, reverting the live cron entry and leaving `job_registry.schedule` (`55 13`) drifted from live cron (`45 22`).
+3. **06-30 masked the defect**: manual chain fires that day wrote same-day regime rows intraday, and the 22:45 post-RTH upsert then overwrote `computed_at` on the composite-PK upsert (write-history destruction), erasing the evidence trail.
+4. **2026-07-02 full-day failure**: no manual chain fired; the automated producer is scheduled for tonight 22:45; every intraday tick 14:00-14:55 UTC (observed) returned `assemble_failed / regime_data_unavailable_at_assemble`; the 14:35 UTC rebalance fired and refused with `rankings_stale`.
+
+**FIX (applied 2026-07-02):**
+- Operator re-armed the ratified lift out-of-band (`cron.alter_job` on job 106 → `55 13 * * 1-5`), reconciling live cron to `job_registry` and to sql/24's ratified design. Verified in `cron.job`: jobid 106 now `schedule='55 13 * * 1-5'`.
+- Same-day manual backfill via the **cron-path handler** `longshort-spy-regime-compute` with `X-Cron-Secret` (JWT-gated manual path deferred: sandbox lacks operator JWT — cron-path proven-equivalent and preserves the T-1-anchored no-lookahead invariant; see Safety basis). Invoke result: `outcome=completed`, `as_of_date=2026-07-02`, `persisted_count=2`, `bar_count=556`, `market_24m_cumulative_return=0.372395`, `market_realized_vol_6m=0.141270`, corr `f4c2282f-b975-4599-aebc-5e26c7275146`, at 14:48:46 UTC.
+
+**Safety basis (T8-clean):** the regime compute is strictly T-1-anchored — the price-history fetcher filters `date < as_of` (no-lookahead docstring in the orchestrator). Run time-of-day is computation-invariant: an intraday 14:48 invocation produces the identical `(market_24m_cumulative_return, market_realized_vol_6m)` pair the 22:45 post-RTH run would produce for the same `as_of_date`. Idempotent by composite-PK upsert. Cron path uses the identical orchestrator; only the auth surface differs from the manual JWT path.
+
+**Live recovery verification (2026-07-02):**
+- `signal_observations` @ `as_of_date=2026-07-02`, `ticker=__MARKET__` → 2 rows, both signal_ids present, non-null values, `computed_at=2026-07-02 14:48:46.806+00`. **A2 ✓**
+- Next combiner tick @ 14:50:03 UTC: `longshort.combiner.assemble.completed` (regime read succeeded — no more `regime_data_unavailable_at_assemble`). **A3 regime-recovery ✓**
+- Second combiner tick @ 14:55:06 UTC: `assemble.completed` again — deterministic. Regime path is CLOSED for 2026-07-02.
+
+**Residual observed at rank stage (out of DW-211 scope — see cross-ref):** both post-backfill ticks failed the *rank* stage with `BookOverlapError: book-seeder: tickers appear on BOTH long and short sides of the seeded book: AAPL, AMZN, AVAV, CCL, CHTR, CMCSA, DAL, DDOG, HON, HOOD, INTC` (11 tickers, deterministic across ticks). This is the DW-204 category defect in the **live** ranker path: the ACT-436 per-variant skip-on-overlap fix was applied to `shadow-ranker-orchestrator.ts` only, not to the live ranker. `combiner_rankings` for 2026-07-02 remains at **0 rows / 0 tickers / no slot**. Registered as follow-up under the existing DW-204 lineage (live-ranker gap); does NOT reopen DW-211.
+
+**DW-210 first-live-breadth datapoint (per charter A3):** **not obtainable this session**. Slot=0 rows because the live-ranker BookOverlapError blocks all `combiner_rankings` writes. DW-210's first datapoint deferred to the next tick that clears rank; the measurement plan itself is unchanged.
+
+**Close criteria:** (a) 2026-07-03 13:55 UTC automated fire writes `signal_observations` @ `as_of_date=2026-07-03` for both regime signal_ids; (b) the 2026-07-03 14:00 UTC combiner tick emits `assemble.completed` (regime read finds the row). Both required.
+
+**Cross-ref:** DW-208 (its Fix-1 close criterion "first clean automated fire" was BLOCKED on this — the dependency chain is now momentum/reversal 13:30 + regime 13:55 + tick 14:00 + fire 14:35); DW-210 (STEP A3 breadth datapoint deferred one tick — live-ranker overlap blocks the measurement); DW-204 lineage / ACT-436 (per-variant skip fix — shadow-only, live-ranker gap now surfaced); FP-057 Sub-step 4a-regime + MIG-129 + `sql/24_longshort_spy_regime_intraday_lift.sql` (the ratified-then-deferred design this re-arms); `feature-assembler-orchestrator.ts:204-210` (strict same-day regime read); `regime-orchestrator.ts` (T-1-anchored no-lookahead docstring); ACT-451 (this landing).
+
+**Numbering reservation:** the pending (unpasted) FP-069 / overshoot charter's short-book finding DW is hereby renumbered **DW-212** to avoid collision with this record.
+
+---
+
+### DW-211-ADD-01 — Fix-2 LIVE CONFIRMATION (DW-208 Fix-2 residual CLOSES on ground truth)
+
+**Status:** LIVE-CONFIRMED (deploy-evidence residual closed).
+
+2026-07-02 14:35:04 UTC — `longshort.rebalance.completed` audit event carried `outcome_class: refused_rankings_stale` + `refusal: rankings_stale`. **First self-classifying rebalance in system history.** ACT-449's `classifyRebalanceOutcome` classifier is live in the audit surface; DW-208-ADD-03 (§9 phantom-success eliminated) closes on real-fire ground truth, not deploy-only evidence.
+
+*(Note: recorded under DW-211 as a companion because the same-day investigation loop that surfaced DW-211 also captured this confirmation; the fix itself belongs to DW-208.)*
+
+**Cross-ref:** DW-208-ADD-03 (Fix-2 charter); ACT-449 (build + deploy); ACT-450 (redeploy that activated the classifier live); ACT-451 (this landing).
+
+
