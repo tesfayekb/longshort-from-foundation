@@ -190,6 +190,11 @@ export interface RankingRow {
    *  don't model freshness keep working; the orchestrator's ranking-
    *  freshness gate only bites when at least one row carries a value. */
   computed_at?: string | null;
+  /** DW-209 provenance — the intraday_slot the reader scoped to. Optional
+   *  so pre-DW-209 test fixtures keep working. Downstream logic reads it
+   *  for audit only; selection is unchanged (scoped input makes the
+   *  planner's per-symbol last-write-wins Map a no-op dedup). */
+  intraday_slot?: number;
 }
 
 /**
