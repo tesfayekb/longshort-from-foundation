@@ -4709,6 +4709,52 @@ Selection (`rebalance-planner.ts:434-529`) accepts each duplicate: there is NO p
 
 **Cross-ref:** DW-208-ADD-01 / ACT-447 (cadence root cause); DW-208-ADD-02 / DEC-078 / ACT-448 (T-1 scope decision — explicitly criticals-only); DW-203-B2 (deferred-breadth premise now invalidated); MIG-122 (slot keystone); short-interest carry job (22:30 UTC); ACT-450 (this landing).
 
+### DW-210-ADD-01 — 2026-07-02 live evidence + counterfactual arithmetic (READ-ONLY facts; NO fix decision)
+
+**Status:** OPEN (unchanged). This addendum records evidence only; the operator decides on the fork above from the numbers below.
+
+**Live evidence — 2026-07-02 (post-DW-211 regime backfill at 14:48:46 UTC):**
+- Ticks at 14:50, 14:55, 15:00 UTC all reach `assemble` (regime path clean).
+- Every subsequent tick fails at `rank` with `BookOverlapError` on the SAME 11 tickers (deterministic).
+- Non-critical coverage on `signal_observations as_of_date=2026-07-02, ticker!='__MARKET__'` at 15:01 UTC (present-name counts): `analyst_revision_drift=168`, `active_catalyst_flag=126`, `news_sentiment_7d=92`. Zero rows for `short_interest_change_30d`, `pead_sue_20d`, `options_flow_imbalance_5d`, `insider_transactions_90d` (insider absent on both 07-01 and 07-02).
+- Coverage is PLATEAUED hour-over-hour vs 14:35 (same three signals, same order-of-magnitude counts) — the "intraday accumulation" hypothesis is **REFUTED**. The morning book is not thin because event-signals need more clock time; it is thin because the breadth-carrier is off-cycle.
+- Breadth-carrier identified: `short_interest_change_30d` produces 836 rows on 07-01 T-1 (jobid 100, cron `30 22 * * 1-5`, pure-DB carry — no EOD dependency; see A4 below).
+
+**Counterfactual arithmetic (live SQL, 2026-07-02 15:05 UTC — exact §4.3.5 gate: BOTH criticals present ∧ `non_critical_present ≥ MIN_NON_CRITICAL_PRESENT=3` per `feature-assembler.ts:244-317` + `signal-catalog.ts:112`):**
+
+| Scenario | Non-criticals treated present | Included names | Disjointness at BOOK_SEED_SIZE=20/side (`ranker-constants.ts:34`) |
+| --- | --- | --- | --- |
+| A1 BASELINE (today only) | analyst, catalyst, news (T=2026-07-02) | **11** | NOT disjoint — 11 < 40; top-20/bottom-20 draw from same 11 → 100% overlap. **This reproduces the observed 11-ticker `BookOverlapError` exactly.** |
+| A2 +SI T-1 carry | + `short_interest_change_30d` (2026-07-01) | **85** | DISJOINT — 85 ≥ 40; residual overlap = 0 at 20/side. **Minimal fix scenario clears the overlap.** |
+| A3 +ALL EOD T-1 | + SI + pead + options-flow + insider (T-1) | **103** | DISJOINT — 103 ≥ 40; residual overlap = 0. Exceeds the 88-name EOD benchmark (insider is absent at T-1 too, so A3 draws from SI+pead+options only; result is still 103 > 88). |
+
+Baseline crit-both-present pool = 827 names; the 11-name gate loss is entirely from the coverage-floor rule (only 3 non-critical signals live today; a name needs ALL THREE — analyst ∩ catalyst ∩ news).
+
+**A4 — T-1 computability findings (producer file:line, no code read from CROSSWIND):**
+- `short_interest_change_30d`: pure-DB carry-forward of prior filing data, no wall-clock or EOD dependency. `_shared/longshort-signals/short-interest-change/carry-orchestrator.ts:17` explicitly bounds carry to `[as_of−22d, as_of]` from persisted prior filings; `longshort-short-interest-carry-compute/index.ts:15` documents "carry is pure-DB, NO Polygon fetchers." **T-1-safe by construction** (analogous to momentum/reversal under DEC-078).
+- `pead_sue_20d`: `_shared/longshort-signals/pead/compute-pead.ts:157` shows the trailing-staleness gate is `(as_of − reportPeriodDate)` from persisted consensus rows — no intraday market feed. **T-1-computable.**
+- `options_flow_imbalance_5d`: `_shared/longshort-signals/options-flow/compute-options-flow.ts:33` computes `age_hours` from persisted Polygon-flow snapshots against `as_of`; the 5d window is trailing. **T-1-computable** provided the previous-EOD ingest has landed (which it does at 22:00 UTC today, jobid 87).
+- `insider_transactions_90d`: `_shared/longshort-signals/insider/`-orchestrator consumes `insider_form4_rows` (SEC filings, T+0 filing timestamps) — trailing-90d window. **T-1-computable.** Note: `insider_transactions_90d` has ZERO rows on both 07-01 and 07-02 — a separate coverage defect (not scoped here), so A3's marginal contribution above SI+pead+options is ~0.
+
+**A5 — candidate reschedule set (cron jobs, current schedules; operator-owned change, NOT actioned here):**
+
+| jobid | jobname | current schedule (UTC) | notes |
+| --- | --- | --- | --- |
+| 100 | `longshort-short-interest-carry-compute` | `30 22 * * 1-5` | Pure-DB carry, T-1-safe; the single-highest-leverage move (baseline → +74 names). |
+| 88 | `longshort.pead.compute` | `0 23 * * 1-5` | Trailing consensus; T-1-computable. |
+| 87 | `longshort.options_flow.compute` | `0 22 * * 1-5` | Trailing 5d Polygon flow; T-1-computable. |
+| 95 | `longshort-insider-compute` | `15 21 * * 1-5` | Trailing 90d Form-4; T-1-computable. |
+| 78 | `longshort-short-interest-compute` | `0 21 1,15 * *` | Bi-monthly filing ingest (upstream of jobid 100); no reschedule needed. |
+
+**Interpretation — decision inputs only, NOT a recommendation:**
+- The BookOverlapError is a **symptom** of the coverage-floor squeezing the crit-both-present pool from 827 → 11. It is not a ranker bug per se; it is a data-availability consequence of the DW-208 cadence fix meeting the DEC-078 scope decision.
+- Moving SI carry alone (A2) resolves the 11 → 85 gate loss and eliminates the overlap at 20/side. Moving all four (A3) yields 103, above the EOD benchmark.
+- Both A2 and A3 are producer-cadence changes on T-1-safe computations — no lookahead risk. The tradeoff is operational (cron windows shift into pre-open), not safety.
+
+**DW-208 Fix-1 close criterion:** formally gated on the DW-210 decision. Until the operator selects A1 / A2 / A3, the morning-book fires will continue to refuse with `refused_rankings_stale` (DW-211-ADD-01 confirms the classifier works) or (post-regime-backfill) fail at rank with `BookOverlapError`. No first-clean-automated-fire is possible without the producer-cadence move.
+
+**Cross-ref:** DW-208-ADD-01 (cadence root); DEC-078 (T-1 scope, criticals-only); DW-211 / DW-211-ADD-01 (regime backfill + Fix-2 confirmation); DW-204 / ACT-436 (live-ranker overlap gap surfaced by baseline scenario); `feature-assembler.ts:244-317` + `signal-catalog.ts:112` (exact gate); `ranker-constants.ts:34` (BOOK_SEED_SIZE=20); ACT-452 (this landing).
+
 
 ## DW-211 — Regime producer cadence vs strict same-day assemble read (deferred MIG-129 lift; 2026-07-02 full-day assemble failure)
 
