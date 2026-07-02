@@ -55,6 +55,7 @@ import {
 } from '../longshort-signals/shared/days-to-cover-store.ts';
 import type { SameTickContradictoryPass } from './cache-propagator.ts';
 import { preflightKey } from './rebalance-planner.ts';
+import { pickLatestRankingsGeneration } from './rankings-generation-picker.ts';
 
 export const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -192,24 +193,23 @@ function createSupabaseEquitySnapshotWriter(): EquitySnapshotWriter {
 
 export function createSupabaseRankingsReader(): (operator_id: string) => Promise<RankingRow[]> {
   return async (operator_id: string): Promise<RankingRow[]> => {
-    const { data: latest, error: e1 } = await supabaseAdmin
-      .from('combiner_rankings')
-      .select('as_of_date, computed_at')
-      .eq('operator_id', operator_id)
-      .order('as_of_date', { ascending: false })
-      .order('computed_at', { ascending: false })
-      .limit(1);
-    if (e1) throw new Error(`combiner_rankings as_of_date read failed: ${e1.message}`);
-    if (!latest || latest.length === 0) return [];
-    const head = latest[0] as { as_of_date: string; computed_at: string | null };
-    const as_of_date = head.as_of_date;
+    // DW-209 Fix A — scope the body-read to a single generation.
+    // Pre-fix the body-read was `.eq('as_of_date', ...)` only, which
+    // under intraday multi-slot writes pulled duplicate tickers across
+    // slot vintages → planner book_size inflation + breadth collapse
+    // (see DW-209 mechanism note). Shared with the snapshot writer via
+    // `pickLatestRankingsGeneration` (Fix B) so the sidecar snapshots
+    // exactly the generation the planner traded.
+    const gen = await pickLatestRankingsGeneration(supabaseAdmin, operator_id);
+    if (gen == null) return [];
 
     const cap = SUBSTITUTION_SCAN_CAP_RANK;
     const { data: rows, error: e2 } = await supabaseAdmin
       .from('combiner_rankings')
-      .select('ticker, long_rank, short_rank, long_score, short_score, gics_sector, ranker_source, computed_at')
+      .select('ticker, long_rank, short_rank, long_score, short_score, gics_sector, ranker_source, computed_at, intraday_slot')
       .eq('operator_id', operator_id)
-      .eq('as_of_date', as_of_date)
+      .eq('as_of_date', gen.as_of_date)
+      .eq('intraday_slot', gen.intraday_slot)
       .or(`long_rank.lte.${cap},short_rank.lte.${cap}`);
     if (e2) throw new Error(`combiner_rankings rows read failed: ${e2.message}`);
     return (rows ?? []) as RankingRow[];
