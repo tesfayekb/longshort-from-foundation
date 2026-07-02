@@ -4802,4 +4802,37 @@ Baseline crit-both-present pool = 827 names; the 11-name gate loss is entirely f
 
 **Cross-ref:** DW-208-ADD-03 (Fix-2 charter); ACT-449 (build + deploy); ACT-450 (redeploy that activated the classifier live); ACT-451 (this landing).
 
+---
+
+### DW-210-ADD-02 — Operator ratifies Option B (all four daily non-criticals → morning T-1); DEC-079 governs; cron operator-applied post-EOD-seal
+
+**Status:** DECISION RECORDED. DW-210 remains **OPEN** pending live confirmation on the first post-cron-application morning.
+
+**Decision (operator, 2026-07-02 ~15:30 UTC):** **Option B — extend T-1 morning cadence to all four daily-cadence non-critical producers** (`short_interest_change_30d` carry, `pead_sue_20d`, `options_flow_imbalance_5d`, `insider_transactions_90d`). Chosen over Option A (SI-only, 85 names) on breadth/ROI (+18 more includable names at zero additional safety cost) and on cadence-coherence grounds (a single morning-T-1 rail for all daily factors — critical + non-critical — collapses the split-cadence problem DEC-078 left open). Option C (do nothing) was not viable given the ground-truth reproduction of `BookOverlapError`.
+
+**Governance:** ratified by **DEC-079** (T-1 close-basis extension to non-critical daily signals). DEC-078 remains the precedent; DEC-079 closes DEC-078's explicit deferral.
+
+**Cron move (operator-applied, out-of-band SQL under §22.5.3):**
+
+| jobid | jobname | from | to |
+| --- | --- | --- | --- |
+| 100 | `longshort-short-interest-carry-compute` | `30 22 * * 1-5` | `35 13 * * 1-5` |
+| 88  | `longshort.pead.compute`                  | `0 23 * * 1-5`  | `35 13 * * 1-5` |
+| 87  | `longshort.options_flow.compute`          | `0 22 * * 1-5`  | `35 13 * * 1-5` |
+| 95  | `longshort-insider-compute`               | `15 21 * * 1-5` | `35 13 * * 1-5` |
+
+**Cron-timing decision:** operator applies the reschedule **tonight, post-23:05 UTC**, so the 2026-07-02 evening runs of the four producers fire one last time on their existing schedules and **seal the 07-02 EOD substrate** before the cadence flip. Applying before 23:05 UTC would leave the 07-02 EOD row unwritten for these signals; applying after preserves historical continuity.
+
+**Post-flip morning ladder (target):** 13:30 criticals → 13:35 non-critical dailies → 13:55 regime → 14:00 first combiner tick → 14:35 rebalance fire.
+
+**Close criteria for DW-210:** the first morning after cron application where BOTH hold:
+  1. A combiner tick (nominally 14:00 UTC) writes an `intraday_slot` row to `combiner_rankings` with an **inclusion count ≥ ~85** (SI-only floor; DEC-079's full-Option-B floor is ~103); AND
+  2. The 14:35 UTC `longshort.rebalance.completed` audit event carries `outcome_class != refused_rankings_stale` — i.e. the rebalance actually proceeds past the freshness/inclusion gates.
+
+**DW-208 Fix-1 close criterion** ("first clean automated fire") unblocks on the SAME fire: DW-208 and DW-210 both close on the first morning meeting the two criteria above.
+
+**Scope excluded from this fix:** (i) the `insider_transactions_90d` zero-output coverage defect (ACT-452 incidental; job 95's move is cadence-uniformity only, not a coverage fix); (ii) the live-ranker `BookOverlapError` (DW-204 lineage; DEC-079 raises the pool from 11 → 85/103, making seed-side overlap arithmetically impossible for the standard book, but the per-variant skip-on-overlap fix remains shadow-only); (iii) job 78 bi-monthly SI filing ingest (upstream, untouched).
+
+**Cross-ref:** DEC-079 (ratifying decision); DEC-078 (precedent, criticals-only, non-criticals-deferred); DW-208 / DW-208-ADD-01 (Fix-1 unblock chain); DW-211 (regime cadence sibling); DW-204 / ACT-436 (live-ranker overlap — mitigated by higher pool, not fixed); ACT-452 (DW-210-ADD-01 counterfactual evidence + T-1-computability grep); ACT-453 (this landing); jobs 100 / 88 / 87 / 95 (operator crons); §22.5.3 (operator-owned cron path).
+
 
