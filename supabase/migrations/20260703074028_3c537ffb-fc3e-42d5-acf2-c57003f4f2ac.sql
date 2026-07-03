@@ -1,0 +1,2 @@
+-- DEFECT-1 / ACT-456 (FP-069 W1b turn-6): Polygon adjusted volume is fractional by vendor construction; widen to numeric for lossless storage. Table verified empty pre-ALTER.
+ALTER TABLE public.overshoot_daily_bars ALTER COLUMN volume TYPE numeric;
