@@ -22,19 +22,27 @@
  * Invoked from .github/workflows/overshoot-guards.yml on every PR.
  */
 
-// The four A3-verified leaf-utility paths overshoot code may import from
-// the longshort tree. Kept small on purpose — each addition requires
-// executor review + FP amendment.
+// The A3-verified leaf-utility paths overshoot code may import from the
+// longshort tree. Kept small on purpose — each addition requires executor
+// review + FP amendment.
+//
+// FP-069 W1b (ACT-456): `longshort-universe-interfaces.ts` was REMOVED from
+// this list because `HttpFetch` is now overshoot-owned at
+// `_shared/overshoot/http-fetch.ts` (signature-identical redeclaration).
 //
 // Matched as *specifier-suffix* — relative imports resolve to these tail paths.
-// The two non-longshort entries (`longshort-clock`, `parse-as-of-date`) are
-// generic infra that historically live under `_shared/`; they are included
-// here so that any future move under the longshort tree still passes the
-// membrane. `parse-as-of-date.ts` currently does NOT contain "longshort" in
-// its specifier and therefore would not trigger the guard at all — it is
-// listed for documentary completeness only.
+// `longshort-clock.ts` and `parse-as-of-date.ts` are documentary carve-outs
+// for infra that historically lives under `_shared/`; they are not currently
+// imported by any overshoot file but stay listed so future moves under the
+// longshort tree still pass the membrane. `parse-as-of-date.ts` does NOT
+// contain "longshort" in its specifier and therefore would not trigger the
+// guard at all — listed for documentary completeness only.
+//
+// NOTE (ACT-456 turn-1): the standing brief called for "exactly four" entries
+// after removal; the arithmetic of removing one from a four-entry list yields
+// three. Surfaced in ACT-456 for operator confirmation; no fourth entry has
+// been fabricated.
 export const A3_ALLOWLIST: ReadonlyArray<string> = [
-  'longshort-universe-interfaces.ts',
   'longshort-universe/shared/fetch-with-timeout.ts',
   'longshort-clock.ts',
   'parse-as-of-date.ts',

@@ -23,7 +23,7 @@
  *     low-liquidity or older bars; represented as `null` on the returned
  *     bar, never coerced to 0 (Anti-pattern row #6).
  */
-import type { HttpFetch } from '../longshort-universe-interfaces.ts';
+import type { HttpFetch } from './http-fetch.ts';
 import {
   DEFAULT_FETCH_TIMEOUT_MS,
   fetchWithTimeoutAndRetry,

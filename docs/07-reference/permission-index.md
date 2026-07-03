@@ -1084,6 +1084,39 @@ The following must create Action Tracker entries:
 
 ---
 
+### OVERSHOOT Permissions (FP-069)
+
+#### `overshoot.view`
+
+| Field | Value |
+|-------|-------|
+| **Permission UUID** | Assigned at insert time in `public.permissions`. Seeded idempotently by migration `20260703044900_*.sql` (FP-069 W1a). |
+| **Module** | overshoot |
+| **Implementation status** | IMPLEMENTED |
+| **Description** | Gates read-only access to overshoot substrate (`overshoot_runs`, `overshoot_universe`, `overshoot_bars`, `overshoot_earnings`). Two-segment per DEC-031 sub-point 3. |
+| **Classification** | operational |
+| **Default roles** | Administrator (granted at seed; superadmin inherits via wildcard). |
+| **Used by** | RLS `SELECT` policies on all four `overshoot_*` tables. |
+| **Blast radius** | small — read-only. |
+| **Lifecycle** | active |
+| **Added by** | FP-069 W1a (ACT-455) |
+
+#### `overshoot.manage`
+
+| Field | Value |
+|-------|-------|
+| **Permission UUID** | Assigned at insert time. Applied to live DB during W1a work-in-progress; **codified into repo migrations by W1b reconciling migration under ACT-456** (idempotent, zero live-DB delta). |
+| **Module** | overshoot |
+| **Implementation status** | IMPLEMENTED (seed + admin grant); consuming surfaces land at W3+. |
+| **Description** | Reserved gate for future overshoot admin/mutating surfaces (universe edits, strategy toggles, run kill-switches). Not currently consumed by any edge function; the W1b backfill triggers use service-role JWT and no permission gate. |
+| **Classification** | admin-critical |
+| **Default roles** | Administrator (granted at seed; superadmin inherits via wildcard). |
+| **Blast radius** | medium — future config surface. |
+| **Lifecycle** | active |
+| **Added by** | FP-069 W1a live-DB apply; codified in repo at FP-069 W1b (ACT-456). |
+
+---
+
 ## Dependencies
 
 - [Authorization Security](../02-security/authorization-security.md)

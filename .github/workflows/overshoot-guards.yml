@@ -22,7 +22,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v1
         with:
-          deno-version: v1.x
+          # FP-069 W1b (ACT-456): pin to a known-good Deno for guard reproducibility.
+          deno-version: v1.46.3
       - name: Run overshoot separation guard
         run: deno run --allow-read scripts/check-overshoot-separation.ts
       - name: Test the guard itself
