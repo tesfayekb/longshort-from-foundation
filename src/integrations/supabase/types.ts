@@ -1629,6 +1629,190 @@ export type Database = {
           },
         ]
       }
+      overshoot_study_candidate_events: {
+        Row: {
+          alias_used: string | null
+          created_at: string
+          days_to_nearest_earnings: number | null
+          drawdown_bucket: number | null
+          event_date: string
+          event_id: number
+          fwd_return_1d: number | null
+          fwd_return_20d: number | null
+          fwd_return_5d: number | null
+          momentum_quintile: number | null
+          move_pct: number
+          run_id: string
+          side: string
+          ticker: string
+          window_days: number
+        }
+        Insert: {
+          alias_used?: string | null
+          created_at?: string
+          days_to_nearest_earnings?: number | null
+          drawdown_bucket?: number | null
+          event_date: string
+          event_id?: number
+          fwd_return_1d?: number | null
+          fwd_return_20d?: number | null
+          fwd_return_5d?: number | null
+          momentum_quintile?: number | null
+          move_pct: number
+          run_id: string
+          side: string
+          ticker: string
+          window_days: number
+        }
+        Update: {
+          alias_used?: string | null
+          created_at?: string
+          days_to_nearest_earnings?: number | null
+          drawdown_bucket?: number | null
+          event_date?: string
+          event_id?: number
+          fwd_return_1d?: number | null
+          fwd_return_20d?: number | null
+          fwd_return_5d?: number | null
+          momentum_quintile?: number | null
+          move_pct?: number
+          run_id?: string
+          side?: string
+          ticker?: string
+          window_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overshoot_study_candidate_events_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "overshoot_study_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
+      }
+      overshoot_study_cell_results: {
+        Row: {
+          arrival_count: number
+          band: string
+          created_at: string
+          drawdown_bucket: number
+          exclusion_width_days: number
+          hit_rate_5d: number | null
+          mean_fwd_return_1d: number | null
+          mean_fwd_return_20d: number | null
+          mean_fwd_return_5d: number | null
+          median_fwd_return_5d: number | null
+          momentum_quintile: number
+          notes: Json | null
+          run_id: string
+          side: string
+          window_days: number
+        }
+        Insert: {
+          arrival_count: number
+          band: string
+          created_at?: string
+          drawdown_bucket: number
+          exclusion_width_days: number
+          hit_rate_5d?: number | null
+          mean_fwd_return_1d?: number | null
+          mean_fwd_return_20d?: number | null
+          mean_fwd_return_5d?: number | null
+          median_fwd_return_5d?: number | null
+          momentum_quintile: number
+          notes?: Json | null
+          run_id: string
+          side: string
+          window_days: number
+        }
+        Update: {
+          arrival_count?: number
+          band?: string
+          created_at?: string
+          drawdown_bucket?: number
+          exclusion_width_days?: number
+          hit_rate_5d?: number | null
+          mean_fwd_return_1d?: number | null
+          mean_fwd_return_20d?: number | null
+          mean_fwd_return_5d?: number | null
+          median_fwd_return_5d?: number | null
+          momentum_quintile?: number
+          notes?: Json | null
+          run_id?: string
+          side?: string
+          window_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overshoot_study_cell_results_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "overshoot_study_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
+      }
+      overshoot_study_runs: {
+        Row: {
+          as_of: string
+          bars_snapshot_max_date: string
+          completed_at: string | null
+          earnings_snapshot_max_date: string
+          git_sha: string
+          outcome: string
+          param_grid: Json
+          param_grid_hash: string
+          performance_stamp: string
+          return_basis: string
+          run_id: string
+          run_label: string
+          short_filter_stamp: string
+          slippage_haircut_bps_long: number
+          slippage_haircut_bps_short: number
+          started_at: string
+          survivorship_stamp: string
+        }
+        Insert: {
+          as_of: string
+          bars_snapshot_max_date: string
+          completed_at?: string | null
+          earnings_snapshot_max_date: string
+          git_sha: string
+          outcome?: string
+          param_grid: Json
+          param_grid_hash: string
+          performance_stamp: string
+          return_basis: string
+          run_id?: string
+          run_label: string
+          short_filter_stamp: string
+          slippage_haircut_bps_long: number
+          slippage_haircut_bps_short: number
+          started_at?: string
+          survivorship_stamp: string
+        }
+        Update: {
+          as_of?: string
+          bars_snapshot_max_date?: string
+          completed_at?: string | null
+          earnings_snapshot_max_date?: string
+          git_sha?: string
+          outcome?: string
+          param_grid?: Json
+          param_grid_hash?: string
+          performance_stamp?: string
+          return_basis?: string
+          run_id?: string
+          run_label?: string
+          short_filter_stamp?: string
+          slippage_haircut_bps_long?: number
+          slippage_haircut_bps_short?: number
+          started_at?: string
+          survivorship_stamp?: string
+        }
+        Relationships: []
+      }
       overshoot_universe: {
         Row: {
           active: boolean

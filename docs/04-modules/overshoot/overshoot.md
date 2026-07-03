@@ -190,3 +190,58 @@ Batch hard-cap for named-ticker invocations is 50 (`full:true` is uncapped). Eac
 
 **W1 CLOSED per §22.3(e).** W2 KEEP/DROP decision gate NEXT (operator).
 - [Change Control Policy](../../00-governance/change-control-policy.md).
+## Wave 2 — Historical parameter-selection study (OPENED 2026-07-03, ACT-457)
+
+**Gate outcome:** operator KEEP at the W1 close gate. W2 is a NON-PERFORMANCE parameter-selection study; every row it writes is quarantined in `overshoot_study_*` tables and structurally cannot merge into any performance surface (performance-ledger principle).
+
+### Ratified stamps (persisted at row-level as CHECK-constrained columns)
+
+- `survivorship_stamp = 'UPPER_BOUND_SURVIVORSHIP_BIASED'` — the study runs on the current active universe; delisted/acquired names of the past are not reconstructed. Every arrival rate and return figure is an **upper bound**.
+- `performance_stamp = 'NON_PERFORMANCE_STUDY_ONLY'` — no study number is a performance number by construction.
+- `short_filter_stamp` ∈ {`NO_SQUEEZE_FILTER_ARRIVALS_UPPER_BOUND_RETURNS_CONSERVATIVE`, `SQUEEZE_FILTER_APPLIED`} — W2 runs under the former (per-metric bias direction: short-tail ARRIVALS = upper bound, short-tail RETURNS = conservative/understated because squeeze-prone names live entry excludes are included). The latter unlocks once FINRA-SI backfill lands (candidate FP named at ACT-457, not chartered).
+- `return_basis = 'CLOSE_TO_CLOSE_REFERENCE'` — the study NEVER simulates stabilization-trigger entries. Trigger design is W3's job, where only real paper fills teach.
+- `drawdown_bucket` is a **tested dimension** (not an assumption). Arrival rates are the primary output; returns are secondary priors.
+
+### Ratified parameter grid (3,000 cells/tail per R1)
+
+- 6 move bands per tail × 5 windows (1/2/3/4/5 trading days) × 5 momentum quintiles × 5 drawdown buckets × 4 exclusion widths = **3,000 cells per tail**, 6,000 across both tails.
+- Slippage haircut defaults (R3): **5 bps long / 15 bps short**, applied at aggregation time (never on the event row itself).
+
+### Substrate (landed this turn, service-role-only)
+
+| Table | Purpose | PK |
+|---|---|---|
+| `overshoot_study_runs` | One row per study run; carries all five stamps + slippage haircuts + `param_grid` (jsonb) + `param_grid_hash` + bars/earnings snapshot max-dates + `as_of` (injected) + `git_sha` + outcome. | `run_id` (uuid) |
+| `overshoot_study_candidate_events` | One row per event (vendor-truth). Stores raw close-to-close `fwd_return_{1d,5d,20d}`; band + exclusion-width membership derived at aggregation, never materialized. | `event_id` (bigserial) |
+| `overshoot_study_cell_results` | Aggregated cell results (arrival counts + haircut-applied return stats per (side, band, window, momentum quintile, drawdown bucket, exclusion width)). | `(run_id, side, band, window_days, momentum_quintile, drawdown_bucket, exclusion_width_days)` |
+
+RLS: enabled on all three; RESTRICTIVE deny for `authenticated`; service-role writes only. No `overshoot.view` grant in W2 (operator UI reads deferred to W4).
+
+### Usable study window
+
+`overshoot_daily_bars` spans 2021-06-29 → 2026-07-02 (~5y). Subtracting the 12-month momentum lookback + 20-day forward-return tail gives an eventable window of approximately **2022-06-27 → 2026-06-04 ≈ ~4 years**. This is the operational bound for W2.5 (90-day smoke) and W2.6 (full run).
+
+### W2 wave plan
+
+| Sub-wave | Deliverable | Status |
+|---|---|---|
+| W2.0 | CI-pin fix: `overshoot-guards.yml` deno-version → `v2.9.1` (v1.46.3 cannot parse Deno-2.x lockfile v5). | ✓ this turn |
+| W2.1 | Benchmark bars backfill (SPY/QQQ/IWM + 11 sector ETFs; non-universe rows). | ✓ this turn (paste-back evidence in ACT-457-ADD-01) |
+| W2.2 | Study-schema migration (three quarantine tables + stamps + RLS). | ✓ this turn |
+| W2.3 | Event-detection SQL + fixtures + EXPLAIN ANALYZE against the bars index. | pending |
+| W2.4 | Study-run function (two-phase: candidate emission → aggregation), idempotent per `run_id`. | pending |
+| W2.5 | 90-day smoke run + operator inspection. | pending |
+| W2.6 | Full ~4-year run over the eventable window. | pending |
+| W2.7 | W2 close: coverage/arrival tables + module doc W2-CLOSED stamp. | pending |
+
+### Events-stored-once semantic
+
+Each qualifying event persists once with its measured covariates (move, window achieved, momentum quintile, drawdown bucket, signed days-to-nearest-earnings). Band and exclusion-width membership are derived at aggregation. Row count stays O(n_events), not O(n_events × n_bands × n_widths); the event row remains vendor-truth.
+
+### Benchmarks are non-universe
+
+The 14 ETF tickers backfilled in W2.1 (SPY/QQQ/IWM + XLK/XLF/XLE/XLV/XLY/XLP/XLI/XLU/XLB/XLRE/XLC) land in `overshoot_daily_bars` but are NOT added to `overshoot_universe`. All coverage queries scope via a universe join — benchmarks never inflate active-ticker counts. Later inceptions (XLRE 2015-10-08, XLC 2018-06-19) are date-plausible and expected.
+
+### FINRA-SI procurement (named, not chartered)
+
+The short-tail bias-direction stamp closes only under `SQUEEZE_FILTER_APPLIED`. That requires broker-grade FINRA bimonthly short-interest coverage over the full study window (not the current live-only feed). Prospective FP: `FP-CANDIDATE-FINRA-SI-BACKFILL` — new `overshoot_short_interest_snapshots` table + procurement path + study re-run. Named for continuity; not chartered.

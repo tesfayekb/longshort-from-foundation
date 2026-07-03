@@ -22,8 +22,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v1
         with:
-          # FP-069 W1b (ACT-456): pin to a known-good Deno for guard reproducibility.
-          deno-version: v1.46.3
+          # FP-069 W2 (ACT-457): pin corrected — v1.46.3 cannot parse lockfile v5
+          # (Deno 2.x lockfile format); v2.9.1 is supervisor-verified against the
+          # separation guard + fetcher tests.
+          deno-version: v2.9.1
       - name: Run overshoot separation guard
         run: deno run --allow-read scripts/check-overshoot-separation.ts
       - name: Test the guard itself
