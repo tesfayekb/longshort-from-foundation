@@ -11,7 +11,7 @@
  * "Overshoot code" = any file under:
  *   - supabase/functions/_shared/overshoot/
  *   - supabase/functions/overshoot-*/
- *   - src/**\/overshoot\/**  (future UI surfaces)
+ *   - src/... any file whose path contains /overshoot/  (future UI surfaces)
  *
  * "Longshort tree" = any import specifier whose path contains 'longshort'.
  *
