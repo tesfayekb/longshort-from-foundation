@@ -41,6 +41,8 @@ import {
 
 const BATCH_HARD_CAP = 50;
 const INTER_TICKER_PACING_MS = 250; // 4 rps floor; Polygon Advanced tolerates >100 rps
+const DEFAULT_FULL_BATCH_SIZE = 60; // ~60 * 1.25s ≈ 75s, under edge worker CPU/wall-clock ceiling (§22.8.5)
+const MAX_FULL_BATCH_SIZE = 120;
 
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -88,6 +90,7 @@ Deno.serve(createHandler(async (req: Request) => {
 
   // ---- ticker resolution ----
   let tickers: string[] = [];
+  let done = false;
   if (body.full === true) {
     const q = supabaseAdmin
       .from('overshoot_universe')
@@ -98,7 +101,18 @@ Deno.serve(createHandler(async (req: Request) => {
     if (error) return apiError(500, 'universe_read_failed', { correlationId, detail: error.message });
     tickers = (data ?? []).map((r) => r.ticker as string);
     if (typeof body.resume_from === 'string' && body.resume_from.length > 0) {
-      tickers = tickers.filter((t) => t >= (body.resume_from as string));
+      // Exclusive resume: skip up to and including the previous cursor.
+      tickers = tickers.filter((t) => t > (body.resume_from as string));
+    }
+    // DEFECT-3 remediation: cap per-invocation work so a single call cannot
+    // exceed the edge worker CPU/wall-clock ceiling (546 WORKER_RESOURCE_LIMIT).
+    const requested = typeof body.batch_size === 'number' && body.batch_size > 0
+      ? Math.floor(body.batch_size) : DEFAULT_FULL_BATCH_SIZE;
+    const batchSize = Math.min(requested, MAX_FULL_BATCH_SIZE);
+    if (tickers.length <= batchSize) {
+      done = true;
+    } else {
+      tickers = tickers.slice(0, batchSize);
     }
   } else if (Array.isArray(body.tickers)) {
     tickers = (body.tickers as unknown[])
@@ -108,6 +122,14 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(400, 'tickers_or_full_required', { correlationId });
   }
   if (tickers.length === 0) {
+    if (body.full === true) {
+      // Resume cursor is past the last universe ticker — batch is empty, backfill is complete.
+      return apiSuccess({
+        ok: true, run_id: null, ticker_count: 0, row_count: 0,
+        failure_count: 0, failures: [], last_cursor: null, done: true,
+        correlation_id: correlationId,
+      });
+    }
     return apiError(400, 'no_tickers_resolved', { correlationId });
   }
   if (!body.full && tickers.length > BATCH_HARD_CAP) {
@@ -179,6 +201,6 @@ Deno.serve(createHandler(async (req: Request) => {
     ok: true, run_id: runId, ticker_count: tickers.length,
     row_count: totalRows, failure_count: failures.length,
     failures: failures.slice(0, 10),
-    last_cursor: lastCursor, correlation_id: correlationId,
+    last_cursor: lastCursor, done, correlation_id: correlationId,
   });
 }));
