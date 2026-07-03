@@ -105,3 +105,23 @@ Deno.test('HTTP 401 throws OvershootFetchError with ticker context', async () =>
     'AAPL',
   );
 });
+
+// DEFECT-1 / ACT-456 (FP-069 W1b turn-6): Polygon adjusted volume is
+// fractional by vendor construction (e.g., AAPL 2026-07-01 v =
+// 37308155.220558). Confirm the parse preserves the fractional value
+// end-to-end (no rounding, no truncation) so the numeric bars column
+// receives vendor-truthful volume.
+Deno.test('preserves fractional adjusted volume losslessly (DEFECT-1)', async () => {
+  const fractionalVolume = 37308155.220558;
+  const fetcher = new PolygonDailyOhlcvFetcher(
+    'test-key',
+    // deno-lint-ignore no-explicit-any
+    ((_url: string) => makeResp(200, {
+      results: [
+        { t: Date.UTC(2026, 6, 1), o: 200, h: 201, l: 199, c: 200.5, v: fractionalVolume, vw: 200.3, n: 812345 },
+      ],
+    })) as any,
+  );
+  const bars = await fetcher.fetchDailyBars('AAPL', AS_OF, 30);
+  assertStrictEquals(bars?.[0].volume, fractionalVolume);
+});
