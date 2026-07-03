@@ -74,11 +74,24 @@ Deno.serve(createHandler(async (req: Request) => {
   let totalRows = 0, reqCount = 0;
   const failures: Array<{ scope: string; error: string }> = [];
   let lastCursor: string | null = null;
+  let duplicatesDropped = 0;
 
   async function persist(rows: EarningsRow[]) {
     if (rows.length === 0) return;
     const fetchedIso = productionClock.getWallClockTs().toISOString();
-    const payload = rows.map((r) => ({
+    // DEFECT-2 / ACT-456 (FP-069 W1b turn-6): in-memory PK-tuple dedupe
+    // (ticker|announcement_date|source), keep-FIRST. Vendor bulk ranges
+    // (FMP) occasionally return duplicate PK tuples that would otherwise
+    // trip Postgres upsert ("cannot affect row a second time"). No other
+    // row semantics are changed.
+    const seen = new Map<string, EarningsRow>();
+    for (const r of rows) {
+      const key = `${r.ticker}|${r.announcement_date}|${r.source}`;
+      if (seen.has(key)) { duplicatesDropped++; continue; }
+      seen.set(key, r);
+    }
+    const deduped = Array.from(seen.values());
+    const payload = deduped.map((r) => ({
       ticker: r.ticker,
       announcement_date: r.announcement_date,
       source: r.source,
@@ -170,6 +183,7 @@ Deno.serve(createHandler(async (req: Request) => {
   return apiSuccess({
     ok: true, run_id: runId, source, from, to,
     row_count: totalRows, request_count: reqCount,
+    duplicates_dropped: duplicatesDropped,
     failure_count: failures.length, failures: failures.slice(0, 10),
     last_cursor: lastCursor, correlation_id: correlationId,
   });
