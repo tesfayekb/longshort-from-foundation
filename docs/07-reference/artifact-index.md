@@ -756,6 +756,31 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Actions** | ACT-288 |
 | **Related Decisions** | DEC-064 (training-runtime substitution; trainer binds to FEATURE_ORDER via SHA-256 stamp), DEC-065 (artifact-storage substitution; URI `storage://combiner-models/{model_id}/model.txt`) |
 | **Notes** | Contains `feature_contract.py` (byte-identical Python mirror of `lgbm-inference.ts` `FEATURE_ORDER`; `feature_order_hash()` SHA-256 of `'\n'.join(FEATURE_ORDER)` = `1054bbc1d735...20b`, matches TS `featureOrderHash()` byte-for-byte), `trainer.py` (LightGBM-lambdarank fit per §6.1/§6.2 LOCK; T+10 horizon per §6.2; winsorize 1st/99th per day per §6.2; exp-time-weight half-life 1.5y per §6.3; NDCG@25 per §6.1; TWO models per §6.1 two-model lock; writes model.txt + meta.json to Storage; INSERTs `combiner_model_registry` with **`status='candidate'`** ONLY — promotion is the 3.3a `promote_combiner_model` RPC's job; ASSERTS `horizon_td=10` widen is live before training; SKIP-GRACEFUL when T+10 labels below `LABEL_MIN_ROWS_PER_SIDE * LABEL_MIN_SEED_DATES` floor — no degenerate fit), `requirements.in` + `requirements.txt` (hash-pinned per DEC-064 Clause 2; lightgbm/optuna/shap/numpy/pandas/supabase; operator regenerates with `pip-compile --generate-hashes` to expand transitives), `tests/test_feature_contract.py` (locks hash to constant), `tests/test_trainer_skip.py` (skip-gate floors), `scripts/assert_feature_order_parity.py` (cross-language CI assert — extracts TS FEATURE_ORDER from `lgbm-inference.ts` + `signal-catalog.ts` and asserts equality with Python + hash parity; DEC-064 Clause 4 enforcement). Lovable CANNOT execute the trainer (lightgbm native + live Supabase + service-role key required) but CAN run the Python tests + parity assert — all green at landing. NO `.github/`, NO `.yml`, NO bucket/secret provisioning. |
+
+### ART-041: Overshoot Separation Guard (script + test)
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-041 |
+| **Type** | reference |
+| **Title** | `scripts/check-overshoot-separation.ts` + `scripts/check-overshoot-separation_test.ts` |
+| **Owning Phase** | FP-069 W1 (Overshoot data commons) |
+| **Status** | `active` |
+| **Related Actions** | ACT-455 (W1a origin), ACT-456 (W1b tightening — allowlist reduced to 3 leaf-util paths; interfaces.ts removed after `HttpFetch` decoupling) |
+| **Notes** | Bidirectional import membrane: (i) no overshoot file imports from `longshort-*` except allowlisted leaf utils; (ii) no longshort file imports from `_shared/overshoot/`. Six tests green at ACT-456. |
+
+### ART-042: Overshoot Guards GitHub Workflow
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-042 |
+| **Type** | reference |
+| **Title** | `.github/workflows/overshoot-guards.yml` |
+| **Owning Phase** | FP-069 W1 |
+| **Status** | `active` |
+| **Related Actions** | ACT-455 (created), ACT-456 (deno-version pinned to `v1.46.3`) |
+| **Notes** | Runs the ART-041 script + test on PRs touching `supabase/functions/**` or `scripts/check-overshoot-separation*`. |
+
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
