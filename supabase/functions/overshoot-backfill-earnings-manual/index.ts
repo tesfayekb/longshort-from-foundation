@@ -34,6 +34,14 @@ import { OvershootFetchError } from '../_shared/overshoot/polygon-daily-ohlcv-fe
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const INTER_TICKER_PACING_MS = 1100; // Finnhub free tier ~60/min; Advanced tier tolerates faster
 const BATCH_HARD_CAP = 50;
+// DEFECT-3b remediation (FP-069 W1b D-5): cap per-invocation work on the
+// full-universe finnhub path so a single call cannot exceed the edge worker
+// CPU/wall-clock ceiling (§22.8.5 — 546 WORKER_RESOURCE_LIMIT). Finnhub is
+// per-ticker + inter-ticker pacing 1100ms + ~1.6s API latency ≈ 2.7s/ticker;
+// 40 * 2.7s ≈ 108s wall — comfortably under with buffer; MAX 60 caps at
+// ~162s for operator override.
+const DEFAULT_FULL_BATCH_SIZE = 40;
+const MAX_FULL_BATCH_SIZE = 60;
 
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -75,6 +83,7 @@ Deno.serve(createHandler(async (req: Request) => {
   const failures: Array<{ scope: string; error: string }> = [];
   let lastCursor: string | null = null;
   let duplicatesDropped = 0;
+  let done = false;
 
   async function persist(rows: EarningsRow[]) {
     if (rows.length === 0) return;
@@ -124,7 +133,20 @@ Deno.serve(createHandler(async (req: Request) => {
         if (error) return apiError(500, 'universe_read_failed', { correlationId, detail: error.message });
         tickers = (data ?? []).map((r) => r.ticker as string);
         if (typeof body.resume_from === 'string' && (body.resume_from as string).length > 0) {
+          // Inclusive resume (t >= cursor): earnings upsert is idempotent on
+          // (ticker, announcement_date, source) so cursor-boundary re-processing
+          // is harmless. Chosen over the bars-fn exclusive semantic to keep the
+          // loop trivially resumable without off-by-one edge cases.
           tickers = tickers.filter((t) => t >= (body.resume_from as string));
+        }
+        // DEFECT-3b: apply per-invocation batch cap.
+        const requested = typeof body.batch_size === 'number' && body.batch_size > 0
+          ? Math.floor(body.batch_size) : DEFAULT_FULL_BATCH_SIZE;
+        const batchSize = Math.min(requested, MAX_FULL_BATCH_SIZE);
+        if (tickers.length <= batchSize) {
+          done = true;
+        } else {
+          tickers = tickers.slice(0, batchSize);
         }
       } else if (Array.isArray(body.tickers)) {
         tickers = (body.tickers as unknown[])
@@ -133,7 +155,18 @@ Deno.serve(createHandler(async (req: Request) => {
       } else {
         return apiError(400, 'tickers_or_full_required_for_finnhub', { correlationId });
       }
-      if (tickers.length === 0) return apiError(400, 'no_tickers_resolved', { correlationId });
+      if (tickers.length === 0) {
+        if (body.full === true) {
+          // Resume cursor is past the last universe ticker — backfill complete.
+          return apiSuccess({
+            ok: true, run_id: null, source, from, to,
+            row_count: 0, request_count: 0, duplicates_dropped: 0,
+            failure_count: 0, failures: [], last_cursor: null, done: true,
+            correlation_id: correlationId,
+          });
+        }
+        return apiError(400, 'no_tickers_resolved', { correlationId });
+      }
       if (!body.full && tickers.length > BATCH_HARD_CAP) {
         return apiError(400, 'batch_exceeds_hard_cap_50', { correlationId, count: tickers.length });
       }
@@ -169,6 +202,7 @@ Deno.serve(createHandler(async (req: Request) => {
         });
       }
       lastCursor = to;
+      done = true;
     }
   } finally {
     await supabaseAdmin.from('overshoot_backfill_runs').update({
@@ -185,6 +219,6 @@ Deno.serve(createHandler(async (req: Request) => {
     row_count: totalRows, request_count: reqCount,
     duplicates_dropped: duplicatesDropped,
     failure_count: failures.length, failures: failures.slice(0, 10),
-    last_cursor: lastCursor, correlation_id: correlationId,
+    last_cursor: lastCursor, done, correlation_id: correlationId,
   });
 }));
