@@ -2,12 +2,24 @@ import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { scanFile } from './check-overshoot-separation.ts';
 
 Deno.test('overshoot file: allowlisted longshort leaf util → OK', () => {
+  // FP-069 W1b (ACT-456): HttpFetch now overshoot-owned (./http-fetch.ts),
+  // so the only remaining allowlisted longshort import is fetch-with-timeout.
   const v = scanFile(
     'supabase/functions/_shared/overshoot/polygon-daily-ohlcv-fetcher.ts',
-    `import type { HttpFetch } from '../longshort-universe-interfaces.ts';
+    `import type { HttpFetch } from './http-fetch.ts';
      import { fetchWithTimeoutAndRetry } from '../longshort-universe/shared/fetch-with-timeout.ts';`,
   );
   assertEquals(v.length, 0);
+});
+
+Deno.test('overshoot file: PREVIOUSLY-allowlisted interfaces.ts now → violation', () => {
+  // W1b tightening: importing HttpFetch from the longshort interfaces module
+  // is no longer allowed — must use the overshoot-owned redeclaration.
+  const v = scanFile(
+    'supabase/functions/_shared/overshoot/polygon-daily-ohlcv-fetcher.ts',
+    `import type { HttpFetch } from '../longshort-universe-interfaces.ts';`,
+  );
+  assertEquals(v.length, 1);
 });
 
 Deno.test('overshoot file: NON-allowlisted longshort import → violation', () => {
