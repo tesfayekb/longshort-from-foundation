@@ -148,4 +148,45 @@ Batch hard-cap for named-ticker invocations is 50 (`full:true` is uncapped). Eac
 3. **F-3 — Finnhub RBA coverage gap.** RBA (RB Global, 2023 Ritchie Bros rebrand) is present in FMP and absent in Finnhub — Finnhub coverage gap, not a symbol invalidity. D-7 mapping-review table to enumerate this + spot-check class-B shells (BRK.B/FOX/GOOG/NWS) which FMP echoes under the B ticker (dedup-at-report decision required).
 
 **Per-source per-year coherence** (universe-scoped finnhub vs all-US-bulk fmp; the ratio reflects the scope diff, not disagreement): 2022 0.815 · 2023 0.829 · 2024 0.832 · 2025 0.837 (tight ~0.83 cluster inside intersection). 2021 (0.0, F-1) and 2026 (0.447, F-2) are boundary cases as above.
+
+> **SUPERSEDED-BY-DEFECT (2026-07-03, ACT-456-ADD-06):** the per-year coherence ratios above were computed against FMP responses that were silently truncated by the ≈4,000-row response cap (DEFECT-4). The ~0.83 ratio is a cap artifact, not a real coverage relationship. See W1b D-7 close-out below for the true intersection-scoped active-universe agreement (99.15%) and the true universe-scope diff (fmp 26,480 all-US tickers vs finnhub 836 scoped). The ADD-05 findings that all 839 active-universe tickers appear in FMP and that RBA is a Finnhub coverage gap survive at higher confidence.
+
+### W1b D-7 close-out · W1 CLOSED (2026-07-03, ACT-456-ADD-06)
+
+**DEFECT-4 (FMP 4,000-row response cap) registered + remediated.** FMP `/stable/earnings-calendar` silently truncates any response at ≈4,000 rows with no explicit error. Year-chunk requests (D-6) dropped ~95% of the data. Monthly ALSO insufficient (peak Feb 2024 = 4,000); weekly insufficient in peak/quarter-transition weeks. **Adaptive remediation script**: weekly-first with auto-descend to daily on any truncated week; HARD-STOP on daily truncation. Execution: 321 chunks (266 weekly + 55 daily on 10 auto-descended weeks), elapsed 202.9s, non200=0. Result: fmp 19,747 → **355,184 rows** (+335,437), distinct tickers 11,122 → **26,480**, span 2021-07-06 → 2026-07-03, PK dup=0.
+
+**F-4 residual (4 quarter-end daily hard-stops).** 4 days remain FMP-cap-truncated at daily granularity (2021-12-30, 2022-12-30, 2023-03-30, 2023-06-29). FMP endpoint accepts date-only (`from`/`to`), no datetime granularity → finer temporal chunking unavailable. **Materiality:** active-universe coverage on those days = {1, 5, 4, 7} / 839 — quarter-end DAY is not a common large-cap report day (large-caps file 10-Q 2-6 weeks LATER). The 4,000-truncation drops the small-cap tail; the active universe is materially unaffected. **Disposition:** NON-BLOCKING for earnings-exclusion substrate; W2 backlog carries a per-ticker-scoped FMP recovery option (code change) if signal-tuning ever demands sub-universe small-cap coverage.
+
+**Cross-audit results (intersection 2021-07-06 → 2026-07-01, `INNER JOIN overshoot_universe u ON u.ticker=e.ticker AND u.active`):**
+
+| metric | value | threshold | verdict |
+|---|--:|--:|---|
+| finnhub active-univ rows | 16,484 / 834 tickers | — | — |
+| fmp active-univ rows | 16,623 / 836 tickers | — | — |
+| exact-date match | 16,236 (98.50%) | — | — |
+| ±1-day match | 108 (0.66%) | — | — |
+| **≤±1d total agreement** | **99.15%** | ≥95% | **PASS ✓** |
+| disagreement >1d | 100 (0.61%) | — | label-drift/reschedule artifacts |
+| single-source-finnhub | 40 (0.24%) | — | mainly class-B shells (BF.B pattern) |
+| single-source-FMP | 278 (1.67%) | — | FMP preliminary/revised repeats |
+| **coverage holes <10 anns** | **12 / 839 = 1.43%** | <5% | **PASS ✓** |
+| PK dup earnings | 0 | 0 | PASS ✓ |
+| PK dup bars | 0 | 0 | PASS ✓ |
+
+**Bars-side (standing requirement):** 1,031,050 rows · 840 distinct tickers (839 active + AAPL D-2 smoke) · per-ticker min=117 (MRSH IPO 2026-01-14) / median=1,258 / max=1,258 (~5y trading days) · span 2021-06-29 → 2026-07-02 · 36 tickers <1000 bars, all traced to legitimate 2022-2026 IPO/spin/rebrand debuts (COR, PR, CRBG, GEN, FBIN, GEHC, NXT, CXT, KVUE, RVTY, KNF, CAVA, EG, SN, TKO, CART, VLTO, CPAY, SOLV, GEV, ULS, CNH, SW, TLN, TXNM, GAP, EXE, SARO, FLG, XYZ, SGI, SNDK, MZTI, PSKY, MRSH, + FISV cycle).
+
+**F-3 mapping recommendation for W2/W3 query-time OR-map (NOT built this turn):** BRK.B→BRK.A · GOOG→GOOGL + FMP-echo · FOX→FOXA + FMP-echo · NWS→NWSA + FMP-echo · RBA→FMP-only · BF.B→Finnhub-only. Preferred over storage-duplication (keeps substrate vendor-truth-preserving).
+
+### Substrate state (W1 CLOSED — finalized 2026-07-03)
+
+| substrate | count | span | source(s) | known limitations |
+|---|--:|---|---|---|
+| `overshoot_daily_bars` | 1,031,050 rows, 840 tickers | 2021-06-29 → 2026-07-02 | Polygon adjusted daily OHLCV+VWAP+trade_count | `volume numeric` (fractional adjusted); 36 tickers <1000 bars are IPO-age (documented) |
+| `overshoot_earnings_calendar` (finnhub) | 16,572 rows, 836 tickers | 2021-06-01 → 2026-07-01 | Finnhub per-ticker (carries `hour` bmo/amc/NULL) | 5 zero-row active tickers (BRK.B + 4 class-B shells) + RBA gap (F-3); BF.B covered here only |
+| `overshoot_earnings_calendar` (fmp) | 355,184 rows, 26,480 tickers | 2021-07-06 → 2026-07-03 | FMP bulk range (no `hour`); cap-remediated via weekly+adaptive-daily | F-1 pre-2021-07-06 absent (Finnhub-only for that segment); F-4 4 quarter-end days cap-truncated on small-cap tail (active-univ non-blocking) |
+| separation guard | active | — | `scripts/check-overshoot-separation.ts` + `.github/workflows/overshoot-guards.yml` | CI-enforced |
+
+**Refresh cadence:** open item — daily incremental append design (finnhub-per-ticker + fmp-weekly window slide) deferred to W2/W3 charter, not built this turn.
+
+**W1 CLOSED per §22.3(e).** W2 KEEP/DROP decision gate NEXT (operator).
 - [Change Control Policy](../../00-governance/change-control-policy.md).
