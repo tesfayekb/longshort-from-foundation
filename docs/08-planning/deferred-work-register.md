@@ -4837,7 +4837,7 @@ Baseline crit-both-present pool = 827 names; the 11-name gate loss is entirely f
 
 ## DW-212 — Short-side selection concentration under reversal-gating (2026-07-02 forensic; evidence feeds FP-069)
 
-**Status:** REGISTERED 2026-07-02 at ACT-454. **Disposition: NO live-strategy change** — evidence feeds FP-069 (OVERSHOOT). This DW consumes the reservation noted at ACT-451 / the DW-210 entry.
+**Status:** REGISTERED 2026-07-02 at ACT-454. **Disposition: NO live-strategy change** — evidence feeds FP-069 (OVERSHOOT). This DW consumes the reservation noted at ACT-451 / the DW-211 entry.
 
 **Finding (2026-07-02 short-book forensic).** The 06-30 rebalance entry cohort's short side was selected with `reversal_1w` **sanctioned-null for all 16 shorts** — effectively a one-signal (momentum-only) short book at the entry slot. Selection distribution: **11/16 shorts** entered ≥ 20% below their 52-week highs; **6/16** entered > 40% below. The > 40%-drawdown sextet contributed **~74% of the −$1,022 short-leg loss over ~44h** against a flat SPY (**−0.135%**); residual after SPY-beta subtraction was **≈ 100% idiosyncratic** — the loss was not a beta accident, it was selection catching falling knives that bounced. The book itself was partial-fill residue (**12 long / 16 short, net-short ~$10.4k**), so the finding is directional evidence, not a stable performance number.
 
