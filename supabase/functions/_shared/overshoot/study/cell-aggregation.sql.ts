@@ -1,4 +1,15 @@
--- FP-069 W2.3 — cell-aggregation SQL (draft; INSERT wiring lands W2.4)
+/**
+ * cell-aggregation.sql.ts — TS module wrapper around the SQL body.
+ *
+ * FP-069 W2.5 conversion (ACT-457-ADD-04, operator ruling modified-B): the
+ * canonical .sql file was converted to a .ts module so the Supabase edge-fn
+ * bundler ships it with the deployed image. SQL content is BYTE-IDENTICAL
+ * to the pre-conversion .sql (sha256 recorded in ACT-457-ADD-04); there is
+ * NO duplicate .sql source — this file is the single source of truth for
+ * the query text. Fixture test (event-detection_fixture_test.sql) is
+ * output-asserted against a live DB and remains untouched.
+ */
+const sql = String.raw`-- FP-069 W2.3 — cell-aggregation SQL (draft; INSERT wiring lands W2.4)
 -- Governance: ACT-457-ADD-02. Design pin P3 (membership derived, not materialized).
 --
 -- Parameters (injected by the W2.4 runner):
@@ -166,4 +177,5 @@ SELECT * FROM cells;
 -- SELECT ... FROM cells;
 --
 -- Expected row count: 12 bands (6 per side) × 5 windows × 5 momentum × 5 drawdown × 4 widths
---                   = 6000 rows per run (3000 per tail — R1 ratified).
+--                   = 6000 rows per run (3000 per tail — R1 ratified).`;
+export default sql;

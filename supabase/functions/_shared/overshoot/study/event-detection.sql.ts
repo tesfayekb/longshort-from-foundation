@@ -1,4 +1,15 @@
--- FP-069 W2.3 — event-detection SQL (draft; INSERT wiring lands W2.4)
+/**
+ * event-detection.sql.ts — TS module wrapper around the SQL body.
+ *
+ * FP-069 W2.5 conversion (ACT-457-ADD-04, operator ruling modified-B): the
+ * canonical .sql file was converted to a .ts module so the Supabase edge-fn
+ * bundler ships it with the deployed image. SQL content is BYTE-IDENTICAL
+ * to the pre-conversion .sql (sha256 recorded in ACT-457-ADD-04); there is
+ * NO duplicate .sql source — this file is the single source of truth for
+ * the query text. Fixture test (event-detection_fixture_test.sql) is
+ * output-asserted against a live DB and remains untouched.
+ */
+const sql = String.raw`-- FP-069 W2.3 — event-detection SQL (draft; INSERT wiring lands W2.4)
 -- Governance: ACT-457-ADD-02. Design pins P1-P7 (see docs/04-modules/overshoot/overshoot.md#w23-study-design).
 --
 -- Parameters (injected by the W2.4 runner; :placeholders are illustrative only,
@@ -268,3 +279,5 @@ SELECT * FROM candidate_events;
 --      momentum_quintile, drawdown_bucket, days_to_nearest_earnings, alias_used,
 --      fwd_return_1d, fwd_return_5d, fwd_return_20d)
 --   SELECT ... FROM candidate_events;
+`;
+export default sql;
