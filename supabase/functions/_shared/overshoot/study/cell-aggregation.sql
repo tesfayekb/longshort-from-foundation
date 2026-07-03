@@ -124,13 +124,28 @@ cells AS (
   CROSS JOIN run_scope rs
   LEFT JOIN events_pnl ep
     ON  ep.side              = b.side
-    AND ep.window_days       = w.window_days
+    -- R-1 QUALIFICATION: cell (W, band) counts events whose |excess_W| crosses band,
+    -- matching what a live detector configured (W, band) fires on. Argmax W is NOT
+    -- used for membership; move_pct/window_days remain descriptive. ACT-457-ADD-03.
     AND ep.momentum_quintile = mq.momentum_quintile
     AND ep.drawdown_bucket   = db.drawdown_bucket
-    -- band membership: half-open [lo, hi) for long; (lo, hi] symmetric for short.
     AND (
-          (b.side = 'long'  AND ep.move_pct >= b.band_lo AND (b.band_hi IS NULL OR ep.move_pct < b.band_hi))
-       OR (b.side = 'short' AND ep.move_pct <= b.band_hi AND (b.band_lo IS NULL OR ep.move_pct > b.band_lo))
+          (b.side = 'long'  AND (CASE w.window_days
+                                   WHEN 1 THEN ep.excess_w1 WHEN 2 THEN ep.excess_w2
+                                   WHEN 3 THEN ep.excess_w3 WHEN 4 THEN ep.excess_w4
+                                   WHEN 5 THEN ep.excess_w5 END) >= b.band_lo
+                             AND (b.band_hi IS NULL OR (CASE w.window_days
+                                   WHEN 1 THEN ep.excess_w1 WHEN 2 THEN ep.excess_w2
+                                   WHEN 3 THEN ep.excess_w3 WHEN 4 THEN ep.excess_w4
+                                   WHEN 5 THEN ep.excess_w5 END) < b.band_hi))
+       OR (b.side = 'short' AND (CASE w.window_days
+                                   WHEN 1 THEN ep.excess_w1 WHEN 2 THEN ep.excess_w2
+                                   WHEN 3 THEN ep.excess_w3 WHEN 4 THEN ep.excess_w4
+                                   WHEN 5 THEN ep.excess_w5 END) <= b.band_hi
+                             AND (b.band_lo IS NULL OR (CASE w.window_days
+                                   WHEN 1 THEN ep.excess_w1 WHEN 2 THEN ep.excess_w2
+                                   WHEN 3 THEN ep.excess_w3 WHEN 4 THEN ep.excess_w4
+                                   WHEN 5 THEN ep.excess_w5 END) > b.band_lo))
         )
     -- earnings-exclusion width: keep events strictly outside the window, OR with no known earnings.
     AND (ep.days_to_nearest_earnings IS NULL
