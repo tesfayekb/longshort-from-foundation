@@ -16,7 +16,7 @@
  *   - Errors throw OvershootFetchError with source+ticker(+scope) context.
  *   - Deduplication is caller-side (DB PK); this fetcher returns raw rows.
  */
-import type { HttpFetch } from '../longshort-universe-interfaces.ts';
+import type { HttpFetch } from './http-fetch.ts';
 import {
   DEFAULT_FETCH_TIMEOUT_MS,
   fetchWithTimeoutAndRetry,
