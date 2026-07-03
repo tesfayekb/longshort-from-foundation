@@ -245,3 +245,29 @@ The 14 ETF tickers backfilled in W2.1 (SPY/QQQ/IWM + XLK/XLF/XLE/XLV/XLY/XLP/XLI
 ### FINRA-SI procurement (named, not chartered)
 
 The short-tail bias-direction stamp closes only under `SQUEEZE_FILTER_APPLIED`. That requires broker-grade FINRA bimonthly short-interest coverage over the full study window (not the current live-only feed). Prospective FP: `FP-CANDIDATE-FINRA-SI-BACKFILL` — new `overshoot_short_interest_snapshots` table + procurement path + study re-run. Named for continuity; not chartered.
+
+### W2.3 study-design SQL (CLOSED 2026-07-03, ACT-457-ADD-02)
+
+Two SQL files land in-repo this wave (no writes yet — INSERT wiring is W2.4):
+
+- `supabase/functions/_shared/overshoot/study/event-detection.sql`
+- `supabase/functions/_shared/overshoot/study/cell-aggregation.sql`
+- `supabase/functions/_shared/overshoot/study/event-detection_fixture_test.sql` (invariant assertions)
+
+**Design pins as implemented:**
+
+| Pin | Choice | Rationale |
+|-----|--------|-----------|
+| **P1 — idiosyncrasy** | Mechanism (a): **excess vs SPY**. `move_pct = ticker_ret(W) − spy_ret(W)`. Long/short trigger via sign + `\|excess\| ≥ min_band_bps`. | Single tuned parameter (band threshold); no separately calibrated flatness constant that would require its own study. Directly implements the DW-212 idiosyncratic thesis. |
+| **P2 — momentum quintile** | `NTILE(5) OVER (PARTITION BY trade_date ORDER BY momentum_12_1)` over the universe of names with non-NULL momentum on that date. Momentum = `close(t-21)/close(t-252) − 1`. | Cross-sectional per event date, not a longitudinal ranking. |
+| **P3 — events once** | One row per `(ticker, event_date, side)` with `window_days = argmax_{W∈{1..5}} \|excess_W\|`. Aggregation filters `window_days = grid.W`; band membership derived by `move_pct BETWEEN band_lo AND band_hi`. | No per-combination materialization. A calendar day satisfying multiple *bands* contributes to multiple cells at aggregation time (bands are magnitude bins on a single measured value). |
+| **P4 — alias earnings** | Declarative `alias_map` VALUES CTE (BRK.B→BRK.A, GOOG→GOOGL, FOX→FOXA, NWS→NWSA). Nearest earnings per event via `ORDER BY ABS(distance), distance DESC LIMIT 1` (ties break to AFTER side). `days_to_nearest_earnings` SIGNED (positive = after event). | ADD-06 spec verbatim. `alias_used` NULLable, holds the earnings-side ticker when mapped. |
+| **P5 — returns** | Raw close-to-close `fwd_return_{1,5,20}d` stored on events via `LEAD` (LEAD returns NULL at the horizon ⇒ typed absence, never a truncated pseudo-return). Haircut + SPY-excess applied at aggregation. | Cell PnL columns store haircut-adjusted `side_sign × raw − haircut_bps/10000`. |
+| **P6 — lookback** | `event_date >= :lookback_min_date`. Usable candidacy begins where BOTH the 252d momentum and the 5d excess lookbacks are satisfied (~2022-07-01 under the current bars snapshot). Earlier dates excluded, not NULL-padded. | Enforced pre-argmax in `per_window_excess`. |
+| **P7 — determinism** | All bounds are parameters (`:run_id`, `:bars_snapshot_max_date`, `:earnings_snapshot_max_date`, `:min_band_bps`, `:lookback_min_date`, `:haircut_bps_*`). No `now()`, no `current_date`, no wall-clock inside SQL. | Enables deterministic replay against a pinned snapshot. |
+
+**Symmetric-P1 emergent behaviour (documented, not a defect):** on a market-wide crash day where SPY drops sharply and a ticker holds steady, the excess-vs-SPY definition yields a legitimate LONG-side dislocation event for that ticker. Live-universe scale rarely produces this artifact clustered on a single day; the fixture surfaces it (2026-06-23 rows) and it is a correct application of the symmetric definition, not a bug.
+
+**Fixture invariants exercised (ACT-457-ADD-02 evidence block):** P1 (BBB market-wide → absent), P4 (GOOG→GOOGL alias with +3 signed distance), P5 (fwd_20d NULL at horizon), P6 (DDD pre-lookback → absent). P2 momentum quintile and drawdown bucket are DEFERRED from fixture testing because LAG(252) offset cannot be parameterized; both are exercised in the W2.5 90-day smoke run against real bars.
+
+**EXPLAIN plan shape (90-day slice, no ANALYZE):** PK-index-driven `Index Scan on overshoot_daily_bars_pkey` for both ticker and SPY reads; `Merge Join` bars⇔universe consuming PK ordering directly into `WindowAgg` (no Sort node); `Hash Join` for SPY alignment (SPY = 1,284 rows). Total cost ≈ 90k for ~1.04M rows through WindowAgg. No seq-scan, no external sort, no spill risk indicators.
