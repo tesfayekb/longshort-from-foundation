@@ -16,8 +16,15 @@
 --       A market-wide day (e.g. SPY -7%, ticker -7%) yields ~0 excess ⇒ no event.
 --   P2: momentum_12_1 quintile is CROSS-SECTIONAL per event_date over active universe
 --       with non-NULL momentum on that date.
---   P3: one row per (ticker, event_date, side); window_days = argmax_{W∈{1..5}} |excess_W|.
---       Band membership is derived at aggregation, never materialized here.
+--   P3 (R-1 QUALIFICATION SEMANTICS, ACT-457-ADD-03):
+--       one row per (ticker, event_date, side) where EXISTS a W in {1..5}
+--       such that |excess_W| >= :min_band_bps. The row persists ALL FIVE
+--       per-window excesses (excess_w1..excess_w5) so cell-aggregation can
+--       derive (W, band) membership independently per W - mirroring what a
+--       live detector configured (W, band) would fire on. move_pct and
+--       window_days are retained as DESCRIPTIVE argmax fields (peak-magnitude
+--       window), NEVER as cell-membership keys. Band membership is derived at
+--       aggregation, never materialized here.
 --   P4: earnings join uses ADD-06 alias OR-map (BRK.B→BRK.A, GOOG→GOOGL, FOX→FOXA, NWS→NWSA).
 --       days_to_nearest_earnings SIGNED: positive ⇒ earnings AFTER event, negative ⇒ BEFORE.
 --   P5: fwd_return_Nd is NULL when event_date + N trading days > bars_snapshot_max_date.
@@ -133,7 +140,8 @@ argmax_window AS (
   SELECT
     ticker, trade_date, close, c_trail252_max, momentum_12_1,
     fwd_1d, fwd_5d, fwd_20d,
-    side, window_days, excess
+    side, window_days, excess,
+    ex_1d, ex_2d, ex_3d, ex_4d, ex_5d
   FROM (
     SELECT
       p.*,
@@ -220,8 +228,13 @@ candidate_events AS (
     aw.ticker                           AS ticker,
     aw.trade_date                       AS event_date,
     aw.side                             AS side,
-    aw.excess                           AS move_pct,          -- excess-vs-SPY (P1)
-    aw.window_days                      AS window_days,       -- argmax W (P3)
+    aw.excess                           AS move_pct,          -- descriptive: argmax |excess| (P3 R-1)
+    aw.window_days                      AS window_days,       -- descriptive: argmax W (P3 R-1)
+    aw.ex_1d                            AS excess_w1,         -- R-1 qualification: per-W excess for cell membership
+    aw.ex_2d                            AS excess_w2,
+    aw.ex_3d                            AS excess_w3,
+    aw.ex_4d                            AS excess_w4,
+    aw.ex_5d                            AS excess_w5,
     mub.momentum_quintile               AS momentum_quintile, -- P2
     CASE
       WHEN aw.c_trail252_max IS NULL OR aw.c_trail252_max <= 0 THEN NULL
@@ -248,8 +261,10 @@ candidate_events AS (
 )
 SELECT * FROM candidate_events;
 
--- W2.4 wiring will wrap: INSERT INTO overshoot_study_candidate_events
---   (run_id, ticker, event_date, side, move_pct, window_days,
---    momentum_quintile, drawdown_bucket, days_to_nearest_earnings, alias_used,
---    fwd_return_1d, fwd_return_5d, fwd_return_20d)
--- SELECT ... FROM candidate_events;
+-- W2.4 wiring (overshoot-study-run edge fn) wraps:
+--   INSERT INTO overshoot_study_candidate_events
+--     (run_id, ticker, event_date, side, move_pct, window_days,
+--      excess_w1, excess_w2, excess_w3, excess_w4, excess_w5,
+--      momentum_quintile, drawdown_bucket, days_to_nearest_earnings, alias_used,
+--      fwd_return_1d, fwd_return_5d, fwd_return_20d)
+--   SELECT ... FROM candidate_events;

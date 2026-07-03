@@ -40,7 +40,7 @@
 --   ✓ DDD  : absent from actuals (P6 pass).
 
 WITH
-fixture_universe(ticker) AS (VALUES ('AAA'),('BBB'),('CCC'),('GOOG'),('DDD')),
+fixture_universe(ticker) AS (VALUES ('AAA'),('BBB'),('CCC'),('GOOG'),('DDD'),('EEE')),
 fixture_bars(ticker, trade_date, close) AS (VALUES
   ('AAA','2026-06-15'::date,100.0),('AAA','2026-06-16',100.0),('AAA','2026-06-17',100.0),
   ('AAA','2026-06-18',100.0),('AAA','2026-06-19',100.0),('AAA','2026-06-22',106.0),('AAA','2026-06-23',106.0),
@@ -51,6 +51,10 @@ fixture_bars(ticker, trade_date, close) AS (VALUES
   ('BBB','2026-06-15',100.0),('BBB','2026-06-16',100.0),('BBB','2026-06-17',100.0),
   ('BBB','2026-06-18',100.0),('BBB','2026-06-19',100.0),('BBB','2026-06-22',100.0),('BBB','2026-06-23',93.0),
   ('DDD','2026-06-15',100.0),('DDD','2026-06-16',106.0),
+  -- EEE: sharp +8% 1-day move on 2026-06-22 that ALSO produces +8% at W=3
+  -- (base 100 three days prior); proves R-1 qualification cross-window fire.
+  ('EEE','2026-06-15',100.0),('EEE','2026-06-16',100.0),('EEE','2026-06-17',100.0),
+  ('EEE','2026-06-18',100.0),('EEE','2026-06-19',100.0),('EEE','2026-06-22',108.0),('EEE','2026-06-23',108.0),
   ('SPY','2026-06-15',400.0),('SPY','2026-06-16',400.0),('SPY','2026-06-17',400.0),
   ('SPY','2026-06-18',400.0),('SPY','2026-06-19',400.0),('SPY','2026-06-22',400.0),('SPY','2026-06-23',372.0)
 ),
@@ -104,7 +108,8 @@ per_window_excess AS (
   WHERE bw.trade_date >= (SELECT lookback_min_date FROM params)
 ),
 argmax_window AS (
-  SELECT ticker, trade_date, close, fwd_20d, side, window_days, excess FROM (
+  SELECT ticker, trade_date, close, fwd_20d, side, window_days, excess,
+         ex_1d, ex_2d, ex_3d, ex_4d, ex_5d FROM (
     SELECT p.*, side, window_days, excess,
       ROW_NUMBER() OVER (PARTITION BY p.ticker, p.trade_date, side ORDER BY ABS(excess) DESC, window_days ASC) AS rn
     FROM per_window_excess p
@@ -142,19 +147,31 @@ nearest_earnings AS (
 ),
 actual AS (
   SELECT aw.ticker, aw.trade_date, aw.side, ROUND(aw.excess::numeric, 4) AS move_pct,
-         aw.window_days, ne.days_to_nearest_earnings, ne.alias_used,
+         aw.window_days,
+         ROUND(aw.ex_1d::numeric,4) excess_w1, ROUND(aw.ex_3d::numeric,4) excess_w3,
+         ne.days_to_nearest_earnings, ne.alias_used,
          (aw.fwd_20d IS NULL) AS fwd_20d_is_null
   FROM argmax_window aw
   LEFT JOIN nearest_earnings ne ON ne.event_ticker=aw.ticker AND ne.event_date=aw.trade_date
+  WHERE aw.trade_date = '2026-06-22'::date  -- pin to isolate SPY-crash D23 artifacts (documented in header)
 ),
-expected(ticker, trade_date, side, move_pct, window_days, days_to_nearest_earnings, alias_used, fwd_20d_is_null) AS (VALUES
-  ('AAA', '2026-06-22'::date, 'long',   0.0600::numeric, 1, NULL::int,  NULL::text, true),
-  ('CCC', '2026-06-22'::date, 'short', -0.0500::numeric, 1, -3,         NULL,       true),
-  ('GOOG','2026-06-22'::date, 'long',   0.0600::numeric, 1,  3,         'GOOGL',    true)
+-- R-1 QUALIFICATION assertions (ACT-457-ADD-03):
+--   AAA/GOOG D22: argmax W=1 excess=+0.06, and excess_w3 must ALSO be +0.06 so a
+--     live (W=3, band=0.05) detector fires on the same event.
+--   EEE D22: sharp 1-day +8% move; excess_w1=excess_w3=+0.08 proves a sharp move
+--     also cross-qualifies at longer W under qualification semantics.
+--   CCC D22: short-side -0.05 at every W.
+--   BBB/DDD: absent (P1, P6).
+expected(ticker, trade_date, side, move_pct, window_days, excess_w1, excess_w3,
+         days_to_nearest_earnings, alias_used, fwd_20d_is_null) AS (VALUES
+  ('AAA', '2026-06-22'::date, 'long',   0.0600::numeric, 1, 0.0600::numeric, 0.0600::numeric, NULL::int,  NULL::text, true),
+  ('CCC', '2026-06-22'::date, 'short', -0.0500::numeric, 1,-0.0500,          -0.0500,          -3,         NULL,       true),
+  ('EEE', '2026-06-22'::date, 'long',   0.0800::numeric, 1, 0.0800,           0.0800,          NULL,       NULL,       true),
+  ('GOOG','2026-06-22'::date, 'long',   0.0600::numeric, 1, 0.0600,           0.0600,           3,         'GOOGL',    true)
 )
 SELECT 'ACTUAL' AS src, ticker, trade_date, side, move_pct, window_days,
-       days_to_nearest_earnings, alias_used, fwd_20d_is_null FROM actual
+       excess_w1, excess_w3, days_to_nearest_earnings, alias_used, fwd_20d_is_null FROM actual
 UNION ALL
 SELECT 'EXPECTED', ticker, trade_date, side, move_pct, window_days,
-       days_to_nearest_earnings, alias_used, fwd_20d_is_null FROM expected
+       excess_w1, excess_w3, days_to_nearest_earnings, alias_used, fwd_20d_is_null FROM expected
 ORDER BY ticker, side, trade_date, src;

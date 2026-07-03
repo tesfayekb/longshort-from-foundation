@@ -1637,6 +1637,11 @@ export type Database = {
           drawdown_bucket: number | null
           event_date: string
           event_id: number
+          excess_w1: number | null
+          excess_w2: number | null
+          excess_w3: number | null
+          excess_w4: number | null
+          excess_w5: number | null
           fwd_return_1d: number | null
           fwd_return_20d: number | null
           fwd_return_5d: number | null
@@ -1654,6 +1659,11 @@ export type Database = {
           drawdown_bucket?: number | null
           event_date: string
           event_id?: number
+          excess_w1?: number | null
+          excess_w2?: number | null
+          excess_w3?: number | null
+          excess_w4?: number | null
+          excess_w5?: number | null
           fwd_return_1d?: number | null
           fwd_return_20d?: number | null
           fwd_return_5d?: number | null
@@ -1671,6 +1681,11 @@ export type Database = {
           drawdown_bucket?: number | null
           event_date?: string
           event_id?: number
+          excess_w1?: number | null
+          excess_w2?: number | null
+          excess_w3?: number | null
+          excess_w4?: number | null
+          excess_w5?: number | null
           fwd_return_1d?: number | null
           fwd_return_20d?: number | null
           fwd_return_5d?: number | null
