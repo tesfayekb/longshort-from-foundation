@@ -22,30 +22,27 @@
  * Invoked from .github/workflows/overshoot-guards.yml on every PR.
  */
 
-// The A3-verified leaf-utility paths overshoot code may import from the
-// longshort tree. Kept small on purpose — each addition requires executor
-// review + FP amendment.
+// A3_ALLOWLIST semantics (FP-069 W1b turn-2, ACT-456):
+// Entries here are the LIVE subset of the FP-069-ratified leaf set
+// (clock, fetch-with-timeout, z-score-normalize, polygon-price-history-fetcher).
+// A ratified-but-not-yet-imported leaf is NOT pre-listed — it is added the
+// first time overshoot code genuinely imports it, in the same PR that
+// introduces the import, citing the FP-069 charter clause that ratified it.
+// A NON-ratified addition requires an FP-069 charter amendment BEFORE the
+// allowlist edit lands. The predicate only fires on specifiers whose path
+// contains 'longshort' (see rule 1 in `scanFile`), so any entry whose
+// specifier does NOT contain 'longshort' is unreachable dead weight and
+// must not be listed.
 //
-// FP-069 W1b (ACT-456): `longshort-universe-interfaces.ts` was REMOVED from
-// this list because `HttpFetch` is now overshoot-owned at
-// `_shared/overshoot/http-fetch.ts` (signature-identical redeclaration).
-//
-// Matched as *specifier-suffix* — relative imports resolve to these tail paths.
-// `longshort-clock.ts` and `parse-as-of-date.ts` are documentary carve-outs
-// for infra that historically lives under `_shared/`; they are not currently
-// imported by any overshoot file but stay listed so future moves under the
-// longshort tree still pass the membrane. `parse-as-of-date.ts` does NOT
-// contain "longshort" in its specifier and therefore would not trigger the
-// guard at all — listed for documentary completeness only.
-//
-// NOTE (ACT-456 turn-1): the standing brief called for "exactly four" entries
-// after removal; the arithmetic of removing one from a four-entry list yields
-// three. Surfaced in ACT-456 for operator confirmation; no fourth entry has
-// been fabricated.
+// W1b turn-2 removals:
+//   - `parse-as-of-date.ts` — unreachable (no 'longshort' in specifier) AND
+//     not a ratified charter leaf. Removed to keep the list a truthful mirror
+//     of live posture.
+//   - `longshort-universe-interfaces.ts` (removed turn-1) — HttpFetch is now
+//     overshoot-owned at `_shared/overshoot/http-fetch.ts`.
 export const A3_ALLOWLIST: ReadonlyArray<string> = [
   'longshort-universe/shared/fetch-with-timeout.ts',
   'longshort-clock.ts',
-  'parse-as-of-date.ts',
 ];
 
 export interface Violation {
