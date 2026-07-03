@@ -17,8 +17,8 @@
  *   1. Insert overshoot_study_runs row with stamps + params + snapshot ceilings
  *      + git_sha, outcome='running'.
  *   2. BEGIN TX.
- *      2a. INSERT ... FROM event-detection.sql (SELECT-only for dry_run).
- *      2b. INSERT ... FROM cell-aggregation.sql (skipped for dry_run).
+ *      2a. INSERT ... FROM event-detection.sql.ts (SELECT-only for dry_run).
+ *      2b. INSERT ... FROM cell-aggregation.sql.ts (skipped for dry_run).
  *      COMMIT.
  *   3. UPDATE runs SET outcome='completed', completed_at=now(). On error,
  *      UPDATE outcome='failed' (transaction rolled back, runs row survives).
@@ -37,12 +37,12 @@ import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js';
 
-const EVENT_DETECTION_SQL = await Deno.readTextFile(
-  new URL('../_shared/overshoot/study/event-detection.sql', import.meta.url),
-);
-const CELL_AGGREGATION_SQL = await Deno.readTextFile(
-  new URL('../_shared/overshoot/study/cell-aggregation.sql', import.meta.url),
-);
+// FP-069 W2.5 (ACT-457-ADD-04): the .sql bodies were converted to .ts modules
+// so the Supabase edge-fn bundler ships them with the deployed image. The .ts
+// modules are the single source of truth for the query text — there is no
+// duplicate .sql file to drift against.
+import EVENT_DETECTION_SQL from '../_shared/overshoot/study/event-detection.sql.ts';
+import CELL_AGGREGATION_SQL from '../_shared/overshoot/study/cell-aggregation.sql.ts';
 
 const SURVIVORSHIP_STAMP = 'UPPER_BOUND_SURVIVORSHIP_BIASED';
 const PERFORMANCE_STAMP = 'NON_PERFORMANCE_STUDY_ONLY';
