@@ -57,9 +57,20 @@ function loadEnv(): ClientEnv {
   const missing: string[] = [];
   const invalid: string[] = [];
 
-  const supabaseUrl = readRaw('VITE_SUPABASE_URL');
-  const supabaseKey = readRaw('VITE_SUPABASE_PUBLISHABLE_KEY');
-  const supabaseProjectId = readRaw('VITE_SUPABASE_PROJECT_ID');
+  // Fallbacks for the three public Supabase identifiers. These are the same
+  // values already hardcoded in src/integrations/supabase/client.ts and shipped
+  // in every client bundle — they are publishable/public by design (RLS is what
+  // protects data). Fallbacks let the published build boot even when the host
+  // does not inject VITE_SUPABASE_* at build time (e.g. Lovable published
+  // deployments without workspace Build Secrets configured). The .env in
+  // preview still overrides these at build time.
+  const FALLBACK_SUPABASE_URL = 'https://sftatlxatbdrotivxcip.supabase.co';
+  const FALLBACK_SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmdGF0bHhhdGJkcm90aXZ4Y2lwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTIyNDMsImV4cCI6MjA5NDI2ODI0M30.ItD8UTfiWsWc1_f8iST4ahyypErCRIjjWeA-oswHKs8';
+  const FALLBACK_SUPABASE_PROJECT_ID = 'sftatlxatbdrotivxcip';
+
+  const supabaseUrl = readRaw('VITE_SUPABASE_URL') ?? FALLBACK_SUPABASE_URL;
+  const supabaseKey = readRaw('VITE_SUPABASE_PUBLISHABLE_KEY') ?? FALLBACK_SUPABASE_PUBLISHABLE_KEY;
+  const supabaseProjectId = readRaw('VITE_SUPABASE_PROJECT_ID') ?? FALLBACK_SUPABASE_PROJECT_ID;
 
   if (!supabaseUrl) missing.push('VITE_SUPABASE_URL');
   else {
