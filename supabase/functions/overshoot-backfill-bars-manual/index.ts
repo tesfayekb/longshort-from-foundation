@@ -122,6 +122,14 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(400, 'tickers_or_full_required', { correlationId });
   }
   if (tickers.length === 0) {
+    if (body.full === true) {
+      // Resume cursor is past the last universe ticker — batch is empty, backfill is complete.
+      return apiSuccess({
+        ok: true, run_id: null, ticker_count: 0, row_count: 0,
+        failure_count: 0, failures: [], last_cursor: null, done: true,
+        correlation_id: correlationId,
+      });
+    }
     return apiError(400, 'no_tickers_resolved', { correlationId });
   }
   if (!body.full && tickers.length > BATCH_HARD_CAP) {
