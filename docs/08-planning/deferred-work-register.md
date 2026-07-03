@@ -4835,4 +4835,20 @@ Baseline crit-both-present pool = 827 names; the 11-name gate loss is entirely f
 
 **Cross-ref:** DEC-079 (ratifying decision); DEC-078 (precedent, criticals-only, non-criticals-deferred); DW-208 / DW-208-ADD-01 (Fix-1 unblock chain); DW-211 (regime cadence sibling); DW-204 / ACT-436 (live-ranker overlap — mitigated by higher pool, not fixed); ACT-452 (DW-210-ADD-01 counterfactual evidence + T-1-computability grep); ACT-453 (this landing); jobs 100 / 88 / 87 / 95 (operator crons); §22.5.3 (operator-owned cron path).
 
+## DW-212 — Short-side selection concentration under reversal-gating (2026-07-02 forensic; evidence feeds FP-069)
+
+**Status:** REGISTERED 2026-07-02 at ACT-454. **Disposition: NO live-strategy change** — evidence feeds FP-069 (OVERSHOOT). This DW consumes the reservation noted at ACT-451 / the DW-210 entry.
+
+**Finding (2026-07-02 short-book forensic).** The 06-30 rebalance entry cohort's short side was selected with `reversal_1w` **sanctioned-null for all 16 shorts** — effectively a one-signal (momentum-only) short book at the entry slot. Selection distribution: **11/16 shorts** entered ≥ 20% below their 52-week highs; **6/16** entered > 40% below. The > 40%-drawdown sextet contributed **~74% of the −$1,022 short-leg loss over ~44h** against a flat SPY (**−0.135%**); residual after SPY-beta subtraction was **≈ 100% idiosyncratic** — the loss was not a beta accident, it was selection catching falling knives that bounced. The book itself was partial-fill residue (**12 long / 16 short, net-short ~$10.4k**), so the finding is directional evidence, not a stable performance number.
+
+**Interpretation.** Momentum-only short-side construction, when reversal is not co-signalling, degenerates to systematically shorting names already deeply below their 52-week highs — precisely the population most prone to a mean-reversion bounce. The book harvested no edge on that population; the mirror-image opportunity (going LONG that same population under the right filters) is what FP-069 (OVERSHOOT) charters as a separate strategy.
+
+**Disposition.** NO live-strategy change from this DW. Any refinement to the live long-short short-book construction converges with the **2026-07-22 DW-109 gate-ablation read** + **FP-058** (squeeze-protection charter) rather than being pre-empted here. The point of this DW is to preserve the evidence and route it to FP-069.
+
+**Open confirmation item.** Why `reversal_1w` was sanctioned-null at the 06-30 entry slot for the entire short book: manual-chain ordering during that day's rebalance is the leading hypothesis (the reversal producer likely ran after the rankings the rebalance consumed). Confirming this requires re-reading the 06-30 producer-vs-consumer timestamps against the manual-chain audit — deferred, not blocking DW-212 registration.
+
+**Candidate evidence-gated refinements (LISTED, NOT ACTIONED).** These are recorded for the 2026-07-22 DW-109 read and any FP-058 build turn to consume; DW-212 does not action them: (a) 52w-drawdown exclusion band on short-side selection (e.g., no short entries on names > X% below 52w-high, X to be studied); (b) reversal-must-be-live pre-condition on short-book construction (short-side entries blocked when `reversal_1w` is sanctioned-null across the intended cohort). Both remain **candidate** pending the DW-109 gate-ablation evidence.
+
+**Cross-ref:** ACT-451 (the reservation this DW consumes); ACT-454 (this landing); FP-069 (the strategy chartered off this evidence); FP-058 (squeeze-protection sibling, never merged); DW-109 (the 2026-07-22 gate-ablation read that converges any live-side decision); DW-207-ADD-01 (broker-sourced close path); the 2026-07-02 short-book forensic turn (evidence source).
+
 
