@@ -124,4 +124,10 @@ Batch hard-cap for named-ticker invocations is 50 (`full:true` is uncapped). Eac
 2. **FMP earnings — batch-upsert PK collision.** FMP bulk-range responses contain duplicate `(ticker, announcement_date, source)` tuples within a single call (e.g. duplicate rows for the same reporting date). The single `.upsert(payload, { onConflict: 'ticker,announcement_date,source' })` fails with `ON CONFLICT DO UPDATE command cannot affect row a second time`. Remediation: in-memory dedupe of `payload[]` on the PK tuple before upsert, keeping last occurrence. Fix is code-local to `overshoot-backfill-earnings-manual/index.ts`.
 
 **Idempotency-signal caveat.** The D-3 turn-5 delta-0 result is a **degenerate idempotency signal** — both writes wrote 0 rows because both failed identically on the same bigint defect. A meaningful idempotency verification requires re-running D-3 after defect (1) is fixed and D-2a yields a positive row count.
+
+### W1b turn-6 remediation (2026-07-03, ACT-456 turn-6)
+
+**Bars-table volume semantics — `numeric` (not `bigint`).** DEFECT-1 ratified as option (a): `overshoot_daily_bars.volume` widened from `bigint` to `numeric` (lossless). Polygon adjusted volume is fractional by vendor construction (split/dividend adjustments produce non-integer share counts); rounding at ingest would silently distort a money-adjacent vendor value, which the ROI-guardrails principle forbids. Fetcher passes vendor `v` through untouched — no change to `polygon-daily-ohlcv-fetcher.ts`. Applies to all downstream consumers: read the column as numeric and preserve fractional precision through analytical surfaces.
+
+**FMP dedupe — keep-FIRST.** DEFECT-2 ratified as in-memory PK-tuple dedupe on `(ticker, announcement_date, source)`, keep-FIRST occurrence, with a `duplicates_dropped: <n>` counter surfaced in the earnings-fn response JSON (and in W1b evidence). No schema change; no other row-semantic change. FMP responses within a single bulk range occasionally repeat identical PK tuples; keep-FIRST is the deterministic, order-preserving choice.
 - [Change Control Policy](../../00-governance/change-control-policy.md).
