@@ -128,7 +128,8 @@ Deno.serve(createHandler(async (req: Request) => {
 
   // ---- iterate ----
   const fetcher = new PolygonDailyOhlcvFetcher(polygonKey);
-  let totalRows = 0, reqCount = 0, failures: Array<{ ticker: string; error: string }> = [];
+  let totalRows = 0, reqCount = 0;
+  const failures: Array<{ ticker: string; error: string }> = [];
   let lastCursor: string | null = null;
 
   for (const ticker of tickers) {
