@@ -76,4 +76,41 @@ HIGH — this module operates a second broker account against real paper fills. 
 - [DW-212](../../08-planning/deferred-work-register.md) — Evidence.
 - [ACT-454](../../06-tracking/action-tracker.md) — Charter landing.
 - [Constitution](../../00-governance/constitution.md).
+
+## Wave-1a Data Commons — Landed State (ACT-455, 2026-07-03)
+
+**Tables (all `overshoot_*`, RLS on, RESTRICTIVE deny-writes + `overshoot.view`-gated SELECT):**
+
+| Table | Purpose | Primary key |
+| --- | --- | --- |
+| `overshoot_backfill_runs` | Lineage row per backfill invocation (kind, cursor, request/row counts, outcome). | `run_id` (uuid) |
+| `overshoot_universe` | Ticker spec table (seeded from `universe_membership`, 839 rows at seed). | `ticker` |
+| `overshoot_daily_bars` | Adjusted OHLCV + VWAP + trade_count; `source_run_id` FK to `overshoot_backfill_runs`. `vwap` and `trade_count` are NULLABLE — typed absence, never 0-coerced. | `(ticker, trade_date)` |
+| `overshoot_earnings_calendar` | Dual-source earnings (`finnhub` primary, `fmp` cross-audit); `hour` is NULLABLE (`'bmo'` / `'amc'` / NULL). Finnhub empty-string / `dmh` / unknown session and all FMP rows persist as SQL NULL — never a synthesized session. | `(ticker, announcement_date, source)` |
+
+**RBAC:** `overshoot.view` (read) + `overshoot.manage` (invoke backfills) seeded and granted to Administrator; DEC-031 two-segment discipline preserved.
+
+**Fetchers (in `supabase/functions/_shared/overshoot/`, parallel-tree per separation contract):**
+- `PolygonDailyOhlcvFetcher` — adjusted daily OHLCV+VWAP+trade_count over an injected `as_of` window. Constructor-injected `apiKey` + `httpFetch`. HTTP 404 → `null` (typed absence); other non-2xx / timeouts throw `OvershootFetchError` with ticker context.
+- `FinnhubEarningsFetcher` — per-ticker calendar with the load-bearing session flag; empty-string / `dmh` / unknown → SQL NULL.
+- `FmpEarningsCalendarFetcher` — bulk range calendar; `hour` always NULL (cross-audit only).
+
+**Manual invocation surfaces (deployed):**
+- `overshoot-backfill-bars-manual` — `POST` handler. Contract: `{ probe?, tickers?, full?, lookback_days?, as_of?, resume_from? }`. Probe path (`{probe:true}`) exercises the Polygon key against AAPL, writes nothing, and returns `{ probe:true, ok, bar_count }` — the A5 gate-zero probe.
+- `overshoot-backfill-earnings-manual` — `POST` handler. Contract: `{ source: 'finnhub'|'fmp', from, to, tickers?, full?, resume_from? }`. Finnhub is per-ticker; FMP is one bulk range call.
+
+**CI membrane:** `scripts/check-overshoot-separation.ts` + `.github/workflows/overshoot-guards.yml` enforce the separation contract at every PR: overshoot files may import ONLY the four A3-allowlisted longshort leaf utilities (`longshort-universe-interfaces.ts`, `longshort-universe/shared/fetch-with-timeout.ts`, `longshort-clock.ts`, `parse-as-of-date.ts`); longshort files may not import anything overshoot. Adding a fifth allowlist entry requires an FP-069 amendment.
+
+## Wave-1b Executor Runbook (backfill completion)
+
+**Not an operator runbook** — this is the executor-facing invocation loop that closes W1 at ACT-456 (the next ACT). Pattern:
+
+1. **Bars, full universe.** Invoke `overshoot-backfill-bars-manual` with `{ full: true, lookback_days: 1830 }`. The handler iterates `overshoot_universe` alphabetically, paces 250 ms between tickers, and stamps each bar with the run's `source_run_id`. On failure/timeout, re-invoke with `{ full: true, resume_from: '<last_cursor>' }` — `last_cursor` is echoed in the previous response and in `overshoot_backfill_runs.cursor`. Expected total: ≈839 tickers × ~5 y ≈ ~1.05 M bar rows.
+2. **Earnings, Finnhub, full universe.** Invoke `overshoot-backfill-earnings-manual` with `{ source: 'finnhub', from: '2021-07-03', to: '2026-07-03', full: true }`. Same resume-by-cursor pattern; 1.1 s inter-ticker pacing.
+3. **Earnings, FMP, bulk range chunks.** Invoke `overshoot-backfill-earnings-manual` with `{ source: 'fmp', from: '2021-07-03', to: '2021-12-31' }`, then step `to` forward in ≤6-month chunks through `2026-07-03`. FMP caps the response window; the handler makes exactly one HTTP call per invocation.
+4. **W1 close bar — full Finnhub↔FMP cross-audit.** SQL over the populated 839-ticker sample: agreement rate on `(ticker, announcement_date)`; hour-flag coverage on the Finnhub table; typed-absence NULL count. Emit as the ACT-456 evidence block.
+
+Batch hard-cap for named-ticker invocations is 50 (`full:true` is uncapped). Each invocation writes ONE `overshoot_backfill_runs` row regardless of failure mode; failures accumulate in `failures[]` (first 10 in response) and `outcome` is `completed` / `partial` / `failed` based on `row_count` vs `failure_count`.
+
+**Secrets required at invocation time:** `POLYGON_API_KEY` (bars), `FINNHUB_API_KEY` (finnhub earnings), `FMP_API_KEY` (fmp earnings). If unset, the function returns 500 `<vendor>_api_key_unset` before opening any run row.
 - [Change Control Policy](../../00-governance/change-control-policy.md).

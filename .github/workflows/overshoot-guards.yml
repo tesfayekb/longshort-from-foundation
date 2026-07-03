@@ -1,0 +1,31 @@
+# FP-069 OVERSHOOT Wave-1a: Separation-Contract CI guard.
+# Runs the tree-scan check on every PR that touches the overshoot or longshort
+# surfaces, and executes the unit tests for the guard itself.
+name: overshoot-guards
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/_shared/overshoot/**'
+      - 'supabase/functions/overshoot-*/**'
+      - 'supabase/functions/_shared/longshort-**'
+      - 'supabase/functions/longshort-**'
+      - 'scripts/check-overshoot-separation*'
+      - '.github/workflows/overshoot-guards.yml'
+  push:
+    branches: [main]
+
+jobs:
+  separation-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      - name: Run overshoot separation guard
+        run: deno run --allow-read scripts/check-overshoot-separation.ts
+      - name: Test the guard itself
+        run: deno test --allow-read scripts/check-overshoot-separation_test.ts
+      - name: Test overshoot fetchers
+        run: deno test --allow-read --allow-net supabase/functions/_shared/overshoot/
