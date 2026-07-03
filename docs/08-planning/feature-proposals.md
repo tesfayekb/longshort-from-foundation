@@ -1363,7 +1363,7 @@ Authority: ACT-302.
 
 | Field | Value |
 | --- | --- |
-| **Status** | CHARTERED (Wave 0) at ACT-454, 2026-07-02. Governance-only landing; no code, no migration, no cron, no secret this turn. Wave 1 opens under a separate execution prompt. |
+| **Status** | execution-in-progress. **W0** chartered at ACT-454. **W1a** landed at ACT-455 (2026-07-03): 4 `overshoot_*` tables live with RLS (RESTRICTIVE deny-writes + `overshoot.view`-gated SELECT); `overshoot.view` + `overshoot.manage` permissions seeded and granted to Administrator; `overshoot_universe` seeded to 839 rows from `universe_membership`; `PolygonDailyOhlcvFetcher` + `FinnhubEarningsFetcher` + `FmpEarningsCalendarFetcher` shipped in `_shared/overshoot/`; `overshoot-backfill-bars-manual` + `overshoot-backfill-earnings-manual` edge functions deployed; separation-contract CI guard active in `.github/workflows/overshoot-guards.yml` (5/5 guard tests green, 10/10 fetcher tests green, guard scan clean on real tree). **W1b** pending: full 839-ticker bars backfill + 5y Finnhub earnings backfill + full-universe Finnhub↔FMP cross-audit — executor-driven under a separate continuation prompt; W1 does NOT close at ACT-455. **W2-W5** unchanged. |
 | **Tier** | A — future money-adjacent system. This turn is documentation-only. |
 | **Mode** | DOCUMENTATION-ONLY at charter. |
 | **Origin** | Operator-authorized 2026-07-02 post-DW-212 short-book forensic. Overshoot is the natural counterpart to the reversal-effect the current long-short book was shorting into (i.e., already-crashed names bouncing against a flat SPY). |
