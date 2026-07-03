@@ -25,30 +25,19 @@ describe('RW-021: env loader fail-fast', () => {
     vi.resetModules();
   });
 
-  it('throws EnvConfigError when VITE_SUPABASE_URL is missing', async () => {
+  it('falls back to hardcoded public Supabase identifiers when VITE_SUPABASE_* are missing', async () => {
+    // Fallbacks are intentional: the three Supabase publishable identifiers
+    // are public (also hardcoded in src/integrations/supabase/client.ts) so
+    // the published build can boot even when the host does not inject
+    // VITE_SUPABASE_* at build time. RLS protects data.
     vi.stubEnv('VITE_SUPABASE_URL', '');
-    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'anon-key');
-    vi.stubEnv('VITE_SUPABASE_PROJECT_ID', 'project-id');
-
-    await expect(async () => {
-      await import('@/lib/env');
-    }).rejects.toMatchObject({
-      name: 'EnvConfigError',
-      missing: expect.arrayContaining(['VITE_SUPABASE_URL']),
-    });
-  });
-
-  it('throws EnvConfigError when VITE_SUPABASE_PUBLISHABLE_KEY is missing', async () => {
-    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
     vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '');
-    vi.stubEnv('VITE_SUPABASE_PROJECT_ID', 'project-id');
+    vi.stubEnv('VITE_SUPABASE_PROJECT_ID', '');
 
-    await expect(async () => {
-      await import('@/lib/env');
-    }).rejects.toMatchObject({
-      name: 'EnvConfigError',
-      missing: expect.arrayContaining(['VITE_SUPABASE_PUBLISHABLE_KEY']),
-    });
+    const mod = await import('@/lib/env');
+    expect(mod.env.SUPABASE_URL).toMatch(/^https:\/\/.+\.supabase\.co$/);
+    expect(mod.env.SUPABASE_PUBLISHABLE_KEY.length).toBeGreaterThan(0);
+    expect(mod.env.SUPABASE_PROJECT_ID.length).toBeGreaterThan(0);
   });
 
   it('throws EnvConfigError when VITE_SUPABASE_URL is not a valid URL', async () => {
