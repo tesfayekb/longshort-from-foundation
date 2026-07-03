@@ -1478,6 +1478,184 @@ export type Database = {
         }
         Relationships: []
       }
+      overshoot_backfill_runs: {
+        Row: {
+          completed_as_of: string | null
+          created_at: string
+          cursor: string | null
+          kind: string
+          outcome: string | null
+          request_count: number | null
+          row_count: number | null
+          run_id: string
+          started_as_of: string
+          updated_at: string
+        }
+        Insert: {
+          completed_as_of?: string | null
+          created_at?: string
+          cursor?: string | null
+          kind: string
+          outcome?: string | null
+          request_count?: number | null
+          row_count?: number | null
+          run_id?: string
+          started_as_of: string
+          updated_at?: string
+        }
+        Update: {
+          completed_as_of?: string | null
+          created_at?: string
+          cursor?: string | null
+          kind?: string
+          outcome?: string | null
+          request_count?: number | null
+          row_count?: number | null
+          run_id?: string
+          started_as_of?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      overshoot_daily_bars: {
+        Row: {
+          adjusted: boolean
+          close: number
+          created_at: string
+          fetched_as_of: string
+          high: number
+          low: number
+          open: number
+          source_run_id: string
+          ticker: string
+          trade_count: number | null
+          trade_date: string
+          volume: number
+          vwap: number | null
+        }
+        Insert: {
+          adjusted?: boolean
+          close: number
+          created_at?: string
+          fetched_as_of: string
+          high: number
+          low: number
+          open: number
+          source_run_id: string
+          ticker: string
+          trade_count?: number | null
+          trade_date: string
+          volume: number
+          vwap?: number | null
+        }
+        Update: {
+          adjusted?: boolean
+          close?: number
+          created_at?: string
+          fetched_as_of?: string
+          high?: number
+          low?: number
+          open?: number
+          source_run_id?: string
+          ticker?: string
+          trade_count?: number | null
+          trade_date?: string
+          volume?: number
+          vwap?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overshoot_daily_bars_source_run_id_fkey"
+            columns: ["source_run_id"]
+            isOneToOne: false
+            referencedRelation: "overshoot_backfill_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
+      }
+      overshoot_earnings_calendar: {
+        Row: {
+          announcement_date: string
+          created_at: string
+          eps_actual: number | null
+          eps_estimate: number | null
+          fetched_as_of: string
+          fiscal_year: number | null
+          hour: string | null
+          quarter: number | null
+          revenue_actual: number | null
+          revenue_estimate: number | null
+          source: string
+          source_run_id: string
+          ticker: string
+        }
+        Insert: {
+          announcement_date: string
+          created_at?: string
+          eps_actual?: number | null
+          eps_estimate?: number | null
+          fetched_as_of: string
+          fiscal_year?: number | null
+          hour?: string | null
+          quarter?: number | null
+          revenue_actual?: number | null
+          revenue_estimate?: number | null
+          source: string
+          source_run_id: string
+          ticker: string
+        }
+        Update: {
+          announcement_date?: string
+          created_at?: string
+          eps_actual?: number | null
+          eps_estimate?: number | null
+          fetched_as_of?: string
+          fiscal_year?: number | null
+          hour?: string | null
+          quarter?: number | null
+          revenue_actual?: number | null
+          revenue_estimate?: number | null
+          source?: string
+          source_run_id?: string
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overshoot_earnings_calendar_source_run_id_fkey"
+            columns: ["source_run_id"]
+            isOneToOne: false
+            referencedRelation: "overshoot_backfill_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
+      }
+      overshoot_universe: {
+        Row: {
+          active: boolean
+          added_as_of: string
+          created_at: string
+          source: string
+          ticker: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          added_as_of: string
+          created_at?: string
+          source: string
+          ticker: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          added_as_of?: string
+          created_at?: string
+          source?: string
+          ticker?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pead_consensus_observations: {
         Row: {
           as_of_date: string
