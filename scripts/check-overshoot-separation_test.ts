@@ -22,6 +22,19 @@ Deno.test('overshoot file: PREVIOUSLY-allowlisted interfaces.ts now → violatio
   assertEquals(v.length, 1);
 });
 
+Deno.test('overshoot file: ratified-but-not-listed leaf (z-score-normalize) → violation', () => {
+  // FP-069 W1b turn-2: proves narrower-than-charter posture. `z-score-normalize`
+  // is a ratified charter leaf but is NOT pre-listed in A3_ALLOWLIST; the guard
+  // therefore REJECTS an overshoot import of it. The intended remediation is
+  // to add it to the allowlist in the SAME PR that introduces the first genuine
+  // overshoot import of the util, citing the charter clause.
+  const v = scanFile(
+    'supabase/functions/_shared/overshoot/some-consumer.ts',
+    `import { zScoreNormalize } from '../longshort-signals/shared/z-score-normalize.ts';`,
+  );
+  assertEquals(v.length, 1);
+});
+
 Deno.test('overshoot file: NON-allowlisted longshort import → violation', () => {
   const v = scanFile(
     'supabase/functions/_shared/overshoot/bad.ts',
