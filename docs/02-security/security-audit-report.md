@@ -101,7 +101,7 @@
 - OPTIONS handled before rate limiting and auth
 
 ### Remaining Gap (3 points)
-- Meta tag CSP and `X-Content-Type-Options` are advisory — HTTP response headers from CDN/hosting would be stronger. `frame-ancestors` is not asserted via meta CSP because browsers ignore it there; clickjacking protection requires an HTTP response-header CSP from hosting infrastructure.
+- Meta tag CSP and `X-Content-Type-Options` are advisory — HTTP response headers from CDN/hosting would be stronger. Requires infrastructure config outside the codebase.
 
 ---
 
@@ -240,9 +240,9 @@ All action buttons now have explicit `checkPermission()` guards matching their A
 |---------------|-----------|-------|
 | Credential stuffing / brute force | ✅ Yes | Dual CAPTCHA + Supabase rate limits + MFA |
 | SQL injection | ✅ Yes | Zero raw SQL, parameterized client only |
-| XSS | ✅ Yes | No unsafe rendering; CSP blocks inline scripts except the pinned Lovable published-badge hash injected by hosting |
+| XSS | ✅ Yes | No unsafe rendering, CSP blocks inline scripts |
 | CSRF | ✅ N/A | Bearer JWT in headers, not cookies |
-| Clickjacking | ⚠️ Partial | `frame-ancestors` cannot be enforced by meta CSP; requires hosting-level HTTP response header |
+| Clickjacking | ✅ Yes | `frame-ancestors 'none'` in CSP |
 | Privilege escalation | ✅ Yes | App-layer RBAC + DB triggers (defense-in-depth) |
 | Session hijacking | ⚠️ Partial | localStorage tokens; XSS surface is zero, but `httpOnly` cookies (`@supabase/ssr`) would eliminate risk entirely |
 | DoS | ⚠️ Partial | 64KB body limit; distributed DoS on read endpoints can bypass in-memory limiter |
