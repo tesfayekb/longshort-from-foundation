@@ -25,11 +25,19 @@
 // The four A3-verified leaf-utility paths overshoot code may import from
 // the longshort tree. Kept small on purpose — each addition requires
 // executor review + FP amendment.
+//
+// Matched as *specifier-suffix* — relative imports resolve to these tail paths.
+// The two non-longshort entries (`longshort-clock`, `parse-as-of-date`) are
+// generic infra that historically live under `_shared/`; they are included
+// here so that any future move under the longshort tree still passes the
+// membrane. `parse-as-of-date.ts` currently does NOT contain "longshort" in
+// its specifier and therefore would not trigger the guard at all — it is
+// listed for documentary completeness only.
 export const A3_ALLOWLIST: ReadonlyArray<string> = [
-  '_shared/longshort-universe-interfaces.ts',
-  '_shared/longshort-universe/shared/fetch-with-timeout.ts',
-  '_shared/longshort-clock.ts',
-  '_shared/parse-as-of-date.ts',
+  'longshort-universe-interfaces.ts',
+  'longshort-universe/shared/fetch-with-timeout.ts',
+  'longshort-clock.ts',
+  'parse-as-of-date.ts',
 ];
 
 export interface Violation {
