@@ -1,0 +1,149 @@
+/**
+ * overshoot-detection-run/index_test.ts — FP-069 W3.5.b-i (ACT-462.b-i).
+ *
+ * Source-sentinel testing pattern (see W3.5.a fetcher tests): the handler is
+ * DB-dependent and cannot be executed under Gate 11's no-network / no-DB
+ * shape. Tests here assert that the handler SOURCE contains the invariants
+ * the contract demands — a grep-based ratchet against silent regressions
+ * (probe-before-gates ordering, boot-assertion pre-any-pipeline, typed-refusal
+ * → outcome mapping, dry_run zero-persist branch, append_run_ids write path,
+ * A4-column persistence targets). Live-DB validation is W3.5.c GATE-ZERO
+ * territory.
+ *
+ * Rationale — mirrors overshoot-study-run's phase-coverage extraction pattern
+ * (Gate 11 leak on Deno.serve()): importing the handler module itself would
+ * bind Deno.serve and leak the listener op. We READ the file instead.
+ */
+import { assert, assertEquals, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import {
+  RATIFIED_STUDY_RUN_ID,
+  RATIFIED_PARAM_GRID_HASH_PREFIX,
+} from '../_shared/overshoot/detector/detector.ts';
+
+const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
+
+Deno.test('DEC-023 envelope: uses createHandler + authenticateRequest + overshoot.manage RBAC', () => {
+  assertStringIncludes(SRC, "import { createHandler, apiSuccess } from '../_shared/handler.ts'");
+  assertStringIncludes(SRC, "import { authenticateRequest } from '../_shared/authenticate-request.ts'");
+  assertStringIncludes(SRC, "checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage')");
+  assertStringIncludes(SRC, 'Deno.serve(createHandler(');
+});
+
+Deno.test('injected clock: uses productionClock, never Date.now()', () => {
+  assertStringIncludes(SRC, "import { productionClock } from '../_shared/longshort-clock.ts'");
+  // No Date.now() in handler body (money-path banned per constitution).
+  assertEquals(SRC.includes('Date.now()'), false, 'Date.now() banned in kernel path');
+  // performance.now() is allowed for durations (non-money, non-kernel).
+});
+
+Deno.test('boot assertion: BEFORE probe short-circuit and skip gates', () => {
+  assertStringIncludes(SRC, RATIFIED_STUDY_RUN_ID);
+  assertStringIncludes(SRC, RATIFIED_PARAM_GRID_HASH_PREFIX);
+  assertStringIncludes(SRC, 'boot_assertion_failed_priors_not_found');
+  // Ordering check: boot query source must appear BEFORE probe short-circuit
+  // AND BEFORE the kill-switch / disarmed gates.
+  const idxBoot = SRC.indexOf('boot_assertion_failed_priors_not_found');
+  const idxProbe = SRC.indexOf('probe_branch_stub_w35b');
+  const idxKS = SRC.indexOf("strategy_key = 'overshoot'");
+  const idxJR = SRC.indexOf("id = 'overshoot.detection.run'");
+  assert(idxBoot > 0 && idxProbe > 0 && idxKS > 0 && idxJR > 0, 'markers present');
+  assert(idxBoot < idxProbe, 'boot assertion must precede probe branch');
+  assert(idxBoot < idxKS,    'boot assertion must precede kill-switch gate');
+  assert(idxBoot < idxJR,    'boot assertion must precede job-disarmed gate');
+});
+
+Deno.test('probe short-circuit: BEFORE the three skip gates', () => {
+  assertStringIncludes(SRC, "body.probe as ('alpaca' | 'polygon' | undefined)");
+  assertStringIncludes(SRC, 'probe_invalid_expected_alpaca_or_polygon');
+  const idxProbeBranch = SRC.indexOf('probe_branch_stub_w35b');
+  const idxKS = SRC.indexOf("strategy_key = 'overshoot'");
+  const idxJR = SRC.indexOf("id = 'overshoot.detection.run'");
+  assert(idxProbeBranch < idxKS, 'probe short-circuit precedes kill-switch');
+  assert(idxProbeBranch < idxJR, 'probe short-circuit precedes job-disarmed');
+});
+
+Deno.test('RBAC deny: overshoot.manage checked before pipeline', () => {
+  const idxRbac = SRC.indexOf("checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage')");
+  const idxPipeline = SRC.indexOf('Stage 1: bars-append leg');
+  assert(idxRbac > 0 && idxPipeline > 0 && idxRbac < idxPipeline);
+});
+
+Deno.test('typed refusal → outcome mapping (all four classes present)', () => {
+  // bars_missing_for_asof → no_op
+  assertStringIncludes(SRC, "err instanceof BarsMissingForAsofError ? 'bars_missing_for_asof'");
+  assertStringIncludes(SRC, "reason === 'bars_missing_for_asof' ? 'no_op' : 'failed'");
+  // benchmarks_missing → failed
+  assertStringIncludes(SRC, "err instanceof BenchmarksMissingError  ? 'benchmarks_missing'");
+  // cap-breach → failed
+  assertStringIncludes(SRC, "err instanceof EarningsCalendarCapBreachError ? 'earnings_calendar_cap_breach'");
+  // staleness → no_op
+  assertStringIncludes(SRC, "reason: 'earnings_calendar_stale'");
+  assertStringIncludes(SRC, "outcome: 'no_op'");
+});
+
+Deno.test('dry_run zero-persist: event/target INSERTs are gated on !dryRun', () => {
+  assertStringIncludes(SRC, 'if (!dryRun && events.length > 0)');
+  assertStringIncludes(SRC, 'if (!dryRun && selected.length > 0)');
+});
+
+Deno.test('append_run_ids shape: {bars, earnings} written into detection run row', () => {
+  assertStringIncludes(SRC, 'append_run_ids: { bars: string | null; earnings: string | null }');
+  assertStringIncludes(SRC, 'append_run_ids = ${JSON.stringify(appendRunIds)}::jsonb');
+  // Both bars-append and earnings-append backfill_run_id must reach the writeback.
+  assertStringIncludes(SRC, "kind='bars'".replace(/'/g, "'"));
+  assertStringIncludes(SRC, "'earnings_fmp'");
+  assertStringIncludes(SRC, 'barsBackfillRunId');
+  assertStringIncludes(SRC, 'earningsBackfillRunId');
+});
+
+Deno.test('kernel live-parameterization: event_date_min = event_date_max = as_of', () => {
+  assertStringIncludes(SRC, "import EVENT_DETECTION_SQL from '../_shared/overshoot/study/event-detection.sql.ts'");
+  assertStringIncludes(SRC, 'DETECTION_PARAM_ORDER');
+  // Both slice bounds bound to asOfDay in the sql.unsafe args (runner-parity).
+  const argsBlock = SRC.slice(SRC.indexOf('sql.unsafe(detectionCore'), SRC.indexOf(']);'));
+  assert(argsBlock.includes('asOfDay,             // :event_date_min = as_of'));
+  assert(argsBlock.includes('asOfDay,             // :event_date_max = as_of'));
+});
+
+Deno.test('detector import: pure, unmodified (runDetector + constants only)', () => {
+  assertStringIncludes(SRC, "import {\n  runDetector,\n  RATIFIED_STUDY_RUN_ID,\n  RATIFIED_PARAM_GRID_HASH_PREFIX,");
+  // No monkey-patching / mutating the detector surface.
+  assertEquals(SRC.includes('runDetector ='), false);
+  assertEquals(SRC.includes('detector.ts\';\n\n// override'), false);
+});
+
+Deno.test('A4 persistence targets: overshoot_events + overshoot_target_positions columns aligned', () => {
+  // overshoot_events columns list (per MIG-149 verbatim).
+  const eventCols = "['run_id','as_of_date','ticker','side','excess_w1','excess_w2','excess_w3','excess_w4','excess_w5','argmax_window_days','momentum_quintile','drawdown_bucket','days_to_nearest_earnings','earnings_alias_used','filter_passes','filter_refusal_reason','selected_for_entry','rank_score','study_cell_ref']";
+  assertStringIncludes(SRC, eventCols);
+  // overshoot_target_positions columns list.
+  const targetCols = "['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at']";
+  assertStringIncludes(SRC, targetCols);
+  // overshoot_detection_runs INSERT column list (append_run_ids MIG-152 present).
+  assertStringIncludes(SRC, 'INSERT INTO overshoot_detection_runs');
+  assertStringIncludes(SRC, 'append_run_ids');
+});
+
+Deno.test('append leg ordering: backfill_runs row inserted BEFORE the upsert', () => {
+  // bars leg
+  const barsBlock = SRC.slice(SRC.indexOf('Stage 1: bars-append leg'), SRC.indexOf('Stage 2:'));
+  const iBRun    = barsBlock.indexOf("INSERT INTO overshoot_backfill_runs (kind, started_as_of, row_count, request_count, outcome)\n        VALUES ('bars'");
+  const iBBars   = barsBlock.indexOf('INSERT INTO overshoot_daily_bars');
+  assert(iBRun > 0 && iBBars > 0 && iBRun < iBBars, 'bars: backfill_runs row precedes daily_bars upsert');
+  // earnings leg
+  const eBlock = SRC.slice(SRC.indexOf('Stage 2: forward-earnings-append leg'), SRC.indexOf('Stage 3:'));
+  const iERun  = eBlock.indexOf("INSERT INTO overshoot_backfill_runs (kind, started_as_of, request_count, outcome)\n        VALUES ('earnings_fmp'");
+  const iEUps  = eBlock.indexOf('INSERT INTO overshoot_earnings_calendar');
+  assert(iERun > 0 && iEUps > 0 && iERun < iEUps, 'earnings: backfill_runs row precedes earnings_calendar upsert');
+});
+
+Deno.test('SI read within staleness window (DETECTOR_SI_STALENESS_MAX_DAYS bound)', () => {
+  assertStringIncludes(SRC, 'DETECTOR_SI_STALENESS_MAX_DAYS = 20');
+  assertStringIncludes(SRC, '(${asOfDay}::date - ${DETECTOR_SI_STALENESS_MAX_DAYS}::int)');
+});
+
+Deno.test('POLYGON_API_KEY_PROD_PROBE binding (D2 ratification)', () => {
+  assertStringIncludes(SRC, "Deno.env.get('POLYGON_API_KEY_PROD_PROBE')");
+  // No fallback chain.
+  assertEquals(SRC.includes("|| Deno.env.get('POLYGON_API_KEY')"), false);
+});
