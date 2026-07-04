@@ -273,6 +273,18 @@ Deno.serve(createHandler(async (req: Request) => {
     });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
+    // W2.5 D-2 diagnostics: apiError intentionally drops `detail` from the wire
+    // response (no internal leakage). Log server-side so edge-function logs
+    // carry the postgres error text for correlation-id lookup.
+    console.error(
+      JSON.stringify({
+        event: 'study_run_failed',
+        correlation_id: correlationId,
+        run_id: runId,
+        detail,
+        stack: err instanceof Error ? err.stack : undefined,
+      }),
+    );
     if (runId) {
       try {
         await sql`
