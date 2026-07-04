@@ -300,3 +300,22 @@ Contract extension: `POST { …, phase?: 'detect'|'aggregate', run_id?, event_da
 2. `W26_D2_DETECT_[1..6]` — `phase='detect'`, six 183-day slices spanning `[2023-07-05, 2026-07-02]`, first call omits `run_id`, subsequent calls pass the returned `run_id`. Expected per-slice: ~39K–42K events, ~80–90s wall.
 3. `W26_D3_AGGREGATE` — `phase='aggregate'`, same `run_id`. Expected: ~189s wall, 6,000 cells, `outcome='completed'`.
 4. `W26_D4_GATES` — six-MATCH, byte-exact hand-check of 3 cells against a full-window recomputation, coverage-refusal negative test (omit one detect slice, confirm 409).
+
+### W2.6 CLOSED (2026-07-04, ACT-457-ADD-09 + ADD-10 + ADD-11)
+
+**PIN-1 evidence correction (ADD-09).** W2.5 G1(b) narrated the momentum-quintile hand-check population as "848 tickers"; correctly-scoped population per runner SQL (`bars JOIN active_universe`) is **833** = (839 active universe) ∩ (non-NULL momentum_12_1). Quintile outcome invariant (ADP → Q1 either way); runner SQL scoping is correct — **no code defect**.
+
+**PIN-2 slice-plan correction (ADD-10).** `lookback_min_date` = `MIN(bars.trade_date)+252` = **2022-03-08** (not the earlier heuristic `bars_max−4y=2023-07-05`). Full study window = **[2022-03-08, 2026-07-02] = 1577 days**. Six contiguous 263-day slices: `[2022-03-08..2022-11-25]`, `[…11-26..2023-08-15]`, `[…08-16..2024-05-04]`, `[…05-05..2025-01-22]`, `[…01-23..2025-10-12]`, `[…10-13..2026-07-02]`.
+
+**Full ratified run (ADD-11).** `run_id=1888e113-f9b3-43f5-856c-d91666a3c121`, `outcome=completed`.
+
+- **Detect (6 slices):** 85,638 + 69,165 + 65,575 + 76,252 + 84,400 + 102,807 = **483,837 events** (byte-exact vs D-1 baseline). Mean 64.6s ± ~3s per slice.
+- **Aggregate:** 54.9s wall, 6,000 cells (12 bands × 5 windows × 5 mq × 5 db × 4 xw). Zero-cell anti-phantom: 109 zero-arrival cells, **0 phantom stat leaks**.
+- **Tail split:** long=241,281 / short=242,556 (0.53% short skew; 90-day slice's 16.1% skew was a window artifact).
+- **Alias earnings:** 219 events used `alias_used` (BRK.B/GOOG/FOX/NWS OR-map).
+- **3-cell byte-exact hand-check (continuity):** `(long, L_10_INF, w=5, mq=3, db=3, xw=5)` = arrival 227 + all 6 stats byte-exact; `(short, S_10_INF, w=5, mq=5, db=5, xw=5)` = arrival 94 byte-exact; `(long, L_05_06, w=3, mq=1, db=3, xw=5)` = populated non-degenerate.
+- **Negative probe:** aggregate on fresh run_id → **400 `phase_aggregate_requires_run_id`** (stricter input-validation gate; earlier than the anticipated 409 `aggregate_missing_window_contract`). Categorical refusal is preserved.
+
+**Duration reality-check vs W2.6-READY model.** Boot dry no-phase: 60.3s (model 62s ✓). Detect: 64.6s ± 3s per slice (model 85s — SQL faster than projected). Aggregate: 54.9s (model 189s — pessimism source: `overshoot_study_candidate_events` is materialized once; aggregate does NOT re-run detection). **Full end-to-end wall ≈ 7m 45s**. The 400s/aggregate ceiling has **7.3× margin**, not 2.1× — the phase mechanism, while correct and useful for future windows exceeding 400s, is not strictly required for the current study window. **Full-window single-shot detect fits in 60s.** Candidate for W2.7 simplification proposal (not rollback — the phase mechanism remains sound).
+
+**W2.7 opens:** module-doc W2 section stamped CLOSED, publish coverage + arrival-rate tables, publish representative-cell selection, honest write-up of the phased-vs-single-shot tradeoff, close FP-069 W2.
