@@ -24,7 +24,8 @@ Deno.test('event-detection SQL exposes all five per-window excess columns (R-1)'
 
 Deno.test('event-detection SQL declares all runner parameters', () => {
   for (const p of [':run_id', ':bars_snapshot_max_date', ':earnings_snapshot_max_date',
-                    ':min_band_bps', ':lookback_min_date', ':event_date_min']) {
+                    ':min_band_bps', ':lookback_min_date', ':event_date_min',
+                    ':event_date_max']) {
     assertStringIncludes(EVENT_DETECTION_SQL, p);
   }
 });
@@ -82,6 +83,98 @@ Deno.test('runner threads event_date_min slice param with 1900-01-01 default', (
   assertStringIncludes(INDEX_SRC, 'event_date_min_invalid_format_expected_YYYY_MM_DD');
   // Detection SQL body filters per_window_excess by :event_date_min.
   assertStringIncludes(EVENT_DETECTION_SQL, 'bw.trade_date >= :event_date_min::date');
+});
+
+// W2.6 phase mechanism (ACT-457-ADD-08): symmetric upper-bound + phase gating.
+Deno.test('runner threads event_date_max slice param with 9999-12-31 default', () => {
+  assertStringIncludes(INDEX_SRC, "'event_date_max'");
+  assertStringIncludes(INDEX_SRC, "'9999-12-31'");
+  assertStringIncludes(INDEX_SRC, 'event_date_max_invalid_format_expected_YYYY_MM_DD');
+  assertStringIncludes(EVENT_DETECTION_SQL, 'bw.trade_date <= :event_date_max::date');
+});
+
+Deno.test('runner accepts phase param and rejects invalid values', () => {
+  assertStringIncludes(INDEX_SRC, "phase = body.phase as ('detect' | 'aggregate' | undefined)");
+  assertStringIncludes(INDEX_SRC, 'phase_invalid_expected_detect_or_aggregate');
+  assertStringIncludes(INDEX_SRC, 'phase_aggregate_requires_run_id');
+});
+
+Deno.test('runner aggregate phase gates on coverage refusal', () => {
+  // Coverage helper is defined + used before the aggregation INSERT.
+  assertStringIncludes(INDEX_SRC, 'checkPhaseCoverage(');
+  assertStringIncludes(INDEX_SRC, "'aggregate_coverage_refused'");
+  assertStringIncludes(INDEX_SRC, "'aggregate_missing_window_contract'");
+  // Coverage read comes from param_grid, not from a client-supplied claim.
+  assertStringIncludes(INDEX_SRC, "paramGridForRun.phases_completed as Array");
+});
+
+Deno.test('checkPhaseCoverage: contiguous slices cover full window', async () => {
+  const mod = await import('./index.ts');
+  const { checkPhaseCoverage } = mod as unknown as {
+    checkPhaseCoverage: (
+      phases: readonly { min: string; max: string }[],
+      fullMin: string,
+      fullMax: string,
+    ) => { covered: boolean; reason?: string };
+  };
+  assertEquals(checkPhaseCoverage(
+    [{ min: '2026-01-01', max: '2026-03-31' }, { min: '2026-04-01', max: '2026-06-30' }],
+    '2026-01-01', '2026-06-30',
+  ).covered, true);
+  // Overlap is allowed.
+  assertEquals(checkPhaseCoverage(
+    [{ min: '2026-01-01', max: '2026-04-15' }, { min: '2026-04-01', max: '2026-06-30' }],
+    '2026-01-01', '2026-06-30',
+  ).covered, true);
+  // Any order is allowed (sort internally).
+  assertEquals(checkPhaseCoverage(
+    [{ min: '2026-04-01', max: '2026-06-30' }, { min: '2026-01-01', max: '2026-03-31' }],
+    '2026-01-01', '2026-06-30',
+  ).covered, true);
+});
+
+Deno.test('checkPhaseCoverage: refuses on gap / short-start / short-end / empty', async () => {
+  const mod = await import('./index.ts');
+  const { checkPhaseCoverage } = mod as unknown as {
+    checkPhaseCoverage: (
+      phases: readonly { min: string; max: string }[],
+      fullMin: string,
+      fullMax: string,
+    ) => { covered: boolean; reason?: string };
+  };
+  // Empty.
+  assertEquals(checkPhaseCoverage([], '2026-01-01', '2026-06-30').covered, false);
+  // Gap in middle.
+  const gap = checkPhaseCoverage(
+    [{ min: '2026-01-01', max: '2026-03-31' }, { min: '2026-04-15', max: '2026-06-30' }],
+    '2026-01-01', '2026-06-30',
+  );
+  assertEquals(gap.covered, false);
+  assert(gap.reason?.includes('gap'));
+  // Short start.
+  assertEquals(checkPhaseCoverage(
+    [{ min: '2026-02-01', max: '2026-06-30' }],
+    '2026-01-01', '2026-06-30',
+  ).covered, false);
+  // Short end.
+  assertEquals(checkPhaseCoverage(
+    [{ min: '2026-01-01', max: '2026-05-31' }],
+    '2026-01-01', '2026-06-30',
+  ).covered, false);
+});
+
+Deno.test('runner detect phase does not mark outcome (keeps run running)', () => {
+  // Only aggregate and single paths call the outcome UPDATE. Detect returns
+  // early after the phases_completed append without touching outcome.
+  const detectBlockStart = INDEX_SRC.indexOf("if (kind === 'detect')");
+  const detectBlockEnd   = INDEX_SRC.indexOf("kind === 'single'", detectBlockStart);
+  assert(detectBlockStart > 0 && detectBlockEnd > detectBlockStart);
+  const detectBlock = INDEX_SRC.slice(detectBlockStart, detectBlockEnd);
+  // No outcome UPDATE inside detect block.
+  assertEquals(detectBlock.includes("SET outcome ="), false,
+    'detect phase must not mark outcome — run stays running until aggregate');
+  // Phases_completed append IS present.
+  assertStringIncludes(detectBlock, "'{phases_completed}'");
 });
 
 // W2.5 D-2 class-fix regression (ACT-457-ADD-06): postgres.js `unsafe(sql, params)`
