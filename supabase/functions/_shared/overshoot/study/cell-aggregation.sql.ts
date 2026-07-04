@@ -66,8 +66,8 @@ exclusion_widths(exclusion_width_days) AS (VALUES (0),(3),(5),(7)),
 events AS (
   SELECT
     e.*,
-    CASE e.side WHEN 'long'  THEN :haircut_bps_long
-                WHEN 'short' THEN :haircut_bps_short END / 10000.0 AS haircut,
+    CASE e.side WHEN 'long'  THEN :haircut_bps_long::numeric
+                WHEN 'short' THEN :haircut_bps_short::numeric END / 10000.0 AS haircut,
     CASE e.side WHEN 'long'  THEN  1 WHEN 'short' THEN -1 END       AS side_sign
   FROM overshoot_study_candidate_events e
   WHERE e.run_id = :run_id::uuid
