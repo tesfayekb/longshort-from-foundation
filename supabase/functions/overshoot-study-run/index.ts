@@ -468,7 +468,10 @@ Deno.serve(createHandler(async (req: Request) => {
     // Tx interface covering only the .unsafe() surface we call. Keeps the
     // module free of `: any` (ESLint no-explicit-any) with zero behavior change.
     interface Tx {
-      unsafe(query: string, params?: unknown[]): Promise<Record<string, unknown>[]>;
+      unsafe(
+        query: string,
+        params?: unknown[],
+      ): Promise<Record<string, unknown>[] & { count?: number }>;
     }
     await sql.begin(async (tx: Tx) => {
       if (dryRun) {
