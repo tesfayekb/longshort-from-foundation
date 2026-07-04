@@ -59,8 +59,17 @@ export function scanFile(
   file: string,
   contents: string,
 ): Violation[] {
+  // FP-069 W3.2.a (ACT-459.a): RULE 1 scope extension — the overshoot-owned
+  // broker adapter tree at `_shared/overshoot-broker/` is a new leaf tree
+  // subject to the same membrane discipline as `_shared/overshoot/`. The
+  // first pattern `/(^|\/)overshoot(\/|-)/` already matches `overshoot-broker/`
+  // structurally (segment starts with `overshoot-`), but the sibling explicit
+  // `_shared/overshoot-broker/` predicate is added for reviewer clarity and
+  // for a covering test-fixture that pins the intent (see the guard's
+  // negative-fixture test in check-overshoot-separation_test.ts).
   const isOvershoot = /(^|\/)overshoot(\/|-)/.test(file) ||
                       /_shared\/overshoot\//.test(file) ||
+                      /_shared\/overshoot-broker\//.test(file) ||
                       /(^|\/)overshoot-[a-z0-9-]+\//.test(file);
   const isLongshort = /longshort/i.test(file) && !isOvershoot;
   const out: Violation[] = [];
