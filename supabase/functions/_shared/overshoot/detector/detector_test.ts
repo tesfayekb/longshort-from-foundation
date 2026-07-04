@@ -276,3 +276,50 @@ Deno.test('Non-silent-drop contract — every (ticker,side) group yields exactly
     assert(observable, `silent-drop detected for ${r.ticker}/${r.side}`);
   }
 });
+
+// ─── Regression #2 (W3.5.c ACT-462.c) — THE COMMIT-TIME CATCH ──────────
+// "regression: 0.11 excess routes to L_10_INF cell and is selected"
+// This is the test that would have caught the W3.5.c first-light defect
+// (placeholder `bandLabelFor` returning `10pct_wN`) at commit time.
+Deno.test('W3.5.c regression: |excess|=0.11 routes to L_10_INF / S_10_INF cells and is selected', () => {
+  // Seed a cell map keyed on the REAL band namespace — LONG @ 0.11 → L_10_INF,
+  // SHORT @ -0.11 → S_10_INF. Any regression of `bandLabelFor` to a namespace
+  // that doesn't intersect these keys fails this test IMMEDIATELY (rank_score
+  // null → capacity/selection zero, matching the live defect signature).
+  const seededCells = new Map<string, StudyCellStats>([
+    ['LONG|L_10_INF|3|5|2|5',  { mean_fwd_return_5d: 0.025, arrival_count: 500 }],
+    ['SHORT|S_10_INF|3|5|5|5', { mean_fwd_return_5d: -0.030, arrival_count: 500 }],
+  ]);
+  const cellKey = (k: StudyCellKey) =>
+    `${k.side}|${k.band}|${k.window_days}|${k.momentum_quintile}|${k.drawdown_bucket}|${k.exclusion_width_days}`;
+
+  const longRow = baseLongCandidate({
+    ticker: 'LNG', window_days: 3, excess_w3: 0.11,
+    momentum_quintile: 5, drawdown_bucket: 2, days_to_nearest_earnings: 10,
+  });
+  const shortRow = baseShortCandidate({
+    ticker: 'SHT', window_days: 3, excess_w3: -0.11,
+    momentum_quintile: 5, drawdown_bucket: 5, days_to_nearest_earnings: 10,
+  });
+  const out = runDetector({
+    candidates: [longRow, shortRow],
+    shortInterest: new Map([['SHT', { ticker: 'SHT', as_of_date: '2026-07-01', si_pct_float: 0.25, dtc: 4 }]]),
+    params: defaultParams({
+      bandLabelFor: realBandLabelFor,
+      studyCellLookup: (k) => seededCells.get(cellKey(k)) ?? null,
+    }),
+  });
+
+  const long  = out.find((e) => e.ticker === 'LNG')!;
+  const short = out.find((e) => e.ticker === 'SHT')!;
+
+  assertEquals(long.filter_refusal_reason, null, 'LONG must not refuse');
+  assertEquals(long.selected_for_entry, true, 'LONG must be selected');
+  assertEquals(long.study_cell_ref?.band, 'L_10_INF');
+  assertEquals(long.rank_score, 0.025); // +sign for LONG
+
+  assertEquals(short.filter_refusal_reason, null, 'SHORT must not refuse');
+  assertEquals(short.selected_for_entry, true, 'SHORT must be selected');
+  assertEquals(short.study_cell_ref?.band, 'S_10_INF');
+  assertEquals(short.rank_score, 0.030); // -sign flip for SHORT (higher = better)
+});
