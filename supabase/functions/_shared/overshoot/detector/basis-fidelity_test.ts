@@ -239,7 +239,7 @@ Deno.test('fixture body byte-integrity — recomputed sha256 equals header sha25
 // ═══════════════════════════════════════════════════════════════════════
 
 async function runLiveParity(day: string): Promise<{ n: number; sha256: string; ms: number }> {
-  const sql = postgres(DB_URL, { max: 1, prepare: false, connect_timeout: 10 });
+  const sql = postgres(DB_URL(), { max: 1, prepare: false, connect_timeout: 10 });
   try {
     const detectionCore = bindNamed(stripStatementBody(EVENT_DETECTION_SQL), DETECTION_PARAM_ORDER);
     // Wrap-shape mirrors runner :404/:461 minus the INSERT verb:
@@ -284,9 +284,9 @@ async function runLiveParity(day: string): Promise<{ n: number; sha256: string; 
 
 Deno.test({
   name: 'LIVE — run+hash immutability pre-check (boot assertion)',
-  ignore: !ENV_READY,
+  ignore: !ENV_READY(),
   fn: async () => {
-    const sql = postgres(DB_URL, { max: 1, prepare: false, connect_timeout: 10 });
+    const sql = postgres(DB_URL(), { max: 1, prepare: false, connect_timeout: 10 });
     try {
       const [row] = await sql`
         SELECT run_id::text AS run_id, param_grid_hash
@@ -309,7 +309,7 @@ Deno.test({
 for (const day of FIXTURE_DAYS) {
   Deno.test({
     name: `LIVE — basis-fidelity parity for ${day} (byte-exact vs fixture, NO tolerance)`,
-    ignore: !ENV_READY,
+    ignore: !ENV_READY(),
     fn: async () => {
       const path = new URL(`${day}.jsonl`, FIXTURE_DIR);
       const text = await Deno.readTextFile(path);
@@ -327,7 +327,7 @@ for (const day of FIXTURE_DAYS) {
         // Per-row diff dump for the STOP report (fixture vs live body).
         const wanted = text.split('\n').slice(text.split('\n').findIndex((l) => l === '# ---') + 1).filter(Boolean);
         // Re-fetch body_text for diff — bounded to the first few divergences.
-        const sql = postgres(DB_URL, { max: 1, prepare: false, connect_timeout: 10 });
+        const sql = postgres(DB_URL(), { max: 1, prepare: false, connect_timeout: 10 });
         try {
           const detectionCore = bindNamed(stripStatementBody(EVENT_DETECTION_SQL), DETECTION_PARAM_ORDER);
           const [row] = await sql.unsafe(
