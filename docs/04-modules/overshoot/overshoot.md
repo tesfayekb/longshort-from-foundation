@@ -283,3 +283,20 @@ Two SQL files land in-repo this wave (no writes yet — INSERT wiring is W2.4):
 ### W2.4 runner (`overshoot-study-run`)
 
 Manual-invocation edge function (no cron). Contract: `POST { as_of?, param_grid?, slippage_haircut_bps_long?=5, slippage_haircut_bps_short?=15, min_band_bps?=300, run_label?, dry_run? }`. RBAC-gated by `overshoot.manage`; uses `productionClock` for the injected wall clock; uses `SUPABASE_DB_URL` via `postgres.js` to execute the study SQL bodies as `INSERT ... SELECT`. Sequence: snapshot ceilings → INSERT runs row (`outcome='running'`, **outside** the events/cells txn so failure is truthfully recorded) → txn { INSERT candidate_events, INSERT cell_results } → UPDATE runs `outcome='completed'`. Failure path rolls back the txn and UPDATEs runs to `'failed'`. `dry_run=true` executes detection as `SELECT count(*)` only and marks the runs row `'partial'`.
+
+### W2.5 CLOSED (2026-07-04, ACT-457-ADD-06 + ADD-07)
+
+D-1 through D-5 all PASS. First-ever successful live end-to-end: run `045d2dfc…2700` (90-day slice, 200 / 58.9s / 39,857 events / 6,000 cells / `outcome='completed'`). Latent cast-class bug (postgres.js unknown-type param resolution against `text` in arithmetic and date-compare contexts) uncovered by D-2 live probe and fixed as a class across both study SQL modules (6 `::date` + 2 `::numeric` casts). Machine-checkable regression test asserts every `:param` in both bodies carries an adjacent `::type` cast. Byte-exact hand-checks: three cells at the SQL level (largest arrival, mid-band, zero-cell) + two feature-level features (`drawdown_bucket=3` and `momentum_quintile=1` for ADP 2026-07-02, event 120077) all reconciled to stored values byte-exact.
+
+### W2.6 phase mechanism (READY, NOT YET RUN — ACT-457-ADD-08)
+
+Contract extension: `POST { …, phase?: 'detect'|'aggregate', run_id?, event_date_max?, event_date_min_full?, event_date_max_full? }`. `phase='detect'` seeds `overshoot_study_runs.param_grid = { window:{event_date_min_full, event_date_max_full}, phases_completed:[] }` on first call, appends `{min, max, event_count, completed_at}` per subsequent call. `phase='aggregate'` refuses (`409 aggregate_coverage_refused`) unless the union of `phases_completed` covers `[min_full, max_full]` contiguously (1-day gap tolerance; overlap allowed). Then runs cell-aggregation over the FULL events table for `run_id` — exact statistics preserved (no median-merge approximation). Legacy no-phase path unchanged.
+
+**Measured budget** (from W2.5 empirical data): full-window detection ≈ 62.8s / 483,837 events; 90d slice ≈ 47s detect + 15.5s aggregate; projected full-window aggregation ≈ 189s over ~239K events → 251.8s total end-to-end vs 400s edge-fn ceiling = **2.1× margin**. **Fallback** (documented, not implemented): if the aggregate call ever exceeds ceiling, split into 6 slice-aggregate + merge; median approximated via T-digest or sort-merge over stored per-slice fwd-return arrays.
+
+**Proposed W2.6 invocation plan (operator-owned, awaiting authorization):**
+
+1. `W26_D1_BOOT` — dry, 90d, phase omitted (backward-compat probe on new deploy).
+2. `W26_D2_DETECT_[1..6]` — `phase='detect'`, six 183-day slices spanning `[2023-07-05, 2026-07-02]`, first call omits `run_id`, subsequent calls pass the returned `run_id`. Expected per-slice: ~39K–42K events, ~80–90s wall.
+3. `W26_D3_AGGREGATE` — `phase='aggregate'`, same `run_id`. Expected: ~189s wall, 6,000 cells, `outcome='completed'`.
+4. `W26_D4_GATES` — six-MATCH, byte-exact hand-check of 3 cells against a full-window recomputation, coverage-refusal negative test (omit one detect slice, confirm 409).
