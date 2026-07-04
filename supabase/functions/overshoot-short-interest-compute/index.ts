@@ -244,7 +244,8 @@ Deno.serve(createHandler(async (req: Request) => {
           : e instanceof OvershootAlpacaNetworkError
           ? `alpaca_network_error endpoint=${e.endpoint}`
           : e instanceof Error ? e.message : String(e);
-      return apiError(502, 'alpaca_probe_failed', { correlationId, detail });
+      console.error('[overshoot-si-compute] alpaca probe failed:', detail, { correlationId });
+      return apiError(502, 'alpaca_probe_failed', { correlationId });
     }
   }
 
@@ -275,7 +276,8 @@ Deno.serve(createHandler(async (req: Request) => {
       });
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
-      return apiError(502, 'polygon_probe_failed', { correlationId, detail });
+      console.error('[overshoot-si-compute] polygon probe failed:', detail, { correlationId });
+      return apiError(502, 'polygon_probe_failed', { correlationId });
     }
   }
 
@@ -338,7 +340,8 @@ Deno.serve(createHandler(async (req: Request) => {
       return apiError(400, 'no_tickers_resolved', { correlationId });
     }
     if (tickers.length > BATCH_HARD_CAP_EXPLICIT) {
-      return apiError(400, 'batch_exceeds_hard_cap_50', { correlationId, count: tickers.length });
+      console.error('[overshoot-si-compute] batch exceeds hard cap:', tickers.length, { correlationId });
+      return apiError(400, 'batch_exceeds_hard_cap_50', { correlationId });
     }
     done = true;
   } else {
@@ -348,7 +351,10 @@ Deno.serve(createHandler(async (req: Request) => {
       .eq('active', true)
       .order('ticker', { ascending: true });
     const { data, error } = await q;
-    if (error) return apiError(500, 'universe_read_failed', { correlationId, detail: error.message });
+    if (error) {
+      console.error('[overshoot-si-compute] universe read failed:', error.message, { correlationId });
+      return apiError(500, 'universe_read_failed', { correlationId });
+    }
     tickers = (data ?? []).map((r) => r.ticker as string);
     if (typeof body.resume_from === 'string' && body.resume_from.length > 0) {
       tickers = tickers.filter((t) => t > (body.resume_from as string));
