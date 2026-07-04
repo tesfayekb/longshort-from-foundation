@@ -21,6 +21,11 @@ const sql = String.raw`-- FP-069 W2.3 — event-detection SQL (draft; INSERT wir
 --                                        (defaults 300 = 3%; lower bound of smallest band)
 --   :lookback_min_date         date    — first date where 252-trailing lookback is satisfied
 --                                        (typically bars_min + 252 trading days ≈ 2022-06-27)
+--   :event_date_min            date    — LOWER BOUND on candidate event_date (P3 slice control).
+--                                        Bounds EVENT dates only; lookback/lead windows still
+--                                        read bars OUTSIDE this bound. Defaults to '1900-01-01'
+--                                        when the runner caller does not supply event_date_min,
+--                                        preserving pre-W2.5-D2 full-window behaviour byte-for-byte.
 --
 -- INVARIANTS (asserted by the fixture test in ./event-detection_fixture_test.sql):
 --   P1: acute move is EXCESS vs SPY over trigger window.
@@ -144,6 +149,7 @@ per_window_excess AS (
   FROM bars_windowed bw
   JOIN spy_windowed sw USING (trade_date)
   WHERE bw.trade_date >= :lookback_min_date
+    AND bw.trade_date >= :event_date_min
 ),
 argmax_window AS (
   -- Unpivot the 5 windows, keep argmax |ex_W| per (ticker, trade_date, side).
