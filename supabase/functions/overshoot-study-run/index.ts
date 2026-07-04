@@ -10,6 +10,10 @@
  *     min_band_bps?: number,           // default 300 (lower bound of smallest band)
  *     run_label?: string,              // human tag; dry runs auto-prefixed 'DRY_RUN:'
  *     dry_run?: boolean,               // default false; when true, no event/cell writes
+ *     event_date_min?: 'YYYY-MM-DD',   // W2.5 D-2: LOWER BOUND on candidate event_date.
+ *                                       // Bounds EVENT dates only; lookback/lead windows
+ *                                       // still read bars outside the bound. Defaults to
+ *                                       // '1900-01-01' when unset (full-window behaviour).
  *   }
  *
  * Sequence (single pg connection; runs row lives OUTSIDE the events/cells txn
@@ -92,6 +96,7 @@ const DETECTION_PARAM_ORDER = [
   'earnings_snapshot_max_date',
   'min_band_bps',
   'lookback_min_date',
+  'event_date_min',
 ] as const;
 const AGGREGATION_PARAM_ORDER = [
   'run_id',
@@ -139,12 +144,20 @@ Deno.serve(createHandler(async (req: Request) => {
     ? Number(body.slippage_haircut_bps_short)
     : 15;
   const minBandBps = Number.isFinite(body.min_band_bps) ? Number(body.min_band_bps) : 300;
+  // W2.5 D-2 slice control. When unset, use '1900-01-01' so the pre-W2.5-D2
+  // full-window detection semantics are preserved byte-for-byte.
+  const eventDateMinRaw = body.event_date_min as string | undefined;
+  if (eventDateMinRaw !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(eventDateMinRaw)) {
+    return apiError(400, 'event_date_min_invalid_format_expected_YYYY_MM_DD', { correlationId });
+  }
+  const eventDateMin = eventDateMinRaw ?? '1900-01-01';
   const paramGrid = (body.param_grid as Record<string, unknown>) ?? { defaults: 'R1' };
   const paramGridHash = await hashParams({
     param_grid: paramGrid,
     haircut_long: haircutLong,
     haircut_short: haircutShort,
     min_band_bps: minBandBps,
+    event_date_min: eventDateMin,
   });
   const runLabel = `${dryRun ? 'DRY_RUN:' : ''}${(body.run_label as string) ?? 'w24-run'}`;
   const gitSha = Deno.env.get('BUILD_SHA') ?? 'unknown';
@@ -202,7 +215,7 @@ Deno.serve(createHandler(async (req: Request) => {
       if (dryRun) {
         const [{ count }] = await tx.unsafe(
           `WITH detection AS (${detectionCore}) SELECT count(*)::int AS count FROM detection`,
-          [runId, snap.bars_max, snap.earnings_max, minBandBps, snap.lookback_min],
+          [runId, snap.bars_max, snap.earnings_max, minBandBps, snap.lookback_min, eventDateMin],
         );
         eventCount = Number(count);
         return;
@@ -221,6 +234,7 @@ Deno.serve(createHandler(async (req: Request) => {
         snap.earnings_max,
         minBandBps,
         snap.lookback_min,
+        eventDateMin,
       ]);
       eventCount = eventsRes.count ?? 0;
 
