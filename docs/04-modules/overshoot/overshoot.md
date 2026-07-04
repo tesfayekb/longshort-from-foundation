@@ -49,6 +49,27 @@ Every overshoot build wave inherits these from v1, non-retrofit:
 
 Overshoot code MUST NOT write, upsert, delete, or otherwise mutate any row in any table whose name is prefixed `longshort_`, `combiner_`, or that is otherwise owned by the long-short strategy. This includes indirect writes via shared writer helpers under `supabase/functions/_shared/longshort-execution/`, `supabase/functions/_shared/longshort-combiner/`, and any strategy-owned audit surface. Reads from strategy-agnostic commons (`signal_observations`, market facts) are the sole sanctioned cross-boundary interaction, and only as reads. Any violation — even a "temporary" one for a smoke test — is a STOP-condition and reverts the offending change.
 
+## Live-Price Source Contract (binding, 2026-07-04 operator directive)
+
+**Verbatim operator directive (record):** ALL market prices — live quotes, snapshots, NBBO, pre-open reversion checks, marketable-limit price construction, any MTM or decision reference — source from POLYGON exclusively (Stocks Advanced plan, real-time entitled; key = `POLYGON_API_KEY_PROD_PROBE` per the ACT-462.a caveat). Alpaca market-data endpoints (`data.alpaca.markets`, `/v2/stocks/*`) are FORBIDDEN as price sources — the account's data plan is delayed IEX; a delayed price in an entry/exit decision is a silent-wrong-price defect class. Distinction binding: Alpaca remains AUTHORITATIVE for broker truth (fills and their execution prices, positions, equity, order status) per §2 axiom 2 — the fence is on market-data reads, not account-state reads. The `data.alpaca.markets` entry in both paper clients' URL allow-lists is capability-without-consumer: fence comment added at that line in the overshoot client (one-line comment edit, no behavior change); separation-guard-style check to be added to the W3.6.d/e test matrices: zero `data.alpaca.markets` / `/v2/stocks/` consumers in overshoot execution paths. Mirrors the longshort precedent (Polygon quote fetchers for live prices; Alpaca for account truth). **W3.6.b proceeds unchanged — its fetchers read order/account truth only.**
+
+**Data-source registry (per surface):**
+
+| Surface | Source | Endpoint(s) | Notes |
+| --- | --- | --- | --- |
+| Daily-bar commons (historical) | Polygon | `/v2/aggs/grouped/…` (adjusted) | ACT-455 / W1a. |
+| Live quotes / snapshots (real-time) | Polygon | Snapshot + NBBO (Stocks Advanced) | W3.6.e stabilization re-check + entry-price construction. |
+| Pre-open reversion re-check | Polygon | Snapshot (prevDay + lastQuote in one response) | I5 DEFAULT-DENY on unavailable / reverted. |
+| Marketable-limit price construction | Polygon | NBBO | W3.6.e. |
+| MTM / decision reference prices | Polygon | Snapshot | Any surface consuming a "current price". |
+| Fills + execution prices | Alpaca (paper, account #2) | `/v2/orders/:id` | Broker truth. W3.2 fill-fetcher. |
+| Positions | Alpaca (paper, account #2) | `/v2/positions`, `/v2/positions/:sym` | Broker truth. W3.2 position-fetcher. |
+| Equity / buying-power | Alpaca (paper, account #2) | `/v2/account` | Broker truth. W3.6.b account-fetcher (I7-#7). |
+| Order status / open orders | Alpaca (paper, account #2) | `/v2/orders?status=open`, `/v2/orders/:id` | Broker truth. W3.6.b open-orders-fetcher + W3.2 fill-fetcher. |
+| Shortability | Alpaca (paper, account #2) | `/v2/assets/:sym` | Broker truth. W3.2 shortability-fetcher. |
+
+**W3.6.d/e enforcement (deferred to those waves):** the test matrices for the exit engine (W3.6.d) and entry engine (W3.6.e) MUST include a separation-guard-style assertion — zero `data.alpaca.markets` / `/v2/stocks/` consumers in overshoot execution paths. Failure to include the assertion is a STOP for W3.6.d/e closure.
+
 ## Earnings-Exclusion Is Load-Bearing
 
 News-driven drops drift (PEAD literature): a stock that falls on an earnings miss tends to continue falling for days-to-weeks, not reverse. The reversion edge overshoot targets lives exclusively in non-fundamental dislocations (liquidity air-pockets, index-inclusion sweeps, sector-rotation over-reactions, single-name algorithmic cascades). Trading a dislocation without a clean earnings-exclusion filter mixes two regimes with opposite expected returns and can produce a null or negative net edge even when the pure-reversion sub-population is strongly positive. Consequently the W1 historical earnings-calendar backfill is a **hard gate** on both the W2 study and on live W3 trading — the strategy will not enter a position whose event window overlaps a known earnings date, and the study will not fit parameters on event windows lacking earnings coverage.

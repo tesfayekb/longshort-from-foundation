@@ -51,6 +51,7 @@ const ALPACA_DATA_BASE_URL = 'https://data.alpaca.markets' as const;
  */
 const PAPER_ONLY_ALLOWED_URL_PREFIXES = [
   'https://paper-api.alpaca.markets',
+  // FENCE (2026-07-04, operator directive — LIVE-PRICE SOURCE CONTRACT): capability-without-consumer. Price reads (quotes / snapshots / NBBO / reversion checks / marketable-limit construction / MTM) are POLYGON-ONLY (Stocks Advanced, real-time; key POLYGON_API_KEY_PROD_PROBE). Alpaca market-data (data.alpaca.markets, /v2/stocks/*) is FORBIDDEN in overshoot execution paths — the account's data plan is delayed IEX; a delayed price in an entry/exit decision is a silent-wrong-price defect class. Alpaca remains authoritative for BROKER TRUTH (fills, positions, equity, order status) per §2 axiom 2; the fence is on market-data reads, not account-state reads. Enforcement: zero data.alpaca.markets / /v2/stocks/ consumers in W3.6.d/e test matrices (separation-guard-style check).
   'https://data.alpaca.markets',
   'http://localhost',
   'https://localhost',
