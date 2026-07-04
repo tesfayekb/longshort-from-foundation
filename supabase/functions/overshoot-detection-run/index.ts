@@ -83,6 +83,7 @@ import {
   type StudyCellKey,
   type StudyCellStats,
 } from '../_shared/overshoot/detector/detector.ts';
+import { bandLabelFor } from '../_shared/overshoot/detector/band-label.ts';
 
 // ── Live-detection defaults. Named parameters, provenance in comments. ────────
 // Ratified priors (FP-069 W3): exclusion_width=5, capacity=20, thresholds L=0.10 S=0.08,
@@ -134,15 +135,12 @@ const DETECTION_PARAM_ORDER = [
   'event_date_max',
 ] as const;
 
-function bandLabelFor(side: Side, windowDays: number): string {
-  // Mirrors the study runner's band-canonicalization convention: `10pct_wN`.
-  // The percentage prefix comes from DETECTOR_MIN_BAND_BPS / 100 = 3, but
-  // cell-aggregation uses the 10-pct band alias for the ratified priors;
-  // this MUST match the aggregation-side label EXACTLY for studyCellLookup
-  // to hit. TODO(W3.5.c dry-run): confirm hit rate against seeded cells.
-  const _s = side; // width-independent
-  return `10pct_w${windowDays}`;
-}
+// bandLabelFor is imported from `_shared/overshoot/detector/band-label.ts`.
+// The prior in-handler placeholder (`10pct_wN`) shipped as a TODO and was
+// the W3.5.c first-light defect: it never intersected the real study-side
+// namespace (`{L,S}_03_04..{L,S}_10_INF`), zeroing selection on both sides.
+// Fix: signed-excess magnitude-bin classifier, verbatim-mirrored from
+// `_shared/overshoot/study/cell-aggregation.sql.ts`.
 
 interface Env {
   supabaseDbUrl: string;
