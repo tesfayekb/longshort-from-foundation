@@ -521,3 +521,25 @@ STOP conditions: fence-proof non-zero at step 1 or 7; batch surfacing a compute 
 **Naming caveat (`POLYGON_API_KEY_PROD_PROBE`, operator D2 ruling, carried from ACT-462.a).** The pipeline binds `POLYGON_API_KEY_PROD_PROBE` for grouped-daily fetch. The `_PROD_PROBE` suffix is a **legacy naming artifact** — this IS the production-plan Polygon credential; single named key, no fallback chains. Rebinding to a new name was rejected on the grounds that duplicate-value secrets are a rotation hazard that outweighs the naming semantics. **Runtime validity is proven ONLY by the W3.5.c GATE-ZERO probe from the edge runtime against the grouped endpoint** — sandbox probes are design-shape evidence only (W1 lesson standing).
 
 **W3.5.c readiness sequence.** (1) deploy `overshoot-detection-run` via `supabase--deploy_edge_functions`; (2) GATE-ZERO probe from the edge runtime against the Polygon grouped endpoint (proves `POLYGON_API_KEY_PROD_PROBE` valid runtime credential); (3) `dry_run=true` invocation on a known-good as_of, assert `event_count>0`, `selected_count>=0`, zero `overshoot_events` / `overshoot_target_positions` rows persisted; (4) first real detection via §7.5 invocation shape (probe-mode short-circuit exercised); (5) evidence bundle collection; (6) W3.5 wave closure per §22.3(e).
+
+## §8 First-light (W3.5 CLOSED — ACT-462.c + finalization)
+
+**Run lineage (two banked LIVE runs, both audited under ARM→DRY→LIVE→DISARM brackets):**
+
+*(1) `ded4213d-0a78-46b5-aab7-393dbd7b4bcd`* — as_of=`2026-07-02`, `selected_count=0`, banked as designed-selectivity artifact. **Surfaced the D-1 defect** (`bandLabelFor` operator/bin mismatch → 100% `no_study_cell`), fixed at ACT-462.c: extracted `_shared/overshoot/detector/band-label.ts` as pure signed-excess classifier mirroring `cell-aggregation.sql.ts` verbatim (inclusive-lo / exclusive-hi; ±0.10 → `_10_INF`).
+
+*(2) `2985db66-a9f2-4a8f-9e7a-4259d1bd4a38`* — as_of=`2026-06-18`, `selected_count=4` (L=3, S=1). **Accounting identity 582 = 4 + 578 ✅** persisted DB counts. DRY/LIVE parity identical (event_count, selected_count, earnings_duplicates_dropped all match byte-for-byte). Real `study_cell_ref`s across two bands proves bin-boundary logic beyond `_10_INF`: `VRT/L/L_10_INF/w=2`, `GLW/L/L_10_INF/w=1`, `INTC/L/L_10_INF/w=2`, `RH/S/S_08_10/w=5`. Refusal histogram: 358 excess / 125 window / 33 si-squeeze / 32 momentum / 29 drawdown / 1 earnings-exclusion = 578. `no_study_cell = 0` — ACT-462.c live-verified end-to-end.
+
+**Sweep calibration (offline `overshoot-sweep-diagnostic`, 12 trading days 2026-06-16→2026-07-02):** 9/12 non-empty selection days, **1/12 both-sided (06-18 → arm date)**. Designed selectivity, not defect.
+
+**Sizing rule v1 (source-documented placeholder — `overshoot-detection-run/index.ts:604-620`):** `target_shares=0`, `target_notional=0`, real `rank_score` payload. Broker sizing deferred to W3.6. `overshoot_target_positions` UPSERT idempotent by PK `(run_id, ticker, side)` + `ON CONFLICT DO NOTHING`.
+
+**Append leg (live-verified DEFECT-2 dedupe):** `earnings_vendor_row_count=255`, `earnings_duplicates_dropped=34`, `earnings_appended_row_count=221` — mirrors W1b backfill fetcher `keep-first` semantics per source ledger.
+
+**Non-ratifications (SI freshness):** SI-append leg in detection handler NOT ratified. Durable fix is `sql/30_overshoot_short_interest_cron_schedule.sql` at the W3 arming gate; interim guard is the detector's `si_stale` typed refusal.
+
+**Read-only wave surface:** `supabase/functions/overshoot-sweep-diagnostic/index.ts` (enumerate/single/batch modes; DEC-023 envelope; `overshoot.manage`; SELECT-only). Operational tool, not a strategy surface.
+
+**Forward rule (per INC-82):** registry bracket flips (`job_registry.enabled`) MUST use the data-write tool path (W3.3 precedent), not the migration tool. Applies to W3.6+.
+
+**W3.6 preview:** entry/execution engine — marketable-limit T+1-open with pre-open stabilization re-check (P-B ratified), broker sizing replacing zero placeholders. EXECUTION-CONTRACT ratification block (I1–I7) delivered as pre-build investigation; awaiting operator ratification before build begins.
