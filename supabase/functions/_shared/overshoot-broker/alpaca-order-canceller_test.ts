@@ -34,7 +34,7 @@ Deno.test('happy path — 204 → resolves void; DELETE hits encoded /v2/orders/
   const fetchImpl: typeof fetch = (input, init) => {
     seenUrl = String(input);
     seenMethod = (init as RequestInit).method ?? '';
-    return Promise.resolve(new Response('', { status: 204 }));
+    return Promise.resolve(new Response(null, { status: 204 }));
   };
   const client = new OvershootAlpacaPaperClient({ fetchImpl });
   const canceller = new OvershootAlpacaOrderCanceller(client);
@@ -83,7 +83,7 @@ Deno.test('order-id URL-encoding — special chars encoded, never injected raw',
   let seenUrl = '';
   const fetchImpl: typeof fetch = (input) => {
     seenUrl = String(input);
-    return Promise.resolve(new Response('', { status: 204 }));
+    return Promise.resolve(new Response(null, { status: 204 }));
   };
   const client = new OvershootAlpacaPaperClient({ fetchImpl });
   const canceller = new OvershootAlpacaOrderCanceller(client);
