@@ -13,6 +13,19 @@ Each entry must reach one of two terminal states per supervisor protocol §8: **
 
 ## Open Findings
 
+### INC-83 — `overshoot_target_positions` NOT-NULL zero-sentinel rows at detection time (SENTINEL-class anti-phantom debt; accepted-with-disposition; resolved structurally at W3.6.e entry-engine UPSERT)
+
+| Field | Value |
+|---|---|
+| **Surfaced** | 2026-07-04 during W3.6.c (ACT-463.c) R-4 sizing-execution-point reconciliation. |
+| **Finding** | `overshoot_target_positions` has `target_shares NOT NULL` + `target_notional NOT NULL` with no `entry_reference_price` column and no provisional-flag column (schema at MIG `20260704023836_...:146-155`). The detection-run handler (`overshoot-detection-run/index.ts:604-620`) writes `target_shares=0 / target_notional=0` as documented-intentional placeholders for selected events. This violates the anti-phantom-defaults money-path rule (no silent monetary defaults; typed absence over fabricated zeros) at the schema-persisted layer. |
+| **Classification** | SENTINEL-class debt — accepted-with-disposition, not silently fixed. The zeros are documented in source (`// intentional placeholder`) + FP-069 status clause; no reader mistakes them for real sizing. They exist because sizing was correctly deferred to entry time (freshest equity + I5 pre-open re-check must gate order commitment) but the target_positions schema was designed before that reconciliation was made explicit. |
+| **Disposition (binding)** | **Resolved structurally at W3.6.e (entry engine)** — the entry engine UPSERTs each selected `(run_id, ticker, side)` row with real `target_shares` / `target_notional` at the moment of order commitment (after fresh account snapshot + successful I5 re-check), OR leaves the row at its zero-sentinel state when I5 refuses. UPSERT = canonical resolution: broker-truth once committed, sentinel-until-committed otherwise. NO schema migration proposed (adding a provisional-flag or NULL-permitting the size cols would introduce a new state to reason about + require RLS read-consumer contract rewrite + not improve auditability). |
+| **Forward binding** | W3.6.e (ACT-463.e) MUST include: (a) an entry-engine test asserting the UPSERT overwrites the zero sentinel with real sizing on commitment; (b) a test asserting the zero sentinel PERSISTS when I5 refuses (so operator forensics see "detection selected N; entry committed M<N; N-M refused with reason X"); (c) an INC-83-closure clause in ACT-463.e citing this INC + the tests. |
+| **Why NOT fixed at W3.6.c** | R-4 resolution: provisional detection-time sizing would require (i) a schema migration, (ii) an Alpaca account fetch inside the detection handler (widening its refusal surface), (iii) code churn in a handler that was headline-gated byte-untouched this turn. The entry-engine UPSERT is the correct structural resolution point. |
+| **Cross-references** | ACT-463.c (R-4 reconciliation record); FP-069-ADD-08 (FP status W3.6.c clause); MIG `20260704023836_...:146-155` (`overshoot_target_positions` schema); anti-phantom-defaults rule (money-path standing); `_shared/overshoot-execution/sizing.ts` (pure module whose UPSERT consumer is W3.6.e). |
+| **Status** | Open; disposition ACCEPTED-WITH-DISPOSITION; closure gated on W3.6.e landing. |
+
 ### INC-82 — Registry bracket flips used migration tool instead of data-write tool (§22.5.3 forward-rule deviation)
 
 | Field | Value |
