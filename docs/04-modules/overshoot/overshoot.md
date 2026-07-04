@@ -339,6 +339,39 @@ FP-069 **W2 CLOSED**. Read-out evidence tables T1–T6 published verbatim in ACT
 
 **Effective-vs-nominal window-start reconciliation.** ACT-457's original arithmetic block computed the usable window as `[bars_min + 252 trading days, bars_max − 20 trading days] ≈ [2022-06-27, 2026-06-04]`. The runner's **effective** boundary is `lookback_min_date = MIN(bars.trade_date) + 252 = 2022-03-08` — 111 calendar days earlier than the nominal, because `bars_min` in the nominal used a heuristic (approx `2021-06-29 + 252 CAL days`) while the runner reads the true minimum trade_date from the pinned snapshot and adds 252 TRADING days. The upper bound `2026-07-02` intentionally EXCLUDES the 20d forward-return safety margin: `fwd_return_20d` is materialized via `LEAD`, returning typed-NULL beyond the horizon (P5 discipline — no truncated pseudo-returns). Both boundaries are honest; the effective window is *wider* than the ADD nominal implied. Downstream: the ADD nominal-window arithmetic row (ACT-457, "Usable study window (arithmetic accepted)") is superseded-under-pointer by the runner-derived value for future study runs.
 
+## Wave 3 — Live detector + broker-first execution (OPENED 2026-07-04, ACT-458)
+
+**W3 GO ratified** (operator, post-W2.7). Detector priors (from operator ratification):
+
+- **LONG**: `excess_w ≥ +10%` for w∈{1,2,3}; `momentum_quintile ∈ {4,5}`; `drawdown_bucket ∈ {1,2,3}`; `exclusion_width = ±5`. Ranked selection.
+- **SHORT**: `excess_w ≤ −8%` for w∈{1..5}; `drawdown_bucket ∈ {4,5}`; `momentum_quintile ∈ {1,5}`; `exclusion_width = ±5`; **unconditional live squeeze filter** applied on top. Ranked selection.
+- **Capacity**: up to 20 slots/side (variable inventory; T6 confirmed arrival-richness is such that ranking, not capacity, is the design problem).
+- **Cadence**: EOD (T close), stabilization-trigger entry at T+1 (per W3 pre-build investigation I2 recommendation).
+
+**P-A** (Alpaca paper account #2 + `ALPACA_PAPER_KEY_OVERSHOOT` / `ALPACA_PAPER_SECRET_OVERSHOOT`) confirmed provisioned.
+
+### W3.1 CLOSED — execution-substrate schema (2026-07-04, ACT-458)
+
+Seven overshoot-namespaced tables landed via one atomic migration. Live evidence (information_schema.tables + pg_policies) confirms all seven present with expected column counts and RLS enabled with the ratified policy trio (SELECT via `has_permission(auth.uid(), 'overshoot.view')`; RESTRICTIVE deny of authenticated writes on non-audit tables; service-role FOR ALL on write-heavy tables; audit is INSERT-only for authenticated + service-role ALL).
+
+| Table | Cols | Role in the money path |
+| --- | --- | --- |
+| `overshoot_detection_runs` | 10 | One row per EOD detector fire. `outcome ∈ {running,completed,failed,no_op}`, `durations_ms jsonb`, `correlation_id`, `git_sha`. |
+| `overshoot_events` | 21 | The W4 console substrate. `excess_w1..w5`, `argmax_window_days`, `momentum_quintile`, `drawdown_bucket`, `days_to_nearest_earnings`, `earnings_alias_used`, `filter_passes jsonb` (per-filter pass/fail with reasons), `filter_refusal_reason`, `selected_for_entry`, `rank_score`, `study_cell_ref jsonb` (P-B#4 lookup provenance). |
+| `overshoot_lots` | 14 | FIFO tax-lot ledger. Byte-shape mirror of `longshort_lots` MINUS `locate_id` and `wash_sale_*` (dropped v1 per W3 investigation I3/I5: no pre-trade locate requirement in overshoot priors; wash-sale accounting deferred to a later wave). Drop is pinned in `COMMENT ON TABLE`. |
+| `overshoot_target_positions` | 7 | `run_id, ticker, side, target_shares, target_notional, rank_score, computed_at`; PK `(run_id, ticker, side)`. |
+| `overshoot_reconciliation_state` | 10 | Byte-shape mirror of `longshort_reconciliation_state`. State-as-projection cache; authoritative log is `reconciliation_events`. |
+| `overshoot_short_interest` | 6 | Polygon-derived cache. `si_pct_float` = raw SI ÷ current shares-outstanding — **conscious approximation** pinned in `COMMENT ON TABLE` verbatim in spirit with the longshort short-interest-orchestrator precedent. Typed absence via NULL (§9 SENTINEL — never fabricated zero). |
+| `overshoot_audit_logs` | 10 | Mirror of `longshort_audit_logs`. Append-only. Sole sanctioned writer is `_shared/strategy-audit.ts writeStrategyAuditEvent({strategyKey:'overshoot', ...})`. |
+
+**Strategy-audit registry**: `KNOWN_STRATEGY_KEYS` in `supabase/functions/_shared/strategy-audit.ts` gains `'overshoot'` (additive; no structural edit). Router now resolves `strategyKey='overshoot'` → `overshoot_audit_logs` via the existing `resolveStrategyAuditTable` template. Unknown-key fallback path (`unknown_strategy_key` structured failure) is UNCHANGED — a call from any strategy not on the list still returns a typed failure without throwing.
+
+**No new permission was created.** `overshoot.view` is expected pre-existing from earlier study waves (referenced by the study-substrate policies).
+
+**Gates cleared this step:** `npx eslint supabase/functions/_shared/strategy-audit.ts` clean (exit 0); `deno check supabase/functions/_shared/strategy-audit.ts` clean (exit 0); §22.5.1 live-DB evidence pasted in ACT-458; both `deno.lock` files untouched (no dependency change). Pre-existing linter warnings (SECURITY DEFINER on legacy DB functions; service-role `USING(true)` on FOR ALL policies) are the ratified longshort pattern class — not introduced by this migration.
+
+**W3.2 readiness**: overshoot-broker sibling adapter tree (`supabase/functions/_shared/overshoot-broker/`) is the next step per the W3 wave-plan (investigation I3). No secrets probed this step per operator instruction.
+
 **Negative-probe acceptance.** The fresh-aggregate 400 `phase_aggregate_requires_run_id` refusal (W2.6 NEG probe) is ACCEPTED as a valid coverage-refusal proof. The stricter input-validation gate fires earlier than the anticipated 409 `aggregate_missing_window_contract`; the categorical no-run_id-no-aggregate contract is preserved. No code change warranted.
 
 **Run-of-record lineage (for W3 pinning).** `run_id=1888e113-f9b3-43f5-856c-d91666a3c121`, `param_grid_hash=a37e4b96…f354e80`, `git_sha=0c5ad0d9`, `outcome=completed`, `as_of=2026-07-02`, `bars_snapshot_max_date=2026-07-02`, `earnings_snapshot_max_date=2026-07-02`, stamps: `survivorship=UPPER_BOUND_SURVIVORSHIP_BIASED`, `performance=NON_PERFORMANCE_STUDY_ONLY`, `short_filter=NO_SQUEEZE_FILTER_ARRIVALS_UPPER_BOUND_RETURNS_CONSERVATIVE`, `return_basis=CLOSE_TO_CLOSE_REFERENCE`. Any W3 parameter-ratification reads must scope to this run_id.
