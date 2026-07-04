@@ -84,7 +84,19 @@ export interface SessionAgeOk {
   /** Number of trading sessions strictly AFTER entryDate, inclusive of
    *  the in-progress session when it counts (see PIN-1). */
   sessionsSinceEntry: number;
-  /** True iff sessionsSinceEntry >= OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS. */
+  /**
+   * 1-indexed holding-day ordinal: entry day itself = 1; the next
+   * trading session (Tue after a Mon entry) = 2; the FIFTH holding day
+   * (Fri after a Mon entry) = 5. Definition:
+   *   holdingDayOrdinal = sessionsSinceEntry + 1
+   * The +1 accounts for the entry-day boundary (a Mon-entry Fri-exit is
+   * "5 sessions of holding" inclusively, matching the P-B#3 ratified
+   * per-day-ROI convention). Used for the fire decision below.
+   */
+  holdingDayOrdinal: number;
+  /** True iff holdingDayOrdinal >= OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS.
+   *  PIN-1: a Mon entry MUST fire at the Fri cron (ordinal 5), NEVER
+   *  the following Mon (ordinal 6 late-fire defect). */
   shouldFireTimeExit: boolean;
   /** Provenance echo — did the in-progress session contribute +1? */
   inProgressCounted: boolean;
@@ -160,12 +172,14 @@ export function computeSessionAge(input: ComputeSessionAgeInput): SessionAgeResu
     clock.sessionDate > entryDate && !settled.has(clock.sessionDate);
 
   const sessionsSinceEntry = settled.size + (inProgressCounted ? 1 : 0);
+  const holdingDayOrdinal = sessionsSinceEntry + 1;
   const shouldFireTimeExit =
-    sessionsSinceEntry >= OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS;
+    holdingDayOrdinal >= OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS;
 
   return {
     ok: true,
     sessionsSinceEntry,
+    holdingDayOrdinal,
     shouldFireTimeExit,
     inProgressCounted,
     minutesToClose: clock.minutesToClose,
