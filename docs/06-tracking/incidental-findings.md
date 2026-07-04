@@ -13,6 +13,18 @@ Each entry must reach one of two terminal states per supervisor protocol §8: **
 
 ## Open Findings
 
+### INC-82 — Registry bracket flips used migration tool instead of data-write tool (§22.5.3 forward-rule deviation)
+
+| Field | Value |
+|---|---|
+| **Discovered** | 2026-07-04 (FP-069 W3.5 R-1 reconciliation, HEAD `ba413901`) |
+| **Discovery Context** | R-1 parity check of `supabase_migrations.schema_migrations` (last 10) vs `ls supabase/migrations/` (last 10) showed 1:1 parity with a normal 1-3s tool-side timestamp offset per row — no missing-file class break. However the four `job_registry.enabled` flips for the W3.5.c bracket window (two prior turns + this turn's ARM `20260704114058` / DISARM `20260704115109` for as_of=2026-06-18) all executed via the migration tool, not the data-write tool. |
+| **Class** | Tool-path convention drift — same class as §22.5.3 (SQL for cron/registry data changes belongs on the data-write path so remixes don't inherit operator-specific runtime state as schema history). |
+| **Reference precedent** | W3.3 arm-bracket (ACT-460.b.iii.arm) executed `job_registry.overshoot.short_interest.compute.enabled` true→false via the data-write tool as the ratified pattern. This wave broke the pattern; migration tool was used because the AI reached for it reflexively for anything SQL-shaped. |
+| **Evidence-bundle impact** | **None.** Read-back proofs (`SELECT id, enabled, updated_at FROM job_registry WHERE id='overshoot.detection.run'`) landed identically under either tool path. The bracket state transitions are provably correct; only the ledger classification is affected. |
+| **Disposition** | **Logged — forward-binding only.** No retroactive re-do (would multiply history without changing observed state). Forward rule recorded in FP-069-ADD-05 (W3.5 CLOSED clause) and now here: **registry bracket flips MUST use the data-write tool path; migration tool is reserved for schema/structure/policy/function changes.** Applies to W3.6+ execution-engine brackets and every future strategy arm/disarm. |
+| **Related** | INC-20 (schema_migrations parity precedent — not applicable here; parity intact). §22.5.3 (SQL data-vs-schema tool boundary). |
+
 ## Resolved Findings
 
 ### INC-81 — Advance-path (`longshort-execute` / `runTick`) §8.4 propagator + htb-cache wiring gap (NAMED cron-arm prerequisite)
