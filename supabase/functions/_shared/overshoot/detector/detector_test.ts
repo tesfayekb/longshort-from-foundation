@@ -82,7 +82,11 @@ function defaultParams(over: Partial<DetectorParams> = {}): DetectorParams {
     shortMomentumSet: [1, 5],
     longDrawdownSet: [1, 2, 3],
     shortDrawdownSet: [4, 5],
-    bandLabelFor: (side, w) => `${side === 'LONG' ? '10' : '8'}pct_w${w}`,
+    // Fixture bandLabelFor mirrors the ratified 3-arg signature; content
+    // is a synthetic stable key (not the real study-side namespace) — the
+    // real classifier is exercised in `band-label_test.ts` + the regression
+    // test below.
+    bandLabelFor: (side, w, _excess) => `${side === 'LONG' ? '10' : '8'}pct_w${w}`,
     studyCellLookup: (_k: StudyCellKey) => DEFAULT_CELL,
     ...over,
   };
