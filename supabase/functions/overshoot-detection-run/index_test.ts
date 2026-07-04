@@ -52,7 +52,7 @@ Deno.test('boot assertion: BEFORE probe short-circuit and skip gates', () => {
   // Ordering check: boot query source must appear BEFORE probe short-circuit
   // AND BEFORE the kill-switch / disarmed gates.
   const idxBoot = SRC.indexOf('boot_assertion_failed_priors_not_found');
-  const idxProbe = SRC.indexOf('probe_branch_stub_w35b');
+  const idxProbe = SRC.indexOf('alpaca_probe_failed');
   const idxKS = SRC.indexOf("strategy_key = 'overshoot'");
   const idxJR = SRC.indexOf("id = 'overshoot.detection.run'");
   assert(idxBoot > 0 && idxProbe > 0 && idxKS > 0 && idxJR > 0, 'markers present');
@@ -64,7 +64,11 @@ Deno.test('boot assertion: BEFORE probe short-circuit and skip gates', () => {
 Deno.test('probe short-circuit: BEFORE the three skip gates', () => {
   assertStringIncludes(SRC, "body.probe as ('alpaca' | 'polygon' | undefined)");
   assertStringIncludes(SRC, 'probe_invalid_expected_alpaca_or_polygon');
-  const idxProbeBranch = SRC.indexOf('probe_branch_stub_w35b');
+  // W3.5.c live-probe wiring (α): sentinels moved from stub note to the
+  // typed error codes emitted only inside the alpaca/polygon probe branch.
+  assertStringIncludes(SRC, 'alpaca_probe_failed');
+  assertStringIncludes(SRC, 'polygon_probe_failed');
+  const idxProbeBranch = SRC.indexOf('alpaca_probe_failed');
   const idxKS = SRC.indexOf("strategy_key = 'overshoot'");
   const idxJR = SRC.indexOf("id = 'overshoot.detection.run'");
   assert(idxProbeBranch < idxKS, 'probe short-circuit precedes kill-switch');
