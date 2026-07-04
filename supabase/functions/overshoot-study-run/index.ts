@@ -1,6 +1,28 @@
 /**
  * overshoot-study-run — FP-069 W2.4 study runner (manual invocation only).
  *
+ * W2.6 PHASE MECHANISM (ACT-457-ADD-08):
+ *   Optional `phase` param splits a run into N detect invocations + 1 aggregate
+ *   invocation, all keyed to ONE run_id. Preserves exact statistics (no median-
+ *   merge approximation) with 2.1x margin under the 400s edge-fn ceiling.
+ *
+ *   phase omitted (legacy)  — single-shot detect+aggregate, byte-for-byte
+ *                             identical to W2.5 behaviour.
+ *   phase='detect'          — insert events for the [event_date_min,
+ *                             event_date_max] slice against a run_id. If
+ *                             `run_id` is not supplied, a fresh run row is
+ *                             created with param_grid.window recording the
+ *                             REQUESTED full window (event_date_min_full,
+ *                             event_date_max_full). Each detect call appends
+ *                             its slice bounds + event_count to
+ *                             param_grid.phases_completed.
+ *   phase='aggregate'       — requires run_id. Refuses to run unless the
+ *                             union of param_grid.phases_completed slices
+ *                             covers [event_date_min_full, event_date_max_full]
+ *                             contiguously (a coverage CHECK, not trust).
+ *                             Runs cell-aggregation over the FULL events
+ *                             table for run_id, marks outcome='completed'.
+ *
  * Contract:
  *   POST {
  *     as_of?: 'YYYY-MM-DD',            // injected clock (P7); default = today UTC
@@ -14,6 +36,17 @@
  *                                       // Bounds EVENT dates only; lookback/lead windows
  *                                       // still read bars outside the bound. Defaults to
  *                                       // '1900-01-01' when unset (full-window behaviour).
+ *     event_date_max?: 'YYYY-MM-DD',   // W2.6 phase slice: UPPER BOUND on candidate event_date.
+ *                                       // Defaults to '9999-12-31' when unset.
+ *     phase?: 'detect' | 'aggregate',  // W2.6: optional phased execution. See header.
+ *     run_id?: 'uuid',                 // W2.6: required for phase='aggregate' and for
+ *                                       // subsequent phase='detect' calls; must match an
+ *                                       // existing run in outcome='running'.
+ *     event_date_min_full?: 'YYYY-MM-DD', // W2.6: REQUESTED full-window lower bound; recorded
+ *                                          // on first detect call, checked by aggregate coverage.
+ *                                          // Defaults to event_date_min.
+ *     event_date_max_full?: 'YYYY-MM-DD', // W2.6: REQUESTED full-window upper bound. Defaults to
+ *                                          // event_date_max (or bars ceiling if both unset).
  *   }
  *
  * Sequence (single pg connection; runs row lives OUTSIDE the events/cells txn
@@ -97,6 +130,7 @@ const DETECTION_PARAM_ORDER = [
   'min_band_bps',
   'lookback_min_date',
   'event_date_min',
+  'event_date_max',
 ] as const;
 const AGGREGATION_PARAM_ORDER = [
   'run_id',
@@ -114,6 +148,42 @@ function hashParams(obj: unknown): Promise<string> {
         .map((b) => b.toString(16).padStart(2, '0'))
         .join(''),
     );
+}
+
+/**
+ * Coverage check: verify sorted phase slices union-cover the full window
+ * [W_min, W_max] with no gaps (overlap allowed). Dates as ISO YYYY-MM-DD.
+ * Returns { covered, gap? } for observable diagnostics.
+ */
+export function checkPhaseCoverage(
+  phases: readonly { min: string; max: string }[],
+  fullMin: string,
+  fullMax: string,
+): { covered: boolean; reason?: string } {
+  if (phases.length === 0) return { covered: false, reason: 'no_phases_completed' };
+  const sorted = [...phases].sort((a, b) => (a.min < b.min ? -1 : 1));
+  if (sorted[0].min > fullMin) {
+    return { covered: false, reason: `gap_at_start:first_min=${sorted[0].min}>full_min=${fullMin}` };
+  }
+  let cursor = sorted[0].max;
+  for (let i = 1; i < sorted.length; i++) {
+    // Allow contiguous OR overlap: sorted[i].min <= cursor + 1 day
+    const gapCutoff = addDaysIso(cursor, 1);
+    if (sorted[i].min > gapCutoff) {
+      return { covered: false, reason: `gap:${cursor}->${sorted[i].min}` };
+    }
+    if (sorted[i].max > cursor) cursor = sorted[i].max;
+  }
+  if (cursor < fullMax) {
+    return { covered: false, reason: `gap_at_end:last_max=${cursor}<full_max=${fullMax}` };
+  }
+  return { covered: true };
+}
+
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 Deno.serve(createHandler(async (req: Request) => {
@@ -151,6 +221,34 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(400, 'event_date_min_invalid_format_expected_YYYY_MM_DD', { correlationId });
   }
   const eventDateMin = eventDateMinRaw ?? '1900-01-01';
+  // W2.6 phase slice upper bound. Defaults to sentinel preserving W2.5 semantics.
+  const eventDateMaxRaw = body.event_date_max as string | undefined;
+  if (eventDateMaxRaw !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(eventDateMaxRaw)) {
+    return apiError(400, 'event_date_max_invalid_format_expected_YYYY_MM_DD', { correlationId });
+  }
+  const eventDateMax = eventDateMaxRaw ?? '9999-12-31';
+
+  // W2.6 phase mechanism.
+  const phase = body.phase as ('detect' | 'aggregate' | undefined);
+  if (phase !== undefined && phase !== 'detect' && phase !== 'aggregate') {
+    return apiError(400, 'phase_invalid_expected_detect_or_aggregate', { correlationId });
+  }
+  const priorRunIdRaw = body.run_id as string | undefined;
+  if (priorRunIdRaw !== undefined && !/^[0-9a-f-]{36}$/i.test(priorRunIdRaw)) {
+    return apiError(400, 'run_id_invalid_uuid_format', { correlationId });
+  }
+  if (phase === 'aggregate' && !priorRunIdRaw) {
+    return apiError(400, 'phase_aggregate_requires_run_id', { correlationId });
+  }
+  const eventDateMinFull = (body.event_date_min_full as string | undefined) ?? eventDateMin;
+  const eventDateMaxFull = (body.event_date_max_full as string | undefined) ?? eventDateMax;
+  if (phase && !/^\d{4}-\d{2}-\d{2}$/.test(eventDateMinFull)) {
+    return apiError(400, 'event_date_min_full_invalid_format', { correlationId });
+  }
+  if (phase && !/^\d{4}-\d{2}-\d{2}$/.test(eventDateMaxFull)) {
+    return apiError(400, 'event_date_max_full_invalid_format', { correlationId });
+  }
+
   const paramGrid = (body.param_grid as Record<string, unknown>) ?? { defaults: 'R1' };
   const paramGridHash = await hashParams({
     param_grid: paramGrid,
@@ -158,6 +256,8 @@ Deno.serve(createHandler(async (req: Request) => {
     haircut_short: haircutShort,
     min_band_bps: minBandBps,
     event_date_min: eventDateMin,
+    event_date_max: eventDateMax,
+    phase: phase ?? 'single',
   });
   const runLabel = `${dryRun ? 'DRY_RUN:' : ''}${(body.run_label as string) ?? 'w24-run'}`;
   const gitSha = Deno.env.get('BUILD_SHA') ?? 'unknown';
@@ -183,25 +283,65 @@ Deno.serve(createHandler(async (req: Request) => {
       return apiError(422, 'no_bars_at_or_before_as_of', { correlationId, detail: asOfDay });
     }
 
-    // 2. Insert runs row (outside the events/cells transaction).
-    const [runRow] = await sql<{ run_id: string }[]>`
-      INSERT INTO overshoot_study_runs (
-        run_label, as_of, git_sha, param_grid, param_grid_hash,
-        slippage_haircut_bps_long, slippage_haircut_bps_short,
-        bars_snapshot_max_date, earnings_snapshot_max_date,
-        survivorship_stamp, performance_stamp, short_filter_stamp, return_basis,
-        outcome
-      ) VALUES (
-        ${runLabel}, ${asOfIso}::timestamptz, ${gitSha},
-        ${sql.json(paramGrid)}, ${paramGridHash},
-        ${haircutLong}, ${haircutShort},
-        ${snap.bars_max}::date, ${snap.earnings_max}::date,
-        ${SURVIVORSHIP_STAMP}, ${PERFORMANCE_STAMP}, ${SHORT_FILTER_STAMP}, ${RETURN_BASIS},
-        'running'
-      )
-      RETURNING run_id
-    `;
-    runId = runRow.run_id;
+    // 2. Insert or attach to runs row.
+    //    Legacy + first detect + single-shot: INSERT a new runs row.
+    //    Subsequent detect / aggregate: attach to existing run_id, refuse if not 'running'.
+    let paramGridForRun: Record<string, unknown> = paramGrid;
+    if (priorRunIdRaw && (phase === 'detect' || phase === 'aggregate')) {
+      const [existing] = await sql<{
+        run_id: string;
+        outcome: string;
+        param_grid: Record<string, unknown> | null;
+      }[]>`
+        SELECT run_id, outcome, param_grid
+        FROM overshoot_study_runs
+        WHERE run_id = ${priorRunIdRaw}::uuid
+        FOR UPDATE
+      `;
+      if (!existing) {
+        await sql.end({ timeout: 5 });
+        return apiError(404, 'run_id_not_found', { correlationId, detail: priorRunIdRaw });
+      }
+      if (existing.outcome !== 'running') {
+        await sql.end({ timeout: 5 });
+        return apiError(409, 'run_not_in_running_state', {
+          correlationId,
+          detail: `run_id=${priorRunIdRaw} outcome=${existing.outcome}`,
+        });
+      }
+      runId = existing.run_id;
+      paramGridForRun = (existing.param_grid as Record<string, unknown>) ?? {};
+    } else {
+      // Fresh insert. For phase='detect', embed the requested full window so
+      // subsequent aggregate can enforce coverage against a fixed contract.
+      const seedGrid: Record<string, unknown> = { ...paramGrid };
+      if (phase === 'detect') {
+        seedGrid.window = {
+          event_date_min_full: eventDateMinFull,
+          event_date_max_full: eventDateMaxFull,
+        };
+        seedGrid.phases_completed = [];
+      }
+      const [runRow] = await sql<{ run_id: string }[]>`
+        INSERT INTO overshoot_study_runs (
+          run_label, as_of, git_sha, param_grid, param_grid_hash,
+          slippage_haircut_bps_long, slippage_haircut_bps_short,
+          bars_snapshot_max_date, earnings_snapshot_max_date,
+          survivorship_stamp, performance_stamp, short_filter_stamp, return_basis,
+          outcome
+        ) VALUES (
+          ${runLabel}, ${asOfIso}::timestamptz, ${gitSha},
+          ${sql.json(seedGrid)}, ${paramGridHash},
+          ${haircutLong}, ${haircutShort},
+          ${snap.bars_max}::date, ${snap.earnings_max}::date,
+          ${SURVIVORSHIP_STAMP}, ${PERFORMANCE_STAMP}, ${SHORT_FILTER_STAMP}, ${RETURN_BASIS},
+          'running'
+        )
+        RETURNING run_id
+      `;
+      runId = runRow.run_id;
+      paramGridForRun = seedGrid;
+    }
 
     const detectionCore = bindNamed(stripStatementBody(EVENT_DETECTION_SQL), DETECTION_PARAM_ORDER);
     const aggregationCore = bindNamed(stripStatementBody(CELL_AGGREGATION_SQL), AGGREGATION_PARAM_ORDER);
@@ -211,11 +351,115 @@ Deno.serve(createHandler(async (req: Request) => {
     let eventCount = 0;
     let cellCount = 0;
 
+    // Detect the execution kind:
+    //   'single'    — legacy: detect + aggregate in one txn, mark outcome
+    //   'detect'    — insert events for slice only, append phase, keep running
+    //   'aggregate' — coverage-gated aggregation only, mark outcome
+    const kind: 'single' | 'detect' | 'aggregate' = phase ?? 'single';
+
+    if (kind === 'aggregate') {
+      const phasesRaw = (paramGridForRun.phases_completed as Array<{ min: string; max: string }>) ?? [];
+      const win = (paramGridForRun.window as { event_date_min_full: string; event_date_max_full: string } | undefined);
+      if (!win) {
+        await sql.end({ timeout: 5 });
+        return apiError(409, 'aggregate_missing_window_contract', {
+          correlationId,
+          detail: `run_id=${runId} has no param_grid.window; run must be seeded by phase='detect'`,
+        });
+      }
+      const cov = checkPhaseCoverage(phasesRaw, win.event_date_min_full, win.event_date_max_full);
+      if (!cov.covered) {
+        await sql.end({ timeout: 5 });
+        return apiError(409, 'aggregate_coverage_refused', {
+          correlationId,
+          detail: `run_id=${runId} coverage_gap=${cov.reason} window=[${win.event_date_min_full},${win.event_date_max_full}] phases_completed=${JSON.stringify(phasesRaw)}`,
+        });
+      }
+      if (!dryRun) {
+        const insertCells =
+          `INSERT INTO overshoot_study_cell_results
+             (run_id, side, band, window_days, momentum_quintile, drawdown_bucket,
+              exclusion_width_days, arrival_count,
+              mean_fwd_return_1d, mean_fwd_return_5d, mean_fwd_return_20d,
+              median_fwd_return_5d, hit_rate_5d, notes)
+           ${aggregationCore}`;
+        const cellsRes = await sql.unsafe(insertCells, [
+          runId, haircutLong, haircutShort, snap.bars_max,
+        ]);
+        cellCount = cellsRes.count ?? 0;
+      }
+      const totalMs = performance.now() - t0;
+      await sql`
+        UPDATE overshoot_study_runs
+           SET outcome = ${dryRun ? 'partial' : 'completed'},
+               completed_at = now()
+         WHERE run_id = ${runId}::uuid
+      `;
+      await sql.end({ timeout: 5 });
+      return apiSuccess({
+        run_id: runId,
+        event_count: 0,
+        cell_count: cellCount,
+        dry_run: dryRun,
+        phase: 'aggregate',
+        durations_ms: { total: Math.round(totalMs) },
+        correlation_id: correlationId,
+      });
+    }
+
+    if (kind === 'detect') {
+      // Insert events for this slice; do NOT run aggregation, do NOT mark
+      // outcome — the run remains 'running' until the aggregate phase.
+      if (dryRun) {
+        const [{ count }] = await sql.unsafe(
+          `WITH detection AS (${detectionCore}) SELECT count(*)::int AS count FROM detection`,
+          [runId, snap.bars_max, snap.earnings_max, minBandBps, snap.lookback_min, eventDateMin, eventDateMax],
+        );
+        eventCount = Number(count);
+      } else {
+        const insertEvents =
+          `INSERT INTO overshoot_study_candidate_events
+             (run_id, ticker, event_date, side, move_pct, window_days,
+              excess_w1, excess_w2, excess_w3, excess_w4, excess_w5,
+              momentum_quintile, drawdown_bucket, days_to_nearest_earnings, alias_used,
+              fwd_return_1d, fwd_return_5d, fwd_return_20d)
+           ${detectionCore}`;
+        const eventsRes = await sql.unsafe(insertEvents, [
+          runId, snap.bars_max, snap.earnings_max, minBandBps, snap.lookback_min, eventDateMin, eventDateMax,
+        ]);
+        eventCount = eventsRes.count ?? 0;
+        // Append this slice to phases_completed atomically (jsonb).
+        await sql`
+          UPDATE overshoot_study_runs
+             SET param_grid = jsonb_set(
+                   COALESCE(param_grid, '{}'::jsonb),
+                   '{phases_completed}',
+                   COALESCE(param_grid->'phases_completed', '[]'::jsonb)
+                   || ${sql.json({ min: eventDateMin, max: eventDateMax, event_count: eventCount, completed_at: new Date().toISOString() })}::jsonb
+                 )
+           WHERE run_id = ${runId}::uuid
+        `;
+      }
+      const totalMs = performance.now() - t0;
+      await sql.end({ timeout: 5 });
+      return apiSuccess({
+        run_id: runId,
+        event_count: eventCount,
+        cell_count: 0,
+        dry_run: dryRun,
+        phase: 'detect',
+        slice: { event_date_min: eventDateMin, event_date_max: eventDateMax },
+        durations_ms: { total: Math.round(totalMs) },
+        correlation_id: correlationId,
+      });
+    }
+
+    // kind === 'single' — legacy path, byte-for-byte compatible with W2.5.
     await sql.begin(async (tx) => {
       if (dryRun) {
         const [{ count }] = await tx.unsafe(
           `WITH detection AS (${detectionCore}) SELECT count(*)::int AS count FROM detection`,
-          [runId, snap.bars_max, snap.earnings_max, minBandBps, snap.lookback_min, eventDateMin],
+          [runId, snap.bars_max, snap.earnings_max, minBandBps, snap.lookback_min, eventDateMin, eventDateMax],
         );
         eventCount = Number(count);
         return;
@@ -235,6 +479,7 @@ Deno.serve(createHandler(async (req: Request) => {
         minBandBps,
         snap.lookback_min,
         eventDateMin,
+        eventDateMax,
       ]);
       eventCount = eventsRes.count ?? 0;
 
