@@ -66,6 +66,12 @@ import {
 import { PolygonGroupedDailyFetcher } from '../_shared/overshoot/polygon-grouped-daily-fetcher.ts';
 import { FmpEarningsCalendarFetcher } from '../_shared/overshoot/earnings-calendar-fetcher.ts';
 import {
+  OvershootAlpacaPaperClient,
+  OvershootAlpacaApiError,
+  OvershootAlpacaCredentialError,
+  OvershootAlpacaNetworkError,
+} from '../_shared/overshoot-broker/alpaca-paper-client.ts';
+import {
   runDetector,
   RATIFIED_STUDY_RUN_ID,
   RATIFIED_PARAM_GRID_HASH_PREFIX,
@@ -233,16 +239,55 @@ Deno.serve(createHandler(async (req: Request) => {
     // ── (4) Probe short-circuit — BEFORE the three skip gates. ────────────
     if (probeMode !== undefined) {
       await sql.end({ timeout: 5 });
-      // W3.5.c will wire the actual vendor probe (grouped-daily for polygon,
-      // clock for alpaca). This tranche proves the branch and returns a
-      // machine-checkable envelope; NO pipeline stage runs.
-      return apiSuccess({
-        probe: probeMode,
-        as_of: asOfDay,
-        priors_ok: true,
-        correlation_id: correlationId,
-        note: 'probe_branch_stub_w35b; live probe wires in W3.5.c',
-      });
+      // W3.5.c GATE-ZERO wiring (ratified α). Transcribes the proven pattern
+      // from overshoot-short-interest-compute:222-282. Probes NEVER touch the
+      // DB and NEVER emit secret material beyond the AZD5-comparator last-4.
+      if (probeMode === 'alpaca') {
+        try {
+          const client = new OvershootAlpacaPaperClient();
+          const account = await client.getJson<{ account_number?: string; status?: string }>(
+            '/v2/account',
+          );
+          const acct = typeof account.account_number === 'string' ? account.account_number : '';
+          const account_last4 = acct.length >= 4 ? acct.slice(-4) : null;
+          return apiSuccess({
+            ok: true,
+            probe: 'alpaca',
+            account_last4,
+            status: typeof account.status === 'string' ? account.status : null,
+            paper: true,
+            correlation_id: correlationId,
+          });
+        } catch (e) {
+          const detail =
+            e instanceof OvershootAlpacaApiError
+              ? `alpaca_api_error status=${e.status} endpoint=${e.endpoint}`
+              : e instanceof OvershootAlpacaCredentialError
+              ? 'alpaca_credential_missing'
+              : e instanceof OvershootAlpacaNetworkError
+              ? `alpaca_network_error endpoint=${e.endpoint}`
+              : e instanceof Error ? e.message : String(e);
+          console.error('[overshoot-detection-run] alpaca probe failed:', detail, { correlationId });
+          return apiError(502, 'alpaca_probe_failed', { correlationId });
+        }
+      }
+      // probeMode === 'polygon' — grouped-daily against POLYGON_API_KEY_PROD_PROBE.
+      if (!env.polygonKey) return apiError(500, 'polygon_key_unset', { correlationId });
+      try {
+        const fetcher = new PolygonGroupedDailyFetcher(env.polygonKey);
+        const grouped = await fetcher.fetchGroupedDaily(asOfDate);
+        return apiSuccess({
+          ok: true,
+          probe: 'polygon',
+          as_of_probed: asOfDay,
+          resultsCount: grouped.resultsCount,
+          correlation_id: correlationId,
+        });
+      } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
+        console.error('[overshoot-detection-run] polygon probe failed:', detail, { correlationId });
+        return apiError(502, 'polygon_probe_failed', { correlationId });
+      }
     }
 
     // ── (5) Skip gates ───────────────────────────────────────────────────
