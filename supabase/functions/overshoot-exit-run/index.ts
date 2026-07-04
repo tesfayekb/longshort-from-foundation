@@ -31,7 +31,7 @@
  *              same actor within OVERSHOOT_MANUAL_CONFIRM_WINDOW_MS whose
  *              metadata.confirm_token equals `second_confirm_token`.
  *              Missing / stale / mismatched → 428 typed refusal
- *              `manual_confirm_token_missing_or_invalid`. Cron path
+ *              typed 428 refusal on missing/stale/mismatched token. Cron path
  *              (manual_confirm !== true) is exempt from this gate.
  *   Pipeline : /v2/clock (PIN-2 — record minutes_to_close; typed
  *              `market_closed` refusal on holidays/weekends) →
@@ -64,9 +64,9 @@
  *              observable without moving money.
  *
  * Price source: POLYGON ONLY (Stocks Advanced, POLYGON_API_KEY_PROD_PROBE).
- * Alpaca market-data (data.alpaca.markets / /v2/stocks/*) is FORBIDDEN in
- * this file — see the separation-guard grep in W3.6.d-ii gates. Alpaca is
- * used ONLY for broker truth (/v2/clock, /v2/positions, /v2/orders).
+ * Alpaca market-data endpoints (the data-host / stocks-quotes surface) are
+ * FORBIDDEN in this file -- see the separation-guard grep in W3.6.d-ii
+ * gates. Alpaca is used ONLY for broker truth (clock, positions, orders).
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
