@@ -74,7 +74,8 @@ Deno.serve(createHandler(async (req: Request) => {
     } catch (e) {
       const msg = e instanceof OvershootFetchError ? e.message :
         (e instanceof Error ? e.message : String(e));
-      return apiError(502, 'polygon_probe_failed', { correlationId, detail: msg });
+      console.error('[overshoot-backfill-bars-manual] polygon probe failed:', msg, { correlationId });
+      return apiError(502, 'polygon_probe_failed', { correlationId });
     }
   }
 
@@ -98,7 +99,10 @@ Deno.serve(createHandler(async (req: Request) => {
       .eq('active', true)
       .order('ticker', { ascending: true });
     const { data, error } = await q;
-    if (error) return apiError(500, 'universe_read_failed', { correlationId, detail: error.message });
+    if (error) {
+      console.error('[overshoot-backfill-bars-manual] universe read failed:', error.message, { correlationId });
+      return apiError(500, 'universe_read_failed', { correlationId });
+    }
     tickers = (data ?? []).map((r) => r.ticker as string);
     if (typeof body.resume_from === 'string' && body.resume_from.length > 0) {
       // Exclusive resume: skip up to and including the previous cursor.
@@ -133,7 +137,8 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(400, 'no_tickers_resolved', { correlationId });
   }
   if (!body.full && tickers.length > BATCH_HARD_CAP) {
-    return apiError(400, 'batch_exceeds_hard_cap_50', { correlationId, count: tickers.length });
+    console.error('[overshoot-backfill-bars-manual] batch exceeds hard cap:', { count: tickers.length, correlationId });
+    return apiError(400, 'batch_exceeds_hard_cap_50', { correlationId });
   }
 
   // ---- create run row ----
@@ -144,7 +149,8 @@ Deno.serve(createHandler(async (req: Request) => {
     .select('run_id')
     .single();
   if (runErr || !runRow) {
-    return apiError(500, 'run_row_insert_failed', { correlationId, detail: runErr?.message });
+    console.error('[overshoot-backfill-bars-manual] run row insert failed:', runErr?.message, { correlationId });
+    return apiError(500, 'run_row_insert_failed', { correlationId });
   }
   const runId = runRow.run_id as string;
 
