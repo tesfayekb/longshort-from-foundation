@@ -62,8 +62,10 @@ Deno.test('window arithmetic: as_of + 1 .. as_of + width + margin (calendar days
 
 Deno.test('happy path: decoded FMP rows mapped to upsert shape with attribution', async () => {
   const fetcher = fmpFetcherReturning([
-    { symbol: 'AAPL', date: '2026-07-07', eps: null, epsEstimated: 1.5, revenue: null, revenueEstimated: 90000000000 },
-    { symbol: 'TSLA', date: '2026-07-08', eps: 0.5, epsEstimated: 0.55, revenue: 25000000000, revenueEstimated: 26000000000 },
+    // FMP live shape (verified 2026-07-04 probe): epsActual/revenueActual +
+    // epsEstimated/revenueEstimated. ACT-462.c field-name fix.
+    { symbol: 'AAPL', date: '2026-07-07', epsActual: null, epsEstimated: 1.5, revenueActual: null, revenueEstimated: 90000000000 },
+    { symbol: 'TSLA', date: '2026-07-08', epsActual: 0.5, epsEstimated: 0.55, revenueActual: 25000000000, revenueEstimated: 26000000000 },
   ]);
   const r = await appendForwardEarnings({
     fetcher, asOf: AS_OF, exclusionWidthDays: 5, marginDays: 2,
@@ -80,6 +82,75 @@ Deno.test('happy path: decoded FMP rows mapped to upsert shape with attribution'
   assertStrictEquals(aapl.eps_estimate, 1.5);
   assertStrictEquals(aapl.eps_actual, null);
   assertStrictEquals(aapl.revenue_actual, null);
+  const tsla = r.rows[1];
+  assertStrictEquals(tsla.eps_actual, 0.5);
+  assertStrictEquals(tsla.revenue_actual, 25000000000);
+  assertStrictEquals(tsla.eps_estimate, 0.55);
+  assertStrictEquals(tsla.revenue_estimate, 26000000000);
+  assertStrictEquals(r.duplicatesDropped, 0);
+  assertStrictEquals(r.vendorRowCount, 2);
+});
+
+Deno.test('DEFECT-2 regression: FMP dupe PK-tuples in one window are deduped keep-FIRST (would trip SQLSTATE 21000 otherwise)', async () => {
+  // W3.5.c first-light live-repro fixture — FMP returned 424 rows / 417
+  // unique keys for [2026-07-03..2026-07-09] on 2026-07-04, tripping
+  // Postgres 21000 "cannot affect row a second time" on the
+  // ON CONFLICT (ticker, announcement_date, source) DO UPDATE upsert.
+  // Convention (keep-FIRST + duplicatesDropped counter) mirrors
+  // overshoot-backfill-earnings-manual/index.ts:91-102 verbatim.
+  const fetcher = fmpFetcherReturning([
+    { symbol: 'IDTVF', date: '2026-07-08', epsActual: null, epsEstimated: 0.10 },
+    { symbol: 'IDTVF', date: '2026-07-08', epsActual: null, epsEstimated: 0.20 }, // dupe PK
+    { symbol: 'EUA.L', date: '2026-07-07', epsActual: null, epsEstimated: null },
+    { symbol: 'EUA.L', date: '2026-07-07', epsActual: null, epsEstimated: null }, // dupe PK
+    { symbol: 'AAPL',  date: '2026-07-07', epsActual: null, epsEstimated: 1.5 },
+  ]);
+  const r = await appendForwardEarnings({
+    fetcher, asOf: AS_OF, exclusionWidthDays: 5, marginDays: 2,
+    sourceRunId: RUN_ID, fetchedAsOf: FETCHED_AS_OF, capRows: 4000,
+  });
+  assertStrictEquals(r.vendorRowCount, 5);
+  assertStrictEquals(r.duplicatesDropped, 2);
+  assertStrictEquals(r.rows.length, 3);
+  // Keep-FIRST: the surviving IDTVF row is the one whose epsEstimated=0.10
+  // (the first vendor occurrence), NOT the 0.20 that came second.
+  const idtvf = r.rows.find((x) => x.ticker === 'IDTVF')!;
+  assertStrictEquals(idtvf.eps_estimate, 0.10);
+  // No key tuple appears twice in the returned row set (deterministic).
+  const seen = new Set<string>();
+  for (const row of r.rows) {
+    const k = `${row.ticker}|${row.announcement_date}|${row.source}`;
+    if (seen.has(k)) throw new Error(`dupe survived dedupe: ${k}`);
+    seen.add(k);
+  }
+  // Sort invariant preserved after dedupe (announcement_date asc, ticker asc).
+  assertEquals(r.rows.map((x) => `${x.announcement_date}|${x.ticker}`), [
+    '2026-07-07|AAPL',
+    '2026-07-07|EUA.L',
+    '2026-07-08|IDTVF',
+  ]);
+});
+
+Deno.test('ACT-462.c field-name fix: FMP epsActual/revenueActual populate eps_actual/revenue_actual (not the pre-fix eps/revenue keys)', async () => {
+  // Pre-fix reader used r.eps / r.revenue → 100% of historical actuals
+  // were silently null (355,184 rows across 2021-07-06..2026-07-03).
+  // Post-fix reader uses r.epsActual / r.revenueActual.
+  const fetcher = fmpFetcherReturning([
+    // Post-fix keys → populated.
+    { symbol: 'MSFT', date: '2026-07-07', epsActual: 2.99, revenueActual: 76000000000 },
+    // Pre-fix keys → ignored (must NOT populate actuals; guards against a regression back to eps/revenue).
+    { symbol: 'GOOG', date: '2026-07-08', eps: 1.89, revenue: 82000000000 } as unknown as Record<string, unknown>,
+  ]);
+  const r = await appendForwardEarnings({
+    fetcher, asOf: AS_OF, exclusionWidthDays: 5, marginDays: 2,
+    sourceRunId: RUN_ID, fetchedAsOf: FETCHED_AS_OF, capRows: 4000,
+  });
+  const msft = r.rows.find((x) => x.ticker === 'MSFT')!;
+  const goog = r.rows.find((x) => x.ticker === 'GOOG')!;
+  assertStrictEquals(msft.eps_actual, 2.99);
+  assertStrictEquals(msft.revenue_actual, 76000000000);
+  assertStrictEquals(goog.eps_actual, null);
+  assertStrictEquals(goog.revenue_actual, null);
 });
 
 Deno.test('cap breach at exactly capRows throws EarningsCalendarCapBreachError (no upsert leakage)', async () => {
