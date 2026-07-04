@@ -158,7 +158,11 @@ Deno.test('REFUSED si_unavailable — SHORT with no SI row (default-deny)', () =
     shortInterest: new Map(), params: defaultParams(),
   });
   assertEquals(out[0].filter_refusal_reason, 'si_unavailable');
-  assertEquals(out[0].rank_score, null);
+  // Observability contract: rank_score MAY still be populated (what the
+  // candidate WOULD have ranked) for the W4 console, but selection is
+  // blocked. What's forbidden is FABRICATION — a rank_score derived from a
+  // missing SI value. The rank here comes from the study cell only.
+  assertEquals(out[0].selected_for_entry, false);
 });
 
 Deno.test('REFUSED si_unavailable — SHORT with si_pct_float=null (typed-null, NOT zero)', () => {
