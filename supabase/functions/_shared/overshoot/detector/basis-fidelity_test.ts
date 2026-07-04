@@ -38,7 +38,6 @@
 // STOP rule (executed by the operator, not the test): any MISMATCH → paste
 // per-row diff + halt; NO fixture edits, NO tolerance widening.
 
-import 'https://deno.land/std@0.224.0/dotenv/load.ts';
 import { assert, assertEquals, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js';
 
@@ -110,9 +109,22 @@ const FIXTURE_DIR = new URL('../../../../../fixtures/overshoot-detector/', impor
 const FIXTURE_DAYS = ['2022-05-24', '2024-05-02', '2026-04-15'] as const;
 
 // ─── Env gate (sibling precedent: insider-r2-concurrent-claim_test.ts:87) ─
-const DB_URL = Deno.env.get('SUPABASE_DB_URL') ?? '';
-const LIVE_OPT_IN = Deno.env.get('OVERSHOOT_PARITY_LIVE') === '1';
-const ENV_READY = LIVE_OPT_IN && DB_URL.length > 0;
+// Permission-safe lazy env: the guards workflow runs `deno test --allow-read
+// --allow-net` WITHOUT `--allow-env`. A top-level `Deno.env.get(...)` throws
+// `NotCapable` at module load, killing the file BEFORE the `ignore: !ENV_READY`
+// gate can register. Wrap every env read in a try/catch that degrades to
+// `undefined`, and keep all reads lazy (evaluated inside test bodies / ignore
+// predicates, not at import time). FORBIDDEN: adding `--allow-env` to the
+// guards workflow — that would widen CI permissions to accommodate a test-file
+// side effect, inverting the fix. Catalogue: second instance of the
+// module-load-side-effect-in-tests class (prior: `Deno.serve` leak). Test
+// modules must be side-effect-free at import; all environment access lazy.
+const safeEnv = (k: string): string | undefined => {
+  try { return Deno.env.get(k); } catch { return undefined; }
+};
+const DB_URL = () => safeEnv('SUPABASE_DB_URL') ?? '';
+const LIVE_OPT_IN = () => safeEnv('OVERSHOOT_PARITY_LIVE') === '1';
+const ENV_READY = () => LIVE_OPT_IN() && DB_URL().length > 0;
 
 // ─── Header parser (pure — no DB) ─────────────────────────────────────
 interface FixtureHeader {
