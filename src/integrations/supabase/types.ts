@@ -1614,6 +1614,7 @@ export type Database = {
       }
       overshoot_detection_runs: {
         Row: {
+          append_run_ids: Json | null
           as_of: string
           correlation_id: string | null
           created_at: string
@@ -1626,6 +1627,7 @@ export type Database = {
           selected_count: number
         }
         Insert: {
+          append_run_ids?: Json | null
           as_of: string
           correlation_id?: string | null
           created_at?: string
@@ -1638,6 +1640,7 @@ export type Database = {
           selected_count?: number
         }
         Update: {
+          append_run_ids?: Json | null
           as_of?: string
           correlation_id?: string | null
           created_at?: string
