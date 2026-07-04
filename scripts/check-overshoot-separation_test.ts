@@ -67,3 +67,28 @@ Deno.test('overshoot function directory recognized', () => {
   );
   assertEquals(v.length, 1);
 });
+
+// FP-069 W3.2.a (ACT-459.a): RULE 1 scope extension fixture. Proves that
+// an overshoot-broker file importing from the longshort-broker tree is
+// caught (i.e. the new leaf tree is under the membrane and the A3
+// allowlist is not bypassed by placement under `_shared/overshoot-broker/`).
+Deno.test('overshoot-broker file: importing longshort-broker → violation', () => {
+  const v = scanFile(
+    'supabase/functions/_shared/overshoot-broker/alpaca-paper-client.ts',
+    `import type { BrokerOrderRequest } from '../longshort-broker-interfaces.ts';
+     import { AlpacaPaperClient } from '../longshort-broker/alpaca-paper-client.ts';`,
+  );
+  assertEquals(v.length, 2);
+  assertEquals(v[0].line, 1);
+  assertEquals(v[1].line, 2);
+});
+
+// Positive: overshoot-broker importing its own sibling interfaces file
+// is fine (no `longshort` in specifier — the guard predicate does not fire).
+Deno.test('overshoot-broker file: importing own interfaces → OK', () => {
+  const v = scanFile(
+    'supabase/functions/_shared/overshoot-broker/alpaca-paper-client.ts',
+    `import type { BrokerOrderRequest } from '../overshoot-broker-interfaces.ts';`,
+  );
+  assertEquals(v.length, 0);
+});
