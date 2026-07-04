@@ -408,3 +408,50 @@ Drift MUST be surfaced in the audit block of the initiating sub-turn's ACT entry
 **Run-of-record lineage (for W3 pinning).** `run_id=1888e113-f9b3-43f5-856c-d91666a3c121`, `param_grid_hash=a37e4b96…f354e80`, `git_sha=0c5ad0d9`, `outcome=completed`, `as_of=2026-07-02`, `bars_snapshot_max_date=2026-07-02`, `earnings_snapshot_max_date=2026-07-02`, stamps: `survivorship=UPPER_BOUND_SURVIVORSHIP_BIASED`, `performance=NON_PERFORMANCE_STUDY_ONLY`, `short_filter=NO_SQUEEZE_FILTER_ARRIVALS_UPPER_BOUND_RETURNS_CONSERVATIVE`, `return_basis=CLOSE_TO_CLOSE_REFERENCE`. Any W3 parameter-ratification reads must scope to this run_id.
 
 **W3 gate status.** W2 obligations are discharged. W3 opens on operator ratification of a detector-parameter tuple (band × window × momentum-quintile × drawdown-bucket × exclusion-width) informed by T1–T6, plus provisioning of the second Alpaca paper account and its two secrets (per the SEPARATION CONTRACT §1). Parameter ratification is a supervisor-tier decision, not a build task.
+
+### W3.3 CLOSED — short-interest commons populated under audited arm-bracket (2026-07-04, ACT-460.a/b.i/b.ii/b.iii + ACT-460.b.iii.arm)
+
+The overshoot short-interest common (`public.overshoot_short_interest`) is populated end-to-end. The `overshoot-short-interest-compute` edge function is **deployed-disarmed**: the code, registry seed, deployed bundle, and GATE-ZERO dual-vendor probes are live, but the `job_registry.overshoot.short_interest.compute.enabled` row remains `false` and no `cron.job` row wires it — the batch that populated the table ran under a manual audited arm-bracket, not a cron fire.
+
+**Substrate state (W3.3 CLOSED, 2026-07-04):**
+
+| Surface | State | Notes |
+| --- | --- | --- |
+| `overshoot-short-interest-compute/index.ts` | DEPLOYED (517 lines; sha256 `7cac0924…70d0ea` on HEAD `0fb08235…`) | DEC-023 envelope; `overshoot.manage` RBAC; injected clock (`productionClock.getWallClockTs()`); resumable batch (`{as_of?, probe?, tickers?, batch_size?, resume_from?}`); three skip gates (kill-switch / job-disarmed / probes). |
+| `_shared/overshoot/polygon-shares-outstanding-fetcher.ts` + `_test.ts` | LANDED (ACT-460.a) | Signature-identical transcription of the longshort sibling; typed-absence on unavailable. |
+| `_shared/overshoot/polygon-short-interest-fetcher.ts` + `_test.ts` | LANDED (ACT-460.a) | Raw SI share counts + typed-absence DTC (prefer `days_to_cover`, else `short_interest / avg_daily_volume`, else null — never fabricated zero). |
+| `job_registry` row `overshoot.short_interest.compute` | SEEDED, DISARMED (MIG-151) | `enabled=false, status='registered'`, schedule `'0 21 1,15 * *'`, handler_path exact match to deployed function. Disarm-fire-enable convention honored. |
+| `sql/30_overshoot_short_interest_cron_schedule.sql` | AUTHORED-PENDING-APPLY | NOT executed in W3.3. Header states the four-step post-apply verification block; arming deferred to a future operator-authorized W3 arming gate. |
+| `cron.job` overshoot rows | ZERO throughout W3.3 | Verified pre-bracket AND post-bracket. |
+| `overshoot_short_interest` rows | 5,034 across 839/839 active tickers, 7 distinct as_of dates spanning `2026-03-13 → 2026-06-15` | 42 rows with `si_pct_float=NULL` (7 shares-unavailable tickers — denominator typed-absence); 0 rows with `dtc=NULL`; 21 source_run_ids partitioning the write (20×240 + 1×234). |
+
+**A3 derivation contract (byte-verbatim to `_shared/longshort-signals/short-interest-change/short-interest-orchestrator.ts:319-335`):** `si_pct_float = r.short_interest / shares` under `Number.isFinite(shares) && shares > 0`; typed-null fallback when `shares === null`. Conscious-approximation (current shares-outstanding used to denominate historical SI counts) documented at the divide site, in the `COMMENT ON TABLE overshoot_short_interest`, and in the compute file's header docstring.
+
+**GATE-ZERO dual-vendor probes (both PASS, ACT-460.b.ii):**
+- ALPACA: 200 `account_last4=AZD5, status=ACTIVE, paper=true, correlation_id=13e5affb-4b93-4936-bbc9-b0ee1a9ab8d0` — B3 (account #2 `PA37Y0DBAZD5`) validated as the edge runtime sees them; zero `SVZO` cross-contamination.
+- POLYGON: 200 `status=reports, report_count=6, correlation_id=0eb4c1b0-19a2-40c1-9bff-2b3ab0ace49a` — one SI fetch, zero writes.
+
+**Arm-bracket protocol (ACT-460.b.iii.arm) — the pre-arming manual-run procedure documented here for reuse.** The compute's SKIP GATE #2 (job disarmed) is the sole seam blocking manual runs against a disarmed registry row. Until either sql/30 is armed or a `force:true` bypass ships, batches run inside this audited bracket:
+
+**STRUCTURAL FENCE (definition, binding for this module):** "cron arming" is executing `sql/30` or creating/enabling any `cron.job` row targeting the compute. A `job_registry.enabled` flip inside an audited bracket is **NOT** cron arming provided `cron.job WHERE jobname LIKE 'overshoot%'` holds zero rows for the bracket's duration. The disarm gate blocking a batch is the convention functioning correctly, not a defect.
+
+**Seven-step protocol (every step recorded in the initiating ACT entry, verbatim pastes):**
+1. **FENCE PROOF** — `SELECT count(*) FROM cron.job WHERE jobname LIKE 'overshoot%'` MUST equal 0. Non-zero → STOP.
+2. **PRE-STATE** — `SELECT id, enabled FROM job_registry WHERE id='overshoot.short_interest.compute'` MUST show `enabled=false`.
+3. **ARM** — `UPDATE job_registry SET enabled=true WHERE id='overshoot.short_interest.compute'` (note: `status` column is bound by `job_registry_status_check ∈ {'registered','paused','poison'}`; keep as `'registered'` — do NOT set to `'enabled'`).
+4. **BATCH** — direct-`localStorage` §7.5 loop script, resume-by-cursor over the active universe to `done=true`. Fixed `as_of` (reused by step 5). Per-invocation `[#NN]` log lines + TOTALS + RUN_IDS pasted back verbatim.
+5. **IDEMPOTENCY** — re-invoke ONE batch at the same `as_of` (no `resume_from`, so it hits the first-`batch_size` slice deterministically). Prove: `md5(string_agg(ticker|as_of_date|si_pct_float|dtc, ',' ORDER BY ticker,as_of_date))` byte-identical before/after; `distinct_run_ids` same slice = 1 (upsert fully overwrites `source_run_id`/`computed_at`); `si_pct_float, dtc` unchanged.
+6. **DISARM** — `UPDATE job_registry SET enabled=false ...`; POST-STATE `SELECT` paste confirms `enabled=false`.
+7. **FENCE RE-PROOF** — cron.job overshoot count still 0.
+
+STOP conditions: fence-proof non-zero at step 1 or 7; batch surfacing a compute defect (the row is re-disarmed BEFORE stopping); any `sql/30` execution.
+
+**Named future design item (evidence-gated, NOT built now):** if the arm-bracket cadence becomes a repeated burden, a `force:true` bypass on SKIP GATE #2 keyed to `overshoot.manage` RBAC (or a longshort manual-sibling analog) is the amendment to consider. Not required by any pending wave.
+
+**§22.5.1 evidence bundle (verbatim reads):** totals `5,034 rows / 839 distinct tickers / 839 active universe / zero-row count = 0 / 7 distinct as_of dates / min 2026-03-13 max 2026-06-15`. Typed-absence: `si_pct_float_null_rows=42` across 7 shares-unavailable tickers (sample ACGL, BLD, HON, JHG — `si_pct_float=NULL` with `dtc≠NULL`, `source_run_id` present); SI-unavailable→no-row shape stated in compute header lines 60–65 and verified by `si_unavailable_count=0` across all 21 invocations. dtc coverage: `dtc_null_rows=0 / dtc_derived_rows=5,034`. Spot cross-check (AAPL): `2026-06-15 si_pct_float=0.0098 dtc=2.76`, `2026-05-29 0.0106/3.38`, `2026-05-15 0.0094/2.74` — plausibility PASS (mega-cap SI% ≈ 1%, DTC 2.7–3.4d). Runs attribution: 21 UUIDs partitioning 5,034 rows as 20×240 + 1×234.
+
+**Idempotency proof (delta-0):** `derivation_hash_pre=derivation_hash_post=24b6e4bc1c176ae97d126385e675b42f` on the first-40-ticker slice; only `source_run_id`/`computed_at` refreshed.
+
+**Incidental fix-forward (ACT-460.b.iii):** four `apiError()` sites in `overshoot-backfill-bars-manual/index.ts` were passing extra `{detail, correlationId}` props incompatible with the shape — extra context now routes to `console.error(...)` before the `apiError(status, code, {correlationId})` call. Redeploy `d24fd4f4…7102b7da` on HEAD `9e149090…`; 55/55 gate-11 subset PASS.
+
+**W3.4 readiness:** detector kernel + byte-exact study-parity property test (the basis-fidelity gate — kernel outputs must match study-cell outputs bit-for-bit on the ratified `run_id=1888e113-f9b3-43f5-856c-d91666a3c121` fixture). **Do NOT begin W3.4 until operator authorizes.**
