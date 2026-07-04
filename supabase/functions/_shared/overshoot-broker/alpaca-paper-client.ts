@@ -117,7 +117,6 @@ export interface OvershootAlpacaPaperClientConfig {
   fetchImpl?: typeof fetch;
 }
 
-// @ts-ignore — Deno global; this file is consumed by Deno, not the Vite bundle.
 declare const Deno: { env: { get(name: string): string | undefined } };
 
 export class OvershootAlpacaPaperClient {
