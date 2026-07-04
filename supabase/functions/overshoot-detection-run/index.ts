@@ -136,11 +136,11 @@ const DETECTION_PARAM_ORDER = [
 ] as const;
 
 // bandLabelFor is imported from `_shared/overshoot/detector/band-label.ts`.
-// The prior in-handler placeholder (`10pct_wN`) shipped as a TODO and was
-// the W3.5.c first-light defect: it never intersected the real study-side
-// namespace (`{L,S}_03_04..{L,S}_10_INF`), zeroing selection on both sides.
-// Fix: signed-excess magnitude-bin classifier, verbatim-mirrored from
-// `_shared/overshoot/study/cell-aggregation.sql.ts`.
+// The prior in-handler classifier returned `10pct_wN` — a label that never
+// intersected the real study-side namespace (`{L,S}_03_04..{L,S}_10_INF`),
+// zeroing selection on both sides at W3.5.c first-light. Current form is a
+// signed-excess magnitude-bin classifier, verbatim-mirrored from
+// `_shared/overshoot/study/cell-aggregation.sql.ts` (see band-label.ts).
 
 interface Env {
   supabaseDbUrl: string;
