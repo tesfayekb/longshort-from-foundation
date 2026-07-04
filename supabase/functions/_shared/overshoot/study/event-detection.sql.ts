@@ -68,12 +68,12 @@ bars AS (
   SELECT b.ticker, b.trade_date, b.close
   FROM overshoot_daily_bars b
   JOIN active_universe u USING (ticker)
-  WHERE b.trade_date <= :bars_snapshot_max_date
+  WHERE b.trade_date <= :bars_snapshot_max_date::date
 ),
 spy AS (
   SELECT trade_date, close AS spy_close
   FROM overshoot_daily_bars
-  WHERE ticker = 'SPY' AND trade_date <= :bars_snapshot_max_date
+  WHERE ticker = 'SPY' AND trade_date <= :bars_snapshot_max_date::date
 ),
 
 -- ┌───────────────────────────────────────────────────────────────────────────┐
@@ -148,8 +148,8 @@ per_window_excess AS (
           THEN (bw.close/bw.c_lag5 - 1.0) - (sw.spy_close/sw.spy_lag5 - 1.0) END) AS ex_5d
   FROM bars_windowed bw
   JOIN spy_windowed sw USING (trade_date)
-  WHERE bw.trade_date >= :lookback_min_date
-    AND bw.trade_date >= :event_date_min
+  WHERE bw.trade_date >= :lookback_min_date::date
+    AND bw.trade_date >= :event_date_min::date
 ),
 argmax_window AS (
   -- Unpivot the 5 windows, keep argmax |ex_W| per (ticker, trade_date, side).
@@ -218,7 +218,7 @@ nearest_earnings AS (
        FROM earnings_expanded ee
        JOIN overshoot_earnings_calendar ec
          ON ec.ticker = ee.earnings_ticker
-        AND ec.announcement_date <= :earnings_snapshot_max_date
+        AND ec.announcement_date <= :earnings_snapshot_max_date::date
       WHERE ee.event_ticker = aw.ticker
       ORDER BY ABS(ec.announcement_date - aw.trade_date) ASC,
                (ec.announcement_date - aw.trade_date) DESC
@@ -227,7 +227,7 @@ nearest_earnings AS (
        FROM earnings_expanded ee
        JOIN overshoot_earnings_calendar ec
          ON ec.ticker = ee.earnings_ticker
-        AND ec.announcement_date <= :earnings_snapshot_max_date
+        AND ec.announcement_date <= :earnings_snapshot_max_date::date
       WHERE ee.event_ticker = aw.ticker
       ORDER BY ABS(ec.announcement_date - aw.trade_date) ASC,
                (ec.announcement_date - aw.trade_date) DESC
