@@ -6,9 +6,14 @@
  * each trading day in a caller-provided window and returns a summary
  * table + recommendation. NEVER persists a run row or event row.
  *
- * Contract:
- *   POST { as_of_start: 'YYYY-MM-DD', as_of_end: 'YYYY-MM-DD',
- *          correlation_id?: string }
+ * Contract (three modes — pick one per call; per-day kernel is ~40-50s,
+ * platform idle timeout is 150s, so a full range CANNOT be swept in a
+ * single invocation):
+ *   (a) ENUMERATE (fast, no detector): POST { as_of_start, as_of_end }
+ *       → returns { trading_days: [...] } for the caller to loop over.
+ *   (b) SINGLE  (one detector pass):   POST { as_of }
+ *   (c) BATCH   (≤3 detector passes):  POST { as_of_list: [...] }
+ *   correlation_id?: string on all three.
  *   Auth: DEC-023 envelope + overshoot.manage RBAC (same as detection-run).
  *
  * Guardrails codified in this file:
@@ -53,6 +58,7 @@ const DETECTOR_SHORT_DRAWDOWN = [4, 5] as const;
 const DETECTOR_MIN_BAND_BPS = 300;
 const DUMMY_RUN_ID = '00000000-0000-0000-0000-000000000000';
 const MAX_WINDOW_DAYS = 60;
+const MAX_BATCH_DAYS = 3;
 
 function stripStatementBody(sql: string): string {
   let s = sql;
@@ -104,30 +110,79 @@ Deno.serve(createHandler(async (req: Request) => {
   try { body = ((await req.json()) as Record<string, unknown>) ?? {}; }
   catch { return apiError(400, 'invalid_json_body', { correlationId }); }
 
+  const asOfSingle = body.as_of as string | undefined;
+  const asOfList = body.as_of_list as string[] | undefined;
   const startRaw = body.as_of_start as string | undefined;
   const endRaw = body.as_of_end as string | undefined;
-  if (!startRaw || !endRaw) return apiError(400, 'as_of_start_and_as_of_end_required', { correlationId });
-  const startDate = parseAsOfDate(startRaw);
-  const endDate = parseAsOfDate(endRaw);
-  if (!startDate || !endDate) return apiError(400, 'as_of_invalid_format_expected_YYYY_MM_DD', { correlationId });
-  const start = startDate.toISOString().slice(0, 10);
-  const end = endDate.toISOString().slice(0, 10);
-  if (daysBetween(start, end) < 0) return apiError(400, 'as_of_end_before_start', { correlationId });
-  if (daysBetween(start, end) > MAX_WINDOW_DAYS) return apiError(400, `window_exceeds_${MAX_WINDOW_DAYS}_days`, { correlationId });
+
+  // Resolve mode.
+  let mode: 'enumerate' | 'single' | 'batch';
+  let requestedDates: string[] = [];
+  let start = '', end = '';
+  if (asOfSingle) {
+    mode = 'single';
+    const d = parseAsOfDate(asOfSingle);
+    if (!d) return apiError(400, 'as_of_invalid_format_expected_YYYY_MM_DD', { correlationId });
+    requestedDates = [d.toISOString().slice(0, 10)];
+  } else if (Array.isArray(asOfList) && asOfList.length > 0) {
+    mode = 'batch';
+    if (asOfList.length > MAX_BATCH_DAYS) return apiError(400, `as_of_list_exceeds_${MAX_BATCH_DAYS}`, { correlationId });
+    for (const s of asOfList) {
+      const d = parseAsOfDate(s);
+      if (!d) return apiError(400, 'as_of_list_invalid_format_expected_YYYY_MM_DD', { correlationId });
+      requestedDates.push(d.toISOString().slice(0, 10));
+    }
+  } else if (startRaw && endRaw) {
+    mode = 'enumerate';
+    const startDate = parseAsOfDate(startRaw);
+    const endDate = parseAsOfDate(endRaw);
+    if (!startDate || !endDate) return apiError(400, 'as_of_invalid_format_expected_YYYY_MM_DD', { correlationId });
+    start = startDate.toISOString().slice(0, 10);
+    end = endDate.toISOString().slice(0, 10);
+    if (daysBetween(start, end) < 0) return apiError(400, 'as_of_end_before_start', { correlationId });
+    if (daysBetween(start, end) > MAX_WINDOW_DAYS) return apiError(400, `window_exceeds_${MAX_WINDOW_DAYS}_days`, { correlationId });
+  } else {
+    return apiError(400, 'expected_as_of_or_as_of_list_or_as_of_start_and_as_of_end', { correlationId });
+  }
 
   const dbUrl = Deno.env.get('SUPABASE_DB_URL') ?? '';
   if (!dbUrl) return apiError(500, 'db_url_unset', { correlationId });
   const sql = postgres(dbUrl, { max: 1, prepare: false, connect_timeout: 15 });
 
   try {
-    // Determine trading days from overshoot_daily_bars (SELECT only).
-    const tradingRows = await sql<{ trade_date: string }[]>`
-      SELECT DISTINCT trade_date::text AS trade_date
-      FROM overshoot_daily_bars
-      WHERE trade_date BETWEEN ${start}::date AND ${end}::date
-      ORDER BY trade_date
-    `;
-    const sweepDates = tradingRows.map((r) => r.trade_date);
+    // Determine trading days.
+    let sweepDates: string[];
+    if (mode === 'enumerate') {
+      const tradingRows = await sql<{ trade_date: string }[]>`
+        SELECT DISTINCT trade_date::text AS trade_date
+        FROM overshoot_daily_bars
+        WHERE trade_date BETWEEN ${start}::date AND ${end}::date
+        ORDER BY trade_date
+      `;
+      sweepDates = tradingRows.map((r) => r.trade_date);
+      await sql.end({ timeout: 5 });
+      return apiSuccess({
+        ok: true,
+        correlation_id: correlationId,
+        mode,
+        sweep_window: { start, end, trading_days: sweepDates.length },
+        trading_days: sweepDates,
+        per_date: [],
+        recommendation: { pick: null, rationale: 'enumerate_only_no_detector_run' },
+        read_only: true,
+        bracket_touched: false,
+        next_step: 'Invoke with { as_of: "<date>" } for each trading day and aggregate client-side.',
+      });
+    } else {
+      // single | batch: filter requested dates to those that are actual trading days.
+      const tradingRows = await sql<{ trade_date: string }[]>`
+        SELECT DISTINCT trade_date::text AS trade_date
+        FROM overshoot_daily_bars
+        WHERE trade_date = ANY(${requestedDates}::date[])
+        ORDER BY trade_date
+      `;
+      sweepDates = tradingRows.map((r) => r.trade_date);
+    }
 
     // Study cells — one read, ratified priors.
     const cellRows = await sql<{ side: string; band: string; window_days: number; momentum_quintile: number; drawdown_bucket: number; exclusion_width_days: number; arrival_count: number; mean_fwd_return_5d: number | null }[]>`
@@ -273,7 +328,9 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiSuccess({
       ok: true,
       correlation_id: correlationId,
-      sweep_window: { start, end, trading_days: sweepDates.length },
+      mode,
+      requested_dates: requestedDates,
+      trading_days_processed: sweepDates,
       per_date: perDate,
       recommendation,
       read_only: true,
