@@ -99,6 +99,13 @@ export interface AppendForwardEarningsResult {
   windowDays: number;
   rows: EarningsCalendarUpsertRow[];
   vendorRowCount: number;
+  /**
+   * DEFECT-2 (ACT-456, FP-069 W1b turn-6) counter mirrored into W3.5.c:
+   * count of vendor rows dropped because they duplicated a
+   * (ticker|announcement_date|source) PK-tuple already emitted in the
+   * same fetch window. See dedupe block below.
+   */
+  duplicatesDropped: number;
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -165,13 +172,37 @@ export async function appendForwardEarnings(
     source_run_id: sourceRunId,
     fetched_as_of: fetchedAsOfIso,
   }));
+  // DEFECT-2 / ACT-456 (FP-069 W1b turn-6) — mirrored verbatim into the
+  // W3.5.c live-detection append leg (recurrence in a new module; see
+  // ACT-462.c class audit). In-memory PK-tuple dedupe
+  // (ticker|announcement_date|source), keep-FIRST. Vendor bulk ranges
+  // (FMP) occasionally return duplicate PK tuples that would otherwise
+  // trip Postgres upsert ("cannot affect row a second time", SQLSTATE
+  // 21000). No other row semantics are changed. Convention
+  // (keep-FIRST + duplicatesDropped counter) matches
+  // overshoot-backfill-earnings-manual/index.ts:91-102 verbatim so a
+  // detection-run append and a backfill append of the same window
+  // produce byte-identical row sets.
+  const seen = new Map<string, EarningsCalendarUpsertRow>();
+  let duplicatesDropped = 0;
+  for (const r of rows) {
+    const key = `${r.ticker}|${r.announcement_date}|${r.source}`;
+    if (seen.has(key)) { duplicatesDropped++; continue; }
+    seen.set(key, r);
+  }
+  const deduped = Array.from(seen.values());
   // Deterministic order (observability + test stability).
-  rows.sort((a, b) => {
+  deduped.sort((a, b) => {
     const d = a.announcement_date.localeCompare(b.announcement_date);
     return d !== 0 ? d : a.ticker.localeCompare(b.ticker);
   });
 
-  return { fromIso, toIso, windowDays, rows, vendorRowCount: vendorRows.length };
+  return {
+    fromIso, toIso, windowDays,
+    rows: deduped,
+    vendorRowCount: vendorRows.length,
+    duplicatesDropped,
+  };
 }
 
 // ---------- Staleness predicate ----------

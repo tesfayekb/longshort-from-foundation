@@ -138,9 +138,15 @@ export class FinnhubEarningsFetcher {
 interface FmpEarningsRow {
   date?: string;
   symbol?: string;
-  eps?: number | null;
+  // FMP /stable/earnings-calendar (verified 2026-07-04 live probe) returns
+  // `epsActual`/`revenueActual` — the earlier `eps`/`revenue` field names
+  // used by this reader silently null-ed all 355,184 historical actuals
+  // (source='fmp', 2021-07-06..2026-07-03). Detector selection is
+  // date-only, so no gating/refusal drift; forensic completeness only.
+  // Estimates use `epsEstimated`/`revenueEstimated` (unchanged).
+  epsActual?: number | null;
   epsEstimated?: number | null;
-  revenue?: number | null;
+  revenueActual?: number | null;
   revenueEstimated?: number | null;
 }
 
@@ -203,9 +209,9 @@ export class FmpEarningsCalendarFetcher {
         quarter: null,
         fiscal_year: null,
         eps_estimate: typeof r.epsEstimated === 'number' ? r.epsEstimated : null,
-        eps_actual: typeof r.eps === 'number' ? r.eps : null,
+        eps_actual: typeof r.epsActual === 'number' ? r.epsActual : null,
         revenue_estimate: typeof r.revenueEstimated === 'number' ? r.revenueEstimated : null,
-        revenue_actual: typeof r.revenue === 'number' ? r.revenue : null,
+        revenue_actual: typeof r.revenueActual === 'number' ? r.revenueActual : null,
       });
     }
     return out;

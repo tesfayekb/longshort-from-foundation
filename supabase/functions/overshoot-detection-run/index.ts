@@ -421,9 +421,22 @@ Deno.serve(createHandler(async (req: Request) => {
       }
       await sql`UPDATE overshoot_backfill_runs SET row_count=${appendRes.rows.length}, outcome='completed', completed_as_of=${new Date().toISOString()}::timestamptz WHERE run_id=${earningsBackfillRunId}::uuid`;
       durations.earnings_append_ms = Math.round(performance.now() - tE);
+      // DEFECT-2 recurrence forensic — ACT-462.c class-audit counter.
+      // Surface vendor-dedupe count into durations metadata (jsonb bucket)
+      // so the run-row records how many FMP vendor rows collided on
+      // (ticker|announcement_date|source) in the fetch window.
+      (durations as Record<string, unknown>).earnings_duplicates_dropped = appendRes.duplicatesDropped;
+      (durations as Record<string, unknown>).earnings_vendor_row_count = appendRes.vendorRowCount;
+      (durations as Record<string, unknown>).earnings_appended_row_count = appendRes.rows.length;
     } catch (err) {
       const reason = err instanceof EarningsCalendarCapBreachError ? 'earnings_calendar_cap_breach'
                                                                     : 'earnings_append_unexpected';
+      // ACT-462.c forensic: surface throw shape in the failed run row so
+      // future unexpected-bucket entries are diagnosable without an extra
+      // repro. Previously the catch swallowed the message entirely,
+      // forcing an out-of-band FMP probe to root-cause the 21000 case.
+      (durations as Record<string, unknown>).earnings_append_error =
+        err instanceof Error ? (err.name + ': ' + err.message).slice(0, 500) : String(err).slice(0, 500);
       await finalizeRun(sql, runId, 'failed', reason, 0, 0, durations, { bars: barsBackfillRunId, earnings: earningsBackfillRunId });
       await sql.end({ timeout: 5 });
       return apiSuccess({ run_id: runId, outcome: 'failed', reason, event_count: 0, selected_count: 0, correlation_id: correlationId });
