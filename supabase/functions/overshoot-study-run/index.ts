@@ -334,7 +334,7 @@ Deno.serve(createHandler(async (req: Request) => {
           outcome
         ) VALUES (
           ${runLabel}, ${asOfIso}::timestamptz, ${gitSha},
-          ${sql.json(seedGrid)}, ${paramGridHash},
+          ${JSON.stringify(seedGrid)}::jsonb, ${paramGridHash},
           ${haircutLong}, ${haircutShort},
           ${snap.bars_max}::date, ${snap.earnings_max}::date,
           ${SURVIVORSHIP_STAMP}, ${PERFORMANCE_STAMP}, ${SHORT_FILTER_STAMP}, ${RETURN_BASIS},
