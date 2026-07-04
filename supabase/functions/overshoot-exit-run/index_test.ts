@@ -41,7 +41,7 @@ Deno.test('DEC-023 envelope: createHandler + authenticateRequest + overshoot.man
 Deno.test('injected clock: productionClock; Date.now() only in I6 window cutoff (documented)', () => {
   assertStringIncludes(SRC, "import { productionClock } from '../_shared/longshort-clock.ts'");
   // Strip line-/block-comments before counting Date.now() references so
-  // docstring mentions do not false-positive.
+  // docstring mentions do not spuriously match.
   const noComments = SRC.split('\n')
     .filter((l) => !/^\s*\*/.test(l) && !/^\s*\/\//.test(l))
     .join('\n');
