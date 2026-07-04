@@ -1478,6 +1478,45 @@ export type Database = {
         }
         Relationships: []
       }
+      overshoot_audit_logs: {
+        Row: {
+          action: string
+          correlation_id: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          metadata: Json
+          operator_id: string
+          target_id: string | null
+          target_type: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          correlation_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          operator_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          correlation_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          operator_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       overshoot_backfill_runs: {
         Row: {
           completed_as_of: string | null
@@ -1573,6 +1612,45 @@ export type Database = {
           },
         ]
       }
+      overshoot_detection_runs: {
+        Row: {
+          as_of: string
+          correlation_id: string | null
+          created_at: string
+          detected_at: string
+          durations_ms: Json
+          event_count: number
+          git_sha: string | null
+          outcome: string
+          run_id: string
+          selected_count: number
+        }
+        Insert: {
+          as_of: string
+          correlation_id?: string | null
+          created_at?: string
+          detected_at: string
+          durations_ms?: Json
+          event_count?: number
+          git_sha?: string | null
+          outcome: string
+          run_id?: string
+          selected_count?: number
+        }
+        Update: {
+          as_of?: string
+          correlation_id?: string | null
+          created_at?: string
+          detected_at?: string
+          durations_ms?: Json
+          event_count?: number
+          git_sha?: string | null
+          outcome?: string
+          run_id?: string
+          selected_count?: number
+        }
+        Relationships: []
+      }
       overshoot_earnings_calendar: {
         Row: {
           announcement_date: string
@@ -1628,6 +1706,203 @@ export type Database = {
             referencedColumns: ["run_id"]
           },
         ]
+      }
+      overshoot_events: {
+        Row: {
+          argmax_window_days: number | null
+          as_of_date: string
+          created_at: string
+          days_to_nearest_earnings: number | null
+          drawdown_bucket: number | null
+          earnings_alias_used: string | null
+          event_id: string
+          excess_w1: number | null
+          excess_w2: number | null
+          excess_w3: number | null
+          excess_w4: number | null
+          excess_w5: number | null
+          filter_passes: Json
+          filter_refusal_reason: string | null
+          momentum_quintile: number | null
+          rank_score: number | null
+          run_id: string
+          selected_for_entry: boolean
+          side: string
+          study_cell_ref: Json | null
+          ticker: string
+        }
+        Insert: {
+          argmax_window_days?: number | null
+          as_of_date: string
+          created_at?: string
+          days_to_nearest_earnings?: number | null
+          drawdown_bucket?: number | null
+          earnings_alias_used?: string | null
+          event_id?: string
+          excess_w1?: number | null
+          excess_w2?: number | null
+          excess_w3?: number | null
+          excess_w4?: number | null
+          excess_w5?: number | null
+          filter_passes?: Json
+          filter_refusal_reason?: string | null
+          momentum_quintile?: number | null
+          rank_score?: number | null
+          run_id: string
+          selected_for_entry?: boolean
+          side: string
+          study_cell_ref?: Json | null
+          ticker: string
+        }
+        Update: {
+          argmax_window_days?: number | null
+          as_of_date?: string
+          created_at?: string
+          days_to_nearest_earnings?: number | null
+          drawdown_bucket?: number | null
+          earnings_alias_used?: string | null
+          event_id?: string
+          excess_w1?: number | null
+          excess_w2?: number | null
+          excess_w3?: number | null
+          excess_w4?: number | null
+          excess_w5?: number | null
+          filter_passes?: Json
+          filter_refusal_reason?: string | null
+          momentum_quintile?: number | null
+          rank_score?: number | null
+          run_id?: string
+          selected_for_entry?: boolean
+          side?: string
+          study_cell_ref?: Json | null
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overshoot_events_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "overshoot_detection_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
+      }
+      overshoot_lots: {
+        Row: {
+          closed_at: string | null
+          cost_basis: number
+          created_at: string
+          entry_ts: string
+          expected_settlement_ts: string | null
+          lot_id: string
+          operator_id: string
+          qty: number
+          settlement_state: string
+          side: string
+          source_order_id: string | null
+          status: string
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          cost_basis: number
+          created_at?: string
+          entry_ts: string
+          expected_settlement_ts?: string | null
+          lot_id?: string
+          operator_id?: string
+          qty: number
+          settlement_state?: string
+          side: string
+          source_order_id?: string | null
+          status?: string
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          cost_basis?: number
+          created_at?: string
+          entry_ts?: string
+          expected_settlement_ts?: string | null
+          lot_id?: string
+          operator_id?: string
+          qty?: number
+          settlement_state?: string
+          side?: string
+          source_order_id?: string | null
+          status?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      overshoot_reconciliation_state: {
+        Row: {
+          call_name: string
+          cooldown_until: string | null
+          escalation_active: boolean
+          escalation_count_24h: number
+          last_firing_ts: string | null
+          operator_id: string
+          rolling_window_count: number
+          rolling_window_start: string
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          call_name: string
+          cooldown_until?: string | null
+          escalation_active?: boolean
+          escalation_count_24h?: number
+          last_firing_ts?: string | null
+          operator_id?: string
+          rolling_window_count?: number
+          rolling_window_start: string
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          call_name?: string
+          cooldown_until?: string | null
+          escalation_active?: boolean
+          escalation_count_24h?: number
+          last_firing_ts?: string | null
+          operator_id?: string
+          rolling_window_count?: number
+          rolling_window_start?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      overshoot_short_interest: {
+        Row: {
+          as_of_date: string
+          computed_at: string
+          dtc: number | null
+          si_pct_float: number | null
+          source_run_id: string | null
+          ticker: string
+        }
+        Insert: {
+          as_of_date: string
+          computed_at?: string
+          dtc?: number | null
+          si_pct_float?: number | null
+          source_run_id?: string | null
+          ticker: string
+        }
+        Update: {
+          as_of_date?: string
+          computed_at?: string
+          dtc?: number | null
+          si_pct_float?: number | null
+          source_run_id?: string | null
+          ticker?: string
+        }
+        Relationships: []
       }
       overshoot_study_candidate_events: {
         Row: {
@@ -1827,6 +2102,44 @@ export type Database = {
           survivorship_stamp?: string
         }
         Relationships: []
+      }
+      overshoot_target_positions: {
+        Row: {
+          computed_at: string
+          rank_score: number | null
+          run_id: string
+          side: string
+          target_notional: number
+          target_shares: number
+          ticker: string
+        }
+        Insert: {
+          computed_at: string
+          rank_score?: number | null
+          run_id: string
+          side: string
+          target_notional: number
+          target_shares: number
+          ticker: string
+        }
+        Update: {
+          computed_at?: string
+          rank_score?: number | null
+          run_id?: string
+          side?: string
+          target_notional?: number
+          target_shares?: number
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overshoot_target_positions_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "overshoot_detection_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
       }
       overshoot_universe: {
         Row: {
