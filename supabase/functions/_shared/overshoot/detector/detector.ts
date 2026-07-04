@@ -184,7 +184,12 @@ export interface DetectorParams {
   shortMomentumSet: readonly number[]; // {1,5}
   longDrawdownSet: readonly number[]; // {1,2,3}
   shortDrawdownSet: readonly number[]; // {4,5}
-  bandLabelFor: (side: Side, windowDays: number) => string; // e.g. LONG,w3 -> '10pct_w3'
+  // Signature ratified 2026-07-04 (W3.5.c defect-fix): classifier keys on
+  // the SIGNED excess at the argmax window so the magnitude-bin label
+  // (L_03_04..L_10_INF / S_03_04..S_10_INF) matches the study-side band
+  // namespace verbatim. `windowDays` retained for provenance / debug and to
+  // keep the study cell PK match window-consistent with the argmax pick.
+  bandLabelFor: (side: Side, windowDays: number, excessAtArgmax: number) => string;
   studyCellLookup: (key: StudyCellKey) => StudyCellStats | null;
   shortabilityLookup?: (ticker: string) => ShortabilityRecord | null;
 }
@@ -429,7 +434,7 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
     if (cellKeyable) {
       const key: StudyCellKey = {
         side,
-        band: params.bandLabelFor(side, row.window_days),
+        band: params.bandLabelFor(side, row.window_days, picked.excess),
         window_days: row.window_days,
         momentum_quintile: row.momentum_quintile!,
         drawdown_bucket: row.drawdown_bucket!,
