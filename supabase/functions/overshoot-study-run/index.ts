@@ -154,8 +154,11 @@ function hashParams(obj: unknown): Promise<string> {
 // its own module (./phase-coverage.ts) so unit tests can exercise it without
 // importing this file — the Deno.serve() binding below leaks an unclosed
 // listener op under Gate 11's full-execution shape. Re-exported here for
-// source-compat with any downstream caller that used the runner surface.
-export { checkPhaseCoverage } from './phase-coverage.ts';
+// source-compat with any downstream caller that used the runner surface;
+// also bound locally as `checkPhaseCoverage` for the aggregate branch at
+// the coverage gate below.
+import { checkPhaseCoverage } from './phase-coverage.ts';
+export { checkPhaseCoverage };
 
 Deno.serve(createHandler(async (req: Request) => {
   if (req.method !== 'POST') {
