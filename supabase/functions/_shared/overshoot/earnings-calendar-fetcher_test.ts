@@ -56,7 +56,9 @@ Deno.test('FMP: bulk range, hour always null', async () => {
     'test-key',
     // deno-lint-ignore no-explicit-any
     ((_url: string) => makeResp(200, [
-      { symbol: 'AAPL', date: '2026-07-25', epsEstimated: 1.5, eps: 1.6 },
+      // ACT-462.c: FMP /stable/earnings-calendar returns epsActual /
+      // revenueActual (verified 2026-07-04 live probe), not eps / revenue.
+      { symbol: 'AAPL', date: '2026-07-25', epsEstimated: 1.5, epsActual: 1.6, revenueEstimated: 90e9, revenueActual: 95e9 },
       { symbol: 'MSFT', date: '2026-07-24' },
     ])) as any,
   );
@@ -65,6 +67,9 @@ Deno.test('FMP: bulk range, hour always null', async () => {
   assertStrictEquals(rows[0].hour, null);
   assertEquals(rows[0].source, 'fmp');
   assertEquals(rows[0].eps_actual, 1.6);
+  assertEquals(rows[0].revenue_actual, 95e9);
+  assertEquals(rows[0].eps_estimate, 1.5);
+  assertEquals(rows[0].revenue_estimate, 90e9);
 });
 
 Deno.test('Empty apiKey rejected for both fetchers', () => {
