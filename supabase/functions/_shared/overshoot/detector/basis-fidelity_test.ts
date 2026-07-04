@@ -303,7 +303,6 @@ for (const day of FIXTURE_DAYS) {
       const text = await Deno.readTextFile(path);
       const { header } = parseFixtureHeader(text);
       const live = await runLiveParity(day);
-      // eslint-disable-next-line no-console
       console.log(
         `  parity ${day}: rows=${live.n} sha256=${live.sha256} wall=${live.ms}ms ` +
           `expected_rows=${header.rows} expected_sha256=${header.sha256_body} ` +
