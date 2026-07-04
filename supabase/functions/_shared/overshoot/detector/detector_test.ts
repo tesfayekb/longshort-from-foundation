@@ -19,6 +19,7 @@ import {
   type StudyCellKey,
   type StudyCellStats,
 } from './detector.ts';
+import { bandLabelFor as realBandLabelFor } from './band-label.ts';
 
 const RUN_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const AS_OF = '2026-07-04';
