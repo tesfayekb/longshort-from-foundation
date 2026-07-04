@@ -150,41 +150,12 @@ function hashParams(obj: unknown): Promise<string> {
     );
 }
 
-/**
- * Coverage check: verify sorted phase slices union-cover the full window
- * [W_min, W_max] with no gaps (overlap allowed). Dates as ISO YYYY-MM-DD.
- * Returns { covered, gap? } for observable diagnostics.
- */
-export function checkPhaseCoverage(
-  phases: readonly { min: string; max: string }[],
-  fullMin: string,
-  fullMax: string,
-): { covered: boolean; reason?: string } {
-  if (phases.length === 0) return { covered: false, reason: 'no_phases_completed' };
-  const sorted = [...phases].sort((a, b) => (a.min < b.min ? -1 : 1));
-  if (sorted[0].min > fullMin) {
-    return { covered: false, reason: `gap_at_start:first_min=${sorted[0].min}>full_min=${fullMin}` };
-  }
-  let cursor = sorted[0].max;
-  for (let i = 1; i < sorted.length; i++) {
-    // Allow contiguous OR overlap: sorted[i].min <= cursor + 1 day
-    const gapCutoff = addDaysIso(cursor, 1);
-    if (sorted[i].min > gapCutoff) {
-      return { covered: false, reason: `gap:${cursor}->${sorted[i].min}` };
-    }
-    if (sorted[i].max > cursor) cursor = sorted[i].max;
-  }
-  if (cursor < fullMax) {
-    return { covered: false, reason: `gap_at_end:last_max=${cursor}<full_max=${fullMax}` };
-  }
-  return { covered: true };
-}
-
-function addDaysIso(iso: string, days: number): string {
-  const d = new Date(iso + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
+// FP-069 W3.2.a fold-in (GATE-11 FIX): checkPhaseCoverage was extracted to
+// its own module (./phase-coverage.ts) so unit tests can exercise it without
+// importing this file — the Deno.serve() binding below leaks an unclosed
+// listener op under Gate 11's full-execution shape. Re-exported here for
+// source-compat with any downstream caller that used the runner surface.
+export { checkPhaseCoverage } from './phase-coverage.ts';
 
 Deno.serve(createHandler(async (req: Request) => {
   if (req.method !== 'POST') {
