@@ -86,7 +86,7 @@ Deno.test('refusal: entry in the future → entry_date_in_future', () => {
 // The two assertions below pin the fire boundary. They are the
 // PIN-1 regression bar — do not delete without operator ratification.
 
-Deno.test('PIN-1: Friday cron (5th holding day) — sessions=4 → constant currently 5', () => {
+Deno.test('PIN-1: Friday cron (5th holding day) — ordinal=5, fires; sixth-day late-fire prevented', () => {
   const fri = computeSessionAge({
     entryDate: '2026-06-15',
     spyPriorSessionDates: ['2026-06-16', '2026-06-17', '2026-06-18'],
@@ -94,11 +94,20 @@ Deno.test('PIN-1: Friday cron (5th holding day) — sessions=4 → constant curr
   });
   assert(fri.ok);
   assertEquals(fri.sessionsSinceEntry, 4);
+  assertEquals(fri.holdingDayOrdinal, 5);
+  assertEquals(fri.shouldFireTimeExit, true);
   assertEquals(fri.inProgressCounted, true);
-  // Under the shipped constant (5) with strictly-after counting, Fri
-  // reports 4. The exit engine's decision function (fireExitOnHoldingDay)
-  // adds the inclusive-day convention. That decision function is
-  // asserted below via `shouldFireTimeExit` semantics.
+});
+
+Deno.test('PIN-1: Thursday cron (4th holding day) — does NOT fire', () => {
+  const thu = computeSessionAge({
+    entryDate: '2026-06-15',
+    spyPriorSessionDates: ['2026-06-16', '2026-06-17'],
+    clock: openClock('2026-06-18'),
+  });
+  assert(thu.ok);
+  assertEquals(thu.holdingDayOrdinal, 4);
+  assertEquals(thu.shouldFireTimeExit, false);
 });
 
 Deno.test('PIN-1 (canonical): Monday entry → shouldFireTimeExit boundary is Friday, not Monday+7', () => {
