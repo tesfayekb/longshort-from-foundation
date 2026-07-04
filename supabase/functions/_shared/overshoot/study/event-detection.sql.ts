@@ -26,6 +26,12 @@ const sql = String.raw`-- FP-069 W2.3 — event-detection SQL (draft; INSERT wir
 --                                        read bars OUTSIDE this bound. Defaults to '1900-01-01'
 --                                        when the runner caller does not supply event_date_min,
 --                                        preserving pre-W2.5-D2 full-window behaviour byte-for-byte.
+--   :event_date_max            date    — UPPER BOUND on candidate event_date (W2.6 phase slice).
+--                                        Symmetric to :event_date_min. Bounds EVENT dates only.
+--                                        Defaults to '9999-12-31' when the runner caller does
+--                                        not supply event_date_max, preserving pre-W2.6 behaviour
+--                                        byte-for-byte (bars_snapshot_max_date remains the hard
+--                                        upper ceiling via Section A WHERE clauses).
 --
 -- INVARIANTS (asserted by the fixture test in ./event-detection_fixture_test.sql):
 --   P1: acute move is EXCESS vs SPY over trigger window.
@@ -150,6 +156,7 @@ per_window_excess AS (
   JOIN spy_windowed sw USING (trade_date)
   WHERE bw.trade_date >= :lookback_min_date::date
     AND bw.trade_date >= :event_date_min::date
+    AND bw.trade_date <= :event_date_max::date
 ),
 argmax_window AS (
   -- Unpivot the 5 windows, keep argmax |ex_W| per (ticker, trade_date, side).
