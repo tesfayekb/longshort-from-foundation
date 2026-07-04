@@ -57,6 +57,7 @@ export type StrategyAuditWriteResult =
 
 export const KNOWN_STRATEGY_KEYS: ReadonlySet<string> = new Set<string>([
   'longshort',
+  'overshoot',
 ])
 
 // Default operator UUID for system-originated events (per FP-005 AC-10 +
