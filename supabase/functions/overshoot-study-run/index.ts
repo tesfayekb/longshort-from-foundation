@@ -464,8 +464,16 @@ Deno.serve(createHandler(async (req: Request) => {
     }
 
     // kind === 'single' — legacy path, byte-for-byte compatible with W2.5.
-    // deno-lint-ignore no-explicit-any
-    await sql.begin(async (tx: any) => {
+    // postgres.js v3.4.4 ships as .js without .d.ts — use a local structural
+    // Tx interface covering only the .unsafe() surface we call. Keeps the
+    // module free of `: any` (ESLint no-explicit-any) with zero behavior change.
+    interface Tx {
+      unsafe(
+        query: string,
+        params?: unknown[],
+      ): Promise<Record<string, unknown>[] & { count?: number }>;
+    }
+    await sql.begin(async (tx: Tx) => {
       if (dryRun) {
         const [{ count }] = await tx.unsafe(
           `WITH detection AS (${detectionCore}) SELECT count(*)::int AS count FROM detection`,
