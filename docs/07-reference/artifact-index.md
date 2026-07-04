@@ -781,6 +781,34 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Actions** | ACT-455 (created), ACT-456 (deno-version pinned to `v1.46.3`) |
 | **Notes** | Runs the ART-041 script + test on PRs touching `supabase/functions/**` or `scripts/check-overshoot-separation*`. |
 
+### ART-043: MIG-151 Overshoot Short-Interest Compute job_registry Seed (DISARMED)
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-043 |
+| **Type** | migration |
+| **Title** | MIG-151 — `job_registry` seed for `overshoot.short_interest.compute` (DISARMED twice-monthly compute cron) |
+| **Source Path** | `supabase/migrations/20260704043127_05b95ae3-cfe0-43ef-86f0-45b2d932b0d3.sql` |
+| **Owning Phase** | FP-069 W3.3.b (Overshoot short-interest derivation — b.i tranche: code + seed + wiring artifact + local gates) |
+| **Status** | `active` |
+| **Related Actions** | ACT-460.b.i (created) |
+| **Related Decisions** | DEC-023 (handler envelope), DEC-033 (T4 — per-strategy audit table), DEC-034 clause 4 (sole wall-clock chokepoint), DEC-040 (cron.job evidence required for scheduled-execution attestations), DEC-043 (end-to-end attestation gate). |
+| **Notes** | Single-row `INSERT ... ON CONFLICT (id) DO NOTHING` mirroring MIG-102 / MIG-106 disarmed-seed precedents (17-column shape byte-verbatim to MIG-106). `enabled=false` at seed (disarm-fire-enable convention). `schedule='0 21 1,15 * *'` byte-identical to the sql/30 template (drift = §22.5 DRIFT-class defect). NO cron.job mutation (operator-applied via sql/30 at b.iii arming step). §22.5.1 live-DB verification at ACT-460.b.i: `(id, owner_module, trigger_type, schedule, enabled, handler_path, class, priority, execution_guarantee, timeout_seconds, max_retries, retry_policy, concurrency_policy, replay_safe, version, status)` = `('overshoot.short_interest.compute', 'overshoot', 'scheduled', '0 21 1,15 * *', false, 'supabase/functions/overshoot-short-interest-compute/index.ts', 'operational', 'normal', 'at_least_once', 600, 2, 'standard', 'forbid', true, '1.0.0', 'registered')`. |
+
+### ART-044: Overshoot Short-Interest Cron-Wiring SQL Artifact (sql/30) — AUTHORED, NOT APPLIED
+
+| Field | Value |
+|-------|-------|
+| **Artifact ID** | ART-044 |
+| **Type** | sql-artifact |
+| **Title** | `sql/30_overshoot_short_interest_cron_schedule.sql` — wires `overshoot-short-interest-compute` to `pg_cron` at `'0 21 1,15 * *'` (FP-069 W3.3.b) |
+| **Source Path** | `sql/30_overshoot_short_interest_cron_schedule.sql` |
+| **Owning Phase** | FP-069 W3.3.b (b.i authoring; operator-applied at b.iii arming step) |
+| **Status** | `authored-pending-apply` — file lives in `sql/` (not `supabase/migrations/`) per MIG-031 precedent; cron.schedule + verification block ARE NOT executed at b.i (arming is b.iii-gated on deploy + GATE-ZERO probes + first clean batch, per DEC-043). |
+| **Related Actions** | ACT-460.b.i (authored) |
+| **Related Decisions** | DEC-023, DEC-033, DEC-034 (4), DEC-040 (cron.job evidence), DEC-043 (end-to-end attestation gate — b.iii arm-conditions). |
+| **Notes** | Mirrors `sql/20_longshort_short_interest_carry_cron_schedule.sql` (canonical end-to-end-verified pattern) verbatim — three placeholders (PROJECT_REF / YOUR_ANON_KEY / YOUR_CRON_SECRET_VALUE), no secret committed. Four-step post-apply verification block: (1) `cron.job` introspection (schedule byte-match + `active=true` + resolved PROJECT_REF + `X-Cron-Secret` header); (2) PROJECT_REF-literal sweep across all cron.job rows (INC-64 sentinel; expected 0 rows); (3) ARM step (`UPDATE job_registry SET enabled=true ...`); (4) cron-attributable-row confirmation on `overshoot_short_interest`. Schedule `'0 21 1,15 * *'` shares the exact UTC minute with the longshort native SI cron but a DIFFERENT `jobname` (`overshoot-short-interest-compute` vs `longshort-short-interest-compute`); pg_cron keys on `(jobname, username)` so co-existence at the same minute is expected + fine. REUSES existing `CRON_SECRET`. ASCII-only self-check pending at b.iii-arm. |
+
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
