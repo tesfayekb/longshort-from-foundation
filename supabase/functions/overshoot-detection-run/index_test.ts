@@ -31,14 +31,23 @@ Deno.test('DEC-023 envelope: uses createHandler + authenticateRequest + overshoo
 
 Deno.test('injected clock: uses productionClock, never Date.now()', () => {
   assertStringIncludes(SRC, "import { productionClock } from '../_shared/longshort-clock.ts'");
-  // No Date.now() in handler body (money-path banned per constitution).
-  assertEquals(SRC.includes('Date.now()'), false, 'Date.now() banned in kernel path');
+  // No executable Date.now() call in handler body (money-path banned per
+  // constitution). Strip line-comments before scanning so the docstring
+  // reference on line 11 does not false-positive.
+  const noComments = SRC.split('\n')
+    .filter((l) => !/^\s*\*/.test(l) && !/^\s*\/\//.test(l))
+    .join('\n');
+  assertEquals(noComments.includes('Date.now('), false, 'Date.now() banned in kernel path');
   // performance.now() is allowed for durations (non-money, non-kernel).
 });
 
 Deno.test('boot assertion: BEFORE probe short-circuit and skip gates', () => {
-  assertStringIncludes(SRC, RATIFIED_STUDY_RUN_ID);
-  assertStringIncludes(SRC, RATIFIED_PARAM_GRID_HASH_PREFIX);
+  // The handler MUST reference the ratified constants BY NAME (single-home
+  // discipline — no literal UUID/hash copies drifting outside detector.ts).
+  // The tests import the constants and verify the identifier names appear.
+  void RATIFIED_STUDY_RUN_ID; void RATIFIED_PARAM_GRID_HASH_PREFIX;
+  assertStringIncludes(SRC, 'RATIFIED_STUDY_RUN_ID');
+  assertStringIncludes(SRC, 'RATIFIED_PARAM_GRID_HASH_PREFIX');
   assertStringIncludes(SRC, 'boot_assertion_failed_priors_not_found');
   // Ordering check: boot query source must appear BEFORE probe short-circuit
   // AND BEFORE the kill-switch / disarmed gates.
