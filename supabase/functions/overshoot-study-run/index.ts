@@ -280,7 +280,8 @@ Deno.serve(createHandler(async (req: Request) => {
     `;
     if (!snap?.bars_max) {
       await sql.end({ timeout: 5 });
-      return apiError(422, 'no_bars_at_or_before_as_of', { correlationId, detail: asOfDay });
+      console.error(JSON.stringify({ event: 'no_bars_at_or_before_as_of', correlationId, as_of: asOfDay }));
+      return apiError(422, 'no_bars_at_or_before_as_of', { correlationId });
     }
 
     // 2. Insert or attach to runs row.
@@ -300,14 +301,16 @@ Deno.serve(createHandler(async (req: Request) => {
       `;
       if (!existing) {
         await sql.end({ timeout: 5 });
-        return apiError(404, 'run_id_not_found', { correlationId, detail: priorRunIdRaw });
+        console.error(JSON.stringify({ event: 'run_id_not_found', correlationId, run_id: priorRunIdRaw }));
+        return apiError(404, 'run_id_not_found', { correlationId });
       }
       if (existing.outcome !== 'running') {
         await sql.end({ timeout: 5 });
-        return apiError(409, 'run_not_in_running_state', {
-          correlationId,
-          detail: `run_id=${priorRunIdRaw} outcome=${existing.outcome}`,
-        });
+        console.error(JSON.stringify({
+          event: 'run_not_in_running_state',
+          correlationId, run_id: priorRunIdRaw, outcome: existing.outcome,
+        }));
+        return apiError(409, 'run_not_in_running_state', { correlationId });
       }
       runId = existing.run_id;
       paramGridForRun = (existing.param_grid as Record<string, unknown>) ?? {};
@@ -362,18 +365,24 @@ Deno.serve(createHandler(async (req: Request) => {
       const win = (paramGridForRun.window as { event_date_min_full: string; event_date_max_full: string } | undefined);
       if (!win) {
         await sql.end({ timeout: 5 });
-        return apiError(409, 'aggregate_missing_window_contract', {
-          correlationId,
-          detail: `run_id=${runId} has no param_grid.window; run must be seeded by phase='detect'`,
-        });
+        console.error(JSON.stringify({
+          event: 'aggregate_missing_window_contract',
+          correlationId, run_id: runId,
+          hint: "run must be seeded by phase='detect'",
+        }));
+        return apiError(409, 'aggregate_missing_window_contract', { correlationId });
       }
       const cov = checkPhaseCoverage(phasesRaw, win.event_date_min_full, win.event_date_max_full);
       if (!cov.covered) {
         await sql.end({ timeout: 5 });
-        return apiError(409, 'aggregate_coverage_refused', {
-          correlationId,
-          detail: `run_id=${runId} coverage_gap=${cov.reason} window=[${win.event_date_min_full},${win.event_date_max_full}] phases_completed=${JSON.stringify(phasesRaw)}`,
-        });
+        console.error(JSON.stringify({
+          event: 'aggregate_coverage_refused',
+          correlationId, run_id: runId,
+          coverage_gap: cov.reason,
+          window: [win.event_date_min_full, win.event_date_max_full],
+          phases_completed: phasesRaw,
+        }));
+        return apiError(409, 'aggregate_coverage_refused', { correlationId });
       }
       if (!dryRun) {
         const insertCells =
@@ -455,7 +464,8 @@ Deno.serve(createHandler(async (req: Request) => {
     }
 
     // kind === 'single' — legacy path, byte-for-byte compatible with W2.5.
-    await sql.begin(async (tx) => {
+    // deno-lint-ignore no-explicit-any
+    await sql.begin(async (tx: any) => {
       if (dryRun) {
         const [{ count }] = await tx.unsafe(
           `WITH detection AS (${detectionCore}) SELECT count(*)::int AS count FROM detection`,
@@ -540,6 +550,6 @@ Deno.serve(createHandler(async (req: Request) => {
       } catch { /* best-effort; the runs row already records outcome='running' truthfully */ }
     }
     try { await sql.end({ timeout: 5 }); } catch { /* ignore */ }
-    return apiError(500, 'study_run_failed', { correlationId, detail });
+    return apiError(500, 'study_run_failed', { correlationId });
   }
 }));
