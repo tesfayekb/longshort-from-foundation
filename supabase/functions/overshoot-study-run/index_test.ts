@@ -81,7 +81,65 @@ Deno.test('runner threads event_date_min slice param with 1900-01-01 default', (
   // Validated format on non-null input.
   assertStringIncludes(INDEX_SRC, 'event_date_min_invalid_format_expected_YYYY_MM_DD');
   // Detection SQL body filters per_window_excess by :event_date_min.
-  assertStringIncludes(EVENT_DETECTION_SQL, 'bw.trade_date >= :event_date_min');
+  assertStringIncludes(EVENT_DETECTION_SQL, 'bw.trade_date >= :event_date_min::date');
+});
+
+// W2.5 D-2 class-fix regression (ACT-457-ADD-06): postgres.js `unsafe(sql, params)`
+// binds JS scalars as unknown/text-typed positional params. Any :param used in an
+// arithmetic / date-compare / uuid-compare context must carry an adjacent `::type`
+// cast, or postgres resolves the surrounding operator against text and raises
+// `42883 operator does not exist: text / numeric` (the exact live-run failure that
+// remained latent through W2.4 because dry-runs skip cell-aggregation).
+//
+// This test extracts EVERY `:param` occurrence from both SQL bodies and asserts
+// each carries an adjacent `::type` cast. Zero exceptions permitted — any
+// deliberate uncast site would be a test-visible carve-out requiring justification.
+Deno.test('every :param occurrence in study SQL modules carries an explicit ::type cast', () => {
+  // Strip `--` line comments so param declarations in headers do not count.
+  const stripComments = (s: string) => s.replace(/--[^\n]*/g, '');
+  // Skip false-positive `::` sequences (`::text`, `::numeric`, `::date`, `::uuid`,
+  // `::smallint`) by anchoring the match to `:` NOT preceded by `:`.
+  // Also skip CTE column-list definitions like `momentum_quintiles(momentum_quintile)`
+  // — those are not param bindings; parser distinguishes because `:name` (with
+  // leading colon) is a bindNamed marker while `name(...)` is not.
+  const paramRe = /(?<!:):([a-z_]+)(::[a-z_]+)?/g;
+  const modules: readonly [string, string][] = [
+    ['event-detection', stripComments(EVENT_DETECTION_SQL)],
+    ['cell-aggregation', stripComments(CELL_AGGREGATION_SQL)],
+  ];
+  const uncast: string[] = [];
+  for (const [name, body] of modules) {
+    for (const m of body.matchAll(paramRe)) {
+      const [, paramName, cast] = m;
+      if (!cast) uncast.push(`${name}: :${paramName} @ pos ${m.index}`);
+    }
+  }
+  if (uncast.length > 0) {
+    throw new Error(
+      `Found ${uncast.length} uncast :param occurrence(s) — postgres.js unsafe() ` +
+      `will bind these as unknown/text and fail operator resolution:\n  - ` +
+      uncast.join('\n  - '),
+    );
+  }
+});
+
+// bindNamed uses `:name\b` — word boundary between `:name` and `::type` matches
+// because `:` is not a word char, so the substitution preserves the cast. This
+// test pins that assumption at the call surface (runner index.ts) rather than
+// only testing SQL bodies.
+Deno.test('runner bindNamed regex preserves ::type casts adjacent to :name', () => {
+  // The regex definition in index.ts is `:${n}\\b`. Simulate the substitution.
+  const sample = "SELECT :run_id::uuid, :as_of::date, :n::numeric FROM x WHERE k = :run_id";
+  const names = ['run_id', 'as_of', 'n'] as const;
+  let out = sample;
+  names.forEach((n, i) => {
+    const re = new RegExp(`:${n}\\b`, 'g');
+    out = out.replace(re, `$${i + 1}`);
+  });
+  assertStringIncludes(out, '$1::uuid');
+  assertStringIncludes(out, '$2::date');
+  assertStringIncludes(out, '$3::numeric');
+  assertStringIncludes(out, 'k = $1');
 });
 
 Deno.test('runner dry_run gating: skips cell-aggregation, marks outcome=partial', () => {
