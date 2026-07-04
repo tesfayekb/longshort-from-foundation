@@ -106,7 +106,7 @@ const PROVENANCE = {
 } as const;
 
 // Fixture files (frozen — FP-069 W3.4.a, rule β).
-const FIXTURE_DIR = new URL('./fixtures/', import.meta.url);
+const FIXTURE_DIR = new URL('../detector-fixtures/', import.meta.url);
 const FIXTURE_DAYS = ['2022-05-24', '2024-05-02', '2026-04-15'] as const;
 
 // ─── Env gate (sibling precedent: insider-r2-concurrent-claim_test.ts:87) ─
