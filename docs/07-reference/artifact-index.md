@@ -809,6 +809,16 @@ For each phase, only **one** authoritative closure document may exist in the rep
 | **Related Decisions** | DEC-023, DEC-033, DEC-034 (4), DEC-040 (cron.job evidence), DEC-043 (end-to-end attestation gate — b.iii arm-conditions). |
 | **Notes** | Mirrors `sql/20_longshort_short_interest_carry_cron_schedule.sql` (canonical end-to-end-verified pattern) verbatim — three placeholders (PROJECT_REF / YOUR_ANON_KEY / YOUR_CRON_SECRET_VALUE), no secret committed. Four-step post-apply verification block: (1) `cron.job` introspection (schedule byte-match + `active=true` + resolved PROJECT_REF + `X-Cron-Secret` header); (2) PROJECT_REF-literal sweep across all cron.job rows (INC-64 sentinel; expected 0 rows); (3) ARM step (`UPDATE job_registry SET enabled=true ...`); (4) cron-attributable-row confirmation on `overshoot_short_interest`. Schedule `'0 21 1,15 * *'` shares the exact UTC minute with the longshort native SI cron but a DIFFERENT `jobname` (`overshoot-short-interest-compute` vs `longshort-short-interest-compute`); pg_cron keys on `(jobname, username)` so co-existence at the same minute is expected + fine. REUSES existing `CRON_SECRET`. ASCII-only self-check pending at b.iii-arm. |
 
+| **Artifact ID** | ART-046 |
+| **Type** | sql-artifact |
+| **Title** | `sql/32_overshoot_exit_run_cron_schedule.sql` — wires `overshoot-exit-run` to `pg_cron` at `'50 19 * * 1-5'` (FP-069 W3.6.d-ii) |
+| **Source Path** | `sql/32_overshoot_exit_run_cron_schedule.sql` |
+| **Owning Phase** | FP-069 W3.6.d-ii (authored at d-ii; operator-applied at W3.6.d-arm). |
+| **Status** | `authored-pending-apply` — file lives in `sql/` (not `supabase/migrations/`) per MIG-031 precedent; `cron.schedule` + POST-APPLY verification block are NOT executed at authoring. Arming is gated on deploy (done this turn) + authenticated 2xx boot-probe + zero-lot dry-run truthful-accounting + (post-W3.6.e) first-real-exit end-to-end DEC-043 evidence. |
+| **Related Actions** | ACT-463.d-ii (authored + handler deployed + MIG-153 seeded). |
+| **Related Decisions** | DEC-023, DEC-033, DEC-034 (4), DEC-040 (cron.job evidence), DEC-043 (end-to-end attestation), plus PIN-1 + PIN-2 (2026-07-04 operator ratifications) and the LIVE-PRICE SOURCE CONTRACT (2026-07-04 standing directive — enforced by separation-guard grep in the handler test suite). |
+| **Notes** | Mirrors `sql/31_overshoot_detection_run_cron_schedule.sql` verbatim shape — three placeholders (PROJECT_REF / YOUR_ANON_KEY / YOUR_CRON_SECRET_VALUE), no secret committed. Three-step POST-APPLY verification block: (1) `cron.job` introspection (schedule byte-match `50 19 * * 1-5` + `active=true` + resolved PROJECT_REF + `X-Cron-Secret` header); (2) PROJECT_REF-literal sweep across all `cron.job` rows (INC-64 sentinel; expected 0 rows); (3) ARM step (`UPDATE job_registry SET enabled=true` for `id='overshoot.exit.run'`). Schedule byte-identical to MIG-153 `job_registry.schedule` (drift = §22.5 DRIFT-class defect). REUSES existing `CRON_SECRET`. PIN-2 (UTC-fixed pg_cron; 19:50 UTC = 15:50 ET summer / 14:50 ET winter) — v1 accepts the drift documented, measured on every emitted exit event via `minutes_to_close`. ASCII-only self-check performed at authoring (`grep -nP '[^\x00-\x7F]' sql/32_...` → 0 matches). |
+
 ## Dependencies
 
 - [Database Migration Ledger](database-migration-ledger.md)
