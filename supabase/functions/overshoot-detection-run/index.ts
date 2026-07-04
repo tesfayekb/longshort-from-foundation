@@ -66,6 +66,12 @@ import {
 import { PolygonGroupedDailyFetcher } from '../_shared/overshoot/polygon-grouped-daily-fetcher.ts';
 import { FmpEarningsCalendarFetcher } from '../_shared/overshoot/earnings-calendar-fetcher.ts';
 import {
+  OvershootAlpacaPaperClient,
+  OvershootAlpacaApiError,
+  OvershootAlpacaCredentialError,
+  OvershootAlpacaNetworkError,
+} from '../_shared/overshoot-broker/alpaca-paper-client.ts';
+import {
   runDetector,
   RATIFIED_STUDY_RUN_ID,
   RATIFIED_PARAM_GRID_HASH_PREFIX,
