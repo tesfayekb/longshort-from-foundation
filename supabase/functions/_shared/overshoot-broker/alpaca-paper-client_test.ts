@@ -92,7 +92,7 @@ Deno.test('injected fetchImpl receives OVERSHOOT-specific auth headers on GET', 
   let seenHeaders: Record<string, string> = {};
   const fetchImpl: typeof fetch = (input, init) => {
     seenUrl = String(input);
-    const hdrs = (init?.headers ?? {}) as Record<string, string>;
+    const hdrs = ((init as RequestInit | undefined)?.headers ?? {}) as Record<string, string>;
     seenHeaders = { ...hdrs };
     return Promise.resolve(
       new Response(JSON.stringify({ ok: true }), {
