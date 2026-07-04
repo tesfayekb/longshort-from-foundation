@@ -307,7 +307,7 @@ Deno.serve(createHandler(async (req: Request) => {
     // ── Stage 1: bars-append leg ────────────────────────────────────────
     try {
       const tBars = performance.now();
-      const polyFetcher = new PolygonGroupedDailyFetcher({ apiKey: env.polygonKey });
+      const polyFetcher = new PolygonGroupedDailyFetcher(env.polygonKey);
       const grouped = await polyFetcher.fetchGroupedDaily(asOfDate);
       // Insert backfill_runs row (kind='bars') BEFORE the upsert to satisfy FK.
       const [bRun] = await sql<{ run_id: string }[]>`
@@ -323,7 +323,7 @@ Deno.serve(createHandler(async (req: Request) => {
         fetchedAsOf: productionClock.getWallClockTs(),
       });
       if (barsRows.length > 0) {
-        const cols = ['ticker','trade_date','open','high','low','close','volume','vwap','trade_count','adjusted','source_run_id','fetched_as_of'];
+        const cols = ['ticker','trade_date','open','high','low','close','volume','vwap','trade_count','adjusted','source_run_id','fetched_as_of'] as const;
         await sql`INSERT INTO overshoot_daily_bars ${sql(barsRows, ...cols)}
           ON CONFLICT (ticker, trade_date) DO UPDATE SET
             open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low, close=EXCLUDED.close,
@@ -344,7 +344,7 @@ Deno.serve(createHandler(async (req: Request) => {
     // ── Stage 2: forward-earnings-append leg ────────────────────────────
     try {
       const tE = performance.now();
-      const fmpFetcher = new FmpEarningsCalendarFetcher({ apiKey: env.fmpKey });
+      const fmpFetcher = new FmpEarningsCalendarFetcher(env.fmpKey);
       // Backfill_runs row inserted AFTER a successful fetch produced a row_count;
       // shape: kind='earnings_fmp'. FK is on the earnings_calendar upsert, so
       // the row must exist BEFORE the upsert. Insert with placeholder then
@@ -366,7 +366,7 @@ Deno.serve(createHandler(async (req: Request) => {
         capRows: EARNINGS_CAP_ROWS,
       });
       if (appendRes.rows.length > 0) {
-        const cols = ['ticker','announcement_date','source','hour','quarter','fiscal_year','eps_estimate','eps_actual','revenue_estimate','revenue_actual','source_run_id','fetched_as_of'];
+        const cols = ['ticker','announcement_date','source','hour','quarter','fiscal_year','eps_estimate','eps_actual','revenue_estimate','revenue_actual','source_run_id','fetched_as_of'] as const;
         await sql`INSERT INTO overshoot_earnings_calendar ${sql(appendRes.rows, ...cols)}
           ON CONFLICT (ticker, announcement_date, source) DO UPDATE SET
             hour=EXCLUDED.hour, quarter=EXCLUDED.quarter, fiscal_year=EXCLUDED.fiscal_year,
@@ -541,7 +541,7 @@ Deno.serve(createHandler(async (req: Request) => {
         rank_score: e.rank_score,
         study_cell_ref: e.study_cell_ref === null ? null : JSON.stringify(e.study_cell_ref),
       }));
-      const cols = ['run_id','as_of_date','ticker','side','excess_w1','excess_w2','excess_w3','excess_w4','excess_w5','argmax_window_days','momentum_quintile','drawdown_bucket','days_to_nearest_earnings','earnings_alias_used','filter_passes','filter_refusal_reason','selected_for_entry','rank_score','study_cell_ref'];
+      const cols = ['run_id','as_of_date','ticker','side','excess_w1','excess_w2','excess_w3','excess_w4','excess_w5','argmax_window_days','momentum_quintile','drawdown_bucket','days_to_nearest_earnings','earnings_alias_used','filter_passes','filter_refusal_reason','selected_for_entry','rank_score','study_cell_ref'] as const;
       await sql`INSERT INTO overshoot_events ${sql(eventRows, ...cols)}`;
     }
     if (!dryRun && selected.length > 0) {
@@ -559,7 +559,7 @@ Deno.serve(createHandler(async (req: Request) => {
         rank_score: e.rank_score,
         computed_at: nowIso,
       }));
-      const cols = ['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at'];
+      const cols = ['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at'] as const;
       await sql`INSERT INTO overshoot_target_positions ${sql(targetRows, ...cols)}
         ON CONFLICT (run_id, ticker, side) DO NOTHING`;
     }
@@ -584,6 +584,7 @@ Deno.serve(createHandler(async (req: Request) => {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Sql = any;
 
 async function insertRunRow(sql: Sql, args: {
