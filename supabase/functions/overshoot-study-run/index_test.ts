@@ -24,7 +24,7 @@ Deno.test('event-detection SQL exposes all five per-window excess columns (R-1)'
 
 Deno.test('event-detection SQL declares all runner parameters', () => {
   for (const p of [':run_id', ':bars_snapshot_max_date', ':earnings_snapshot_max_date',
-                    ':min_band_bps', ':lookback_min_date']) {
+                    ':min_band_bps', ':lookback_min_date', ':event_date_min']) {
     assertStringIncludes(EVENT_DETECTION_SQL, p);
   }
 });
@@ -68,6 +68,20 @@ Deno.test('runner inserts runs row OUTSIDE the events/cells transaction (truthfu
 Deno.test('runner records outcome=failed on catch path (with best-effort UPDATE)', () => {
   assertStringIncludes(INDEX_SRC, "outcome = 'failed'");
   assertStringIncludes(INDEX_SRC, 'study_run_failed');
+});
+
+// W2.5 D-2 regression pin: event_date_min slice parameter must be plumbed
+// through the runner and defaulted to '1900-01-01' when caller omits it,
+// preserving the pre-D2 full-window detection behaviour byte-for-byte.
+Deno.test('runner threads event_date_min slice param with 1900-01-01 default', () => {
+  // DETECTION_PARAM_ORDER contains event_date_min.
+  assertStringIncludes(INDEX_SRC, "'event_date_min'");
+  // Default sentinel present.
+  assertStringIncludes(INDEX_SRC, "'1900-01-01'");
+  // Validated format on non-null input.
+  assertStringIncludes(INDEX_SRC, 'event_date_min_invalid_format_expected_YYYY_MM_DD');
+  // Detection SQL body filters per_window_excess by :event_date_min.
+  assertStringIncludes(EVENT_DETECTION_SQL, 'bw.trade_date >= :event_date_min');
 });
 
 Deno.test('runner dry_run gating: skips cell-aggregation, marks outcome=partial', () => {
