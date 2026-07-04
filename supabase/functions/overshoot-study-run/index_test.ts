@@ -8,6 +8,14 @@
 import { assert, assertEquals, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import EVENT_DETECTION_SQL from '../_shared/overshoot/study/event-detection.sql.ts';
 import CELL_AGGREGATION_SQL from '../_shared/overshoot/study/cell-aggregation.sql.ts';
+// FP-069 W3.2.a fold-in (GATE-11 FIX): checkPhaseCoverage is imported from
+// its own module rather than through `./index.ts`. Previously two Deno.test
+// blocks (at :111 / :137) did `await import('./index.ts')` to reach the
+// helper — that path binds `Deno.serve(...)` and leaks an unclosed listener
+// op at end-of-suite under Gate 11's `deno test --allow-net --allow-env
+// --allow-read --lock=deno.lock` invocation. The runner still re-exports
+// checkPhaseCoverage for source-compat; tests take the direct path.
+import { checkPhaseCoverage } from './phase-coverage.ts';
 
 const INDEX_SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
 
@@ -108,15 +116,7 @@ Deno.test('runner aggregate phase gates on coverage refusal', () => {
   assertStringIncludes(INDEX_SRC, "paramGridForRun.phases_completed as Array");
 });
 
-Deno.test('checkPhaseCoverage: contiguous slices cover full window', async () => {
-  const mod = await import('./index.ts');
-  const { checkPhaseCoverage } = mod as unknown as {
-    checkPhaseCoverage: (
-      phases: readonly { min: string; max: string }[],
-      fullMin: string,
-      fullMax: string,
-    ) => { covered: boolean; reason?: string };
-  };
+Deno.test('checkPhaseCoverage: contiguous slices cover full window', () => {
   assertEquals(checkPhaseCoverage(
     [{ min: '2026-01-01', max: '2026-03-31' }, { min: '2026-04-01', max: '2026-06-30' }],
     '2026-01-01', '2026-06-30',
@@ -133,15 +133,7 @@ Deno.test('checkPhaseCoverage: contiguous slices cover full window', async () =>
   ).covered, true);
 });
 
-Deno.test('checkPhaseCoverage: refuses on gap / short-start / short-end / empty', async () => {
-  const mod = await import('./index.ts');
-  const { checkPhaseCoverage } = mod as unknown as {
-    checkPhaseCoverage: (
-      phases: readonly { min: string; max: string }[],
-      fullMin: string,
-      fullMax: string,
-    ) => { covered: boolean; reason?: string };
-  };
+Deno.test('checkPhaseCoverage: refuses on gap / short-start / short-end / empty', () => {
   // Empty.
   assertEquals(checkPhaseCoverage([], '2026-01-01', '2026-06-30').covered, false);
   // Gap in middle.
