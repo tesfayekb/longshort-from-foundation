@@ -50,10 +50,26 @@ const SHORT_FILTER_STAMP = 'NO_SQUEEZE_FILTER_ARRIVALS_UPPER_BOUND_RETURNS_CONSE
 const RETURN_BASIS = 'CLOSE_TO_CLOSE_REFERENCE';
 
 function stripStatementBody(sql: string): string {
-  // Strip trailing whitespace / final `;` at end-of-file so the SELECT can be
-  // wrapped in an INSERT ... SELECT. Line-level comments (--) inside the body
-  // are preserved.
-  return sql.replace(/;\s*$/, '').trimEnd();
+  // Strip trailing whitespace, trailing `--` line-comments, AND the final
+  // statement-terminating `;` so the SELECT can be safely wrapped in
+  // `INSERT ... <core>` or `WITH detection AS (<core>) ...`.
+  //
+  // The prior implementation used /;\s*$/ which only removed a `;` at the
+  // very end of the string. The .sql.ts bodies (event-detection,
+  // cell-aggregation) have trailing `-- wiring notes` comment blocks AFTER
+  // the real statement terminator, so the mid-body `;` survived and — once
+  // wrapped in parentheses for dry_run — produced a Postgres syntax error
+  // ("SELECT ... FROM cte; -- comments )"), returning 500 study_run_failed.
+  // Loop to strip any interleaved trailing comment lines / whitespace /
+  // semicolons until stable.
+  let s = sql;
+  for (;;) {
+    const before = s;
+    s = s.replace(/\s+$/, '');
+    s = s.replace(/(^|\n)[ \t]*--[^\n]*$/, '');
+    s = s.replace(/;\s*$/, '');
+    if (s === before) return s;
+  }
 }
 
 /**

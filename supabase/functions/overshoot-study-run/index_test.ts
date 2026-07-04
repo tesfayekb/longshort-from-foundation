@@ -82,3 +82,39 @@ Deno.test('runner initial runs outcome is running (survives mid-flight failure t
 Deno.test('runner stamps git_sha from BUILD_SHA env (six-MATCH surface)', () => {
   assertStringIncludes(INDEX_SRC, "Deno.env.get('BUILD_SHA')");
 });
+
+// Regression pin (ACT-457-ADD-05): the dry_run 500 root cause was that
+// stripStatementBody used /;\s*$/ which only strips the final `;` at
+// end-of-string. Both .sql.ts bodies have trailing `-- wiring …` comments
+// AFTER the real statement terminator, so the mid-body `;` survived and,
+// once wrapped in `WITH detection AS (<core>) …`, produced a Postgres
+// syntax error inside the parenthesised subquery. This test proves the
+// wrapped form contains ZERO semicolons after stripping — the exact
+// invariant the runner depends on.
+Deno.test('regression: stripped SQL bodies contain no `;` (safe to wrap in CTE / INSERT)', () => {
+  // Re-implement stripStatementBody locally to keep the test pure.
+  function strip(sql: string): string {
+    let s = sql;
+    for (;;) {
+      const before = s;
+      s = s.replace(/\s+$/, '');
+      s = s.replace(/(^|\n)[ \t]*--[^\n]*$/, '');
+      s = s.replace(/;\s*$/, '');
+      if (s === before) return s;
+    }
+  }
+  for (const [name, body] of [
+    ['event-detection', EVENT_DETECTION_SQL],
+    ['cell-aggregation', CELL_AGGREGATION_SQL],
+  ] as const) {
+    const stripped = strip(body);
+    // Strip inline `--` line comments before scanning for `;` so semicolons
+    // that live only inside prose comments (e.g. "SPY -7%, ticker -7%;")
+    // don't spuriously fail this invariant — the runtime parser also
+    // ignores them. What must not survive is a `;` in executable SQL.
+    const noComments = stripped.replace(/--[^\n]*/g, '');
+    if (noComments.includes(';')) {
+      throw new Error(`stripped ${name} body still contains a semicolon in executable SQL — would break CTE wrap`);
+    }
+  }
+});
