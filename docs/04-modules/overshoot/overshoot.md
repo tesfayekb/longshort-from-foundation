@@ -372,6 +372,37 @@ Seven overshoot-namespaced tables landed via one atomic migration. Live evidence
 
 **W3.2 readiness**: overshoot-broker sibling adapter tree (`supabase/functions/_shared/overshoot-broker/`) is the next step per the W3 wave-plan (investigation I3). No secrets probed this step per operator instruction.
 
+### W3.2 CLOSED — overshoot-broker sibling adapter tree (2026-07-04, ACT-459.a/b/c)
+
+The broker surface the W3 money-path will call sits at `supabase/functions/_shared/overshoot-broker/`. Six adapters + one interfaces file, delivered across three atomic sub-turns (ACT-459.a/b/c), all gate-clean.
+
+| File | Role | Endpoint |
+| --- | --- | --- |
+| `overshoot-broker-interfaces.ts` | Signature-identical redeclaration of the ten `Broker*` types the six adapters consume. B1(a) owned-interface ruling (HttpFetch precedent, W1b ACT-456). | n/a |
+| `overshoot-broker/alpaca-paper-client.ts` | Auth + fetch primitive. Secrets `ALPACA_PAPER_KEY_OVERSHOOT` / `ALPACA_PAPER_SECRET_OVERSHOOT`. INC-77 paper-only-URL allow-list preserved verbatim. Four typed error classes with `Overshoot*` prefix. `fetchImpl` test-seam. | — |
+| `overshoot-broker/alpaca-order-submitter.ts` | Submit an order. DW-149 market-order `limit_price` omission preserved. `submitted_at` ISO-or-injected-`ts` fallback. **B2 discipline — `client_order_id` OPAQUE passthrough**, explicitly tested. | POST /v2/orders |
+| `overshoot-broker/alpaca-order-canceller.ts` | Cancel an order. 422 → idempotent no-op (Alpaca terminal-order semantics). All other statuses propagate typed. | DELETE /v2/orders/:id |
+| `overshoot-broker/alpaca-fill-fetcher.ts` | Poll fill state. Trichotomy preserved (unfilled / partial / filled). `avg_fill_price` TYPED ABSENCE — never fabricated 0-fill on `null` or empty-string. `fetched_at = ts`. | GET /v2/orders/:id |
+| `overshoot-broker/alpaca-position-fetcher.ts` | Broker-truth positions. 404 → `null`. FP-068 W1 additive fields (`unrealized_pl` / `unrealized_intraday_pl` / `lastday_price`) preserved with typed-absence branching. **Broker-truth surface — persisted-projection semantics untouched by this layer.** | GET /v2/positions{,/{symbol}} |
+| `overshoot-broker/alpaca-shortability-fetcher.ts` | Pre-trade SHORT gate. Inactive/non-tradable → structurally not shortable regardless of stale flag. 4xx → EXPLICIT `shortable: false` result echoing requested symbol (NEVER fabricated `true`). 5xx / network errors propagate typed per DEC-034 (3). `easy_to_borrow` typed-absence → `null`. | GET /v2/assets/{symbol} |
+
+**Transcription-over-allowlisting rationale (MAINTENANCE-DUALITY NOTE, NAMED FUTURE AUDIT ITEM).** Every overshoot adapter is a **behavior-identical, byte-shape-equivalent** transcription of its longshort sibling — POST bodies, endpoint paths, error branches, and the INC-77 paper-only-URL allow-list are all identical. Only three rebindings differ: type imports (`../overshoot-broker-interfaces.ts`), client + error-class imports (`Overshoot*` prefix), and class name.
+
+The alternative — a single shared adapter with a strategy-key allow-list — was explicitly rejected. A shared adapter re-introduces the exact membrane the separation guard exists to prevent: a single edit path can silently divert overshoot's account-#2 traffic into longshort's account #1 (or the reverse). The membrane is worth the maintenance cost.
+
+**The price of membrane independence** is that the two INC-77 paper-only-URL allow-list copies (and the client shapes generally) must be kept in sync manually. This is a **named future audit item** — cadence: reviewed at every subsequent overshoot broker-surface amendment AND at the start of each W3 sub-wave (W3.3 / W3.4 / …). The audit compares:
+1. `PAPER_ONLY_ALLOWED_URL_PREFIXES` between the two clients (bytes MUST match unless divergence is DEC-ratified).
+2. Adapter method signatures and error-branch structure per sibling pair.
+3. INC-77 guard closure — construction-time throw semantics MUST match.
+
+Drift MUST be surfaced in the audit block of the initiating sub-turn's ACT entry. Silent drift is a §22.8-class stop condition.
+
+**Blocker rulings (verbatim, from ACT-459):** **B1(a)** overshoot tree OWNS its execution contract (signature-identical transcription, NOT an import). **B2(a)** NO CID scheme / intent / state-machine content in W3.2; opaque passthrough only; scheme lands at W3.4. **B3(a)** operator-local `curl` paste is the account-#2 credential-value gate (paste in ACT-459: `PA37Y0DBAZD5`, ACTIVE, `shorting_enabled: true`, distinct from account #1 `PA3CRAJBSVZO` per `docs/06-tracking/incidental-findings.md:954`). Runtime GATE-ZERO probe (edge-runtime secret visibility) deferred to W3.3.
+
+**Gates cleared this wave:** ESLint clean on all 10 new files; `deno check` clean on all 10 new files; separation guard 0 violations at every sub-turn (`_shared/overshoot-broker/*` predicate added to `scripts/check-overshoot-separation.ts` at W3.2.a); Gate-11 subset over `_shared/overshoot-broker/` at W3.2.c close: **43 passed | 0 failed (329ms)**. Lockfile hygiene: `deno.lock` root untouched across all three sub-turns; `supabase/functions/deno.lock` gained the postgresjs → std@0.132.0 subtree at W3.2.a merge (`ebfd06f7`) as a legitimate consequence of the gate-11 refactor extending the type-checker's transitive-resolution reach over `overshoot-study-run/index.ts`; corrected characterization landed in ACT-459.a-ADD; forward-binding rule §22.8.4 (lockfile diffs enumerated pre-commit; "untouched" verified by `git diff`, never asserted) now binds. Supervisor-side CI check-runs on `ebfd06f7`: strong-evidence SUCCESS, toolchain-parity SUCCESS, separation-guard SUCCESS.
+
+**W3.3 readiness**: overshoot short-interest sibling fetcher (over `OvershootAlpacaPaperClient` or a Polygon-shaped analog per the longshort SI orchestrator precedent) + first disarmed cron. The runtime **GATE-ZERO** probe seam (edge-runtime visibility of `ALPACA_PAPER_KEY_OVERSHOOT` / `ALPACA_PAPER_SECRET_OVERSHOOT`) arrives with W3.3's first live-runtime touch.
+
 **Negative-probe acceptance.** The fresh-aggregate 400 `phase_aggregate_requires_run_id` refusal (W2.6 NEG probe) is ACCEPTED as a valid coverage-refusal proof. The stricter input-validation gate fires earlier than the anticipated 409 `aggregate_missing_window_contract`; the categorical no-run_id-no-aggregate contract is preserved. No code change warranted.
 
 **Run-of-record lineage (for W3 pinning).** `run_id=1888e113-f9b3-43f5-856c-d91666a3c121`, `param_grid_hash=a37e4b96…f354e80`, `git_sha=0c5ad0d9`, `outcome=completed`, `as_of=2026-07-02`, `bars_snapshot_max_date=2026-07-02`, `earnings_snapshot_max_date=2026-07-02`, stamps: `survivorship=UPPER_BOUND_SURVIVORSHIP_BIASED`, `performance=NON_PERFORMANCE_STUDY_ONLY`, `short_filter=NO_SQUEEZE_FILTER_ARRIVALS_UPPER_BOUND_RETURNS_CONSERVATIVE`, `return_basis=CLOSE_TO_CLOSE_REFERENCE`. Any W3 parameter-ratification reads must scope to this run_id.
