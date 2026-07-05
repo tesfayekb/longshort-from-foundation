@@ -600,3 +600,265 @@ STOP conditions: fence-proof non-zero at step 1 or 7; batch surfacing a compute 
 **Forward rule (per INC-82):** registry bracket flips (`job_registry.enabled`) MUST use the data-write tool path (W3.3 precedent), not the migration tool. Applies to W3.6+.
 
 **W3.6 preview:** entry/execution engine — marketable-limit T+1-open with pre-open stabilization re-check (P-B ratified), broker sizing replacing zero placeholders. EXECUTION-CONTRACT ratification block (I1–I7) delivered as pre-build investigation; awaiting operator ratification before build begins.
+
+## §9 W3.6.e-iii Part 1 — First-Light Runbook (AUTHORED 2026-07-05, ACT-464.e-iii; execution pending first selection cycle)
+
+**Scope of this section.** Documentation + operator-executable scripts only. ZERO code, ZERO migrations, ZERO deploys, ZERO arming were performed at authoring time. Execution follows the market calendar and requires (a) operator availability in the two time windows specified below, (b) a Session-1 evening producing `selected_count > 0`. Zero-select evenings are banked evidence per the ratified priors (~3 of 4 evenings expected empty on average), not failures.
+
+**Structural fence (binding — inherited verbatim from W3.3 arm-bracket protocol).** "Cron arming" = executing `sql/32` or `sql/33`, or creating/enabling any `cron.job` row whose `jobname LIKE 'overshoot%'`. A `job_registry.enabled` flip inside an audited bracket is NOT cron arming provided `SELECT count(*) FROM cron.job WHERE jobname LIKE 'overshoot%'` returns 0 throughout the bracket. Both `overshoot.detection.run` and `overshoot.entry.run` registry rows MUST return to `enabled=false` before the session ends — regardless of outcome. Any pipeline defect surfaced mid-bracket triggers DISARM → STOP → evidence bundle to supervisor. No hot-fix.
+
+**Registry rows in play this wave (do NOT re-fire while disarmed):**
+
+| id | Session | Schedule (docs) | Handler |
+| --- | --- | --- | --- |
+| `overshoot.detection.run` | 1 (evening) | `0 22 * * 1-5` (sql/31 authored-only) | `supabase/functions/overshoot-detection-run/index.ts` |
+| `overshoot.entry.run` | 2 (morning) | `35 13 * * 1-5` + `35 14 * * 1-5` DUAL-SLOT (sql/33 authored-only) | `supabase/functions/overshoot-entry-run/index.ts` |
+| `overshoot.exit.run` (probe-only this wave) | 2 (morning attestation) | `50 19 * * 1-5` (sql/32 authored-only) | `supabase/functions/overshoot-exit-run/index.ts` |
+
+---
+
+### §9.1 SESSION 1 — Evening detection arm-bracket (~18:05+ ET on any trading day)
+
+Established 7-step bracket per W3.3 precedent, using the INC-82 data-write tool path for the `job_registry.enabled` flips.
+
+1. **FENCE PROOF.** `SELECT count(*) FROM cron.job WHERE jobname LIKE 'overshoot%'` MUST equal 0. Non-zero → STOP.
+2. **PRE-STATE.** `SELECT id, enabled, schedule, handler_path FROM job_registry WHERE id='overshoot.detection.run'` MUST show `enabled=false`.
+3. **ARM (data-write tool).** `UPDATE job_registry SET enabled=true WHERE id='overshoot.detection.run'` — status stays `'registered'` (do NOT set `'enabled'`; would violate `job_registry_status_check`).
+4. **DETECTION-RUN INVOCATION.** POST `overshoot-detection-run` `{ as_of: '<today ET session date>', dry_run: false }` via §7.5 direct-localStorage script (below). Paste back the full JSON response verbatim.
+5. **READ `selected_count` + BRANCH.**
+    - `selected_count === 0` → runbook says: no entry tomorrow; DISARM (step 6) + FENCE RE-PROOF (step 7); repeat Session 1 next trading evening. Banked evidence, not a failure.
+    - `selected_count > 0` → Session 2 is GO for tomorrow morning. Have ready: (a) tomorrow's `run_id` (from the detection-run response `run_id` field) and (b) the operator's 09:15 ET seat time. Proceed through steps 6–7 as usual; entry bracket runs tomorrow.
+6. **DISARM (data-write tool).** `UPDATE job_registry SET enabled=false WHERE id='overshoot.detection.run'`. POST-STATE `SELECT id, enabled FROM job_registry WHERE id='overshoot.detection.run'` confirms `enabled=false`.
+7. **FENCE RE-PROOF.** Same query as step 1; count MUST still equal 0.
+
+STOP conditions (Session 1): fence non-zero at step 1 or 7; detection-run response `outcome ∈ {failed}` or unexpected refusal; any code defect surfaced (re-disarm first). `outcome=no_op reason ∈ {market_closed, bars_missing_for_asof, earnings_calendar_stale, earnings_calendar_cap_breach, kill_switch_active, job_disarmed}` are TRUTHFUL refusals (bracket closes normally with disposition noted; not defects).
+
+---
+
+### §9.2 SESSION 2 — Morning execution (09:15–09:40 ET, only after a GO evening)
+
+Session 2 runs ONLY on the morning after a Session-1 evening with `selected_count > 0`. Two phases, in order.
+
+#### §9.2.i — d-ii CARRIED exit-engine attestations (closes W3.6.d-ii operator-arm obligation)
+
+No exit arming. Probe-scope only. This attests (a) `overshoot-exit-run` authenticates + boots against the live edge runtime and (b) its dry-run pipeline reports truthful zero-lot no-op accounting when no `overshoot_lots` rows exist yet.
+
+1. **Alpaca probe (authenticated 2xx).** POST `overshoot-exit-run` `{ "probe": "alpaca" }`. Expect `200 { ok:true, probe:'alpaca', account_last4, status, paper:true, correlation_id }`.
+2. **Polygon probe (authenticated 2xx).** POST `overshoot-exit-run` `{ "probe": "polygon" }`. Expect `200 { ok:true, probe:'polygon', report_count, correlation_id }`.
+3. **Exit dry-run (truthful zero-lot no-op).** POST `overshoot-exit-run` `{ "dry_run": true }`. Expected shape at first-light: `outcome:'completed'`, `positions_examined = 0 + 0`, `matched_count = 0`, `exits_submitted = 0`, all four reconciliation-refusal counts = 0, all four exit-price refusal counts = 0, `session_age_no_fire = 0`, `submissions_failed = 0`, `dry_run:true`. Any non-zero cell that ISN'T attributable to a live open lot is a defect → STOP (nothing to disarm on the exit side this session — the row is already disarmed).
+
+Attestation closes when all three responses are pasted back into the ACT entry with correlation_ids intact. No exit `job_registry` write occurs during Session 2.
+
+#### §9.2.ii — Entry bracket (7 steps; token-flow scripted end-to-end)
+
+**I6 two-step token flow (design pin, operator-supplied token; NOT machine-minted).** The `overshoot-entry-run` handler validates against a pre-existing `overshoot_audit_logs` row of action `overshoot.entry.manual_triggered` whose `metadata->>'confirm_token'` equals the request body's `second_confirm_token`, within the 15-minute manual window, keyed to the operator's `auth.uid()`. The operator therefore mints the token FIRST via the data-write tool (a `writeStrategyAuditEvent`-shaped INSERT), THEN issues the entry invocation carrying `manual_confirm=true, second_confirm_token=<same>`. The token is a per-bracket random string — never reused across brackets. Cron-path invocations bypass this gate; this wave never uses the cron path.
+
+1. **FENCE PROOF.** `SELECT count(*) FROM cron.job WHERE jobname LIKE 'overshoot%'` MUST equal 0.
+2. **PRE-STATE.** `SELECT id, enabled, schedule, handler_path FROM job_registry WHERE id='overshoot.entry.run'` MUST show `enabled=false, schedule='35 13 * * 1-5'` (single registry row per operator ratification; DUAL-SLOT lives at the cron layer only, unused this wave).
+3. **ARM (data-write tool).** `UPDATE job_registry SET enabled=true WHERE id='overshoot.entry.run'`.
+4. **TOKEN-MINT + ENTRY DRY-RUN (I6 two-step).**
+    - **(4a) Mint the confirm_token (data-write tool):** INSERT `overshoot_audit_logs` row `action='overshoot.entry.manual_triggered'`, `operator_id = auth.uid() of the operator issuing step 4b`, `metadata = jsonb_build_object('confirm_token', '<dry-run-random-hex>', 'phase', 'dry_run', 'as_of', '<today ET>')`, `strategy_key='overshoot'`. Timestamp is `now()` (audit-write; not a money-path wall-clock read).
+    - **(4b) DRY-RUN invocation:** POST `overshoot-entry-run` `{ "dry_run": true, "manual_confirm": true, "second_confirm_token": "<dry-run-random-hex>" }` via §7.5 script. Expected: `dry_run:true`, `targets_loaded > 0` (matches Session-1 `selected_count`), `orders_submitted:0`, accounting identity `targets_loaded = orders_submitted + Σ (i5_refusals + sizing_refusals + buying_power_refusals + shortability_refusals + entry_price_refusals + submissions_failed) + fill_unfilled_no_lots` (with orders_submitted=0 in dry-run; the RHS accounts for every target as either an I5 refusal or a "would-have-submitted" no-op — the response includes `would_submit_count` for the coherent-dry-run check). Paste back. Coherent = identity holds AND every non-refused row echoes real `sizing` (equity, allocation_pct, margin_multiplier, slotNotional, shares) against live pre-open quotes.
+5. **TOKEN-MINT + ENTRY LIVE.** Only on a coherent dry-run response.
+    - **(5a) Mint a FRESH confirm_token:** same data-write INSERT as 4a, DIFFERENT random hex, `metadata.phase='live'`. Never reuse the dry-run token.
+    - **(5b) LIVE invocation:** POST `overshoot-entry-run` `{ "manual_confirm": true, "second_confirm_token": "<live-random-hex>" }` (dry_run omitted / false). Paste back the full response. Expected: `orders_submitted = would_submit_count` from step 4b (barring live BP/shortability/quote drift between minutes), accounting identity holds, response carries `run_id` and `correlation_id`.
+6. **DISARM (data-write tool).** `UPDATE job_registry SET enabled=false WHERE id='overshoot.entry.run'`. POST-STATE `SELECT` confirms.
+7. **FENCE RE-PROOF.** Cron.job overshoot count still 0.
+
+STOP conditions (Session 2.ii): fence non-zero at step 1 or 7; any 4xx/5xx from step 4b or 5b that is NOT a truthful named refusal (e.g., `strategy_config_absent`, `equity_snapshot_unavailable`, `market_closed`, `manual_confirm_token_missing_or_invalid` are truthful — surface them, DISARM, STOP); accounting-identity violation in either response (silent-drop trap); any request that would need improvisation beyond the six scripts below.
+
+---
+
+### §9.3 §7.5 direct-localStorage invocation scripts (paste into DevTools console on the preview iframe frame)
+
+Common prelude (paste ONCE per DevTools session; token stays in-memory only, never logged, never persisted to any surface):
+
+```js
+// —— §7.5 prelude — read Supabase session token from localStorage; never console.log the token
+const SUPABASE_URL = "https://sftatlxatbdrotivxcip.supabase.co";
+const APIKEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmdGF0bHhhdGJkcm90aXZ4Y2lwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTIyNDMsImV4cCI6MjA5NDI2ODI0M30.ItD8UTfiWsWc1_f8iST4ahyypErCRIjjWeA-oswHKs8";
+const STORAGE_KEY = "sb-sftatlxatbdrotivxcip-auth-token";
+const SESSION = JSON.parse(localStorage.getItem(STORAGE_KEY));
+const TOKEN = SESSION.access_token; // in-memory only; do NOT log
+async function callFn(name, body) {
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": APIKEY,
+      "Authorization": `Bearer ${TOKEN}`,
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+  const text = await r.text();
+  console.log(`[${name}] status=${r.status}`, text);
+  return { status: r.status, body: text };
+}
+```
+
+**Script §9.3.A — Session-1 detection-run (evening).**
+```js
+await callFn("overshoot-detection-run", { as_of: "YYYY-MM-DD", dry_run: false });
+```
+
+**Script §9.3.B — Session-2 exit probe (Alpaca).**
+```js
+await callFn("overshoot-exit-run", { probe: "alpaca" });
+```
+
+**Script §9.3.C — Session-2 exit probe (Polygon).**
+```js
+await callFn("overshoot-exit-run", { probe: "polygon" });
+```
+
+**Script §9.3.D — Session-2 exit dry-run (truthful zero-lot no-op expected).**
+```js
+await callFn("overshoot-exit-run", { dry_run: true });
+```
+
+**Script §9.3.E — Session-2 entry DRY-RUN (paired with token-mint 4a).**
+```js
+const DRY_TOKEN = "<paste-the-same-hex-you-just-INSERTed-into-audit-logs-metadata>";
+await callFn("overshoot-entry-run", { dry_run: true, manual_confirm: true, second_confirm_token: DRY_TOKEN });
+```
+
+**Script §9.3.F — Session-2 entry LIVE (paired with token-mint 5a; ONLY on coherent dry-run).**
+```js
+const LIVE_TOKEN = "<paste-the-DIFFERENT-hex-you-just-INSERTed-for-phase-live>";
+await callFn("overshoot-entry-run", { manual_confirm: true, second_confirm_token: LIVE_TOKEN });
+```
+
+**Data-write templates (executed via the platform data-write tool per INC-82; the operator's tool call, not a script here):**
+
+```sql
+-- 9.3.T1  Session-2 step 4a — mint DRY-RUN confirm_token
+INSERT INTO public.overshoot_audit_logs (strategy_key, action, operator_id, metadata, created_at)
+VALUES ('overshoot', 'overshoot.entry.manual_triggered',
+        auth.uid(),
+        jsonb_build_object('confirm_token', '<dry-hex>', 'phase', 'dry_run', 'as_of', '<today-et>'),
+        now());
+
+-- 9.3.T2  Session-2 step 5a — mint LIVE confirm_token (DIFFERENT hex)
+INSERT INTO public.overshoot_audit_logs (strategy_key, action, operator_id, metadata, created_at)
+VALUES ('overshoot', 'overshoot.entry.manual_triggered',
+        auth.uid(),
+        jsonb_build_object('confirm_token', '<live-hex>', 'phase', 'live', 'as_of', '<today-et>'),
+        now());
+
+-- 9.3.T3  ARM / DISARM flips (Session 1 steps 3+6; Session 2 steps 3+6)
+UPDATE public.job_registry SET enabled = true  WHERE id = 'overshoot.detection.run';
+UPDATE public.job_registry SET enabled = false WHERE id = 'overshoot.detection.run';
+UPDATE public.job_registry SET enabled = true  WHERE id = 'overshoot.entry.run';
+UPDATE public.job_registry SET enabled = false WHERE id = 'overshoot.entry.run';
+```
+
+---
+
+### §9.4 Evidence bundle — `read_query` set (paste at end of Session 2)
+
+Every clause below is a standalone SELECT; the bundle is the concatenation of their outputs pasted into the ACT-464.e-iii-EXEC entry (created after the calendar-gated execution turn).
+
+```sql
+-- E1  Fence re-proof (must equal 0 twice: end of Session 1, end of Session 2)
+SELECT count(*) AS overshoot_cron_jobs FROM cron.job WHERE jobname LIKE 'overshoot%';
+
+-- E2  Both DISARM post-states
+SELECT id, enabled, status FROM public.job_registry
+ WHERE id IN ('overshoot.detection.run','overshoot.entry.run')
+ ORDER BY id;
+
+-- E3  Strategy config echo (typed-absence contract: exactly one row expected)
+SELECT account_key, strategy_allocation_pct, margin_multiplier, updated_by, updated_at
+  FROM public.overshoot_strategy_config;
+
+-- E4  Detection run (Session 1) lineage
+SELECT run_id, as_of, outcome, event_count, selected_count, git_sha, correlation_id, durations_ms
+  FROM public.overshoot_detection_runs
+ ORDER BY started_at DESC LIMIT 3;
+
+-- E5  Per-target I5 outcomes with observed gaps persisted (audit trail)
+SELECT created_at, action, metadata->>'ticker' AS ticker, metadata->>'side' AS side,
+       metadata->>'reason' AS reason, metadata->>'reversionPct' AS reversion_pct,
+       metadata->>'inc83_sentinel_persists' AS sentinel_persists
+  FROM public.overshoot_audit_logs
+ WHERE action LIKE 'overshoot.entry.%'
+   AND created_at > now() - interval '2 hours'
+ ORDER BY created_at;
+
+-- E6  Entry accounting identity — reconstruct RHS from audit + orders
+--     targets_loaded = orders_submitted + Σ named refusals + fill_unfilled_no_lots
+--     (compared against the JSON envelope returned by 9.3.E and 9.3.F)
+SELECT
+  (SELECT count(*) FROM public.overshoot_target_positions WHERE run_id = '<detection-run-uuid>') AS targets_loaded,
+  (SELECT count(*) FROM public.overshoot_audit_logs
+     WHERE action = 'overshoot.entry.order.submitted' AND metadata->>'run_id' = '<detection-run-uuid>') AS orders_submitted,
+  (SELECT jsonb_object_agg(reason, cnt) FROM (
+    SELECT metadata->>'reason' AS reason, count(*) AS cnt
+      FROM public.overshoot_audit_logs
+     WHERE action LIKE 'overshoot.entry.%'
+       AND metadata->>'run_id' = '<detection-run-uuid>'
+       AND metadata->>'reason' IS NOT NULL
+     GROUP BY 1
+  ) t) AS refusal_histogram;
+
+-- E7  INC-83 resolution proof — real sizing on submitted names
+SELECT run_id, ticker, side, target_shares, target_notional, rank_score, computed_at
+  FROM public.overshoot_target_positions
+ WHERE run_id = '<detection-run-uuid>'
+   AND (target_shares > 0 OR target_notional > 0)
+ ORDER BY ticker, side;
+
+-- E8  INC-83 sentinel-persists proof — I5-refused names keep zero-sentinel
+SELECT run_id, ticker, side, target_shares, target_notional
+  FROM public.overshoot_target_positions
+ WHERE run_id = '<detection-run-uuid>'
+   AND target_shares = 0 AND target_notional = 0
+ ORDER BY ticker, side;
+
+-- E9  Sizing echoes per submitted order (equity, allocation_pct, margin_multiplier, slotNotional, shares)
+SELECT created_at,
+       metadata->>'ticker' AS ticker, metadata->>'side' AS side,
+       metadata->>'equity' AS equity, metadata->>'strategy_allocation_pct' AS alloc_pct,
+       metadata->>'margin_multiplier' AS margin_mult, metadata->>'sizing_base' AS sizing_base,
+       metadata->>'slot_notional' AS slot_notional, metadata->>'shares' AS shares
+  FROM public.overshoot_audit_logs
+ WHERE action = 'overshoot.entry.order.submitted'
+   AND metadata->>'run_id' = '<detection-run-uuid>'
+ ORDER BY created_at;
+
+-- E10  CIDs verbatim (ovs- entry) + broker acceptance
+SELECT metadata->>'client_order_id' AS cid, metadata->>'broker_order_id' AS broker_id,
+       metadata->>'ticker' AS ticker, metadata->>'side' AS side,
+       metadata->>'orderSide_semantic' AS order_side_semantic
+  FROM public.overshoot_audit_logs
+ WHERE action = 'overshoot.entry.order.submitted'
+   AND metadata->>'run_id' = '<detection-run-uuid>'
+ ORDER BY created_at;
+
+-- E11  FIRST overshoot_lots rows (broker-truth cost basis)
+SELECT lot_id, ticker, side, entry_ts, filled_qty, avg_fill_price,
+       (avg_fill_price * filled_qty) AS cost_basis, status, source_order_id
+  FROM public.overshoot_lots
+ WHERE entry_ts > now() - interval '2 hours'
+ ORDER BY entry_ts, ticker;
+
+-- E12  Exit-engine attestations (9.2.i) — probe + dry-run correlation trail
+SELECT created_at, action, metadata->>'probe' AS probe,
+       metadata->>'dry_run' AS dry_run, metadata->>'correlation_id' AS cid
+  FROM public.overshoot_audit_logs
+ WHERE action LIKE 'overshoot.exit.%'
+   AND created_at > now() - interval '4 hours'
+ ORDER BY created_at;
+```
+
+The evidence bundle is complete when: E1 returns 0 in both invocations, E2 shows both rows `enabled=false`, E3 returns exactly one config row, E4 shows the Session-1 lineage row with `selected_count > 0`, E6's LHS equals RHS (accounting identity), E7 ∪ E8 partitions the target rows with no overlap, E9 has one row per submitted CID, E10 CIDs all match `^ovs-[0-9a-f]{8}-[A-Z0-9.]+-[LS]-entry-[0-9]+$`, E11 has ≥1 row iff any fill landed (partial-fills legal), E12 shows the three exit attestations with distinct correlation_ids.
+
+---
+
+### §9.5 Landing constraints for the docs-only turn (this turn, ACT-464.e-iii Part 1)
+
+- Zero code diffs. Byte-untouched verified via `git diff --stat HEAD -- supabase/ scripts/ src/` → empty.
+- Zero lockfile diffs. `git diff --stat HEAD -- deno.lock supabase/functions/deno.lock` → empty; sizes unchanged (`deno.lock` 47998B, `supabase/functions/deno.lock` 51849B).
+- Zero migrations, zero deploys, zero `job_registry.enabled` flips, zero `cron.job` writes.
+- Docs surfaces touched: this section (§9), the action-tracker ACT-464.e-iii entry, the FP-069 Status W3.6.e-iii-part-1 clause. No other file.
+- Runbook execution is TIME-ANCHORED (Session 1 evening + Session 2 morning within 09:15–09:40 ET) and CALENDAR-GATED (requires a trading day for Session 1 and a subsequent trading day for Session 2). Zero-select evenings loop back to §9.1 the next trading evening.
