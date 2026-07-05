@@ -53,7 +53,11 @@ const UniverseHubPage = lazy(() => import("./pages/trading/longshort/UniverseHub
 const ReconciliationHubPage = lazy(() => import("./pages/trading/longshort/ReconciliationHubPage"));
 const PortfolioHubPage = lazy(() => import("./pages/trading/longshort/PortfolioHubPage"));
 const ExecutionHubPage = lazy(() => import("./pages/trading/longshort/ExecutionHubPage"));
-const OvershootDashboardPage = lazy(() => import("./pages/trading/overshoot/OvershootDashboardPage"));
+const OvershootOverviewPage = lazy(() => import("./pages/trading/overshoot/OvershootOverviewPage"));
+const OvershootDetectorPage = lazy(() => import("./pages/trading/overshoot/OvershootDetectorPage"));
+const OvershootExecutionPage = lazy(() => import("./pages/trading/overshoot/OvershootExecutionPage"));
+const OvershootPortfolioPage = lazy(() => import("./pages/trading/overshoot/OvershootPortfolioPage"));
+const OvershootConfigPage = lazy(() => import("./pages/trading/overshoot/OvershootConfigPage"));
 const OvershootDetectorRunDetailPage = lazy(() => import("./pages/trading/overshoot/OvershootDetectorRunDetailPage"));
 const ProfilePage = lazy(() => import("./pages/user/ProfilePage"));
 const SecurityPage = lazy(() => import("./pages/user/SecurityPage"));
@@ -244,7 +248,27 @@ const App = () => (
                 } />
                 <Route path="overshoot" element={
                   <PermissionGate permission="overshoot.view">
-                    <OvershootDashboardPage />
+                    <OvershootOverviewPage />
+                  </PermissionGate>
+                } />
+                <Route path="overshoot/detector" element={
+                  <PermissionGate permission="overshoot.view">
+                    <OvershootDetectorPage />
+                  </PermissionGate>
+                } />
+                <Route path="overshoot/execution" element={
+                  <PermissionGate permission="overshoot.view">
+                    <OvershootExecutionPage />
+                  </PermissionGate>
+                } />
+                <Route path="overshoot/portfolio" element={
+                  <PermissionGate permission="overshoot.view">
+                    <OvershootPortfolioPage />
+                  </PermissionGate>
+                } />
+                <Route path="overshoot/config" element={
+                  <PermissionGate permission="overshoot.view">
+                    <OvershootConfigPage />
                   </PermissionGate>
                 } />
                 <Route path="overshoot/detector/:runId" element={
