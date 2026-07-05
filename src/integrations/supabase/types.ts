@@ -1907,6 +1907,30 @@ export type Database = {
         }
         Relationships: []
       }
+      overshoot_strategy_config: {
+        Row: {
+          account_key: string
+          margin_multiplier: number
+          strategy_allocation_pct: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_key: string
+          margin_multiplier: number
+          strategy_allocation_pct: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_key?: string
+          margin_multiplier?: number
+          strategy_allocation_pct?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       overshoot_study_candidate_events: {
         Row: {
           alias_used: string | null
