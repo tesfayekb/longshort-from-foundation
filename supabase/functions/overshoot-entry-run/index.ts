@@ -187,6 +187,7 @@ interface RefusalTally {
   detection_linkage: number;
   strategy_config_absent: number;
   equity_snapshot_unavailable: number;
+  position_already_open: number;
   i5_refusals: number;
   sizing_refusals: number;
   buying_power_refusals: number;
@@ -200,6 +201,7 @@ function newTally(): RefusalTally {
     detection_linkage: 0,
     strategy_config_absent: 0,
     equity_snapshot_unavailable: 0,
+    position_already_open: 0,
     i5_refusals: 0,
     sizing_refusals: 0,
     buying_power_refusals: 0,
