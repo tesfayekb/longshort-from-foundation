@@ -1594,3 +1594,20 @@ later). Proof item: exit-run per-lot isolation is **PARTIAL** at HEAD `9fdd4334`
 (submitter + pricing isolated; Polygon fetch + per-lot SQL NOT isolated) — the
 H6 slot is **promoted to H0** (pre-arming gate blocker). Part-2 EXEC continues
 to outrank everything the moment operator evidence lands.
+
+### FP-069 STATUS — SECURITY corrective landed (2026-07-05, ACT-469)
+
+RLS permissive-policy tightening applied per operator rulings (Q1(a), Q2=YES).
+Migration `20260705053400_77479237-6eb5-48c6-9fb0-5ff8c9715999.sql` (policies-only):
+DROP `overshoot_audit_logs_insert` (forgery vector — service-role writes only,
+attested three paths); DROP `corporate_actions_authenticated_read` and
+`feature_flags_read_policy` (no client consumers, engine-only via service role);
+REPLACE `kill_switches_read_policy` with `kill_switches_read_scoped` (scoped to
+`longshort.view`/`overshoot.view`/superadmin — safety surface, operators must
+see breaker state); DROP 20 functionless service-role no-op policies. Console
+read-survival matrix verified: all seven overshoot pages + longshort console
+surviving. `longshort_lots` + `longshort_audit_logs` re-verified current (sql/13
+prior corrective holds — no re-drops). Roadmap H-SEC records the Dashboard
+checklist (signups-disabled, leaked-password protection, MFA, linter paste-back)
+as operator out-of-band items. Part-2 EXEC (Monday evening Session 1) continues
+to outrank everything the moment operator evidence lands.
