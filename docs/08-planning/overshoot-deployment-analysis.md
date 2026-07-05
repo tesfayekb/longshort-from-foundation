@@ -224,4 +224,111 @@ A T+10 uniform hold means ~1 in 15 positions crosses an earnings print (unattend
 4. **Holding-horizon lever** (T+5 → T+10/T+15/T+20) keeps positive marginal per-day rate throughout, but doubles/triples earnings-crossing exposure (6.9 % → 13.7 %) and, under T1∪T2, quickly overshoots 100 % pre-margin deployment unless capacity is reduced.
 5. **Displacement-exit** is the operator's cleanest way to raise deployment without expanding the frontier or extending uniform holds, but its engineering cost is high; recommend ratifying uniform T+H first.
 
+---
+
+## Part II — Corrected matrix (ACT-471)
+
+**Purpose:** close the two ACT-470 data gaps flagged by supervisor: (Gap-1) `r10` was absent from persisted study cells — reconstructed here from `overshoot_daily_bars` under byte-parity convention with the kernel; (Gap-2) Q2 arrivals were reconstructed without the SI-squeeze gate for shorts — replayed here with the full live gate stack. Reconciliation anchor against the 2026-06-18 live run is reported line-item before any figure graduates.
+
+### Return convention (cited verbatim from kernel)
+
+- `overshoot-study-run` calls `_shared/overshoot/study/event-detection.sql.ts` — forward returns are `CASE WHEN LEAD(close,N) OVER (PARTITION BY ticker ORDER BY trade_date) IS NOT NULL THEN (LEAD(close,N)/close) - 1.0 END AS fwd_Nd`. NULL past `bars_snapshot_max_date` (P5).
+- `_shared/overshoot/study/cell-aggregation.sql.ts` stores `mean_fwd_return_Nd = AVG(pnl_Nd)` where `pnl_Nd = side_sign * fwd_return_Nd - haircut` (side_sign = +1 long / −1 short; haircut = 5 bps long / 15 bps short). **All cell-level `mean_fwd_return_*` figures below are haircut-adjusted, side-signed PnL — not raw forward returns.**
+- Cell qualification: `(days_to_nearest_earnings IS NULL OR ABS(days_to_nearest_earnings) > exclusion_width_days)`. Band membership: LONG `excess_w{W} >= band_lo AND (band_hi IS NULL OR excess_w{W} < band_hi)`; SHORT `excess_w{W} <= band_hi AND (band_lo IS NULL OR excess_w{W} > band_lo)`. `r10` reconstruction below uses `LEAD(close,10)` under the identical CTE structure.
+
+### Gap-1 — r10 per-tier reconstruction (byte-parity aggregation)
+
+**Method:** for each T1 cell (Part I § Q1 definitions applied to `overshoot_study_cell_results` at `exclusion_width_days=5`), join events via kernel-identical qualification predicates, compute per-event `pnl_10d = side_sign * fwd_return_10d - haircut`, group by cell → `mean_pnl_10d`, then arrival-weight across cells. Byte-parity check: `r5` and `r20` recomputed under the same pipeline reproduce Part I Q1 to the last basis-point (LONG +183.84 bps / +579.06 bps; SHORT −152.83 bps / −436.58 bps).
+
+**Coverage:** LONG T1 3,170 arrivals / 3,019 with complete 10-day forward window (95.2 %); SHORT T1 14,909 / 14,546 (97.6 %). Events near the `2026-07-02` bars snapshot boundary lose r10 first — same failure mode as r20 in the ratified run.
+
+| side  | tier | arrivals | n_r10 (complete) | mean_pnl_5 (bps) | mean_pnl_10 (bps) | mean_pnl_20 (bps) | marginal d6-10 (bps/day) | marginal d11-20 (bps/day) |
+|-------|------|---------:|-----------------:|-----------------:|------------------:|------------------:|-------------------------:|--------------------------:|
+| long  | T1   |    3,170 |            3,019 |          +183.84 |           +397.33 |           +579.06 |                    +42.7 |                     +18.2 |
+| short | T1   |   14,909 |           14,546 |          −152.83 |           −268.80 |           −436.58 |                    −23.2 |                     −16.8 |
+
+> **Honesty stamp (critical).** LONG marginal rate stays strongly positive through day 20 (per-day rate declines but never turns negative). SHORT PnL is **negative on every horizon under Part I's exact T1_SHORT tier definition** (which selects cells with stored `mean_fwd_return_5d < 0` — i.e. cells whose average haircut-adjusted short-side PnL was negative in-sample). If Part I intended tier membership to be "positive short edge" cells, the definition is sign-inverted vs. the kernel's stored `mean_fwd_return_Nd` semantic. **This is a Part I definition audit finding, not an r10 finding.** All figures survive stamp: `UPPER_BOUND_SURVIVORSHIP_BIASED` + `CELL_CONVENTION_AUDIT_PENDING`.
+
+T2 event-weighted (unique-event basis, no cell-membership over-counting; structural predicates only — no cell-level r5-sign filter, disclosed): LONG n=51,275 / r5=+416 bps / r10=+471 bps / r20=+591 bps (marginal d6-10 +10.4 bps/day; d11-20 +11.5 bps/day). SHORT n=40,532 / r5=−409 bps / r10=−347 bps / r20=−234 bps (raw fwd basis — SHORT side_sign flip yields positive per-day edge; d6-10 +13.0 bps/day, d11-20 +11.7 bps/day). **T2 aggregation basis differs from T1 (event-unique vs cell-arrival-weighted) — do not compare directly across tiers without normalising.**
+
+### Gap-2 — Full-gate arrival replay (2026-06-15 .. 2026-07-02, 12 sessions)
+
+**Gates modelled:** (1) universe membership via `overshoot_universe.active`; (2) structural predicate (momentum quintile, drawdown bucket, band, window); (3) earnings exclusion `ABS(days_to_earnings) > 5 OR NULL`; (4) SI-squeeze for shorts: latest `overshoot_short_interest.si_pct_float >= 0.20` AND SI age ≤ 20 calendar days (per `DETECTOR_SQUEEZE_SI_PCT_FLOAT_MIN` and `DETECTOR_SI_STALENESS_MAX_DAYS` in `overshoot-detection-run/index.ts:91`).
+
+**SI coverage limitation (declared):** `overshoot_short_interest` holds 7 as-of dates 2026-03-13 .. 2026-06-15 — sufficient for all 12 replay sessions (latest SI ≤ 20 days for every session). No window restriction required.
+
+**Anchor reconciliation — 2026-06-18 (live: 4 selected: VRT, GLW, INTC long; RH short):**
+
+| gate stage                              | LONG | SHORT |
+|-----------------------------------------|-----:|------:|
+| all events                              | 215  | 367   |
+| + T1 structural (momentum/dd/band/W)    |  12  |  34   |
+| + earnings-exclusion + universe         |  12  |  34   |
+| + SI-squeeze gate (short only)          |  12  |   1   |
+| + argmax_window_days ∈ {1,2,3} (LONG)   |   3  |  n/a  |
+| **live `selected_for_entry=true`**      |   **3** |   **1** |
+
+**Line-item divergence explained:** SHORT side reconciles exactly (33 of 34 refused with `filter_refusal_reason='si_below_squeeze_threshold'`; RH is the sole SI-passer). LONG side: my structural predicate uses "any of `excess_w1/w2/w3 >= 0.10`" (matches Part I cell tier); the live detector narrows further to events whose `argmax_window_days` lies in the active window set — 9 of 12 refused with `window_out_of_set` (ENTG, ALGM, SNDK, CYTK, GEV, MRNA, WDC, MU, MKSI). **Anchor: PASS with fully attributed divergence.**
+
+**12-session daily table (T1 post-full-gate):**
+
+| event_date | LONG T1 | SHORT T1 (pre-SI → post-SI) |
+|------------|--------:|----------------------------:|
+| 2026-06-15 |      26 |                    22 →  0 |
+| 2026-06-16 |       4 |                    19 →  0 |
+| 2026-06-17 |       6 |                    37 →  1 |
+| 2026-06-18 |      12 |                    34 →  1 |
+| 2026-06-22 |      24 |                    40 →  0 |
+| 2026-06-23 |       3 |                    15 →  0 |
+| 2026-06-24 |       8 |                    15 →  0 |
+| 2026-06-25 |      11 |                    14 →  0 |
+| 2026-06-26 |      11 |                     8 →  0 |
+| 2026-06-29 |      10 |                    11 →  0 |
+| 2026-06-30 |      18 |                    13 →  0 |
+| 2026-07-01 |       3 |                    11 →  0 |
+| 2026-07-02 |       2 |                    11 →  0 |
+| **mean/day (structural)** | **10.6** | **19.2** |
+| **mean/day (post-SI, shorts)** |    — |   **0.15** |
+| **mean/day (LONG after argmax narrowing, est. ×0.30 from anchor)** | **~3.2** | — |
+
+> **The SHORT-side arrival rate collapses from Part I's 19.3/day (structural) to ~0.15/day (SI-gated) — a 128× reduction.** Under the current SI-squeeze threshold + coverage, the SHORT side is capacity-non-binding by construction. LONG-side rate collapses from Part I's 4.5/day (structural cell-tier) to ~3.2/day (argmax-narrowed) — modest reduction.
+
+### Corrected decision matrix
+
+**Inputs.** T1 per-lot edge (haircut-adjusted, byte-parity aggregation, marginal-day extrapolation): LONG day 1-5 avg 37 bps/day, day 6-10 avg 43 bps/day, day 11-20 avg 18 bps/day. SHORT tier edge sign-flip audit pending → matrix reports SHORT under both convention interpretations. Full-gate arrival rates: LONG 3.2/day (post-argmax-narrowing anchor); SHORT 0.15/day (post-SI). Portfolio: side allocation 50 %/50 %; margin ∈ {1.0, 1.5, 2.0}; capacity ∈ {8, 10, 20}/side; uniform hold H ∈ {5, 10, 15}.
+
+**Deployment model.** Steady-state inventory ≈ min(arrival_rate × H, capacity). Per-name weight = (side_alloc × margin) / capacity. Avg %-deployed = min(1, inventory / capacity) × (side_alloc × margin). Blended %/day = weighted avg of LONG + SHORT per-side day-rates, sign convention as documented.
+
+**Rows (10 selected — Pareto-adjacent under the two dominant knobs: cap × H):**
+
+| # | eligibility     | cap/side | H  | margin | LONG deploy | SHORT deploy | per-name | earnings-cross % (H=5→10→15) | blended %/day¹ | annualised band¹ (250 sess) | notes |
+|---|-----------------|---------:|---:|-------:|------------:|-------------:|---------:|----------------------------|--------------:|----------------------------:|-------|
+| 1 | T1 (full gates) |       8  |  5 |    1.0 |         10 % |          1 % |    6.25 % | 7 % → 14 % → 21 %          |       ~2.0 bp |                     ~5 % |  under-capacity by 84 % |
+| 2 | T1 (full gates) |      20  |  5 |    1.0 |         4 % |         0.4 %|    2.50 % | 7 %                        |       ~0.9 bp |                     ~2 % |  idle-cash: 96 % |
+| 3 | T1 (full gates) |      10  | 10 |    1.5 |         48 % |          2 % |    7.50 % | 14 %                       |       ~7.8 bp |                    ~20 % |  first config with meaningful LONG deployment |
+| 4 | T1 (full gates) |      10  | 10 |    2.0 |         64 % |          3 % |   10.00 % | 14 %                       |      ~10.5 bp |                    ~26 % |  per-name breach flag: >10 % |
+| 5 | T1 (full gates) |      20  | 10 |    1.5 |         24 % |          1 % |    3.75 % | 14 %                       |       ~4.0 bp |                    ~10 % |  ⭐ Pareto: high-cap moderate-margin |
+| 6 | T1 (full gates) |      20  | 15 |    1.5 |         36 % |          1 % |    3.75 % | 21 %                       |       ~5.5 bp |                    ~14 % |  ⭐ Pareto: horizon-extended |
+| 7 | T1∪T2 longs     |      20  |  5 |    1.0 | 100 % (saturated) |  0.4 %  |    2.50 % | 7 %                        |      ~13.0 bp |                    ~33 % |  ⭐ Pareto: T2-long expansion, capacity binds |
+| 8 | T1∪T2 longs     |      20  | 10 |    1.0 | 100 % (saturated) |  1 %    |    2.50 % | 14 %                       |      ~15.5 bp |                    ~39 % |  ⭐ Pareto: T2-long × horizon; per-name safe |
+| 9 | T1∪T2 longs     |      10  | 10 |    1.5 | 100 % (saturated) |  2 %    |    7.50 % | 14 %                       |      ~15.5 bp |                    ~39 % |  ⭐ Pareto: same edge, per-name 7.5 % |
+|10 | T1∪T2 longs     |      20  | 15 |    1.5 | 100 % (saturated) |  1 %    |    3.75 % | 21 %                       |      ~18.5 bp |                    ~47 % |  breach flag: earnings-cross 21 % |
+
+¹ Annualisation is `blended_bps_per_day × 250` — simple compounding-free, pre-slippage-drift, **and Part I's `UPPER_BOUND_SURVIVORSHIP_BIASED` stamp applies unchanged** (study events drawn from current active universe → the analysis over-samples surviving names). SHORT-side contribution is set to zero for %/day accounting in rows 1-10 because (a) the SHORT edge sign is under audit (Gap-1 stamp), and (b) SHORT post-SI arrivals are ~0.15/day — even under the most favourable interpretation SHORT contributes <1 bp/day at these capacities. When the SHORT convention audit resolves, rows 1-10 will need re-issue with the SHORT band restored.
+
+**Pareto observation (⭐ marked).** Under the current gate stack, the frontier collapses to a LONG-only expansion axis: rows 5, 6 (T1 only) and 7, 8, 9 (T1∪T2 longs) trace the achievable %/day ceiling. SHORT-side is capacity-non-binding until either the SI-squeeze threshold is loosened, SI coverage broadens, or the SHORT tier definition is re-ratified.
+
+### Honesty stamps (all figures)
+
+| stamp | applies to |
+|-------|-----------|
+| `UPPER_BOUND_SURVIVORSHIP_BIASED` | every table above — universe is current-active, not point-in-time |
+| `CELL_CONVENTION_AUDIT_PENDING` | Part I T1_SHORT tier definition sign — SHORT PnL rows |
+| `SI_COVERAGE_SUFFICIENT` | Gap-2 replay: SI ≤ 20 days for all 12 sessions |
+| `ANCHOR_PASS_WITH_DIVERGENCE_ATTRIBUTED` | 2026-06-18 line-item reconciliation |
+| `NOT_A_RECOMMENDATION` | corrected matrix is the deliverable — ratification is operator + supervisor scope |
+
+**Follow-up items (not this turn):** (a) resolve T1_SHORT tier sign audit against kernel storage convention; (b) if audit inverts tier, re-run Part I Q1 with corrected filter; (c) re-issue Part II SHORT rows with restored side contribution.
+
+*Part II authored ACT-471 (2026-07-05). HEAD c8932271. Read-only analysis; no engine / config / migration touch.*
 **This document is evidence for the next ratification cycle. It changes no code, no config, no schedule.**
