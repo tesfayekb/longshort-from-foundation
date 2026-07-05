@@ -435,7 +435,7 @@ Deno.serve(createHandler(async (req: Request) => {
       ORDER BY trade_date DESC
       LIMIT 30
     `;
-    const spyPriorSessionDates = spyDates.map((r) => r.trade_date).sort();
+    const spyPriorSessionDates: string[] = (spyDates as { trade_date: string }[]).map((r) => r.trade_date).sort();
     const priorSpySession = computePriorSpySessionDate(sessionDate, spyPriorSessionDates);
     let detectionRun: OvershootDetectionRunRow | null = null;
     if (priorSpySession !== null) {
@@ -532,8 +532,8 @@ Deno.serve(createHandler(async (req: Request) => {
     // Per-side capacity counts (used by sizing to slice equally across
     // slots within a side). Capacity is the SELECTED count per side —
     // capacity_per_side that survived detection.
-    const longSelections = selections.filter((s) => s.side === 'long');
-    const shortSelections = selections.filter((s) => s.side === 'short');
+    const longSelections = (selections as SelectionRow[]).filter((s) => s.side === 'long');
+    const shortSelections = (selections as SelectionRow[]).filter((s) => s.side === 'short');
 
     await writeStrategyAuditEvent({
       strategyKey: 'overshoot',
