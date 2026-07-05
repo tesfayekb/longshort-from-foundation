@@ -103,7 +103,6 @@ export const overshootNav: NavSection = {
  * scheduled for removal once the wrapper is retired.
  */
 export { OvershootOverview as OvershootOverviewPage } from './components/OvershootOverview';
-export { OvershootOverview as OvershootDashboardPage } from './components/OvershootOverview';
 export { OvershootDetectorRuns as OvershootDetectorPage } from './components/OvershootDetectorRuns';
 export { OvershootExecutionTrail as OvershootExecutionPage } from './components/OvershootExecutionTrail';
 export { OvershootPositions as OvershootPortfolioPositionsPage } from './components/OvershootPositions';
