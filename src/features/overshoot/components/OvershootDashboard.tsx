@@ -16,6 +16,7 @@
  * `src/features/overshoot/index.ts`, NOT from this file directly.
  */
 import { HubTabs, HubEmptyState } from '@/pages/trading/longshort/hub/HubTabs';
+import { OvershootDetectorRuns } from './OvershootDetectorRuns';
 
 export function OvershootDashboard() {
   return (
@@ -34,13 +35,7 @@ export function OvershootDashboard() {
           {
             value: 'detector',
             label: 'Detector',
-            content: (
-              <HubEmptyState
-                title="Detector monitor"
-                description="Run history and candidate detail land in W4.b. Sources: overshoot_detection_runs, overshoot_events."
-                note="W4.b — not yet implemented"
-              />
-            ),
+            content: <OvershootDetectorRuns />,
           },
           {
             value: 'execution',

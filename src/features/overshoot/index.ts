@@ -95,3 +95,18 @@ export const overshootNav: NavSection = {
  * `src/pages/trading/overshoot/`) import this through the façade ONLY.
  */
 export { OvershootDashboard as OvershootDashboardPage } from './components/OvershootDashboard';
+
+/**
+ * W4.b (ACT-465.b): drill-in page for a single detection run at
+ * `/trading/overshoot/detector/:runId`. Re-exported here so the page
+ * wrapper at `src/pages/trading/overshoot/OvershootDetectorRunDetailPage.tsx`
+ * can honor the T1 façade-only import rule.
+ *
+ * Supervisor note (fourth-export accounting): the façade actually exposes
+ * FOUR runtime names + one type — this comment records the tally
+ * explicitly. Names: `overshootNav`, `OVERSHOOT_PERMISSION_KEYS`,
+ * `OvershootDashboardPage`, `OvershootDetectorRunDetailPage`. Type:
+ * `OvershootPermissionKey`. Any expansion beyond this set requires a
+ * new operator ratification, per T1.
+ */
+export { OvershootDetectorRunDetail as OvershootDetectorRunDetailPage } from './components/OvershootDetectorRunDetail';
