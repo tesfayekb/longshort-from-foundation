@@ -80,6 +80,37 @@ pre-arming gate — ARM does not open until H0-H5 are green.
 - **H5 (CANDIDATE-iii)** — equity snapshots. Daily broker-truth equity rows into `overshoot_equity_snapshots`. Feeds the Overview gain cards (currently pending-empty per W4.g) and the W5 windowed P&L. This is the honest counterpart to console-driven price fetches (still forbidden).
 - **H6** — RETIRED (promoted into H0 above; the pre-existing H6 slot is the exit-loop isolation fix; recorded here for cross-reference discipline).
 
+### H-SEC — Security-posture P0 items (ACT-469 landed the corrective; these are the residuals)
+
+ACT-469 (2026-07-05) applied the RLS permissive-policy tightening (DROP the
+`overshoot_audit_logs` forgery vector; DROP the two engine-only permissive
+SELECT policies on `corporate_actions`/`feature_flags`; REPLACE the
+`kill_switches` read with a scoped policy per operator ruling Q1(a); DROP 20
+functionless service-role no-op policies). The residual security-posture items
+below are **operator out-of-band actions** (Supabase Dashboard, not Lovable)
+plus one follow-up sweep:
+
+- **H-SEC-1 (operator)** — **signups disabled.** Authentication → Providers →
+  Email → confirm "Allow new users to sign up" is **OFF** (single-operator
+  project, invitation-only per DEC-030 spirit). Paste-back: screenshot or
+  Dashboard URL + timestamp into ACT-469 follow-up.
+- **H-SEC-2 (operator)** — **leaked-password protection enabled.**
+  Authentication → Providers → Email → confirm "Prevent use of leaked passwords
+  (HaveIBeenPwned)" is **ON**.
+- **H-SEC-3 (operator)** — **MFA enrolled.** Authentication → Users → confirm
+  the operator's row shows an MFA factor present. If absent, enroll before
+  Phase ARM opens.
+- **H-SEC-4 (Lovable follow-up)** — **linter output paste-back sweep.** After
+  H-SEC-1..3 confirmed, paste current Supabase linter output verbatim into a
+  follow-up ACT for the SECURITY DEFINER WARN triage (post-ACT-469 the linter
+  reports 13 findings, all pre-existing: 1× `RLS Enabled No Policy` INFO, 11× +
+  1× `Signed-In Users Can Execute SECURITY DEFINER Function` WARN — the RBAC
+  helpers and kill-switch/config RPCs are DESIGNED callable-by-signed-in
+  contract; triage will separate designed-callable from over-exposed).
+
+**Entry criteria:** ACT-469 landed (met). **Exit criteria:** H-SEC-1..4 all
+confirmed with evidence paste-back before Phase ARM opens.
+
 **Entry criteria:** NOW phase banked (≥1 first-light detection + entry + exit fill).
 **Exit criteria:** H0-H5 green (each with test + evidence bundle); ACT-468 closure.
 
