@@ -467,4 +467,96 @@ LONG anchor unchanged: 12 LONG-T1 structural → 3 selected after argmax narrowi
 - **Files edited this turn (exactly three):** `docs/08-planning/overshoot-deployment-analysis.md` (Part III append + Part I inline SUPERSEDED markers), `docs/06-tracking/action-tracker.md` (ACT-471 amendment + ACT-472 entry), `docs/08-planning/feature-proposals.md` (FP-069 Status ACT-472 clause).
 - **Longshort surface:** untouched (docs-only, overshoot-scoped).
 
+---
+
+## Part IV — Regime-sliced returns for the long-heavy ratification (ACT-473)
+
+HEAD: `0f97f766`. Mode: INVESTIGATION (read-only). Study run unchanged (`1888e113-…`). Feeds W3.8 Tier-A ratification of the T+10 long-heavy deployment (Row 5 / Row 7 of the Part III matrix). **No recommendation language — evidence only.**
+
+### IV.1 — Regime definition (proposed; grounded in commons SPY bars)
+
+**Primary — SPY drawdown-from-peak bands** (peak = expanding-window max close on `overshoot_daily_bars.ticker='SPY'`, 2021-06-29..2026-07-02 — 5+ years present in the ratified bars snapshot, safely subsuming the 2022-03-08..2026-07-02 study window):
+
+| regime | rule | sessions in study window | date coverage | avg drawdown | worst drawdown |
+|--------|------|-------------------------:|---------------|-------------:|---------------:|
+| BULL       | `SPY/peak − 1 ≥ −5 %`           |  596 | 2022-03-28..2026-07-02 | −1.29 % | −4.92 % |
+| CORRECTION | `−15 % ≤ SPY/peak − 1 < −5 %`   |  306 | 2022-03-08..2026-04-07 | −9.95 % | −15.00 % |
+| BEAR       | `SPY/peak − 1 < −15 %`          |  182 | 2022-05-09..2025-04-21 | −18.76 % | −25.36 % |
+
+**Justification:** drawdown-from-peak is the framing that directly matches the "crash behavior" question the ratification cares about (does the long book lose more when the market is falling?), rather than a return-tercile split which mixes fast-recovery and slow-grind sessions symmetrically. Bands are the operator's suggested defaults (−5 %, −15 %); grounded in the same SPY series the detector's benchmark whitelist already ingests (per `polygon-grouped-daily-fetcher.ts` benchmark list). No new data source, no calibrated threshold, no clock injection.
+
+**Alternative option (NOT chosen; offered for operator override):** trailing-60-session SPY return terciles over the study window. Trade-off: symmetric buckets, but conflates "still-recovering from 2022 bear" sessions with "grinding into a top" sessions — same trailing-60d return, opposite regime posture. If operator prefers, re-slice is a single-CTE rewrite.
+
+**Single-bear-sample caveat (LOAD-BEARING stamp):** the 182 BEAR sessions are ONE bear episode (2022-05..2025-04, a 2022-shaped equity drawdown — inflation/rate-hike-driven, no credit-system stress, no liquidity halt). One 2022-shaped bear ≠ all bears. Nothing below can generalise to a 2008-style or 2020-COVID-style regime. `SINGLE_BEAR_EPISODE_SAMPLE` — all Part IV figures inherit this stamp in addition to `UPPER_BOUND_SURVIVORSHIP_BIASED`.
+
+### IV.2 — Per-regime × tier × horizon PnL table (haircut-adjusted, side-signed; kernel convention per ACT-472)
+
+Convention: `pnl_N = side_sign · fwd_return_N − haircut` with `haircut_LONG = 5 bps`, `haircut_SHORT = 15 bps`. `r5` and `r20` from persisted event columns; **`r10` reconstructed** via `LEAD(close,10) OVER (PARTITION BY ticker ORDER BY trade_date)` on `overshoot_daily_bars` (ACT-471 byte-parity method; per-ticker join on `(ticker, event_date)`). `p10` = 10th-percentile (worst-decile) tail. "per-day-bps" = mean_pnl / horizon_days.
+
+| side  | tier | regime     | events | events_r10 | mean_pnl5 | mean_pnl10 | mean_pnl20 | rate5/day | rate10/day | rate20/day | p10_pnl5 | p10_pnl10 | p10_pnl20 |
+|-------|------|------------|-------:|-----------:|----------:|-----------:|-----------:|----------:|-----------:|-----------:|---------:|----------:|----------:|
+| LONG  | T1    | **BEAR**       |    113 |    113 | **+333.3** | **+348.6** | **+555.0** |  +66.7 |  +34.9 |  +27.8 |   −330.1 |   −822.6 |   −647.3 |
+| LONG  | T1    | CORRECTION |    361 |    361 |   +177.3 |   +434.7 |   +629.2 |  +35.5 |  +43.5 |  +31.5 |   −566.1 |   −576.4 | −1030.3 |
+| LONG  | T1    | BULL       |  1,237 |  1,197 |   +111.3 |   +248.2 |   +465.5 |  +22.3 |  +24.8 |  +23.3 |   −838.8 | −1125.6 | −1494.2 |
+| LONG  | T2    | **BEAR**       | 19,504 | 19,504 |  **+99.5** |  **+191.7** |  **+423.9** |  +19.9 |  +19.2 |  +21.2 |   −539.4 |   −696.4 |   −861.5 |
+| LONG  | T2    | CORRECTION | 25,870 | 25,870 |   +50.5 |   +123.5 |   +184.5 |  +10.1 |  +12.4 |   +9.2 |   −574.6 |   −793.9 | −1171.4 |
+| LONG  | T2    | BULL       | 54,823 | 53,241 |   +45.3 |    +76.7 |   +160.4 |   +9.1 |   +7.7 |   +8.0 |   −594.9 |   −835.3 | −1164.0 |
+| SHORT | T1_corrected | **BEAR** |   68 |     68 |  **−128.9** |   **−22.2** |  **−221.3** |  −25.8 |   −2.2 |  −11.1 | −1075.4 | −1494.0 | −2285.4 |
+| SHORT | T1_corrected | CORRECTION | 199 | 199 |   −49.1 |   −156.2 |   −190.8 |   −9.8 |  −15.6 |   −9.5 |   −920.2 | −1461.5 | −2103.1 |
+| SHORT | T1_corrected | BULL   |    320 |    313 |   +33.3 |    +26.7 |    −59.9 |   +6.7 |   +2.7 |   −3.0 |   −809.2 | −1203.4 | −1751.9 |
+
+Units: bps (× 10⁻⁴), post-haircut, side-signed. Missing `r10` cells (BULL LONG T1: 40 events; BULL LONG T2: 1,582; BULL SHORT: 7) reflect events near the bars-snapshot horizon (2026-07-02) where +10 sessions falls beyond snapshot — silent-drop refused, typed absence honoured.
+
+**Sample-size caveats (per-regime honesty stamps):**
+- `LONG T1 BEAR` (113) and `SHORT T1_corrected BEAR` (68) are **thin single-episode samples** — treat point estimates as directional evidence, not calibration data.
+- `LONG T2 BEAR` (19,504) is statistically large but drawn from the same one bear episode — regime replication is 1, not N.
+- `SHORT T1_corrected` totals **587** across all regimes here vs the cell-aggregate **1,259** reported in Part III §III.1. The gap reflects a boundary-mapping / exclusion-semantics discrepancy between the event-level structural filter used here (`side + move_pct → band` via `-0.08 / -0.10` thresholds on the events dump) and the cell-level `arrival_count` aggregation used in Part III (kernel-side band assignment on the same events). Directional regime signs are unaffected; absolute per-cell weighting is undercount-biased for SHORT. `SHORT_BAND_MAPPING_UNDERCOUNT_STAMP`.
+
+### IV.3 — Arrival-rate per day by regime (does the detector really flood in bears?)
+
+| regime | sessions | all-LONG-structural arrivals/day | T1 LONG arrivals/day | T2 LONG arrivals/day | T1_corrected SHORT arrivals/day | dd-bucket-4/5 exclusion fraction (LONG) |
+|------------|-------:|---------------------------------:|---------------------:|---------------------:|-------------------------------:|----------------------------------------:|
+| BULL       |    596 |  220.92 |  2.076 |   92.0 | 0.537 | 13.5 % |
+| CORRECTION |    306 |  221.05 |  1.180 |   84.5 | 0.650 | 20.7 % |
+| BEAR       |    182 |  230.61 |  **0.621** |  **107.2** | **0.374** | **33.2 %** |
+
+**Cascade-hypothesis verdict:**
+- Raw structural overshoot arrivals per day are **essentially flat across regimes** (220.9 / 221.0 / 230.6 — a ~4 % BEAR uptick, not a cascade).
+- **T1 LONG arrivals collapse in BEAR** — 0.62/day, ~30 % of the BULL rate — because BEAR pushes most tickers into deep-drawdown buckets (4/5) which the T1 predicate excludes.
+- T2 LONG arrivals **do modestly cascade** in BEAR (+17 % vs BULL): 107/day vs 92/day.
+- T1_corrected SHORT arrivals in BEAR are the **lowest** of all three regimes (0.37/day) — the SHORT predicate (momentum-quintile ∈ {1,5} ∧ dd-bucket ∈ {4,5}) is a "capitulation + prior-momentum" filter that structurally fires less when the whole tape is already at dd-4/5.
+- Existing dd-bucket-{1,2,3} filter (T1 LONG) refuses **33.2 %** of raw BEAR long-candidates on drawdown alone, vs 13.5 % in BULL — the filter is already doing meaningful bear-regime work.
+
+### IV.4 — Plainly-worded "crash behavior" summary per config
+
+**Current live config (T1 LONG only, H=5, ~0.5 % NAV/lot, LONG-only after the SHORT capacity-non-binding finding in Part III):**
+
+> In the one bear episode observed (2022-05..2025-04), T1 LONG per-event PnL5 was actually **higher** (+333 bps vs +111 bps in BULL) — deep-move-followed-by-shallow-drawdown setups mean-revert harder when the aggregate market is falling. But arrival frequency **collapses to 0.62/day** (vs 2.08/day in BULL), so bear-regime capital deployment is intrinsically capped by signal scarcity, not by rule. Worst-decile PnL5 in BEAR (−330 bps) is materially **smaller** than in BULL (−839 bps) — the same predicate that filters out deep-drawdown candidates also filters out the fattest left tails. **Crash-behavior read: current config is naturally defensive in bears (few signals, capped left tail), earns strong per-event edge on the signals it does take.** Sample: one bear, 113 events — directional, not calibration-grade.
+
+**T+10 long-heavy config (T1∪T2 LONG, H=10, matrix Row 7 candidate):**
+
+> Bear-regime deployment rises to **107 arrivals/day** (T2-driven), materially utilising capital. Per-event PnL10 in BEAR is **+192 bps** (vs +77 bps BULL, +124 bps CORRECTION) — the mean-reversion edge survives regime-switching, upper-bound-survivorship-stamped. **However, the worst-decile PnL10 in BEAR is −696 bps per event**; at ~50 concurrent lots this compounds into meaningful drawdown-of-strategy risk if the bear regime resembles 2022 (steady grind-down with intermittent squeeze relief) — and this stat generalises poorly to a fast-crash bear (2020-COVID) or a credit-system bear (2008). The T+10 hold horizon (vs T+5) amplifies bear-regime tail-exposure: p10 worsens from −539 bps at r5 to −696 bps at r10 to −862 bps at r20 in BEAR-T2. **Crash-behavior read: T+10 long-heavy earns positive expectancy in the one bear observed, but tail risk scales with horizon; ratification requires either (a) an operator-accepted single-bear extrapolation, or (b) a regime-conditional risk-cap layered on top (out of scope for this analysis).**
+
+**SHORT T1 (corrected) in bears — the only regime a short book might matter:**
+
+> Per-event PnL5 in BEAR is **−129 bps** (net of 15 bps haircut) on a tiny 68-event sample; PnL20 is −221 bps. The short predicate does NOT earn positive expectancy in bears — the "capitulation + prior-momentum" cells fire on tickers that have already crashed, which mean-revert *upward* even inside the aggregate bear. Combined with the near-zero live arrival rate (post-SI-squeeze gate: ~0.005/day per Part III §III.4), the SHORT book adds **no bear-hedge value** in this sample. `SHORT_NO_BEAR_HEDGE_VALUE` on the sample stated, subject to `SINGLE_BEAR_EPISODE_SAMPLE`.
+
+### IV.5 — Honesty stamps (Part IV inherits all Parts I–III stamps, adds these)
+
+| stamp | meaning |
+|-------|---------|
+| `UPPER_BOUND_SURVIVORSHIP_BIASED` | inherited: all PnL figures are upper bounds |
+| `SINGLE_BEAR_EPISODE_SAMPLE` | 182 BEAR sessions are ONE 2022-shaped bear — regime replication N=1 |
+| `SHORT_BAND_MAPPING_UNDERCOUNT_STAMP` | Part IV SHORT event counts (587) undercount the cell-aggregate (1,259) by ~2× due to event/cell boundary-mapping semantics; directional regime signs unaffected |
+| `SHORT_NO_BEAR_HEDGE_VALUE` | on this sample, SHORT T1 does not earn positive PnL in BEAR — no crash-hedge property |
+| `T2_TAIL_HORIZON_SCALES` | worst-decile PnL worsens with hold horizon in BEAR (p10 pnl20 < p10 pnl10 < p10 pnl5) — H↑ amplifies left tail |
+| `NOT_A_RECOMMENDATION` | Part IV is evidence; ratification is operator + supervisor scope |
+
+### IV.6 — Gate pastes
+
+- **Docs-only diff proof:** `git diff --stat HEAD -- supabase/ src/ scripts/ deno.lock supabase/functions/deno.lock` → **empty** (no engine, no config, no migration, no lockfile, no cron.job, no edge deploy touched).
+- **Kernel/engine byte-untouched:** `_shared/overshoot/study/cell-aggregation.sql.ts`, `_shared/overshoot/detector/*`, `overshoot-detection-run/*`, `overshoot-study-run/*`, `_shared/overshoot/polygon-*` — all byte-identical to HEAD `0f97f766`.
+- **No MIG / cron / deploy:** zero migration files created, `sql/3*_overshoot_*` unchanged, no edge function redeploy triggered.
+- **Files edited this turn (exactly three):** `docs/08-planning/overshoot-deployment-analysis.md` (Part IV append), `docs/06-tracking/action-tracker.md` (ACT-473 entry), `docs/08-planning/feature-proposals.md` (FP-069 Status ACT-473 pointer).
+- **Longshort surface:** untouched (docs-only, overshoot-scoped).
 *Part III authored ACT-472 (2026-07-05). HEAD `00e1dd01`. Analysis-layer correction only; kernel is ratified and byte-locked. Part-2 EXEC (Monday evening Session 1) continues to outrank everything the moment operator evidence lands.*
