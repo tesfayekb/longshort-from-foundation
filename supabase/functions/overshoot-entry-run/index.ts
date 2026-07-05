@@ -1,0 +1,785 @@
+/**
+ * overshoot-entry-run -- FP-069 W3.6.e-ii (ACT-464.e-ii).
+ *
+ * Pre-open ENTRY cron handler + operator-manual entry path.
+ * DISARMED at seed (MIG-155, `overshoot.entry.run`, enabled=false).
+ * Operator arms at W3.6.e-arm (first-light bracket) via sql/33.
+ *
+ * Contract (all operator-ratified -- do NOT drift):
+ *   Request  : POST { as_of?: 'YYYY-MM-DD', probe?: 'alpaca'|'polygon',
+ *                     dry_run?: boolean, manual_confirm?: boolean,
+ *                     second_confirm_token?: string, slot?: 'a'|'b' }
+ *   Auth     : DEC-023 envelope via createHandler + authenticateRequest +
+ *              overshoot.manage RBAC.
+ *   Clock    : injected productionClock (Date.now() only in I6 window cutoff).
+ *   Boot     : same shape as exit-run:
+ *                (i) RATIFIED_STUDY_RUN_ID row in overshoot_study_runs
+ *                (ii) drift-canary void-refs on the W3.6.e-i exported
+ *                     constants (sizing + i5 + entry-price + detection-
+ *                     linkage) AND sizing.ts constants so an e-i rename
+ *                     surfaces at edge boot, not first money-path fire.
+ *   Probes   : body.probe short-circuits BEFORE the three skip gates.
+ *   Gates    : (i) kill-switch (strategy_key='overshoot' non-'active'),
+ *              (ii) job-disarmed (overshoot.entry.run.enabled=false),
+ *              (iii) probe (request-level short-circuit).
+ *   I6 gate  : `manual_confirm=true` requires a matching
+ *              `overshoot.entry.manual_triggered` audit row within
+ *              OVERSHOOT_MANUAL_CONFIRM_WINDOW_MS for the same actor.
+ *   Pipeline :
+ *     (a) /v2/clock (PIN-2; typed market_closed refusal + minutes_to_close)
+ *     (b) run_already_exists idempotency gate (DUAL-SLOT DST collapse):
+ *         checks for a same-session-date 'overshoot.entry.session_marker'
+ *         audit row; second slot in the DUAL-SLOT pair returns typed
+ *         no-op {reason:'run_already_exists'}.
+ *     (c) detection-linkage (W3.6.e-i): fetch SPY prior-session dates +
+ *         latest completed detection run for the computed prior session;
+ *         three typed refusals surfaced + audited.
+ *     (d) overshoot_strategy_config read (typed strategy_config_absent
+ *         on missing row; NEVER schema-default silent fallback).
+ *     (e) fresh account snapshot via OvershootAlpacaAccountFetcher
+ *         (typed equity_snapshot_unavailable passthrough).
+ *     (f) session marker written (idempotency anchor for slot-b).
+ *     (g) per selected target:
+ *           I5 pre-open re-check (W3.6.e-i, DEFAULT-DENY) ->
+ *           computeTargetSizing (sizingBase = equity * alloc * margin) ->
+ *           assertBuyingPowerCoversNotional (R-gamma; cumulative check
+ *              BEFORE each submission) ->
+ *           shortability gate for shorts (OvershootAlpacaShortabilityFetcher;
+ *              typed not_shortable) ->
+ *           Polygon snapshot -> constructEntryLimitPrice (W3.6.e-i;
+ *              four typed refusals) ->
+ *           submit LIMIT day-TIF with entry CID (attempt run-scoped) ->
+ *           INC-83 RESOLUTION UPSERT of overshoot_target_positions
+ *              (overwrites-on-commit; sentinel-persists-on-I5-refuse) ->
+ *           fetch fill -> INSERT overshoot_lots on filled_qty > 0 (broker
+ *              truth; partial-fill leaves lot at filled qty).
+ *   Accounting identity (never-silent-drop; evidenced in response):
+ *     targets_loaded
+ *       = orders_submitted
+ *       + i5_refusals
+ *       + sizing_refusals
+ *       + buying_power_refusals
+ *       + shortability_refusals
+ *       + entry_price_refusals (4 classes)
+ *       + submissions_failed
+ *       + fill_unfilled_no_lots
+ *   dry_run  : full pipeline; ZERO order submissions; response marks
+ *              dry_run=true so the identity is observable.
+ *
+ * Price source: POLYGON ONLY (LIVE-PRICE SOURCE CONTRACT 2026-07-04).
+ * Alpaca market-data endpoints FORBIDDEN. Alpaca is used ONLY for broker
+ * truth (clock, account, positions, orders, fills, shortability).
+ */
+import { createHandler, apiSuccess } from '../_shared/handler.ts';
+import { authenticateRequest } from '../_shared/authenticate-request.ts';
+import { checkPermissionOrThrow } from '../_shared/authorization.ts';
+import { apiError } from '../_shared/api-error.ts';
+import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
+import { productionClock } from '../_shared/longshort-clock.ts';
+import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
+import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js';
+
+import {
+  OvershootAlpacaPaperClient,
+  OvershootAlpacaApiError,
+  OvershootAlpacaCredentialError,
+  OvershootAlpacaNetworkError,
+} from '../_shared/overshoot-broker/alpaca-paper-client.ts';
+import { OvershootAlpacaAccountFetcher } from '../_shared/overshoot-broker/alpaca-account-fetcher.ts';
+import { OvershootAlpacaOrderSubmitter } from '../_shared/overshoot-broker/alpaca-order-submitter.ts';
+import { OvershootAlpacaFillFetcher } from '../_shared/overshoot-broker/alpaca-fill-fetcher.ts';
+import { OvershootAlpacaShortabilityFetcher } from '../_shared/overshoot-broker/alpaca-shortability-fetcher.ts';
+import {
+  RATIFIED_STUDY_RUN_ID,
+  RATIFIED_PARAM_GRID_HASH_PREFIX,
+} from '../_shared/overshoot/detector/detector.ts';
+
+// ── W3.6.a CID + W3.6.e-i pure-module imports (boot-drift surface). ──
+import { buildOvershootClientOrderId, type OvershootSide } from '../_shared/overshoot-execution/client-order-id.ts';
+import {
+  OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
+  OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+  computeTargetSizing,
+  assertBuyingPowerCoversNotional,
+  type OvershootSizeSide,
+} from '../_shared/overshoot-execution/sizing.ts';
+import {
+  OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS,
+  OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS,
+  constructEntryLimitPrice,
+  type EntrySide,
+} from '../_shared/overshoot-execution/entry-price-construction.ts';
+import type { PolygonQuoteSnapshot } from '../_shared/overshoot-execution/exit-price-construction.ts';
+import {
+  OVERSHOOT_I5_REVERSION_TOLERANCE_PCT,
+  evaluateI5PreOpenRecheck,
+} from '../_shared/overshoot-execution/i5-recheck.ts';
+import {
+  resolveDetectionRunForEntry,
+  computePriorSpySessionDate,
+  type OvershootDetectionRunRow,
+} from '../_shared/overshoot-execution/detection-linkage.ts';
+
+// I6 manual-confirm window (ratified: 15 minutes; parity with exit-run).
+const OVERSHOOT_MANUAL_CONFIRM_WINDOW_MS = 15 * 60 * 1000;
+
+// Single-account key ratified for v1 (A3, ACT-464 STEP A).
+const OVERSHOOT_ACCOUNT_KEY = 'overshoot-paper-primary';
+
+interface Env {
+  supabaseDbUrl: string;
+  polygonKey: string;
+  gitSha: string;
+}
+function readEnv(): Env {
+  return {
+    supabaseDbUrl: Deno.env.get('SUPABASE_DB_URL') ?? '',
+    polygonKey:    Deno.env.get('POLYGON_API_KEY_PROD_PROBE') ?? '',
+    gitSha:        Deno.env.get('BUILD_SHA') ?? 'unknown',
+  };
+}
+
+interface AlpacaClockResponse {
+  timestamp: string;
+  is_open: boolean;
+  next_open: string;
+  next_close: string;
+}
+
+interface PolygonSnapshotResponse {
+  status?: string;
+  ticker?: {
+    ticker?: string;
+    lastQuote?: { p?: number; P?: number; s?: number; S?: number; t?: number };
+  };
+}
+
+async function fetchPolygonSnapshot(
+  polygonKey: string,
+  symbol: string,
+): Promise<PolygonQuoteSnapshot | null> {
+  const url = `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(symbol)}?apiKey=${polygonKey}`;
+  const resp = await fetch(url, { method: 'GET' });
+  if (!resp.ok) { try { await resp.text(); } catch { /* noop */ } return null; }
+  const j = await resp.json() as PolygonSnapshotResponse;
+  const lq = j?.ticker?.lastQuote;
+  if (!lq || typeof lq.p !== 'number' || typeof lq.P !== 'number' || typeof lq.t !== 'number') {
+    return null;
+  }
+  return {
+    symbol,
+    bid: lq.p,
+    ask: lq.P,
+    capturedAt: new Date(Math.floor(lq.t / 1_000_000)),
+  };
+}
+
+interface SelectionRow {
+  ticker: string;
+  side: 'long' | 'short';
+  rank_score: number | null;
+  t_close_ref: number | null;
+  pre_event_ref: number | null;
+}
+
+interface RefusalTally {
+  detection_linkage: number;
+  strategy_config_absent: number;
+  equity_snapshot_unavailable: number;
+  i5_refusals: number;
+  sizing_refusals: number;
+  buying_power_refusals: number;
+  shortability_refusals: number;
+  entry_price: { polygon_snapshot_unavailable: number; polygon_snapshot_stale: number; polygon_snapshot_malformed: number; polygon_snapshot_crossed: number };
+  submissions_failed: number;
+  fill_unfilled_no_lots: number;
+}
+function newTally(): RefusalTally {
+  return {
+    detection_linkage: 0,
+    strategy_config_absent: 0,
+    equity_snapshot_unavailable: 0,
+    i5_refusals: 0,
+    sizing_refusals: 0,
+    buying_power_refusals: 0,
+    shortability_refusals: 0,
+    entry_price: { polygon_snapshot_unavailable: 0, polygon_snapshot_stale: 0, polygon_snapshot_malformed: 0, polygon_snapshot_crossed: 0 },
+    submissions_failed: 0,
+    fill_unfilled_no_lots: 0,
+  };
+}
+
+// deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Sql = any;
+
+/**
+ * DEC-023 handler. Ordering (STRICT):
+ *   (1) method + JSON parse
+ *   (2) RBAC overshoot.manage
+ *   (3) Boot assertion + e-i drift-canaries
+ *   (4) Probe short-circuit
+ *   (5) Skip gates: kill-switch, disarmed
+ *   (6) I6 manual-confirm gate (manual path only)
+ *   (7) Pipeline: clock -> run_already_exists -> detection linkage ->
+ *       config read -> account snapshot -> session marker -> per-target:
+ *       I5 -> sizing -> BP guard -> shortability -> polygon snap ->
+ *       entry price -> UPSERT target_positions -> submit -> fill ->
+ *       insert overshoot_lots
+ */
+Deno.serve(createHandler(async (req: Request) => {
+  const correlationId = crypto.randomUUID();
+  if (req.method !== 'POST') {
+    return apiError(405, 'method_not_allowed', { correlationId });
+  }
+
+  const authCtx = await authenticateRequest(req);
+  await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+
+  let body: Record<string, unknown> = {};
+  try {
+    body = ((await req.json()) as Record<string, unknown>) ?? {};
+  } catch {
+    return apiError(400, 'invalid_json_body', { correlationId });
+  }
+
+  const asOfRaw = body.as_of as string | undefined;
+  const asOfDate = asOfRaw ? parseAsOfDate(asOfRaw) : productionClock.getWallClockTs();
+  if (!asOfDate) return apiError(400, 'as_of_invalid_format_expected_YYYY_MM_DD', { correlationId });
+  const dryRun = body.dry_run === true;
+  const manualConfirm = body.manual_confirm === true;
+  const secondConfirmToken = typeof body.second_confirm_token === 'string' ? body.second_confirm_token : null;
+  const probeMode = body.probe as ('alpaca' | 'polygon' | undefined);
+  if (probeMode !== undefined && probeMode !== 'alpaca' && probeMode !== 'polygon') {
+    return apiError(400, 'probe_invalid_expected_alpaca_or_polygon', { correlationId });
+  }
+  const slot = typeof body.slot === 'string' ? body.slot : null;
+
+  const env = readEnv();
+  if (!env.supabaseDbUrl) return apiError(500, 'db_url_unset', { correlationId });
+
+  const sql: Sql = postgres(env.supabaseDbUrl, { max: 1, prepare: false, connect_timeout: 10 });
+
+  try {
+    // ── (3) Boot assertion + drift-canaries ─────────────────────────────
+    const priors = await sql<{ run_id: string }[]>`
+      SELECT run_id
+      FROM overshoot_study_runs
+      WHERE run_id = ${RATIFIED_STUDY_RUN_ID}::uuid
+        AND param_grid_hash LIKE ${RATIFIED_PARAM_GRID_HASH_PREFIX + '%'}
+        AND outcome = 'completed'
+    `;
+    if (priors.length !== 1) {
+      await sql.end({ timeout: 5 });
+      console.error(JSON.stringify({
+        event: 'boot_assertion_failed_priors_not_found',
+        correlationId,
+        expected_run_id: RATIFIED_STUDY_RUN_ID,
+        expected_hash_prefix: RATIFIED_PARAM_GRID_HASH_PREFIX,
+        rows_found: priors.length,
+      }));
+      return apiError(500, 'boot_assertion_failed_priors_not_found', { correlationId });
+    }
+    // Drift-canaries: e-i module constants statically imported above.
+    void OVERSHOOT_SIDE_ALLOCATION_PCT_LONG;
+    void OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT;
+    void OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS;
+    void OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS;
+    void OVERSHOOT_I5_REVERSION_TOLERANCE_PCT;
+
+    // ── (4) Probe short-circuit ─────────────────────────────────────────
+    if (probeMode !== undefined) {
+      await sql.end({ timeout: 5 });
+      if (probeMode === 'alpaca') {
+        try {
+          const client = new OvershootAlpacaPaperClient();
+          const account = await client.getJson<{ account_number?: string; status?: string }>('/v2/account');
+          const acct = typeof account.account_number === 'string' ? account.account_number : '';
+          return apiSuccess({
+            ok: true, probe: 'alpaca',
+            account_last4: acct.length >= 4 ? acct.slice(-4) : null,
+            status: typeof account.status === 'string' ? account.status : null,
+            paper: true, correlation_id: correlationId,
+          });
+        } catch (e) {
+          const detail =
+            e instanceof OvershootAlpacaApiError ? `alpaca_api_error status=${e.status} endpoint=${e.endpoint}`
+            : e instanceof OvershootAlpacaCredentialError ? 'alpaca_credential_missing'
+            : e instanceof OvershootAlpacaNetworkError ? `alpaca_network_error endpoint=${e.endpoint}`
+            : e instanceof Error ? e.message : String(e);
+          console.error('[overshoot-entry-run] alpaca probe failed:', detail, { correlationId });
+          return apiError(502, 'alpaca_probe_failed', { correlationId });
+        }
+      }
+      if (!env.polygonKey) return apiError(500, 'polygon_key_unset', { correlationId });
+      try {
+        const snap = await fetchPolygonSnapshot(env.polygonKey, 'SPY');
+        return apiSuccess({
+          ok: true, probe: 'polygon',
+          snapshot_present: snap !== null,
+          correlation_id: correlationId,
+        });
+      } catch (e) {
+        console.error('[overshoot-entry-run] polygon probe failed:', String(e), { correlationId });
+        return apiError(502, 'polygon_probe_failed', { correlationId });
+      }
+    }
+
+    // ── (5) Skip gates ──────────────────────────────────────────────────
+    const [ks] = await sql<{ state: string | null }[]>`
+      SELECT state FROM kill_switches
+      WHERE strategy_key = 'overshoot'
+      LIMIT 1
+    `;
+    if (ks && ks.state && ks.state !== 'active') {
+      await sql.end({ timeout: 5 });
+      return apiSuccess({
+        outcome: 'no_op', reason: `kill_switch_${ks.state}`,
+        targets_loaded: 0, orders_submitted: 0,
+        correlation_id: correlationId,
+      });
+    }
+    const [jr] = await sql<{ enabled: boolean }[]>`
+      SELECT enabled FROM job_registry WHERE id = 'overshoot.entry.run'
+    `;
+    if (jr && jr.enabled === false) {
+      await sql.end({ timeout: 5 });
+      return apiSuccess({
+        outcome: 'no_op', reason: 'job_disarmed',
+        targets_loaded: 0, orders_submitted: 0,
+        correlation_id: correlationId,
+      });
+    }
+
+    // ── (6) I6 second-confirm token gate (manual path only) ─────────────
+    if (manualConfirm) {
+      if (!secondConfirmToken) {
+        await sql.end({ timeout: 5 });
+        return apiError(428, 'manual_confirm_token_missing_or_invalid', { correlationId });
+      }
+      const cutoff = new Date(Date.now() - OVERSHOOT_MANUAL_CONFIRM_WINDOW_MS).toISOString();
+      const trigger = await sql<{ id: string }[]>`
+        SELECT id FROM overshoot_audit_logs
+        WHERE action = 'overshoot.entry.manual_triggered'
+          AND operator_id = ${authCtx.user.id}::uuid
+          AND created_at >= ${cutoff}::timestamptz
+          AND metadata->>'confirm_token' = ${secondConfirmToken}
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+      if (trigger.length !== 1) {
+        await sql.end({ timeout: 5 });
+        return apiError(428, 'manual_confirm_token_missing_or_invalid', { correlationId });
+      }
+    }
+
+    // ── (7) Pipeline ────────────────────────────────────────────────────
+    if (!env.polygonKey) { await sql.end({ timeout: 5 }); return apiError(500, 'polygon_key_unset', { correlationId }); }
+
+    const nowTs = productionClock.getWallClockTs();
+    const client = new OvershootAlpacaPaperClient();
+
+    // (a) /v2/clock — PIN-2 seam. Broker STATE (not market-data).
+    let sessionDate: string; let minutesToClose: number; let isMarketOpen: boolean;
+    try {
+      const raw = await client.getJson<AlpacaClockResponse>('/v2/clock');
+      const nextClose = new Date(raw.next_close);
+      minutesToClose = Math.max(0, Math.round((nextClose.getTime() - nowTs.getTime()) / 60_000));
+      sessionDate = (raw.is_open ? new Date(raw.timestamp) : new Date(raw.next_open))
+        .toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      isMarketOpen = raw.is_open;
+    } catch (e) {
+      await sql.end({ timeout: 5 });
+      console.error('[overshoot-entry-run] clock fetch failed:', String(e), { correlationId });
+      return apiError(502, 'market_clock_unavailable', { correlationId });
+    }
+    if (!isMarketOpen) {
+      await sql.end({ timeout: 5 });
+      return apiSuccess({
+        outcome: 'no_op', reason: 'market_closed',
+        minutes_to_close: minutesToClose, session_date: sessionDate,
+        targets_loaded: 0, orders_submitted: 0,
+        correlation_id: correlationId, dry_run: dryRun, slot,
+      });
+    }
+
+    // (b) run_already_exists idempotency gate (DUAL-SLOT DST collapse).
+    // A same-session-date session marker means slot-a fired already; slot-b
+    // returns typed no-op. Cron and manual paths both consult the gate;
+    // manual path is exempt from the no-op (operator re-fire is deliberate).
+    if (!manualConfirm) {
+      const [existing] = await sql<{ id: string }[]>`
+        SELECT id FROM overshoot_audit_logs
+        WHERE action = 'overshoot.entry.session_marker'
+          AND metadata->>'session_date' = ${sessionDate}
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+      if (existing) {
+        await sql.end({ timeout: 5 });
+        return apiSuccess({
+          outcome: 'no_op', reason: 'run_already_exists',
+          session_date: sessionDate,
+          targets_loaded: 0, orders_submitted: 0,
+          correlation_id: correlationId, dry_run: dryRun, slot,
+        });
+      }
+    }
+
+    // (c) detection-linkage (W3.6.e-i).
+    const spyDates = await sql<{ trade_date: string }[]>`
+      SELECT trade_date::text AS trade_date
+      FROM overshoot_daily_bars
+      WHERE ticker = 'SPY'
+        AND trade_date < ${sessionDate}::date
+      ORDER BY trade_date DESC
+      LIMIT 30
+    `;
+    const spyPriorSessionDates = spyDates.map((r) => r.trade_date).sort();
+    const priorSpySession = computePriorSpySessionDate(sessionDate, spyPriorSessionDates);
+    let detectionRun: OvershootDetectionRunRow | null = null;
+    if (priorSpySession !== null) {
+      const [row] = await sql<{ run_id: string; as_of: string; outcome: string; selected_count: number }[]>`
+        SELECT run_id::text AS run_id, as_of::text AS as_of, outcome, selected_count
+        FROM overshoot_detection_runs
+        WHERE as_of = ${priorSpySession}::date
+        ORDER BY detected_at DESC
+        LIMIT 1
+      `;
+      if (row) detectionRun = row;
+    }
+    const linkage = resolveDetectionRunForEntry({
+      asOf: sessionDate, spyPriorSessionDates, detectionRun,
+    });
+    if (!linkage.ok) {
+      await writeStrategyAuditEvent({
+        strategyKey: 'overshoot',
+        action: `overshoot.entry.detection_linkage_refusal.${linkage.refusal}`,
+        actorId: authCtx.user.id, targetType: 'overshoot_detection_runs', targetId: sessionDate,
+        correlationId,
+        metadata: { reason: linkage.reason, priorSessionExpected: linkage.priorSessionExpected, runAsOfActual: linkage.runAsOfActual, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot },
+      });
+      await sql.end({ timeout: 5 });
+      return apiSuccess({
+        outcome: 'no_op', reason: `detection_linkage_${linkage.refusal}`,
+        session_date: sessionDate,
+        targets_loaded: 0, orders_submitted: 0,
+        correlation_id: correlationId, dry_run: dryRun, slot,
+      });
+    }
+
+    // (d) strategy config read — typed strategy_config_absent (never default).
+    const [cfg] = await sql<{ strategy_allocation_pct: string; margin_multiplier: string }[]>`
+      SELECT strategy_allocation_pct::text, margin_multiplier::text
+      FROM overshoot_strategy_config
+      WHERE account_key = ${OVERSHOOT_ACCOUNT_KEY}
+    `;
+    if (!cfg) {
+      await writeStrategyAuditEvent({
+        strategyKey: 'overshoot',
+        action: 'overshoot.entry.strategy_config_absent',
+        actorId: authCtx.user.id, targetType: 'overshoot_strategy_config', targetId: OVERSHOOT_ACCOUNT_KEY,
+        correlationId,
+        metadata: { account_key: OVERSHOOT_ACCOUNT_KEY, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot },
+      });
+      await sql.end({ timeout: 5 });
+      return apiSuccess({
+        outcome: 'no_op', reason: 'strategy_config_absent',
+        session_date: sessionDate,
+        targets_loaded: 0, orders_submitted: 0,
+        correlation_id: correlationId, dry_run: dryRun, slot,
+      });
+    }
+    const strategyAllocationPct = Number(cfg.strategy_allocation_pct);
+    const marginMultiplier = Number(cfg.margin_multiplier);
+
+    // (e) fresh account snapshot.
+    const accountFetcher = new OvershootAlpacaAccountFetcher(client);
+    const accountSnapshot = await accountFetcher.fetchAccountSnapshot(nowTs);
+    if (accountSnapshot.ok === false) {
+      await writeStrategyAuditEvent({
+        strategyKey: 'overshoot',
+        action: 'overshoot.entry.equity_snapshot_unavailable',
+        actorId: authCtx.user.id, targetType: 'overshoot_strategy_config', targetId: OVERSHOOT_ACCOUNT_KEY,
+        correlationId,
+        metadata: { reason: accountSnapshot.reason, raw_equity: accountSnapshot.raw_equity, raw_buying_power: accountSnapshot.raw_buying_power, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot },
+      });
+      await sql.end({ timeout: 5 });
+      return apiSuccess({
+        outcome: 'no_op', reason: 'equity_snapshot_unavailable',
+        session_date: sessionDate,
+        targets_loaded: 0, orders_submitted: 0,
+        correlation_id: correlationId, dry_run: dryRun, slot,
+      });
+    }
+    const sizingBase = accountSnapshot.equity * strategyAllocationPct * marginMultiplier;
+
+    // (f) load selections + write session marker.
+    const selections = await sql<SelectionRow[]>`
+      SELECT
+        e.ticker,
+        e.side,
+        e.rank_score,
+        NULL::numeric AS t_close_ref,
+        NULL::numeric AS pre_event_ref
+      FROM overshoot_events e
+      WHERE e.run_id = ${linkage.runId}::uuid
+        AND e.selected_for_entry = true
+      ORDER BY e.side, e.rank_score DESC NULLS LAST, e.ticker
+    `;
+    const targetsLoaded = selections.length;
+
+    // Per-side capacity counts (used by sizing to slice equally across
+    // slots within a side). Capacity is the SELECTED count per side —
+    // capacity_per_side that survived detection.
+    const longSelections = selections.filter((s) => s.side === 'long');
+    const shortSelections = selections.filter((s) => s.side === 'short');
+
+    await writeStrategyAuditEvent({
+      strategyKey: 'overshoot',
+      action: 'overshoot.entry.session_marker',
+      actorId: authCtx.user.id, targetType: 'overshoot_detection_runs', targetId: linkage.runId,
+      correlationId,
+      metadata: {
+        session_date: sessionDate, prior_spy_session: linkage.priorSessionExpected,
+        detection_run_id: linkage.runId, selected_count: linkage.selectedCount,
+        targets_loaded: targetsLoaded, long_capacity: longSelections.length, short_capacity: shortSelections.length,
+        dry_run: dryRun, manual: manualConfirm, slot, minutes_to_close: minutesToClose,
+      },
+    });
+
+    const runId = crypto.randomUUID();
+    const intent = 'entry' as const;
+    const tally = newTally();
+    const submissions: Array<{
+      symbol: string; side: 'long' | 'short'; qty: number; lot_ids: readonly string[];
+      order_id: string | null; client_order_id: string; limit_price: number; refusal?: string;
+      filled_qty?: number; avg_fill_price?: number | null;
+    }> = [];
+    let cumulativeIntendedNotional = 0;
+    let ordersSubmitted = 0;
+
+    const shortabilityFetcher = new OvershootAlpacaShortabilityFetcher(client);
+    const fillFetcher = new OvershootAlpacaFillFetcher(client);
+    const submitter = new OvershootAlpacaOrderSubmitter(client);
+
+    for (const sel of selections) {
+      const sideUpper: OvershootSide = sel.side === 'long' ? 'LONG' : 'SHORT';
+      const sizeSide: OvershootSizeSide = sideUpper;
+      const entrySide: EntrySide = sideUpper;
+      const capacityPerSide = sideUpper === 'LONG' ? longSelections.length : shortSelections.length;
+
+      // Fetch pre-open Polygon snapshot (reused for I5 + entry-price).
+      const snap = await fetchPolygonSnapshot(env.polygonKey, sel.ticker);
+
+      // I5 pre-open re-check (DEFAULT-DENY). If we don't have t_close_ref
+      // and pre_event_ref on the selection row, we STILL run the recheck
+      // path — it will refuse `reference_prices_malformed`, which is the
+      // correct default-deny outcome, and the refusal is audited + surfaced.
+      const tCloseRef = sel.t_close_ref ?? NaN;
+      const preEventRef = sel.pre_event_ref ?? NaN;
+      const i5 = evaluateI5PreOpenRecheck({
+        snapshot: snap, side: sideUpper, tCloseRef, preEventRef, asOf: nowTs,
+      });
+      if (!i5.ok) {
+        tally.i5_refusals += 1;
+        // INC-83 RESOLUTION: on I5 refuse, the target_positions row is
+        // NOT UPSERTed — the pre-existing sentinel (target_shares=0,
+        // target_notional=0) from detection PERSISTS as the truthful
+        // "no entry taken" record. Proof obligation:
+        //   sentinel-persists-on-I5-refuse.
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: `overshoot.entry.i5_refusal.${i5.refusal}`,
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: { ticker: sel.ticker, side: sel.side, reason: i5.reason, reversionPct: i5.reversionPct, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId, inc83_sentinel_persists: true },
+        });
+        continue;
+      }
+
+      // Entry-time sizing. entryReferencePrice = the I5 pre-open mid.
+      const sizing = computeTargetSizing({
+        snapshot: accountSnapshot, side: sizeSide, capacityPerSide,
+        entryReferencePrice: i5.preOpenMid, sizingBase,
+        strategyAllocationPct, marginMultiplier,
+      });
+      if (!sizing.ok) {
+        tally.sizing_refusals += 1;
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: `overshoot.entry.sizing_refusal.${sizing.refusal}`,
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: { ticker: sel.ticker, side: sel.side, reason: sizing.reason, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId },
+        });
+        continue;
+      }
+
+      // R-gamma cumulative BP guardrail BEFORE this submission.
+      const bpCheck = assertBuyingPowerCoversNotional({
+        snapshot: accountSnapshot,
+        intendedNotional: cumulativeIntendedNotional + sizing.slotNotional,
+      });
+      if (!bpCheck.ok) {
+        tally.buying_power_refusals += 1;
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: `overshoot.entry.buying_power_refusal.${bpCheck.refusal}`,
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: { ticker: sel.ticker, side: sel.side, reason: bpCheck.reason, buying_power: bpCheck.buyingPower, intended_notional: bpCheck.intendedNotional, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId },
+        });
+        continue;
+      }
+
+      // Shortability gate (shorts only).
+      if (sel.side === 'short') {
+        const shortability = await shortabilityFetcher.fetchShortability(sel.ticker, nowTs);
+        if (!shortability.shortable) {
+          tally.shortability_refusals += 1;
+          await writeStrategyAuditEvent({
+            strategyKey: 'overshoot',
+            action: 'overshoot.entry.shortability_refusal.not_shortable',
+            actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+            correlationId,
+            metadata: { ticker: sel.ticker, side: sel.side, easy_to_borrow: shortability.easy_to_borrow, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId },
+          });
+          continue;
+        }
+      }
+
+      // Entry-price construction (W3.6.e-i).
+      const priced = constructEntryLimitPrice({ snapshot: snap, side: entrySide, asOf: nowTs });
+      if (!priced.ok) {
+        tally.entry_price[priced.refusal] = (tally.entry_price[priced.refusal] ?? 0) + 1;
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: `overshoot.entry.price_refusal.${priced.refusal}`,
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: { ticker: sel.ticker, side: sel.side, reason: priced.reason, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId },
+        });
+        continue;
+      }
+
+      // INC-83 RESOLUTION UPSERT — overwrites-on-commit. The detection
+      // sentinel row (target_shares=0, target_notional=0) is REPLACED
+      // with the sized entry values BEFORE order submission. Proof
+      // obligation: overwrites-on-commit.
+      await sql`
+        INSERT INTO overshoot_target_positions (run_id, ticker, side, target_shares, target_notional, rank_score, computed_at)
+        VALUES (${linkage.runId}::uuid, ${sel.ticker}, ${sel.side}, ${sizing.shares}, ${sizing.slotNotional}, ${sel.rank_score}, ${nowTs.toISOString()}::timestamptz)
+        ON CONFLICT (run_id, ticker, side) DO UPDATE
+          SET target_shares    = EXCLUDED.target_shares,
+              target_notional  = EXCLUDED.target_notional,
+              computed_at      = EXCLUDED.computed_at
+      `;
+
+      cumulativeIntendedNotional += sizing.slotNotional;
+
+      const cid = buildOvershootClientOrderId({
+        runId, ticker: sel.ticker, side: sideUpper, intent, attempt: 0,
+      });
+
+      if (dryRun) {
+        submissions.push({ symbol: sel.ticker, side: sel.side, qty: sizing.shares, lot_ids: [], order_id: null, client_order_id: cid, limit_price: priced.limitPrice });
+        continue;
+      }
+
+      try {
+        // Alpaca accepts 'sell' to open a short when the account has no
+        // long shares. The overshoot broker-interface constrains to
+        // 'buy'|'sell'; the CID + audit metadata carry the semantic
+        // 'sell_short' intent via `side1='S'` + intent='entry'.
+        const alpacaSide: 'buy' | 'sell' = sideUpper === 'LONG' ? 'buy' : 'sell';
+        const acc = await submitter.submitOrder({
+          symbol: sel.ticker, qty: sizing.shares, side: alpacaSide,
+          type: 'limit', time_in_force: 'day',
+          limit_price: priced.limitPrice, client_order_id: cid,
+        }, nowTs);
+        ordersSubmitted += 1;
+
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: `overshoot.entry.submitted.${intent}`,
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: {
+            ticker: sel.ticker, side: sel.side, qty: sizing.shares,
+            order_id: acc.order_id, client_order_id: acc.client_order_id,
+            limit_price: priced.limitPrice, slippage_bps: priced.slippageBps,
+            snapshot_age_ms: priced.snapshotAgeMs, minutes_to_close: minutesToClose,
+            intent, attempt: 0, run_id: runId,
+            sizingBase, strategy_allocation_pct: strategyAllocationPct, margin_multiplier: marginMultiplier,
+            i5_reversion_pct: i5.reversionPct, orderSide_semantic: priced.orderSide,
+          },
+        });
+
+        // Fetch fill; INSERT overshoot_lots for filled qty > 0.
+        // Partial fills leave the order in-flight for later reconciliation;
+        // we persist WHAT filled (broker truth).
+        const fill = await fillFetcher.fetchFill(acc.order_id, nowTs);
+        let lotId: string | null = null;
+        if (fill.filled_qty > 0 && fill.avg_fill_price !== null) {
+          const [lot] = await sql<{ lot_id: string }[]>`
+            INSERT INTO overshoot_lots (symbol, entry_ts, qty, cost_basis, side, status, settlement_state, source_order_id)
+            VALUES (${sel.ticker}, ${nowTs.toISOString()}::timestamptz, ${fill.filled_qty}, ${fill.avg_fill_price * fill.filled_qty}, ${sel.side}, 'open', 'pending', ${acc.order_id})
+            RETURNING lot_id::text AS lot_id
+          `;
+          lotId = lot?.lot_id ?? null;
+        } else {
+          tally.fill_unfilled_no_lots += 1;
+        }
+        submissions.push({
+          symbol: sel.ticker, side: sel.side, qty: sizing.shares,
+          lot_ids: lotId ? [lotId] : [],
+          order_id: acc.order_id, client_order_id: acc.client_order_id,
+          limit_price: priced.limitPrice,
+          filled_qty: fill.filled_qty, avg_fill_price: fill.avg_fill_price,
+        });
+      } catch (err) {
+        tally.submissions_failed += 1;
+        const reason = err instanceof OvershootAlpacaApiError ? `alpaca_api_${err.status}`
+          : err instanceof OvershootAlpacaNetworkError ? 'alpaca_network_error'
+          : err instanceof OvershootAlpacaCredentialError ? 'alpaca_credential_missing'
+          : 'submit_unexpected';
+        submissions.push({ symbol: sel.ticker, side: sel.side, qty: sizing.shares, lot_ids: [], order_id: null, client_order_id: cid, limit_price: priced.limitPrice, refusal: reason });
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.entry.submit_failed',
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: { ticker: sel.ticker, side: sel.side, reason, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId },
+        });
+      }
+    }
+
+    await sql.end({ timeout: 5 });
+
+    return apiSuccess({
+      outcome: 'completed',
+      run_id: runId,
+      intent,
+      dry_run: dryRun,
+      manual: manualConfirm,
+      slot,
+      session_date: sessionDate,
+      detection_run_id: linkage.runId,
+      prior_spy_session: linkage.priorSessionExpected,
+      targets_loaded: targetsLoaded,
+      orders_submitted: ordersSubmitted,
+      refusals: tally,
+      submissions,
+      minutes_to_close: minutesToClose,
+      sizingBase,
+      strategy_allocation_pct: strategyAllocationPct,
+      margin_multiplier: marginMultiplier,
+      correlation_id: correlationId,
+    });
+  } catch (err) {
+    try { await sql.end({ timeout: 5 }); } catch { /* noop */ }
+    console.error(JSON.stringify({ event: 'entry_run_unhandled', correlationId, err: String(err) }));
+    return apiError(500, 'entry_run_unhandled_error', { correlationId });
+  }
+}));
