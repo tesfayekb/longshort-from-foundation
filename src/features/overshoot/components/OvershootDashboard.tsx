@@ -15,7 +15,7 @@
  * import `OvershootDashboardPage` (the named re-export) from
  * `src/features/overshoot/index.ts`, NOT from this file directly.
  */
-import { HubTabs, HubEmptyState } from '@/pages/trading/longshort/hub/HubTabs';
+import { HubTabs, HubEmptyState } from './OvershootHubTabs';
 import { OvershootDetectorRuns } from './OvershootDetectorRuns';
 
 export function OvershootDashboard() {
