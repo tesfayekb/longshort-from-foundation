@@ -916,3 +916,9 @@ Both feeds populate a `Set<string>` (`heldTickers`); the per-target check is an 
 **Tab wiring (final W4 shape).** Detector → `OvershootDetectorRuns` (ACT-465.b). Execution → `OvershootExecutionTrail` (ACT-465.c). Portfolio → `OvershootPositions` + `OvershootPnL` (ACT-465.d). Config → `OvershootConfigPanel` (ACT-465.e). All four tabs render live data or truthful empty-state cards citing the specific pending event; zero fabricated numbers, zero synthetic charts, zero console-driven price fetches (LIVE-PRICE SOURCE CONTRACT honored across the arc).
 
 **Standing reminder (BINDING).** Part-2 EXEC (Monday-evening Session 1) outranks any post-W4 follow-up the moment operator first-light evidence lands.
+
+## §10 (continued) — Console read-surface (W4 FULLY CLOSED, ACT-465.g)
+
+The operator console at `/trading/overshoot/*` is complete across seven read-only pages: Overview, Detector, Detector-Run-Detail, **Universe** (W4.g — active universe × latest SI coverage matrix with typed-absence flagging), Execution, Portfolio, Config. The Config page is the SOLE write surface, funneled through the SECURITY DEFINER RPC `overshoot_update_strategy_config` (W4.e).
+
+**Display-truth invariant (W4.g):** every console-displayed threshold that shadows an engine named parameter MUST cite the engine constant by `file:line` in a source comment and mirror the engine value; the SI staleness display in `OvershootOverview.tsx` is the reference implementation (mirrors `DETECTOR_SI_STALENESS_MAX_DAYS = 20` from `supabase/functions/overshoot-detection-run/index.ts:97`). This rule prevents silent divergence between the operator-visible surface and the engine's enforced parameters.
