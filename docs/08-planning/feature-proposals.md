@@ -1597,6 +1597,8 @@ to outrank everything the moment operator evidence lands.
 
 ### FP-069 STATUS — Part II corrected matrix authored (2026-07-05, ACT-471)
 
+**ACT-472 pointer (2026-07-05).** Part III authored — SHORT tiers re-issued under corrected sign convention. `CELL_CONVENTION_AUDIT_PENDING` (raised by ACT-471) is **RESOLVED as CONFIRMED-DEFECT, analysis-layer only**: supervisor confirmed kernel storage `pnl_Nd = side_sign * fwd_return_Nd − haircut` at `_shared/overshoot/study/cell-aggregation.sql.ts:30/:71/:78-79`; live detector uses threshold + ratified-cell rank lookup (no sign filter, W3.4 byte-parity); LONG rows unaffected; no engine change required or permitted. Corrected T1 SHORT collapses 35 → 5 cells / 14,909 → 1,259 events; r5 SIGN FLIP (−1.53 % → +0.23 %); r10 = **−19 bps** (marginal d6+ negative — SHORT hold-horizon ceiling is H≤5). Post-full-gate SHORT arrivals ~0.005/day (was 0.15/day). **Pareto set unchanged; deployment picture materially unchanged** — LONG axis remains the sole material frontier (operator honesty-check hypothesis verified). Superseded rows marked inline `[SUPERSEDED-ACT-472]` in Part I/II. Analysis doc: `docs/08-planning/overshoot-deployment-analysis.md` (Part III append). Zero engine / config / migration / cron / deploy / lockfile touches. Part-2 EXEC (Monday evening Session 1) continues to outrank everything the moment operator evidence lands.
+
 Read-only follow-up closing the two ACT-470 data gaps. Return convention
 cited verbatim from kernel (`event-detection.sql.ts` LEAD-based fwd return;
 `cell-aggregation.sql.ts` `mean_fwd_return_Nd = AVG(pnl_Nd)` with
