@@ -246,7 +246,7 @@ export function OvershootExecutionTrail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('reconciliation_events')
-        .select('event_id,call_name,outcome,tier,symbol,ts,details')
+        .select('event_id,call_name,outcome,tier,symbol,ts')
         .in('call_name', A5_RECONCILIATION_CLASSES as unknown as string[])
         .order('ts', { ascending: false })
         .limit(50);
