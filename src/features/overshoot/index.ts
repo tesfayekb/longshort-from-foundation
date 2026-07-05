@@ -24,6 +24,7 @@
  * fetches this tranche). W4.b–W4.e hydrate the tabs progressively.
  */
 import { Activity, ClipboardList, Briefcase, Settings, LayoutDashboard } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import type { NavSection } from '@/config/navigation.types';
 
 /**
@@ -68,6 +69,12 @@ export const overshootNav: NavSection = {
       permission: 'overshoot.view',
     },
     {
+      title: 'Universe',
+      url: '/trading/overshoot/universe',
+      icon: Globe,
+      permission: 'overshoot.view',
+    },
+    {
       title: 'Execution',
       url: '/trading/overshoot/execution',
       icon: Activity,
@@ -108,6 +115,13 @@ export { OvershootExecutionTrail as OvershootExecutionPage } from './components/
 export { OvershootPositions as OvershootPortfolioPositionsPage } from './components/OvershootPositions';
 export { OvershootPnL as OvershootPortfolioPnLPage } from './components/OvershootPnL';
 export { OvershootConfigPanel as OvershootConfigPage } from './components/OvershootConfigPanel';
+
+/**
+ * W4.g (ACT-465.g): Universe page — 839-row active `overshoot_universe`
+ * joined to latest `overshoot_short_interest` per ticker with typed-
+ * absence flagging for shares-unavailable rows.
+ */
+export { OvershootUniverse as OvershootUniversePage } from './components/OvershootUniverse';
 
 /**
  * W4.b (ACT-465.b): drill-in page for a single detection run at
