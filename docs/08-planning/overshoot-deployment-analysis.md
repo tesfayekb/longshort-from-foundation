@@ -2,24 +2,26 @@
 
 HEAD: `d629182a`. Mode: INVESTIGATION (read-only). Study run: `1888e113-f9b3-43f5-856c-d91666a3c121` (`param_grid_hash a37e4b96…`, bars_snapshot_max_date 2026-07-02, `return_basis=CLOSE_TO_CLOSE_REFERENCE`, `survivorship_stamp=UPPER_BOUND_SURVIVORSHIP_BIASED`, `slippage_haircut_bps LONG=5 SHORT=15`). All figures below inherit the survivorship UPPER-BOUND stamp — this analysis is a **future-ratification input**, not evidence, and does not modify any engine constant, config row, or migration.
 
+> **⚠️ AUDIT NOTICE (ACT-472, 2026-07-05, HEAD `00e1dd01`) — SHORT rows in Parts I and II are SUPERSEDED.** Supervisor confirmed via independent source read of `_shared/overshoot/study/cell-aggregation.sql.ts:30/:71/:78-79` that the stored `mean_fwd_return_Nd` is haircut-adjusted PnL with `side_sign` applied (`pnl_Nd = side_sign * fwd_return_Nd − haircut`). Part I's T1_SHORT filter `mean_fwd_return_5d < 0` therefore selected **losing** short cells, not winning ones. Classification: **CONFIRMED-DEFECT, ANALYSIS-LAYER ONLY.** Containment attested: the live detector (`overshoot-detection-run/index.ts`) has **no sign-filter** — eligibility is `threshold + ratified-cell rank lookup` (W3.4 byte-parity); LONG rows are unaffected. Corrected SHORT figures + re-issued arrival replay + re-issued decision matrix are in **Part III** at the bottom of this document. Individual superseded rows are marked inline `[SUPERSEDED-ACT-472]`.
+
 ---
 
 ## Q1 — Frontier map (ratified-run study cells, `exclusion_width_days=5`)
 
 **Predicate provenance (detector.ts + band-label.ts + overshoot-detection-run/index.ts:92-103, verbatim):**
 - **T1 LONG** — `band='L_10_INF'` ∧ `window_days ∈ {1,2,3}` ∧ `momentum ∈ {4,5}` ∧ `drawdown ∈ {1,2,3}` ∧ `mean_r5 > 0`.
-- **T1 SHORT** — `band ∈ {S_08_10, S_10_INF}` ∧ `window_days ∈ {1,2,3,4,5}` ∧ `momentum ∈ {1,5}` ∧ `drawdown ∈ {4,5}` ∧ `mean_r5 < 0` (i.e. `rank_score = −mean_r5 > 0`).
+- **T1 SHORT** — `band ∈ {S_08_10, S_10_INF}` ∧ `window_days ∈ {1,2,3,4,5}` ∧ `momentum ∈ {1,5}` ∧ `drawdown ∈ {4,5}` ∧ `mean_r5 < 0` (i.e. `rank_score = −mean_r5 > 0`). **[SUPERSEDED-ACT-472 — kernel stores side-signed haircut-adjusted PnL; corrected predicate is symmetric with LONG: `mean_r5 > 0`. See Part III.]**
 - **T2** — NOT T1 AND `rank_score ≥ 2 × haircut` (LONG ≥ 10 bps, SHORT ≥ 30 bps on 5-day return).
 - **T3** — NOT T1 AND `haircut ≤ rank_score < 2 × haircut` (LONG 5-10 bps, SHORT 15-30 bps).
 
 | tier | side  | cells | events | event-weighted mean_r5 | event-weighted rank_score | min cell n | max cell n |
 |------|-------|------:|-------:|-----------------------:|--------------------------:|-----------:|-----------:|
 | T1   | LONG  |    18 |  3,170 | +1.838 %               | +1.838 %                  |          9 |        993 |
-| T1   | SHORT |    35 | 14,909 | −1.528 %               | +1.528 %                  |         11 |      1,636 |
+| T1   | SHORT |    35 | 14,909 | −1.528 %               | +1.528 %                  |         11 |      1,636 | **[SUPERSEDED-ACT-472]** |
 | T2   | LONG  |   491 |261,830 | +0.542 %               | +0.542 %                  |          2 |      4,793 |
-| T2   | SHORT |   471 |335,749 | −0.759 %               | +0.759 %                  |          1 |      4,509 |
+| T2   | SHORT |   471 |335,749 | −0.759 %               | +0.759 %                  |          1 |      4,509 | **[SUPERSEDED-ACT-472]** |
 | T3   | LONG  |    28 | 29,963 | +0.082 %               | +0.082 %                  |         62 |      5,022 |
-| T3   | SHORT |    62 | 52,109 | −0.239 %               | +0.239 %                  |          2 |      2,961 |
+| T3   | SHORT |    62 | 52,109 | −0.239 %               | +0.239 %                  |          2 |      2,961 | **[SUPERSEDED-ACT-472]** |
 
 Cell-count / event-count expansion T1 → T1∪T2: cells **27× (long) / 14× (short)**; events **83× / 24×**. Per-dollar edge collapse T1 → T2 (event-weighted): LONG **1.84 % → 0.54 %** (~29 % of T1); SHORT **1.53 % → 0.76 %** (~50 % of T1). Adding T3 makes the marginal edge indistinguishable from the haircut (LONG 8 bps ≈ 1× haircut).
 
