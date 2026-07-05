@@ -17,6 +17,7 @@
  */
 import { HubTabs, HubEmptyState } from './OvershootHubTabs';
 import { OvershootDetectorRuns } from './OvershootDetectorRuns';
+import { OvershootExecutionTrail } from './OvershootExecutionTrail';
 
 export function OvershootDashboard() {
   return (
@@ -40,13 +41,7 @@ export function OvershootDashboard() {
           {
             value: 'execution',
             label: 'Execution',
-            content: (
-              <HubEmptyState
-                title="Execution trail"
-                description="Audit-log trail, I5 refusal gaps, and reconciliation alerts land in W4.c. Sources: overshoot_audit_logs, reconciliation_events."
-                note="W4.c — not yet implemented"
-              />
-            ),
+            content: <OvershootExecutionTrail />,
           },
           {
             value: 'portfolio',
