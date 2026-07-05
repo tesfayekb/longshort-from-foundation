@@ -121,7 +121,6 @@ export { OvershootConfigPanel as OvershootConfigPage } from './components/Oversh
  *     - overshootNav
  *     - OVERSHOOT_PERMISSION_KEYS
  *     - OvershootOverviewPage
- *     - OvershootDashboardPage (legacy alias → OvershootOverviewPage)
  *     - OvershootDetectorPage
  *     - OvershootExecutionPage
  *     - OvershootPortfolioPositionsPage
