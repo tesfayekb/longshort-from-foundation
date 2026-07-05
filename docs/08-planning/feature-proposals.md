@@ -1595,6 +1595,33 @@ later). Proof item: exit-run per-lot isolation is **PARTIAL** at HEAD `9fdd4334`
 H6 slot is **promoted to H0** (pre-arming gate blocker). Part-2 EXEC continues
 to outrank everything the moment operator evidence lands.
 
+### FP-069 STATUS — Part II corrected matrix authored (2026-07-05, ACT-471)
+
+Read-only follow-up closing the two ACT-470 data gaps. Return convention
+cited verbatim from kernel (`event-detection.sql.ts` LEAD-based fwd return;
+`cell-aggregation.sql.ts` `mean_fwd_return_Nd = AVG(pnl_Nd)` with
+`pnl_Nd = side_sign * fwd - haircut`). **Gap-1:** r10 reconstructed via
+cell-arrival-weighted, byte-parity aggregation — reproduces Part I r5/r20
+exactly, adds LONG T1 r10 = +397.33 bps and SHORT T1 r10 = −268.80 bps
+with 95-98 % window completeness; marginal-day rates derived. **Convention
+audit finding:** Part I T1_SHORT tier's `stored mean_fwd_return_5d < 0`
+filter selects negative-PnL cells under the kernel storage semantic —
+likely sign-inverted vs intent, flagged `CELL_CONVENTION_AUDIT_PENDING`.
+**Gap-2:** full-gate arrival replay (universe + structural + earnings +
+SI-squeeze) for 12 sessions. **Anchor 2026-06-18 = PASS with attributed
+divergence** — 12 LONG-T1 → 3 selected after argmax_window_days narrowing
+(matches VRT/GLW/INTC); 34 SHORT-T1 → 1 after SI gate (matches RH sole
+passer, 33 refused `si_below_squeeze_threshold`). SHORT arrival collapses
+128× from 19.2/day (structural) to 0.15/day (post-SI). **Corrected
+decision matrix** (10 rows, 5 ⭐-Pareto): T1-only-full-gates ceiling ~5.5
+bps/day; T1∪T2-longs ceiling ~15.5 bps/day (both under
+`UPPER_BOUND_SURVIVORSHIP_BIASED`). Analysis doc:
+`docs/08-planning/overshoot-deployment-analysis.md` (Part II append).
+Zero code, zero migrations, zero engine touches; no recommendation
+language — matrix IS the deliverable, ratification is operator +
+supervisor scope. Part-2 EXEC (Monday evening Session 1) continues to
+outrank everything the moment operator evidence lands.
+
 ### FP-069 STATUS — Deployment analysis authored (2026-07-05, ACT-470)
 
 Read-only investigation quantifying the four future ROI levers (frontier
