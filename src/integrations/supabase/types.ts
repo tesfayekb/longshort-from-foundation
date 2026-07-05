@@ -3455,6 +3455,26 @@ export type Database = {
         Returns: Json
       }
       longshort_get_heal_date: { Args: never; Returns: string }
+      overshoot_update_strategy_config: {
+        Args: {
+          p_account_key: string
+          p_allocation_pct: number
+          p_margin_multiplier: number
+        }
+        Returns: {
+          account_key: string
+          margin_multiplier: number
+          strategy_allocation_pct: number
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "overshoot_strategy_config"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       promote_combiner_model: { Args: { p_model_id: string }; Returns: Json }
       purge_retired_combiner_artifacts: { Args: never; Returns: Json }
       rollback_combiner_model: { Args: { p_side: string }; Returns: Json }
