@@ -15,7 +15,7 @@
  * import `OvershootDashboardPage` (the named re-export) from
  * `src/features/overshoot/index.ts`, NOT from this file directly.
  */
-import { HubTabs, HubEmptyState } from './OvershootHubTabs';
+import { HubTabs } from './OvershootHubTabs';
 import { OvershootDetectorRuns } from './OvershootDetectorRuns';
 import { OvershootExecutionTrail } from './OvershootExecutionTrail';
 import { OvershootPositions } from './OvershootPositions';
