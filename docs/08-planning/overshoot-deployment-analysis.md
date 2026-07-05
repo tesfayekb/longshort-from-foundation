@@ -560,3 +560,162 @@ Units: bps (× 10⁻⁴), post-haircut, side-signed. Missing `r10` cells (BULL L
 - **Files edited this turn (exactly three):** `docs/08-planning/overshoot-deployment-analysis.md` (Part IV append), `docs/06-tracking/action-tracker.md` (ACT-473 entry), `docs/08-planning/feature-proposals.md` (FP-069 Status ACT-473 pointer).
 - **Longshort surface:** untouched (docs-only, overshoot-scoped).
 *Part III authored ACT-472 (2026-07-05). HEAD `00e1dd01`. Analysis-layer correction only; kernel is ratified and byte-locked. Part-2 EXEC (Monday evening Session 1) continues to outrank everything the moment operator evidence lands.*
+
+---
+
+# Part V — W3.8 STEP A: charter, surface census, and design proposal (ACT-474, 2026-07-05, HEAD `9c5e3c57`)
+
+**Mode:** EXECUTION (STEP A only — READ-ONLY census + design proposal; no engine / config / migration / fixture / lockfile touches this turn). **Tier:** A (money path — priors, exits, sizing). **Charter authority:** operator directive verbatim — *"ALL PLAN SHOULD BE TO INCREASE ROI."* Evidence base: Parts I–IV of this document (ACT-470/471/472/473).
+
+**Framing note (operator, recorded):** the regime governor in (R-4) is NOT a caution tax. Per Part IV, T1 LONGs earn MORE per event in bears (+333 bps vs +111 bps BULL), so they keep running; T2's BEAR edge halves at unchanged worst-decile tail (p10 pnl10 = −696 bps), so throttling T2 in BEAR is itself the ROI-optimal move on the numbers. Everything in this wave maximizes measured return; nothing is reflexive conservatism.
+
+## V.0 — Ratified bundle-shape (verbatim, for STEP A traceability)
+
+- **R-1** LONG holding **T+5 → T+10** (marginal d6–d10 = 42.7 bps/day ≈ d2–d5; ACT-471). SHORT stays **T+5 HARD** (`SHORT_T1_R10_NEGATIVE`, ACT-472).
+- **R-2** T2 LONG frontier admission with rank-priority (T1 always outranks T2). SHORT eligibility unchanged.
+- **R-3** Long-heavy reallocation (~0.15/day SHORT arrivals ⇒ 50% short nameplate is idle capital).
+- **R-4** Regime governor: SPY drawdown-from-peak bands (BULL ≥ −5 %, CORRECTION −5..−15 %, BEAR < −15 %) computed from `overshoot_daily_bars` at entry-run start. BEAR ⇒ **T1-only** longs (T2 throttled). Persisted on every run + entry.
+- **R-5** Instrumentation: `config_version + regime + tier(T1/T2) + holding_horizon` on every entry so W5 attributes results per lever. Each lever independently reversible via ratified constants.
+
+## V.A2 — Surface census (every file each R touches, grep-verified this turn against HEAD `9c5e3c57`)
+
+Symbols in `code font` are the exact identifiers a builder will need to grep. **NO byte-change list** — this is inventory only.
+
+### R-1: per-side holding horizon (LONG=10, SHORT=5)
+
+| # | Surface | Path | Current | Requires |
+|--:|---------|------|---------|----------|
+| 1 | Single scalar constant | `supabase/functions/_shared/overshoot-execution/intents.ts:38` — `export const OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS = 5` | uniform T+5 | Split into `OVERSHOOT_EXIT_HOLD_SESSIONS_LONG = 10` + `OVERSHOOT_EXIT_HOLD_SESSIONS_SHORT = 5`; keep uniform constant as deprecated alias for one release with a compile-time reference in tests. |
+| 2 | Re-export | `_shared/overshoot-execution/session-age.ts:47,49` | re-exports uniform constant | Import + re-export both new constants; deprecate old. |
+| 3 | Pure decider | `_shared/overshoot-execution/session-age.ts:97,177` — `shouldFireTimeExit = holdingDayOrdinal >= OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS` | side-agnostic | Add `side: 'LONG'\|'SHORT'` to `ComputeSessionAgeInput`; branch the threshold. Refusal codes unchanged. |
+| 4 | Exit engine | `supabase/functions/overshoot-exit-run/index.ts:95,256` | side-agnostic loop | Pass `lot.side` into `computeSessionAge`. Loop already iterates per lot ⇒ trivial. Audit metadata gains `holding_horizon_sessions`. |
+| 5 | Tests (byte-parity) | `_shared/overshoot-execution/session-age_test.ts:8,24`; `_shared/overshoot-execution/intents_test.ts:7,17`; `overshoot-exit-run/index_test.ts:25,75,78,82` | assert `=== 5` | Split assertions into LONG=10 / SHORT=5; keep PIN-1 Monday-entry-fires-Friday test as SHORT case; add Monday-entry-fires-following-Friday-plus-one-week test as LONG case. |
+| 6 | Console (W4.g) | `src/features/overshoot/components/OvershootPnL.tsx` + open-lots surfaces | cite engine constant | Cite per-side constant; add `holding_horizon` column to open-lots table. |
+
+### R-2: T2 LONG frontier admission (ratified-change protocol required)
+
+| # | Surface | Path | Current | Requires |
+|--:|---------|------|---------|----------|
+| 1 | Detector cell-set predicate | `_shared/overshoot/detector/detector.ts:255-276,427-468` — `RATIFIED_STUDY_RUN_ID`, `RATIFIED_PARAM_GRID_HASH_PREFIX`, `study_cell_ref` lookup by `mean_fwd_return_5d` | eligibility is *any* study cell with non-null `mean_fwd_return_5d` from the ratified run (implicit — no explicit T1/T2 tag on cell) | Explicit tier stamp per side: `LONG_T2_PREDICATE = mean_fwd_return_5d ≥ 2 × haircut_long_bps/1e4` (i.e. ≥ 0.0010). Rank score stays `mean_fwd_return_5d * sideSign` ⇒ T1 outranks T2 by construction (T1 mean strictly greater than T2 by predicate). SHORT predicate unchanged. |
+| 2 | Cell lookup contract | `detector.ts` `StudyCellLookup` shape | returns `{ mean_fwd_return_5d, arrival_count }` | Add `tier: 'T1'\|'T2'\|null` derived at lookup construction (pure — computed from stored means + haircut constants; NOT a new column, NOT a study re-run). |
+| 3 | Fixture regeneration + byte-parity | `_shared/overshoot/detector/basis-fidelity_test.ts:277-294`; `detector_test.ts`; existing 3-regime parity fixtures | fixtures pinned to current predicate hash | **New RATIFIED_PARAM_GRID_HASH_PREFIX** (T2-admitting predicate is a different eligible set). Three-regime byte-parity re-verification MUST re-attest against the extended predicate. Old fixtures preserved side-by-side (never deleted — audit trail). |
+| 4 | Detection run metadata | `overshoot-detection-run/index.ts:89-97` (ratified priors comment block) | prior-set literals | Add `TIER_ELIGIBILITY = { LONG: ['T1','T2'], SHORT: ['T1'] }` constant. Persist per-event tier on `overshoot_events.tier`. |
+| 5 | Schema | `overshoot_events` (21 cols today) | no `tier` column | Additive column `tier text` NULL-allowed (backfill = NULL, not fabricated). Migration DEC-023 idempotent (`ADD COLUMN IF NOT EXISTS`). |
+| 6 | Console citations | `src/features/overshoot/components/OvershootDetectorRunDetailPage` (via façade) | shows filter passes | Show tier badge; cite the LONG-T2 predicate constant from the engine (W4.g rule — no re-derivation in UI). |
+
+**Ratified-change protocol for R-2 (mandatory, per W3.4 byte-parity discipline):**
+ 1. Freeze the T2 predicate as a pure module + constant.
+ 2. Regenerate 3-regime parity fixtures under the extended predicate (BULL / CORRECTION / BEAR anchors — anchor dates from Part IV window).
+ 3. Publish a new `RATIFIED_PARAM_GRID_HASH_PREFIX_v2`; keep the v1 prefix in a `SUPERSEDED_HASHES` audit tuple.
+ 4. Attest re-anchor at 2026-06-18 (Part II anchor): live selections + all Part-II-attributed refusals reproduce line-item.
+ 5. Deploy detector; run one dry detection cycle; snapshot the new `study_cell_ref → tier` distribution; operator + supervisor sign.
+
+### R-3: long-heavy reallocation
+
+| # | Surface | Path | Current | Requires |
+|--:|---------|------|---------|----------|
+| 1 | Side allocation | `_shared/overshoot-execution/sizing.ts:56-57` — `OVERSHOOT_SIDE_ALLOCATION_PCT_LONG = 0.50`, `_SHORT = 0.50` | 50/50 | Propose 0.75 / 0.25 (see V.A4). |
+| 2 | Detector per-side capacity | `overshoot-detection-run/index.ts:93` — `DETECTOR_CAPACITY_PER_SIDE = 20` | single scalar (both sides) | Split into `DETECTOR_CAPACITY_LONG = 30`, `DETECTOR_CAPACITY_SHORT = 10`. Detector `capacityPerSide` param already per-call ⇒ pass side-specific values. |
+| 3 | Entry-run capacity source | `overshoot-entry-run/index.ts:538-539,588` — `capacityPerSide = longSelections.length` or `shortSelections.length` | capacity = whatever detector selected | Unchanged in code shape (still per-side count); the CAP is enforced upstream in detector selection. |
+| 4 | Sizing tests | `_shared/overshoot-execution/sizing_test.ts:7-8,41-42` | assert `=== 0.50/0.50` | Assert new ratified pair; assert sum ≤ 1.00 (pre-margin nameplate). |
+| 5 | Config panel | `src/features/overshoot/components/OvershootConfigPanel.tsx:22,61,72-75,107,166,228,238,245,257,264,293,345-347` | shows `strategy_allocation_pct` only | Additionally display per-side allocation constants (READ-ONLY citations from engine, W4.g). No new DB row (per-side split is a code constant, not per-account tunable — matches DEC-076 pattern). |
+
+### R-4: regime governor (new pure module, no vendors)
+
+| # | Surface | Path | Current | Requires |
+|--:|---------|------|---------|----------|
+| 1 | Regime module (new) | `_shared/overshoot/regime.ts` (proposed) | does not exist | Pure module. Input: readonly SPY bars from `overshoot_daily_bars` (existing; SPY series confirmed in Part IV). Output: `{ regime: 'BULL'\|'CORRECTION'\|'BEAR', dd_from_peak: number, peak_date: string, as_of: string }`. Bands verbatim from Part IV. No wall-clock, no I/O. Expanding-window peak from 2021-06-29 anchor (per ACT-473). |
+| 2 | Regime bar fetcher (new) | `_shared/overshoot/regime-fetcher.ts` (proposed) | n/a | Thin DB read (`SELECT trade_date, close FROM overshoot_daily_bars WHERE ticker='SPY' AND trade_date <= as_of ORDER BY trade_date`). Read-only. Boundary source is `overshoot_daily_bars`, already ratified. |
+| 3 | Entry-run wiring | `overshoot-entry-run/index.ts` (start-of-run) | no regime read | Compute regime BEFORE selection loop; pass to a `tierAdmissionForSide(side, regime)` predicate that filters selections by allowed tier. BEAR ⇒ `LONG_ADMIT = ['T1']`; else `['T1','T2']`. SHORT admit unchanged (`['T1']`). |
+| 4 | Detection-run wiring | `overshoot-detection-run/index.ts` | tier absent | Persist tier on event (R-2 #5) so replay can slice by tier × regime post-hoc. Regime persisted on `overshoot_detection_runs.regime` (additive col). |
+| 5 | Schema | `overshoot_detection_runs` (11 cols) + `overshoot_lots` (14 cols) | no regime / tier / config_version | Additive columns (all NULL-allowed): `regime text`, `dd_from_peak numeric`, `tier text`, `holding_horizon_sessions int`, `config_version text`. All migrations idempotent (`IF NOT EXISTS`). |
+| 6 | Regime-module tests (new) | `_shared/overshoot/regime_test.ts` | n/a | Pin the three Part IV anchors: BULL sample, CORRECTION sample, BEAR sample (deepest = 2022-10 −25.36 %). Peak-date byte-parity vs Part IV expanding-window computation. |
+| 7 | Console | overshoot dashboard components | no regime badge | Show current regime + dd_from_peak + peak_date; slice open-lots by regime × tier. |
+
+**Interaction honesty (from Part IV, recorded so builds cite it):** BEAR self-throttle is already organic — T1 LONG BEAR arrivals = 0.62/day vs 2.08/day BULL, driven by the existing `drawdown_bucket ∈ {1,2,3}` filter refusing 33.2 % of raw BEAR long-candidates on drawdown alone. The R-4 governor throttles T2 (BEAR event count 19,504 with p10 pnl10 = −696 bps); it does NOT hobble T1, whose bear economics are the strongest in the study.
+
+### R-5: instrumentation
+
+Every entry lot MUST carry `config_version`, `regime`, `tier`, `holding_horizon_sessions`. Additive schema columns per R-4 #5. Audit metadata on `overshoot.entry.session_marker` and `overshoot.exit.*` events gains the four fields. Consumers: W5 attribution slicer (planned) reads directly from `overshoot_lots` — no join fan-out.
+
+## V.A3 — Exact T2 predicate (deterministic — for fixture regeneration)
+
+Over the ratified study cells (`overshoot_study_cell_results` scoped to `RATIFIED_STUDY_RUN_ID = 1888e113-f9b3-43f5-856c-d91666a3c121`, `param_grid_hash a37e4b96…`, `exclusion_width_days = 5`), the LONG-T2 predicate is:
+
+```text
+LONG_T2_ELIGIBLE(cell) ≡
+    cell.side = 'LONG'
+  ∧ NOT LONG_T1_ELIGIBLE(cell)               -- exact Part I / detector T1 tuple
+  ∧ cell.mean_fwd_return_5d ≥ 0.0010         -- 2 × haircut_long_bps (5 bps) / 1e4
+  ∧ cell.arrival_count ≥ 1                   -- kernel already enforces; explicit
+```
+
+Where `LONG_T1_ELIGIBLE` is:
+
+```text
+  band = 'L_10_INF'
+∧ window_days ∈ {1,2,3}
+∧ momentum_quintile ∈ {4,5}
+∧ drawdown_bucket ∈ {1,2,3}
+∧ mean_fwd_return_5d > 0
+```
+
+This is a **read-only view** over the ratified study — no study re-run, no new event materialization. Cell count under this predicate reproduces Part I Q1 exactly: **491 T2 LONG cells / 261,830 events**. The fixture generator selects the `(band, window_days, momentum_quintile, drawdown_bucket)` tuple for each cell and stores it in the parity fixture alongside T1 cells; the extended predicate is a set-union at the detector's `study-cell-lookup` step (map lookup unchanged).
+
+## V.A4 — R-3 allocation proposal (from the corrected matrix)
+
+**Proposed:** `(long_allocation = 0.75, long_capacity = 30, short_allocation = 0.25, short_capacity = 10)`.
+
+**Derivation, cited to matrix rows:**
+ - LONG side, T1∪T2 saturates cap on all tested capacities (Part I Q3, Part II corrected matrix rows 5–9). Deployment binding constraint is capacity, not arrivals (T1∪T2 = 106+/day whole-history; Part II).
+ - SHORT side (corrected, Part III): post-SI arrivals ~0.005/day ⇒ SHORT is capacity-non-binding at ANY reasonable cap. The Part III / Part IV finding is unequivocal: SHORT is a nameplate placeholder for W5-measured re-ratification, not a deployment lever today.
+ - Nameplate sum = 0.75 + 0.25 = 1.00 (pre-margin, matches operator ceiling).
+ - **Slot concentration:** LONG = 0.75 / 30 = **2.50 % / slot**; SHORT = 0.25 / 10 = **2.50 % / slot** — matches operator's 2.5% target verbatim.
+ - **Concentration-flag check** (Part I Q3 concentration table): 2.5% is BELOW the 6.25% (cap=8/m=1.0) and 10% (cap=10/m=2.0) flag lines ⇒ no concentration flag triggered at pre-margin.
+ - **Deployment upper bound at margin=1.0:** LONG @ full cap = 75% of equity; SHORT @ realized 0.005/day = ~0.05% of equity ⇒ operational deployment ≈ **75%** (moves the upper bound from ~10 % [current live 20/50/50] toward the ~40 %-class the operator directive names, with headroom for margin toggle as a separate future lever).
+ - Alternatives considered (for operator override, NOT chosen): (0.80, 32, 0.20, 8) — pushes slot to 2.5%/2.5% but drops SHORT below 8-slot audit-line minimum; (0.70, 28, 0.30, 12) — under-uses LONG headroom given LONG is the binding side. Neither maximizes measured LONG deployment as directly.
+
+## V.A5 — Tranche split proposal (with H0 sequenced explicitly)
+
+H0 = the **exit-loop isolation** promoted blocker (ACT-468 hardening wave), which must land before ANY exit-behavior change ships. Sequenced first below.
+
+| Tranche | Scope | Independently reversible? | Blocker on prior |
+|--:|-------|---------------------------|-------------------|
+| **H0** | Exit-loop isolation (ACT-468). Non-negotiable prerequisite for R-1 (per-side holding split). | Yes | None — merges from the hardening wave. |
+| **T1** | Pure modules + constants only: (a) split holding constants (R-1 module); (b) split allocation + capacity constants (R-3 module); (c) new `_shared/overshoot/regime.ts` pure module + tests (R-4 #1, #6). No consumers wired yet. Every constant change compile-error-forces the follow-up tranche. | Yes — old constants aliased for one release. | H0 |
+| **T2** | Detector-prior extension (R-2 #1–#4) with the ratified-change protocol pastes (V.A2 R-2 protocol). New `RATIFIED_PARAM_GRID_HASH_PREFIX_v2`, 3-regime parity fixture regeneration + attestation, 2026-06-18 anchor re-attestation. Ships with old prefix retained in `SUPERSEDED_HASHES`. | Yes — revert prefix to v1, T2 admit-list disabled by tier admission predicate returning `['T1']`. | T1 |
+| **T3** | Engines wiring: (a) `session-age.ts` + `overshoot-exit-run` consume per-side holding (R-1); (b) `overshoot-entry-run` computes regime + applies tier admission (R-4 #3); (c) sizing consumes new allocations + detector consumes new caps (R-3). Additive schema migration for `regime / tier / holding_horizon_sessions / config_version / dd_from_peak` (R-4 #5, idempotent). | Yes — each lever is a constant swap. | T2 |
+| **T4** | Config surfaces + console citations (W4.g) + R-5 instrumentation on audit metadata. No behavior change beyond visibility. | Yes | T3 |
+| **T5** | Ratified-change evidence bundle: byte-parity diffs, anchor-attestation output, 1-run dry deploy trace, tier-distribution snapshot, W5-slicer readiness check. | n/a (evidence gate) | T4 |
+
+**Standing binding rule honored:** pause-on-Part-2-EXEC — first light outranks every tranche the moment operator evidence lands. Builds land AFTER first light banks and INTERLEAVE with the ACT-468 hardening wave; both precede arming. One prompt in flight at all times.
+
+## V.A6 — Risks (what each lever could break, and the test that pins it)
+
+| Lever | Break mode | Pinning test |
+|:-----:|-----------|--------------|
+| R-1 LONG H=10 | Exit fires day-6 instead of day-11 due to `holdingDayOrdinal` off-by-one when side branch is added. | New PIN-1-LONG fixture: Monday-entry ⇒ fires day-11 (following Friday +1w) NOT day-6. Byte-parity test on `computeSessionAge({side:'LONG'})` for 3 anchor holidays (Christmas, July 4, Thanksgiving). |
+| R-1 SHORT H=5 | Regression: SHORT accidentally inherits LONG horizon. | Assert `computeSessionAge({side:'SHORT'})` fires ordinal-5 for Monday entry — existing PIN-1 test, rewired with SHORT side param. |
+| R-2 T2 admission | Silent T1 rank inversion (T2 cell outranks T1 due to floating-point tie). | Fixture asserts sorted `rank_score` strictly monotone within T1 before any T2 appears in the top-20. |
+| R-2 fixture drift | Regeneration produces a cell that Part I Q1 didn't list ⇒ predicate leak. | Deterministic cell-count assertion: exactly **509 LONG cells** (T1=18 + T2=491) in the eligible-set fixture; hash of sorted `(band,window,momentum,drawdown)` tuples matches a pinned SHA. |
+| R-3 allocation | Detector selects 30 LONG but sizer treats capacity as 20 (constant drift). | Test asserts `sideAllocationPct('LONG') / DETECTOR_CAPACITY_LONG === 0.025` and same for SHORT — the slot-concentration invariant. |
+| R-3 nameplate | Nameplate sum exceeds 1.00 pre-margin. | `assertEquals(OVERSHOOT_SIDE_ALLOCATION_PCT_LONG + OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT, 1.0)`. |
+| R-4 regime | Regime read races detection ⇒ BEAR regime not applied on the run that needs it. | Regime is computed AT `overshoot-entry-run` start, persisted on `overshoot_detection_runs.regime`, and re-read (not recomputed) by all downstream steps. Test: inject two clocks, assert regime is snapshot-consistent within a run. |
+| R-4 regime | dd-from-peak uses forward-looking bars (leaks). | Fetcher predicate `trade_date <= as_of`. Test with fixture containing `as_of` and future bars asserts they are excluded byte-for-byte. |
+| R-4 governor | Cascade of BEAR → T1-only accidentally throttles SHORT too. | Test: `tierAdmissionForSide('SHORT', 'BEAR') === ['T1']` (unchanged from BULL — SHORT admit is regime-invariant per charter). |
+| R-5 instrumentation | Lot rows missing tier/regime ⇒ W5 attribution silently NULL. | Post-migration NOT NULL constraint deferred (backfill = NULL, honest); W5 slicer asserts coverage ≥ 99% on lots CREATED after tranche T3 deploy_ts. |
+| Cross-lever | Old exit rows (pre-R-1) reprocessed under new horizon ⇒ retroactive exit. | Exit-engine reads `lot.holding_horizon_sessions` (R-5 persisted) — never re-derives from current constant for lots already-tagged. Pre-tranche lots keep the uniform-5 horizon they were tagged with (backfill = 5 for existing open lots at migration time — documented in migration NOTE). |
+
+## V.A1 — Gate pastes
+
+- **HEAD verified:** `git rev-parse HEAD` → `9c5e3c574a30d5899129dbd22bdb43746088c5a8`.
+- **ACT-474 free:** `rg -n "ACT-474" docs/06-tracking/action-tracker.md` before this turn returned no matches (ledger-adjacent; this turn takes it).
+- **Docs-only diff:** `git diff --stat HEAD -- supabase/ src/ scripts/ deno.lock supabase/functions/deno.lock` will report **empty** post-turn (no engine, no config, no migration, no lockfile, no cron.job, no edge deploy touched).
+- **Kernel/engine/fixture byte-untouched:** `_shared/overshoot/detector/*`, `_shared/overshoot-execution/*`, `overshoot-*-run/*`, `_shared/overshoot/study/*` — all byte-identical to HEAD `9c5e3c57` this turn.
+- **No MIG / cron / deploy:** zero migration files created, `sql/3*_overshoot_*` unchanged, no edge function redeploy triggered.
+- **Files edited this turn (exactly three):** `docs/08-planning/overshoot-deployment-analysis.md` (Part V append), `docs/06-tracking/action-tracker.md` (ACT-474 entry), `docs/08-planning/feature-proposals.md` (FP-069 Status ACT-474 pointer).
+- **Separation guard:** docs-only turn, N/A on code.
+- **Longshort surface:** untouched (overshoot-scoped).
+- **STOP conditions honored:** no engine/detector/fixture byte changes; ratified-change protocol enumerated (not executed); allocation proposal cited row-by-row; H0 sequenced explicitly first; every risk paired with its pinning test.
+
+*Part V authored ACT-474 (2026-07-05). HEAD `9c5e3c57`. STEP A only — STOP for ratification. No build lands from this document; every tranche is a separate operator-approved wave.*
