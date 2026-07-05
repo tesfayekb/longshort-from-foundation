@@ -44,7 +44,7 @@ Deno.test('boot assertion + drift-canaries precede probe / skip gates / I6 / pip
   const idxKS     = SRC.indexOf("strategy_key = 'overshoot'");
   const idxJR     = SRC.indexOf("id = 'overshoot.entry.run'");
   const idxI6     = SRC.indexOf('manual_confirm_token_missing_or_invalid');
-  const idxPipe   = SRC.indexOf('(a) /v2/clock');
+  const idxPipe   = SRC.indexOf('// (a) /v2/clock');
   assert(idxBoot > 0 && idxCanary > 0 && idxProbe > 0 && idxKS > 0 && idxJR > 0 && idxI6 > 0 && idxPipe > 0);
   assert(idxBoot < idxCanary, 'boot precedes drift-canary');
   assert(idxCanary < idxProbe, 'canary precedes probe');
