@@ -1595,6 +1595,24 @@ later). Proof item: exit-run per-lot isolation is **PARTIAL** at HEAD `9fdd4334`
 H6 slot is **promoted to H0** (pre-arming gate blocker). Part-2 EXEC continues
 to outrank everything the moment operator evidence lands.
 
+### FP-069 STATUS — Deployment analysis authored (2026-07-05, ACT-470)
+
+Read-only investigation quantifying the four future ROI levers (frontier
+expansion T1→T1∪T2, margin_multiplier, holding-horizon extension, displacement
+exit) against the ratified study run `1888e113-f9b3-43f5-856c-d91666a3c121`
+and the persisted study candidate stream. Confirms the operator's ~80 % idle-
+cash observation as a T1-predicate + 50 %/side-allocation artefact (not a
+capacity artefact), quantifies edge-vs-arrival trade for each frontier step
+(T2 gives ~30-50 % of T1 per-dollar edge but 24-83× event volume), maps
+deployment × concentration × earnings-crossing across cap ∈ {20,10,8} ×
+margin ∈ {1.0,2.0} × H ∈ {5,10,15,20}, and notes r10 is absent from persisted
+cell/event data (scoped reconstruction sketched, not run). Every number
+carries the survivorship UPPER_BOUND stamp. Analysis doc:
+`docs/08-planning/overshoot-deployment-analysis.md`. Zero code, zero
+migrations, zero engine touches this turn — evidence for the next
+ratification cycle. Part-2 EXEC (Monday evening Session 1) continues to
+outrank everything the moment operator evidence lands.
+
 ### FP-069 STATUS — SECURITY corrective landed (2026-07-05, ACT-469)
 
 RLS permissive-policy tightening applied per operator rulings (Q1(a), Q2=YES).
