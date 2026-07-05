@@ -18,6 +18,8 @@
 import { HubTabs, HubEmptyState } from './OvershootHubTabs';
 import { OvershootDetectorRuns } from './OvershootDetectorRuns';
 import { OvershootExecutionTrail } from './OvershootExecutionTrail';
+import { OvershootPositions } from './OvershootPositions';
+import { OvershootPnL } from './OvershootPnL';
 
 export function OvershootDashboard() {
   return (
@@ -47,11 +49,10 @@ export function OvershootDashboard() {
             value: 'portfolio',
             label: 'Portfolio',
             content: (
-              <HubEmptyState
-                title="Open lots & realized P&L"
-                description="Lot-level portfolio surface lands in W4.d. Sources: overshoot_lots, overshoot_reconciliation_state. Equity-curve visualization awaits the ratified overshoot equity-snapshots table (candidate iii)."
-                note="W4.d — not yet implemented"
-              />
+              <div className="space-y-6">
+                <OvershootPositions />
+                <OvershootPnL />
+              </div>
             ),
           },
           {
