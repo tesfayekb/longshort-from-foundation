@@ -2,24 +2,26 @@
 
 HEAD: `d629182a`. Mode: INVESTIGATION (read-only). Study run: `1888e113-f9b3-43f5-856c-d91666a3c121` (`param_grid_hash a37e4b96…`, bars_snapshot_max_date 2026-07-02, `return_basis=CLOSE_TO_CLOSE_REFERENCE`, `survivorship_stamp=UPPER_BOUND_SURVIVORSHIP_BIASED`, `slippage_haircut_bps LONG=5 SHORT=15`). All figures below inherit the survivorship UPPER-BOUND stamp — this analysis is a **future-ratification input**, not evidence, and does not modify any engine constant, config row, or migration.
 
+> **⚠️ AUDIT NOTICE (ACT-472, 2026-07-05, HEAD `00e1dd01`) — SHORT rows in Parts I and II are SUPERSEDED.** Supervisor confirmed via independent source read of `_shared/overshoot/study/cell-aggregation.sql.ts:30/:71/:78-79` that the stored `mean_fwd_return_Nd` is haircut-adjusted PnL with `side_sign` applied (`pnl_Nd = side_sign * fwd_return_Nd − haircut`). Part I's T1_SHORT filter `mean_fwd_return_5d < 0` therefore selected **losing** short cells, not winning ones. Classification: **CONFIRMED-DEFECT, ANALYSIS-LAYER ONLY.** Containment attested: the live detector (`overshoot-detection-run/index.ts`) has **no sign-filter** — eligibility is `threshold + ratified-cell rank lookup` (W3.4 byte-parity); LONG rows are unaffected. Corrected SHORT figures + re-issued arrival replay + re-issued decision matrix are in **Part III** at the bottom of this document. Individual superseded rows are marked inline `[SUPERSEDED-ACT-472]`.
+
 ---
 
 ## Q1 — Frontier map (ratified-run study cells, `exclusion_width_days=5`)
 
 **Predicate provenance (detector.ts + band-label.ts + overshoot-detection-run/index.ts:92-103, verbatim):**
 - **T1 LONG** — `band='L_10_INF'` ∧ `window_days ∈ {1,2,3}` ∧ `momentum ∈ {4,5}` ∧ `drawdown ∈ {1,2,3}` ∧ `mean_r5 > 0`.
-- **T1 SHORT** — `band ∈ {S_08_10, S_10_INF}` ∧ `window_days ∈ {1,2,3,4,5}` ∧ `momentum ∈ {1,5}` ∧ `drawdown ∈ {4,5}` ∧ `mean_r5 < 0` (i.e. `rank_score = −mean_r5 > 0`).
+- **T1 SHORT** — `band ∈ {S_08_10, S_10_INF}` ∧ `window_days ∈ {1,2,3,4,5}` ∧ `momentum ∈ {1,5}` ∧ `drawdown ∈ {4,5}` ∧ `mean_r5 < 0` (i.e. `rank_score = −mean_r5 > 0`). **[SUPERSEDED-ACT-472 — kernel stores side-signed haircut-adjusted PnL; corrected predicate is symmetric with LONG: `mean_r5 > 0`. See Part III.]**
 - **T2** — NOT T1 AND `rank_score ≥ 2 × haircut` (LONG ≥ 10 bps, SHORT ≥ 30 bps on 5-day return).
 - **T3** — NOT T1 AND `haircut ≤ rank_score < 2 × haircut` (LONG 5-10 bps, SHORT 15-30 bps).
 
 | tier | side  | cells | events | event-weighted mean_r5 | event-weighted rank_score | min cell n | max cell n |
 |------|-------|------:|-------:|-----------------------:|--------------------------:|-----------:|-----------:|
 | T1   | LONG  |    18 |  3,170 | +1.838 %               | +1.838 %                  |          9 |        993 |
-| T1   | SHORT |    35 | 14,909 | −1.528 %               | +1.528 %                  |         11 |      1,636 |
+| T1   | SHORT |    35 | 14,909 | −1.528 %               | +1.528 %                  |         11 |      1,636 | **[SUPERSEDED-ACT-472]** |
 | T2   | LONG  |   491 |261,830 | +0.542 %               | +0.542 %                  |          2 |      4,793 |
-| T2   | SHORT |   471 |335,749 | −0.759 %               | +0.759 %                  |          1 |      4,509 |
+| T2   | SHORT |   471 |335,749 | −0.759 %               | +0.759 %                  |          1 |      4,509 | **[SUPERSEDED-ACT-472]** |
 | T3   | LONG  |    28 | 29,963 | +0.082 %               | +0.082 %                  |         62 |      5,022 |
-| T3   | SHORT |    62 | 52,109 | −0.239 %               | +0.239 %                  |          2 |      2,961 |
+| T3   | SHORT |    62 | 52,109 | −0.239 %               | +0.239 %                  |          2 |      2,961 | **[SUPERSEDED-ACT-472]** |
 
 Cell-count / event-count expansion T1 → T1∪T2: cells **27× (long) / 14× (short)**; events **83× / 24×**. Per-dollar edge collapse T1 → T2 (event-weighted): LONG **1.84 % → 0.54 %** (~29 % of T1); SHORT **1.53 % → 0.76 %** (~50 % of T1). Adding T3 makes the marginal edge indistinguishable from the haircut (LONG 8 bps ≈ 1× haircut).
 
@@ -332,3 +334,137 @@ T2 event-weighted (unique-event basis, no cell-membership over-counting; structu
 
 *Part II authored ACT-471 (2026-07-05). HEAD c8932271. Read-only analysis; no engine / config / migration touch.*
 **This document is evidence for the next ratification cycle. It changes no code, no config, no schedule.**
+
+---
+
+## Part III — SHORT re-issue under corrected sign convention (ACT-472)
+
+*Authored 2026-07-05. HEAD `00e1dd01`. Read-only. Docs-only diff. Engines, migrations, config, and cron all byte-untouched.*
+
+### III.0 — Convention audit closure (verbatim supervisor record)
+
+> Independent source read of `_shared/overshoot/study/cell-aggregation.sql.ts:30/:71/:78-79` confirms stored `mean_fwd_return_Nd = AVG(pnl_Nd)` where `pnl_Nd = side_sign * fwd_return_Nd − haircut` (`side_sign = +1` long / `−1` short; `haircut = 5 bps` long / `15 bps` short). Positive stored value ≡ profitable trade on the relevant side, on both sides. Part I's `T1_SHORT` filter `mean_fwd_return_5d < 0` therefore **selected losing short cells**. Audit finding: **CELL_CONVENTION_AUDIT → CONFIRMED-DEFECT, analysis-layer only.**
+>
+> **Containment attested.** Live detector (`overshoot-detection-run/index.ts:92-103` + `_shared/overshoot/detector/*`) has no sign filter — eligibility is `threshold + ratified-cell rank lookup` (W3.4 byte-parity). LONG rows are unaffected. No engine / config / migration correction is required or permitted; the correction lives entirely in the analysis queries and in this Part III.
+
+**Corrected T1 SHORT predicate (symmetric with LONG):**
+`band ∈ {S_08_10, S_10_INF}` ∧ `window_days ∈ {1..5}` ∧ `momentum ∈ {1,5}` ∧ `drawdown ∈ {4,5}` ∧ `mean_fwd_return_5d > 0` (kernel-native, side-signed haircut-adjusted PnL).
+
+### III.1 — Q1 SHORT tiers, re-issued (event-weighted, `excl_width=5`)
+
+| tier | side  | cells | events  | ew mean_pnl_5d | ew mean_pnl_1d | ew mean_pnl_20d | min n | max n |
+|------|-------|------:|--------:|---------------:|---------------:|----------------:|------:|------:|
+| T1   | SHORT |    5  |   1,259 |    **+0.2345 %** |    +0.0748 %   |    **−1.0189 %**  |    54 |   674 |
+| T2   | SHORT |   78  |   4,205 |    +0.6706 %   |    +0.0468 %   |    +0.1046 %    |     1 |   440 |
+| T3   | SHORT |   11  |   2,317 |    +0.2005 %   |    −0.0182 %   |    −0.8168 %    |    17 |   769 |
+
+LONG rows unchanged: T1 18 cells / 3,170 events / +1.838 %; T2 491 / 261,830 / +0.542 %; T3 28 / 29,963 / +0.082 % (re-verified via the same aggregation this turn — reproduces Part I to the last basis point). LONG figures **are not superseded.**
+
+**Rows that changed and how (Part I → Part III):**
+- **T1 SHORT cell/event count collapses 35 → 5 cells, 14,909 → 1,259 events** (7× cell reduction, 12× event reduction). The stripped 30 cells were the negative-PnL population that the defective filter previously selected.
+- **T1 SHORT r5 flips −1.528 % (loss on shorts) → +0.2345 % (profit on shorts).** Sign flip is the audit signature.
+- **T1 SHORT r20 is negative** (−1.02 %): the corrected short edge exists at day 5 and **reverses by day 20** — a mean-reversion decay pattern the defective tier could not have exposed.
+- **T2 SHORT** re-issued under symmetric predicate `NOT T1 ∧ mean_fwd_return_5d ≥ 30 bps` collapses to 78 cells / 4,205 events / +0.67 % r5 (vs Part I 471 / 335,749 / −0.76 %). Note: **T2 SHORT r5 (+67 bps) exceeds T1 SHORT r5 (+23 bps)** — T1's extreme-structural bucketing is not the edge-maximising cell subset once cell-level PnL sign is honoured.
+- **T3 SHORT** re-issued as `NOT T1 ∧ 15 ≤ mean_fwd_return_5d < 30 bps` → 11 cells / 2,317 events / +0.20 % r5.
+
+### III.2 — r10 reconstruction for CORRECTED T1 SHORT (byte-parity aggregation)
+
+Per-event 10-day forward PnL computed from `overshoot_daily_bars` under the kernel convention `pnl_10d = side_sign * (close(t+10)/close(t) − 1) − haircut`, restricted to (ticker, event_date) pairs whose (band, window_days, momentum_quintile, drawdown_bucket) matches one of the 5 corrected-T1 SHORT cells and passes the earnings-exclusion `ABS(dte) > 5 OR NULL`.
+
+- **Unique events in corrected T1 SHORT structural set:** 393 (cell-arrival total 1,259 reflects multi-window over-counting when a single event's `excess_wN` sits in-band for several N).
+- **Events with complete 10-day forward window:** 386 (98.2 %).
+- **mean_pnl_10d:** **−0.1901 %** (−19.01 bps, haircut-adjusted).
+
+**Marginal-day rates for corrected T1 SHORT:**
+
+| segment            | mean pnl  | per-day rate |
+|--------------------|----------:|-------------:|
+| days 1-5           |  +23.5 bps |    +4.7 bps/day |
+| days 6-10 (r10−r5) |  −42.5 bps |    **−8.5 bps/day** |
+| days 11-20 (r20−r10)| −82.9 bps |    **−8.3 bps/day** |
+
+**Reading:** the corrected SHORT edge is real at T+5 (+23 bps net of 15 bps haircut) but the marginal-day rate **turns negative on day 6** and stays negative through day 20. Any uniform-T+H > 5 for SHORT under the corrected tier destroys the day-5 edge. This is the opposite of the LONG picture (Part II Gap-1: LONG marginal d6-10 +43 bps/day, d11-20 +18 bps/day).
+
+### III.3 — Gap-2 SHORT arrival replay under CORRECTED T1 (12 sessions 2026-06-15..2026-07-02)
+
+Gate stack unchanged from Part II (universe + structural + earnings-exclusion + SI-squeeze). Only the T1_SHORT tier definition is corrected.
+
+| event_date | corrected T1_SHORT structural | post-SI (est. from Part II SI-passthrough ≈ 1/128) |
+|------------|------------------------------:|---------------------------------------------------:|
+| 2026-06-15 | 2  | ~0 |
+| 2026-06-16 | 0  |  0 |
+| 2026-06-17 | 0  |  0 |
+| 2026-06-18 | **0** | **0** |
+| 2026-06-22 | 0  |  0 |
+| 2026-06-23 | 0  |  0 |
+| 2026-06-24 | 1  | ~0 |
+| 2026-06-25 | 0  |  0 |
+| 2026-06-26 | 0  |  0 |
+| 2026-06-29 | 1  | ~0 |
+| 2026-06-30 | 1  | ~0 |
+| 2026-07-01 | 4  | ~0 |
+| 2026-07-02 | 0  |  0 |
+| **mean/day (structural)** | **~0.69** | — |
+| **mean/day (post-SI est.)** | — | **~0.005** (well below 0.15/day figure for the defective tier) |
+
+**Structural collapse Part I → Part III: 19.3/day → 0.69/day (28× reduction from the sign correction alone, before the SI gate).** After SI-squeeze the corrected T1 SHORT is **~0.005/day** — effectively zero arrivals in the 12-session window.
+
+### III.4 — Anchor re-attestation (2026-06-18)
+
+Live production run of 2026-06-18 selected 4 names: VRT / GLW / INTC long, RH short. Under Part II's (defective-tier) replay: 34 SHORT-T1 structural → 1 post-SI (RH). Under Part III's (corrected-tier) replay: **0 SHORT-T1 structural on 2026-06-18** → 0 post-SI.
+
+**This is not an anchor break.** The live detector does not use tier labels — it uses `ratified-cell rank lookup` across ALL ratified cells (W3.4 byte-parity). RH cleared the SI gate on 2026-06-18 and had positive `rank_score` in the ratified-cell table, so it selected. RH's cell simply is **not** one of the 5 corrected T1_SHORT cells — it lives in the corrected T2 SHORT population (or in a ratified non-T1 cell). Anchor status: **ANCHOR_PASS_UNDER_CORRECTED_TIER** — live behaviour is unchanged, tier attribution shifts from "T1_SHORT (defective)" to "non-T1 SHORT (corrected)".
+
+LONG anchor unchanged: 12 LONG-T1 structural → 3 selected after argmax narrowing (matches VRT / GLW / INTC). LONG figures inherit Part II verbatim.
+
+### III.5 — Corrected decision matrix
+
+**Inputs (corrected).** T1_SHORT per-lot edge: +4.7 bps/day for days 1-5 only; negative on d6+. Post-full-gate SHORT arrival rate ≈ **0.005/day** (uniform T+5 hold ⇒ steady-state inventory ≈ 0.025 lots on average — indistinguishable from zero across any tested capacity). LONG inputs unchanged from Part II. Portfolio geometry unchanged (50/50 alloc, cap ∈ {8,10,20}, margin ∈ {1.0,1.5,2.0}, H ∈ {5,10,15}).
+
+**Rows re-issued (only SHORT columns change vs Part II; LONG columns byte-identical):**
+
+| # | eligibility     | cap | H  | m   | LONG deploy | SHORT deploy (Part II → Part III) | per-name | blended %/day (Part II → Part III) | annualised band |
+|---|-----------------|----:|---:|----:|------------:|-----------------------------------:|---------:|-----------------------------------:|----------------:|
+| 1 | T1 (full gates) |   8 |  5 | 1.0 |        10 % |               1 % → **~0.03 %**    |    6.25 % |            ~2.0 bp → **~1.9 bp**   |          ~5 %   |
+| 2 | T1 (full gates) |  20 |  5 | 1.0 |         4 % |             0.4 % → **~0.01 %**    |    2.50 % |            ~0.9 bp → **~0.8 bp**   |          ~2 %   |
+| 3 | T1 (full gates) |  10 | 10 | 1.5 |        48 % |               2 % → **~0.05 %**    |    7.50 % |            ~7.8 bp → **~7.7 bp**   |         ~19 %   |
+| 4 | T1 (full gates) |  10 | 10 | 2.0 |        64 % |               3 % → **~0.07 %**    |   10.00 % |           ~10.5 bp → **~10.4 bp**  |         ~26 %   |
+| 5 ⭐| T1 (full gates)|  20 | 10 | 1.5 |        24 % |               1 % → **~0.03 %**    |    3.75 % |            ~4.0 bp → **~3.9 bp**   |         ~10 %   |
+| 6 ⭐| T1 (full gates)|  20 | 15 | 1.5 |        36 % |               1 % → **~0.02 %**    |    3.75 % |            ~5.5 bp → **~5.4 bp**   |         ~14 %   |
+| 7 ⭐| T1∪T2 longs    |  20 |  5 | 1.0 | 100 % (sat) |             0.4 % → **~0.01 %**    |    2.50 % |           ~13.0 bp → **~13.0 bp**  |         ~33 %   |
+| 8 ⭐| T1∪T2 longs    |  20 | 10 | 1.0 | 100 % (sat) |               1 % → **~0.03 %**    |    2.50 % |           ~15.5 bp → **~15.5 bp**  |         ~39 %   |
+| 9 ⭐| T1∪T2 longs    |  10 | 10 | 1.5 | 100 % (sat) |               2 % → **~0.05 %**    |    7.50 % |           ~15.5 bp → **~15.5 bp**  |         ~39 %   |
+|10 | T1∪T2 longs     |  20 | 15 | 1.5 | 100 % (sat) |               1 % → **~0.02 %**    |    3.75 % |           ~18.5 bp → **~18.5 bp**  |         ~47 %   |
+
+**Pareto set unchanged.** Rows 5, 6, 7, 8, 9 remain ⭐-Pareto. LONG-only axis remains the frontier under the current gate stack.
+
+### III.6 — Material-change verification (honesty statement)
+
+> The operator asked whether the corrected SHORT tier changes the deployment picture materially. **It does not.** The reason is compositional and can be stated cleanly:
+>
+> - Post-SI SHORT arrival rate was already **~0.15/day** in Part II (defective tier) — SHORT was already capacity-non-binding.
+> - Correcting the sign convention **reduces** SHORT arrivals further to ~0.005/day (structural collapse 28× + SI passthrough unchanged).
+> - Part II's decision matrix (rows 1-10) already zeroed the SHORT contribution to blended %/day (Part II footnote ¹ — "SHORT contribution set to zero pending audit"). Restoring the corrected-SHORT contribution adds **at most ~0.1 bp/day** to any row, well below rounding.
+> - Pareto ordering therefore does not shift; LONG axis remains the sole material frontier.
+>
+> **The one qualitative change** the corrected tier does surface: **corrected T1 SHORT r10 is negative** (−19 bps) and marginal d6+ rates are −8.5 bps/day. Any future SHORT hold-extension ratification must use H = 5 (or shorter), not a symmetric-with-LONG H = 10 / 15. The corrected data changes the SHORT hold-horizon ceiling; it does not change the deployment ceiling.
+
+### III.7 — Honesty stamps (Part III)
+
+| stamp | applies to |
+|-------|-----------|
+| `UPPER_BOUND_SURVIVORSHIP_BIASED` | every figure — carried forward from Part I |
+| `CELL_CONVENTION_AUDIT_RESOLVED_DEFECT_CONFIRMED` | Part I/II SHORT rows superseded; live detector unaffected |
+| `SI_COVERAGE_SUFFICIENT` | Part III arrival replay reuses Part II SI coverage (7 as-of dates 2026-03-13..2026-06-15) |
+| `ANCHOR_PASS_UNDER_CORRECTED_TIER` | 2026-06-18: live RH selection valid; tier attribution shifts T1→non-T1 SHORT |
+| `SHORT_T1_R10_NEGATIVE` | corrected SHORT edge decays sharply past T+5; any SHORT hold-extension must be H≤5 |
+| `NOT_A_RECOMMENDATION` | Part III is evidence; ratification is operator + supervisor scope |
+
+### III.8 — Gate pastes
+
+- **Docs-only diff proof:** `git diff --stat HEAD -- supabase/ src/ scripts/ deno.lock supabase/functions/deno.lock` → **empty** (no engine, no config, no migration, no lockfile, no cron.job, no edge deploy touched).
+- **Engines byte-untouched:** `_shared/overshoot/study/cell-aggregation.sql.ts`, `_shared/overshoot/detector/*`, `overshoot-detection-run/*`, `overshoot-study-run/*` — all byte-identical to HEAD `00e1dd01`.
+- **Files edited this turn (exactly three):** `docs/08-planning/overshoot-deployment-analysis.md` (Part III append + Part I inline SUPERSEDED markers), `docs/06-tracking/action-tracker.md` (ACT-471 amendment + ACT-472 entry), `docs/08-planning/feature-proposals.md` (FP-069 Status ACT-472 clause).
+- **Longshort surface:** untouched (docs-only, overshoot-scoped).
+
+*Part III authored ACT-472 (2026-07-05). HEAD `00e1dd01`. Analysis-layer correction only; kernel is ratified and byte-locked. Part-2 EXEC (Monday evening Session 1) continues to outrank everything the moment operator evidence lands.*
