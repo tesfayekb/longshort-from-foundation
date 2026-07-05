@@ -1576,3 +1576,11 @@ Post-W4 operator review surfaced four issues; all four addressed this tranche. *
 W4.g (ACT-465.g) closes the console arc: NEW Universe page (`/trading/overshoot/universe`) surfaces the 839-row active `overshoot_universe` × latest `overshoot_short_interest` coverage matrix with typed-absence flagging (shares-unavailable ≠ missing data). Paired with a display-truth fix in OvershootOverview: the SI staleness threshold now mirrors the engine's `DETECTOR_SI_STALENESS_MAX_DAYS = 20` (`supabase/functions/overshoot-detection-run/index.ts:97`) instead of the previous hardcoded 14. **Forward rule (ledgered):** console-displayed thresholds cite their engine constant by file:line and mirror the engine's named parameter — never restate values independently.
 
 **W4 FULLY CLOSED.** Seven pages live (Overview, Detector, Detector-Run-Detail, Universe, Execution, Portfolio, Config). Zero engine touches across W4. Pause-on-Part-2-EXEC binding: Part-2 EXEC (Monday evening Session 1) outranks everything the moment operator evidence lands.
+
+### FP-069 W4 STATUS — W4.h landed (2026-07-05)
+
+W4.h (ACT-465.h) applies the final console polish: within-page tabs per the longshort HubTabs convention on the two dense pages (Portfolio: `Open Lots` / `Reconciliation` / `Realized P&L` / `Equity Curve`; Execution: `Entry/Exit Trail` / `Reconciliation Refusals` / `Audit Log`). Overview / Detector / Config stay untabbed (summary / single-table / single-form). Universe stays untabbed — the joined per-row `overshoot_universe × overshoot_short_interest` scan pattern would be broken by splitting {Constituents \| SI Coverage}, and coverage summary chips already cover the SI-overview role. Nav-level page-per-section shape (W4.f) is preserved.
+
+A small overshoot-owned tab primitive (`src/features/overshoot/components/OvershootHubTabs.tsx`) is re-introduced as a duplicate-by-design twin of `src/pages/trading/longshort/hub/HubTabs.tsx` (INC-77 duplicate-primitive discipline — the FP-069 Separation Contract prohibits overshoot→longshort imports; the twin is not an A3 leaf utility). Card component bodies unchanged; existing cards are re-housed inside tabs at the page-wrapper level.
+
+**W4 FULLY CLOSED (final-final).** Pause-on-Part-2-EXEC remains binding.
