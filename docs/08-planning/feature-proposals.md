@@ -1584,3 +1584,13 @@ W4.h (ACT-465.h) applies the final console polish: within-page tabs per the long
 A small overshoot-owned tab primitive (`src/features/overshoot/components/OvershootHubTabs.tsx`) is re-introduced as a duplicate-by-design twin of `src/pages/trading/longshort/hub/HubTabs.tsx` (INC-77 duplicate-primitive discipline — the FP-069 Separation Contract prohibits overshoot→longshort imports; the twin is not an A3 leaf utility). Card component bodies unchanged; existing cards are re-housed inside tabs at the page-wrapper level.
 
 **W4 FULLY CLOSED (final-final).** Pause-on-Part-2-EXEC remains binding.
+
+### FP-069 STATUS — Forward roadmap consolidated (2026-07-05, ACT-467)
+
+Full forward sequence (NOW → H → ARM → P → L + REGISTERED-FUTURE) authored at
+`docs/08-planning/overshoot-roadmap.md`. ROI-ordered, evidence-gated, phase
+entry/exit criteria explicit, live-readiness gate criteria written NOW (not
+later). Proof item: exit-run per-lot isolation is **PARTIAL** at HEAD `9fdd4334`
+(submitter + pricing isolated; Polygon fetch + per-lot SQL NOT isolated) — the
+H6 slot is **promoted to H0** (pre-arming gate blocker). Part-2 EXEC continues
+to outrank everything the moment operator evidence lands.
