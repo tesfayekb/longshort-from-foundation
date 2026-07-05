@@ -20,6 +20,7 @@ import { OvershootDetectorRuns } from './OvershootDetectorRuns';
 import { OvershootExecutionTrail } from './OvershootExecutionTrail';
 import { OvershootPositions } from './OvershootPositions';
 import { OvershootPnL } from './OvershootPnL';
+import { OvershootConfigPanel } from './OvershootConfigPanel';
 
 export function OvershootDashboard() {
   return (
@@ -58,13 +59,7 @@ export function OvershootDashboard() {
           {
             value: 'config',
             label: 'Config',
-            content: (
-              <HubEmptyState
-                title="Strategy configuration"
-                description="Read-only view + gated edit dialog for overshoot_strategy_config lands in W4.e (Tier-A-adjacent). Atomicity mechanism (RPC vs. sequential-with-loud-failure) will be adjudicated at W4.e Step A per the design pin."
-                note="W4.e — not yet implemented"
-              />
-            ),
+            content: <OvershootConfigPanel />,
           },
         ]}
       />
