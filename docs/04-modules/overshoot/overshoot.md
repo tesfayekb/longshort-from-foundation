@@ -862,3 +862,22 @@ The evidence bundle is complete when: E1 returns 0 in both invocations, E2 shows
 - Zero migrations, zero deploys, zero `job_registry.enabled` flips, zero `cron.job` writes.
 - Docs surfaces touched: this section (§9), the action-tracker ACT-464.e-iii entry, the FP-069 Status W3.6.e-iii-part-1 clause. No other file.
 - Runbook execution is TIME-ANCHORED (Session 1 evening + Session 2 morning within 09:15–09:40 ET) and CALENDAR-GATED (requires a trading day for Session 1 and a subsequent trading day for Session 2). Zero-select evenings loop back to §9.1 the next trading evening.
+
+## §10 W4.a — Console foundation (LANDED 2026-07-05, ACT-465)
+
+**Scope:** the read-only OVERSHOOT operator console foundation. Nav + shell + façade + PermissionGate-wrapped route + four tabbed honest empty-states. **Zero data fetches, zero hooks, zero services, zero backend changes.** Hydration is progressive across W4.b–e; W4.a is the trellis, not the vines.
+
+**Files landed (exactly five surfaces):**
+- NEW `src/features/overshoot/index.ts` — the strategy façade. Exports EXACTLY three names per T1: `overshootNav` (NavSection descriptor), `OVERSHOOT_PERMISSION_KEYS` (frozen array `['overshoot.view','overshoot.manage']` — both keys already seeded; the array reflects existing state, does not seed), `OvershootDashboardPage` (routed page re-export of the internal shell).
+- NEW `src/features/overshoot/components/OvershootDashboard.tsx` — the internal shell. Renders `HubTabs` (reused from `@/pages/trading/longshort/hub/HubTabs` — the shared trading-panel primitive) with four sections: **Detector** (W4.b), **Execution** (W4.c), **Portfolio** (W4.d), **Config** (W4.e). Each tab renders `HubEmptyState` naming the source tables + owning tranche explicitly. NO fabricated data, NO stub numbers, NO fake charts.
+- NEW `src/pages/trading/overshoot/OvershootDashboardPage.tsx` — page wrapper. Imports ONLY from `@/features/overshoot` (the façade). Lazy-loaded by `src/App.tsx`.
+- EDIT `src/config/trading-navigation.ts` — appended `overshootNav` after `longshortNav`. This is the DEC-031 sub-point 6 sanctioned narrow carve-out: trading-panel-infrastructure MAY import from a strategy façade for nav/RBAC-key registration ONLY.
+- EDIT `src/App.tsx` — lazy import + one `<Route path="overshoot">` under `<Route path="/trading">`, wrapped in `<PermissionGate permission="overshoot.view">`.
+
+**RBAC.** Route + all nav items gated on `overshoot.view` (read). W4.e will introduce the write path gated on `overshoot.manage`. W4.a introduces no new permission keys.
+
+**Byte-untouched trees (headline gate, both empty this turn):** `src/features/longshort/**` + `supabase/**` + all engine/detector/kernel files. The longshort feature tree and every backend surface are UNTOUCHED — verified by `git diff --stat` returning zero for both roots.
+
+**W4.e DESIGN PIN (recorded here; adjudicated at W4.e Step A).** The Step-A A3 sketch described the config UPDATE + audit INSERT as "one client transaction." supabase-js does NOT expose a client-side multi-statement transaction; two browser calls cannot be atomic as sketched. W4.e Step A MUST propose an atomicity mechanism with repo evidence — either a small server-side RPC (UPDATE + audit INSERT atomic; likely a migration, keeping W4.e Tier-A-adjacent) or sequential-with-loud-failure semantics (audit-write failure surfaces destructively in the UI and refuses to report success). Not decided here.
+
+**W4.b–e placeholders (as rendered).** Detector: "Run history and candidate detail land in W4.b. Sources: overshoot_detection_runs, overshoot_events." Execution: "Audit-log trail, I5 refusal gaps, and reconciliation alerts land in W4.c. Sources: overshoot_audit_logs, reconciliation_events." Portfolio: "Lot-level portfolio surface lands in W4.d. Sources: overshoot_lots, overshoot_reconciliation_state. Equity-curve visualization awaits the ratified overshoot equity-snapshots table (candidate iii)." Config: "Read-only view + gated edit dialog for overshoot_strategy_config lands in W4.e (Tier-A-adjacent). Atomicity mechanism (RPC vs sequential-with-loud-failure) will be adjudicated at W4.e Step A per the design pin."
