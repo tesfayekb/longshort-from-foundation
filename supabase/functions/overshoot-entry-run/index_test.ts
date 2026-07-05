@@ -213,3 +213,76 @@ Deno.test('probe short-circuit taxonomy: alpaca / polygon only; else 400', () =>
 Deno.test('single account key ratified for v1 (A3)', () => {
   assertStringIncludes(SRC, "const OVERSHOOT_ACCOUNT_KEY = 'overshoot-paper-primary'");
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// ACT-466 position_already_open entry gate (money-path).
+// Source-sentinel tests: assert the gate exists, is placed correctly, uses
+// both sources (open lots + broker positions), refuses on either side, and
+// carries full signal context per operator ratification.
+// ─────────────────────────────────────────────────────────────────────────
+
+Deno.test('ACT-466: position_already_open counter present in RefusalTally + newTally', () => {
+  assertStringIncludes(SRC, 'position_already_open: number;');
+  assertStringIncludes(SRC, 'position_already_open: 0,');
+});
+
+Deno.test('ACT-466: gate sources BOTH open lots AND broker positions (position-fetcher sibling)', () => {
+  assertStringIncludes(SRC, "import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpaca-position-fetcher.ts'");
+  assertStringIncludes(SRC, "SELECT symbol, side FROM overshoot_lots WHERE status = 'open'");
+  assertStringIncludes(SRC, 'positionFetcher.listOpenPositions(nowTs)');
+  assertStringIncludes(SRC, 'const heldTickers = new Set<string>()');
+});
+
+Deno.test('ACT-466: same-side open lot → refused (heldTickers set is side-agnostic)', () => {
+  // The Set is populated from openLotRows regardless of side, so a same-side
+  // open lot triggers the gate. Assert the population loop + the gate check.
+  assertStringIncludes(SRC, 'for (const r of openLotRows');
+  assertStringIncludes(SRC, 'heldTickers.add(r.symbol)');
+  assertStringIncludes(SRC, 'if (heldTickers.has(sel.ticker)) {');
+});
+
+Deno.test('ACT-466: opposite-side open lot → refused (either side blocks)', () => {
+  // Same Set feed → opposite-side hit is identical control flow. Ratchet the
+  // audit-metadata field that records the observed lot sides so W5 can
+  // reconstruct which side was already held.
+  assertStringIncludes(SRC, 'open_lot_sides: lotHit.map((r) => r.side)');
+});
+
+Deno.test('ACT-466: broker-position-no-lot (manual position) → refused', () => {
+  // Broker positions populate heldTickers via a separate loop; manual
+  // positions (no matching lot) are flagged in metadata.
+  assertStringIncludes(SRC, 'for (const p of brokerPositions) if (p.qty !== 0) heldTickers.add(p.symbol)');
+  assertStringIncludes(SRC, 'manual_broker_position: lotHit.length === 0 && brokerHit.length > 0');
+});
+
+Deno.test('ACT-466: no-position → gate does NOT continue (falls through to Polygon snapshot)', () => {
+  // The gate is a guarded `continue`; when the ticker is absent from
+  // heldTickers, control flows into fetchPolygonSnapshot (the next line
+  // in-source). Assert placement: gate precedes snapshot fetch, snapshot
+  // fetch precedes I5.
+  const idxGate     = SRC.indexOf('if (heldTickers.has(sel.ticker)) {');
+  const idxSnap     = SRC.indexOf('await fetchPolygonSnapshot(env.polygonKey, sel.ticker)');
+  const idxI5eval   = SRC.indexOf('evaluateI5PreOpenRecheck({');
+  assert(idxGate > 0 && idxSnap > 0 && idxI5eval > 0);
+  assert(idxGate < idxSnap, 'position_already_open gate precedes Polygon snapshot');
+  assert(idxSnap < idxI5eval, 'Polygon snapshot precedes I5 evaluation');
+});
+
+Deno.test('ACT-466: refusal carries full signal context (rank_score + side + ticker)', () => {
+  assertStringIncludes(SRC, "action: 'overshoot.entry.position_already_open'");
+  assertStringIncludes(SRC, 'ticker: sel.ticker, side: sel.side, rank_score: sel.rank_score');
+});
+
+Deno.test('ACT-466: gate placement — AFTER detection-linkage / config / equity / session-marker, BEFORE per-target vendor calls', () => {
+  const idxLinkage = SRC.indexOf('resolveDetectionRunForEntry');
+  const idxMarker  = SRC.indexOf("action: 'overshoot.entry.session_marker'");
+  const idxPrefetch = SRC.indexOf('const openLotRows = await sql');
+  const idxLoop    = SRC.indexOf('for (const sel of selections) {');
+  const idxGate    = SRC.indexOf('if (heldTickers.has(sel.ticker)) {');
+  const idxI5      = SRC.indexOf('const i5 = evaluateI5PreOpenRecheck');
+  assert(idxLinkage > 0 && idxMarker > 0 && idxPrefetch > 0 && idxLoop > 0 && idxGate > 0 && idxI5 > 0);
+  assert(idxLinkage < idxPrefetch, 'detection-linkage precedes prefetch');
+  assert(idxMarker  < idxPrefetch, 'session marker precedes prefetch');
+  assert(idxPrefetch < idxLoop,    'prefetch precedes per-target loop');
+  assert(idxGate    < idxI5,       'position_already_open gate precedes I5');
+});
