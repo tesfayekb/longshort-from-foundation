@@ -23,7 +23,7 @@
  * W4.a status: shell only. Tabs render honest empty-states (no data
  * fetches this tranche). W4.b–W4.e hydrate the tabs progressively.
  */
-import { Activity, ClipboardList, Briefcase, Settings } from 'lucide-react';
+import { Activity, ClipboardList, Briefcase, Settings, LayoutDashboard } from 'lucide-react';
 import type { NavSection } from '@/config/navigation.types';
 
 /**
@@ -58,30 +58,30 @@ export const overshootNav: NavSection = {
     {
       title: 'Overview',
       url: '/trading/overshoot',
-      icon: Activity,
+      icon: LayoutDashboard,
       permission: 'overshoot.view',
     },
     {
       title: 'Detector',
-      url: '/trading/overshoot?tab=detector',
+      url: '/trading/overshoot/detector',
       icon: ClipboardList,
       permission: 'overshoot.view',
     },
     {
       title: 'Execution',
-      url: '/trading/overshoot?tab=execution',
+      url: '/trading/overshoot/execution',
       icon: Activity,
       permission: 'overshoot.view',
     },
     {
       title: 'Portfolio',
-      url: '/trading/overshoot?tab=portfolio',
+      url: '/trading/overshoot/portfolio',
       icon: Briefcase,
       permission: 'overshoot.view',
     },
     {
       title: 'Config',
-      url: '/trading/overshoot?tab=config',
+      url: '/trading/overshoot/config',
       icon: Settings,
       permission: 'overshoot.view',
     },
@@ -89,12 +89,26 @@ export const overshootNav: NavSection = {
 };
 
 /**
- * Routed page component for `/trading/overshoot`. Thin re-export of the
- * internal `OvershootDashboard` component. Consumers (the route
- * registration in `src/App.tsx` and the page wrapper in
- * `src/pages/trading/overshoot/`) import this through the façade ONLY.
+ * Routed page components. W4.f (ACT-465.f) restructured the console from
+ * tabs-in-one-route to a page-per-section shape mirroring the longshort
+ * convention — each section is now a first-class route so active-nav
+ * highlighting resolves via react-router `NavLink`'s pathname match
+ * (queries were ignored, causing all tab entries to co-highlight).
+ *
+ * Consumers (route registration in `src/App.tsx` and page wrappers in
+ * `src/pages/trading/overshoot/`) import through the façade ONLY.
+ *
+ * Legacy alias `OvershootDashboardPage` maps to the new Overview page to
+ * keep the existing wrapper `OvershootDashboardPage.tsx` compiling —
+ * scheduled for removal once the wrapper is retired.
  */
-export { OvershootDashboard as OvershootDashboardPage } from './components/OvershootDashboard';
+export { OvershootOverview as OvershootOverviewPage } from './components/OvershootOverview';
+export { OvershootOverview as OvershootDashboardPage } from './components/OvershootOverview';
+export { OvershootDetectorRuns as OvershootDetectorPage } from './components/OvershootDetectorRuns';
+export { OvershootExecutionTrail as OvershootExecutionPage } from './components/OvershootExecutionTrail';
+export { OvershootPositions as OvershootPortfolioPositionsPage } from './components/OvershootPositions';
+export { OvershootPnL as OvershootPortfolioPnLPage } from './components/OvershootPnL';
+export { OvershootConfigPanel as OvershootConfigPage } from './components/OvershootConfigPanel';
 
 /**
  * W4.b (ACT-465.b): drill-in page for a single detection run at
@@ -102,11 +116,20 @@ export { OvershootDashboard as OvershootDashboardPage } from './components/Overs
  * wrapper at `src/pages/trading/overshoot/OvershootDetectorRunDetailPage.tsx`
  * can honor the T1 façade-only import rule.
  *
- * Supervisor note (fourth-export accounting): the façade actually exposes
- * FOUR runtime names + one type — this comment records the tally
- * explicitly. Names: `overshootNav`, `OVERSHOOT_PERMISSION_KEYS`,
- * `OvershootDashboardPage`, `OvershootDetectorRunDetailPage`. Type:
- * `OvershootPermissionKey`. Any expansion beyond this set requires a
- * new operator ratification, per T1.
+ * FAÇADE EXPORT LEDGER (updated W4.f, ACT-465.f — expansion ratified by
+ * the R-1 restructure ruling):
+ *   Runtime values:
+ *     - overshootNav
+ *     - OVERSHOOT_PERMISSION_KEYS
+ *     - OvershootOverviewPage
+ *     - OvershootDashboardPage (legacy alias → OvershootOverviewPage)
+ *     - OvershootDetectorPage
+ *     - OvershootExecutionPage
+ *     - OvershootPortfolioPositionsPage
+ *     - OvershootPortfolioPnLPage
+ *     - OvershootConfigPage
+ *     - OvershootDetectorRunDetailPage
+ *   Types:
+ *     - OvershootPermissionKey
  */
 export { OvershootDetectorRunDetail as OvershootDetectorRunDetailPage } from './components/OvershootDetectorRunDetail';
