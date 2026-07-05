@@ -566,11 +566,52 @@ Deno.serve(createHandler(async (req: Request) => {
     const fillFetcher = new OvershootAlpacaFillFetcher(client);
     const submitter = new OvershootAlpacaOrderSubmitter(client);
 
+    // ── ACT-466 position_already_open gate (SOURCES) ────────────────────
+    // Pre-fetch open lots + broker positions ONCE before the loop; the
+    // per-target check is a Set lookup (no vendor calls spent on refused
+    // names). Blocks entry when EITHER source shows the ticker held on
+    // EITHER side, including manual broker positions with no matching lot
+    // (broker truth per §2 axiom 2). Pyramiding is not a v1 default.
+    const openLotRows = await sql<{ symbol: string; side: 'long' | 'short' }[]>`
+      SELECT symbol, side FROM overshoot_lots WHERE status = 'open'
+    `;
+    const positionFetcher = new OvershootAlpacaPositionFetcher(client);
+    const brokerPositions = await positionFetcher.listOpenPositions(nowTs);
+    const heldTickers = new Set<string>();
+    for (const r of openLotRows as { symbol: string; side: 'long' | 'short' }[]) heldTickers.add(r.symbol);
+    for (const p of brokerPositions) if (p.qty !== 0) heldTickers.add(p.symbol);
+
     for (const sel of selections) {
       const sideUpper: OvershootSide = sel.side === 'long' ? 'LONG' : 'SHORT';
       const sizeSide: OvershootSizeSide = sideUpper;
       const entrySide: EntrySide = sideUpper;
       const capacityPerSide = sideUpper === 'LONG' ? longSelections.length : shortSelections.length;
+
+      // ── ACT-466 position_already_open per-target check ────────────────
+      // Placed BEFORE any vendor call (Polygon snapshot / I5 / sizing /
+      // shortability / entry-price). Refusal persists full signal context
+      // so W5 can measure forgone repeat-signal / pyramiding value.
+      if (heldTickers.has(sel.ticker)) {
+        tally.position_already_open += 1;
+        const lotHit    = (openLotRows as { symbol: string; side: 'long' | 'short' }[])
+                            .filter((r) => r.symbol === sel.ticker);
+        const brokerHit = brokerPositions.filter((p) => p.symbol === sel.ticker);
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.entry.position_already_open',
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: {
+            ticker: sel.ticker, side: sel.side, rank_score: sel.rank_score,
+            open_lot_sides: lotHit.map((r) => r.side),
+            broker_position_qty: brokerHit.length > 0 ? brokerHit[0].qty : null,
+            broker_position_side: brokerHit.length > 0 ? (brokerHit[0].qty > 0 ? 'long' : 'short') : null,
+            manual_broker_position: lotHit.length === 0 && brokerHit.length > 0,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+          },
+        });
+        continue;
+      }
 
       // Fetch pre-open Polygon snapshot (reused for I5 + entry-price).
       const snap = await fetchPolygonSnapshot(env.polygonKey, sel.ticker);
