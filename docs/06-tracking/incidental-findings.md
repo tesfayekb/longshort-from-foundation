@@ -13,7 +13,7 @@ Each entry must reach one of two terminal states per supervisor protocol §8: **
 
 ## Open Findings
 
-### INC-83 — `overshoot_target_positions` NOT-NULL zero-sentinel rows at detection time (SENTINEL-class anti-phantom debt; accepted-with-disposition; resolved structurally at W3.6.e entry-engine UPSERT)
+### INC-83 — `overshoot_target_positions` NOT-NULL zero-sentinel rows at detection time (SENTINEL-class anti-phantom debt; **RESOLVED at ACT-464.e-ii, 2026-07-05**)
 
 | Field | Value |
 |---|---|
@@ -24,7 +24,7 @@ Each entry must reach one of two terminal states per supervisor protocol §8: **
 | **Forward binding** | W3.6.e (ACT-463.e) MUST include: (a) an entry-engine test asserting the UPSERT overwrites the zero sentinel with real sizing on commitment; (b) a test asserting the zero sentinel PERSISTS when I5 refuses (so operator forensics see "detection selected N; entry committed M<N; N-M refused with reason X"); (c) an INC-83-closure clause in ACT-463.e citing this INC + the tests. |
 | **Why NOT fixed at W3.6.c** | R-4 resolution: provisional detection-time sizing would require (i) a schema migration, (ii) an Alpaca account fetch inside the detection handler (widening its refusal surface), (iii) code churn in a handler that was headline-gated byte-untouched this turn. The entry-engine UPSERT is the correct structural resolution point. |
 | **Cross-references** | ACT-463.c (R-4 reconciliation record); FP-069-ADD-08 (FP status W3.6.c clause); MIG `20260704023836_...:146-155` (`overshoot_target_positions` schema); anti-phantom-defaults rule (money-path standing); `_shared/overshoot-execution/sizing.ts` (pure module whose UPSERT consumer is W3.6.e). |
-| **Status** | Open; disposition ACCEPTED-WITH-DISPOSITION; closure gated on W3.6.e landing. |
+| **Status** | **RESOLVED at ACT-464.e-ii (2026-07-05).** `overshoot-entry-run` handler executes the ratified UPSERT `INSERT INTO overshoot_target_positions ... ON CONFLICT (run_id, ticker, side) DO UPDATE SET target_shares, target_notional, computed_at`. Both proof obligations enforced by `overshoot-entry-run/index_test.ts` source-sentinels: (a) **overwrites-on-commit** — the UPSERT lands with the real sizing values from `computeTargetSizing` immediately BEFORE order submission (test `INC-83 overwrites-on-commit proof: UPSERT with ON CONFLICT DO UPDATE`); (b) **sentinel-persists-on-I5-refuse** — on `!i5.ok` the loop `continue`s BEFORE the UPSERT block, leaving the detection sentinel (0/0) intact + audit metadata `inc83_sentinel_persists: true` records the truthful no-entry-taken outcome (test `I5 default-deny with INC-83 sentinel-persists-on-I5-refuse proof` + `idxI5refuse < idxUpsert` ordering assertion). No schema migration required — the UPSERT was the correct structural resolution point as anticipated at surfacing. |
 
 ### INC-82 — Registry bracket flips used migration tool instead of data-write tool (§22.5.3 forward-rule deviation)
 
