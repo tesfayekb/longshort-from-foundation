@@ -881,3 +881,24 @@ The evidence bundle is complete when: E1 returns 0 in both invocations, E2 shows
 **W4.e DESIGN PIN (recorded here; adjudicated at W4.e Step A).** The Step-A A3 sketch described the config UPDATE + audit INSERT as "one client transaction." supabase-js does NOT expose a client-side multi-statement transaction; two browser calls cannot be atomic as sketched. W4.e Step A MUST propose an atomicity mechanism with repo evidence — either a small server-side RPC (UPDATE + audit INSERT atomic; likely a migration, keeping W4.e Tier-A-adjacent) or sequential-with-loud-failure semantics (audit-write failure surfaces destructively in the UI and refuses to report success). Not decided here.
 
 **W4.b–e placeholders (as rendered).** Detector: "Run history and candidate detail land in W4.b. Sources: overshoot_detection_runs, overshoot_events." Execution: "Audit-log trail, I5 refusal gaps, and reconciliation alerts land in W4.c. Sources: overshoot_audit_logs, reconciliation_events." Portfolio: "Lot-level portfolio surface lands in W4.d. Sources: overshoot_lots, overshoot_reconciliation_state. Equity-curve visualization awaits the ratified overshoot equity-snapshots table (candidate iii)." Config: "Read-only view + gated edit dialog for overshoot_strategy_config lands in W4.e (Tier-A-adjacent). Atomicity mechanism (RPC vs sequential-with-loud-failure) will be adjudicated at W4.e Step A per the design pin."
+
+## §11 W3.6.e-ii entry-gate corrective — `position_already_open` (LANDED 2026-07-05, ACT-466)
+
+**Ruling (operator-verbatim, ACT-466):** any open `overshoot_lots` row OR broker position for the candidate ticker (EITHER side) → typed refusal `position_already_open`, persisted with the declined signal's full context (`rank_score`, `side`, `ticker`) so W5 can measure forgone repeat-signal / pyramiding value. **Pyramiding is a future evidence-gated policy, not a v1 default.** A manual broker position (no matching lot) ALSO blocks entry — broker truth per §2 axiom 2.
+
+**Gap closed.** The pre-corrective entry handler was held-name-blind: it submitted new orders without consulting either the open-lots ledger or broker positions. On a repeat signal for a ticker already held (or with an unrecorded manual position), it would pyramid unattended. ACT-466 wires the gate that ensures every entry pass first reads held names and refuses cleanly on any hit.
+
+**Placement (precise):** inside the per-target loop, AFTER detection-linkage / strategy-config read / equity snapshot / session-marker write, and BEFORE any per-target vendor call (Polygon snapshot / I5 / sizing / shortability / entry-price construction / submit). No vendor calls are spent on refused names.
+
+**Sources.** Two pre-loop reads (one DB, one broker):
+- `SELECT symbol, side FROM overshoot_lots WHERE status = 'open'` — one query, once per run.
+- `positionFetcher.listOpenPositions(nowTs)` via the existing `OvershootAlpacaPositionFetcher` sibling (`_shared/overshoot-broker/alpaca-position-fetcher.ts`) — one `GET /v2/positions` call, once per run.
+Both feeds populate a `Set<string>` (`heldTickers`); the per-target check is an O(1) `Set.has()` lookup.
+
+**Refusal shape.** Counter `position_already_open` in the accounting-identity tally. Audit event `overshoot.entry.position_already_open` on `overshoot_audit_logs` carries: `ticker`, `side`, `rank_score`, `open_lot_sides` (array of the observed held sides — supports opposite-side vs same-side reconstruction for W5), `broker_position_qty`, `broker_position_side`, `manual_broker_position` (boolean — true when broker shows a position with no matching open lot). `session_date` / `dry_run` / `manual` / `slot` / `run_id` per every other overshoot audit row.
+
+**Accounting identity extended.** `targets_loaded = orders_submitted + position_already_open + i5_refusals + sizing_refusals + buying_power_refusals + shortability_refusals + entry_price_refusals + submissions_failed + fill_unfilled_no_lots`. The tally is echoed in the response envelope so the identity is observable at every run.
+
+**Byte-untouched constraint (headline).** Detector / exit / e-i pure modules UNTOUCHED — the corrective is confined to the entry handler + its test file. The pipeline scope beyond the gate insertion is untouched.
+
+**Follow-ups registered as FP stubs.** Wash-sale pre-W8 decision item (does overshoot re-entry need wash-sale interlock before W8's ledger lands?) and the pre-arming ALERTING requirement (failure / reconciliation-refusal / identity-break notifications must exist before ARM) are both registered as stubs on feature-proposals.md this turn.
