@@ -145,3 +145,11 @@ export { OvershootUniverse as OvershootUniversePage } from './components/Oversho
  *     - OvershootPermissionKey
  */
 export { OvershootDetectorRunDetail as OvershootDetectorRunDetailPage } from './components/OvershootDetectorRunDetail';
+
+/**
+ * W4.h (ACT-465.h): overshoot-owned within-page tab primitive (duplicate
+ * of the longshort HubTabs shape per the FP-069 Separation Contract —
+ * INC-77 duplicate-primitive discipline). Consumed by dense page wrappers
+ * (Portfolio, Execution) to house existing cards in ?tab=-synced tabs.
+ */
+export { OvershootHubTabs, OvershootHubEmptyState } from './components/OvershootHubTabs';
