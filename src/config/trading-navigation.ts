@@ -2,6 +2,7 @@ import { LayoutDashboard } from 'lucide-react';
 import type { NavSection } from './navigation.types';
 import { ROUTES } from './routes';
 import { longshortNav } from '@/features/longshort';
+import { overshootNav } from '@/features/overshoot';
 
 /**
  * Trading-panel navigation.
@@ -27,4 +28,5 @@ export const tradingNavigation: NavSection[] = [
     ],
   },
   longshortNav,
+  overshootNav,
 ];
