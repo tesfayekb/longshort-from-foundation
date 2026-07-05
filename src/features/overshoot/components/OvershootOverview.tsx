@@ -21,6 +21,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 
+/**
+ * SI staleness display window — MUST mirror the engine's named parameter:
+ *   supabase/functions/overshoot-detection-run/index.ts:97
+ *     const DETECTOR_SI_STALENESS_MAX_DAYS = 20;
+ *
+ * Console-displayed thresholds cite their engine constant, never restate
+ * values independently (FP-069 W4.g display-truth rule, ACT-465.g).
+ */
+const DETECTOR_SI_STALENESS_MAX_DAYS = 20;
+
 interface DetectionRow {
   run_id: string;
   as_of: string;
@@ -323,10 +333,14 @@ export function OvershootOverview() {
                 </div>
                 <div>
                   <Badge
-                    variant={siStaleDays !== null && siStaleDays > 14 ? 'destructive' : 'outline'}
+                    variant={
+                      siStaleDays !== null && siStaleDays > DETECTOR_SI_STALENESS_MAX_DAYS
+                        ? 'destructive'
+                        : 'outline'
+                    }
                     className="font-mono text-xs"
                   >
-                    staleness: {siStaleDays ?? '—'}d (window: 14d)
+                    staleness: {siStaleDays ?? '—'}d (window: {DETECTOR_SI_STALENESS_MAX_DAYS}d)
                   </Badge>
                 </div>
               </div>
