@@ -89,6 +89,7 @@ import { OvershootAlpacaAccountFetcher } from '../_shared/overshoot-broker/alpac
 import { OvershootAlpacaOrderSubmitter } from '../_shared/overshoot-broker/alpaca-order-submitter.ts';
 import { OvershootAlpacaFillFetcher } from '../_shared/overshoot-broker/alpaca-fill-fetcher.ts';
 import { OvershootAlpacaShortabilityFetcher } from '../_shared/overshoot-broker/alpaca-shortability-fetcher.ts';
+import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpaca-position-fetcher.ts';
 import {
   RATIFIED_STUDY_RUN_ID,
   RATIFIED_PARAM_GRID_HASH_PREFIX,
