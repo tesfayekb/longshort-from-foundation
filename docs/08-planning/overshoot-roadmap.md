@@ -107,6 +107,35 @@ plus one follow-up sweep:
   1× `Signed-In Users Can Execute SECURITY DEFINER Function` WARN — the RBAC
   helpers and kill-switch/config RPCs are DESIGNED callable-by-signed-in
   contract; triage will separate designed-callable from over-exposed).
+- **H-SEC-5 (Lovable + operator, ACT-475)** — **MCP surface ratification and
+  standing invariant.** The `supabase/functions/mcp` edge function (bundled
+  from `src/lib/mcp/{index,tools/app-info,tools/echo}.ts` by the
+  `@lovable.dev/mcp-js@0.20.0` Vite plugin, deployed and reachable
+  unauthenticated at `https://sftatlxatbdrotivxcip.supabase.co/functions/v1/mcp`)
+  is **ratified READ-ONLY forever**: no write / mutation / order-touching /
+  RBAC-touching / secret-touching tool may be added under any future prompt.
+  Current surface = exactly two tools: `app_info` (static non-sensitive
+  name/description JSON) and `echo` (returns caller-supplied text). Auth
+  posture (verbatim, this turn): `defineMcp` has no `auth` field
+  (`.lovable/mcp/manifest.json` → `"auth":{"type":"none"}`); no
+  `functions.mcp.verify_jwt` override in `supabase/config.toml`; the emitted
+  function body performs **no** `getClaims` / `checkPermissionOrThrow` /
+  bearer verification — handler is
+  `Deno.serve(createSupabaseHandler(mcp_default, { functionName: "mcp" }))`.
+  Live probe this turn: unauthenticated `POST tools/list` → `HTTP 200` +
+  full tool list SSE. **Operator waiver required** to hold this public-auth
+  posture past ratification: the MCP client-connect flow (ChatGPT / Claude
+  / Cursor / Codex) requires the surface be reachable without app auth to
+  discover tools; the tradeoff is that `app_info` name/description is
+  world-readable and `echo` is a public reflector. Both are non-sensitive
+  by construction — the read-only-forever invariant is what makes this
+  waiver bounded. **Alternative (surface as choice, do not decide):** add
+  Supabase OAuth 2.1 (RFC 8414 resource-server flow per the
+  `app-mcp-server-authoring` knowledge) — every client re-authenticates as
+  a real user, tools receive a per-user token; cost is the OAuth server
+  provisioning + consent-route build + every future tool becomes
+  RBAC-scoped. Operator ruling recorded here before any tool beyond the
+  two current ones is added.
 
 **Entry criteria:** ACT-469 landed (met). **Exit criteria:** H-SEC-1..4 all
 confirmed with evidence paste-back before Phase ARM opens.
