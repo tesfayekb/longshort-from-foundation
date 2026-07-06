@@ -719,3 +719,60 @@ H0 = the **exit-loop isolation** promoted blocker (ACT-468 hardening wave), whic
 - **STOP conditions honored:** no engine/detector/fixture byte changes; ratified-change protocol enumerated (not executed); allocation proposal cited row-by-row; H0 sequenced explicitly first; every risk paired with its pinning test.
 
 *Part V authored ACT-474 (2026-07-05). HEAD `9c5e3c57`. STEP A only — STOP for ratification. No build lands from this document; every tranche is a separate operator-approved wave.*
+
+---
+
+# Part V.B — R-3 amendment + Part V freshness attestation (ACT-475, 2026-07-05)
+
+**Mode:** DOCUMENTATION-ONLY. **Tier:** A (money-path allocation constants — proposal only, no build). No engine / config / migration / fixture / lockfile / deploy byte-touch this turn.
+
+## V.B1 — Part V freshness attestation (line-cited)
+
+Every quantitative claim in Part V (`overshoot-deployment-analysis.md` lines 566–721, ACT-474) traces to ACT-472-corrected (Part III) or ACT-473-regime (Part IV) numbers, NOT to the `[SUPERSEDED-ACT-472]` rows in Parts I / II. Line-by-line:
+
+- **L570 (framing):** "+333 bps vs +111 bps BULL" and "p10 pnl10 = −696 bps" — both cited from Part IV §IV.2 (ACT-473) regime × tier × horizon table. Not superseded.
+- **L574 (R-1 LONG T+10):** "marginal d6–d10 = 42.7 bps/day" — cited ACT-471 (Part II reconstruction), which is the r10-corrected series post-ACT-472. Not superseded.
+- **L574 (R-1 SHORT T+5 HARD):** cited `SHORT_T1_R10_NEGATIVE` stamp from ACT-472. Corrected.
+- **L576 (R-3 rationale ~0.15/day):** SHORT pre-filter arrivals from Part III (ACT-472 corrected). Corrected.
+- **L577 (R-4 regime bands):** BULL/CORRECTION/BEAR bands from Part IV §IV.1 (ACT-473). Not superseded.
+- **L635 (interaction honesty, T1 LONG BEAR = 0.62/day; T2 BEAR event count 19,504; p10 pnl10 = −696 bps):** all from Part IV §IV.2 (ACT-473). Corrected.
+- **L663 (T2 predicate — 491 T2 LONG cells / 261,830 events):** derived from ACT-470 Q1 LONG cells (LONG figures are NOT superseded — the ACT-472 SUPERSEDED marker is SHORT-only; LONG kernel-sign was correct in Part I). Attested unchanged.
+- **L670–676 (R-3 derivation rows):** cite Part I Q3 LONG cap-saturation (LONG rows never superseded) and Part III / Part IV SHORT arrivals ~0.005/day (ACT-472 corrected + ACT-473 regime slice). Corrected.
+- **L697–706 (risks/pinning tests):** implementation contracts, no historical PnL claims — freshness N/A.
+
+**Conclusion:** Part V contains **zero** `[SUPERSEDED-ACT-472]` figures. Superseded markers appear only on lines 20, 22, 24 (Part I) and line 118 (Part I blended math). No re-issue required.
+
+## V.B2 — R-3 amendment (operator directive, verbatim, recorded)
+
+**Operator directive (verbatim):** *"long-primary allocation — long 0.90 / capacity 36, short 0.10 / capacity 4 for the paper phase; pure long-only 1.00 / 40 PRE-AUTHORIZED as the W8 live default if paper confirms the study's short verdict."*
+
+**Amendment to Part V §V.A4 (supersedes the 0.75 / 30 + 0.25 / 10 proposal of ACT-474 L667):**
+
+| Phase | `OVERSHOOT_SIDE_ALLOCATION_PCT_LONG` | `DETECTOR_CAPACITY_LONG` | `OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT` | `DETECTOR_CAPACITY_SHORT` | Slot conc. LONG | Slot conc. SHORT | Nameplate sum | Authorization |
+|:-----:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|---|
+| **Paper (W3.8 tranche T3)** | **0.90** | **36** | **0.10** | **4** | 2.50 % | 2.50 % | 1.00 | Operator directive this turn (ACT-475). Ratifies at W3.8 tranche T3 alongside R-1/R-2/R-4. |
+| **Live default (W8, conditional)** | **1.00** | **40** | **0.00** | **0** | 2.50 % | n/a | 1.00 | **PRE-AUTHORIZED** this turn — auto-elects at W8 IFF the paper evidence confirms the study's SHORT verdict (post-SI SHORT arrivals ≈ study's 0.005/day AND SHORT PnL5 realized ≤ 0 bps net-of-haircut). Fail-open to Paper-tier (0.90/36 + 0.10/4) if either condition falsifies. |
+
+**Derivation cited to matrix rows (updated from V.A4):**
+ - LONG: Part I Q3 + Part II corrected matrix rows 5–9 — cap-saturation binds; 36 slots × 2.5 % / slot = 90 % of equity at margin=1.0 (higher deployment than V.A4's 30/2.5% / 75 %).
+ - SHORT paper 0.10 / 4: retains the audit-line ≥ 4-slot minimum for the SHORT engine so first-light through W7 keeps producing SHORT audit rows for W5 re-ratification — even at 0.005/day realized post-SI arrivals, 4 slots is the minimum non-zero footprint that keeps the shortability + IB-availability + SI-carry pipelines exercised.
+ - Slot concentration invariant preserved at exactly **2.50 % / slot** on both sides (matches operator ceiling from ACT-474 §V.A4).
+ - Nameplate sum = 1.00 pre-margin on BOTH tiers.
+ - **Deployment upper bound at margin=1.0:** Paper tier LONG @ full cap = **90 %**; SHORT realized 0.005/day ≈ 0.02 % — operational deployment ≈ **90 %**. Live tier = **100 %** (pure long). Both exceed the ~40 %-class the operator directive names; the 90 → 100 step at W8 is the pre-authorized re-ratification.
+
+**W8 auto-elect conditions (evidence gate, must both hold):**
+ 1. Realized SHORT arrivals over the W3.8→W7 paper window ≤ 0.02/day (4× the study's 0.005/day headroom for measurement noise). Source: `overshoot_events WHERE side='SHORT' AND selected_for_entry=true`.
+ 2. Realized SHORT PnL5 (haircut-adjusted, side-signed per ACT-472 kernel convention) ≤ 0 bps averaged over all SHORT round-trips in the paper window. Source: `overshoot_lots WHERE side='SHORT' AND status='closed'` joined to entry/exit prices.
+
+If either condition FAILS at W8-decision-time, the Live tier does NOT auto-elect; the paper allocation (0.90 / 36 + 0.10 / 4) becomes the W8 default and SHORT gets a formal re-ratification wave (out of scope for this ACT — new FP if needed).
+
+**Pinning tests (extend V.A6 risks table):**
+ - `assertEquals(OVERSHOOT_SIDE_ALLOCATION_PCT_LONG, 0.90)` + `assertEquals(DETECTOR_CAPACITY_LONG, 36)` — paper tier.
+ - `assertEquals(OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT, 0.10)` + `assertEquals(DETECTOR_CAPACITY_SHORT, 4)` — paper tier.
+ - `assertEquals(0.90 / 36, 0.025)` + `assertEquals(0.10 / 4, 0.025)` — slot-concentration invariant.
+ - `assertEquals(OVERSHOOT_SIDE_ALLOCATION_PCT_LONG + OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT, 1.0)` — nameplate.
+ - W8 auto-elect gate is a **separate, later ACT** — not built this turn; only the constants and the pre-authorization are recorded here.
+
+**Standing invariants preserved:** 2.5 % / slot concentration ceiling; nameplate ≤ 1.00 pre-margin; R-1 (LONG T+10 / SHORT T+5) unchanged; R-2 (T2 LONG frontier admission) unchanged; R-4 (regime governor) unchanged; H0 sequencing (ACT-468 exit-loop isolation before any R-1 land) unchanged.
+
+*Part V.B authored ACT-475 (2026-07-05). Docs-only; no engine byte-touch. W3.8 tranche ratification proceeds after MCP security tranche (§H-SEC-5) and Part V freshness attestation (V.B1) land.*
