@@ -136,6 +136,21 @@ plus one follow-up sweep:
   provisioning + consent-route build + every future tool becomes
   RBAC-scoped. Operator ruling recorded here before any tool beyond the
   two current ones is added.
+  - **Operator + supervisor ruling (ACT-475 closure, verbatim):** option
+    **(a) `auth: none` is ACCEPTED** for the CURRENT surface only, because
+    that surface is frozen at exactly `app_info` + `echo` (non-sensitive
+    by construction) and public reachability keeps the operator's MCP
+    connector working. **HARD CONDITION (STANDING INVARIANT, additive to
+    the READ-ONLY-forever contract):** any tool beyond these two requires
+    OAuth 2.1 adoption FIRST (per the `app-mcp-server-authoring` KB path),
+    PLUS its own FP + operator ratification + `function-index.md` row +
+    H-SEC-5 amendment — **no exceptions, no "just one read-only query
+    tool" incrementalism; RBAC without caller identity is unsound.** The
+    five supervisor-verification tools proposed in ACT-475 are REGISTERED
+    as **FP-CANDIDATE-vi** (supervisor MCP verification channel,
+    OAuth-prerequisite) and SEQUENCED after the critical month — they are
+    a verification-convenience upgrade, not a money-path item; the proven
+    paste-based §22.5.1 channel continues meanwhile.
 
 **Entry criteria:** ACT-469 landed (met). **Exit criteria:** H-SEC-1..4 all
 confirmed with evidence paste-back before Phase ARM opens.
