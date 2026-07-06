@@ -57,8 +57,17 @@
  *     positions_examined = exits_submitted
  *                        + reconciliation_refusals (4 classes)
  *                        + session_age_no_fire
+ *                        + session_age_query_failed     -- ACT-468 H0
+ *                        + snapshot_fetch_failed        -- ACT-468 H0
+ *                        + per_lot_unexpected           -- ACT-468 H0
  *                        + exit_price_refusals (4 classes)
  *                        + market_closed_skips
+ *   Per-lot isolation (ACT-468 H0): the per-lot for-body is wrapped so
+ *   ANY per-lot failure (session-age SQL throw, polygon snapshot throw,
+ *   or unexpected error in exit-price / submit) yields a TYPED per-lot
+ *   outcome and the loop CONTINUES. Run-level failures (boot, kill-
+ *   switch, disarmed, clock, broker positions, open-lots SELECT) stay
+ *   run-level. See the boundary comment above the loop for details.
  *   dry_run  : full pipeline; ZERO order submissions; response marks
  *              dry_run=true so the accounting identity above is
  *              observable without moving money.
@@ -175,6 +184,9 @@ interface RefusalTally {
   reconciliation: { lot_without_broker_position: number; unknown_broker_position: number; side_mismatch: number; qty_mismatch: number };
   exit_price:     { polygon_snapshot_unavailable: number; polygon_snapshot_stale: number; polygon_snapshot_malformed: number; polygon_snapshot_crossed: number };
   session_age_no_fire: number;
+  session_age_query_failed: number;
+  snapshot_fetch_failed: number;
+  per_lot_unexpected: number;
   submissions_failed: number;
 }
 function newTally(): RefusalTally {
@@ -182,6 +194,9 @@ function newTally(): RefusalTally {
     reconciliation: { lot_without_broker_position: 0, unknown_broker_position: 0, side_mismatch: 0, qty_mismatch: 0 },
     exit_price:     { polygon_snapshot_unavailable: 0, polygon_snapshot_stale: 0, polygon_snapshot_malformed: 0, polygon_snapshot_crossed: 0 },
     session_age_no_fire: 0,
+    session_age_query_failed: 0,
+    snapshot_fetch_failed: 0,
+    per_lot_unexpected: 0,
     submissions_failed: 0,
   };
 }
@@ -447,8 +462,29 @@ Deno.serve(createHandler(async (req: Request) => {
     const intent = manualConfirm ? 'exit_manual' : 'exit_time';
 
     for (const m of report.matched) {
+      // ── ACT-468 H0: PER-LOT ERROR ISOLATION BOUNDARY ────────────────────
+      // Wrap the ENTIRE per-lot body so ANY per-lot failure (session-age
+      // SQL throw, polygon snapshot network throw, or an unexpected error
+      // in exit-price / submit path) produces a TYPED per-lot outcome,
+      // persists an audit row with the error class + correlation, and lets
+      // the loop CONTINUE to the next lot. One bad lot MUST NOT abandon
+      // the rest of the day's exits.
+      //
+      // BOUNDARY (explicit): RUN-LEVEL failures — boot assertion, kill-
+      // switch / disarmed / probe branches, /v2/clock, broker positions
+      // fetch, open-lots SELECT, reconciliation setup, DB URL / polygon
+      // key config — are NOT per-lot-wrapped. They stay run-level and
+      // abort the entire tick (caught by the outer try/catch that returns
+      // 500 exit_run_unhandled_error). Per-lot wrap begins here and ends
+      // at the end of the for-body.
+      //
+      // `perLotStage` tags the risky call in flight so the catch can emit
+      // the correct typed class without brittle error-message parsing.
+      let perLotStage: 'session_age_query' | 'snapshot_fetch' | 'exit_price' | 'submit' = 'session_age_query';
+      try {
       // (e) session-age (cron path only). Manual override bypasses.
       if (!manualConfirm) {
+        perLotStage = 'session_age_query';
         const spyPriorSessionDates = await sql<{ trade_date: string }[]>`
           SELECT trade_date::text AS trade_date
           FROM overshoot_daily_bars
@@ -478,8 +514,10 @@ Deno.serve(createHandler(async (req: Request) => {
       }
 
       // (f) Polygon snapshot.
+      perLotStage = 'snapshot_fetch';
       const snap = await fetchPolygonSnapshot(env.polygonKey, m.symbol);
       // (g) exit-price construction (d-i module).
+      perLotStage = 'exit_price';
       const priced = constructExitLimitPrice({
         snapshot: snap, side: m.side.toUpperCase() as OvershootSide, asOf: nowTs,
       });
@@ -496,6 +534,7 @@ Deno.serve(createHandler(async (req: Request) => {
       }
 
       // (h) build CID + submit.
+      perLotStage = 'submit';
       const cid = buildOvershootClientOrderId({
         runId, ticker: m.symbol, side: m.side.toUpperCase() as OvershootSide,
         intent, attempt: 0,
@@ -541,6 +580,43 @@ Deno.serve(createHandler(async (req: Request) => {
           correlationId,
           metadata: { symbol: m.symbol, side: m.side, reason, lot_ids: m.lotIds, dry_run: dryRun, manual: manualConfirm, run_id: runId },
         });
+      }
+      } catch (perLotErr) {
+        // ── ACT-468 H0: typed per-lot failure — loop CONTINUES. ──
+        // The submit stage owns its own try/catch above; if we land here
+        // with stage='submit' it means the try/catch itself threw
+        // (writeStrategyAuditEvent, etc.) — classify as per_lot_unexpected
+        // rather than double-count submissions_failed.
+        const cls: 'session_age_query_failed' | 'snapshot_fetch_failed' | 'per_lot_unexpected' =
+          perLotStage === 'session_age_query' ? 'session_age_query_failed'
+          : perLotStage === 'snapshot_fetch'  ? 'snapshot_fetch_failed'
+          : 'per_lot_unexpected';
+        if (cls === 'session_age_query_failed') tally.session_age_query_failed += 1;
+        else if (cls === 'snapshot_fetch_failed') tally.snapshot_fetch_failed += 1;
+        else tally.per_lot_unexpected += 1;
+        const errMsg = perLotErr instanceof Error ? perLotErr.message : String(perLotErr);
+        try {
+          await writeStrategyAuditEvent({
+            strategyKey: 'overshoot',
+            action: `overshoot.exit.${cls}`,
+            actorId: authCtx.user.id, targetType: 'overshoot_lots', targetId: m.symbol,
+            correlationId,
+            metadata: {
+              symbol: m.symbol, side: m.side, lot_ids: m.lotIds,
+              stage: perLotStage, error: errMsg,
+              dry_run: dryRun, manual: manualConfirm, run_id: runId,
+            },
+          });
+        } catch (auditErr) {
+          // Audit write itself failed — log to stderr so the tick is not
+          // aborted; the tally increment above still records the event.
+          console.error(JSON.stringify({
+            event: 'per_lot_audit_write_failed',
+            correlationId, symbol: m.symbol, stage: perLotStage,
+            per_lot_err: errMsg, audit_err: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          }));
+        }
+        continue;
       }
     }
 

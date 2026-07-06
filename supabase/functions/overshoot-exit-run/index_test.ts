@@ -171,6 +171,77 @@ Deno.test('exit-price: all four typed-refusal counters present in tally', () => 
   assertStringIncludes(SRC, 'polygon_snapshot_crossed: 0');
 });
 
+// ── ACT-468 H0: per-lot error isolation ─────────────────────────────────
+// The handler is DB + network dependent (see file header). These tests
+// prove the isolation contract via source-sentinels: the per-lot body is
+// wrapped, the catch classifies via a stage tag, both new typed audit
+// actions are emitted, the tally carries the new counters, and the run-
+// level boundary is stated explicitly.
+
+Deno.test('ACT-468 H0: per-lot try wraps the for-body immediately after loop header', () => {
+  const idxFor  = SRC.indexOf('for (const m of report.matched)');
+  const idxTry  = SRC.indexOf('try {', idxFor);
+  const idxCase = SRC.indexOf("perLotStage: 'session_age_query'", idxFor);
+  assert(idxFor > 0 && idxTry > 0 && idxCase > 0);
+  assert(idxCase < idxTry || idxTry - idxFor < 800, 'try appears near top of for-body');
+  // The catch classifies via stage tag, not by parsing error messages.
+  assertStringIncludes(SRC, "perLotStage === 'session_age_query' ? 'session_age_query_failed'");
+  assertStringIncludes(SRC, "perLotStage === 'snapshot_fetch'  ? 'snapshot_fetch_failed'");
+  assertStringIncludes(SRC, "'per_lot_unexpected'");
+});
+
+Deno.test('ACT-468 H0: catch continues the loop (never abandons remaining lots)', () => {
+  // The per-lot catch block MUST end with `continue;` — proves that a
+  // failure on lot N does not abort lots N+1..end.
+  const idxCatch = SRC.indexOf('} catch (perLotErr) {');
+  assert(idxCatch > 0, 'per-lot catch exists');
+  const catchBody = SRC.slice(idxCatch, idxCatch + 2400);
+  assertStringIncludes(catchBody, 'continue;');
+  // Tally increment happens BEFORE the audit write so a failing audit
+  // still records the event.
+  assertStringIncludes(catchBody, 'tally.session_age_query_failed += 1');
+  assertStringIncludes(catchBody, 'tally.snapshot_fetch_failed += 1');
+  assertStringIncludes(catchBody, 'tally.per_lot_unexpected += 1');
+});
+
+Deno.test('ACT-468 H0: typed per-lot failure audit actions emitted for both new classes', () => {
+  assertStringIncludes(SRC, 'overshoot.exit.${cls}');
+  // Both new class strings appear as tally keys + classification literals.
+  assertStringIncludes(SRC, "'session_age_query_failed'");
+  assertStringIncludes(SRC, "'snapshot_fetch_failed'");
+});
+
+Deno.test('ACT-468 H0: new tally counters wired in newTally() and RefusalTally', () => {
+  assertStringIncludes(SRC, 'session_age_query_failed: number');
+  assertStringIncludes(SRC, 'snapshot_fetch_failed: number');
+  assertStringIncludes(SRC, 'per_lot_unexpected: number');
+  assertStringIncludes(SRC, 'session_age_query_failed: 0');
+  assertStringIncludes(SRC, 'snapshot_fetch_failed: 0');
+  assertStringIncludes(SRC, 'per_lot_unexpected: 0');
+});
+
+Deno.test('ACT-468 H0: run-level failures NOT per-lot-wrapped — boundary stated explicitly', () => {
+  assertStringIncludes(SRC, 'PER-LOT ERROR ISOLATION BOUNDARY');
+  assertStringIncludes(SRC, 'RUN-LEVEL failures');
+  // Run-level failures still return via the outer catch (500 unhandled).
+  assertStringIncludes(SRC, "return apiError(500, 'exit_run_unhandled_error'");
+  // Boot / clock / positions / open-lots calls remain OUTSIDE the per-lot
+  // for-loop — proven by their source-order position preceding the loop.
+  const idxFor       = SRC.indexOf('for (const m of report.matched)');
+  const idxClock     = SRC.indexOf("await client.getJson<AlpacaClockResponse>('/v2/clock')");
+  const idxPositions = SRC.indexOf('positionFetcher.listOpenPositions');
+  const idxOpenLots  = SRC.indexOf('WHERE status = \'open\'');
+  assert(idxClock > 0 && idxClock < idxFor,     'clock fetch is run-level');
+  assert(idxPositions > 0 && idxPositions < idxFor, 'positions fetch is run-level');
+  assert(idxOpenLots > 0 && idxOpenLots < idxFor,   'open-lots SELECT is run-level');
+});
+
+Deno.test('ACT-468 H0: accounting identity docstring lists new refusal classes', () => {
+  assertStringIncludes(SRC, '+ session_age_query_failed');
+  assertStringIncludes(SRC, '+ snapshot_fetch_failed');
+  assertStringIncludes(SRC, '+ per_lot_unexpected');
+});
+
 Deno.test('session-age (PIN-1): SPY prior-session query strictly > entry_ts::date; earliest lot anchors', () => {
   assertStringIncludes(SRC, "WHERE ticker = 'SPY'");
   assertStringIncludes(SRC, 'trade_date > (');

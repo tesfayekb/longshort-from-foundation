@@ -350,6 +350,7 @@
         "npm:@fontsource/inter@^5.2.8",
         "npm:@fontsource/jetbrains-mono@^5.2.8",
         "npm:@fontsource/plus-jakarta-sans@^5.2.8",
+        "npm:@lovable.dev/mcp-js@0.20",
         "npm:@playwright/test@^1.57.0",
         "npm:@radix-ui/react-alert-dialog@^1.1.14",
         "npm:@radix-ui/react-avatar@^1.1.10",
