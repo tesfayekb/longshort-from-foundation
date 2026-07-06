@@ -1,5 +1,4 @@
 import { defineTool } from "@lovable.dev/mcp-js";
-import { z } from "zod";
 
 export default defineTool({
   name: "app_info",
