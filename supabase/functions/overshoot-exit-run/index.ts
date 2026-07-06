@@ -57,8 +57,17 @@
  *     positions_examined = exits_submitted
  *                        + reconciliation_refusals (4 classes)
  *                        + session_age_no_fire
+ *                        + session_age_query_failed     -- ACT-468 H0
+ *                        + snapshot_fetch_failed        -- ACT-468 H0
+ *                        + per_lot_unexpected           -- ACT-468 H0
  *                        + exit_price_refusals (4 classes)
  *                        + market_closed_skips
+ *   Per-lot isolation (ACT-468 H0): the per-lot for-body is wrapped so
+ *   ANY per-lot failure (session-age SQL throw, polygon snapshot throw,
+ *   or unexpected error in exit-price / submit) yields a TYPED per-lot
+ *   outcome and the loop CONTINUES. Run-level failures (boot, kill-
+ *   switch, disarmed, clock, broker positions, open-lots SELECT) stay
+ *   run-level. See the boundary comment above the loop for details.
  *   dry_run  : full pipeline; ZERO order submissions; response marks
  *              dry_run=true so the accounting identity above is
  *              observable without moving money.
