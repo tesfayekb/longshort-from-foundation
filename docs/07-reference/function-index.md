@@ -4612,3 +4612,21 @@ INERT (no reader) until 3.2-c assembler regime-broadcaster is wired.
 | **Separation invariant** | Overshoot tree. Zero imports from `_shared/longshort-*/**`. Standing LIVE-PRICE SOURCE CONTRACT enforced by test grep: zero `data.alpaca.markets` / `/v2/stocks/` / `useDataUrl=true` consumers. |
 | **Files** | `supabase/functions/overshoot-entry-run/index.ts` + `_test.ts`; MIG-154 (`overshoot_strategy_config` table + RLS/GRANTs); MIG-155 (registry seed `overshoot.entry.run` enabled=`false`); `sql/33_overshoot_entry_run_cron_schedule.sql` (ART-047, authored-pending-apply; TWO cron.schedule lines). |
 | **Added by** | ACT-464.e-ii (function + tests + MIG-154 + MIG-155 + sql/33 + deploy + boot-probe). Authenticated 2xx probes + zero-lot dry-run truthful-accounting + first-real-entry end-to-end evidence land at W3.6.e-iii first-light bracket. |
+
+---
+
+## `mcp` — public MCP tool-surface edge function (ACT-475 ratified)
+
+| Field | Value |
+|---|---|
+| **Module** | platform / MCP integration (operator-initiated via Lovable MCP feature; reclassified per §22.5.4 from unauthorized-drift to operator-authorized-pending-ratification, ratified ACT-475). |
+| **Classification** | edge function — **READ-ONLY forever** (standing invariant, H-SEC-5). Non-money-path. Reads nothing from DB; writes nothing to DB; touches no broker; touches no secrets. Exposes MCP tool-list + tool invocation over Streamable HTTP. |
+| **File** | `supabase/functions/mcp/index.ts` (**AUTO-GENERATED** by `@lovable.dev/mcp-js@0.20.0` Vite plugin from `src/lib/mcp/index.ts` + `src/lib/mcp/tools/{app-info,echo}.ts` — do NOT hand-edit; regenerated on every build). |
+| **Auth** | **NONE** — verbatim posture: `defineMcp` has no `auth` field; `.lovable/mcp/manifest.json` reports `"auth":{"type":"none"}`; no `functions.mcp.verify_jwt` override in `supabase/config.toml`; function body has zero `getClaims` / `checkPermissionOrThrow` / bearer verification. Handler is `Deno.serve(createSupabaseHandler(mcp_default, { functionName: "mcp" }))`. Live probe (ACT-475, unauthenticated `POST tools/list`): `HTTP 200` + full tool list SSE returned. **Operator waiver recorded H-SEC-5** — public auth is required by the MCP client-connect flow (ChatGPT / Claude / Cursor / Codex); the read-only-forever invariant bounds the waiver. |
+| **Deploy** | Deployed to `https://sftatlxatbdrotivxcip.supabase.co/functions/v1/mcp` (prior turn). |
+| **Tools (exhaustive, RATIFIED CEILING)** | (1) `app_info` — returns static JSON `{name:"SSOT Guardian Core", description:"..."}`; input schema empty; `readOnlyHint:true`, `idempotentHint:true`, `openWorldHint:false`. (2) `echo` — returns caller-supplied `text`; input schema `{text: z.string().min(1)}`; same annotations. **NO OTHER TOOL MAY BE ADDED under any future prompt** — H-SEC-5 standing invariant. Any addition of write / mutation / order-touching / RBAC-touching / secret-touching / data-read tools requires an explicit new FP + operator ratification + this row updated. |
+| **Contract** | MCP Streamable HTTP per `https://modelcontextprotocol.io/specification/2025-06-18/basic/transports`. `POST` with `Accept: application/json, text/event-stream` (spec-mandatory or 406). |
+| **Separation invariant** | Zero imports from `_shared/overshoot-*/**`, `_shared/longshort-*/**`, `src/features/**`. Tool handlers are pure (`app_info` returns a literal; `echo` returns its input). |
+| **Secrets** | NONE consumed. |
+| **Standing invariants** | (1) READ-ONLY forever (H-SEC-5). (2) No DB read/write. (3) No broker touch. (4) No secret access. (5) Auto-generated file — hand-edits forbidden. (6) Any tool addition requires new FP. |
+| **Added by** | Operator-initiated via Lovable MCP feature (commits `82b372fb..513a6528`, reclassified per §22.5.4). Ratified ACT-475 (H-SEC-5 line + this row). |
