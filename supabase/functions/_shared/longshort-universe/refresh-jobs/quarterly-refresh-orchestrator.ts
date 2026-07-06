@@ -339,7 +339,6 @@ export function createQuarterlyRefreshOrchestrator(
             hard_exclusion_reasons: firings.map((f) => f.reason),
           });
         } catch (emitErr) {
-          // eslint-disable-next-line no-console
           console.warn(
             `quarterly-refresh-orchestrator: metrics emission failed for refresh_id ${refresh_id}: ${emitErr instanceof Error ? emitErr.message : String(emitErr)}`,
           );
