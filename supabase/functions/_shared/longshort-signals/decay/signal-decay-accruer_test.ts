@@ -1,5 +1,4 @@
 // @ts-nocheck — Deno test file; runs via `deno test`, not Vite/tsc.
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Tests for the per-signal close-to-next-open decay accruer
  * (MIG-114 / ACT-279).
