@@ -3,6 +3,8 @@ import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.t
 import {
   evaluateI5PreOpenRecheck,
   OVERSHOOT_I5_REVERSION_TOLERANCE_PCT,
+  OVERSHOOT_I5_SNAPSHOT_MIN_AGE_MS,
+  OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS,
 } from './i5-recheck.ts';
 import type { PolygonQuoteSnapshot } from './exit-price-construction.ts';
 
@@ -68,6 +70,26 @@ Deno.test('default-deny — polygon_snapshot_unavailable when null', () => {
 Deno.test('default-deny — polygon_snapshot_stale on >15s age', () => {
   const r = evaluateI5PreOpenRecheck({
     snapshot: snap(107.45, 107.55, 20_000),
+    side: 'LONG', tCloseRef: 110, preEventRef: 100, asOf: AS_OF,
+  });
+  assert(!r.ok);
+  assertEquals(r.refusal, 'polygon_snapshot_stale');
+});
+
+Deno.test('ACT-485 Option B — small negative age (skew, −500ms) is ACCEPTED (within widened lower bound)', () => {
+  assertEquals(OVERSHOOT_I5_SNAPSHOT_MIN_AGE_MS, -1_000);
+  assertEquals(OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS, 15_000);
+  // agoMs = -500 → capturedAt is 500ms IN THE FUTURE vs asOf → age = -500ms.
+  const r = evaluateI5PreOpenRecheck({
+    snapshot: snap(107.45, 107.55, -500),
+    side: 'LONG', tCloseRef: 110, preEventRef: 100, asOf: AS_OF,
+  });
+  assert(r.ok, `expected pass on -500ms skew; got refusal=${r.ok ? 'n/a' : r.refusal} reason=${r.ok ? 'n/a' : r.reason}`);
+});
+
+Deno.test('ACT-485 Option B — negative age beyond floor (−1500ms) STILL refuses stale', () => {
+  const r = evaluateI5PreOpenRecheck({
+    snapshot: snap(107.45, 107.55, -1_500),
     side: 'LONG', tCloseRef: 110, preEventRef: 100, asOf: AS_OF,
   });
   assert(!r.ok);
