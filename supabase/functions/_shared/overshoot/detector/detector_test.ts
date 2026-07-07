@@ -29,8 +29,8 @@ import {
   type StudyCellStats,
 } from './detector.ts';
 import { bandLabelFor as realBandLabelFor } from './band-label.ts';
-// Deno std sha256 for the version-hash reproducibility invariant.
-import { crypto as stdCrypto } from 'https://deno.land/std@0.224.0/crypto/mod.ts';
+// Native Web Crypto (globalThis.crypto.subtle) — no import needed; used by
+// the version-hash reproducibility invariant below.
 
 const RUN_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const AS_OF = '2026-07-04';
@@ -357,14 +357,14 @@ Deno.test('SHORT path — low-mean cell (below LONG T2 floor) still admits (SHOR
 Deno.test('RATIFIED_DETECTOR_VERSION — reproducible from study_full_hash + spec_v2_json', async () => {
   const STUDY_FULL = 'a37e4b963c0ff13f0962e231b6322d11f1210df44812cdd24dcf06e66f354e80';
   const input = new TextEncoder().encode(STUDY_FULL + '||' + DETECTOR_PREDICATE_SPEC_V2_JSON);
-  const digest = await stdCrypto.subtle.digest('SHA-256', input);
+  const digest = await crypto.subtle.digest('SHA-256', input);
   const hex = Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
   assertEquals(hex.slice(0, 8), RATIFIED_DETECTOR_VERSION);
   // v1 prefix also reproducible from the retroactive v1 spec.
   const inputV1 = new TextEncoder().encode(STUDY_FULL + '||' + DETECTOR_PREDICATE_SPEC_V1_JSON);
-  const digestV1 = await stdCrypto.subtle.digest('SHA-256', inputV1);
+  const digestV1 = await crypto.subtle.digest('SHA-256', inputV1);
   const hexV1 = Array.from(new Uint8Array(digestV1))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
