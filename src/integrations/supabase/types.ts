@@ -1710,6 +1710,51 @@ export type Database = {
           },
         ]
       }
+      overshoot_entry_runs: {
+        Row: {
+          correlation_id: string | null
+          created_at: string
+          detection_run_id: string | null
+          dry_run: boolean
+          git_sha: string | null
+          orders_submitted: number
+          outcome: string
+          regime: string | null
+          regime_signal_context: Json | null
+          run_id: string
+          session_date: string
+          targets_loaded: number
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string
+          detection_run_id?: string | null
+          dry_run?: boolean
+          git_sha?: string | null
+          orders_submitted?: number
+          outcome: string
+          regime?: string | null
+          regime_signal_context?: Json | null
+          run_id?: string
+          session_date: string
+          targets_loaded?: number
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string
+          detection_run_id?: string | null
+          dry_run?: boolean
+          git_sha?: string | null
+          orders_submitted?: number
+          outcome?: string
+          regime?: string | null
+          regime_signal_context?: Json | null
+          run_id?: string
+          session_date?: string
+          targets_loaded?: number
+        }
+        Relationships: []
+      }
       overshoot_events: {
         Row: {
           argmax_window_days: number | null
