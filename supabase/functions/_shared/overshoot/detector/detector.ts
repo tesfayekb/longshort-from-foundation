@@ -292,65 +292,118 @@ export function assertStudyProvenance(a: StudyProvenanceAttestation): void {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// FP-069 W3.8 T2.1 (ACT-479) — DETECTOR-PRIOR EXTENSION: tiered admission
+// FP-069 W3.8 T2.1b (ACT-479 — DRIFT correction) — GRID-WIDE tiered admission
 // ═══════════════════════════════════════════════════════════════════════
 //
-// Ratified 2026-07-07 (operator STEP-A ratifications, verbatim):
-//   (a) v2 = detector-versioning via NEW RATIFIED_DETECTOR_VERSION constant
+// DRIFT DISPOSITION (2026-07-07): the T2.1 landing (v2 prefix 723c2d25)
+// kept the LONG excess/momentum/drawdown/window gates BEFORE cell lookup,
+// which reduced T2 to a mean-partition within T1 geometry — vanishingly
+// small admission delta. The ratified frontier (ACT-470 Part I:
+// 491 T2 LONG cells / 261,830 events; ACT-471: T1∪T2 ≈ 106 LONG
+// arrivals/day; ACT-474 pointer verbatim: "T2 predicate as an exact
+// deterministic view over ratified study cells — mean_fwd_return_5d ≥
+// 0.0010 — reproduces Part I 491 cells / 261,830 events exactly") requires
+// grid-wide cell-mean-governed admission. T2.1b corrects the semantics.
+//
+// Ratified 2026-07-07 (operator STEP-A + T2.1b reconciliation):
+//   (a) v2 = detector-versioning via RATIFIED_DETECTOR_VERSION constant
 //       (sha256(study_full_hash ‖ canonical predicate_spec_json), first 8
-//       hex, ASCII '||' separator for portability). RATIFIED_STUDY_RUN_ID
-//       and RATIFIED_PARAM_GRID_HASH_PREFIX remain UNTOUCHED and
-//       boot-asserted forever — the study kernel is unchanged; no consumer
-//       rename atom exists; consumers ADD the new assertion in a later
-//       sub-tranche without a boot-broken window.
-//   (b) Selection ordering is pure rank_score DESC, |excess| DESC (operator
+//       hex, ASCII '||' separator). RATIFIED_STUDY_RUN_ID and
+//       RATIFIED_PARAM_GRID_HASH_PREFIX remain UNTOUCHED and boot-asserted
+//       forever — the study kernel is unchanged. Nothing binds v2 yet;
+//       T2.1b revises the v2 hash in-tranche (noted in
+//       DETECTOR_VERSION_HISTORY[v2].rationale).
+//   (b) Selection ordering: pure rank_score DESC, |excess| DESC (operator
 //       ROI directive — rank_score is the measured expected return;
-//       tier-class-priority rejected as a conservatism clamp). `tier ASC`
-//       is the FINAL tie-break only, invoked when rank_score AND |excess|
-//       tie exactly — this is determinism scaffolding, not priority.
+//       tier-class-priority rejected). `tier ASC` is the FINAL tie-break
+//       only — determinism scaffolding, not priority.
 //   (c) A higher-mean T2 cell DOES outrank a lower-mean T1 cell — the
 //       admission gate is per-cell; the ranking gate is per-mean.
+//   (d) Uniform ROI floor (SUPERVISOR LEAN, adopted): mean_fwd_return_5d
+//       ≥ 0.0010 applies grid-wide, INCLUDING T1-geometry cells. Cells
+//       below the floor refuse `no_study_cell` regardless of geometry —
+//       trading cells measured below 2× costs is ROI-negative independent
+//       of band/window/mq/dd classification. Explicit behavior delta vs
+//       v1 (which admitted any non-null-mean LONG cell); the delta is
+//       recorded as its own line in DETECTOR_VERSION_HISTORY[v2].
 //
-// LONG_T2_ELIGIBLE(cell) ≡ side='LONG' ∧ NOT LONG_T1_ELIGIBLE(cell)
-//                          ∧ mean_fwd_return_5d ≥ 0.0010 (2× haircut)
-//                          ∧ arrival_count ≥ 1
-// LONG_T1_ELIGIBLE(cell) ≡ side='LONG' ∧ mean_fwd_return_5d ≥ 0.0020
-//                          ∧ arrival_count ≥ 1
-//   (T1 threshold = retroactive canonicalization of the T1-only prior:
-//    2× the T2 haircut floor. Cells below 0.0010 refuse `no_study_cell`
-//    — a new hard floor that pre-v2 code lacked. In practice such cells
-//    ranked at the bottom of the top-20-per-side sort and were unlikely
-//    to be selected under capacity=20; the 2026-06-18 anchor's 3 LONG
-//    admissions are all L_10_INF cells with mean ≥ 0.0020 → all T1.)
+// LONG_T1_GEOMETRY(cellKey) ≡ side='LONG'
+//                              ∧ band ∈ {'L_10_INF'}
+//                              ∧ window_days ∈ {1,2,3}
+//                              ∧ momentum_quintile ∈ {4,5}
+//                              ∧ drawdown_bucket ∈ {1,2,3}
+//
+// LONG admission (T2.1b):
+//   (1) Universe: kernel |move_pct| ≥ 3% (upstream, unchanged).
+//   (2) Event-level gates: earnings-exclusion ±5d.
+//   (3) Cell resolution: (band, window_days, momentum_quintile,
+//       drawdown_bucket, exclusion_width_days) → cell.
+//   (4) Cell gate: mean_fwd_return_5d ≥ 0.0010 ∧ arrival_count ≥ 1;
+//       otherwise REFUSED `no_study_cell`.
+//   (5) Tier tagging: T1 iff LONG_T1_GEOMETRY(cellKey); else T2.
+//
+// LONG events OUTSIDE T1 geometry are NO LONGER refused at
+// excess/momentum/drawdown/window stages — they proceed to cell lookup and
+// live or die on the ROI floor. Those stages become informational
+// pass-records (`filter: 'long-tier-classifier'`) that document tier
+// classification, never refuse. SHORT is byte-unchanged from v1.
+//
+// The 2026-06-18 anchor: 3 LONG selections were all `L_10_INF`/w∈{1,2}/
+// mq=5/dd∈{1,2} cells with means well above 0.0010 → all remain T1 under
+// v2b (anchor preserved by construction; the added T2 admissions are
+// incremental, not displacing).
 //
 // SHORT path is BYTE-UNCHANGED this tranche: no T2 admission, no tier
 // tagging (tier remains null on every SHORT event), no mean-return floor
 // change. The SHORT rank_score formula `mean_fwd_return_5d * -1` is
-// preserved verbatim; the SHORT selection set is preserved verbatim.
+// preserved verbatim; the SHORT selection set is preserved verbatim;
+// every SHORT filter stage (window-set, excess-threshold, momentum,
+// drawdown, earnings-exclusion, si-squeeze-gate) executes identically to
+// v1 code.
 
-export const LONG_T1_MEAN_FWD_RETURN_5D_MIN = 0.0020 as const;
-export const LONG_T2_MEAN_FWD_RETURN_5D_MIN = 0.0010 as const;
+/** Grid-wide ROI floor — applies to every LONG tier (T1 + T2). */
+export const LONG_ROI_MEAN_FWD_RETURN_5D_MIN = 0.0010 as const;
 export const LONG_TIER_ARRIVAL_COUNT_MIN = 1 as const;
 
-/** Minimal shape the tier predicates read — a subset of `StudyCellStats`. */
+/** T1 GEOMETRY — the ratified geometric envelope; cells inside are T1. */
+export const LONG_T1_GEOMETRY = {
+  bands: ['L_10_INF'] as const,
+  windows: [1, 2, 3] as const,
+  momentum_quintiles: [4, 5] as const,
+  drawdown_buckets: [1, 2, 3] as const,
+} as const;
+
+/**
+ * Geometry-only predicate — reads the cell KEY, not the cell stats. T1
+ * cells with mean below the ROI floor still fail the uniform-floor gate
+ * (see (d) above) — geometry is the tier tag, ROI floor is the admission
+ * gate.
+ */
+export function isLongT1Geometry(cellKey: StudyCellKey): boolean {
+  return (
+    cellKey.side === 'LONG' &&
+    (LONG_T1_GEOMETRY.bands as readonly string[]).includes(cellKey.band) &&
+    (LONG_T1_GEOMETRY.windows as readonly number[]).includes(cellKey.window_days) &&
+    (LONG_T1_GEOMETRY.momentum_quintiles as readonly number[]).includes(cellKey.momentum_quintile) &&
+    (LONG_T1_GEOMETRY.drawdown_buckets as readonly number[]).includes(cellKey.drawdown_bucket)
+  );
+}
+
+/** Minimal shape the LONG ROI-floor gate reads — subset of `StudyCellStats`. */
 export interface CellForTierEval {
   mean_fwd_return_5d: number | null;
   arrival_count: number;
 }
 
-export function LONG_T1_ELIGIBLE(cell: CellForTierEval): boolean {
+/**
+ * LONG admission gate — uniform ROI floor + arrival-count floor. Applies
+ * grid-wide to BOTH tiers (T1 and T2). Cells below floor refuse
+ * `no_study_cell`, regardless of geometry.
+ */
+export function LONG_ADMISSIBLE(cell: CellForTierEval): boolean {
   return (
     cell.mean_fwd_return_5d !== null &&
-    cell.mean_fwd_return_5d >= LONG_T1_MEAN_FWD_RETURN_5D_MIN &&
-    cell.arrival_count >= LONG_TIER_ARRIVAL_COUNT_MIN
-  );
-}
-
-export function LONG_T2_ELIGIBLE(cell: CellForTierEval): boolean {
-  if (LONG_T1_ELIGIBLE(cell)) return false;
-  return (
-    cell.mean_fwd_return_5d !== null &&
-    cell.mean_fwd_return_5d >= LONG_T2_MEAN_FWD_RETURN_5D_MIN &&
+    cell.mean_fwd_return_5d >= LONG_ROI_MEAN_FWD_RETURN_5D_MIN &&
     cell.arrival_count >= LONG_TIER_ARRIVAL_COUNT_MIN
   );
 }
@@ -369,7 +422,7 @@ export const DETECTOR_PREDICATE_SPEC_V1_JSON =
   '{"version":"v1","long":{"excess_min":0.10,"windows":[1,2,3],"momentum":[4,5],"drawdown":[1,2,3],"earnings_exclusion_days":5,"tiers":{"T1":{"mean_fwd_return_5d_min":0.0020,"arrival_count_min":1}}},"selection":{"ordering":["rank_score_desc","abs_excess_desc"],"capacity_per_side_default":20},"short":{"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
 
 export const DETECTOR_PREDICATE_SPEC_V2_JSON =
-  '{"version":"v2","long":{"excess_min":0.10,"windows":[1,2,3],"momentum":[4,5],"drawdown":[1,2,3],"earnings_exclusion_days":5,"tiers":{"T1":{"mean_fwd_return_5d_min":0.0020,"arrival_count_min":1},"T2":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1,"disjoint_from":"T1"}}},"selection":{"ordering":["rank_score_desc","abs_excess_desc","tier_asc"],"capacity_per_side_default":20,"tier_role":"w5_attribution_tag_not_priority_class"},"short":{"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
+  '{"version":"v2","long":{"universe":"kernel_move_pct_min_3pct","event_gates":["earnings_exclusion_5d"],"admission":"study_cell_membership","tiers":{"T1":{"geometry":{"bands":["L_10_INF"],"windows":[1,2,3],"momentum_quintiles":[4,5],"drawdown_buckets":[1,2,3]},"cell_gate":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1}},"T2":{"geometry":"complement_of_T1_within_long_study_grid","cell_gate":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1},"disjoint_from":"T1"}},"uniform_roi_floor":{"mean_fwd_return_5d_min":0.0010,"scope":"all_long_tiers","behavior_delta_vs_v1":"v1_admitted_any_non_null_mean; v2b_refuses_below_floor_including_t1_geometry"}},"selection":{"ordering":["rank_score_desc","abs_excess_desc","tier_asc"],"capacity_per_side_default":20,"tier_role":"w5_attribution_tag_not_priority_class"},"short":{"byte_unchanged_from_v1":true,"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
 
 /**
  * Currently-ratified detector version prefix (sha256(study_full_hash ‖
@@ -377,7 +430,7 @@ export const DETECTOR_PREDICATE_SPEC_V2_JSON =
  * Frozen; not recomputed at runtime this tranche. Consumers begin
  * asserting this in T2.4 (additive; no v1 removal, no boot-broken window).
  */
-export const RATIFIED_DETECTOR_VERSION = '723c2d25' as const;
+export const RATIFIED_DETECTOR_VERSION = 'b7cdfcd8' as const;
 
 export interface DetectorVersionHistoryEntry {
   version: 'v1' | 'v2';
@@ -414,12 +467,27 @@ export const DETECTOR_VERSION_HISTORY: readonly DetectorVersionHistoryEntry[] = 
     prefix: RATIFIED_DETECTOR_VERSION,
     predicate_spec_json: DETECTOR_PREDICATE_SPEC_V2_JSON,
     rationale:
-      'FP-069 W3.8 T2 detector-prior extension: LONG T2 admission ' +
-      '(mean_fwd_return_5d in [0.0010, 0.0020), arrival_count >= 1, disjoint from T1). ' +
-      'SHORT path byte-unchanged. Selection ordering gains tier ASC as final tie-break only ' +
-      '(W5 attribution tag, NOT a priority class — a higher-mean T2 cell DOES outrank a ' +
-      'lower-mean T1 cell, per operator ROI directive). Study run + kernel + param_grid_hash ' +
-      'UNTOUCHED; RATIFIED_STUDY_RUN_ID and RATIFIED_PARAM_GRID_HASH_PREFIX remain boot-asserted.',
+      'FP-069 W3.8 T2.1b (DRIFT-CORRECTED) grid-wide detector-prior extension. ' +
+      'IN-TRANCHE REVISION of the T2.1 v2 landing (superseded prefix 723c2d25 — never bound; ' +
+      'nothing deployed). DRIFT: T2.1 kept LONG excess/momentum/drawdown/window gates BEFORE ' +
+      'cell lookup, reducing T2 to a mean-partition within T1 geometry (~zero incremental ' +
+      'arrivals) — incompatible with the ACT-470 Part I ratified frontier (491 T2 LONG cells / ' +
+      '261,830 events) and ACT-471 ~106/day charter figure. T2.1b corrects: LONG admission is ' +
+      'now CELL-SET MEMBERSHIP over the full study grid. Tier T1 = LONG_T1_GEOMETRY ' +
+      '(band=L_10_INF ∧ w∈{1,2,3} ∧ mq∈{4,5} ∧ dd∈{1,2,3}) — pure geometry. Tier T2 = any ' +
+      'non-T1-geometry LONG study cell passing the uniform ROI floor. ' +
+      'BEHAVIOR DELTA vs v1 (recorded per operator design-question ruling): uniform ROI floor ' +
+      'mean_fwd_return_5d >= 0.0010 applies grid-wide INCLUDING T1-geometry cells. v1 admitted ' +
+      'any non-null-mean LONG cell; v2b refuses below-floor cells regardless of geometry — ' +
+      'trading cells below 2x costs is ROI-negative independent of geometry. LONG events ' +
+      'outside T1 geometry no longer refuse at excess/momentum/drawdown stages — they proceed ' +
+      'to cell lookup and admit as T2 if their cell meets the ROI floor. Event-level gates ' +
+      'that REMAIN for all LONG tiers: kernel |move_pct|>=3% universe, earnings-exclusion ' +
+      '+/-5d. Selection ordering unchanged from T2.1 ratification: pure rank_score DESC, ' +
+      '|excess| DESC, tier ASC final-tie-break-only (W5 attribution tag, NOT priority class). ' +
+      'SHORT path BYTE-UNCHANGED from v1 (all filter stages executed identically; tier=null on ' +
+      'every SHORT event). Study run + kernel + param_grid_hash UNTOUCHED; ' +
+      'RATIFIED_STUDY_RUN_ID and RATIFIED_PARAM_GRID_HASH_PREFIX remain boot-asserted.',
     act_ref: 'ACT-479',
     ratification_date: '2026-07-07',
   },
@@ -441,8 +509,10 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
 
   for (const [, group] of groups) {
     const side = group[0].side;
-    const allowedWindows =
-      side === 'LONG' ? params.longWindowSet : params.shortWindowSet;
+    // T2.1b: LONG admits ALL kernel windows {1..5} — window is a cell-key
+    // input, not a gate. SHORT window-set is byte-unchanged from v1.
+    const allowedWindows: readonly number[] =
+      side === 'LONG' ? [1, 2, 3, 4, 5] : params.shortWindowSet;
     const allowedMomentum =
       side === 'LONG' ? params.longMomentumSet : params.shortMomentumSet;
     const allowedDrawdown =
@@ -457,55 +527,79 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
     let firstRefusal: RefusalReason | null = null;
     const setRefusal = (r: RefusalReason) => { if (firstRefusal === null) firstRefusal = r; };
 
-    // 0. side-window-set
-    passes.push({
-      filter: 'side-window-set',
-      passed: picked.windowInSet,
-      ...(picked.windowInSet ? {} : {
-        reason: 'window_out_of_set' as const,
-        detail: { window_days: row.window_days, allowed: [...allowedWindows] },
-      }),
-    });
-    if (!picked.windowInSet) setRefusal('window_out_of_set');
+    // ─── Stages 0-3: SHORT keeps v1 geometry gates; LONG converts them
+    // to informational classifier records (T2.1b DRIFT correction).
+    if (side === 'SHORT') {
+      // 0. side-window-set — SHORT byte-unchanged.
+      passes.push({
+        filter: 'side-window-set',
+        passed: picked.windowInSet,
+        ...(picked.windowInSet ? {} : {
+          reason: 'window_out_of_set' as const,
+          detail: { window_days: row.window_days, allowed: [...allowedWindows] },
+        }),
+      });
+      if (!picked.windowInSet) setRefusal('window_out_of_set');
 
-    // 1. excess-threshold — signed for the side.
-    const excessOk =
-      side === 'LONG'
-        ? picked.excess >= excessThreshold
-        : picked.excess <= -excessThreshold;
-    passes.push({
-      filter: 'excess-threshold',
-      passed: excessOk,
-      ...(excessOk ? {} : {
-        reason: 'excess_below_threshold' as const,
-        detail: { excess: picked.excess, threshold: excessThreshold, side },
-      }),
-    });
-    if (!excessOk) setRefusal('excess_below_threshold');
+      // 1. excess-threshold — SHORT byte-unchanged.
+      const excessOk = picked.excess <= -excessThreshold;
+      passes.push({
+        filter: 'excess-threshold',
+        passed: excessOk,
+        ...(excessOk ? {} : {
+          reason: 'excess_below_threshold' as const,
+          detail: { excess: picked.excess, threshold: excessThreshold, side },
+        }),
+      });
+      if (!excessOk) setRefusal('excess_below_threshold');
 
-    // 2. momentum
-    const momOk = row.momentum_quintile !== null && allowedMomentum.includes(row.momentum_quintile);
-    passes.push({
-      filter: 'momentum-quintile-in-set',
-      passed: momOk,
-      ...(momOk ? {} : {
-        reason: 'momentum_out_of_set' as const,
-        detail: { momentum_quintile: row.momentum_quintile, allowed: [...allowedMomentum] },
-      }),
-    });
-    if (!momOk) setRefusal('momentum_out_of_set');
+      // 2. momentum — SHORT byte-unchanged.
+      const momOk = row.momentum_quintile !== null && allowedMomentum.includes(row.momentum_quintile);
+      passes.push({
+        filter: 'momentum-quintile-in-set',
+        passed: momOk,
+        ...(momOk ? {} : {
+          reason: 'momentum_out_of_set' as const,
+          detail: { momentum_quintile: row.momentum_quintile, allowed: [...allowedMomentum] },
+        }),
+      });
+      if (!momOk) setRefusal('momentum_out_of_set');
 
-    // 3. drawdown
-    const ddOk = row.drawdown_bucket !== null && allowedDrawdown.includes(row.drawdown_bucket);
-    passes.push({
-      filter: 'drawdown-bucket-in-set',
-      passed: ddOk,
-      ...(ddOk ? {} : {
-        reason: 'drawdown_out_of_set' as const,
-        detail: { drawdown_bucket: row.drawdown_bucket, allowed: [...allowedDrawdown] },
-      }),
-    });
-    if (!ddOk) setRefusal('drawdown_out_of_set');
+      // 3. drawdown — SHORT byte-unchanged.
+      const ddOk = row.drawdown_bucket !== null && allowedDrawdown.includes(row.drawdown_bucket);
+      passes.push({
+        filter: 'drawdown-bucket-in-set',
+        passed: ddOk,
+        ...(ddOk ? {} : {
+          reason: 'drawdown_out_of_set' as const,
+          detail: { drawdown_bucket: row.drawdown_bucket, allowed: [...allowedDrawdown] },
+        }),
+      });
+      if (!ddOk) setRefusal('drawdown_out_of_set');
+    } else {
+      // LONG (T2.1b): geometry becomes a cell-key input; excess /
+      // momentum / drawdown / window are NOT gates. Emit a single
+      // classifier pass-record for observability continuity — the W4
+      // console + audit queries can still inspect which stage-shape
+      // each event would have classified into.
+      const _t1GeomWindow = (LONG_T1_GEOMETRY.windows as readonly number[]).includes(row.window_days);
+      const _t1GeomMom = row.momentum_quintile !== null && (LONG_T1_GEOMETRY.momentum_quintiles as readonly number[]).includes(row.momentum_quintile);
+      const _t1GeomDd = row.drawdown_bucket !== null && (LONG_T1_GEOMETRY.drawdown_buckets as readonly number[]).includes(row.drawdown_bucket);
+      const _excessAbove10 = picked.excess >= excessThreshold;
+      passes.push({
+        filter: 'long-tier-classifier',
+        passed: true,
+        detail: {
+          note: 'T2.1b: LONG geometry classified at cell lookup; excess/momentum/drawdown/window are cell-key inputs, not gates',
+          t1_geometry_window: _t1GeomWindow,
+          t1_geometry_momentum: _t1GeomMom,
+          t1_geometry_drawdown: _t1GeomDd,
+          excess_at_or_above_v1_threshold: _excessAbove10,
+          picked_window_days: row.window_days,
+          picked_excess: picked.excess,
+        },
+      });
+    }
 
     // 4. earnings-exclusion
     const dte = row.days_to_nearest_earnings;
@@ -575,6 +669,12 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
     let rank_score: number | null = null;
     let study_cell_ref: StudyCellKey | null = null;
     let tier: 'T1' | 'T2' | null = null;
+    // T2.1b: LONG treats momentum/drawdown/window as cell-key inputs. A
+    // typed-null momentum or drawdown_bucket still cannot form a valid
+    // cell key (cell rows are keyed on those columns) — refuse
+    // observably. `picked.windowInSet` is always true for LONG (all
+    // windows admissible) so it collapses to non-null checks; for SHORT
+    // it retains its v1 meaning.
     const cellKeyable =
       row.momentum_quintile !== null &&
       row.drawdown_bucket !== null &&
@@ -598,30 +698,20 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
         });
         setRefusal('no_study_cell');
       } else if (side === 'LONG') {
-        // FP-069 W3.8 T2.1 (ACT-479) — tiered LONG admission.
-        // T1: mean >= 0.0020 ∧ arrival_count >= 1.
-        // T2: 0.0010 <= mean < 0.0020 ∧ arrival_count >= 1 (NOT T1).
-        // Below T2 floor OR arrival_count < 1 → REFUSED no_study_cell
-        // (new hard floor v2 introduces; never silent-pass, never
-        // default-zero — the DW-208 anti-pattern this module exists to
-        // prevent).
-        if (LONG_T1_ELIGIBLE(cell)) {
-          tier = 'T1';
+        // FP-069 W3.8 T2.1b (ACT-479 DRIFT correction) — grid-wide LONG
+        // admission. Uniform ROI floor gate + geometry-based tier tag.
+        if (LONG_ADMISSIBLE(cell)) {
+          tier = isLongT1Geometry(key) ? 'T1' : 'T2';
           rank_score = cell.mean_fwd_return_5d;
           study_cell_ref = key;
           passes.push({
             filter: 'study-cell-lookup',
             passed: true,
-            detail: { arrival_count: cell.arrival_count, tier: 'T1' },
-          });
-        } else if (LONG_T2_ELIGIBLE(cell)) {
-          tier = 'T2';
-          rank_score = cell.mean_fwd_return_5d;
-          study_cell_ref = key;
-          passes.push({
-            filter: 'study-cell-lookup',
-            passed: true,
-            detail: { arrival_count: cell.arrival_count, tier: 'T2' },
+            detail: {
+              arrival_count: cell.arrival_count,
+              tier,
+              mean_fwd_return_5d: cell.mean_fwd_return_5d,
+            },
           });
         } else {
           passes.push({
@@ -632,8 +722,8 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
               cell_key: key,
               mean_fwd_return_5d: cell.mean_fwd_return_5d,
               arrival_count: cell.arrival_count,
-              reason: 'below_long_t2_floor_or_arrival_count',
-              long_t2_mean_fwd_return_5d_min: LONG_T2_MEAN_FWD_RETURN_5D_MIN,
+              reason: 'below_long_uniform_roi_floor_or_arrival_count',
+              long_roi_mean_fwd_return_5d_min: LONG_ROI_MEAN_FWD_RETURN_5D_MIN,
               long_tier_arrival_count_min: LONG_TIER_ARRIVAL_COUNT_MIN,
             },
           });
