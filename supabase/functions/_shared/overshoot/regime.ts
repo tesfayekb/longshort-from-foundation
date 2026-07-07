@@ -55,6 +55,51 @@ export interface RegimeRefusal {
 
 export type RegimeResult = RegimeOk | RegimeRefusal;
 
+// ── FP-069 W3.8 T3b (ACT-480) — REGIME ADMISSION HELPER ──────────────────
+//
+// Pure classifier consumed by the entry-run engine. STRUCTURAL INVARIANT
+// (operator-ratified, phantom-BEAR pin): regime_throttled_t2 is reachable
+// EXCLUSIVELY through `regime.ok === true && regime === 'BEAR' &&
+// tier === 'T2'`. Every other combination — including indeterminate
+// regime (regime.ok === false) — fails OPEN to normal T1∪T2 admission.
+//
+// Fail-open is deliberate (ACT-473 lean): a missing/malformed SPY series
+// is an observability problem, not a signal to silently switch to
+// BEAR-mode gating. The entry-run emits `overshoot.entry.regime_indeterminate`
+// on the fail-open branch; the operator sees the divergence in audit.
+//
+// SHORT admission is not gated by regime this tranche (ACT-473 scoped the
+// governor to LONG T2). Non-'T2' tiers (T1, null) never throttle here.
+
+export type RegimeAdmissionReason =
+  | 'regime_throttled_t2'
+  | null;
+
+export interface RegimeAdmissionOutcome {
+  /** True iff this selection MUST be refused by the entry engine. */
+  throttle: boolean;
+  /** Typed reason for the audit row; null iff throttle === false. */
+  reason: RegimeAdmissionReason;
+}
+
+export function shouldThrottleUnderRegime(
+  regimeResult: RegimeResult,
+  tier: 'T1' | 'T2' | null,
+): RegimeAdmissionOutcome {
+  // FAIL-OPEN: indeterminate regime never throttles. The entry-run logs a
+  // regime_indeterminate audit row on this branch (surfacing the input
+  // problem) but admits the selection normally.
+  if (regimeResult.ok !== true) {
+    return { throttle: false, reason: null };
+  }
+  // Only BEAR + T2 throttles. BULL/CORRECTION never throttle any tier;
+  // BEAR never throttles T1 or null-tier (SHORT).
+  if (regimeResult.regime === 'BEAR' && tier === 'T2') {
+    return { throttle: true, reason: 'regime_throttled_t2' };
+  }
+  return { throttle: false, reason: null };
+}
+
 export interface ComputeRegimeInput {
   /** SPY closes strictly in ascending trade-date order, deduplicated.
    *  Caller supplies the query; this module does not touch the DB. Must

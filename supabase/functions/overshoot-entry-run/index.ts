@@ -93,6 +93,7 @@ import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpa
 import {
   RATIFIED_STUDY_RUN_ID,
   RATIFIED_PARAM_GRID_HASH_PREFIX,
+  RATIFIED_DETECTOR_VERSION,
 } from '../_shared/overshoot/detector/detector.ts';
 
 // ── W3.6.a CID + W3.6.e-i pure-module imports (boot-drift surface). ──
@@ -100,6 +101,8 @@ import { buildOvershootClientOrderId, type OvershootSide } from '../_shared/over
 import {
   OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
   OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+  OVERSHOOT_CAPACITY_LONG,
+  OVERSHOOT_CAPACITY_SHORT,
   computeTargetSizing,
   assertBuyingPowerCoversNotional,
   type OvershootSizeSide,
@@ -120,6 +123,12 @@ import {
   computePriorSpySessionDate,
   type OvershootDetectionRunRow,
 } from '../_shared/overshoot-execution/detection-linkage.ts';
+import {
+  computeRegime,
+  shouldThrottleUnderRegime,
+  type RegimeResult,
+  type OvershootRegime,
+} from '../_shared/overshoot/regime.ts';
 
 // I6 manual-confirm window (ratified: 15 minutes; parity with exit-run).
 const OVERSHOOT_MANUAL_CONFIRM_WINDOW_MS = 15 * 60 * 1000;
@@ -179,6 +188,7 @@ interface SelectionRow {
   ticker: string;
   side: 'long' | 'short';
   rank_score: number | null;
+  tier: 'T1' | 'T2' | null;
   t_close_ref: number | null;
   pre_event_ref: number | null;
 }
@@ -188,6 +198,7 @@ interface RefusalTally {
   strategy_config_absent: number;
   equity_snapshot_unavailable: number;
   position_already_open: number;
+  regime_throttled_t2: number;
   i5_refusals: number;
   sizing_refusals: number;
   buying_power_refusals: number;
@@ -202,6 +213,7 @@ function newTally(): RefusalTally {
     strategy_config_absent: 0,
     equity_snapshot_unavailable: 0,
     position_already_open: 0,
+    regime_throttled_t2: 0,
     i5_refusals: 0,
     sizing_refusals: 0,
     buying_power_refusals: 0,
@@ -286,9 +298,23 @@ Deno.serve(createHandler(async (req: Request) => {
     // Drift-canaries: e-i module constants statically imported above.
     void OVERSHOOT_SIDE_ALLOCATION_PCT_LONG;
     void OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT;
+    void OVERSHOOT_CAPACITY_LONG;
+    void OVERSHOOT_CAPACITY_SHORT;
     void OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS;
     void OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS;
     void OVERSHOOT_I5_REVERSION_TOLERANCE_PCT;
+
+    // T3b (ACT-480) — INC-84 §5 generalization: detector_version boot
+    // format assertion + probe-envelope echo (self-attesting deploys).
+    if (typeof RATIFIED_DETECTOR_VERSION !== 'string' || !/^[0-9a-f]{8}$/.test(RATIFIED_DETECTOR_VERSION)) {
+      await sql.end({ timeout: 5 });
+      console.error(JSON.stringify({
+        event: 'boot_assertion_failed_detector_version_malformed',
+        correlationId,
+        loaded_value_typeof: typeof RATIFIED_DETECTOR_VERSION,
+      }));
+      return apiError(500, 'boot_assertion_failed_detector_version_malformed', { correlationId });
+    }
 
     // ── (4) Probe short-circuit ─────────────────────────────────────────
     if (probeMode !== undefined) {
@@ -303,6 +329,7 @@ Deno.serve(createHandler(async (req: Request) => {
             account_last4: acct.length >= 4 ? acct.slice(-4) : null,
             status: typeof account.status === 'string' ? account.status : null,
             paper: true, correlation_id: correlationId,
+            detector_version: RATIFIED_DETECTOR_VERSION,
           });
         } catch (e) {
           const detail =
@@ -321,6 +348,7 @@ Deno.serve(createHandler(async (req: Request) => {
           ok: true, probe: 'polygon',
           snapshot_present: snap !== null,
           correlation_id: correlationId,
+          detector_version: RATIFIED_DETECTOR_VERSION,
         });
       } catch (e) {
         console.error('[overshoot-entry-run] polygon probe failed:', String(e), { correlationId });
@@ -517,12 +545,57 @@ Deno.serve(createHandler(async (req: Request) => {
     }
     const sizingBase = accountSnapshot.equity * strategyAllocationPct * marginMultiplier;
 
+    // ── T3b (ACT-480) REGIME GOVERNOR ────────────────────────────────────
+    // Compute the SPY-drawdown regime BEFORE loading selections so the
+    // regime + full signal context is stamped on the entry-run row + every
+    // regime_throttled_t2 refusal. Fail-open discipline: `regime.ok=false`
+    // (empty_input / insufficient_bars / non_positive_close) never
+    // throttles — the audit row surfaces `regime_indeterminate` and the
+    // per-selection admission proceeds as if regime were BULL. The
+    // phantom-BEAR invariant (regime_test.ts T3b PIN) locks this seam.
+    const spyClosesRows = await sql<{ close: number }[]>`
+      SELECT close::float8 AS close
+      FROM overshoot_daily_bars
+      WHERE ticker = 'SPY'
+        AND trade_date <= ${sessionDate}::date
+      ORDER BY trade_date DESC
+      LIMIT 60
+    `;
+    const spyClosesAscending: number[] = (spyClosesRows as { close: number }[])
+      .map((r) => Number(r.close))
+      .reverse();
+    const regime: RegimeResult = computeRegime({ spyClosesAscending });
+    const regimeSignalContext = regime.ok
+      ? {
+          bars_consumed: regime.barsConsumed,
+          drawdown_from_peak_pct: regime.drawdownFromPeakPct,
+          last_close: regime.lastClose,
+          peak_close: regime.peakClose,
+        }
+      : { bars_consumed: spyClosesAscending.length, refusal: regime.refusal, reason: regime.reason };
+    if (regime.ok !== true) {
+      // FAIL-OPEN audit. The engine proceeds; no T2 selections are gated.
+      await writeStrategyAuditEvent({
+        strategyKey: 'overshoot',
+        action: 'overshoot.entry.regime_indeterminate',
+        actorId: authCtx.user.id, targetType: 'overshoot_daily_bars', targetId: 'SPY',
+        correlationId,
+        metadata: {
+          reason: regime.reason, refusal: regime.refusal,
+          bars_available: spyClosesAscending.length,
+          session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot,
+        },
+      });
+    }
+    const regimeLabel: OvershootRegime | null = regime.ok ? regime.regime : null;
+
     // (f) load selections + write session marker.
     const selections = await sql<SelectionRow[]>`
       SELECT
         e.ticker,
         e.side,
         e.rank_score,
+        e.tier,
         NULL::numeric AS t_close_ref,
         NULL::numeric AS pre_event_ref
       FROM overshoot_events e
@@ -547,6 +620,9 @@ Deno.serve(createHandler(async (req: Request) => {
         session_date: sessionDate, prior_spy_session: linkage.priorSessionExpected,
         detection_run_id: linkage.runId, selected_count: linkage.selectedCount,
         targets_loaded: targetsLoaded, long_capacity: longSelections.length, short_capacity: shortSelections.length,
+        capacity_long_ratified: OVERSHOOT_CAPACITY_LONG, capacity_short_ratified: OVERSHOOT_CAPACITY_SHORT,
+        regime: regimeLabel, regime_ok: regime.ok, regime_signal_context: regimeSignalContext,
+        detector_version: RATIFIED_DETECTOR_VERSION,
         dry_run: dryRun, manual: manualConfirm, slot, minutes_to_close: minutesToClose,
       },
     });
@@ -585,7 +661,34 @@ Deno.serve(createHandler(async (req: Request) => {
       const sideUpper: OvershootSide = sel.side === 'long' ? 'LONG' : 'SHORT';
       const sizeSide: OvershootSizeSide = sideUpper;
       const entrySide: EntrySide = sideUpper;
-      const capacityPerSide = sideUpper === 'LONG' ? longSelections.length : shortSelections.length;
+      // INC-87 STRUCTURAL FIX (T3b, ACT-480): sizing denominator is the
+      // ratified per-side CAPACITY constant, NOT the per-side selection
+      // count. Under-fill (selections < capacity) yields idle slots that
+      // tick, not concentration; the pre-fix defect sized a 4-selection
+      // morning at ~12.5%/name (LONG) vs the ratified 2.5%/name.
+      const capacityPerSide = sideUpper === 'LONG'
+        ? OVERSHOOT_CAPACITY_LONG
+        : OVERSHOOT_CAPACITY_SHORT;
+
+      // T3b (ACT-480) — REGIME GOVERNOR per-selection gate. Reachable
+      // ONLY through regime.ok===true (phantom-BEAR invariant, locked by
+      // regime_test.ts). Full signal context persisted for W5 slicing.
+      const admission = shouldThrottleUnderRegime(regime, sel.tier);
+      if (admission.throttle) {
+        tally.regime_throttled_t2 += 1;
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: `overshoot.entry.${admission.reason}`,
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: {
+            ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
+            regime: regimeLabel, regime_signal_context: regimeSignalContext,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+          },
+        });
+        continue;
+      }
 
       // ── ACT-466 position_already_open per-target check ────────────────
       // Placed BEFORE any vendor call (Polygon snapshot / I5 / sizing /
@@ -602,7 +705,8 @@ Deno.serve(createHandler(async (req: Request) => {
           actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
           correlationId,
           metadata: {
-            ticker: sel.ticker, side: sel.side, rank_score: sel.rank_score,
+            ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
+            regime: regimeLabel,
             open_lot_sides: lotHit.map((r) => r.side),
             broker_position_qty: brokerHit.length > 0 ? brokerHit[0].qty : null,
             broker_position_side: brokerHit.length > 0 ? (brokerHit[0].qty > 0 ? 'long' : 'short') : null,
@@ -750,7 +854,8 @@ Deno.serve(createHandler(async (req: Request) => {
           actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
           correlationId,
           metadata: {
-            ticker: sel.ticker, side: sel.side, qty: sizing.shares,
+            ticker: sel.ticker, side: sel.side, tier: sel.tier, qty: sizing.shares,
+            regime: regimeLabel, capacity_per_side: capacityPerSide,
             order_id: acc.order_id, client_order_id: acc.client_order_id,
             limit_price: priced.limitPrice, slippage_bps: priced.slippageBps,
             snapshot_age_ms: priced.snapshotAgeMs, minutes_to_close: minutesToClose,
@@ -801,6 +906,37 @@ Deno.serve(createHandler(async (req: Request) => {
 
     await sql.end({ timeout: 5 });
 
+    // T3b (ACT-480) — persist the entry-run row (MIG-157). Regime label
+    // and signal context recorded for W5 slicing; NULL regime iff
+    // regime.ok===false (regime_indeterminate audit written above).
+    try {
+      const persistSql: Sql = postgres(env.supabaseDbUrl, { max: 1, prepare: false, connect_timeout: 10 });
+      try {
+        await persistSql`
+          INSERT INTO overshoot_entry_runs
+            (run_id, session_date, detection_run_id, outcome, targets_loaded,
+             orders_submitted, correlation_id, git_sha, regime,
+             regime_signal_context, dry_run)
+          VALUES (${runId}::uuid, ${sessionDate}::date, ${linkage.runId}::uuid,
+                  'completed', ${targetsLoaded}, ${ordersSubmitted},
+                  ${correlationId}, ${env.gitSha}, ${regimeLabel},
+                  ${persistSql.json(regimeSignalContext)}::jsonb, ${dryRun})
+        `;
+      } finally {
+        await persistSql.end({ timeout: 5 });
+      }
+    } catch (persistErr) {
+      // Non-blocking: the run-level audit row is the historical truth;
+      // the entry-runs table is the additive W5-slicing surface. A write
+      // failure here logs to stderr and does NOT alter the response
+      // envelope's outcome (money-path decisions have already committed).
+      console.error(JSON.stringify({
+        event: 'overshoot_entry_runs_insert_failed',
+        correlationId, run_id: runId,
+        error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+      }));
+    }
+
     return apiSuccess({
       outcome: 'completed',
       run_id: runId,
@@ -819,6 +955,11 @@ Deno.serve(createHandler(async (req: Request) => {
       sizingBase,
       strategy_allocation_pct: strategyAllocationPct,
       margin_multiplier: marginMultiplier,
+      regime: regimeLabel,
+      regime_signal_context: regimeSignalContext,
+      detector_version: RATIFIED_DETECTOR_VERSION,
+      capacity_long: OVERSHOOT_CAPACITY_LONG,
+      capacity_short: OVERSHOOT_CAPACITY_SHORT,
       correlation_id: correlationId,
     });
   } catch (err) {
