@@ -6,6 +6,8 @@ import {
   sideAllocationPct,
   OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
   OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+  OVERSHOOT_CAPACITY_LONG,
+  OVERSHOOT_CAPACITY_SHORT,
   assertBuyingPowerCoversNotional,
 } from './sizing.ts';
 import type {
@@ -37,64 +39,90 @@ const refusedSnap = (): OvershootAccountSnapshotRefusal => ({
 // number. Kept so pre-refactor arithmetic remains legible.
 const baseFor = (equity: number, pct = 1.0, mm = 1.0) => equity * pct * mm;
 
-Deno.test('provenance constants: long/short allocations = 0.50 (R-α operator ROI-raising override, ACT-464)', () => {
-  assertEquals(OVERSHOOT_SIDE_ALLOCATION_PCT_LONG, 0.50);
-  assertEquals(OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT, 0.50);
-  assertEquals(sideAllocationPct('LONG'), 0.50);
-  assertEquals(sideAllocationPct('SHORT'), 0.50);
+Deno.test('R-3 provenance (ACT-478 / ACT-475 §V.B2): long-primary 0.90 / short-secondary 0.10 paper phase', () => {
+  assertEquals(OVERSHOOT_SIDE_ALLOCATION_PCT_LONG, 0.90);
+  assertEquals(OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT, 0.10);
+  assertEquals(sideAllocationPct('LONG'), 0.90);
+  assertEquals(sideAllocationPct('SHORT'), 0.10);
 });
 
-Deno.test('happy path — LONG side: sizingBase=100000, cap=4, price=50 → slot=12500 (0.50 pct), shares=250', () => {
+Deno.test('R-3 provenance: capacity constants LONG=36 / SHORT=4 (named; T3 wires into engines)', () => {
+  assertEquals(OVERSHOOT_CAPACITY_LONG, 36);
+  assertEquals(OVERSHOOT_CAPACITY_SHORT, 4);
+});
+
+Deno.test('R-3 SLOT-CONCENTRATION INVARIANT: both sides compute exactly 2.5% of sizingBase per slot', () => {
+  // Load-bearing: drift here = the ratified paper-phase allocation is broken.
+  const longConcentration = OVERSHOOT_SIDE_ALLOCATION_PCT_LONG / OVERSHOOT_CAPACITY_LONG;
+  const shortConcentration = OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT / OVERSHOOT_CAPACITY_SHORT;
+  assertEquals(longConcentration, 0.025);
+  assertEquals(shortConcentration, 0.025);
+  assertEquals(longConcentration, shortConcentration);
+  // Direct arithmetic on a 100k sizingBase: 2500 per slot both sides.
+  assertEquals((100_000 * OVERSHOOT_SIDE_ALLOCATION_PCT_LONG) / OVERSHOOT_CAPACITY_LONG, 2500);
+  assertEquals((100_000 * OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT) / OVERSHOOT_CAPACITY_SHORT, 2500);
+});
+
+Deno.test('R-3 NAMEPLATE-SUM INVARIANT: long_alloc + short_alloc = 1.00 pre-margin', () => {
+  assertEquals(
+    OVERSHOOT_SIDE_ALLOCATION_PCT_LONG + OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+    1.00,
+  );
+});
+
+Deno.test('happy path — LONG side: sizingBase=100000, cap=36 (R-3), price=50 → slot=2500 (0.90 pct), shares=50', () => {
   const r = computeTargetSizing({
     snapshot: okSnap(100_000),
     side: 'LONG',
-    capacityPerSide: 4,
+    capacityPerSide: OVERSHOOT_CAPACITY_LONG,
     entryReferencePrice: 50,
     sizingBase: baseFor(100_000),
     strategyAllocationPct: 1.0,
     marginMultiplier: 1.0,
   });
   assert(r.ok);
-  assertEquals(r.slotNotional, 12_500);
-  assertEquals(r.shares, 250);
-  assertEquals(r.sideAllocationPct, 0.50);
+  // 100_000 * 0.90 / 36 = 2500 (slot-concentration 2.5%); 2500 / 50 = 50.
+  assertEquals(r.slotNotional, 2500);
+  assertEquals(r.shares, 50);
+  assertEquals(r.sideAllocationPct, 0.90);
   assertEquals(r.equityBasis, 100_000);
   assertEquals(r.sizingBase, 100_000);
   assertEquals(r.strategyAllocationPct, 1.0);
   assertEquals(r.marginMultiplier, 1.0);
 });
 
-Deno.test('happy path — SHORT side independent of long: same equity/cap/price yields identical sizing', () => {
+Deno.test('R-3 happy path — SHORT side: sizingBase=100000, cap=4, price=50 → slot=2500 (0.10 pct), shares=50', () => {
   const long = computeTargetSizing({
-    snapshot: okSnap(200_000), side: 'LONG', capacityPerSide: 5, entryReferencePrice: 100,
-    sizingBase: baseFor(200_000), strategyAllocationPct: 1.0, marginMultiplier: 1.0,
+    snapshot: okSnap(100_000), side: 'LONG', capacityPerSide: OVERSHOOT_CAPACITY_LONG, entryReferencePrice: 50,
+    sizingBase: baseFor(100_000), strategyAllocationPct: 1.0, marginMultiplier: 1.0,
   });
   const shortR = computeTargetSizing({
-    snapshot: okSnap(200_000), side: 'SHORT', capacityPerSide: 5, entryReferencePrice: 100,
-    sizingBase: baseFor(200_000), strategyAllocationPct: 1.0, marginMultiplier: 1.0,
+    snapshot: okSnap(100_000), side: 'SHORT', capacityPerSide: OVERSHOOT_CAPACITY_SHORT, entryReferencePrice: 50,
+    sizingBase: baseFor(100_000), strategyAllocationPct: 1.0, marginMultiplier: 1.0,
   });
   assert(long.ok && shortR.ok);
-  assertEquals(long.slotNotional, 20_000);
-  assertEquals(shortR.slotNotional, 20_000);
-  assertEquals(long.shares, 200);
-  assertEquals(shortR.shares, 200);
+  // R-3 slot-concentration invariant: BOTH sides = 2500 per slot on a 100k base.
+  assertEquals(long.slotNotional, 2500);
+  assertEquals(shortR.slotNotional, 2500);
+  assertEquals(long.shares, 50);
+  assertEquals(shortR.shares, 50);
 });
 
 Deno.test('FLOOR behavior — fractional shares floor to whole number (never round up)', () => {
-  // sizingBase=100_000 * 0.50 / 4 = 12500; price=199 → 62.81 → FLOOR 62
+  // sizingBase=100_000 * 0.90 / 36 = 2500; price=99 → 25.25… → FLOOR 25
   const r = computeTargetSizing({
-    snapshot: okSnap(100_000), side: 'LONG', capacityPerSide: 4, entryReferencePrice: 99,
+    snapshot: okSnap(100_000), side: 'LONG', capacityPerSide: OVERSHOOT_CAPACITY_LONG, entryReferencePrice: 99,
     sizingBase: baseFor(100_000), strategyAllocationPct: 1.0, marginMultiplier: 1.0,
   });
   assert(r.ok);
-  // 12500 / 99 = 126.26... → FLOOR 126
-  assertEquals(r.shares, 126);
+  // 2500 / 99 = 25.25… → FLOOR 25
+  assertEquals(r.shares, 25);
 });
 
 Deno.test('boundary — equity edge: tiny equity, price just at slot notional → shares=1', () => {
-  // sizingBase=1000 * 0.50 / 1 = 500; price=500 → shares=1
+  // Under R-3, a cap of 1 with equity 1000 → 1000 * 0.90 / 1 = 900; price=900 → shares=1.
   const r = computeTargetSizing({
-    snapshot: okSnap(1000), side: 'LONG', capacityPerSide: 1, entryReferencePrice: 500,
+    snapshot: okSnap(1000), side: 'LONG', capacityPerSide: 1, entryReferencePrice: 900,
     sizingBase: baseFor(1000), strategyAllocationPct: 1.0, marginMultiplier: 1.0,
   });
   assert(r.ok);
@@ -102,9 +130,9 @@ Deno.test('boundary — equity edge: tiny equity, price just at slot notional �
 });
 
 Deno.test('typed refusal — price > per-slot notional returns reference_price_exceeds_slot_notional (NOT silent 0)', () => {
-  // slotNotional = 100_000 * 0.50 / 10 = 5000; price = 6000 → shares would be 0
+  // slotNotional = 100_000 * 0.90 / 10 = 9000; price = 10_000 → shares would be 0
   const r = computeTargetSizing({
-    snapshot: okSnap(100_000), side: 'LONG', capacityPerSide: 10, entryReferencePrice: 6000,
+    snapshot: okSnap(100_000), side: 'LONG', capacityPerSide: 10, entryReferencePrice: 10_000,
     sizingBase: baseFor(100_000), strategyAllocationPct: 1.0, marginMultiplier: 1.0,
   });
   assert(!r.ok);
@@ -148,34 +176,35 @@ Deno.test('typed refusal — reference price <= 0 (zero and negative both refuse
 
 Deno.test('both sides independent — long refusal does not bleed into short computation', () => {
   const longR = computeTargetSizing({
-    snapshot: okSnap(100_000), side: 'LONG', capacityPerSide: 10, entryReferencePrice: 6000,
+    snapshot: okSnap(100_000), side: 'LONG', capacityPerSide: 10, entryReferencePrice: 10_000,
     sizingBase: baseFor(100_000), strategyAllocationPct: 1.0, marginMultiplier: 1.0,
   });
   const shortR = computeTargetSizing({
-    snapshot: okSnap(100_000), side: 'SHORT', capacityPerSide: 4, entryReferencePrice: 50,
+    snapshot: okSnap(100_000), side: 'SHORT', capacityPerSide: OVERSHOOT_CAPACITY_SHORT, entryReferencePrice: 50,
     sizingBase: baseFor(100_000), strategyAllocationPct: 1.0, marginMultiplier: 1.0,
   });
   assert(!longR.ok);
   assert(shortR.ok);
-  // sizingBase=100_000 * 0.50 / 4 = 12_500; 12_500 / 50 = 250
-  assertEquals(shortR.shares, 250);
+  // R-3: sizingBase=100_000 * 0.10 / 4 = 2500; 2500 / 50 = 50
+  assertEquals(shortR.shares, 50);
 });
 
 // ─── R-β / R-γ new coverage (ACT-464.e-i) ─────────────────────────────────
 
-Deno.test('R-β: sizingBase scales slotNotional linearly (equity 100k * pct 0.5 * mm 2.0 → base 100k)', () => {
+Deno.test('R-β: sizingBase scales slotNotional linearly (equity 100k * pct 0.5 * mm 2.0 → base 100k, R-3 slot arithmetic)', () => {
   const r = computeTargetSizing({
     snapshot: okSnap(100_000),
     side: 'LONG',
-    capacityPerSide: 4,
+    capacityPerSide: OVERSHOOT_CAPACITY_LONG,
     entryReferencePrice: 50,
     sizingBase: 100_000 * 0.5 * 2.0, // = 100_000
     strategyAllocationPct: 0.5,
     marginMultiplier: 2.0,
   });
   assert(r.ok);
-  assertEquals(r.slotNotional, 12_500);
-  assertEquals(r.shares, 250);
+  // 100_000 * 0.90 / 36 = 2500; 2500 / 50 = 50
+  assertEquals(r.slotNotional, 2500);
+  assertEquals(r.shares, 50);
   assertEquals(r.strategyAllocationPct, 0.5);
   assertEquals(r.marginMultiplier, 2.0);
   assertEquals(r.sizingBase, 100_000);
