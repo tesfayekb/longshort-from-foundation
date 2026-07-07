@@ -596,8 +596,9 @@ Deno.serve(createHandler(async (req: Request) => {
         selected_for_entry: e.selected_for_entry,
         rank_score: e.rank_score,
         study_cell_ref: e.study_cell_ref === null ? null : JSON.stringify(e.study_cell_ref),
+        tier: e.tier, // FP-069 W3.8 T2.3 (MIG-156) — 'T1'|'T2'|null; SHORT always null
       }));
-      const cols = ['run_id','as_of_date','ticker','side','excess_w1','excess_w2','excess_w3','excess_w4','excess_w5','argmax_window_days','momentum_quintile','drawdown_bucket','days_to_nearest_earnings','earnings_alias_used','filter_passes','filter_refusal_reason','selected_for_entry','rank_score','study_cell_ref'] as const;
+      const cols = ['run_id','as_of_date','ticker','side','excess_w1','excess_w2','excess_w3','excess_w4','excess_w5','argmax_window_days','momentum_quintile','drawdown_bucket','days_to_nearest_earnings','earnings_alias_used','filter_passes','filter_refusal_reason','selected_for_entry','rank_score','study_cell_ref','tier'] as const;
       await sql`INSERT INTO overshoot_events ${sql(eventRows, ...cols)}`;
     }
     if (!dryRun && selected.length > 0) {
