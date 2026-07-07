@@ -144,7 +144,7 @@ export function OvershootDetectorRunDetail() {
       const { data, error } = await supabase
         .from('overshoot_events')
         .select(
-          'event_id,ticker,side,argmax_window_days,excess_w1,excess_w2,excess_w3,excess_w4,excess_w5,momentum_quintile,drawdown_bucket,filter_passes,filter_refusal_reason,selected_for_entry,rank_score,study_cell_ref'
+          'event_id,ticker,side,argmax_window_days,excess_w1,excess_w2,excess_w3,excess_w4,excess_w5,momentum_quintile,drawdown_bucket,filter_passes,filter_refusal_reason,selected_for_entry,rank_score,study_cell_ref,tier'
         )
         .eq('run_id', runId!)
         .order('selected_for_entry', { ascending: false })
@@ -250,6 +250,7 @@ export function OvershootDetectorRunDetail() {
                   <TableRow>
                     <TableHead>Ticker</TableHead>
                     <TableHead>Side</TableHead>
+                    <TableHead>Tier</TableHead>
                     <TableHead className="text-right">Exc@arg</TableHead>
                     <TableHead className="text-right">Win</TableHead>
                     <TableHead className="text-right">MQ</TableHead>
@@ -271,6 +272,18 @@ export function OvershootDetectorRunDetail() {
                       <TableRow key={ev.event_id}>
                         <TableCell className="font-mono">{ev.ticker}</TableCell>
                         <TableCell className="font-mono text-xs">{ev.side}</TableCell>
+                        <TableCell>
+                          {ev.tier ? (
+                            <Badge
+                              variant={ev.tier === 'T1' ? 'default' : 'secondary'}
+                              className="font-mono text-[10px]"
+                            >
+                              {ev.tier}
+                            </Badge>
+                          ) : (
+                            <span className="font-mono text-[10px] text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right font-mono">
                           {formatExcess(excessAtArgmax(ev))}
                         </TableCell>

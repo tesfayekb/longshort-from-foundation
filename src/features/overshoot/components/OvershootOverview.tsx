@@ -104,6 +104,25 @@ export function OvershootOverview() {
     },
   });
 
+  // T4 (ACT-481) — tier breakdown for the latest detection run. Reads the
+  // MIG-156 `tier` column on `overshoot_events` (T1 / T2 / null). Rendered
+  // as three badges: T1 selected, T2 selected, and short-side selected
+  // (short rows carry tier=null; the count is derived by grouping on side).
+  const latestRunId = latestRunQuery.data?.run_id ?? null;
+  const latestTiersQuery = useQuery({
+    queryKey: ['overshoot', 'overview', 'latest-tiers', latestRunId],
+    enabled: Boolean(latestRunId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('overshoot_events')
+        .select('side, tier, selected_for_entry')
+        .eq('run_id', latestRunId!)
+        .eq('selected_for_entry', true);
+      if (error) throw error;
+      return (data ?? []) as { side: string; tier: string | null; selected_for_entry: boolean }[];
+    },
+  });
+
   const openLotsQuery = useQuery({
     queryKey: ['overshoot', 'overview', 'open-lots'],
     queryFn: async () => {
@@ -161,6 +180,13 @@ export function OvershootOverview() {
   const latest = latestRunQuery.data ?? null;
   const refused = latest ? latest.event_count - latest.selected_count : 0;
   const identityOK = latest ? latest.event_count === latest.selected_count + refused && refused >= 0 : true;
+
+  // T4 (ACT-481) — tier breakdown of the latest run's selections
+  // (T1 long / T2 long / SHORT). Uses the MIG-156 `tier` column verbatim.
+  const latestTiers = latestTiersQuery.data ?? [];
+  const tierT1 = latestTiers.filter((e) => e.tier === 'T1').length;
+  const tierT2 = latestTiers.filter((e) => e.tier === 'T2').length;
+  const tierShort = latestTiers.filter((e) => e.side === 'short').length;
 
   const si = siFreshQuery.data ?? null;
   const siStaleDays = si ? daysBetween(new Date(si.as_of_date), new Date()) : null;
@@ -276,6 +302,12 @@ export function OvershootOverview() {
                       ? `${latest.selected_count} sel + ${refused} ref = ${latest.event_count}`
                       : `identity mismatch: ${latest.selected_count} + ${refused} ≠ ${latest.event_count}`}
                   </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-xs text-muted-foreground">tier snapshot:</span>
+                  <Badge variant="default" className="font-mono text-[10px]">T1 long: {tierT1}</Badge>
+                  <Badge variant="secondary" className="font-mono text-[10px]">T2 long: {tierT2}</Badge>
+                  <Badge variant="outline" className="font-mono text-[10px]">SHORT: {tierShort}</Badge>
                 </div>
               </div>
             )}
