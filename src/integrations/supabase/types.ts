@@ -1733,6 +1733,7 @@ export type Database = {
           side: string
           study_cell_ref: Json | null
           ticker: string
+          tier: string | null
         }
         Insert: {
           argmax_window_days?: number | null
@@ -1756,6 +1757,7 @@ export type Database = {
           side: string
           study_cell_ref?: Json | null
           ticker: string
+          tier?: string | null
         }
         Update: {
           argmax_window_days?: number | null
@@ -1779,6 +1781,7 @@ export type Database = {
           side?: string
           study_cell_ref?: Json | null
           ticker?: string
+          tier?: string | null
         }
         Relationships: [
           {

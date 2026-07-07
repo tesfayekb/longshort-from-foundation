@@ -126,8 +126,8 @@ Deno.test('detector import: pure, unmodified (runDetector + constants only)', ()
 });
 
 Deno.test('A4 persistence targets: overshoot_events + overshoot_target_positions columns aligned', () => {
-  // overshoot_events columns list (per MIG-149 verbatim).
-  const eventCols = "['run_id','as_of_date','ticker','side','excess_w1','excess_w2','excess_w3','excess_w4','excess_w5','argmax_window_days','momentum_quintile','drawdown_bucket','days_to_nearest_earnings','earnings_alias_used','filter_passes','filter_refusal_reason','selected_for_entry','rank_score','study_cell_ref']";
+  // overshoot_events columns list (per MIG-149 + MIG-156 tier verbatim).
+  const eventCols = "['run_id','as_of_date','ticker','side','excess_w1','excess_w2','excess_w3','excess_w4','excess_w5','argmax_window_days','momentum_quintile','drawdown_bucket','days_to_nearest_earnings','earnings_alias_used','filter_passes','filter_refusal_reason','selected_for_entry','rank_score','study_cell_ref','tier']";
   assertStringIncludes(SRC, eventCols);
   // overshoot_target_positions columns list.
   const targetCols = "['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at']";
@@ -135,6 +135,28 @@ Deno.test('A4 persistence targets: overshoot_events + overshoot_target_positions
   // overshoot_detection_runs INSERT column list (append_run_ids MIG-152 present).
   assertStringIncludes(SRC, 'INSERT INTO overshoot_detection_runs');
   assertStringIncludes(SRC, 'append_run_ids');
+});
+
+Deno.test('FP-069 W3.8 T2.3 (MIG-156): tier round-trip — T1/T2/null persist verbatim via e.tier', () => {
+  // Source-sentinel: the handler MUST forward the detector-emitted tier
+  // ('T1' | 'T2' | null) into the overshoot_events INSERT without mapping,
+  // coercion, or default. The detector already emits the tag (T2.1b @ b7cdfcd8);
+  // this test ratchets against silent regressions dropping it again.
+  //
+  // Round-trip proof triangle (grep, not runtime — DB-independent per file docstring):
+  //   (a) eventRows mapping contains a raw `tier: e.tier` field (no `?? null`,
+  //       no `.toLowerCase()`, no coercion — verbatim pass-through).
+  //   (b) column list terminates with 'tier' so INSERT column count matches row keys.
+  //   (c) MIG-156 provenance comment cites the migration by number.
+  assertStringIncludes(SRC, 'tier: e.tier,');
+  // No coercion / default variants may creep in:
+  assertEquals(SRC.includes('tier: e.tier ?? '),  false, 'no nullish coalescing on tier');
+  assertEquals(SRC.includes('tier: e.tier ||'),   false, 'no || fallback on tier');
+  assertEquals(SRC.includes('e.tier.toLowerCase'), false, 'tier stays literal T1/T2');
+  // Column list terminates with 'tier' (MIG-156 additive tail):
+  assertStringIncludes(SRC, "'study_cell_ref','tier']");
+  // Provenance marker present (MIG-156 comment on the eventRows tier line):
+  assertStringIncludes(SRC, 'MIG-156');
 });
 
 Deno.test('append leg ordering: backfill_runs row inserted BEFORE the upsert', () => {
