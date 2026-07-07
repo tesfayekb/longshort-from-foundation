@@ -50,3 +50,22 @@ jobs:
             exit 1
           fi
           echo "INC-90 gate clean: no NULL:: placeholders in overshoot money-path handlers."
+      - name: INC-91 gate — no numeric-literal snapshot-age bounds outside single-home
+        run: |
+          # INC-91 standing invariant (ACT-486) — snapshot-age comparisons
+          # in _shared/overshoot-execution/ MUST import
+          # OVERSHOOT_SNAPSHOT_MIN_AGE_MS / MAX_AGE_MS from
+          # snapshot-age-bounds.ts. Numeric-literal bounds at any sibling
+          # site are a class-drift risk (the exact pathology that made
+          # ACT-485 half-fix INC-90 while leaving entry-/exit-price on
+          # the old [0, 15000] bound). See docs/06-tracking/incidental-
+          # findings.md INC-91 and docs/06-tracking/action-tracker.md
+          # ACT-486 for full context.
+          HITS=$(grep -RIn --include='*.ts' -E 'snapshotAgeMs\s*[<>]=?\s*-?[0-9][0-9_]*' \
+                   supabase/functions/_shared/overshoot-execution 2>/dev/null || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::INC-91 violation: numeric-literal snapshot-age bound found. Import from snapshot-age-bounds.ts instead."
+            echo "$HITS"
+            exit 1
+          fi
+          echo "INC-91 gate clean: all snapshot-age bounds routed through the single home."
