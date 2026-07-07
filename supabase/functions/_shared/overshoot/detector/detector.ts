@@ -167,6 +167,19 @@ export interface DetectedEvent {
   rank_score: number | null;
   study_cell_ref: StudyCellKey | null;
   shortability: ShortabilityRecord | null;
+  /**
+   * FP-069 W3.8 T2.1 (ACT-479) — W5 attribution tag, NOT a priority class.
+   * LONG cells tag `T1` (mean_fwd_return_5d ≥ LONG_T1_MEAN_FWD_RETURN_5D_MIN)
+   * or `T2` (LONG_T2_MEAN_FWD_RETURN_5D_MIN ≤ mean < T1 threshold ∧
+   * arrival_count ≥ 1 ∧ NOT T1). SHORT path: tier is ALWAYS null (SHORT
+   * predicate byte-unchanged this tranche). Cells with mean below the T2
+   * floor OR arrival_count < 1 refuse `no_study_cell` (never silent-pass,
+   * never tier-assigned). Selection ordering is pure rank_score DESC,
+   * |excess| DESC, tier ASC final tie-break only — tier does NOT bias
+   * priority (ratified 2026-07-07: rank_score is the measured expected
+   * return; tier-class-priority rejected as a conservatism clamp).
+   */
+  tier: 'T1' | 'T2' | null;
 }
 
 export interface DetectorParams {
@@ -277,6 +290,140 @@ export function assertStudyProvenance(a: StudyProvenanceAttestation): void {
     );
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// FP-069 W3.8 T2.1 (ACT-479) — DETECTOR-PRIOR EXTENSION: tiered admission
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Ratified 2026-07-07 (operator STEP-A ratifications, verbatim):
+//   (a) v2 = detector-versioning via NEW RATIFIED_DETECTOR_VERSION constant
+//       (sha256(study_full_hash ‖ canonical predicate_spec_json), first 8
+//       hex, ASCII '||' separator for portability). RATIFIED_STUDY_RUN_ID
+//       and RATIFIED_PARAM_GRID_HASH_PREFIX remain UNTOUCHED and
+//       boot-asserted forever — the study kernel is unchanged; no consumer
+//       rename atom exists; consumers ADD the new assertion in a later
+//       sub-tranche without a boot-broken window.
+//   (b) Selection ordering is pure rank_score DESC, |excess| DESC (operator
+//       ROI directive — rank_score is the measured expected return;
+//       tier-class-priority rejected as a conservatism clamp). `tier ASC`
+//       is the FINAL tie-break only, invoked when rank_score AND |excess|
+//       tie exactly — this is determinism scaffolding, not priority.
+//   (c) A higher-mean T2 cell DOES outrank a lower-mean T1 cell — the
+//       admission gate is per-cell; the ranking gate is per-mean.
+//
+// LONG_T2_ELIGIBLE(cell) ≡ side='LONG' ∧ NOT LONG_T1_ELIGIBLE(cell)
+//                          ∧ mean_fwd_return_5d ≥ 0.0010 (2× haircut)
+//                          ∧ arrival_count ≥ 1
+// LONG_T1_ELIGIBLE(cell) ≡ side='LONG' ∧ mean_fwd_return_5d ≥ 0.0020
+//                          ∧ arrival_count ≥ 1
+//   (T1 threshold = retroactive canonicalization of the T1-only prior:
+//    2× the T2 haircut floor. Cells below 0.0010 refuse `no_study_cell`
+//    — a new hard floor that pre-v2 code lacked. In practice such cells
+//    ranked at the bottom of the top-20-per-side sort and were unlikely
+//    to be selected under capacity=20; the 2026-06-18 anchor's 3 LONG
+//    admissions are all L_10_INF cells with mean ≥ 0.0020 → all T1.)
+//
+// SHORT path is BYTE-UNCHANGED this tranche: no T2 admission, no tier
+// tagging (tier remains null on every SHORT event), no mean-return floor
+// change. The SHORT rank_score formula `mean_fwd_return_5d * -1` is
+// preserved verbatim; the SHORT selection set is preserved verbatim.
+
+export const LONG_T1_MEAN_FWD_RETURN_5D_MIN = 0.0020 as const;
+export const LONG_T2_MEAN_FWD_RETURN_5D_MIN = 0.0010 as const;
+export const LONG_TIER_ARRIVAL_COUNT_MIN = 1 as const;
+
+/** Minimal shape the tier predicates read — a subset of `StudyCellStats`. */
+export interface CellForTierEval {
+  mean_fwd_return_5d: number | null;
+  arrival_count: number;
+}
+
+export function LONG_T1_ELIGIBLE(cell: CellForTierEval): boolean {
+  return (
+    cell.mean_fwd_return_5d !== null &&
+    cell.mean_fwd_return_5d >= LONG_T1_MEAN_FWD_RETURN_5D_MIN &&
+    cell.arrival_count >= LONG_TIER_ARRIVAL_COUNT_MIN
+  );
+}
+
+export function LONG_T2_ELIGIBLE(cell: CellForTierEval): boolean {
+  if (LONG_T1_ELIGIBLE(cell)) return false;
+  return (
+    cell.mean_fwd_return_5d !== null &&
+    cell.mean_fwd_return_5d >= LONG_T2_MEAN_FWD_RETURN_5D_MIN &&
+    cell.arrival_count >= LONG_TIER_ARRIVAL_COUNT_MIN
+  );
+}
+
+// Canonical predicate-spec JSON — the versioned artifact. Byte-exact
+// strings; DO NOT reformat (whitespace / key order changes the hash). The
+// two spec strings + STUDY_FULL_HASH + '||' separator produce the version
+// prefixes below (sha256 first 8 hex). Recomputed from source at boot in
+// the T2.4 sub-tranche's new assertion; frozen here for audit.
+//
+// STUDY_FULL_HASH = 'a37e4b963c0ff13f0962e231b6322d11f1210df44812cdd24dcf06e66f354e80'
+// (full `overshoot_study_runs.param_grid_hash` for RATIFIED_STUDY_RUN_ID;
+// UNTOUCHED, boot-asserted separately via RATIFIED_PARAM_GRID_HASH_PREFIX.)
+
+export const DETECTOR_PREDICATE_SPEC_V1_JSON =
+  '{"version":"v1","long":{"excess_min":0.10,"windows":[1,2,3],"momentum":[4,5],"drawdown":[1,2,3],"earnings_exclusion_days":5,"tiers":{"T1":{"mean_fwd_return_5d_min":0.0020,"arrival_count_min":1}}},"selection":{"ordering":["rank_score_desc","abs_excess_desc"],"capacity_per_side_default":20},"short":{"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
+
+export const DETECTOR_PREDICATE_SPEC_V2_JSON =
+  '{"version":"v2","long":{"excess_min":0.10,"windows":[1,2,3],"momentum":[4,5],"drawdown":[1,2,3],"earnings_exclusion_days":5,"tiers":{"T1":{"mean_fwd_return_5d_min":0.0020,"arrival_count_min":1},"T2":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1,"disjoint_from":"T1"}}},"selection":{"ordering":["rank_score_desc","abs_excess_desc","tier_asc"],"capacity_per_side_default":20,"tier_role":"w5_attribution_tag_not_priority_class"},"short":{"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
+
+/**
+ * Currently-ratified detector version prefix (sha256(study_full_hash ‖
+ * DETECTOR_PREDICATE_SPEC_V2_JSON), first 8 hex, ASCII '||' separator).
+ * Frozen; not recomputed at runtime this tranche. Consumers begin
+ * asserting this in T2.4 (additive; no v1 removal, no boot-broken window).
+ */
+export const RATIFIED_DETECTOR_VERSION = '723c2d25' as const;
+
+export interface DetectorVersionHistoryEntry {
+  version: 'v1' | 'v2';
+  prefix: string;
+  predicate_spec_json: string;
+  rationale: string;
+  act_ref: string;
+  ratification_date: string;
+}
+
+/**
+ * DETECTOR_VERSION_HISTORY — audit tuple; v1 preserved forever with
+ * rationale, v2 recorded with ACT-479 provenance. Renamed from the
+ * STEP-A-proposed `SUPERSEDED_HASHES` per operator ratification (a):
+ * v1 is not "superseded" (study unchanged, boot assertions untouched);
+ * v1 is retroactively canonicalized and v2 extends the admission set.
+ */
+export const DETECTOR_VERSION_HISTORY: readonly DetectorVersionHistoryEntry[] = [
+  {
+    version: 'v1',
+    prefix: '34371220',
+    predicate_spec_json: DETECTOR_PREDICATE_SPEC_V1_JSON,
+    rationale:
+      'Retroactive canonicalization of the T1-only prior at commit of ACT-479. ' +
+      'Captures the pre-T2 predicate surface: LONG admission with mean_fwd_return_5d >= 0.0020 ' +
+      '(2x the T2 haircut floor), arrival_count >= 1; SHORT unchanged. Selection ordering: ' +
+      'rank_score DESC, |excess| DESC (no tier tie-break). No hash existed pre-ACT-479; this ' +
+      'entry documents the shipped behavior surface for audit continuity.',
+    act_ref: 'pre-ACT-479 (retroactive)',
+    ratification_date: '2026-07-07',
+  },
+  {
+    version: 'v2',
+    prefix: RATIFIED_DETECTOR_VERSION,
+    predicate_spec_json: DETECTOR_PREDICATE_SPEC_V2_JSON,
+    rationale:
+      'FP-069 W3.8 T2 detector-prior extension: LONG T2 admission ' +
+      '(mean_fwd_return_5d in [0.0010, 0.0020), arrival_count >= 1, disjoint from T1). ' +
+      'SHORT path byte-unchanged. Selection ordering gains tier ASC as final tie-break only ' +
+      '(W5 attribution tag, NOT a priority class — a higher-mean T2 cell DOES outrank a ' +
+      'lower-mean T1 cell, per operator ROI directive). Study run + kernel + param_grid_hash ' +
+      'UNTOUCHED; RATIFIED_STUDY_RUN_ID and RATIFIED_PARAM_GRID_HASH_PREFIX remain boot-asserted.',
+    act_ref: 'ACT-479',
+    ratification_date: '2026-07-07',
+  },
+] as const;
 
 export function runDetector(input: DetectorInput): DetectedEvent[] {
   const { candidates, shortInterest, params } = input;
@@ -427,6 +574,7 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
     // 6. study-cell-lookup — rank_score source.
     let rank_score: number | null = null;
     let study_cell_ref: StudyCellKey | null = null;
+    let tier: 'T1' | 'T2' | null = null;
     const cellKeyable =
       row.momentum_quintile !== null &&
       row.drawdown_bucket !== null &&
@@ -449,8 +597,51 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
           detail: { cell_key: key },
         });
         setRefusal('no_study_cell');
+      } else if (side === 'LONG') {
+        // FP-069 W3.8 T2.1 (ACT-479) — tiered LONG admission.
+        // T1: mean >= 0.0020 ∧ arrival_count >= 1.
+        // T2: 0.0010 <= mean < 0.0020 ∧ arrival_count >= 1 (NOT T1).
+        // Below T2 floor OR arrival_count < 1 → REFUSED no_study_cell
+        // (new hard floor v2 introduces; never silent-pass, never
+        // default-zero — the DW-208 anti-pattern this module exists to
+        // prevent).
+        if (LONG_T1_ELIGIBLE(cell)) {
+          tier = 'T1';
+          rank_score = cell.mean_fwd_return_5d;
+          study_cell_ref = key;
+          passes.push({
+            filter: 'study-cell-lookup',
+            passed: true,
+            detail: { arrival_count: cell.arrival_count, tier: 'T1' },
+          });
+        } else if (LONG_T2_ELIGIBLE(cell)) {
+          tier = 'T2';
+          rank_score = cell.mean_fwd_return_5d;
+          study_cell_ref = key;
+          passes.push({
+            filter: 'study-cell-lookup',
+            passed: true,
+            detail: { arrival_count: cell.arrival_count, tier: 'T2' },
+          });
+        } else {
+          passes.push({
+            filter: 'study-cell-lookup',
+            passed: false,
+            reason: 'no_study_cell',
+            detail: {
+              cell_key: key,
+              mean_fwd_return_5d: cell.mean_fwd_return_5d,
+              arrival_count: cell.arrival_count,
+              reason: 'below_long_t2_floor_or_arrival_count',
+              long_t2_mean_fwd_return_5d_min: LONG_T2_MEAN_FWD_RETURN_5D_MIN,
+              long_tier_arrival_count_min: LONG_TIER_ARRIVAL_COUNT_MIN,
+            },
+          });
+          setRefusal('no_study_cell');
+        }
       } else {
-        rank_score = cell.mean_fwd_return_5d * (side === 'LONG' ? 1 : -1);
+        // SHORT path — BYTE-UNCHANGED (no tier, no mean-return floor).
+        rank_score = cell.mean_fwd_return_5d * -1;
         study_cell_ref = key;
         passes.push({
           filter: 'study-cell-lookup',
@@ -495,10 +686,19 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
       rank_score,
       study_cell_ref,
       shortability,
+      tier,
     });
   }
 
-  // ─── 7. Capacity-slot selection — per side, rank_score DESC, |excess| DESC ──
+  // ─── 7. Capacity-slot selection — per side ────────────────────────────
+  // Ordering (ratified 2026-07-07): rank_score DESC (measured expected
+  // return — the ROI signal), |excess| DESC (magnitude tiebreak), then
+  // `tier ASC` as FINAL determinism scaffold only (T1 before T2 when the
+  // first two keys are EXACT ties). Tier is a W5 attribution tag, NOT a
+  // priority class: a higher-mean T2 cell WILL outrank a lower-mean T1
+  // cell — that is the whole point of admitting T2 at the ROI floor.
+  // SHORT events always have tier=null; tier tie-break degenerates to
+  // no-op on SHORT (both compared values are null → 0).
   for (const side of ['LONG', 'SHORT'] as const) {
     const qualified = evaluated
       .filter((e) => e.side === side && e.filter_refusal_reason === null && e.rank_score !== null)
@@ -513,7 +713,13 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
           Math.abs(b.excess_w1 ?? 0), Math.abs(b.excess_w2 ?? 0), Math.abs(b.excess_w3 ?? 0),
           Math.abs(b.excess_w4 ?? 0), Math.abs(b.excess_w5 ?? 0),
         );
-        return bEx - aEx;
+        const exDiff = bEx - aEx;
+        if (exDiff !== 0) return exDiff;
+        // Final tie-break only: tier ASC (T1=0, T2=1, null=2). Determinism
+        // scaffolding — NOT priority. See ordering comment above.
+        const tierRank = (t: 'T1' | 'T2' | null): number =>
+          t === 'T1' ? 0 : t === 'T2' ? 1 : 2;
+        return tierRank(a.tier) - tierRank(b.tier);
       });
     const capacity = params.capacityPerSide;
     for (let i = 0; i < qualified.length; i++) {

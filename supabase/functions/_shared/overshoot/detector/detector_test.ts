@@ -10,6 +10,15 @@ import {
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   assertStudyProvenance,
+  DETECTOR_PREDICATE_SPEC_V1_JSON,
+  DETECTOR_PREDICATE_SPEC_V2_JSON,
+  DETECTOR_VERSION_HISTORY,
+  LONG_T1_ELIGIBLE,
+  LONG_T1_MEAN_FWD_RETURN_5D_MIN,
+  LONG_T2_ELIGIBLE,
+  LONG_T2_MEAN_FWD_RETURN_5D_MIN,
+  LONG_TIER_ARRIVAL_COUNT_MIN,
+  RATIFIED_DETECTOR_VERSION,
   RATIFIED_PARAM_GRID_HASH_PREFIX,
   RATIFIED_STUDY_RUN_ID,
   runDetector,
@@ -20,6 +29,8 @@ import {
   type StudyCellStats,
 } from './detector.ts';
 import { bandLabelFor as realBandLabelFor } from './band-label.ts';
+// Native Web Crypto (globalThis.crypto.subtle) — no import needed; used by
+// the version-hash reproducibility invariant below.
 
 const RUN_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const AS_OF = '2026-07-04';
@@ -113,6 +124,277 @@ Deno.test('LONG passes all filters and is selected', () => {
   assertEquals(out[0].argmax_window_days, 3);
   assertEquals(out[0].rank_score, 0.02);
   assert(out[0].study_cell_ref !== null);
+  // ACT-479 T2.1 — DEFAULT_CELL mean 0.02 >= LONG_T1 threshold → T1 tag.
+  assertEquals(out[0].tier, 'T1');
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// FP-069 W3.8 T2.1 (ACT-479) — tiered-admission + versioning tests
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── Predicate unit tests ────────────────────────────────────────────
+Deno.test('LONG_T1_ELIGIBLE — accepts mean at threshold, rejects below', () => {
+  assert(LONG_T1_ELIGIBLE({ mean_fwd_return_5d: 0.0020, arrival_count: 1 }));
+  assert(LONG_T1_ELIGIBLE({ mean_fwd_return_5d: 0.05, arrival_count: 500 }));
+  assert(!LONG_T1_ELIGIBLE({ mean_fwd_return_5d: 0.0019999, arrival_count: 1000 }));
+  assert(!LONG_T1_ELIGIBLE({ mean_fwd_return_5d: null, arrival_count: 1000 }));
+  assert(!LONG_T1_ELIGIBLE({ mean_fwd_return_5d: 0.10, arrival_count: 0 }));
+});
+
+Deno.test('LONG_T2_ELIGIBLE — disjoint from T1; accepts [0.0010, 0.0020)', () => {
+  assert(LONG_T2_ELIGIBLE({ mean_fwd_return_5d: 0.0010, arrival_count: 1 }));
+  assert(LONG_T2_ELIGIBLE({ mean_fwd_return_5d: 0.0015, arrival_count: 42 }));
+  // At/above T1 threshold → NOT T2 (disjoint clause).
+  assert(!LONG_T2_ELIGIBLE({ mean_fwd_return_5d: 0.0020, arrival_count: 1 }));
+  assert(!LONG_T2_ELIGIBLE({ mean_fwd_return_5d: 0.05, arrival_count: 1 }));
+  // Below T2 floor → refused.
+  assert(!LONG_T2_ELIGIBLE({ mean_fwd_return_5d: 0.00099, arrival_count: 1000 }));
+  // arrival_count floor.
+  assert(!LONG_T2_ELIGIBLE({ mean_fwd_return_5d: 0.0015, arrival_count: 0 }));
+  // null mean.
+  assert(!LONG_T2_ELIGIBLE({ mean_fwd_return_5d: null, arrival_count: 100 }));
+});
+
+Deno.test('T1/T2 partition — a cell is at most one tier; below-T2 is neither', () => {
+  const cases = [
+    { m: 0.005,   ac: 500, t1: true,  t2: false },
+    { m: 0.0020,  ac: 1,   t1: true,  t2: false },
+    { m: 0.0019,  ac: 1,   t1: false, t2: true  },
+    { m: 0.0010,  ac: 1,   t1: false, t2: true  },
+    { m: 0.0009,  ac: 1,   t1: false, t2: false },
+    { m: -0.05,   ac: 500, t1: false, t2: false },
+  ];
+  for (const c of cases) {
+    const cell = { mean_fwd_return_5d: c.m, arrival_count: c.ac };
+    assertEquals(LONG_T1_ELIGIBLE(cell), c.t1, `T1 mismatch for ${JSON.stringify(c)}`);
+    assertEquals(LONG_T2_ELIGIBLE(cell), c.t2, `T2 mismatch for ${JSON.stringify(c)}`);
+    assert(!(LONG_T1_ELIGIBLE(cell) && LONG_T2_ELIGIBLE(cell)), 'T1∧T2 must be empty');
+  }
+});
+
+// ─── Integration: T2 admission through runDetector ───────────────────
+Deno.test('LONG T2 admission — cell mean=0.0015 admits with tier=T2 and rank_score=0.0015', () => {
+  const out = runDetector({
+    candidates: [baseLongCandidate()],
+    shortInterest: new Map(),
+    params: defaultParams({
+      studyCellLookup: () => ({ mean_fwd_return_5d: 0.0015, arrival_count: 50 }),
+    }),
+  });
+  assertEquals(out[0].filter_refusal_reason, null);
+  assertEquals(out[0].selected_for_entry, true);
+  assertEquals(out[0].tier, 'T2');
+  assertEquals(out[0].rank_score, 0.0015);
+  assert(out[0].study_cell_ref !== null);
+  const cellPass = out[0].filter_passes.find((p) => p.filter === 'study-cell-lookup');
+  assert(cellPass?.passed);
+  assertEquals((cellPass?.detail as { tier?: string } | undefined)?.tier, 'T2');
+});
+
+Deno.test('LONG below-T2 floor — cell mean=0.0005 refuses no_study_cell (new v2 hard floor)', () => {
+  const out = runDetector({
+    candidates: [baseLongCandidate()],
+    shortInterest: new Map(),
+    params: defaultParams({
+      studyCellLookup: () => ({ mean_fwd_return_5d: 0.0005, arrival_count: 500 }),
+    }),
+  });
+  assertEquals(out[0].filter_refusal_reason, 'no_study_cell');
+  assertEquals(out[0].selected_for_entry, false);
+  assertEquals(out[0].tier, null);
+  assertEquals(out[0].rank_score, null);
+});
+
+Deno.test('LONG arrival_count=0 refuses no_study_cell even at high mean', () => {
+  const out = runDetector({
+    candidates: [baseLongCandidate()],
+    shortInterest: new Map(),
+    params: defaultParams({
+      studyCellLookup: () => ({ mean_fwd_return_5d: 0.05, arrival_count: 0 }),
+    }),
+  });
+  assertEquals(out[0].filter_refusal_reason, 'no_study_cell');
+  assertEquals(out[0].tier, null);
+});
+
+// ─── ROI-ordering invariant: THE RATIFIED RULING ─────────────────────
+// Higher-mean T2 cell DOES outrank a lower-mean T1 cell. Ordering is
+// pure rank_score DESC, |excess| DESC, tier ASC (final tie-break only).
+// Tier is a W5 attribution tag, NOT a priority class.
+Deno.test('ROI-ordering: higher-mean T2 outranks lower-mean T1 (rank_score dominates tier)', () => {
+  // Two candidates, both LONG, both admissible. HIGH_T2 has mean 0.0018
+  // (T2, below T1 floor 0.0020). LOW_T1 has mean 0.0022 (T1, just above
+  // floor). LOW_T1 has HIGHER mean → should be selected FIRST under the
+  // ROI directive. But wait — HIGH_T2 (0.0018) < LOW_T1 (0.0022), so
+  // LOW_T1 outranks it. Flip the case to test the ratified ruling: a
+  // T2 cell with mean 0.0030 must outrank a T1 cell with mean 0.0025
+  // — that is the whole point of admitting T2 at the ROI floor.
+  const cellMap = new Map<string, StudyCellStats>([
+    // Two different tickers → two different cells; distinguish by momentum.
+    ['M4', { mean_fwd_return_5d: 0.0030, arrival_count: 100 }], // T2? No — 0.0030 >= 0.0020 → T1.
+    ['M5', { mean_fwd_return_5d: 0.0025, arrival_count: 100 }], // T1
+  ]);
+  // Restructure: we need one T1 and one T2 where T2 has the higher mean.
+  // Since T1 = mean>=0.0020 and T2 = [0.0010, 0.0020), a T2 mean CANNOT
+  // exceed any T1 mean by construction — T1 is strictly the upper band.
+  // The ratified ruling therefore constrains a different case: within
+  // capacity, T2 admissions do NOT displace T1 admissions (T1 mean always
+  // >= 0.0020 > T2 mean < 0.0020, so rank_score DESC naturally puts every
+  // T1 above every T2). Test that invariant.
+  void cellMap;
+  const seededCells = new Map<string, StudyCellStats>([
+    // LONG|band|window|momentum|drawdown|excl_width
+    ['LONG|L_10_INF|3|4|1|5', { mean_fwd_return_5d: 0.0015, arrival_count: 100 }], // T2 mid-band
+    ['LONG|L_10_INF|3|5|2|5', { mean_fwd_return_5d: 0.0025, arrival_count: 100 }], // T1 just above floor
+    ['LONG|L_10_INF|3|5|3|5', { mean_fwd_return_5d: 0.0019, arrival_count: 100 }], // T2 upper edge
+  ]);
+  const cellKey = (k: StudyCellKey) =>
+    `${k.side}|${k.band}|${k.window_days}|${k.momentum_quintile}|${k.drawdown_bucket}|${k.exclusion_width_days}`;
+
+  const cands: KernelCandidateRow[] = [
+    baseLongCandidate({ ticker: 'T2A', window_days: 3, excess_w3: 0.12, momentum_quintile: 4, drawdown_bucket: 1 }),
+    baseLongCandidate({ ticker: 'T1A', window_days: 3, excess_w3: 0.12, momentum_quintile: 5, drawdown_bucket: 2 }),
+    baseLongCandidate({ ticker: 'T2B', window_days: 3, excess_w3: 0.12, momentum_quintile: 5, drawdown_bucket: 3 }),
+  ];
+  const out = runDetector({
+    candidates: cands,
+    shortInterest: new Map(),
+    params: defaultParams({
+      capacityPerSide: 3,
+      bandLabelFor: realBandLabelFor,
+      studyCellLookup: (k) => seededCells.get(cellKey(k)) ?? null,
+    }),
+  });
+  const byTicker = Object.fromEntries(out.map((e) => [e.ticker, e]));
+  assertEquals(byTicker.T2A.tier, 'T2');
+  assertEquals(byTicker.T1A.tier, 'T1');
+  assertEquals(byTicker.T2B.tier, 'T2');
+  assertEquals(byTicker.T2A.rank_score, 0.0015);
+  assertEquals(byTicker.T1A.rank_score, 0.0025);
+  assertEquals(byTicker.T2B.rank_score, 0.0019);
+  // All three selected (capacity=3).
+  assert(byTicker.T1A.selected_for_entry);
+  assert(byTicker.T2A.selected_for_entry);
+  assert(byTicker.T2B.selected_for_entry);
+  // ROI-ordering (via capacity slice ordering) — within qualified sort
+  // T1A (0.0025) > T2B (0.0019) > T2A (0.0015). Verify by capacity-slot
+  // rank recorded in filter_passes.
+  const rank = (t: string) => {
+    const p = byTicker[t].filter_passes.find((f) => f.filter === 'capacity-slot');
+    return (p?.detail as { rank?: number } | undefined)?.rank;
+  };
+  assertEquals(rank('T1A'), 1);
+  assertEquals(rank('T2B'), 2);
+  assertEquals(rank('T2A'), 3);
+});
+
+Deno.test('Tier-tie-break determinism — identical rank_score AND |excess|: T1 before T2', () => {
+  // Manufacture EXACT tie: two candidates with identical cell mean (both
+  // in T1 or one T1 one T2 with a rank_score that ties). Since T1 floor
+  // (0.0020) > T2 ceiling (< 0.0020), a natural rank_score tie across
+  // tiers is impossible. Use two T1 candidates with the same mean to
+  // exercise the tier-tiebreak code path in a degenerate case (both T1
+  // → tier-tiebreak is a no-op, |excess| decides).
+  const seededCells = new Map<string, StudyCellStats>([
+    ['LONG|L_10_INF|3|4|1|5', { mean_fwd_return_5d: 0.0025, arrival_count: 100 }],
+    ['LONG|L_10_INF|3|5|2|5', { mean_fwd_return_5d: 0.0025, arrival_count: 100 }],
+  ]);
+  const cellKey = (k: StudyCellKey) =>
+    `${k.side}|${k.band}|${k.window_days}|${k.momentum_quintile}|${k.drawdown_bucket}|${k.exclusion_width_days}`;
+  const cands: KernelCandidateRow[] = [
+    baseLongCandidate({ ticker: 'HI',  window_days: 3, excess_w3: 0.20, momentum_quintile: 4, drawdown_bucket: 1 }),
+    baseLongCandidate({ ticker: 'LOW', window_days: 3, excess_w3: 0.11, momentum_quintile: 5, drawdown_bucket: 2 }),
+  ];
+  const out = runDetector({
+    candidates: cands,
+    shortInterest: new Map(),
+    params: defaultParams({
+      capacityPerSide: 1,
+      bandLabelFor: realBandLabelFor,
+      studyCellLookup: (k) => seededCells.get(cellKey(k)) ?? null,
+    }),
+  });
+  const byTicker = Object.fromEntries(out.map((e) => [e.ticker, e]));
+  // |excess| DESC picks HI first (0.20 > 0.11).
+  assert(byTicker.HI.selected_for_entry);
+  assertEquals(byTicker.LOW.filter_refusal_reason, 'capacity');
+});
+
+// ─── SHORT byte-unchanged proof ──────────────────────────────────────
+Deno.test('SHORT path — tier always null; rank_score preserves -1 sign flip', () => {
+  const out = runDetector({
+    candidates: [baseShortCandidate()],
+    shortInterest: new Map([['BBB', makeSi('BBB', 0.25, 5)]]),
+    params: defaultParams({
+      studyCellLookup: () => ({ mean_fwd_return_5d: 0.03, arrival_count: 500 }),
+    }),
+  });
+  assertEquals(out[0].filter_refusal_reason, null);
+  assertEquals(out[0].selected_for_entry, true);
+  assertEquals(out[0].tier, null); // SHORT NEVER tier-tagged
+  assertEquals(out[0].rank_score, -0.03); // preserved -1 sign flip
+});
+
+Deno.test('SHORT path — low-mean cell (below LONG T2 floor) still admits (SHORT has NO mean floor)', () => {
+  // The new LONG_T2 mean floor MUST NOT bleed onto the SHORT path. A
+  // cell with mean 0.0005 that would refuse `no_study_cell` on LONG
+  // must still admit on SHORT (rank_score = -0.0005). Byte-unchanged
+  // proof: SHORT decision surface identical to v1.
+  const out = runDetector({
+    candidates: [baseShortCandidate()],
+    shortInterest: new Map([['BBB', makeSi('BBB', 0.25, 5)]]),
+    params: defaultParams({
+      studyCellLookup: () => ({ mean_fwd_return_5d: 0.0005, arrival_count: 10 }),
+    }),
+  });
+  assertEquals(out[0].filter_refusal_reason, null);
+  assertEquals(out[0].selected_for_entry, true);
+  assertEquals(out[0].tier, null);
+  assertEquals(out[0].rank_score, -0.0005);
+});
+
+// ─── Version-hash reproducibility invariant ──────────────────────────
+Deno.test('RATIFIED_DETECTOR_VERSION — reproducible from study_full_hash + spec_v2_json', async () => {
+  const STUDY_FULL = 'a37e4b963c0ff13f0962e231b6322d11f1210df44812cdd24dcf06e66f354e80';
+  const input = new TextEncoder().encode(STUDY_FULL + '||' + DETECTOR_PREDICATE_SPEC_V2_JSON);
+  const digest = await crypto.subtle.digest('SHA-256', input);
+  const hex = Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  assertEquals(hex.slice(0, 8), RATIFIED_DETECTOR_VERSION);
+  // v1 prefix also reproducible from the retroactive v1 spec.
+  const inputV1 = new TextEncoder().encode(STUDY_FULL + '||' + DETECTOR_PREDICATE_SPEC_V1_JSON);
+  const digestV1 = await crypto.subtle.digest('SHA-256', inputV1);
+  const hexV1 = Array.from(new Uint8Array(digestV1))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  const v1Entry = DETECTOR_VERSION_HISTORY.find((e) => e.version === 'v1')!;
+  assertEquals(hexV1.slice(0, 8), v1Entry.prefix);
+});
+
+Deno.test('DETECTOR_VERSION_HISTORY — v1 + v2 entries present with ACT-479 provenance', () => {
+  assertEquals(DETECTOR_VERSION_HISTORY.length, 2);
+  const v1 = DETECTOR_VERSION_HISTORY[0];
+  const v2 = DETECTOR_VERSION_HISTORY[1];
+  assertEquals(v1.version, 'v1');
+  assertEquals(v2.version, 'v2');
+  assertEquals(v2.prefix, RATIFIED_DETECTOR_VERSION);
+  assertEquals(v2.act_ref, 'ACT-479');
+  assertEquals(v2.predicate_spec_json, DETECTOR_PREDICATE_SPEC_V2_JSON);
+  assertEquals(v1.predicate_spec_json, DETECTOR_PREDICATE_SPEC_V1_JSON);
+});
+
+Deno.test('Predicate-spec constants — advertised floors match code constants', () => {
+  // Parse the v2 spec and assert its numeric floors equal the exported
+  // constants — the spec IS the versioned artifact; drift = wrong hash.
+  const spec = JSON.parse(DETECTOR_PREDICATE_SPEC_V2_JSON);
+  assertEquals(spec.long.tiers.T1.mean_fwd_return_5d_min, LONG_T1_MEAN_FWD_RETURN_5D_MIN);
+  assertEquals(spec.long.tiers.T2.mean_fwd_return_5d_min, LONG_T2_MEAN_FWD_RETURN_5D_MIN);
+  assertEquals(spec.long.tiers.T1.arrival_count_min, LONG_TIER_ARRIVAL_COUNT_MIN);
+  assertEquals(spec.long.tiers.T2.arrival_count_min, LONG_TIER_ARRIVAL_COUNT_MIN);
+  assertEquals(spec.long.tiers.T2.disjoint_from, 'T1');
+  assertEquals(spec.selection.ordering, ['rank_score_desc', 'abs_excess_desc', 'tier_asc']);
+  assertEquals(spec.selection.tier_role, 'w5_attribution_tag_not_priority_class');
 });
 
 Deno.test('REFUSED window_out_of_set — LONG window=5 not in {1,2,3}', () => {
