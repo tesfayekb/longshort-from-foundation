@@ -189,8 +189,16 @@ interface SelectionRow {
   side: 'long' | 'short';
   rank_score: number | null;
   tier: 'T1' | 'T2' | null;
-  t_close_ref: number | null;
-  pre_event_ref: number | null;
+  // ACT-485 Option A (INC-90 structural fix) — sourced by LATERAL JOIN
+  // to `overshoot_daily_bars`; numeric-typed on the DB side, postgresjs
+  // hands them back as strings (numeric type) so the loader coerces via
+  // Number() after the explicit non-null check. NULL-impossible after the
+  // typed `reference_bar_missing` refusal branch.
+  t_close_ref: string | number | null;
+  pre_event_ref: string | number | null;
+  // Metadata for reference_bar_missing audit rows (never-silent-drop).
+  as_of: string;                // detection_runs.as_of (YYYY-MM-DD)
+  argmax_window_days: number;   // events row window used for pre_event bar offset
 }
 
 interface RefusalTally {
@@ -590,15 +598,46 @@ Deno.serve(createHandler(async (req: Request) => {
     const regimeLabel: OvershootRegime | null = regime.ok ? regime.regime : null;
 
     // (f) load selections + write session marker.
+    // ACT-485 Option A (INC-90 structural fix) — REAL reference-price
+    // wiring. Sources per the I5 contract docstring (`_shared/overshoot-
+    // execution/i5-recheck.ts` lines 22-32): `tCloseRef` = close at the
+    // T-close session (the detection run's `as_of` date); `preEventRef` =
+    // close of the pre-event reference bar, offset `argmax_window_days`
+    // TRADING SESSIONS before the T-close (never calendar-day math —
+    // uses OFFSET on trade-date DESC to walk sessions inside
+    // `overshoot_daily_bars`, honouring holidays and weekends). LEFT
+    // JOIN LATERAL yields NULL when a bar is missing; the handler
+    // converts that NULL to the typed `reference_bar_missing` refusal
+    // (never NaN, never a silent default) — see the loop body below.
+    // The `NULL::` placeholder pattern is anti-patterned by INC-90 and
+    // guarded by `.github/workflows/overshoot-guards.yml`.
     const selections = await sql<SelectionRow[]>`
       SELECT
         e.ticker,
         e.side,
         e.rank_score,
         e.tier,
-        NULL::numeric AS t_close_ref,
-        NULL::numeric AS pre_event_ref
+        e.argmax_window_days,
+        dr.as_of::text AS as_of,
+        tclose.close  AS t_close_ref,
+        preref.close  AS pre_event_ref
       FROM overshoot_events e
+      JOIN overshoot_detection_runs dr
+        ON dr.run_id = e.run_id
+      LEFT JOIN LATERAL (
+        SELECT close
+        FROM overshoot_daily_bars
+        WHERE ticker = e.ticker AND trade_date = dr.as_of
+        LIMIT 1
+      ) tclose ON true
+      LEFT JOIN LATERAL (
+        SELECT close
+        FROM overshoot_daily_bars
+        WHERE ticker = e.ticker AND trade_date <= dr.as_of
+        ORDER BY trade_date DESC
+        OFFSET e.argmax_window_days
+        LIMIT 1
+      ) preref ON true
       WHERE e.run_id = ${linkage.runId}::uuid
         AND e.selected_for_entry = true
       ORDER BY e.side, e.rank_score DESC NULLS LAST, e.ticker
@@ -720,12 +759,35 @@ Deno.serve(createHandler(async (req: Request) => {
       // Fetch pre-open Polygon snapshot (reused for I5 + entry-price).
       const snap = await fetchPolygonSnapshot(env.polygonKey, sel.ticker);
 
-      // I5 pre-open re-check (DEFAULT-DENY). If we don't have t_close_ref
-      // and pre_event_ref on the selection row, we STILL run the recheck
-      // path — it will refuse `reference_prices_malformed`, which is the
-      // correct default-deny outcome, and the refusal is audited + surfaced.
-      const tCloseRef = sel.t_close_ref ?? NaN;
-      const preEventRef = sel.pre_event_ref ?? NaN;
+      // ACT-485 Option A (INC-90 fix) — reference_bar_missing typed
+      // refusal. Sourced by LATERAL JOIN above (never `NULL::` placeholder).
+      // NULL from the JOIN means the daily bar is missing for the T-close
+      // session or the pre-event bar (argmax_window_days sessions back).
+      // Refuse with a NAMED refusal + full context — never NaN, never a
+      // silent default. Counted under `i5_refusals` (semantically: cannot
+      // evaluate the I5 recheck). INC-83 sentinel persists (no UPSERT).
+      if (sel.t_close_ref === null || sel.pre_event_ref === null) {
+        tally.i5_refusals += 1;
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.entry.reference_bar_missing',
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: {
+            ticker: sel.ticker, side: sel.side,
+            reason: `daily-bar reference price missing (t_close_ref=${sel.t_close_ref} pre_event_ref=${sel.pre_event_ref}); detection as_of=${sel.as_of}; argmax_window_days=${sel.argmax_window_days}`,
+            t_close_ref: sel.t_close_ref, pre_event_ref: sel.pre_event_ref,
+            detection_as_of: sel.as_of, argmax_window_days: sel.argmax_window_days,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+            inc83_sentinel_persists: true,
+          },
+        });
+        continue;
+      }
+      // Coerce numeric-strings from postgresjs (numeric type default).
+      // Non-null by the branch above; Number() is total on the string form.
+      const tCloseRef = Number(sel.t_close_ref);
+      const preEventRef = Number(sel.pre_event_ref);
       const i5 = evaluateI5PreOpenRecheck({
         snapshot: snap, side: sideUpper, tCloseRef, preEventRef, asOf: nowTs,
       });
