@@ -99,6 +99,27 @@ function fmtMargin(n: number): string {
 
 export function OvershootConfigPanel() {
   const queryClient = useQueryClient();
+  // T4 (ACT-481) — engine-constant display values. Per the W4.g display-truth
+  // rule (ACT-465.g), console-displayed thresholds cite their engine constant
+  // by FILE, never restate independent values. These mirrors exist only for
+  // display; the money-engines read the constants directly from the cited
+  // files, and the separation guard (ACT-465.b-FIX) prevents importing them
+  // into the frontend. Verify against source when auditing.
+  //
+  // Sources (T3a / T3b landings under ACT-480):
+  //   supabase/functions/_shared/overshoot-execution/sizing.ts:80
+  //     export const OVERSHOOT_CAPACITY_LONG = 36;
+  //   supabase/functions/_shared/overshoot-execution/sizing.ts:81
+  //     export const OVERSHOOT_CAPACITY_SHORT = 4;
+  //   supabase/functions/_shared/overshoot-execution/intents.ts:57
+  //     export const OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG = 10;
+  //   supabase/functions/_shared/overshoot-execution/intents.ts:58
+  //     export const OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT = 5;
+  const CAPACITY_LONG_DISPLAY = 36;
+  const CAPACITY_SHORT_DISPLAY = 4;
+  const HOLDING_SESSIONS_LONG_DISPLAY = 10;
+  const HOLDING_SESSIONS_SHORT_DISPLAY = 5;
+
   const configQuery = useQuery({
     queryKey: ['overshoot-strategy-config'],
     queryFn: async () => {
@@ -115,6 +136,7 @@ export function OvershootConfigPanel() {
   const [editing, setEditing] = useState<OvershootConfigRow | null>(null);
 
   return (
+    <div className="space-y-6">
     <Card>
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <div>
@@ -215,6 +237,49 @@ export function OvershootConfigPanel() {
         />
       ) : null}
     </Card>
+
+    {/* T4 (ACT-481) — engine capacities & horizons. Cited by file per W4.g. */}
+    <Card>
+      <CardHeader>
+        <CardTitle>Engine capacities &amp; horizons (cited by file)</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Read-only display of the money-engine constants that govern per-side sizing
+          (T3b/ACT-480) and per-side exit horizons (T3a/ACT-480). Values here MIRROR
+          the engine constants for display; the engines read them directly from the
+          files cited below, and the frontend separation guard forbids importing
+          engine bytes. If the source and this display ever disagree, the source is
+          authoritative — file an INC and correct this display.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <div className="text-xs uppercase text-muted-foreground">Per-side capacity</div>
+            <div className="mt-1 flex flex-wrap gap-2">
+              <Badge variant="default" className="font-mono">LONG = {CAPACITY_LONG_DISPLAY}</Badge>
+              <Badge variant="secondary" className="font-mono">SHORT = {CAPACITY_SHORT_DISPLAY}</Badge>
+            </div>
+            <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+              source: <code>supabase/functions/_shared/overshoot-execution/sizing.ts:80-81</code>
+              <br />OVERSHOOT_CAPACITY_LONG / OVERSHOOT_CAPACITY_SHORT
+            </p>
+          </div>
+          <div>
+            <div className="text-xs uppercase text-muted-foreground">Per-side exit horizon (holding sessions)</div>
+            <div className="mt-1 flex flex-wrap gap-2">
+              <Badge variant="default" className="font-mono">LONG = {HOLDING_SESSIONS_LONG_DISPLAY}</Badge>
+              <Badge variant="secondary" className="font-mono">SHORT = {HOLDING_SESSIONS_SHORT_DISPLAY}</Badge>
+            </div>
+            <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+              source: <code>supabase/functions/_shared/overshoot-execution/intents.ts:57-58</code>
+              <br />OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG / _SHORT
+              <br />read via <code>holdingSessionsForSide(side)</code> in session-age.ts
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+    </div>
   );
 }
 
