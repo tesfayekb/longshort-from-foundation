@@ -189,8 +189,16 @@ interface SelectionRow {
   side: 'long' | 'short';
   rank_score: number | null;
   tier: 'T1' | 'T2' | null;
-  t_close_ref: number | null;
-  pre_event_ref: number | null;
+  // ACT-485 Option A (INC-90 structural fix) — sourced by LATERAL JOIN
+  // to `overshoot_daily_bars`; numeric-typed on the DB side, postgresjs
+  // hands them back as strings (numeric type) so the loader coerces via
+  // Number() after the explicit non-null check. NULL-impossible after the
+  // typed `reference_bar_missing` refusal branch.
+  t_close_ref: string | number | null;
+  pre_event_ref: string | number | null;
+  // Metadata for reference_bar_missing audit rows (never-silent-drop).
+  as_of: string;                // detection_runs.as_of (YYYY-MM-DD)
+  argmax_window_days: number;   // events row window used for pre_event bar offset
 }
 
 interface RefusalTally {
