@@ -246,6 +246,23 @@ function AuditRowCell({ row }: { row: AuditRow }) {
 }
 
 export function OvershootExecutionTrail() {
+  // T4 (ACT-481) — recent overshoot_entry_runs (MIG-157). Read-only. Uses
+  // the new scoped SELECT policy (`overshoot_entry_runs_view_read`, MIG-158)
+  // and its RESTRICTIVE deny-all-writes counterpart. Sparse until first
+  // armed entry cron fires; the honest empty-state calls this out.
+  const entryRunsQuery = useQuery({
+    queryKey: ['overshoot', 'execution', 'entry-runs-recent'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('overshoot_entry_runs')
+        .select('run_id,session_date,detection_run_id,outcome,targets_loaded,orders_submitted,regime,regime_signal_context,dry_run,correlation_id,created_at')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   // Recent audit rows (all-actions view, most recent 50) — arm/disarm +
   // config + short-interest lifecycle + (once EXEC lands) entry/exit.
   const auditQuery = useQuery({
@@ -317,6 +334,74 @@ export function OvershootExecutionTrail() {
 
   return (
     <div className="space-y-6">
+      {/* T4 (ACT-481): recent entry-runs card, MIG-157 data via MIG-158 policy. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Entry runs (last 20, MIG-157)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {entryRunsQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : entryRunsQuery.isError ? (
+            <p className="text-sm text-destructive">
+              Failed to load entry runs: {(entryRunsQuery.error as Error).message}
+            </p>
+          ) : (entryRunsQuery.data ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No entry-run rows yet — the table is written by the entry cron and stays sparse
+              until first-light. Scoped read policy visible to <code className="font-mono">overshoot.view</code>.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Session</TableHead>
+                  <TableHead>Outcome</TableHead>
+                  <TableHead>Regime</TableHead>
+                  <TableHead className="text-right">Targets</TableHead>
+                  <TableHead className="text-right">Submitted</TableHead>
+                  <TableHead>Dry-run</TableHead>
+                  <TableHead>Signal context</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(entryRunsQuery.data ?? []).map((r) => {
+                  const label = r.regime ?? 'INDETERMINATE';
+                  const variant: 'default' | 'secondary' | 'destructive' | 'outline' =
+                    label === 'BEAR' ? 'destructive' : label === 'BULL' ? 'default' : 'outline';
+                  let ctx = '';
+                  if (r.regime_signal_context) {
+                    try { ctx = JSON.stringify(r.regime_signal_context); } catch { ctx = ''; }
+                    if (ctx.length > 120) ctx = ctx.slice(0, 120) + '…';
+                  }
+                  return (
+                    <TableRow key={r.run_id}>
+                      <TableCell className="font-mono text-xs">{r.session_date}</TableCell>
+                      <TableCell>
+                        <Badge variant={r.outcome === 'completed' ? 'default' : 'destructive'} className="font-mono text-[10px]">
+                          {r.outcome}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={variant} className="font-mono text-[10px]">{label}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{r.targets_loaded}</TableCell>
+                      <TableCell className="text-right font-mono">{r.orders_submitted}</TableCell>
+                      <TableCell className="font-mono text-[10px] text-muted-foreground">
+                        {r.dry_run ? 'true' : 'false'}
+                      </TableCell>
+                      <TableCell className="font-mono text-[10px] text-muted-foreground max-w-[280px] truncate">
+                        {ctx || '—'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       {/* A5 reconciliation refusal alerts */}
       <Card>
         <CardHeader>
