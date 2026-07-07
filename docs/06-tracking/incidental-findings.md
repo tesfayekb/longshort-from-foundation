@@ -10,13 +10,13 @@
 
 **Test-blind-spot note (test-migration guidance for T3b):** the entry-run's e-ii unit-test suite exercises the sizing FORMULA (`computeTargetSizing` with an operator-supplied capacity input) but never asserts the SOURCE of the denominator flowing in from `index.ts:588`. Formula-correct + source-wrong is a class the current source-sentinel posture does not catch; T3b's test migration MUST add a source-sentinel asserting the handler reads `OVERSHOOT_CAPACITY_LONG` / `OVERSHOOT_CAPACITY_SHORT` (not `.length` off a selection array) at the exact call-site currently at :588 — plus a negative sentinel asserting `longSelections.length` / `shortSelections.length` no longer appear on the sizing path.
 
-**Resolution (deferred to T3b):** wire `capacityPerSide = sideUpper === 'LONG' ? OVERSHOOT_CAPACITY_LONG : OVERSHOOT_CAPACITY_SHORT` at :588 (constants imported from `_shared/overshoot-execution/intents.ts` / capacity home to be finalized in T3b design). Under-fill (selections < capacity) becomes idle slots that tick, not concentration; over-fill is already prevented upstream by the detector's per-side selection cap. Concurrent with the wiring: extend the entry-run test suite with the source-sentinel described above.
+**Resolution (LANDED at T3b — ACT-480):** the entry-run handler's :588 line now reads `capacityPerSide = sideUpper === 'LONG' ? OVERSHOOT_CAPACITY_LONG : OVERSHOOT_CAPACITY_SHORT` (constants imported from `_shared/overshoot-execution/sizing.ts`, which already carried `OVERSHOOT_CAPACITY_LONG=36` / `OVERSHOOT_CAPACITY_SHORT=4` per ACT-478). Under-fill (selections < capacity) now yields idle slots that tick, not concentration; over-fill is prevented upstream by the detector's per-side selection cap. Test-migration binding satisfied by two source-sentinels in `overshoot-entry-run/index_test.ts`: positive (`capacityPerSide` reads the ratified capacity constants verbatim) + negative (`capacityPerSide` MUST NOT read `.length` off any selections array; the pre-fix `longSelections.length : shortSelections.length` ternary MUST be absent from the sizing path). Both sentinels green at T3b landing.
 
 **Cross-references:** ACT-480 STEP A A3 (the census that surfaced this); FP-069 W3.8 T3b (the scheduled structural fix); `supabase/functions/overshoot-entry-run/index.ts:588` (the defect site); ACT-478 (per-side capacity constants ratification); Constitution Rule 6 (register-before-fix discipline that mandated this INC being filed BEFORE any T3b byte lands).
 
-**Disposition:** Logged. Structural fix scheduled for T3b (ACT-480). No behavioral change this landing.
+**Disposition:** Resolved (T3b — ACT-480). Structural fix landed with capacity-constants wiring + source-sentinels + regime governor + MIG-157 persistence. Realized impact remains zero (job registry still disarmed; no live fires).
 
-**Status:** Open — deferred to T3b (this same ACT-480 tranche).
+**Status:** Resolved (T3b — ACT-480).
 
 ---
 
