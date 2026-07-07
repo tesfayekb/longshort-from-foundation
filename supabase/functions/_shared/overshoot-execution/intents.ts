@@ -43,25 +43,19 @@ export function isOvershootIntent(value: unknown): value is OvershootIntent {
 //     across every regime bucket at H > 5. SHORT H ≤ 5 HARD; extending SHORT
 //     beyond 5 destroys edge. SHORT H=5 ratified.
 //
-// Per-side constants (this module owns the values; engine wiring lands at T3):
+// Per-side constants (this module owns the values; engine wiring lands at
+// T3a — FP-069 W3.8 T3, ACT-480). The deprecated uniform alias
+// OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS was DELETED at T3a landing (ACT-480):
+//   - session-age.computeSessionAge now accepts `side: 'LONG' | 'SHORT'`
+//     and reads the horizon via holdingSessionsForSide(side).
+//   - overshoot-exit-run passes `m.side` (upper-cased) at the call site;
+//     the exit engine's drift-canary references the per-side constants.
+//   - source-sentinel tests in overshoot-exit-run/index_test.ts +
+//     session-age.ts assert the alias symbol is ABSENT from both files.
+// Do NOT re-introduce the uniform alias — LONG was silently capped at 5
+// (SHORT-uniform) while it existed, defeating ACT-471's H=10 ratification.
 export const OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG = 10;
 export const OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT = 5;
-
-// DEPRECATED-ALIASED uniform constant — DO NOT REMOVE this turn (T1).
-// Current consumers (session-age.ts, session-age_test.ts, overshoot-exit-run
-// index.ts:104,271 + index_test.ts sentinels, intents_test.ts) still read the
-// uniform value; per T1 scope "handlers keep passing their own values until
-// T3". Removing this alias would break FIVE call-sites and violate the
-// "byte-untouched on all engine files" gate. The value stays at 5 — which
-// happens to equal SHORT — so behavior at engine layer is unchanged this
-// tranche (SHORT correctly capped; LONG remains at 5 until T3 rewires
-// session-age + exit-run to consume the per-side constants).
-//
-// T3 REMOVAL PLAN: session-age.computeSessionAge accepts `side: OvershootSide`
-// and reads the per-side constant via a helper; the exit engine's void-drift
-// canary migrates to reference both per-side symbols; this alias is then
-// deleted with the T3 landing.
-export const OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS = 5;
 
 /**
  * Per-side holding-horizon accessor. NOT wired into the exit engine this
