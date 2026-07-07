@@ -75,6 +75,7 @@ import {
   runDetector,
   RATIFIED_STUDY_RUN_ID,
   RATIFIED_PARAM_GRID_HASH_PREFIX,
+  RATIFIED_DETECTOR_VERSION,
   type DetectedEvent,
   type DetectorInput,
   type KernelCandidateRow,
@@ -232,6 +233,28 @@ Deno.serve(createHandler(async (req: Request) => {
         rows_found: priors.length,
       }));
       return apiError(500, 'boot_assertion_failed_priors_not_found', { correlationId });
+    }
+
+    // FP-069 W3.8 T2.4 (ACT-479) — RATIFIED_DETECTOR_VERSION boot assertion
+    // (single-home invariant tightening). The constant is imported from
+    // detector.ts; this assertion proves the deployed bundle carries the
+    // ratified detector-version identity (b7cdfcd8, 8-hex prefix of
+    // sha256(study_full_hash ‖ DETECTOR_PREDICATE_SPEC_V2_JSON)). Absent /
+    // malformed → typed hard-fail before any pipeline stage. Entry/exit
+    // handlers get their own copy at T3 per minimum-coupling (§22.3(c)) —
+    // their bundles are stale on this constant until then and would false-trip
+    // if asserted here. INC-84 §5 bundle-content version echo:
+    // RATIFIED_DETECTOR_VERSION is surfaced in the dry-run response envelope
+    // (see the completion return below) making every dry-run self-attesting.
+    if (typeof RATIFIED_DETECTOR_VERSION !== 'string' || !/^[0-9a-f]{8}$/.test(RATIFIED_DETECTOR_VERSION)) {
+      await sql.end({ timeout: 5 });
+      console.error(JSON.stringify({
+        event: 'boot_assertion_failed_detector_version_malformed',
+        correlationId,
+        loaded_value_typeof: typeof RATIFIED_DETECTOR_VERSION,
+        loaded_value_length: typeof RATIFIED_DETECTOR_VERSION === 'string' ? RATIFIED_DETECTOR_VERSION.length : null,
+      }));
+      return apiError(500, 'boot_assertion_failed_detector_version_malformed', { correlationId });
     }
 
     // ── (4) Probe short-circuit — BEFORE the three skip gates. ────────────
@@ -626,11 +649,23 @@ Deno.serve(createHandler(async (req: Request) => {
       bars: barsBackfillRunId, earnings: earningsBackfillRunId,
     });
     await sql.end({ timeout: 5 });
+    // FP-069 W3.8 T2.4 (ACT-479) — dry-run response envelope enrichment
+    // (INC-84 §5 bundle-content proof + Proposal A tier snapshot).
+    // Under dry_run=true ONLY: emit the ratified detector_version and a
+    // full tier snapshot (candidate/selected counts per tier + rank_score
+    // stats per tier + the full selected[] with tier + rank_score +
+    // study_cell_ref). Zero DB writes beyond the dry-marked run row that
+    // dry_run has always written (events/target-positions gates unchanged).
+    // The presence of `detector_version` and `tier_snapshot` in the envelope
+    // is the DEPLOY-CONTENT PROOF for T2.4 and every future dry-run —
+    // the pre-T2.4 bundle cannot produce these fields.
+    const dryRunEvidence = dryRun ? buildDryRunEvidence(events, selected) : undefined;
     return apiSuccess({
       run_id: runId, outcome: 'completed',
       event_count: events.length, selected_count: selected.length,
       dry_run: dryRun, durations_ms: durations,
       correlation_id: correlationId,
+      ...(dryRunEvidence !== undefined ? { dry_run_evidence: dryRunEvidence } : {}),
     });
   } catch (err) {
     try { await sql.end({ timeout: 5 }); } catch { /* noop */ }
