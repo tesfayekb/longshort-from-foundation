@@ -104,6 +104,25 @@ export function OvershootOverview() {
     },
   });
 
+  // T4 (ACT-481) — tier breakdown for the latest detection run. Reads the
+  // MIG-156 `tier` column on `overshoot_events` (T1 / T2 / null). Rendered
+  // as three badges: T1 selected, T2 selected, and short-side selected
+  // (short rows carry tier=null; the count is derived by grouping on side).
+  const latestRunId = latestRunQuery.data?.run_id ?? null;
+  const latestTiersQuery = useQuery({
+    queryKey: ['overshoot', 'overview', 'latest-tiers', latestRunId],
+    enabled: Boolean(latestRunId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('overshoot_events')
+        .select('side, tier, selected_for_entry')
+        .eq('run_id', latestRunId!)
+        .eq('selected_for_entry', true);
+      if (error) throw error;
+      return (data ?? []) as { side: string; tier: string | null; selected_for_entry: boolean }[];
+    },
+  });
+
   const openLotsQuery = useQuery({
     queryKey: ['overshoot', 'overview', 'open-lots'],
     queryFn: async () => {
