@@ -81,6 +81,10 @@ interface AuditMetadata {
   dry_run?: boolean;
   ticker?: string;
   side?: string;
+  tier?: string;
+  // Regime governor (T3b / ACT-480; T4 surfacing / ACT-481)
+  regime?: string;
+  regime_signal_context?: unknown;
   // I5
   i5_outcome?: string;
   observed_gap_pct?: number;
@@ -102,6 +106,37 @@ interface AuditMetadata {
 
 function asMeta(m: unknown): AuditMetadata {
   return m && typeof m === 'object' ? (m as AuditMetadata) : {};
+}
+
+/**
+ * REGIME chip — renders when an audit row carries a regime label
+ * (regime_throttled_t2 refusals, regime_indeterminate warnings, or any
+ * entry-attempt row where the engine attached its regime context per T3b).
+ * Signal context is rendered compactly (JSON preview, truncated).
+ */
+function RegimeChip({ meta }: { meta: AuditMetadata }) {
+  if (!meta.regime && !meta.regime_signal_context) return null;
+  const label = meta.regime ?? 'INDETERMINATE';
+  const variant: 'default' | 'secondary' | 'destructive' | 'outline' =
+    label === 'BEAR' ? 'destructive' : label === 'BULL' ? 'default' : 'outline';
+  let ctx = '';
+  if (meta.regime_signal_context) {
+    try { ctx = JSON.stringify(meta.regime_signal_context); } catch { ctx = ''; }
+    if (ctx.length > 140) ctx = ctx.slice(0, 140) + '…';
+  }
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+      <Badge variant={variant} className="font-mono">regime: {label}</Badge>
+      {meta.tier && (
+        <Badge variant={meta.tier === 'T1' ? 'default' : 'secondary'} className="font-mono">
+          tier: {meta.tier}
+        </Badge>
+      )}
+      {ctx && (
+        <span className="font-mono text-[10px] text-muted-foreground">{ctx}</span>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -202,6 +237,7 @@ function AuditRowCell({ row }: { row: AuditRow }) {
       {metaSummary(meta) && (
         <div className="text-xs text-muted-foreground">{metaSummary(meta)}</div>
       )}
+      <RegimeChip meta={meta} />
       <I5Chip meta={meta} />
       <SizingStrip meta={meta} />
       <CidChip meta={meta} />
