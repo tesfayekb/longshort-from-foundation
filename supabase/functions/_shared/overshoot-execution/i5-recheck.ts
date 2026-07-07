@@ -46,14 +46,19 @@
 // ok=false. The caller MUST NOT interpret an absent ok=true as pass.
 
 import type { PolygonQuoteSnapshot } from './exit-price-construction.ts';
+import {
+  OVERSHOOT_SNAPSHOT_MIN_AGE_MS,
+  OVERSHOOT_SNAPSHOT_MAX_AGE_MS,
+} from './snapshot-age-bounds.ts';
 
 /** Fraction of the T-close overshoot that may revert pre-open without
  *  refusing the selection. 0.50 = half the overshoot reversed. */
 export const OVERSHOOT_I5_REVERSION_TOLERANCE_PCT = 0.50;
 
-/** Snapshot staleness cap for the I5 pre-open quote read. Matches the
- *  entry/exit constructors (single ratified value across intents). */
-export const OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS = 15_000;
+/** Snapshot staleness cap for the I5 pre-open quote read. Re-exported
+ *  from the ratified single-home in ./snapshot-age-bounds.ts (ACT-486 /
+ *  INC-91). Historical export name preserved for external callers/tests. */
+export const OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS = OVERSHOOT_SNAPSHOT_MAX_AGE_MS;
 
 /** Snapshot age floor for the I5 pre-open quote read.
  *
@@ -67,10 +72,12 @@ export const OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS = 15_000;
  *  upper bound as the true staleness cap. Ages outside [MIN, MAX] still
  *  refuse `polygon_snapshot_stale`.
  *
- *  Scope discipline: Option B is I5-only per ACT-485. The
- *  entry-/exit-price constructors keep [0, 15000] until a separate
- *  amendment ratifies the same widening there. */
-export const OVERSHOOT_I5_SNAPSHOT_MIN_AGE_MS = -1_000;
+ *  Scope closure: ACT-486 (INC-91) extended the widening to the entry-
+ *  and exit-price constructors after a class audit found the same skew
+ *  pathology at those sibling sites. This constant is now re-exported
+ *  from the single-home in ./snapshot-age-bounds.ts so every site
+ *  imports the identical value. Historical export name preserved. */
+export const OVERSHOOT_I5_SNAPSHOT_MIN_AGE_MS = OVERSHOOT_SNAPSHOT_MIN_AGE_MS;
 
 /** Minimum absolute overshoot magnitude ($) below which reversionPct
  *  is undefined and the module refuses. Guards against 0-denominator
@@ -153,12 +160,12 @@ export function evaluateI5PreOpenRecheck(input: I5RecheckInput): I5RecheckResult
   }
   const snapshotAgeMs = asOf.getTime() - capturedAt.getTime();
   if (!Number.isFinite(snapshotAgeMs)
-      || snapshotAgeMs > OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS
-      || snapshotAgeMs < OVERSHOOT_I5_SNAPSHOT_MIN_AGE_MS) {
+      || snapshotAgeMs > OVERSHOOT_SNAPSHOT_MAX_AGE_MS
+      || snapshotAgeMs < OVERSHOOT_SNAPSHOT_MIN_AGE_MS) {
     return {
       ok: false, side, reversionPct: null,
       refusal: 'polygon_snapshot_stale',
-      reason: `snapshot age ${snapshotAgeMs}ms outside [${OVERSHOOT_I5_SNAPSHOT_MIN_AGE_MS}, ${OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS}ms]`,
+      reason: `snapshot age ${snapshotAgeMs}ms outside [${OVERSHOOT_SNAPSHOT_MIN_AGE_MS}, ${OVERSHOOT_SNAPSHOT_MAX_AGE_MS}ms]`,
     };
   }
 
