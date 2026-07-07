@@ -247,8 +247,9 @@ Deno.test('FP-069 W3.8 T2.4 corrective: finalizeRun carries dry_run marker on BO
   //     dryRun trailing). The old signature ended `{ bars: ..., earnings: ... });`
   //     with no dryRun; the corrective ends `}, dryRun);` for the success
   //     path and `..., dryRun);` for the three catch paths.
+  // 4 call sites + 1 definition ('async function finalizeRun('). Total 5.
   const callSites = SRC.match(/finalizeRun\(/g) ?? [];
-  assertEquals(callSites.length, 4, 'exactly 4 finalizeRun call sites');
+  assertEquals(callSites.length, 5, '4 finalizeRun call sites + 1 definition');
   // None of the four may end without dryRun forwarded:
   assertEquals(SRC.includes('earnings: null });'), false, 'bars-catch site must forward dryRun');
   assertEquals(SRC.includes('earnings: earningsBackfillRunId });'), false,
