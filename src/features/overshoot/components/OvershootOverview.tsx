@@ -181,6 +181,13 @@ export function OvershootOverview() {
   const refused = latest ? latest.event_count - latest.selected_count : 0;
   const identityOK = latest ? latest.event_count === latest.selected_count + refused && refused >= 0 : true;
 
+  // T4 (ACT-481) — tier breakdown of the latest run's selections
+  // (T1 long / T2 long / SHORT). Uses the MIG-156 `tier` column verbatim.
+  const latestTiers = latestTiersQuery.data ?? [];
+  const tierT1 = latestTiers.filter((e) => e.tier === 'T1').length;
+  const tierT2 = latestTiers.filter((e) => e.tier === 'T2').length;
+  const tierShort = latestTiers.filter((e) => e.side === 'short').length;
+
   const si = siFreshQuery.data ?? null;
   const siStaleDays = si ? daysBetween(new Date(si.as_of_date), new Date()) : null;
 
