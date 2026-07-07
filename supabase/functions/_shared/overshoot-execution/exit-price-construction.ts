@@ -37,8 +37,18 @@
 export const OVERSHOOT_EXIT_MARKETABLE_LIMIT_SLIPPAGE_BPS = 50;
 
 /** Maximum acceptable snapshot age at the moment of exit-order submission.
- *  15 seconds tolerates typical polling jitter but rejects stale caches. */
-export const OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS = 15_000;
+ *  Re-exported from the ratified single-home in ./snapshot-age-bounds.ts
+ *  so every overshoot money-path snapshot-age comparison shares the same
+ *  bound (ACT-486 / INC-91). Historical export name preserved for
+ *  external callers/tests. */
+import {
+  OVERSHOOT_SNAPSHOT_MIN_AGE_MS,
+  OVERSHOOT_SNAPSHOT_MAX_AGE_MS,
+} from './snapshot-age-bounds.ts';
+export const OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS = OVERSHOOT_SNAPSHOT_MAX_AGE_MS;
+/** Min acceptable snapshot age (negative = server clock behind Polygon
+ *  event time — see ACT-486 / INC-91 provenance in snapshot-age-bounds.ts). */
+export const OVERSHOOT_EXIT_SNAPSHOT_MIN_AGE_MS = OVERSHOOT_SNAPSHOT_MIN_AGE_MS;
 
 export type ExitSide = 'LONG' | 'SHORT';
 
@@ -125,11 +135,13 @@ export function constructExitLimitPrice(
   }
 
   const snapshotAgeMs = asOf.getTime() - capturedAt.getTime();
-  if (!Number.isFinite(snapshotAgeMs) || snapshotAgeMs > OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS || snapshotAgeMs < 0) {
+  if (!Number.isFinite(snapshotAgeMs)
+      || snapshotAgeMs > OVERSHOOT_SNAPSHOT_MAX_AGE_MS
+      || snapshotAgeMs < OVERSHOOT_SNAPSHOT_MIN_AGE_MS) {
     return {
       ok: false, side,
       refusal: 'polygon_snapshot_stale',
-      reason: `snapshot age ${snapshotAgeMs}ms outside [0, ${OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS}ms]`,
+      reason: `snapshot age ${snapshotAgeMs}ms outside [${OVERSHOOT_SNAPSHOT_MIN_AGE_MS}, ${OVERSHOOT_SNAPSHOT_MAX_AGE_MS}ms]`,
     };
   }
 
