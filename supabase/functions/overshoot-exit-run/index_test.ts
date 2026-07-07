@@ -89,11 +89,12 @@ Deno.test('T3a drift canary: per-side holding constants + slippage/snapshot-age 
 // ── T3a (ACT-480) source-sentinels — alias absent + per-side wiring ──────
 Deno.test('T3a: deprecated uniform alias OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS is ABSENT from engine source (value + import forms)', () => {
   // Strip comments so docstring mentions of the historical alias name do
-  // not spuriously match. The value/import symbol must not appear.
+  // not spuriously match. Match the exact symbol (not followed by _LONG /
+  // _SHORT), which is the deleted uniform alias.
   const noComments = SRC.split('\n')
     .filter((l) => !/^\s*\*/.test(l) && !/^\s*\/\//.test(l))
     .join('\n');
-  assertEquals(noComments.includes('OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS'), false,
+  assertEquals(/OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS(?![_A-Z])/.test(noComments), false,
     'uniform alias must not be referenced as a value/import in the exit engine (T3a — ACT-480)');
 });
 
