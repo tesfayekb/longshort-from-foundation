@@ -627,6 +627,8 @@ Established 7-step bracket per W3.3 precedent, using the INC-82 data-write tool 
 2. **PRE-STATE.** `SELECT id, enabled, schedule, handler_path FROM job_registry WHERE id='overshoot.detection.run'` MUST show `enabled=false`.
 3. **ARM (data-write tool).** `UPDATE job_registry SET enabled=true WHERE id='overshoot.detection.run'` — status stays `'registered'` (do NOT set `'enabled'`; would violate `job_registry_status_check`).
 4. **DETECTION-RUN INVOCATION.** POST `overshoot-detection-run` `{ as_of: '<today ET session date>', dry_run: false }` via §7.5 direct-localStorage script (below). Paste back the full JSON response verbatim.
+
+    **Runbook amendment (ACT-464.e-iii Part 2, 2026-07-06 Session 1 observation):** the fetch is expected to appear stalled in DevTools for **~2 minutes** while the detector kernel executes server-side (first-session observed `kernel_ms = 110004`, `total_ms = 114172`). This is NORMAL and NOT a hang — do NOT abort. The response arrives with `outcome:'completed'` once the kernel returns.
 5. **READ `selected_count` + BRANCH.**
     - `selected_count === 0` → runbook says: no entry tomorrow; DISARM (step 6) + FENCE RE-PROOF (step 7); repeat Session 1 next trading evening. Banked evidence, not a failure.
     - `selected_count > 0` → Session 2 is GO for tomorrow morning. Have ready: (a) tomorrow's `run_id` (from the detection-run response `run_id` field) and (b) the operator's 09:15 ET seat time. Proceed through steps 6–7 as usual; entry bracket runs tomorrow.
@@ -634,6 +636,30 @@ Established 7-step bracket per W3.3 precedent, using the INC-82 data-write tool 
 7. **FENCE RE-PROOF.** Same query as step 1; count MUST still equal 0.
 
 STOP conditions (Session 1): fence non-zero at step 1 or 7; detection-run response `outcome ∈ {failed}` or unexpected refusal; any code defect surfaced (re-disarm first). `outcome=no_op reason ∈ {market_closed, bars_missing_for_asof, earnings_calendar_stale, earnings_calendar_cap_breach, kill_switch_active, job_disarmed}` are TRUTHFUL refusals (bracket closes normally with disposition noted; not defects).
+
+---
+
+### §9.1a SESSION 1 OPTIONAL PRELUDE — SI-refresh mini-bracket (`overshoot.short_interest.compute`)
+
+**Purpose.** Refresh `overshoot_short_interest` from Polygon across the ~839-ticker active universe **before** tomorrow's Session 1 detection run, so that the SI gate (which sits AFTER the geometry gates — window / momentum / drawdown / excess) evaluates the short-side survivor pool against fresh SI rather than stale rows. Optional; run at operator discretion. First-session evidence (2026-07-06, run `5f1a3a58`) showed 21 events refused `si_unavailable` — this is the entire short-side survivor pool clearing the geometry gates against a 21-day-stale SI dataset, not a classification defect. Refreshing SI reduces `si_unavailable` refusals on days when Polygon has newer FINRA SI observations available.
+
+**Structural fence + inheritance.** Reuses the W3.3 seven-step arm-bracket verbatim (see §W3.3 above, lines 493–506). Data-write tool per INC-82 for the `enabled` flip. Registry row `overshoot.short_interest.compute` is SEEDED-DISARMED (MIG-151) with schedule `'0 21 1,15 * *'`; no `cron.job` row is created. Expected yield per the W3.3 GATE-ZERO precedent: ~839 tickers refreshed across ~21 batches (20×240 + 1×234 slice pattern), `si_pct_float` populated where Polygon returns FINRA data, typed-NULL for shares-unavailable tickers (never a fabricated zero — §9 SENTINEL contract). Idempotent: re-invocation at the same `as_of` overwrites `source_run_id`/`computed_at` only; `si_pct_float`/`dtc` unchanged (delta-0 hash proof).
+
+**Seven-step protocol (data-write per INC-82 for steps 3 + 6):**
+
+1. **FENCE PROOF.** `SELECT count(*) FROM cron.job WHERE jobname LIKE 'overshoot%'` MUST equal 0. Non-zero → STOP.
+2. **PRE-STATE.** `SELECT id, enabled, schedule FROM job_registry WHERE id='overshoot.short_interest.compute'` MUST show `enabled=false`, `schedule='0 21 1,15 * *'`.
+3. **ARM (data-write tool).** `UPDATE public.job_registry SET enabled=true WHERE id='overshoot.short_interest.compute'` — `status` stays `'registered'` (do NOT set `'enabled'`; violates `job_registry_status_check ∈ {'registered','paused','poison'}`).
+4. **BATCH.** Direct-localStorage §7.5 loop against `overshoot-short-interest-compute`, resume-by-cursor over the ~839-ticker active universe until the handler returns `done:true`. Fixed `as_of` for the whole loop (reused by step 5). Paste back per-invocation `[#NN]` log lines + TOTALS + RUN_IDS verbatim. Expected shape: ~21 invocations, ~5,034 rows written (20×240 + 1×234 partition per the W3.3 precedent), `si_unavailable_count` truthfully reported per invocation.
+5. **IDEMPOTENCY (optional but recommended).** Re-invoke ONE batch at the same `as_of` (no `resume_from`, deterministic first slice). Prove: `md5(string_agg(ticker|as_of_date|si_pct_float|dtc, ',' ORDER BY ticker,as_of_date))` byte-identical before/after on the first-40-ticker slice; only `source_run_id`/`computed_at` refreshed.
+6. **DISARM (data-write tool).** `UPDATE public.job_registry SET enabled=false WHERE id='overshoot.short_interest.compute'`. POST-STATE `SELECT id, enabled FROM job_registry WHERE id='overshoot.short_interest.compute'` confirms `enabled=false`.
+7. **FENCE RE-PROOF.** Same query as step 1; count MUST still equal 0.
+
+**STOP conditions (§9.1a):** fence non-zero at step 1 or 7; batch surfacing a compute defect (re-disarm first, then STOP); any `sql/30` execution (that path is cron arming, not the mini-bracket); `si_unavailable_count` per invocation trending anomalously high vs the W3.3 baseline (surface, DISARM, STOP, evidence to supervisor).
+
+**Evidence to paste back:** the arm/disarm post-states, the fence-proof pair (both 0), TOTALS row (`rows_written / distinct_tickers / si_unavailable_count / as_of range / distinct run_ids`), idempotency delta-0 hash pair (if step 5 executed), and a spot cross-check on a mega-cap (e.g., AAPL: `si_pct_float ~1%, dtc ~2.7–3.4d` per the W3.3 plausibility PASS).
+
+**Cadence.** Ad-hoc, at operator discretion, prior to (not during) Session 1. Not a prerequisite for Session 1; Session 1 runs correctly against stale SI (refuses truthfully with `si_unavailable`). §9.1a is a ROI-tuning prelude — fresher SI reduces short-side refusals when Polygon has newer FINRA observations available.
 
 ---
 
