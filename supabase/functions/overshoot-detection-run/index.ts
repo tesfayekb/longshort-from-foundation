@@ -684,15 +684,22 @@ async function insertRunRow(sql: Sql, args: {
   gitSha: string; correlationId: string;
   appendRunIds: { bars: string | null; earnings: string | null };
 }): Promise<{ run_id: string }> {
-  const durations = args.reason ? { skip_reason: args.reason } : {};
+  // FP-069 W3.8 T2.4 corrective A′ — driver-binding fix. postgresjs v3.4.4
+  // JSON.stringify()'s any parameter it serializes for jsonb; pre-stringifying
+  // AND casting ::jsonb double-encoded every prior row (jsonb_typeof=string,
+  // silently defeating any durations_ms->>'key' read including T2.4's
+  // console-pollution filter). Pass the OBJECT and the driver serializes once.
+  const durations: Record<string, unknown> = args.reason
+    ? { skip_reason: args.reason, dry_run: args.dryRun }
+    : { dry_run: args.dryRun };
   const [row] = await sql<{ run_id: string }[]>`
     INSERT INTO overshoot_detection_runs
       (as_of, detected_at, outcome, event_count, selected_count, durations_ms,
        correlation_id, git_sha, append_run_ids)
     VALUES (${args.asOfDay}::date, ${new Date().toISOString()}::timestamptz,
-            ${args.outcome}, 0, 0, ${JSON.stringify({ ...durations, dry_run: args.dryRun })}::jsonb,
+            ${args.outcome}, 0, 0, ${sql.json(durations)}::jsonb,
             ${args.correlationId}, ${args.gitSha},
-            ${JSON.stringify(args.appendRunIds)}::jsonb)
+            ${sql.json(args.appendRunIds)}::jsonb)
     RETURNING run_id
   `;
   return { run_id: row.run_id };
@@ -710,7 +717,8 @@ async function finalizeRun(
   // Absence of the key now means pre-T2.4 legacy row only. Prior defect:
   // finalizeRun overwrote durations_ms without merging the flag insertRunRow
   // had stamped, silently defeating the T2.4 STEP 3 console-pollution filter.
-  const payload = reason
+  // A′ — object binding via sql.json(); no pre-stringify, no ::jsonb cast.
+  const payload: Record<string, unknown> = reason
     ? { ...durations, skip_reason: reason, dry_run: dryRun }
     : { ...durations, dry_run: dryRun };
   await sql`
@@ -718,8 +726,8 @@ async function finalizeRun(
        SET outcome = ${outcome},
            event_count = ${eventCount},
            selected_count = ${selectedCount},
-           durations_ms = ${JSON.stringify(payload)}::jsonb,
-           append_run_ids = ${JSON.stringify(appendRunIds)}::jsonb
+           durations_ms = ${sql.json(payload)}::jsonb,
+           append_run_ids = ${sql.json(appendRunIds)}::jsonb
      WHERE run_id = ${runId}::uuid
   `;
 }

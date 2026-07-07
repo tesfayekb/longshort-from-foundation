@@ -145,7 +145,7 @@ Deno.test('dry_run zero-persist: event/target INSERTs are gated on !dryRun', () 
 
 Deno.test('append_run_ids shape: {bars, earnings} written into detection run row', () => {
   assertStringIncludes(SRC, 'append_run_ids: { bars: string | null; earnings: string | null }');
-  assertStringIncludes(SRC, 'append_run_ids = ${JSON.stringify(appendRunIds)}::jsonb');
+  assertStringIncludes(SRC, 'append_run_ids = ${sql.json(appendRunIds)}::jsonb');
   // Both bars-append and earnings-append backfill_run_id must reach the writeback.
   assertStringIncludes(SRC, "kind='bars'".replace(/'/g, "'"));
   assertStringIncludes(SRC, "'earnings_fmp'");
@@ -254,4 +254,25 @@ Deno.test('FP-069 W3.8 T2.4 corrective: finalizeRun carries dry_run marker on BO
   assertEquals(SRC.includes('earnings: null });'), false, 'bars-catch site must forward dryRun');
   assertEquals(SRC.includes('earnings: earningsBackfillRunId });'), false,
     'earnings-catch / staleness sites must forward dryRun');
+});
+
+Deno.test('FP-069 W3.8 T2.4 corrective A′: jsonb binding uses sql.json(), never pre-stringify', () => {
+  // Regression sentinel — prior defect: JSON.stringify(payload)::jsonb caused
+  // postgres.js to double-encode (driver JSON-serializes any parameter it
+  // binds for jsonb; the pre-stringified string became a jsonb SCALAR STRING,
+  // silently defeating every durations_ms->>'key' read including the T2.4
+  // console-pollution filter). The corrective uses the repo idiom sql.json(x)
+  // at both writer sites; no JSON.stringify at any jsonb bind point.
+  assertStringIncludes(SRC, 'durations_ms = ${sql.json(payload)}::jsonb');
+  assertStringIncludes(SRC, '0, 0, ${sql.json(durations)}::jsonb');
+  assertStringIncludes(SRC, 'append_run_ids = ${sql.json(appendRunIds)}::jsonb');
+  // No pre-stringify at any jsonb bind point in the run-row writers:
+  assertEquals(SRC.includes('${JSON.stringify(payload)}::jsonb'), false,
+    'finalizeRun payload must bind via sql.json(), not JSON.stringify');
+  assertEquals(SRC.includes('${JSON.stringify({ ...durations, dry_run: args.dryRun })}::jsonb'), false,
+    'insertRunRow durations must bind via sql.json(), not JSON.stringify');
+  assertEquals(SRC.includes('${JSON.stringify(args.appendRunIds)}::jsonb'), false,
+    'insertRunRow appendRunIds must bind via sql.json(), not JSON.stringify');
+  assertEquals(SRC.includes('${JSON.stringify(appendRunIds)}::jsonb'), false,
+    'finalizeRun appendRunIds must bind via sql.json(), not JSON.stringify');
 });
