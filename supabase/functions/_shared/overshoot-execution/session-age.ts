@@ -44,9 +44,13 @@
 // wall-clock read happens inside this file (kernel purity, standing
 // anti-phantom rule).
 
-import { OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS } from './intents.ts';
-
-export { OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS };
+// FP-069 W3.8 T3a (ACT-480) — per-side horizon wiring. The deprecated
+// uniform alias OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS was DELETED at this
+// landing; the exit horizon is now read via holdingSessionsForSide(side)
+// so LONG (H=10, ACT-471) and SHORT (H=5, ACT-472) are honored per lot.
+// Source-sentinel in overshoot-exit-run/index_test.ts asserts the alias
+// symbol is ABSENT from this file's source.
+import { holdingSessionsForSide } from './intents.ts';
 
 /**
  * Injected market-clock snapshot (PIN-2 seam). Source at the edge:
@@ -94,9 +98,10 @@ export interface SessionAgeOk {
    * per-day-ROI convention). Used for the fire decision below.
    */
   holdingDayOrdinal: number;
-  /** True iff holdingDayOrdinal >= OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS.
-   *  PIN-1: a Mon entry MUST fire at the Fri cron (ordinal 5), NEVER
-   *  the following Mon (ordinal 6 late-fire defect). */
+  /** True iff holdingDayOrdinal >= holdingSessionsForSide(side).
+   *  PIN-1: a Mon SHORT entry MUST fire at the Fri cron (ordinal 5),
+   *  NEVER the following Mon (ordinal 6 late-fire defect). LONG entries
+   *  fire at ordinal 10 (ACT-471); SHORT at ordinal 5 (ACT-472 HARD). */
   shouldFireTimeExit: boolean;
   /** Provenance echo — did the in-progress session contribute +1? */
   inProgressCounted: boolean;
@@ -109,6 +114,10 @@ export type SessionAgeResult = SessionAgeOk | SessionAgeRefusal;
 export interface ComputeSessionAgeInput {
   /** YYYY-MM-DD; the session date of the entry fill. */
   entryDate: string;
+  /** T3a (ACT-480): per-side horizon dispatch. LONG → H=10, SHORT → H=5.
+   *  Required — no default; caller must pass the lot's side explicitly
+   *  (the exit engine passes the reconciled lot side upper-cased). */
+  side: 'LONG' | 'SHORT';
   /**
    * SPY overshoot_daily_bars trade_date values with trade_date > entryDate,
    * ascending, DEDUPLICATED. Represents SETTLED sessions only (today's
@@ -126,7 +135,12 @@ export interface ComputeSessionAgeInput {
 const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/;
 
 export function computeSessionAge(input: ComputeSessionAgeInput): SessionAgeResult {
-  const { entryDate, spyPriorSessionDates, clock } = input;
+  const { entryDate, side, spyPriorSessionDates, clock } = input;
+
+  if (side !== 'LONG' && side !== 'SHORT') {
+    return { ok: false, refusal: 'malformed_session_date',
+      reason: `side must be 'LONG' | 'SHORT' (got ${JSON.stringify(side)})` };
+  }
 
   if (!YYYY_MM_DD.test(entryDate)) {
     return { ok: false, refusal: 'malformed_session_date',
@@ -173,8 +187,9 @@ export function computeSessionAge(input: ComputeSessionAgeInput): SessionAgeResu
 
   const sessionsSinceEntry = settled.size + (inProgressCounted ? 1 : 0);
   const holdingDayOrdinal = sessionsSinceEntry + 1;
+  // T3a (ACT-480): per-side horizon — LONG H=10 (ACT-471), SHORT H=5 (ACT-472).
   const shouldFireTimeExit =
-    holdingDayOrdinal >= OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS;
+    holdingDayOrdinal >= holdingSessionsForSide(side);
 
   return {
     ok: true,
