@@ -759,12 +759,35 @@ Deno.serve(createHandler(async (req: Request) => {
       // Fetch pre-open Polygon snapshot (reused for I5 + entry-price).
       const snap = await fetchPolygonSnapshot(env.polygonKey, sel.ticker);
 
-      // I5 pre-open re-check (DEFAULT-DENY). If we don't have t_close_ref
-      // and pre_event_ref on the selection row, we STILL run the recheck
-      // path — it will refuse `reference_prices_malformed`, which is the
-      // correct default-deny outcome, and the refusal is audited + surfaced.
-      const tCloseRef = sel.t_close_ref ?? NaN;
-      const preEventRef = sel.pre_event_ref ?? NaN;
+      // ACT-485 Option A (INC-90 fix) — reference_bar_missing typed
+      // refusal. Sourced by LATERAL JOIN above (never `NULL::` placeholder).
+      // NULL from the JOIN means the daily bar is missing for the T-close
+      // session or the pre-event bar (argmax_window_days sessions back).
+      // Refuse with a NAMED refusal + full context — never NaN, never a
+      // silent default. Counted under `i5_refusals` (semantically: cannot
+      // evaluate the I5 recheck). INC-83 sentinel persists (no UPSERT).
+      if (sel.t_close_ref === null || sel.pre_event_ref === null) {
+        tally.i5_refusals += 1;
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.entry.reference_bar_missing',
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: {
+            ticker: sel.ticker, side: sel.side,
+            reason: `daily-bar reference price missing (t_close_ref=${sel.t_close_ref} pre_event_ref=${sel.pre_event_ref}); detection as_of=${sel.as_of}; argmax_window_days=${sel.argmax_window_days}`,
+            t_close_ref: sel.t_close_ref, pre_event_ref: sel.pre_event_ref,
+            detection_as_of: sel.as_of, argmax_window_days: sel.argmax_window_days,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+            inc83_sentinel_persists: true,
+          },
+        });
+        continue;
+      }
+      // Coerce numeric-strings from postgresjs (numeric type default).
+      // Non-null by the branch above; Number() is total on the string form.
+      const tCloseRef = Number(sel.t_close_ref);
+      const preEventRef = Number(sel.pre_event_ref);
       const i5 = evaluateI5PreOpenRecheck({
         snapshot: snap, side: sideUpper, tCloseRef, preEventRef, asOf: nowTs,
       });
