@@ -75,6 +75,7 @@ import {
   runDetector,
   RATIFIED_STUDY_RUN_ID,
   RATIFIED_PARAM_GRID_HASH_PREFIX,
+  RATIFIED_DETECTOR_VERSION,
   type DetectedEvent,
   type DetectorInput,
   type KernelCandidateRow,
@@ -232,6 +233,28 @@ Deno.serve(createHandler(async (req: Request) => {
         rows_found: priors.length,
       }));
       return apiError(500, 'boot_assertion_failed_priors_not_found', { correlationId });
+    }
+
+    // FP-069 W3.8 T2.4 (ACT-479) — RATIFIED_DETECTOR_VERSION boot assertion
+    // (single-home invariant tightening). The constant is imported from
+    // detector.ts; this assertion proves the deployed bundle carries the
+    // ratified detector-version identity (b7cdfcd8, 8-hex prefix of
+    // sha256(study_full_hash ‖ DETECTOR_PREDICATE_SPEC_V2_JSON)). Absent /
+    // malformed → typed hard-fail before any pipeline stage. Entry/exit
+    // handlers get their own copy at T3 per minimum-coupling (§22.3(c)) —
+    // their bundles are stale on this constant until then and would false-trip
+    // if asserted here. INC-84 §5 bundle-content version echo:
+    // RATIFIED_DETECTOR_VERSION is surfaced in the dry-run response envelope
+    // (see the completion return below) making every dry-run self-attesting.
+    if (typeof RATIFIED_DETECTOR_VERSION !== 'string' || !/^[0-9a-f]{8}$/.test(RATIFIED_DETECTOR_VERSION)) {
+      await sql.end({ timeout: 5 });
+      console.error(JSON.stringify({
+        event: 'boot_assertion_failed_detector_version_malformed',
+        correlationId,
+        loaded_value_typeof: typeof RATIFIED_DETECTOR_VERSION,
+        loaded_value_length: typeof RATIFIED_DETECTOR_VERSION === 'string' ? RATIFIED_DETECTOR_VERSION.length : null,
+      }));
+      return apiError(500, 'boot_assertion_failed_detector_version_malformed', { correlationId });
     }
 
     // ── (4) Probe short-circuit — BEFORE the three skip gates. ────────────
@@ -626,11 +649,23 @@ Deno.serve(createHandler(async (req: Request) => {
       bars: barsBackfillRunId, earnings: earningsBackfillRunId,
     });
     await sql.end({ timeout: 5 });
+    // FP-069 W3.8 T2.4 (ACT-479) — dry-run response envelope enrichment
+    // (INC-84 §5 bundle-content proof + Proposal A tier snapshot).
+    // Under dry_run=true ONLY: emit the ratified detector_version and a
+    // full tier snapshot (candidate/selected counts per tier + rank_score
+    // stats per tier + the full selected[] with tier + rank_score +
+    // study_cell_ref). Zero DB writes beyond the dry-marked run row that
+    // dry_run has always written (events/target-positions gates unchanged).
+    // The presence of `detector_version` and `tier_snapshot` in the envelope
+    // is the DEPLOY-CONTENT PROOF for T2.4 and every future dry-run —
+    // the pre-T2.4 bundle cannot produce these fields.
+    const dryRunEvidence = dryRun ? buildDryRunEvidence(events, selected) : undefined;
     return apiSuccess({
       run_id: runId, outcome: 'completed',
       event_count: events.length, selected_count: selected.length,
       dry_run: dryRun, durations_ms: durations,
       correlation_id: correlationId,
+      ...(dryRunEvidence !== undefined ? { dry_run_evidence: dryRunEvidence } : {}),
     });
   } catch (err) {
     try { await sql.end({ timeout: 5 }); } catch { /* noop */ }
@@ -678,4 +713,63 @@ async function finalizeRun(
            append_run_ids = ${JSON.stringify(appendRunIds)}::jsonb
      WHERE run_id = ${runId}::uuid
   `;
+}
+
+// FP-069 W3.8 T2.4 (ACT-479) — dry-run envelope evidence builder.
+// Pure, side-effect-free; consumes the in-memory detector output only.
+// Produces the INC-84 §5 bundle-content proof (detector_version echo) +
+// tier snapshot (LONG T1 / LONG T2 / SHORT counts + rank_score stats per
+// tier) + full selected[] with tier / rank_score / study_cell_ref.
+function buildDryRunEvidence(
+  events: readonly DetectedEvent[],
+  selected: readonly DetectedEvent[],
+): {
+  detector_version: string;
+  ratified_study_run_id: string;
+  ratified_param_grid_hash_prefix: string;
+  tier_snapshot: {
+    long_t1_candidates: number;
+    long_t2_candidates: number;
+    short_candidates: number;
+    long_t1_selected: number;
+    long_t2_selected: number;
+    short_selected: number;
+    rank_score_by_tier: Record<'LONG_T1' | 'LONG_T2' | 'SHORT', { count: number; mean: number | null; min: number | null; max: number | null }>;
+  };
+  selected: Array<{ ticker: string; side: Side; tier: 'T1' | 'T2' | null; rank_score: number | null; study_cell_ref: StudyCellKey | null }>;
+} {
+  const longT1Cand = events.filter((e) => e.side === 'LONG' && e.tier === 'T1');
+  const longT2Cand = events.filter((e) => e.side === 'LONG' && e.tier === 'T2');
+  const shortCand  = events.filter((e) => e.side === 'SHORT');
+  const longT1Sel  = selected.filter((e) => e.side === 'LONG' && e.tier === 'T1');
+  const longT2Sel  = selected.filter((e) => e.side === 'LONG' && e.tier === 'T2');
+  const shortSel   = selected.filter((e) => e.side === 'SHORT');
+  const rsStats = (rows: readonly DetectedEvent[]) => {
+    const scores = rows.map((e) => e.rank_score).filter((s): s is number => s !== null);
+    if (scores.length === 0) return { count: rows.length, mean: null, min: null, max: null };
+    const sum = scores.reduce((a, b) => a + b, 0);
+    return { count: rows.length, mean: sum / scores.length, min: Math.min(...scores), max: Math.max(...scores) };
+  };
+  return {
+    detector_version: RATIFIED_DETECTOR_VERSION,
+    ratified_study_run_id: RATIFIED_STUDY_RUN_ID,
+    ratified_param_grid_hash_prefix: RATIFIED_PARAM_GRID_HASH_PREFIX,
+    tier_snapshot: {
+      long_t1_candidates: longT1Cand.length,
+      long_t2_candidates: longT2Cand.length,
+      short_candidates:   shortCand.length,
+      long_t1_selected:   longT1Sel.length,
+      long_t2_selected:   longT2Sel.length,
+      short_selected:     shortSel.length,
+      rank_score_by_tier: {
+        LONG_T1: rsStats(longT1Sel),
+        LONG_T2: rsStats(longT2Sel),
+        SHORT:   rsStats(shortSel),
+      },
+    },
+    selected: selected.map((e) => ({
+      ticker: e.ticker, side: e.side, tier: e.tier,
+      rank_score: e.rank_score, study_cell_ref: e.study_cell_ref,
+    })),
+  };
 }
