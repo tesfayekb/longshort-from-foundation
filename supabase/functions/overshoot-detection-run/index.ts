@@ -697,9 +697,9 @@ async function insertRunRow(sql: Sql, args: {
       (as_of, detected_at, outcome, event_count, selected_count, durations_ms,
        correlation_id, git_sha, append_run_ids)
     VALUES (${args.asOfDay}::date, ${new Date().toISOString()}::timestamptz,
-            ${args.outcome}, 0, 0, ${sql.json(durations)},
+            ${args.outcome}, 0, 0, ${sql.json(durations)}::jsonb,
             ${args.correlationId}, ${args.gitSha},
-            ${sql.json(args.appendRunIds)})
+            ${sql.json(args.appendRunIds)}::jsonb)
     RETURNING run_id
   `;
   return { run_id: row.run_id };
@@ -726,8 +726,8 @@ async function finalizeRun(
        SET outcome = ${outcome},
            event_count = ${eventCount},
            selected_count = ${selectedCount},
-           durations_ms = ${sql.json(payload)},
-           append_run_ids = ${sql.json(appendRunIds)}
+           durations_ms = ${sql.json(payload)}::jsonb,
+           append_run_ids = ${sql.json(appendRunIds)}::jsonb
      WHERE run_id = ${runId}::uuid
   `;
 }
