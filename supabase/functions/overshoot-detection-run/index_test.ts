@@ -119,6 +119,20 @@ Deno.test('probe short-circuit: BEFORE the three skip gates', () => {
   assert(idxProbeBranch < idxJR, 'probe short-circuit precedes job-disarmed');
 });
 
+Deno.test('FP-069 W3.8 T3c (INC-84 §5): probe envelopes echo detector_version (alpaca + polygon)', () => {
+  // Uniformity gate — every money engine's probe envelope carries the
+  // ratified detector_version, matching the entry/exit engines' pattern.
+  // Behavioral deploy proof per INC-84 §5: unauthenticated probes cannot
+  // reach these branches (RBAC-gated), but authenticated probes self-attest
+  // the deployed bundle carries the ratified detector identity (b7cdfcd8).
+  const alpacaBlock = SRC.slice(SRC.indexOf("probe: 'alpaca',"), SRC.indexOf("probe: 'polygon',"));
+  assertStringIncludes(alpacaBlock, 'detector_version: RATIFIED_DETECTOR_VERSION,');
+  const polygonBlock = SRC.slice(SRC.indexOf("probe: 'polygon',"));
+  assertStringIncludes(polygonBlock, 'detector_version: RATIFIED_DETECTOR_VERSION,');
+  // No literal 8-hex copy in the handler — single-home discipline.
+  assertEquals(SRC.includes("'b7cdfcd8'"), false, "no literal version copy in probe envelope");
+});
+
 Deno.test('RBAC deny: overshoot.manage checked before pipeline', () => {
   const idxRbac = SRC.indexOf("checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage')");
   const idxPipeline = SRC.indexOf('Stage 1: bars-append leg');

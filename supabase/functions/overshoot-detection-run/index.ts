@@ -277,6 +277,7 @@ Deno.serve(createHandler(async (req: Request) => {
             account_last4,
             status: typeof account.status === 'string' ? account.status : null,
             paper: true,
+            detector_version: RATIFIED_DETECTOR_VERSION,
             correlation_id: correlationId,
           });
         } catch (e) {
@@ -302,6 +303,7 @@ Deno.serve(createHandler(async (req: Request) => {
           probe: 'polygon',
           as_of_probed: asOfDay,
           resultsCount: grouped.resultsCount,
+          detector_version: RATIFIED_DETECTOR_VERSION,
           correlation_id: correlationId,
         });
       } catch (e) {
