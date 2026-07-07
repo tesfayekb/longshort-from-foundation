@@ -9,6 +9,8 @@ import { assert, assertEquals, assertStringIncludes } from 'https://deno.land/st
 import {
   OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
   OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+  OVERSHOOT_CAPACITY_LONG,
+  OVERSHOOT_CAPACITY_SHORT,
 } from '../_shared/overshoot-execution/sizing.ts';
 import {
   OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS,
@@ -64,6 +66,120 @@ Deno.test('e-i drift canary: all five e-i constants imported AND void-referenced
   assertStringIncludes(SRC, 'void OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS');
   assertStringIncludes(SRC, 'void OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS');
   assertStringIncludes(SRC, 'void OVERSHOOT_I5_REVERSION_TOLERANCE_PCT');
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// T3b (ACT-480) source-sentinels — INC-87 fix + regime governor + MIG-157
+// persistence + tier plumbing + detector_version probe echo.
+// ─────────────────────────────────────────────────────────────────────────
+
+Deno.test('T3b drift canary: capacity constants imported AND void-referenced', () => {
+  void OVERSHOOT_CAPACITY_LONG;
+  void OVERSHOOT_CAPACITY_SHORT;
+  assertStringIncludes(SRC, 'OVERSHOOT_CAPACITY_LONG');
+  assertStringIncludes(SRC, 'OVERSHOOT_CAPACITY_SHORT');
+  assertStringIncludes(SRC, 'void OVERSHOOT_CAPACITY_LONG');
+  assertStringIncludes(SRC, 'void OVERSHOOT_CAPACITY_SHORT');
+  assertEquals(OVERSHOOT_CAPACITY_LONG, 36);
+  assertEquals(OVERSHOOT_CAPACITY_SHORT, 4);
+});
+
+Deno.test('T3b INC-87 STRUCTURAL FIX: capacityPerSide reads ratified capacity constants, NEVER .length of a selections array', () => {
+  // Positive: the wiring uses OVERSHOOT_CAPACITY_LONG / _SHORT verbatim.
+  assertStringIncludes(
+    SRC,
+    "const capacityPerSide = sideUpper === 'LONG'\n        ? OVERSHOOT_CAPACITY_LONG\n        : OVERSHOOT_CAPACITY_SHORT;",
+  );
+  // Negative source-sentinel (INC-87 test-migration guidance): the
+  // capacityPerSide assignment MUST NOT read `.length` off any selections
+  // array. Strip comments so docstring mentions do not spuriously match,
+  // then assert the historical .length denominator is absent from the
+  // sizing path.
+  const noComments = SRC.split('\n')
+    .filter((l) => !/^\s*\*/.test(l) && !/^\s*\/\//.test(l))
+    .join('\n');
+  assertEquals(/capacityPerSide\s*=\s*[^;]*Selections\.length/.test(noComments), false,
+    'INC-87 denominator regression: capacityPerSide must NEVER read .length of a selections array (T3b — ACT-480)');
+  assertEquals(/longSelections\.length\s*:\s*shortSelections\.length/.test(noComments), false,
+    'INC-87 ternary regression: pre-fix per-side .length ternary must be gone from the sizing path');
+});
+
+Deno.test('T3b: e.tier selected on the events query + typed on SelectionRow', () => {
+  assertStringIncludes(SRC, 'e.tier');
+  assertStringIncludes(SRC, "tier: 'T1' | 'T2' | null;");
+});
+
+Deno.test('T3b regime governor: computeRegime + shouldThrottleUnderRegime imported; regime_throttled_t2 counter present', () => {
+  assertStringIncludes(SRC, "from '../_shared/overshoot/regime.ts'");
+  assertStringIncludes(SRC, 'computeRegime,');
+  assertStringIncludes(SRC, 'shouldThrottleUnderRegime,');
+  assertStringIncludes(SRC, 'regime_throttled_t2: number;');
+  assertStringIncludes(SRC, 'regime_throttled_t2: 0,');
+});
+
+Deno.test('T3b regime governor: SPY closes fetched from overshoot_daily_bars (ascending after reverse); no fabricated series', () => {
+  assertStringIncludes(SRC, "WHERE ticker = 'SPY'");
+  assertStringIncludes(SRC, 'ORDER BY trade_date DESC');
+  assertStringIncludes(SRC, 'LIMIT 60');
+  assertStringIncludes(SRC, '.reverse()');
+  assertStringIncludes(SRC, 'computeRegime({ spyClosesAscending })');
+});
+
+Deno.test('T3b regime governor: regime_indeterminate fail-open audit is the ONLY branch on !regime.ok — no silent BEAR-gate', () => {
+  assertStringIncludes(SRC, "action: 'overshoot.entry.regime_indeterminate'");
+  assertStringIncludes(SRC, 'if (regime.ok !== true) {');
+  // Structural source-sentinel: the throttle call is guarded by
+  // shouldThrottleUnderRegime, which enforces regime.ok===true internally
+  // (locked by the phantom-BEAR pin in regime_test.ts). Confirm the
+  // engine has NO local BEAR-check that could bypass the helper.
+  const noComments = SRC.split('\n')
+    .filter((l) => !/^\s*\*/.test(l) && !/^\s*\/\//.test(l))
+    .join('\n');
+  assertEquals(/regime\s*===\s*['"]BEAR['"]/.test(noComments), false,
+    'engine must delegate BEAR admission to shouldThrottleUnderRegime — no inline BEAR literal in engine bytes');
+});
+
+Deno.test('T3b regime governor: regime_throttled_t2 refusal audits with full signal context + tier + rank_score', () => {
+  assertStringIncludes(SRC, 'action: `overshoot.entry.${admission.reason}`');
+  assertStringIncludes(SRC, 'tier: sel.tier');
+  assertStringIncludes(SRC, 'regime: regimeLabel, regime_signal_context: regimeSignalContext');
+});
+
+Deno.test('T3b: submitted audit metadata carries tier + regime + capacity_per_side (sizing echoes)', () => {
+  assertStringIncludes(SRC, 'tier: sel.tier, qty: sizing.shares');
+  assertStringIncludes(SRC, 'regime: regimeLabel, capacity_per_side: capacityPerSide');
+});
+
+Deno.test('T3b MIG-157 persistence: INSERT INTO overshoot_entry_runs after loop end; non-blocking on failure', () => {
+  assertStringIncludes(SRC, 'INSERT INTO overshoot_entry_runs');
+  assertStringIncludes(SRC, 'regime,\n             regime_signal_context, dry_run)');
+  assertStringIncludes(SRC, 'overshoot_entry_runs_insert_failed');
+  // Persistence happens AFTER the per-target loop (does not block money-
+  // path decisions).
+  const idxLoop = SRC.indexOf('for (const sel of selections) {');
+  const idxInsert = SRC.indexOf('INSERT INTO overshoot_entry_runs');
+  assert(idxLoop > 0 && idxInsert > 0 && idxLoop < idxInsert,
+    'MIG-157 INSERT must follow the per-target loop (non-blocking additive persistence)');
+});
+
+Deno.test('T3b INC-84 §5 generalization: RATIFIED_DETECTOR_VERSION boot format assert + echo in BOTH probe envelopes', () => {
+  assertStringIncludes(SRC, 'RATIFIED_DETECTOR_VERSION');
+  assertStringIncludes(SRC, 'boot_assertion_failed_detector_version_malformed');
+  const alpacaProbeStart = SRC.indexOf("probe: 'alpaca'");
+  const polygonProbeStart = SRC.indexOf("probe: 'polygon'");
+  assert(alpacaProbeStart > 0 && polygonProbeStart > 0);
+  const alpacaBlock = SRC.slice(alpacaProbeStart, alpacaProbeStart + 800);
+  const polygonBlock = SRC.slice(polygonProbeStart, polygonProbeStart + 800);
+  assertStringIncludes(alpacaBlock, 'detector_version: RATIFIED_DETECTOR_VERSION');
+  assertStringIncludes(polygonBlock, 'detector_version: RATIFIED_DETECTOR_VERSION');
+});
+
+Deno.test('T3b response envelope carries regime + regime_signal_context + detector_version + capacity constants', () => {
+  assertStringIncludes(SRC, 'regime: regimeLabel,');
+  assertStringIncludes(SRC, 'regime_signal_context: regimeSignalContext,');
+  assertStringIncludes(SRC, 'detector_version: RATIFIED_DETECTOR_VERSION,');
+  assertStringIncludes(SRC, 'capacity_long: OVERSHOOT_CAPACITY_LONG,');
+  assertStringIncludes(SRC, 'capacity_short: OVERSHOOT_CAPACITY_SHORT,');
 });
 
 Deno.test('I6 second-confirm gate: manual path requires token + recent audit row', () => {
