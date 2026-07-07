@@ -5,6 +5,9 @@ import {
   flowForIntent,
   isOvershootIntent,
   OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS,
+  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG,
+  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT,
+  holdingSessionsForSide,
   OVERSHOOT_INTENTS,
 } from './intents.ts';
 
@@ -15,6 +18,19 @@ Deno.test('intents: exactly three ratified intents', () => {
 
 Deno.test('intents: T+5 uniform holding basis constant (P-B#3 corrected)', () => {
   assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS, 5);
+});
+
+Deno.test('R-1 (ACT-478, W3.8 T1): per-side holding constants — LONG=10 (ACT-471), SHORT=5 HARD (ACT-472)', () => {
+  assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG, 10);
+  assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT, 5);
+  assertEquals(holdingSessionsForSide('LONG'), 10);
+  assertEquals(holdingSessionsForSide('SHORT'), 5);
+});
+
+Deno.test('R-1: deprecated uniform alias remains at 5 during T1 (unchanged engine byte-untouched)', () => {
+  // Alias staying at 5 keeps session-age + exit-run behavior byte-identical
+  // this tranche; T3 rewires session-age to per-side and removes this alias.
+  assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS, OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT);
 });
 
 Deno.test('intents: type-guard accepts ratified intents, rejects everything else', () => {

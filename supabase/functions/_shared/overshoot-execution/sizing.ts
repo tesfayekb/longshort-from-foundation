@@ -20,17 +20,34 @@
 //     residual sentinel-zero anti-phantom debt is logged as an incidental
 //     finding for a follow-up schema/UX pass, not silently fixed here.
 //
-// I3 SIDE-ALLOCATION CONSTANTS (operator ROI-raising override,
-//   ratified 2026-07-05 as R-α, ACT-464 charter):
-//   Long side  : 50% of equity, distributed evenly across capacity slots.
-//   Short side : 50% of equity, distributed evenly across capacity slots.
-//   Combined nameplate exposure ≤ 100% of equity at any point in the T+5
-//   holding window (before the margin_multiplier — R-β — is applied to the
-//   sizingBase). PROVENANCE: this replaces the 0.25/0.25 conservative
-//   first-light default with the full deployment-at-capacity numbers per
-//   operator ROI-raising override; DO NOT revert to 0.25 without a
-//   ratified counter-proposal. Downstream code MUST read from these
-//   exported constants and MUST NOT redeclare numeric side allocations.
+// R-3 SIDE-ALLOCATION + CAPACITY CONSTANTS
+//   (FP-069 W3.8 T1, ACT-478 — operator directive verbatim per ACT-475 §V.B2):
+//
+//   "long-primary allocation — long 0.90 / capacity 36, short 0.10 /
+//    capacity 4 for the paper phase; pure long-only 1.00 / 40 PRE-AUTHORIZED
+//    as the W8 live default if paper confirms the study's short verdict."
+//
+//   Long side  : 90 % of strategy allocation, 36 capacity slots.
+//   Short side : 10 % of strategy allocation, 4 capacity slots.
+//
+//   SLOT-CONCENTRATION INVARIANT (both sides identical): 0.90/36 = 0.025 =
+//     0.10/4 — every slot carries exactly 2.5 % of sizingBase, regardless
+//     of side. Enforced by test in `sizing_test.ts`; drift = a defect.
+//   NAMEPLATE SUM: 0.90 + 0.10 = 1.00 pre-margin (assertion in test).
+//
+//   W8 auto-election criterion (PRE-AUTHORIZED, not applied here): pure
+//   long-only (1.00 / 40) becomes the live default if paper phase confirms
+//   the study's short verdict — the short side is retired, not just
+//   throttled. This tranche (T1) does NOT implement the auto-election;
+//   the current 0.90 / 0.10 split is the paper-phase configuration.
+//
+//   Historical: replaces the ACT-464 first-light R-α 0.50 / 0.50 default,
+//   which itself replaced the 0.25 / 0.25 pre-R-α conservative seed.
+//   DO NOT revert without a ratified counter-proposal. Downstream code MUST
+//   read from these exported constants and MUST NOT redeclare numeric side
+//   allocations. Handlers keep passing their own `capacityPerSide` argument
+//   this tranche (T1); the named capacity constants below are for T3 to
+//   consume when engine wiring lands.
 //
 // R-β SIZING-BASE INJECTION (ACT-464.e-i):
 //   Sizing consumes an already-composed `sizingBase` (dollars) rather
@@ -53,8 +70,15 @@
 
 import type { OvershootAccountSnapshot } from '../overshoot-broker/alpaca-account-fetcher.ts';
 
-export const OVERSHOOT_SIDE_ALLOCATION_PCT_LONG = 0.50;
-export const OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT = 0.50;
+export const OVERSHOOT_SIDE_ALLOCATION_PCT_LONG = 0.90;
+export const OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT = 0.10;
+
+/** R-3 capacity constants (ACT-478 / ACT-475 §V.B2). NAMED but not yet
+ *  consumed by handlers this tranche — handlers pass their own
+ *  capacityPerSide argument until T3 wires these in. Slot concentration
+ *  = allocation ÷ capacity = 2.5 % both sides (invariant pinned by test). */
+export const OVERSHOOT_CAPACITY_LONG = 36;
+export const OVERSHOOT_CAPACITY_SHORT = 4;
 
 export type OvershootSizeSide = 'LONG' | 'SHORT';
 
