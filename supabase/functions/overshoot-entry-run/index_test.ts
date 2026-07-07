@@ -386,7 +386,9 @@ Deno.test('ACT-466: no-position → gate does NOT continue (falls through to Pol
 
 Deno.test('ACT-466: refusal carries full signal context (rank_score + side + ticker)', () => {
   assertStringIncludes(SRC, "action: 'overshoot.entry.position_already_open'");
-  assertStringIncludes(SRC, 'ticker: sel.ticker, side: sel.side, rank_score: sel.rank_score');
+  // T3b (ACT-480) extended the same metadata line with tier + regime so
+  // W5 can slice position_already_open refusals by tier/regime too.
+  assertStringIncludes(SRC, 'ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score');
 });
 
 Deno.test('ACT-466: gate placement — AFTER detection-linkage / config / equity / session-marker, BEFORE per-target vendor calls', () => {
