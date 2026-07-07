@@ -18,6 +18,7 @@ import { assert, assertEquals, assertStringIncludes } from 'https://deno.land/st
 import {
   RATIFIED_STUDY_RUN_ID,
   RATIFIED_PARAM_GRID_HASH_PREFIX,
+  RATIFIED_DETECTOR_VERSION,
 } from '../_shared/overshoot/detector/detector.ts';
 
 const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
@@ -45,7 +46,7 @@ Deno.test('boot assertion: BEFORE probe short-circuit and skip gates', () => {
   // The handler MUST reference the ratified constants BY NAME (single-home
   // discipline — no literal UUID/hash copies drifting outside detector.ts).
   // The tests import the constants and verify the identifier names appear.
-  void RATIFIED_STUDY_RUN_ID; void RATIFIED_PARAM_GRID_HASH_PREFIX;
+  void RATIFIED_STUDY_RUN_ID; void RATIFIED_PARAM_GRID_HASH_PREFIX; void RATIFIED_DETECTOR_VERSION;
   assertStringIncludes(SRC, 'RATIFIED_STUDY_RUN_ID');
   assertStringIncludes(SRC, 'RATIFIED_PARAM_GRID_HASH_PREFIX');
   assertStringIncludes(SRC, 'boot_assertion_failed_priors_not_found');
@@ -59,6 +60,49 @@ Deno.test('boot assertion: BEFORE probe short-circuit and skip gates', () => {
   assert(idxBoot < idxProbe, 'boot assertion must precede probe branch');
   assert(idxBoot < idxKS,    'boot assertion must precede kill-switch gate');
   assert(idxBoot < idxJR,    'boot assertion must precede job-disarmed gate');
+});
+
+Deno.test('FP-069 W3.8 T2.4: RATIFIED_DETECTOR_VERSION boot assertion (single-home)', () => {
+  // Import present, typed hard-fail path present, ordering held.
+  assertStringIncludes(SRC, 'RATIFIED_DETECTOR_VERSION,');
+  assertStringIncludes(SRC, 'boot_assertion_failed_detector_version_malformed');
+  assertStringIncludes(SRC, "/^[0-9a-f]{8}$/.test(RATIFIED_DETECTOR_VERSION)");
+  // Ordering: version assert lives INSIDE the boot block, BEFORE probe/gates.
+  const idxVer = SRC.indexOf('boot_assertion_failed_detector_version_malformed');
+  const idxProbe = SRC.indexOf('alpaca_probe_failed');
+  const idxKS = SRC.indexOf("strategy_key = 'overshoot'");
+  const idxJR = SRC.indexOf("id = 'overshoot.detection.run'");
+  assert(idxVer > 0 && idxProbe > 0 && idxKS > 0 && idxJR > 0, 'markers present');
+  assert(idxVer < idxProbe, 'version assert precedes probe branch');
+  assert(idxVer < idxKS,    'version assert precedes kill-switch gate');
+  assert(idxVer < idxJR,    'version assert precedes job-disarmed gate');
+  // No literal 8-hex copy of the version outside detector.ts single-home:
+  // the handler references it BY NAME only.
+  assertEquals(SRC.includes("'b7cdfcd8'"), false, "no literal version copy — single-home discipline");
+});
+
+Deno.test('FP-069 W3.8 T2.4 (INC-84 §5): dry-run envelope carries detector_version + tier_snapshot + selected[]', () => {
+  // Envelope shape gates: dry_run_evidence field spread only under dryRun.
+  assertStringIncludes(SRC, 'buildDryRunEvidence(events, selected)');
+  assertStringIncludes(SRC, 'dry_run_evidence: dryRunEvidence');
+  // Bundle-content proof: detector_version echoed from the ratified constant.
+  assertStringIncludes(SRC, 'detector_version: RATIFIED_DETECTOR_VERSION');
+  // Tier snapshot fields present:
+  assertStringIncludes(SRC, 'long_t1_candidates');
+  assertStringIncludes(SRC, 'long_t2_candidates');
+  assertStringIncludes(SRC, 'short_candidates');
+  assertStringIncludes(SRC, 'long_t1_selected');
+  assertStringIncludes(SRC, 'long_t2_selected');
+  assertStringIncludes(SRC, 'short_selected');
+  assertStringIncludes(SRC, 'rank_score_by_tier');
+  // Full selected[] projection with tier + rank_score + study_cell_ref:
+  assertStringIncludes(SRC, 'selected: selected.map((e) => ({');
+  assertStringIncludes(SRC, 'tier: e.tier,');
+  // Zero new DB writes: no NEW INSERT/UPDATE statements added beyond
+  // the pre-existing events/target/run-row writers. The dry-run gates on
+  // events + targets remain intact (T2.3 headline gate held forward).
+  assertStringIncludes(SRC, 'if (!dryRun && events.length > 0)');
+  assertStringIncludes(SRC, 'if (!dryRun && selected.length > 0)');
 });
 
 Deno.test('probe short-circuit: BEFORE the three skip gates', () => {
