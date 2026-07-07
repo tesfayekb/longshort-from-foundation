@@ -802,7 +802,7 @@ SELECT account_key, strategy_allocation_pct, margin_multiplier, updated_by, upda
 -- E4  Detection run (Session 1) lineage
 SELECT run_id, as_of, outcome, event_count, selected_count, git_sha, correlation_id, durations_ms
   FROM public.overshoot_detection_runs
- ORDER BY started_at DESC LIMIT 3;
+ ORDER BY detected_at DESC LIMIT 3;  -- INC-Ei fix (ACT-477): schema exposes detected_at/created_at, not started_at
 
 -- E5  Per-target I5 outcomes with observed gaps persisted (audit trail)
 SELECT created_at, action, metadata->>'ticker' AS ticker, metadata->>'side' AS side,
