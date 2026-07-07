@@ -1,0 +1,1 @@
+ALTER TABLE public.overshoot_events ADD COLUMN tier text NULL; ALTER TABLE public.overshoot_events ADD CONSTRAINT overshoot_events_tier_chk CHECK (tier IN ('T1','T2') OR tier IS NULL);
