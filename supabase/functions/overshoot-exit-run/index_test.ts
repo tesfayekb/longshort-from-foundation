@@ -22,8 +22,9 @@
  */
 import { assert, assertEquals, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
-  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS,
-} from '../_shared/overshoot-execution/session-age.ts';
+  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG,
+  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT,
+} from '../_shared/overshoot-execution/intents.ts';
 import {
   OVERSHOOT_EXIT_MARKETABLE_LIMIT_SLIPPAGE_BPS,
   OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS,
@@ -70,18 +71,48 @@ Deno.test('boot assertion: BEFORE probe short-circuit AND before skip gates AND 
   assert(idxI6    < idxPipe, 'I6 precedes pipeline');
 });
 
-Deno.test('d-i drift canary: the three exported constants are imported AND referenced', () => {
-  // Trigger evaluation so the linter proves imports are load-bearing.
-  void OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS;
+Deno.test('T3a drift canary: per-side holding constants + slippage/snapshot-age constants imported AND void-referenced', () => {
+  void OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG;
+  void OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT;
   void OVERSHOOT_EXIT_MARKETABLE_LIMIT_SLIPPAGE_BPS;
   void OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS;
-  assertStringIncludes(SRC, 'OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS');
+  assertStringIncludes(SRC, 'OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG');
+  assertStringIncludes(SRC, 'OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT');
   assertStringIncludes(SRC, 'OVERSHOOT_EXIT_MARKETABLE_LIMIT_SLIPPAGE_BPS');
   assertStringIncludes(SRC, 'OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS');
-  // Each constant is `void`-referenced in the boot block.
-  assertStringIncludes(SRC, 'void OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS');
+  assertStringIncludes(SRC, 'void OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG');
+  assertStringIncludes(SRC, 'void OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT');
   assertStringIncludes(SRC, 'void OVERSHOOT_EXIT_MARKETABLE_LIMIT_SLIPPAGE_BPS');
   assertStringIncludes(SRC, 'void OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS');
+});
+
+// ── T3a (ACT-480) source-sentinels — alias absent + per-side wiring ──────
+Deno.test('T3a: deprecated uniform alias OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS is ABSENT from engine source (value + import forms)', () => {
+  // Strip comments so docstring mentions of the historical alias name do
+  // not spuriously match. Match the exact symbol (not followed by _LONG /
+  // _SHORT), which is the deleted uniform alias.
+  const noComments = SRC.split('\n')
+    .filter((l) => !/^\s*\*/.test(l) && !/^\s*\/\//.test(l))
+    .join('\n');
+  assertEquals(/OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS(?![_A-Z])/.test(noComments), false,
+    'uniform alias must not be referenced as a value/import in the exit engine (T3a — ACT-480)');
+});
+
+Deno.test('T3a: computeSessionAge call passes per-lot side (upper-cased reconciled lot side)', () => {
+  assertStringIncludes(SRC, "side: m.side.toUpperCase() as 'LONG' | 'SHORT'");
+});
+
+Deno.test('T3a: INC-84 §5 generalization — RATIFIED_DETECTOR_VERSION echoed in BOTH probe envelopes', () => {
+  assertStringIncludes(SRC, 'RATIFIED_DETECTOR_VERSION');
+  assertStringIncludes(SRC, 'boot_assertion_failed_detector_version_malformed');
+  // Both probe branches (alpaca + polygon) carry the echo field.
+  const alpacaProbeStart = SRC.indexOf("probe: 'alpaca'");
+  const polygonProbeStart = SRC.indexOf("probe: 'polygon'");
+  assert(alpacaProbeStart > 0 && polygonProbeStart > 0);
+  const alpacaBlock = SRC.slice(alpacaProbeStart, alpacaProbeStart + 800);
+  const polygonBlock = SRC.slice(polygonProbeStart, polygonProbeStart + 800);
+  assertStringIncludes(alpacaBlock, 'detector_version: RATIFIED_DETECTOR_VERSION');
+  assertStringIncludes(polygonBlock, 'detector_version: RATIFIED_DETECTOR_VERSION');
 });
 
 Deno.test('I6 second-confirm gate: manual path requires token + recent audit row (15-min window)', () => {

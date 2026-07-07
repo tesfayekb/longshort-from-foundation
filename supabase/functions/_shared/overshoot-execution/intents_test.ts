@@ -4,7 +4,6 @@ import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.t
 import {
   flowForIntent,
   isOvershootIntent,
-  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS,
   OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG,
   OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT,
   holdingSessionsForSide,
@@ -16,10 +15,6 @@ Deno.test('intents: exactly three ratified intents', () => {
   assertEquals([...OVERSHOOT_INTENTS].sort(), ['entry', 'exit_manual', 'exit_time']);
 });
 
-Deno.test('intents: T+5 uniform holding basis constant (P-B#3 corrected)', () => {
-  assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS, 5);
-});
-
 Deno.test('R-1 (ACT-478, W3.8 T1): per-side holding constants — LONG=10 (ACT-471), SHORT=5 HARD (ACT-472)', () => {
   assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG, 10);
   assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT, 5);
@@ -27,10 +22,11 @@ Deno.test('R-1 (ACT-478, W3.8 T1): per-side holding constants — LONG=10 (ACT-4
   assertEquals(holdingSessionsForSide('SHORT'), 5);
 });
 
-Deno.test('R-1: deprecated uniform alias remains at 5 during T1 (unchanged engine byte-untouched)', () => {
-  // Alias staying at 5 keeps session-age + exit-run behavior byte-identical
-  // this tranche; T3 rewires session-age to per-side and removes this alias.
-  assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS, OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT);
+Deno.test('T3a (ACT-480): deprecated uniform alias OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS is DELETED from intents.ts source', async () => {
+  const src = await Deno.readTextFile(new URL('./intents.ts', import.meta.url));
+  // Alias must not appear as an export (only as prose docstring reference).
+  assertEquals(/export const OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS\s*=/.test(src), false,
+    'alias must not be re-exported — T3a deleted it (ACT-480)');
 });
 
 Deno.test('intents: type-guard accepts ratified intents, rejects everything else', () => {
