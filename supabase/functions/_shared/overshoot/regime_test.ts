@@ -6,6 +6,7 @@ import {
   computeRegime,
   OVERSHOOT_REGIME_BEAR_THRESHOLD,
   OVERSHOOT_REGIME_CORRECTION_THRESHOLD,
+  shouldThrottleUnderRegime,
 } from './regime.ts';
 
 Deno.test('provenance: ratified band thresholds match ACT-473 Part IV', () => {
@@ -98,4 +99,70 @@ Deno.test('barsConsumed provenance echo matches input length', () => {
   const r = computeRegime({ spyClosesAscending: [100, 101, 102, 103, 104] });
   assert(r.ok);
   assertEquals(r.barsConsumed, 5);
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// T3b (ACT-480) — REGIME ADMISSION HELPER pins.
+// STRUCTURAL INVARIANT: regime_throttled_t2 reachable ONLY through
+// regime.ok===true && regime==='BEAR' && tier==='T2'. Every other
+// combination (indeterminate, BULL, CORRECTION, non-T2 tier) MUST admit.
+// ─────────────────────────────────────────────────────────────────────────
+
+Deno.test('T3b PIN: BEAR + T2 → throttled (regime_throttled_t2)', () => {
+  const regime = computeRegime({ spyClosesAscending: [10_000, 8499] });
+  assert(regime.ok);
+  assertEquals(regime.regime, 'BEAR');
+  const out = shouldThrottleUnderRegime(regime, 'T2');
+  assertEquals(out.throttle, true);
+  assertEquals(out.reason, 'regime_throttled_t2');
+});
+
+Deno.test('T3b PIN: BEAR + T1 → admitted (T1 immune to regime governor)', () => {
+  const regime = computeRegime({ spyClosesAscending: [10_000, 8499] });
+  assert(regime.ok);
+  const out = shouldThrottleUnderRegime(regime, 'T1');
+  assertEquals(out.throttle, false);
+  assertEquals(out.reason, null);
+});
+
+Deno.test('T3b PIN: BEAR + null tier (SHORT path) → admitted (SHORT not gated by governor v1)', () => {
+  const regime = computeRegime({ spyClosesAscending: [10_000, 8499] });
+  assert(regime.ok);
+  const out = shouldThrottleUnderRegime(regime, null);
+  assertEquals(out.throttle, false);
+});
+
+Deno.test('T3b PIN: BULL + T2 → admitted (no throttle outside BEAR)', () => {
+  const regime = computeRegime({ spyClosesAscending: [100, 101, 102] });
+  assert(regime.ok);
+  assertEquals(regime.regime, 'BULL');
+  const out = shouldThrottleUnderRegime(regime, 'T2');
+  assertEquals(out.throttle, false);
+});
+
+Deno.test('T3b PIN: CORRECTION + T2 → admitted (throttle bracket is BEAR-only)', () => {
+  const regime = computeRegime({ spyClosesAscending: [10_000, 9499] });
+  assert(regime.ok);
+  assertEquals(regime.regime, 'CORRECTION');
+  const out = shouldThrottleUnderRegime(regime, 'T2');
+  assertEquals(out.throttle, false);
+});
+
+// PHANTOM-BEAR pin (operator-ratified). regime_throttled_t2 must NEVER
+// fire on an indeterminate regime input; the input problem is surfaced
+// via regime_indeterminate at the engine, not by silently gating T2 out
+// as if the market were in BEAR. This test locks the "reachable ONLY
+// through regime.ok===true" invariant regardless of downstream refusal
+// class or reason text.
+Deno.test('T3b PIN (phantom-BEAR): regime_indeterminate (regime.ok===false) NEVER throttles — even for T2', () => {
+  for (const refusal of ['empty_input', 'insufficient_bars', 'non_positive_close'] as const) {
+    const regime = { ok: false as const, refusal, reason: `synthetic-${refusal}` };
+    for (const tier of ['T1', 'T2', null] as const) {
+      const out = shouldThrottleUnderRegime(regime, tier);
+      assertEquals(out.throttle, false,
+        `phantom-BEAR VIOLATION: regime.ok=false (${refusal}) threw throttle=true on tier=${tier}. ` +
+        `regime_throttled_t2 MUST be reachable ONLY through regime.ok===true.`);
+      assertEquals(out.reason, null);
+    }
+  }
 });
