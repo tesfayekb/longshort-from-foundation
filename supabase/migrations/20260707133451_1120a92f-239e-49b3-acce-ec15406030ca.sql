@@ -1,0 +1,1 @@
+UPDATE public.job_registry SET enabled = false, updated_at = now() WHERE id = 'overshoot.entry.run';
