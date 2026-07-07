@@ -33,12 +33,22 @@
 // Refusals are NEVER silent zeros. Caller propagates to audit envelope.
 
 import type { PolygonQuoteSnapshot } from './exit-price-construction.ts';
+import {
+  OVERSHOOT_SNAPSHOT_MIN_AGE_MS,
+  OVERSHOOT_SNAPSHOT_MAX_AGE_MS,
+} from './snapshot-age-bounds.ts';
 
 export const OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS = 50;
 
-/** Max acceptable snapshot age at entry-order submission. 15s tolerates
- *  typical polling jitter but rejects stale caches. Matches exit-side. */
-export const OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS = 15_000;
+/** Max acceptable snapshot age at entry-order submission. Re-exported
+ *  from the ratified single-home in ./snapshot-age-bounds.ts so that
+ *  every overshoot money-path snapshot-age comparison shares the same
+ *  bound (ACT-486 / INC-91). Historical export name preserved for
+ *  external callers/tests. */
+export const OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS = OVERSHOOT_SNAPSHOT_MAX_AGE_MS;
+/** Min acceptable snapshot age (negative = server clock behind Polygon
+ *  event time — see ACT-486 / INC-91 provenance in snapshot-age-bounds.ts). */
+export const OVERSHOOT_ENTRY_SNAPSHOT_MIN_AGE_MS = OVERSHOOT_SNAPSHOT_MIN_AGE_MS;
 
 export type EntrySide = 'LONG' | 'SHORT';
 
@@ -113,11 +123,13 @@ export function constructEntryLimitPrice(
   }
 
   const snapshotAgeMs = asOf.getTime() - capturedAt.getTime();
-  if (!Number.isFinite(snapshotAgeMs) || snapshotAgeMs > OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS || snapshotAgeMs < 0) {
+  if (!Number.isFinite(snapshotAgeMs)
+      || snapshotAgeMs > OVERSHOOT_SNAPSHOT_MAX_AGE_MS
+      || snapshotAgeMs < OVERSHOOT_SNAPSHOT_MIN_AGE_MS) {
     return {
       ok: false, side,
       refusal: 'polygon_snapshot_stale',
-      reason: `snapshot age ${snapshotAgeMs}ms outside [0, ${OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS}ms]`,
+      reason: `snapshot age ${snapshotAgeMs}ms outside [${OVERSHOOT_SNAPSHOT_MIN_AGE_MS}, ${OVERSHOOT_SNAPSHOT_MAX_AGE_MS}ms]`,
     };
   }
 
