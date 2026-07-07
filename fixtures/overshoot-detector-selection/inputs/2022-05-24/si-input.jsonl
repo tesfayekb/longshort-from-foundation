@@ -1,0 +1,16 @@
+# FP-069 W3.8 T2.2 (ACT-479) — selection-parity SI input fixture — 2022-05-24
+# as_of: 2022-05-24
+# capture_head_sha: 70ed2a9083c42fa62f4fbfcfd6dec97e6b399762
+# si_disposition: disposition=A_empty_map; physical_evidence: SELECT count(*) WHERE as_of_date<=2022-05-24 → 0; overall min(as_of_date)=2026-03-13 (commons began post-date)
+# siStalenessMaxDays: 20 (verbatim from DETECTOR_SI_STALENESS_MAX_DAYS)
+# squeezeSiPctFloatMin: 0.20 (verbatim from DETECTOR_SQUEEZE_SI_PCT_FLOAT_MIN)
+# column_order: ticker,as_of_date,si_pct_float,dtc
+# null_representation: JSON null (from Postgres row_to_json)
+# ordering: (ticker ASC)
+# rows: 0
+# sha256_body: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+# HONESTY: this fixture captures runDetector() behavior on OUR overshoot_short_interest
+# commons at the capture date. For pre-commons dates (2022-05-24, 2024-05-02) the map is
+# EMPTY by physical evidence — every SHORT resolves to si_unavailable. That is the
+# regression contract the harness enforces; it is NOT a claim about historical SI in the world.
+# ---
