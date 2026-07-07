@@ -1,3 +1,23 @@
+### ACT-482.MILESTONE-EVENING (2026-07-07): EXECUTION — **FP-069 W3.8 MILESTONE-EVENING SESSION 1 CLOSED. SI-refresh + DRY-THEN-LIVE detection + full INC-84 §5 probe matrix (3 engines × 2 vendors) attested. NO code, NO migrations, NO deploys — INC-82 data-writes + authenticated edge invocations only. Fence held (0 overshoot cron jobs) throughout.**
+
+**(1) §9.1a SI-refresh (twice-monthly cadence, single as_of=2026-07-07):** 21 authenticated invocations of `overshoot-short-interest-compute` (resume-by-cursor). Reconstructed TOTALS from raw envelopes (loop script field-name drift did NOT harm evidence — see INC-89): `rows_written=5034`, `distinct_tickers=839`, `si_unavailable_count=0`, `failure_count=0`, `shares_unavailable_count=7` (non-fatal boundary sparsity). DB verify: `count(*)=5034`, `count(DISTINCT ticker)=839`, `max(as_of_date)=2026-06-15` — byte-matches envelope. 21 run_ids: b86c9844, d10dac1d, 07193fdf, fbd49765, 70904328, ddd44696, 9afbbe36, 231cfc27, 2a924a97, 93e4abc1, 37fdcdbe, d5076793, 62583c87, 1d90adbf, 20821ee9, 17b7a50a, 0cb651f6, e2ca7df7, 14804b08, 101d5430, 6c7203a7. Registry disarmed post-refresh.
+
+**(2) §9.1b DRY-THEN-LIVE detection bracket (ACT-481.AMEND governed):** ARM `overshoot.detection.run` → DRY `{as_of:'2026-07-06', dry_run:true}` (run e5c01af2) → LIVE `{as_of:'2026-07-06', dry_run:false}` (run 4c47e958) → DISARM. Envelope parity (deterministic kernel on fixed as_of): both `outcome=completed, event_count=728, selected_count=20`. DRY carries `dry_run_evidence.detector_version='b7cdfcd8'`, `ratified_study_run_id='1888e113-f9b3-43f5-856c-d91666a3c121'`, `ratified_param_grid_hash_prefix='a37e4b96'`, tier_snapshot `{long_t2_candidates:165, short_candidates:422, long_t2_selected:20}`. Selected basket (rank_score∈[0.01081, 0.04125], mean=0.01673, all LONG_T2): AA, AMD, APP, CAR, CEG, CLF, GAP, HL, HPE, MPWR, NEM, ORA, PLTR, QCOM, STX, SYNA, VC, VRT, WDC, WFRD. Persistence proof: DRY writes 0 `overshoot_events` + 0 `overshoot_target_positions` (correct); LIVE writes 728 events / 20 selected_for_entry / 20 target_positions (byte-matches envelope). Entry engine consumes 20 targets from run 4c47e958 tomorrow morning.
+
+**(3) INC-84 §5 probe matrix CLOSED — 6/6 attestations, uniform `detector_version=b7cdfcd8`:** detection-run alpaca (corr 1a9c1e25) + polygon (b3b7f46e); entry-run alpaca (72784a05) + polygon (e3ff7119); exit-run alpaca (ec3cff7d) + polygon (29f74d63). Alpaca envelopes all `{account_last4:'AZD5', status:'ACTIVE', paper:true}`; polygon envelopes carry `snapshot_present:true` (entry/exit) or `as_of_probed:'2026-07-07', resultsCount:0` (detection). Every money engine self-attests the same frontier detector_version and the same AZD5 paper account.
+
+**(4) ACT-481.AMEND carried attestation (a) CLOSED.** DRY-THEN-LIVE persisted the data tomorrow morning's entry engine consumes; the "dry-only evening starves the morning" trap is defeated by observed 20/20 target_positions on run 4c47e958.
+
+**(5) End-of-session state:** All four `overshoot.*` registry rows `enabled=false`. Fence `SELECT count(*) FROM cron.job WHERE jobname LIKE 'overshoot%'` = **0** proven three times (opening, post-SI, closing). Cron-arming remains structurally blocked on H2 per DEC-043-analog ARMING GATE — `sql/32` / `sql/33` authored-only NOT-EXECUTED.
+
+**(6) Incidentals filed this session:** INC-88 (kill_switches longshort-row 403 for overshoot-only operators — background noise); INC-89 (§9.1a DevTools resume-loop field-name drift vs handler envelope — TOTALS/RUN_IDS printed as zero-fallback; raw JSON logs intact). Both docs-only follow-ups; neither is a money-path defect.
+
+**Gates:** No code / migration / deploy this turn; standard byte-untouched sweeps N/A. Evidence pastes above are load-bearing.
+
+**Cross-references:** §9.1 (ACT-481.AMEND), §9.1a (SI-refresh 7-step), §9.1b (DRY-THEN-LIVE 4-step), §9.2.i / §9.2.ii (morning bracket — pending), INC-84 §5.
+
+---
+
 ### ACT-481.T4-CONSOLE-SURFACING (2026-07-07): EXECUTION — **FP-069 W3.8 T4 LANDED: MIG-158 scoped SELECT policy on overshoot_entry_runs + console surfacing of tier badges (T1/T2), regime badge + regime_signal_context render, recent entry-runs card (MIG-157 data via MIG-158 policy), cited-by-file engine capacities & horizons on the Config page, T2.4 corrective dry-run exclusion filter re-confirmed FUNCTIONAL against live data. Read-only end-to-end; ZERO engine bytes touched. W3.8 CLOSED subject to milestone-evening operator session.** Pre-turn HEAD `7d910637` (ACT-480 signed by operator + supervisor; signatures recorded in prior turn's SIGN-GATE bundle row). Tier B frontend + one Tier-A-adjacent RLS migration. Ratified scope executed exactly per operator T4 ruling.
 
 ---
