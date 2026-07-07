@@ -402,7 +402,7 @@ Deno.serve(createHandler(async (req: Request) => {
                    : err instanceof BenchmarksMissingError  ? 'benchmarks_missing'
                    : 'bars_append_unexpected';
       const outcome: Outcome = reason === 'bars_missing_for_asof' ? 'no_op' : 'failed';
-      await finalizeRun(sql, runId, outcome, reason, 0, 0, durations, { bars: barsBackfillRunId, earnings: null });
+      await finalizeRun(sql, runId, outcome, reason, 0, 0, durations, { bars: barsBackfillRunId, earnings: null }, dryRun);
       await sql.end({ timeout: 5 });
       return apiSuccess({ run_id: runId, outcome, reason, event_count: 0, selected_count: 0, correlation_id: correlationId });
     }
@@ -458,7 +458,7 @@ Deno.serve(createHandler(async (req: Request) => {
       // forcing an out-of-band FMP probe to root-cause the 21000 case.
       (durations as Record<string, unknown>).earnings_append_error =
         err instanceof Error ? (err.name + ': ' + err.message).slice(0, 500) : String(err).slice(0, 500);
-      await finalizeRun(sql, runId, 'failed', reason, 0, 0, durations, { bars: barsBackfillRunId, earnings: earningsBackfillRunId });
+      await finalizeRun(sql, runId, 'failed', reason, 0, 0, durations, { bars: barsBackfillRunId, earnings: earningsBackfillRunId }, dryRun);
       await sql.end({ timeout: 5 });
       return apiSuccess({ run_id: runId, outcome: 'failed', reason, event_count: 0, selected_count: 0, correlation_id: correlationId });
     }
@@ -474,7 +474,7 @@ Deno.serve(createHandler(async (req: Request) => {
       thresholdHours: DEFAULT_EARNINGS_CALENDAR_STALENESS_HOURS,
     });
     if (stale) {
-      await finalizeRun(sql, runId, 'no_op', 'earnings_calendar_stale', 0, 0, durations, { bars: barsBackfillRunId, earnings: earningsBackfillRunId });
+      await finalizeRun(sql, runId, 'no_op', 'earnings_calendar_stale', 0, 0, durations, { bars: barsBackfillRunId, earnings: earningsBackfillRunId }, dryRun);
       await sql.end({ timeout: 5 });
       return apiSuccess({ run_id: runId, outcome: 'no_op', reason: 'earnings_calendar_stale', event_count: 0, selected_count: 0, correlation_id: correlationId });
     }
@@ -647,7 +647,7 @@ Deno.serve(createHandler(async (req: Request) => {
     durations.total_ms = Math.round(performance.now() - t0);
     await finalizeRun(sql, runId, 'completed', undefined, events.length, selected.length, durations, {
       bars: barsBackfillRunId, earnings: earningsBackfillRunId,
-    });
+    }, dryRun);
     await sql.end({ timeout: 5 });
     // FP-069 W3.8 T2.4 (ACT-479) — dry-run response envelope enrichment
     // (INC-84 §5 bundle-content proof + Proposal A tier snapshot).
@@ -703,13 +703,22 @@ async function finalizeRun(
   eventCount: number, selectedCount: number,
   durations: Record<string, number>,
   appendRunIds: { bars: string | null; earnings: string | null },
+  dryRun: boolean,
 ): Promise<void> {
+  // FP-069 W3.8 T2.4 corrective (Option A) — carry the dry_run marker on
+  // BOTH paths (true/false) so every completed run row is explicitly marked.
+  // Absence of the key now means pre-T2.4 legacy row only. Prior defect:
+  // finalizeRun overwrote durations_ms without merging the flag insertRunRow
+  // had stamped, silently defeating the T2.4 STEP 3 console-pollution filter.
+  const payload = reason
+    ? { ...durations, skip_reason: reason, dry_run: dryRun }
+    : { ...durations, dry_run: dryRun };
   await sql`
     UPDATE overshoot_detection_runs
        SET outcome = ${outcome},
            event_count = ${eventCount},
            selected_count = ${selectedCount},
-           durations_ms = ${JSON.stringify(reason ? { ...durations, skip_reason: reason } : durations)}::jsonb,
+           durations_ms = ${JSON.stringify(payload)}::jsonb,
            append_run_ids = ${JSON.stringify(appendRunIds)}::jsonb
      WHERE run_id = ${runId}::uuid
   `;

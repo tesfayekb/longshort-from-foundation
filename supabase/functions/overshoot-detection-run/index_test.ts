@@ -226,3 +226,31 @@ Deno.test('POLYGON_API_KEY_PROD_PROBE binding (D2 ratification)', () => {
   // No fallback chain.
   assertEquals(SRC.includes("|| Deno.env.get('POLYGON_API_KEY')"), false);
 });
+
+Deno.test('FP-069 W3.8 T2.4 corrective: finalizeRun carries dry_run marker on BOTH paths', () => {
+  // Regression sentinel — prior defect: insertRunRow stamped dry_run into
+  // durations_ms but finalizeRun overwrote the column with a fresh object
+  // that dropped the flag, silently defeating the T2.4 console-pollution
+  // filter (OvershootDetectorRuns.tsx WHERE durations_ms->>'dry_run' IS
+  // DISTINCT FROM 'true'). Every finalizeRun call site must forward the
+  // dryRun boolean, and the writer must merge it into durations_ms
+  // unconditionally so a completed row is explicitly marked true|false —
+  // absence of the key means pre-T2.4 legacy only.
+  //
+  // (a) writer signature accepts dryRun and merges it into the UPDATE
+  //     payload for both the reason-carrying and reason-less branches:
+  assertStringIncludes(SRC, 'appendRunIds: { bars: string | null; earnings: string | null },\n  dryRun: boolean,\n)');
+  assertStringIncludes(SRC, 'skip_reason: reason, dry_run: dryRun');
+  assertStringIncludes(SRC, '{ ...durations, dry_run: dryRun }');
+  // (b) every finalizeRun call site forwards dryRun as the trailing arg —
+  //     grep for absence of the pre-corrective shape (8-arg call without
+  //     dryRun trailing). The old signature ended `{ bars: ..., earnings: ... });`
+  //     with no dryRun; the corrective ends `}, dryRun);` for the success
+  //     path and `..., dryRun);` for the three catch paths.
+  const callSites = SRC.match(/finalizeRun\(/g) ?? [];
+  assertEquals(callSites.length, 4, 'exactly 4 finalizeRun call sites');
+  // None of the four may end without dryRun forwarded:
+  assertEquals(SRC.includes('earnings: null });'), false, 'bars-catch site must forward dryRun');
+  assertEquals(SRC.includes('earnings: earningsBackfillRunId });'), false,
+    'earnings-catch / staleness sites must forward dryRun');
+});
