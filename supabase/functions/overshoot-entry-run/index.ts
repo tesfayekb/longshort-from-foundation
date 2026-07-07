@@ -598,15 +598,46 @@ Deno.serve(createHandler(async (req: Request) => {
     const regimeLabel: OvershootRegime | null = regime.ok ? regime.regime : null;
 
     // (f) load selections + write session marker.
+    // ACT-485 Option A (INC-90 structural fix) — REAL reference-price
+    // wiring. Sources per the I5 contract docstring (`_shared/overshoot-
+    // execution/i5-recheck.ts` lines 22-32): `tCloseRef` = close at the
+    // T-close session (the detection run's `as_of` date); `preEventRef` =
+    // close of the pre-event reference bar, offset `argmax_window_days`
+    // TRADING SESSIONS before the T-close (never calendar-day math —
+    // uses OFFSET on trade-date DESC to walk sessions inside
+    // `overshoot_daily_bars`, honouring holidays and weekends). LEFT
+    // JOIN LATERAL yields NULL when a bar is missing; the handler
+    // converts that NULL to the typed `reference_bar_missing` refusal
+    // (never NaN, never a silent default) — see the loop body below.
+    // The `NULL::` placeholder pattern is anti-patterned by INC-90 and
+    // guarded by `.github/workflows/overshoot-guards.yml`.
     const selections = await sql<SelectionRow[]>`
       SELECT
         e.ticker,
         e.side,
         e.rank_score,
         e.tier,
-        NULL::numeric AS t_close_ref,
-        NULL::numeric AS pre_event_ref
+        e.argmax_window_days,
+        dr.as_of::text AS as_of,
+        tclose.close  AS t_close_ref,
+        preref.close  AS pre_event_ref
       FROM overshoot_events e
+      JOIN overshoot_detection_runs dr
+        ON dr.run_id = e.run_id
+      LEFT JOIN LATERAL (
+        SELECT close
+        FROM overshoot_daily_bars
+        WHERE ticker = e.ticker AND trade_date = dr.as_of
+        LIMIT 1
+      ) tclose ON true
+      LEFT JOIN LATERAL (
+        SELECT close
+        FROM overshoot_daily_bars
+        WHERE ticker = e.ticker AND trade_date <= dr.as_of
+        ORDER BY trade_date DESC
+        OFFSET e.argmax_window_days
+        LIMIT 1
+      ) preref ON true
       WHERE e.run_id = ${linkage.runId}::uuid
         AND e.selected_for_entry = true
       ORDER BY e.side, e.rank_score DESC NULLS LAST, e.ticker
