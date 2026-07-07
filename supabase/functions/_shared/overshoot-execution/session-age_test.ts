@@ -38,7 +38,7 @@ Deno.test('T3a: alias OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS absent from session-a
   const noComments = src.split('\n')
     .filter((l) => !/^\s*\*/.test(l) && !/^\s*\/\//.test(l))
     .join('\n');
-  assertEquals(noComments.includes('OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS'), false,
+  assertEquals(/OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS(?![_A-Z])/.test(noComments), false,
     'alias must not be a value reference in session-age.ts (T3a — ACT-480)');
 });
 
