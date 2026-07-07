@@ -1,3 +1,23 @@
+### INC-84 (2026-07-07): six-MATCH deployed-SHA gate is a STAMP attestation, not a CONTENT attestation, under the Lovable `supabase--deploy_edge_functions` path.
+
+**Discovery context:** FP-069 W3.8 T2.3 (ACT-479) deploy of `overshoot-detection-run`. Six consecutive `check-deployed-sha.ts` OPTIONS calls at 2 s intervals, source HEAD `6666f533f50f2a22dd352d410936c73be6afd1c4`, all returned deployed `x-build-sha = 0c5ad0d9588fd62df6e88b1b50516069ffaea390` **MISMATCH stable** across all six samples. Single-isolate serve (no rolling deploy). The deployment landed and the module cold-booted successfully (401-precedent authenticated-guard response reflecting the new module surface); the gate nevertheless failed.
+
+**Root cause:** the `check-deployed-sha.ts` script compares the source-HEAD SHA against the `x-build-sha` response header, which is populated from the `BUILD_SHA` env var stamped at deploy time. Under the GitHub-Actions deploy path (FP-050 §22.8.5) the workflow sets `BUILD_SHA=$GITHUB_SHA` explicitly pre-deploy and the gate is meaningful. Under Lovable's `supabase--deploy_edge_functions` path, `BUILD_SHA` is **NOT** refreshed and continues to reflect a prior deploy identity — the gate compares a STAMP the deploy tool did not update, not the identity of the code bundle Deno is executing.
+
+**Classification (§2 axiom 5):** derivative-signal defect in the gate itself. The gate as implemented is a false-negative generator for any deploy performed via the Lovable Supabase-edge-function tool.
+
+**Forward redefinition (STANDING RULE, effective this ledger row):** deploy attestation = **BEHAVIORAL content probe** (an output shape only the new bundle can produce) **OR** a **bundle-content version echo** in the response envelope. The stamp comparison is **DEMOTED to advisory**.
+
+**Implementation (T2.4 landing):** `overshoot-detection-run` implements the standing rule as a permanent property, not a one-time check — the dry-run response envelope carries `dry_run_evidence.detector_version` (echoing the ratified `RATIFIED_DETECTOR_VERSION` constant) plus a `tier_snapshot` object. Every dry-run is self-attesting: presence of these fields proves the new bundle is serving; absence proves the deploy did not land. Entry-run and exit-run adopt the same discipline at T3 with their own redeploys — their `RATIFIED_DETECTOR_VERSION` boot-asserts and envelope echoes are deferred until then per minimum-coupling (§22.3(c)) — their bundles are stale on this constant until T3 and would false-trip if asserted early.
+
+**Cross-references:** ACT-479 T2.3 (discovery landing); ACT-479 T2.4 (forward-rule implementation via `dry_run_evidence.detector_version` echo); FP-050 §22.8.5 (GitHub-Actions BUILD_SHA precedent); §2 axiom 5 (no derivative signals gating money-path decisions); MIG-156 ledger row (T2.3 evidence bundle where the MISMATCH was recorded); `scripts/check-deployed-sha.ts` (the gate script — retained as advisory; docstring update deferred until T3 sweep touches its consumers).
+
+**Status:** OPEN as a gate-discipline standing rule; the CONTENT proof rule is in effect immediately. Closure = removal of the stamp-only gate from any promotion checklist, replaced by behavioral/echo checks (documentation sweep tracked at T3+).
+
+**Linked:** ACT-479 T2.3; ACT-479 T2.4; FP-050 §22.8.5.
+
+---
+
 # Incidental Findings Log
 
 > **Owner:** Project Lead | **Last Reviewed:** 2026-05-16 | **Status:** Living Document
