@@ -1,3 +1,33 @@
+### INC-86 (2026-07-07): `overshoot_detection_runs.durations_ms` was double-encoded across every row prior to T2.4 CORRECTIVE A′ — postgres.js v3 `${JSON.stringify(x)}::jsonb` binds the stringified value AGAIN as jsonb, producing a scalar-string (`jsonb_typeof='string'`).
+
+**Discovery context:** FP-069 W3.8 T2.4 STEP 2 Phase 2 verification of the ratified console-pollution mitigation (dashboard filter `.not('durations_ms->>dry_run','eq','true')`). The dry-run row `2e6a39ca-2c0f-41df-bb13-3b1531130090` returned `dry_run_flag=NULL` under the filter even after the initial finalizeRun-carry fix (INC-85) intended to write `dry_run:true` into `durations_ms`. Follow-up `jsonb_typeof(durations_ms)` probe returned `'string'` on all 13 pre-existing rows; raw payload = `"{\"bars_append_ms\":401,...}"` (an escaped JSON scalar-string), not `{...}` (an object).
+
+**Root cause:** the handler bound jsonb via `${JSON.stringify(payload)}::jsonb`. postgres.js v3.4.4 (`https://deno.land/x/postgresjs@v3.4.4/mod.js`, imported in `supabase/functions/overshoot-detection-run/index.ts:50` and every other overshoot handler) auto-serializes any parameter it binds for jsonb using its internal JSON serializer. Passing an already-`JSON.stringify()`-encoded string sends `"{\"a\":1}"` to Postgres, which `::jsonb` parses as a JSON STRING scalar. Every completed `finalizeRun` UPDATE and every `insertRunRow` INSERT wrote scalar-strings; every `durations_ms->>'key'` read returned NULL silently.
+
+**Scope (project-wide risk assessment):** the double-encode pattern was contained to `overshoot-detection-run/index.ts` at two bind sites (`insertRunRow` line 693 + `finalizeRun` line 721 pre-corrective). Repo-wide grep confirmed the correct idiom (`sql.json(...)::jsonb`) already in use at `overshoot-study-run/index.ts:421`; no other handler exhibits the anti-pattern. Consumer audit (`rg 'durations_ms->|durations_ms ->|durations_ms\[' src/ supabase/functions/ scripts/`): ONE real reader (`OvershootDetectorRuns.tsx:79` — the T2.4 console filter itself); FOUR comment/test refs. Zero silent-NULL consumers of the `earnings_duplicates_dropped` / `earnings_vendor_row_count` / `earnings_appended_row_count` / `earnings_append_error` write-only forensic breadcrumbs.
+
+**Resolution (T2.4 CORRECTIVE A′ landing):** both writer sites migrated to the repo idiom `${sql.json(payload)}::jsonb`; source-sentinel unit test `FP-069 W3.8 T2.4 corrective A′: jsonb binding uses sql.json(), never pre-stringify` locks the fix against silent regression. Legacy repair via `supabase--insert` (§22.5.3/INC-82 DATA-WRITE class, no MIG): (i) reverted the botched initial backfill on `2e6a39ca` (`durations_ms->0 #>>'{}'` extraction) then merged the dry_run marker; (ii) idempotent `UPDATE ... SET durations_ms = ((durations_ms #>> '{}')::jsonb) WHERE jsonb_typeof(durations_ms)='string'` fixed the 13 legacy rows; (iii) post-repair grouped `jsonb_typeof` proof: `{object:14}` (all rows), console filter empirically functional against real data.
+
+**Cross-references:** ACT-479 T2.4-CORRECTIVE-A′ (this landing); INC-85 (finalizeRun-carry defect, discovered during the same Phase 2 verification); INC-84 (deploy attestation redefinition — the CONTENT proof stood exactly because the STAMP was independently proven false-negative on this same row via `git_sha=0c5ad0d9` on the 2026-07-07 dry-run bundle).
+
+**Status:** RESOLVED at landing. Standing rule: any new jsonb bind in overshoot-* handlers MUST use `sql.json(...)` — enforced by the corrective's source-sentinel test on the detection-run writer; T3 sweep should extend the sentinel pattern to entry-run + exit-run writers when they get their own touches.
+
+---
+
+### INC-85 (2026-07-07): `finalizeRun` silently overwrote the `dry_run` marker that `insertRunRow` stamped into `overshoot_detection_runs.durations_ms`, defeating the T2.4 STEP 3 console-pollution filter at its first live target.
+
+**Discovery context:** FP-069 W3.8 T2.4 STEP 2 Phase 2 verification. Operator-fired dry-run at `as_of=2026-06-18` (run_id `2e6a39ca-2c0f-41df-bb13-3b1531130090`) attested the `dry_run_evidence.detector_version` envelope-content proof; the dashboard filter WHERE clause `.not('durations_ms->>dry_run','eq','true')` was expected to exclude the dry-marked row and did not (row appeared in the top-5 live query).
+
+**Root cause:** `insertRunRow` (line 693 pre-corrective) stamped `dry_run: args.dryRun` into `durations_ms` at INSERT. `finalizeRun` (line 712 pre-corrective) then executed `UPDATE ... SET durations_ms = ${JSON.stringify(reason ? {...durations, skip_reason: reason} : durations)}::jsonb` — a complete overwrite of the column with a fresh object built solely from the stage-timer accumulator; the `dry_run` key `insertRunRow` had written was never merged into the finalize payload. Every completed run (dry or live) ended with the flag wiped. Compounded by INC-86 (double-encode), the mitigation was doubly non-functional.
+
+**Resolution (T2.4 CORRECTIVE A′ landing):** `finalizeRun` signature gained trailing `dryRun: boolean`; all four call sites (bars-catch, earnings-catch, staleness, success) forward it; payload merges the flag on BOTH branches (`{ ...durations, dry_run: dryRun }` and `{ ...durations, skip_reason: reason, dry_run: dryRun }`) so every completed row is EXPLICITLY marked true|false — absence of the key now means pre-corrective legacy only. Source-sentinel unit test `FP-069 W3.8 T2.4 corrective: finalizeRun carries dry_run marker on BOTH paths` locks the fix (verifies signature shape, both merge branches, exactly 4 call sites + 1 definition, and the absence of any legacy 8-arg finalizeRun call). Data-write repair covered under INC-86 (§4-ii idempotent legacy repair).
+
+**Cross-references:** ACT-479 T2.4-CORRECTIVE-A′; INC-86 (compounding double-encode defect, resolved same landing); ACT-479 T2.4-STEP3 (original filter ratification).
+
+**Status:** RESOLVED at landing.
+
+---
+
 ### INC-84 (2026-07-07): six-MATCH deployed-SHA gate is a STAMP attestation, not a CONTENT attestation, under the Lovable `supabase--deploy_edge_functions` path.
 
 **Discovery context:** FP-069 W3.8 T2.3 (ACT-479) deploy of `overshoot-detection-run`. Six consecutive `check-deployed-sha.ts` OPTIONS calls at 2 s intervals, source HEAD `6666f533f50f2a22dd352d410936c73be6afd1c4`, all returned deployed `x-build-sha = 0c5ad0d9588fd62df6e88b1b50516069ffaea390` **MISMATCH stable** across all six samples. Single-isolate serve (no rolling deploy). The deployment landed and the module cold-booted successfully (401-precedent authenticated-guard response reflecting the new module surface); the gate nevertheless failed.
