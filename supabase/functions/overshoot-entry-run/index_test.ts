@@ -404,3 +404,62 @@ Deno.test('ACT-466: gate placement — AFTER detection-linkage / config / equity
   assert(idxPrefetch < idxLoop,    'prefetch precedes per-target loop');
   assert(idxGate    < idxI5,       'position_already_open gate precedes I5');
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// ACT-485 (INC-90 structural fix) — Option A: reference-price wiring.
+// Source-sentinel tests: the SELECT sources real reference prices via
+// LATERAL JOINs to overshoot_daily_bars; NaN coercion is banned; the
+// typed reference_bar_missing refusal fires BEFORE the I5 evaluation
+// when either bar is NULL from the JOIN.
+// ─────────────────────────────────────────────────────────────────────────
+
+Deno.test('ACT-485: NULL:: placeholder pattern is ABSENT from the selection loader (INC-90 regression pin)', () => {
+  const noComments = SRC.split('\n')
+    .filter((l) => !/^\s*\*/.test(l) && !/^\s*\/\//.test(l))
+    .join('\n');
+  assertEquals(/NULL::[a-zA-Z]/.test(noComments), false,
+    'INC-90: NULL:: placeholder must not appear in overshoot money-path SELECTs');
+});
+
+Deno.test('ACT-485: selection loader JOINs overshoot_daily_bars for both refs (LATERAL, trade_date, OFFSET argmax_window_days)', () => {
+  assertStringIncludes(SRC, 'JOIN overshoot_detection_runs dr');
+  assertStringIncludes(SRC, 'LEFT JOIN LATERAL (');
+  assertStringIncludes(SRC, 'FROM overshoot_daily_bars');
+  assertStringIncludes(SRC, 'WHERE ticker = e.ticker AND trade_date = dr.as_of');
+  assertStringIncludes(SRC, 'WHERE ticker = e.ticker AND trade_date <= dr.as_of');
+  assertStringIncludes(SRC, 'ORDER BY trade_date DESC');
+  assertStringIncludes(SRC, 'OFFSET e.argmax_window_days');
+  assertStringIncludes(SRC, 'tclose.close  AS t_close_ref');
+  assertStringIncludes(SRC, 'preref.close  AS pre_event_ref');
+});
+
+Deno.test('ACT-485: ?? NaN coercion for tCloseRef/preEventRef is REMOVED from the loop body', () => {
+  const noComments = SRC.split('\n')
+    .filter((l) => !/^\s*\*/.test(l) && !/^\s*\/\//.test(l))
+    .join('\n');
+  assertEquals(/sel\.t_close_ref\s*\?\?\s*NaN/.test(noComments), false,
+    'INC-90: silent NaN coercion for t_close_ref is banned (typed refusal only)');
+  assertEquals(/sel\.pre_event_ref\s*\?\?\s*NaN/.test(noComments), false,
+    'INC-90: silent NaN coercion for pre_event_ref is banned (typed refusal only)');
+});
+
+Deno.test('ACT-485: reference_bar_missing typed refusal fires BEFORE evaluateI5PreOpenRecheck (never-silent-drop)', () => {
+  assertStringIncludes(SRC, "action: 'overshoot.entry.reference_bar_missing'");
+  assertStringIncludes(SRC, 'sel.t_close_ref === null || sel.pre_event_ref === null');
+  const idxRefBarCheck = SRC.indexOf('sel.t_close_ref === null || sel.pre_event_ref === null');
+  const idxI5eval     = SRC.indexOf('const i5 = evaluateI5PreOpenRecheck');
+  assert(idxRefBarCheck > 0 && idxI5eval > 0 && idxRefBarCheck < idxI5eval,
+    'reference_bar_missing null-check must precede I5 evaluation (NULL-impossible at I5)');
+  // INC-83 sentinel discipline preserved (no UPSERT on this refusal path).
+  const idxContinue = SRC.indexOf('continue;', idxRefBarCheck);
+  const idxUpsert   = SRC.indexOf('INSERT INTO overshoot_target_positions', idxRefBarCheck);
+  assert(idxContinue > 0 && idxUpsert > 0 && idxContinue < idxUpsert,
+    'reference_bar_missing must continue (sentinel-persists), NOT reach the UPSERT');
+});
+
+Deno.test('ACT-485: SelectionRow carries as_of + argmax_window_days for reference_bar_missing audit context', () => {
+  assertStringIncludes(SRC, 'as_of: string;');
+  assertStringIncludes(SRC, 'argmax_window_days: number;');
+  assertStringIncludes(SRC, 'e.argmax_window_days,');
+  assertStringIncludes(SRC, 'dr.as_of::text AS as_of,');
+});
