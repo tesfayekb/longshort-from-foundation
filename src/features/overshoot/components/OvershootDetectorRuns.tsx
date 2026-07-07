@@ -71,6 +71,12 @@ export function OvershootDetectorRuns() {
       const { data, error } = await supabase
         .from('overshoot_detection_runs')
         .select('run_id,as_of,detected_at,outcome,event_count,selected_count,correlation_id')
+        // FP-069 W3.8 T2.4 (ACT-479) — exclude dry-marked runs from the
+        // console. Dry-run rows carry durations_ms->>'dry_run' = 'true'
+        // (jsonb text marker written by overshoot-detection-run's
+        // insertRunRow/finalizeRun path). Filter shape: `neq.true` on the
+        // JSON-extracted text. Real detection brackets have no such marker.
+        .not('durations_ms->>dry_run', 'eq', 'true')
         .order('detected_at', { ascending: false })
         .limit(20);
       if (error) throw error;
