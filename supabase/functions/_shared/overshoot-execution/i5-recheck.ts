@@ -55,6 +55,23 @@ export const OVERSHOOT_I5_REVERSION_TOLERANCE_PCT = 0.50;
  *  entry/exit constructors (single ratified value across intents). */
 export const OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS = 15_000;
 
+/** Snapshot age floor for the I5 pre-open quote read.
+ *
+ *  ACT-485 (Option B) — provenance: ACT-484 diagnosis observed sub-second
+ *  NEGATIVE snapshot ages at 09:31 ET first-light (rows: PLTR −277ms,
+ *  QCOM −81ms, STX −445ms, NEM −273ms, HPE −852ms, and similar). Root
+ *  cause is wall-clock skew between the edge-function server clock and
+ *  Polygon `lastQuote.t` event-time (Polygon marginally ahead by ~100ms
+ *  up to ~1s at market-open). Widening the acceptable lower bound from
+ *  0 to −1000ms absorbs the observed skew while preserving the 15s
+ *  upper bound as the true staleness cap. Ages outside [MIN, MAX] still
+ *  refuse `polygon_snapshot_stale`.
+ *
+ *  Scope discipline: Option B is I5-only per ACT-485. The
+ *  entry-/exit-price constructors keep [0, 15000] until a separate
+ *  amendment ratifies the same widening there. */
+export const OVERSHOOT_I5_SNAPSHOT_MIN_AGE_MS = -1_000;
+
 /** Minimum absolute overshoot magnitude ($) below which reversionPct
  *  is undefined and the module refuses. Guards against 0-denominator
  *  silent zero paths — a defence-in-depth alongside NaN checks. */
@@ -135,11 +152,13 @@ export function evaluateI5PreOpenRecheck(input: I5RecheckInput): I5RecheckResult
     };
   }
   const snapshotAgeMs = asOf.getTime() - capturedAt.getTime();
-  if (!Number.isFinite(snapshotAgeMs) || snapshotAgeMs > OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS || snapshotAgeMs < 0) {
+  if (!Number.isFinite(snapshotAgeMs)
+      || snapshotAgeMs > OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS
+      || snapshotAgeMs < OVERSHOOT_I5_SNAPSHOT_MIN_AGE_MS) {
     return {
       ok: false, side, reversionPct: null,
       refusal: 'polygon_snapshot_stale',
-      reason: `snapshot age ${snapshotAgeMs}ms outside [0, ${OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS}ms]`,
+      reason: `snapshot age ${snapshotAgeMs}ms outside [${OVERSHOOT_I5_SNAPSHOT_MIN_AGE_MS}, ${OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS}ms]`,
     };
   }
 
