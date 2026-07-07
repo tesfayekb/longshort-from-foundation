@@ -16,11 +16,16 @@
  *              exists in overshoot_study_runs, param_grid_hash prefix,
  *              outcome='completed'). ALSO imports the three W3.6.d-i
  *              exported constants
- *                OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS
+ *                OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG (per-side, ACT-471)
+ *                OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT (per-side, ACT-472)
  *                OVERSHOOT_EXIT_MARKETABLE_LIMIT_SLIPPAGE_BPS
  *                OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS
  *              so a d-i export drift surfaces at edge boot, not at first
- *              money-path fire.
+ *              money-path fire. T3a (ACT-480) — the uniform alias
+ *              OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS was DELETED at this
+ *              landing and computeSessionAge is called with the per-lot
+ *              side; INC-84 §5 probe envelope now echoes
+ *              RATIFIED_DETECTOR_VERSION on both alpaca + polygon probes.
  *   Probes   : body.probe short-circuits BEFORE the three skip gates.
  *              Returns probe-only envelope; no pipeline stage runs.
  *   Gates    : (i) kill-switch (strategy_key='overshoot' non-'active'),
@@ -97,11 +102,16 @@ import { OvershootAlpacaOrderSubmitter } from '../_shared/overshoot-broker/alpac
 import {
   RATIFIED_STUDY_RUN_ID,
   RATIFIED_PARAM_GRID_HASH_PREFIX,
+  RATIFIED_DETECTOR_VERSION,
 } from '../_shared/overshoot/detector/detector.ts';
 
 // ── W3.6.a intent / CID + W3.6.d-i module imports (boot-drift surface). ──
 import { buildOvershootClientOrderId, type OvershootSide } from '../_shared/overshoot-execution/client-order-id.ts';
-import { OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS, computeSessionAge, type OvershootMarketClockSnapshot } from '../_shared/overshoot-execution/session-age.ts';
+import { computeSessionAge, type OvershootMarketClockSnapshot } from '../_shared/overshoot-execution/session-age.ts';
+import {
+  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG,
+  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT,
+} from '../_shared/overshoot-execution/intents.ts';
 import {
   OVERSHOOT_EXIT_MARKETABLE_LIMIT_SLIPPAGE_BPS,
   OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS,
@@ -268,9 +278,23 @@ Deno.serve(createHandler(async (req: Request) => {
     // Drift-canary: the three d-i constants are statically imported above;
     // a `void` reference guarantees they are not tree-shaken and any
     // rename lands as a compile-time break at deploy, not at first fire.
-    void OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS;
+    void OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG;
+    void OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT;
     void OVERSHOOT_EXIT_MARKETABLE_LIMIT_SLIPPAGE_BPS;
     void OVERSHOOT_EXIT_SNAPSHOT_MAX_AGE_MS;
+
+    // T3a (ACT-480) — INC-84 §5 generalization: every engine's probe
+    // envelope echoes the ratified detector_version so deploys are
+    // self-attesting via unauthenticated probe rather than SHA stamp.
+    if (typeof RATIFIED_DETECTOR_VERSION !== 'string' || !/^[0-9a-f]{8}$/.test(RATIFIED_DETECTOR_VERSION)) {
+      await sql.end({ timeout: 5 });
+      console.error(JSON.stringify({
+        event: 'boot_assertion_failed_detector_version_malformed',
+        correlationId,
+        loaded_value_typeof: typeof RATIFIED_DETECTOR_VERSION,
+      }));
+      return apiError(500, 'boot_assertion_failed_detector_version_malformed', { correlationId });
+    }
 
     // ── (4) Probe short-circuit — BEFORE the three skip gates. ──────────
     if (probeMode !== undefined) {
@@ -285,6 +309,7 @@ Deno.serve(createHandler(async (req: Request) => {
             account_last4: acct.length >= 4 ? acct.slice(-4) : null,
             status: typeof account.status === 'string' ? account.status : null,
             paper: true, correlation_id: correlationId,
+            detector_version: RATIFIED_DETECTOR_VERSION,
           });
         } catch (e) {
           const detail =
@@ -304,6 +329,7 @@ Deno.serve(createHandler(async (req: Request) => {
           ok: true, probe: 'polygon',
           snapshot_present: snap !== null,
           correlation_id: correlationId,
+          detector_version: RATIFIED_DETECTOR_VERSION,
         });
       } catch (e) {
         console.error('[overshoot-exit-run] polygon probe failed:', String(e), { correlationId });
@@ -504,6 +530,7 @@ Deno.serve(createHandler(async (req: Request) => {
         const entryDate = earliest?.d ?? clockSnap.sessionDate;
         const age = computeSessionAge({
           entryDate,
+          side: m.side.toUpperCase() as 'LONG' | 'SHORT',
           spyPriorSessionDates: spyPriorSessionDates.map((r) => r.trade_date),
           clock: clockSnap,
         });
