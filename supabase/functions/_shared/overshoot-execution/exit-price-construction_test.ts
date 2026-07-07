@@ -59,9 +59,18 @@ Deno.test('refusal: stale snapshot (age > 15s) → polygon_snapshot_stale', () =
   assert(!r.ok); assertEquals(r.refusal, 'polygon_snapshot_stale');
 });
 
-Deno.test('refusal: negative snapshot age (clock skew) → polygon_snapshot_stale', () => {
-  const r = constructExitLimitPrice({ snapshot: snap(100, 100.1, -1000), side: 'LONG', asOf: ASOF });
+Deno.test('refusal: negative snapshot age beyond MIN bound → polygon_snapshot_stale', () => {
+  // ACT-486 (INC-91): MIN bound widened to -1000ms to absorb open-time
+  // wall-clock skew. Ages below MIN (e.g. -2000) still refuse.
+  const r = constructExitLimitPrice({ snapshot: snap(100, 100.1, -2000), side: 'LONG', asOf: ASOF });
   assert(!r.ok); assertEquals(r.refusal, 'polygon_snapshot_stale');
+});
+
+Deno.test('accept: negative snapshot age within MIN bound (ACT-486 widening)', () => {
+  // ageMs = -500 → snapshotAgeMs = -500 → inside [-1000, 15000], accept.
+  const r = constructExitLimitPrice({ snapshot: snap(100, 100.1, -500), side: 'LONG', asOf: ASOF });
+  assert(r.ok);
+  assertEquals(r.snapshotAgeMs, -500);
 });
 
 Deno.test('override slippage for A/B: 25 bps LONG', () => {
