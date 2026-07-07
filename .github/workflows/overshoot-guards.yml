@@ -32,7 +32,7 @@ jobs:
         run: deno test --allow-read scripts/check-overshoot-separation_test.ts
       - name: Test overshoot fetchers
         run: deno test --allow-read --allow-net supabase/functions/_shared/overshoot/
-      - name: INC-90 gate — no NULL:: placeholders in overshoot money-path handlers
+      - name: "INC-90 gate — no NULL:: placeholders in overshoot money-path handlers"
         run: |
           # INC-90 standing invariant (ACT-485) — NULL::<type> placeholders
           # in overshoot execution handlers are FORBIDDEN as a silent-
@@ -50,7 +50,7 @@ jobs:
             exit 1
           fi
           echo "INC-90 gate clean: no NULL:: placeholders in overshoot money-path handlers."
-      - name: INC-91 gate — no numeric-literal snapshot-age bounds outside single-home
+      - name: "INC-91 gate — no numeric-literal snapshot-age bounds outside single-home"
         run: |
           # INC-91 standing invariant (ACT-486) — snapshot-age comparisons
           # in _shared/overshoot-execution/ MUST import
