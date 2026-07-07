@@ -5,9 +5,13 @@
 import { assertEquals, assert } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   computeSessionAge,
-  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS,
   type OvershootMarketClockSnapshot,
 } from './session-age.ts';
+import {
+  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG,
+  OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT,
+  holdingSessionsForSide,
+} from './intents.ts';
 
 const openClock = (
   sessionDate: string,
@@ -20,12 +24,26 @@ const openClock = (
   ...opts,
 });
 
-Deno.test('constant re-export = 5 (P-B#3 ratified uniform T+5)', () => {
-  assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS, 5);
+Deno.test('T3a (ACT-480): per-side horizons via holdingSessionsForSide — LONG=10, SHORT=5', () => {
+  assertEquals(holdingSessionsForSide('LONG'), OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG);
+  assertEquals(holdingSessionsForSide('SHORT'), OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT);
+  assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG, 10);
+  assertEquals(OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT, 5);
+});
+
+Deno.test('T3a: alias OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS absent from session-age.ts source', async () => {
+  const src = await Deno.readTextFile(new URL('./session-age.ts', import.meta.url));
+  // Alias may appear in prose (docstring/comment) but MUST NOT be
+  // imported, re-exported, or referenced as a value in this module.
+  const noComments = src.split('\n')
+    .filter((l) => !/^\s*\*/.test(l) && !/^\s*\/\//.test(l))
+    .join('\n');
+  assertEquals(noComments.includes('OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS'), false,
+    'alias must not be a value reference in session-age.ts (T3a — ACT-480)');
 });
 
 Deno.test('refusal: null clock → market_clock_unavailable (never assume open)', () => {
-  const r = computeSessionAge({ entryDate: '2026-06-15', spyPriorSessionDates: [], clock: null });
+  const r = computeSessionAge({ entryDate: '2026-06-15', side: 'SHORT', spyPriorSessionDates: [], clock: null });
   assert(!r.ok);
   assertEquals(r.refusal, 'market_clock_unavailable');
 });
@@ -33,6 +51,7 @@ Deno.test('refusal: null clock → market_clock_unavailable (never assume open)'
 Deno.test('refusal: holiday → market_closed', () => {
   const r = computeSessionAge({
     entryDate: '2026-06-15',
+    side: 'SHORT',
     spyPriorSessionDates: ['2026-06-16', '2026-06-17', '2026-06-18'],
     clock: openClock('2026-06-19', { isHoliday: true }),
   });
@@ -43,6 +62,7 @@ Deno.test('refusal: holiday → market_closed', () => {
 Deno.test('refusal: market closed (weekend / after-hours) → market_closed', () => {
   const r = computeSessionAge({
     entryDate: '2026-06-15',
+    side: 'SHORT',
     spyPriorSessionDates: [],
     clock: openClock('2026-06-20', { isMarketOpen: false }),
   });
@@ -52,7 +72,7 @@ Deno.test('refusal: market closed (weekend / after-hours) → market_closed', ()
 
 Deno.test('refusal: malformed date rejected', () => {
   const r = computeSessionAge({
-    entryDate: '2026/06/15', spyPriorSessionDates: [], clock: openClock('2026-06-15'),
+    entryDate: '2026/06/15', side: 'SHORT', spyPriorSessionDates: [], clock: openClock('2026-06-15'),
   });
   assert(!r.ok);
   assertEquals(r.refusal, 'malformed_session_date');
@@ -60,10 +80,17 @@ Deno.test('refusal: malformed date rejected', () => {
 
 Deno.test('refusal: entry in the future → entry_date_in_future', () => {
   const r = computeSessionAge({
-    entryDate: '2026-06-20', spyPriorSessionDates: [], clock: openClock('2026-06-15'),
+    entryDate: '2026-06-20', side: 'SHORT', spyPriorSessionDates: [], clock: openClock('2026-06-15'),
   });
   assert(!r.ok);
   assertEquals(r.refusal, 'entry_date_in_future');
+});
+
+Deno.test('T3a: malformed side rejected', () => {
+  // deno-lint-ignore no-explicit-any
+  const r = computeSessionAge({ entryDate: '2026-06-15', side: 'BOTH' as any, spyPriorSessionDates: [], clock: openClock('2026-06-16') });
+  assert(!r.ok);
+  assertEquals(r.refusal, 'malformed_session_date');
 });
 
 // ---------- PIN-1 FIXTURE PROOF (do not weaken) ----------
@@ -89,6 +116,7 @@ Deno.test('refusal: entry in the future → entry_date_in_future', () => {
 Deno.test('PIN-1: Friday cron (5th holding day) — ordinal=5, fires; sixth-day late-fire prevented', () => {
   const fri = computeSessionAge({
     entryDate: '2026-06-15',
+    side: 'SHORT',
     spyPriorSessionDates: ['2026-06-16', '2026-06-17', '2026-06-18'],
     clock: openClock('2026-06-19'),
   });
@@ -102,6 +130,7 @@ Deno.test('PIN-1: Friday cron (5th holding day) — ordinal=5, fires; sixth-day 
 Deno.test('PIN-1: Thursday cron (4th holding day) — does NOT fire', () => {
   const thu = computeSessionAge({
     entryDate: '2026-06-15',
+    side: 'SHORT',
     spyPriorSessionDates: ['2026-06-16', '2026-06-17'],
     clock: openClock('2026-06-18'),
   });
@@ -122,6 +151,7 @@ Deno.test('PIN-1 (canonical): Monday entry → shouldFireTimeExit boundary is Fr
   const fires = ladder.map((tick) => {
     const r = computeSessionAge({
       entryDate,
+      side: 'SHORT',
       spyPriorSessionDates: tick.settled,
       clock: openClock(tick.clock),
     });
@@ -139,9 +169,62 @@ Deno.test('PIN-1 (canonical): Monday entry → shouldFireTimeExit boundary is Fr
   );
 });
 
+// ---------- T3a: per-side horizon proofs (ACT-480) ----------
+// LONG H=10 (ACT-471): a LONG lot at ordinal 5 (SHORT's fire day) MUST
+// NOT fire; the LONG fire boundary is ordinal 10. This pins the exact
+// defect the alias-uniform-at-5 wiring produced: LONG lots silently
+// exiting at SHORT's horizon.
+
+Deno.test('T3a LONG: does NOT fire at ordinal 5 (SHORT boundary) — LONG horizon is 10', () => {
+  const fri = computeSessionAge({
+    entryDate: '2026-06-15',
+    side: 'LONG',
+    spyPriorSessionDates: ['2026-06-16', '2026-06-17', '2026-06-18'],
+    clock: openClock('2026-06-19'),
+  });
+  assert(fri.ok);
+  assertEquals(fri.holdingDayOrdinal, 5);
+  assertEquals(fri.shouldFireTimeExit, false,
+    'LONG must NOT fire at ordinal 5 — that was the alias-uniform defect T3a corrects');
+});
+
+Deno.test('T3a LONG: fires at ordinal 10 (LONG horizon, ACT-471)', () => {
+  // Two calendar weeks after Mon 06-15 → Fri 06-26 is the 10th holding day.
+  const settled = [
+    '2026-06-16','2026-06-17','2026-06-18','2026-06-19',
+    '2026-06-22','2026-06-23','2026-06-24','2026-06-25',
+  ];
+  const r = computeSessionAge({
+    entryDate: '2026-06-15',
+    side: 'LONG',
+    spyPriorSessionDates: settled,
+    clock: openClock('2026-06-26'),
+  });
+  assert(r.ok);
+  assertEquals(r.holdingDayOrdinal, 10);
+  assertEquals(r.shouldFireTimeExit, true);
+});
+
+Deno.test('T3a LONG: ordinal 9 does NOT fire (fire boundary is strictly at 10)', () => {
+  const settled = [
+    '2026-06-16','2026-06-17','2026-06-18','2026-06-19',
+    '2026-06-22','2026-06-23','2026-06-24',
+  ];
+  const r = computeSessionAge({
+    entryDate: '2026-06-15',
+    side: 'LONG',
+    spyPriorSessionDates: settled,
+    clock: openClock('2026-06-25'),
+  });
+  assert(r.ok);
+  assertEquals(r.holdingDayOrdinal, 9);
+  assertEquals(r.shouldFireTimeExit, false);
+});
+
 Deno.test('PIN-2: minutesToClose surfaced verbatim for W5 measurement', () => {
   const r = computeSessionAge({
     entryDate: '2026-06-15',
+    side: 'SHORT',
     spyPriorSessionDates: ['2026-06-16', '2026-06-17', '2026-06-18'],
     clock: openClock('2026-06-19', { minutesToClose: 70 }),
   });
@@ -152,6 +235,7 @@ Deno.test('PIN-2: minutesToClose surfaced verbatim for W5 measurement', () => {
 Deno.test('dedup: duplicate SPY dates counted once', () => {
   const r = computeSessionAge({
     entryDate: '2026-06-15',
+    side: 'SHORT',
     spyPriorSessionDates: ['2026-06-16', '2026-06-16', '2026-06-17'],
     clock: openClock('2026-06-18'),
   });
@@ -162,6 +246,7 @@ Deno.test('dedup: duplicate SPY dates counted once', () => {
 Deno.test('in-progress session already in settled set → not double-counted', () => {
   const r = computeSessionAge({
     entryDate: '2026-06-15',
+    side: 'SHORT',
     spyPriorSessionDates: ['2026-06-16', '2026-06-17', '2026-06-18'],
     clock: openClock('2026-06-18'),
   });
@@ -173,6 +258,7 @@ Deno.test('in-progress session already in settled set → not double-counted', (
 Deno.test('SPY dates <= entryDate ignored', () => {
   const r = computeSessionAge({
     entryDate: '2026-06-15',
+    side: 'SHORT',
     spyPriorSessionDates: ['2026-06-12', '2026-06-15', '2026-06-16'],
     clock: openClock('2026-06-17'),
   });
