@@ -20,6 +20,30 @@
 
 ---
 
+### INC-89 (2026-07-07): §9.1a DevTools resume-loop script reads WRONG envelope field names — `source_run_id` / `rows_written` / `distinct_tickers` instead of the handler's actual `run_id` / `row_count` / `ticker_count` — so the loop's printed `TOTALS` and `RUN_IDS` lines were zero/empty even though every per-invocation raw JSON log was correct.
+
+**Discovery context:** ACT-482 milestone-evening §9.1a (this session). The operator ran the 21-invocation SI-refresh loop; the final summary lines printed `TOTALS rows_written=0 distinct_tickers=0 si_unavailable_count=0 invocations=21` and `RUN_IDS ` (empty) despite the DB confirming 5,034 rows and 839 distinct tickers written. Root cause: the DevTools snippet destructures fields that don't exist in the handler envelope. Handler envelope keys: `run_id`, `ticker_count`, `row_count`, `si_unavailable_count`, `shares_unavailable_count`, `last_cursor`, `done`, `outcome`, `correlation_id`. Snippet keys: `source_run_id`, `rows_written`, `distinct_tickers` — three drifted names.
+
+**Blast radius:** ZERO to the money path. The raw JSON envelope is `console.log`-echoed by `callFn` on every invocation, so evidence reconstruction is trivial (as executed this session). The defect is a docs-quality issue: operators cannot rely on the `TOTALS`/`RUN_IDS` summary lines as evidence; they must always paste the per-invocation JSON.
+
+**Fix (deferred, docs-only):** rename the three keys in the §9.1a snippet in `docs/04-modules/overshoot/overshoot.md` — `source_run_id → run_id`, `rows_written → row_count`, `distinct_tickers → ticker_count`. Zero code impact.
+
+**Status:** OPEN; scheduled for a future docs turn. Not blocking.
+
+---
+
+### INC-88 (2026-07-07): background React Query poll from the longshort console (`GET /rest/v1/kill_switches?select=state&strategy_key=eq.longshort`) returns HTTP 403 for operators whose RBAC grants only `overshoot.*` permissions — not a defect in overshoot; a longshort-panel RLS scope surfaced by cross-panel operator sessions.
+
+**Discovery context:** ACT-482 milestone-evening (this session). The DevTools console repeatedly logged the 403 while the operator was on `/trading/overshoot/portfolio` because the longshort console mounts a shared `useKillSwitchState('longshort')` poll regardless of the active panel. The `kill_switches` row for `strategy_key='longshort'` is (correctly) not readable by an operator without any `longshort.*` permission.
+
+**Blast radius:** ZERO to any overshoot money path. The 403 is a longshort-panel console-noise / architectural-scope issue: (a) a longshort poll should not mount from an overshoot route, OR (b) the longshort kill-switch RLS policy should also admit `overshoot.*` operators for read-only observation. Both are longshort-side changes.
+
+**Fix (deferred):** longshort-panel scoping — either gate the poll on `has_permission('longshort.view')` at the hook, or scope the mount to routes under `/trading/longshort/*`. Recommended path (a) for tighter separation. Docs-only for now; code fix owned by longshort next time longshort work opens.
+
+**Status:** OPEN; not blocking overshoot. Assigned to longshort backlog.
+
+---
+
 ### INC-87 (2026-07-07): overshoot-entry-run sizing denominator is per-side SELECTION COUNT (`index.ts:588` — `capacityPerSide = sideUpper === 'LONG' ? longSelections.length : shortSelections.length`), NOT the ratified per-side capacity constants (`OVERSHOOT_CAPACITY_LONG=36` / `OVERSHOOT_CAPACITY_SHORT=4`) — latent Tier-A concentration defect (register-before-fix; structural repair scheduled for T3b).
 
 **Discovery context:** FP-069 W3.8 T3 STEP A census (ACT-480 A3, this landing). The A3 read of the entry-run wiring surface intended to enumerate the sites T3b would flip from the deprecated uniform sizing symbol to `OVERSHOOT_CAPACITY_LONG` / `OVERSHOOT_CAPACITY_SHORT`. The census found that the deployed handler does not read a capacity constant at all: the per-name equal-notional formula's denominator is `longSelections.length` (or `shortSelections.length`), i.e. whichever count the detector produced this tick. Supervisor confirmed the site at `supabase/functions/overshoot-entry-run/index.ts:588`.
