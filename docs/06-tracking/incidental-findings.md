@@ -1,3 +1,25 @@
+### INC-84 §5 GENERALIZATION FINALIZED (2026-07-07, ACT-480 T3c): all three overshoot money engines' probe envelopes carry `detector_version: RATIFIED_DETECTOR_VERSION` — deploy attestation is uniform bundle-content self-echo.
+
+**Context:** T2.4 (ACT-479) landed the standing rule and implemented it in `overshoot-detection-run` via the `dry_run_evidence.detector_version` echo. T3a (ACT-480) added the alpaca+polygon probe-envelope echo to `overshoot-exit-run`. T3b (ACT-480) added the identical echo to `overshoot-entry-run` (probes + selection preview). T3c (this landing) closes the surface by adding the same echo to `overshoot-detection-run`'s alpaca AND polygon probe envelopes — parity with the dry-run envelope echo already in place, so BOTH authentication surfaces on detection-run self-attest.
+
+**Standing rule quoted verbatim (from the original INC-84 landing, in force):** "deploy attestation = **BEHAVIORAL content probe** (an output shape only the new bundle can produce) **OR** a **bundle-content version echo** in the response envelope. The stamp comparison is **DEMOTED to advisory**."
+
+**Coverage matrix (post-T3c):**
+
+| Engine | Probe alpaca | Probe polygon | Dry-run/preview envelope | Boot assertion |
+|---|---|---|---|---|
+| overshoot-detection-run | ✓ (T3c) | ✓ (T3c) | ✓ dry_run_evidence.detector_version (T2.4) | ✓ (T2.4) |
+| overshoot-entry-run     | ✓ (T3b) | ✓ (T3b) | ✓ selection-preview envelope (T3b) | ✓ (T3b) |
+| overshoot-exit-run      | ✓ (T3a) | ✓ (T3a) | n/a (no dry-run branch) | ✓ (T3a) |
+
+**Stamp gate advisory:** `scripts/check-deployed-sha.ts` remains DEMOTED; its docstring update is deferred until T4 sweeps consumers. Any promotion checklist replaces the stamp check with (a) authenticated probe returning `detector_version === RATIFIED_DETECTOR_VERSION`, OR (b) a behavioral content probe unique to the new bundle. Every deploy from ACT-480 onward provides evidence via (a).
+
+**Status:** GENERALIZATION FINALIZED. INC-84 itself remains OPEN pending T4 documentation sweep on stamp-check consumers; the CONTENT rule is fully operational across all three engines.
+
+**Cross-references:** ACT-479 T2.4-STEP3 (rule + first implementation); ACT-480 T3a/T3b/T3c (per-engine landings); `supabase/functions/overshoot-{detection,entry,exit}-run/index.ts` (probe branches carrying `detector_version: RATIFIED_DETECTOR_VERSION`).
+
+---
+
 ### INC-87 (2026-07-07): overshoot-entry-run sizing denominator is per-side SELECTION COUNT (`index.ts:588` — `capacityPerSide = sideUpper === 'LONG' ? longSelections.length : shortSelections.length`), NOT the ratified per-side capacity constants (`OVERSHOOT_CAPACITY_LONG=36` / `OVERSHOOT_CAPACITY_SHORT=4`) — latent Tier-A concentration defect (register-before-fix; structural repair scheduled for T3b).
 
 **Discovery context:** FP-069 W3.8 T3 STEP A census (ACT-480 A3, this landing). The A3 read of the entry-run wiring surface intended to enumerate the sites T3b would flip from the deprecated uniform sizing symbol to `OVERSHOOT_CAPACITY_LONG` / `OVERSHOOT_CAPACITY_SHORT`. The census found that the deployed handler does not read a capacity constant at all: the per-name equal-notional formula's denominator is `longSelections.length` (or `shortSelections.length`), i.e. whichever count the detector produced this tick. Supervisor confirmed the site at `supabase/functions/overshoot-entry-run/index.ts:588`.
