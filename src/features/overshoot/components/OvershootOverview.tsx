@@ -303,6 +303,12 @@ export function OvershootOverview() {
                       : `identity mismatch: ${latest.selected_count} + ${refused} ≠ ${latest.event_count}`}
                   </Badge>
                 </div>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-xs text-muted-foreground">tier snapshot:</span>
+                  <Badge variant="default" className="font-mono text-[10px]">T1 long: {tierT1}</Badge>
+                  <Badge variant="secondary" className="font-mono text-[10px]">T2 long: {tierT2}</Badge>
+                  <Badge variant="outline" className="font-mono text-[10px]">SHORT: {tierShort}</Badge>
+                </div>
               </div>
             )}
           </CardContent>
