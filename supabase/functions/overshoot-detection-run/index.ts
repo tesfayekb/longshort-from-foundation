@@ -714,3 +714,62 @@ async function finalizeRun(
      WHERE run_id = ${runId}::uuid
   `;
 }
+
+// FP-069 W3.8 T2.4 (ACT-479) — dry-run envelope evidence builder.
+// Pure, side-effect-free; consumes the in-memory detector output only.
+// Produces the INC-84 §5 bundle-content proof (detector_version echo) +
+// tier snapshot (LONG T1 / LONG T2 / SHORT counts + rank_score stats per
+// tier) + full selected[] with tier / rank_score / study_cell_ref.
+function buildDryRunEvidence(
+  events: readonly DetectedEvent[],
+  selected: readonly DetectedEvent[],
+): {
+  detector_version: string;
+  ratified_study_run_id: string;
+  ratified_param_grid_hash_prefix: string;
+  tier_snapshot: {
+    long_t1_candidates: number;
+    long_t2_candidates: number;
+    short_candidates: number;
+    long_t1_selected: number;
+    long_t2_selected: number;
+    short_selected: number;
+    rank_score_by_tier: Record<'LONG_T1' | 'LONG_T2' | 'SHORT', { count: number; mean: number | null; min: number | null; max: number | null }>;
+  };
+  selected: Array<{ ticker: string; side: Side; tier: 'T1' | 'T2' | null; rank_score: number | null; study_cell_ref: StudyCellKey | null }>;
+} {
+  const longT1Cand = events.filter((e) => e.side === 'LONG' && e.tier === 'T1');
+  const longT2Cand = events.filter((e) => e.side === 'LONG' && e.tier === 'T2');
+  const shortCand  = events.filter((e) => e.side === 'SHORT');
+  const longT1Sel  = selected.filter((e) => e.side === 'LONG' && e.tier === 'T1');
+  const longT2Sel  = selected.filter((e) => e.side === 'LONG' && e.tier === 'T2');
+  const shortSel   = selected.filter((e) => e.side === 'SHORT');
+  const rsStats = (rows: readonly DetectedEvent[]) => {
+    const scores = rows.map((e) => e.rank_score).filter((s): s is number => s !== null);
+    if (scores.length === 0) return { count: rows.length, mean: null, min: null, max: null };
+    const sum = scores.reduce((a, b) => a + b, 0);
+    return { count: rows.length, mean: sum / scores.length, min: Math.min(...scores), max: Math.max(...scores) };
+  };
+  return {
+    detector_version: RATIFIED_DETECTOR_VERSION,
+    ratified_study_run_id: RATIFIED_STUDY_RUN_ID,
+    ratified_param_grid_hash_prefix: RATIFIED_PARAM_GRID_HASH_PREFIX,
+    tier_snapshot: {
+      long_t1_candidates: longT1Cand.length,
+      long_t2_candidates: longT2Cand.length,
+      short_candidates:   shortCand.length,
+      long_t1_selected:   longT1Sel.length,
+      long_t2_selected:   longT2Sel.length,
+      short_selected:     shortSel.length,
+      rank_score_by_tier: {
+        LONG_T1: rsStats(longT1Sel),
+        LONG_T2: rsStats(longT2Sel),
+        SHORT:   rsStats(shortSel),
+      },
+    },
+    selected: selected.map((e) => ({
+      ticker: e.ticker, side: e.side, tier: e.tier,
+      rank_score: e.rank_score, study_cell_ref: e.study_cell_ref,
+    })),
+  };
+}
