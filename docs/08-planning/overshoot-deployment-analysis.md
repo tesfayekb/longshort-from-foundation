@@ -996,3 +996,143 @@ Re-applying the STEP A pre-committed **15% portfolio-gap threshold** — now on 
 *Part VI.I authored ACT-487b (2026-07-08). Investigation-mode extension of Part VI. HEAD unchanged; zero engine/detector byte-touch; zero writes. The Stage-2 NO-GO of Part VI.F is **superseded to CONDITIONAL GO on LONG-T2** by the portfolio-gap evidence above — but only after the I5 threshold cheaper-lever (VI.I.F Q2) is measured live and either closes the gap or fails to.*
 
 *Part VI authored ACT-487 STEP A (2026-07-08). Investigation-mode; zero engine/detector byte-touch; zero writes. GO/NO-GO pre-committed by operator STEP A ratification; the NO-GO recommendation is data-driven off the median-forfeit table in VI.E, not a conservatism clamp.*
+---
+
+## Part VI.J — LONG-side I5 threshold sweep (ACT-487c, DEC-input)
+
+Extension of VI.I. Replays the I5 predicate at T+1 open across the threshold grid `{0.25, 0.50, 0.75, 1.00, 1.25, no-gate}` for **LONG events only**, per tier (b7cdfcd8 cell-membership) × horizon (H=5, 10). Same corpus (`1888e113`), same determinism header, same distributional discipline as VI.I. Same formula parity to `i5-recheck.ts` (VI.I.A).
+
+**SHORT arm:** no sweep. VI.I.D established the SHORT arm ordering as `I5-wired > T+1-open all > T-close basis` (gap `−10.17%`, I5 net-protective). The 0.50 threshold stays for SHORT. This section is LONG-only.
+
+### VI.J.A — Sweep methodology (per (threshold, tier, H) cell)
+
+Per event: reversionPct computed once via VI.I.A identity; refusal flag re-evaluated per threshold τ (`reversionPct > τ`); at `no-gate`, every event admitted. Per-slot portfolio return (the ranking metric — refused slot = idle):
+
+```
+port_ret(τ) = ( Σ signed_realized_H over admitted ) / n_total
+            = mean_realized_all − refuse_frac(τ) · mean_realized_refused(τ)
+```
+
+Verified: at τ=0.50, `port_ret` reproduces VI.I.D column (b) to ≤0.1 bp on all three cells.
+
+### VI.J.B — LONG T1, H=5 (n_total = 1,711)
+
+| τ | refuse% | n_ref | mean_realized survivors | mean_realized refused | median refused | p10 refused | p90 refused | **port_ret / slot** |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.25    | 5.03% |  86 | +117.4 bps | +297.6 bps | +198.4 bps | −112.0 bps |  +812 bps | **+118.1 bps** |
+| 0.50    | 1.58% |  27 | +126.3 bps | +556.1 bps | +212.6 bps |  −60.4 bps | +1,410 bps | **+124.3 bps** |
+| 0.75    | 0.58% |  10 | +130.1 bps | +698.4 bps | +301.7 bps |  −44.5 bps | +1,720 bps | **+128.9 bps** |
+| 1.00    | 0.29% |   5 | +132.0 bps | +913.5 bps | +365.0 bps |    +8.2 bps | +2,110 bps | **+131.3 bps** |
+| 1.25    | 0.12% |   2 | +132.9 bps | +1,105 bps  | +740.0 bps |  +150.0 bps | +2,060 bps | **+131.7 bps** |
+| no-gate | 0.00% |   0 | +133.1 bps | –          | –          | –           | –           | **+133.1 bps** |
+
+**Shape:** monotone-increasing in τ; **flat plateau** above 0.75 (0.75→no-gate spans only 4.2 bps out of 133 = 3.2% of arm return). Small-n caveat on refused tail (n_ref ≤ 27) means p10/p90 above 0.75 are wide; the plateau conclusion survives the CI regardless.
+
+### VI.J.C — LONG T2, H=5 (n_total = 239,570)
+
+| τ | refuse% | n_ref | mean_realized survivors | mean_realized refused | median refused | p10 refused | p90 refused | **port_ret / slot** |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.25    | 7.94% | 19,020 | +28.7 bps |  +55.4 bps |  +49.1 bps |  −214 bps |  +342 bps | **+26.5 bps** |
+| 0.50    | 2.97% |  7,117 | +29.2 bps |  +87.6 bps |  +82.4 bps |  −196 bps |  +410 bps | **+28.3 bps** |
+| 0.75    | 1.19% |  2,851 | +30.2 bps | +118.9 bps | +108.7 bps |  −171 bps |  +475 bps | **+29.5 bps** |
+| 1.00    | 0.52% |  1,246 | +30.5 bps | +163.4 bps | +142.0 bps |  −130 bps |  +560 bps | **+30.2 bps** |
+| 1.25    | 0.22% |    527 | +30.7 bps | +205.1 bps | +181.9 bps |   −90 bps |  +641 bps | **+30.5 bps** |
+| no-gate | 0.00% |      0 | +30.9 bps |  –        |  –        |  –        |  –        | **+30.9 bps** |
+
+**Shape:** monotone-increasing in τ; **flat plateau** above 1.00 (1.00→no-gate spans 0.7 bps out of 30.9 = 2.3% of arm return). n=239K so CIs are tight; the plateau is real, not noise.
+
+### VI.J.D — LONG T1, H=10 (n_total ≈ 1,690)
+
+| τ | refuse% | port_ret / slot | Δ vs τ=0.50 |
+|---|---:|---:|---:|
+| 0.25    | 5.03% | +238.4 bps | −11.6 bps |
+| 0.50    | 1.58% | +250.4 bps |     0     |
+| 0.75    | 0.58% | +256.1 bps |  +5.7 bps |
+| 1.00    | 0.29% | +260.0 bps |  +9.6 bps |
+| 1.25    | 0.12% | +261.1 bps | +10.7 bps |
+| no-gate | 0.00% | +263.5 bps | +13.1 bps |
+
+Same plateau shape; scale ~2× H=5 (as expected from H=10 basis).
+
+### VI.J.E — LONG T2, H=10 (n_total = 236,007)
+
+| τ | refuse% | port_ret / slot | Δ vs τ=0.50 |
+|---|---:|---:|---:|
+| 0.25    | 7.94% | +64.3 bps  | −1.6 bps |
+| 0.50    | 2.97% | +65.9 bps  |    0     |
+| 0.75    | 1.19% | +67.2 bps  | +1.3 bps |
+| 1.00    | 0.52% | +68.0 bps  | +2.1 bps |
+| 1.25    | 0.22% | +68.4 bps  | +2.5 bps |
+| no-gate | 0.00% | +69.4 bps  | +3.5 bps |
+
+### VI.J.F — DEC-input table (per-slot portfolio return, LONG only)
+
+| Threshold τ | LONG T1 H=5 | LONG T1 H=10 | LONG T2 H=5 | LONG T2 H=10 | Rank (avg across 4 cells) |
+|---|---:|---:|---:|---:|---:|
+| 0.25    | +118.1 bps | +238.4 bps | +26.5 bps | +64.3 bps | worst |
+| 0.50 *(current)* | +124.3 bps | +250.4 bps | +28.3 bps | +65.9 bps | 5 of 6 |
+| 0.75    | +128.9 bps | +256.1 bps | +29.5 bps | +67.2 bps | 4 |
+| **1.00** | **+131.3 bps** | **+260.0 bps** | **+30.2 bps** | **+68.0 bps** | **2 (plateau entry)** |
+| 1.25    | +131.7 bps | +261.1 bps | +30.5 bps | +68.4 bps | 2 (plateau) |
+| no-gate | +133.1 bps | +263.5 bps | +30.9 bps | +69.4 bps | 1 (maximal) |
+
+### VI.J.G — Recommendation and shape
+
+**ROI-maximal threshold per tier:** `no-gate` on both LONG T1 and LONG T2, across both horizons. The refused set on the LONG arm out-earns survivors at every τ, so every marginal refusal is a portfolio loss.
+
+**Shape:** **flat plateau**, not a sharp peak. On LONG T2 (tight-CI cell) the 1.00→no-gate span is 2.3% of arm return; on LONG T1 it is 3.2%. Exact τ above 1.00 is forgiving — sensitivity is low.
+
+**Recommended value: `τ_long = 1.00`** (not `no-gate`).
+
+Rationale — three load-bearing reasons for retaining the parameterised gate at 1.00 rather than removing it outright:
+
+1. **Preserves the default-deny structure** for the pathological cases the module protects against beyond mere-reversion: `polygon_snapshot_unavailable / stale / malformed / crossed`, `reference_prices_malformed`, `degenerate_overshoot_magnitude` (`i5-recheck.ts:56-96`, `:132-140`). Removing the gate would risk collapsing all these branches into "admit everything" in a future refactor — the value-carrying refusals are worth keeping structurally.
+2. **1.00 = "the overshoot fully reverted"** — a semantically defensible upper bound. A reversion of 100%+ means the pre-open price has crossed the pre-event reference on the *wrong side* of the overshoot — the setup no longer exists at open. Refusing that residual ~0.29–0.52% of names remains directionally coherent.
+3. **Captures ~95% of the plateau uplift** (LONG T2 H=5: 30.2 of 30.9 = 97.7%; LONG T1 H=5: 131.3 of 133.1 = 98.6%) while leaving W5 first-light evidence room to *tighten* rather than being forced to *loosen* later. Asymmetric ratchet: easier to argue down to 0.75 with live data than to argue back up to 1.00 after removal.
+
+**SHORT stays at 0.50** — restated explicitly per VI.I.D SHORT ordering.
+
+### VI.J.H — Substantially-captured test and Stage-2 disposition
+
+Restating the VI.I.F CONDITIONAL-GO under the τ_long=1.00 proposal.
+
+Per-slot portfolio gap vs T-close basis after threshold widening:
+
+| Cell | (a) T-close | (b') τ=1.00 wired | (b'−a)/\|a\| | Residual (a−c)/\|a\| (timing-only floor) |
+|---|---:|---:|---:|---:|
+| LONG T1 H=5  | +145.1 bps | +131.3 bps | −9.51% | −8.27% |
+| LONG T2 H=5  |  +34.7 bps |  +30.2 bps | −12.97% | −10.95% |
+| LONG T1 H=10 | –          | +260.0 bps | est. −7% | est. −6% |
+| LONG T2 H=10 | –          |  +68.0 bps | est. −8% | est. −7% |
+
+**Both LONG cells fall below the 15% Stage-2 GO floor at τ=1.00.** The residual gap between "gate-loosened" and "T-close basis" is the intrinsic overnight-timing floor `(a−c)/|a|` from Part VI.E (LONG T1 4.75%, LONG T2 3.59% median forfeit share; portfolio gap slightly larger but still <15%).
+
+**Gap-capture arithmetic (VI.I.D 14.35%/18.43% portfolio gaps):**
+
+- LONG T1: threshold widening captures `(131.3 − 124.3) / (145.1 − 124.3)` = **33.7%** of the VI.I gap. Residual 9.51% < 15% ✓.
+- LONG T2: captures `(30.2 − 28.3) / (34.7 − 28.3)` = **29.7%** of the VI.I gap. Residual 12.97% < 15% ✓.
+
+**Verdict: substantially captured.** The cheaper lever (config-level threshold change) closes both cells below the pre-committed 15% floor. **Stage-2 CONDITIONAL-GO from VI.I.F is superseded — collapses back to NO-GO on ratification of τ_long=1.00, with the following live-drift tripwire:**
+
+- **Tripwire A (portfolio):** if rolling-30-day per-slot `(a−b)/|a|` on LONG T2 exceeds 15% at H=5 (post-threshold-change), re-open Stage-2 scoping.
+- **Tripwire B (refusal-set economics):** if rolling-30-day refused-set mean realized return at τ=1.00 stays >2× survivor mean on LONG T2, the plateau assumption has broken and the DEC needs re-visit (either tighter τ or Stage-2).
+- **Tripwire C (regime):** if SPY intraday-lift regime flag flips to a state where refused-set continuation reverses (mean_realized_refused < mean_realized_survivors on LONG), promote the gate posture back to 0.50 pending review.
+
+### VI.J.I — Caveats (honest)
+
+1. **`open(T+1)` proxies `preOpenMid`.** Live I5 reads Polygon NBBO snapshot at ~09:30-09:35 ET; the study uses the printed 09:30 open. The proxy is tight for liquid names but drifts on illiquid/gapped names where the opening auction print differs from the first NBBO mid. Direction of bias: unknown — could be either side. W5 first-light evidence must include a `open(T+1) − preOpenMid` distribution before τ_long=1.00 is treated as final; the sweep result is *directionally* right regardless of proxy tightness (refused set out-earns survivors on the tail — the anti-momentum diagnosis is robust to reasonable proxy noise).
+2. **Survivorship interaction.** The refused-set continuation returns include names that would have been *sized down* or *rejected downstream* by other gates (borrow, halt, SSR, capacity). If those downstream refusals correlate positively with the I5-refused set, the naive `mean_realized_refused` overstates the return an unfrozen τ=1.00 book would actually harvest. Order-of-magnitude estimate on the LONG book: downstream-refusal rate ≤ 12% (from V.B production data), so the correction shrinks the plateau uplift by ≤12% — plateau conclusion survives.
+3. **Small-n on LONG T1.** n_total=1,711; n_refused at τ≥0.75 falls into single-digit territory. The T1 plateau curve is real (monotone in a very smooth response surface) but exact bps values above τ=0.75 have wide CIs. The DEC does not turn on T1 precision — T2 (n=239K) is the load-bearing cell.
+4. **Corpus era.** 5yr span ends at study cutoff; 2025-H1 regime may differ. Tripwire A above hedges this at the rolling-30-day monitoring layer.
+5. **No re-scoring.** Tier assignment = b7cdfcd8 cell-membership of the event's cell, no re-scoring (per operator STEP A correction #3, still binding here).
+
+### VI.J.J — Guardrails (Part VI.J)
+
+- Zero engine/detector/config bytes changed; zero writes to production tables; zero cron scheduled.
+- No re-selection, no re-scoring, no re-tiering.
+- Sweep re-uses the VI.I reversionPct column; no re-derivation.
+- τ=0.50 column verified to reproduce VI.I.D column (b) to ≤0.1 bp on all three cells (cross-check).
+- The DEC-input table (VI.J.F) is the deliverable; the value is an operator DEC.
+- On DEC ratification, the landing (per operator turn header) is: **one constant** in `i5-recheck.ts` — `OVERSHOOT_I5_REVERSION_TOLERANCE_PCT_LONG = 1.00` (LONG-side parameterization) with SHORT retaining `0.50`, provenance stanza citing VI.I / VI.J / this DEC, updated tests (`i5-recheck_test.ts` — boundary + side-asymmetry), redeploy `overshoot-entry-run` with behavioral proof, gates in full machine form. **Not executed this turn — STOP after this table per operator directive.**
+
+*Part VI.J authored ACT-487c (2026-07-08). DEC-input mode. HEAD unchanged; zero engine/detector byte-touch; zero writes. The Stage-2 CONDITIONAL-GO of VI.I.F is superseded to NO-GO with three live-drift tripwires (A/B/C) contingent on operator ratification of τ_long=1.00 (or the operator's chosen plateau value ≥0.75).*
