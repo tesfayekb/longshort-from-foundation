@@ -2,7 +2,7 @@
 // Deno.serve import — matches parse-as-of-date_test convention so the
 // suite runs without --allow-net / port binds).
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { computeA5SymmetricDiff, toEtSessionDate } from './index.ts';
+import { computeA5SymmetricDiff, toEtSessionDate } from './pure.ts';
 
 Deno.test('toEtSessionDate: DST-safe YYYY-MM-DD for America/New_York', () => {
   // 2026-07-08 13:37:10 UTC = 09:37:10 ET (EDT summer).
