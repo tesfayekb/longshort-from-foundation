@@ -1136,3 +1136,39 @@ Per-slot portfolio gap vs T-close basis after threshold widening:
 - On DEC ratification, the landing (per operator turn header) is: **one constant** in `i5-recheck.ts` — `OVERSHOOT_I5_REVERSION_TOLERANCE_PCT_LONG = 1.00` (LONG-side parameterization) with SHORT retaining `0.50`, provenance stanza citing VI.I / VI.J / this DEC, updated tests (`i5-recheck_test.ts` — boundary + side-asymmetry), redeploy `overshoot-entry-run` with behavioral proof, gates in full machine form. **Not executed this turn — STOP after this table per operator directive.**
 
 *Part VI.J authored ACT-487c (2026-07-08). DEC-input mode. HEAD unchanged; zero engine/detector byte-touch; zero writes. The Stage-2 CONDITIONAL-GO of VI.I.F is superseded to NO-GO with three live-drift tripwires (A/B/C) contingent on operator ratification of τ_long=1.00 (or the operator's chosen plateau value ≥0.75).*
+
+---
+
+## Part VI.K — ROI ladder (ACT-487d, DEC-synthesis)
+
+**Purpose.** One human-readable table for the operator's threshold DEC. Synthesizes Part V (arrival × occupancy × per-day rate on deployed capital) with VI.I (per-slot portfolio returns at τ=0.50) and VI.J (per-slot returns at τ=1.00). No new corpus compute; every number below is a scaling of numbers already in Parts V / VI.I / VI.J.
+
+**Anchor.** Row 1 is tied to Part V §II corrected-matrix **row 7** (T1∪T2 longs, cap=20/side, H=5, margin=1.0, LONG-saturated) — the blended `~13.0 bps/day` → **~33 %/yr upper-bound** figure at line 314. Rows 2–3 are that anchor rescaled by the per-slot ratios `(b'@τ=1.00 / b@τ=0.50)` (Row 2) and `(a / b'@τ=1.00)` (Row 3, unbuilt ceiling), taking the T1-tilted blend the Part V arithmetic uses (see footnote 3). H=5 is primary; the H=10 companion (Part V row 8, ~39 %/yr) moves in lockstep and is stated in footnote 2, not the table.
+
+### VI.K.1 — Ladder table (LONG book, H=5, per $100K deployed to the LONG allocation)
+
+| # | Configuration | Per-slot per-event (bps) | Per-day on deployed capital (bps/day) | Upper-bound annual ROI (%/yr, 250 sess) | Realistic band⁴ (%/yr) | Δ vs Row 1 (upper) | Δ vs Row 1 in $/yr per $100K (upper) |
+|---|---|---:|---:|---:|---:|---:|---:|
+| **1** | **CURRENT** — τ_long = 0.50, T+1-open entry, 20-slot LONG book per INC-92 *(36-slot ratified variant: same %/yr, same bps/day — sizing is a per-name-weight change, not a %/yr change; see footnote 5)* | ~130 (VI.I (b) T1-tilted) | ~13.0 | **~33 %** | ~13–23 % | — | — |
+| **2** | **τ_long = 1.00** — VI.J plateau entry, T+1-open entry unchanged, 20-slot book unchanged | ~138 (VI.J T1-tilted) | ~13.8 | **~35 %** | ~14–24 % | **+2 pp** | **+$2,000** |
+| **3** | **τ_long = 1.00 + T-close entry** ⚠ **UNBUILT CEILING** | ~152 (VI.I (a) T1-tilted) | ~15.2 | **~38 %** | ~15–27 % | **+5 pp** | **+$5,000** |
+
+**Footnotes (assumptions kept visible):**
+
+1. **Anchor reconciliation.** Row 1 upper-bound %/yr = Part V §II corrected-matrix row 7 (line 314, `13.0 bps/day × 250 = ~33 %/yr`). H=10 companion = Part V row 8 (line 315, `15.5 bps/day → ~39 %/yr`). Difference between the two: horizon knob only; not a Row 1 discrepancy.
+2. **Horizon mix under R-1.** Uniform H=5 primary. Rows 2–3 scale by the same VI.J / VI.I H=5 ratios; if the operator selects H=10 under a future R-1 amendment (Part V.B §V.A4), each row rescales by ×1.19 (Part V row 8 / row 7 = 15.5/13.0), preserving inter-row deltas.
+3. **Per-slot blend.** Part V arithmetic is T1-tilted (per-event ~130 bps at Row 7 corresponds to VI.I `(b) I5-wired` sitting between LONG T1 +124.3 bps and LONG T2 +28.3 bps closer to the T1 end — a consequence of the deployment matrix's argmax narrowing at line 296 concentrating deployment on higher-scoring cells). The T1-tilted blend used here: Row 2 multiplier = 131.3/124.3 = 1.056 (T1) blended to 1.067 (T2) → applied ratio ≈ 1.06 → 33 × 1.06 = ~35 %. Row 3 multiplier = 145.1/131.3 = 1.105 (T1) blended to 34.7/30.2 = 1.149 (T2) → applied ratio ≈ 1.10 → 35 × 1.10 = ~38 %. Uses T1-tilt matching Part V; a pure-T2 blend would compress Row 2→3 deltas by ~1 pp, not enough to reorder the ladder.
+4. **Realistic band** applies the Part V honesty stamp deflator convention (`UPPER_BOUND_SURVIVORSHIP_BIASED` + `SINGLE_BEAR_EPISODE_SAMPLE` + `CELL_CONVENTION_AUDIT_PENDING` + slippage-drift beyond the 5/15 bps haircut, per lines 319 + 490 + 548). No explicit deflator is fixed in Part V; convention here is **40–70 % of upper bound**, matching typical study-to-live decay in comparable strategies. SHORT contribution set to zero throughout (line 319 stamp `SHORT edge sign under audit`, subsumed by V.B2 SHORT-shed).
+5. **20-slot vs 36-slot.** The INC-92 fix to entry-time capacity moves per-name weight (2.5 % → 1.4 %) and dollar allocation utilisation (~50 % → 100 % of ratified LONG allocation), NOT the per-day rate on deployed capital. Same %/yr on the deployed dollar; **~2× the dollar amount deployed** under the ratified 36-slot config. Multiply the "Δ vs Row 1 in $/yr per $100K" column by ~2 when quoting against the ratified-capacity allocation.
+6. **Row 3 basis-mismatch caveat (LOAD-BEARING).** T-close entry as measured here uses the study's `close(T)` price against a hypothetical "buy at close" fill. The buildable analog is a **provisional-bar selection** run before RTH close, whose selection membership need not equal the settled-close study membership (late-tape prints, VWAP-window swings, halt/SSR intraday changes). The true buildable ROI sits **below the +5 pp / +$5,000 ceiling** by an unquantified amount — Stage-2 scoping (VI.G) would size the qualification-mismatch measurement before this row's number is treatable as a real target.
+7. **Stamps carried on every row:** `UPPER_BOUND_SURVIVORSHIP_BIASED`, `SINGLE_BEAR_EPISODE_SAMPLE`, `CELL_CONVENTION_AUDIT_PENDING` (SHORT), `slippage_haircut LONG=5 bps SHORT=15 bps` — all inherited from Parts I / IV / V without modification.
+
+### VI.K.2 — Plain-English (five sentences)
+
+1. **Row 1** is what the live LONG book is expected to earn today — I5 at 0.50 with T+1-open entry — under the honest upper-bound arithmetic, roughly 33 %/yr on the LONG allocation with a realistic band of ~13–23 %/yr after survivorship and single-bear deflation.
+2. **Row 2** is the same book with only the `τ_long` constant moved to 1.00, delivering +2 pp/yr upper bound (~+0.8–1.4 pp realistic) — about **+$2,000/yr per $100K of LONG allocation** at the upper bound, or **~+$4,000/yr** once the ratified 36-slot capacity fix (INC-92) doubles the deployed dollar.
+3. **Row 3** adds the theoretical T-close entry leg on top of τ=1.00, giving an unbuilt upper-bound ceiling of ~38 %/yr — **+$5,000/yr per $100K** above Row 1 at the upper bound (~+$10,000/yr on 36-slot deployment), of which the incremental step from Row 2 to Row 3 (**+$3,000/yr per $100K**) is what a Stage-2 pre-close entry build would target.
+4. The τ change (Row 1 → Row 2) is a one-line config move with no ingestion or engine build cost; the pre-close leg (Row 2 → Row 3) requires Stage-2 intraday-timing infrastructure and carries a load-bearing basis-mismatch caveat (footnote 6) meaning the *buildable* number sits some unquantified distance below the +$3,000/yr ceiling.
+5. Numbers only: the ladder is a decision surface, not a recommendation — the threshold DEC and any Stage-2 revisit remain operator calls made against this table, and the ladder inherits every stamp on Parts V / VI.I / VI.J without weakening.
+
+*Part VI.K authored ACT-487d (2026-07-08). Investigation-mode synthesis. HEAD unchanged; zero corpus compute (rescaling of VI.I / VI.J numbers only); zero engine/detector/config byte-touch; zero writes. **STOP after this table per operator directive.** The threshold DEC and any Stage-2 revisit remain operator calls.*
