@@ -26,7 +26,7 @@
  *     (a) discover open CIDs — SELECT DISTINCT (metadata->>'order_id',
  *         'ticker', 'side', 'client_order_id') FROM overshoot_audit_logs
  *         WHERE action='overshoot.entry.submitted.entry'
- *           AND metadata->>'session_date' = session_date
+ *           AND created_at is inside the bounded session-date window
  *           AND (metadata->>'order_id') NOT IN
  *               (SELECT source_order_id::text FROM overshoot_lots
  *                 WHERE source_order_id IS NOT NULL).
@@ -48,9 +48,11 @@
  *         audit event is NEVER a second home for exit timing.
  *     (e) A5 SET-EQUALITY reconcile: GET /v2/positions vs open lots
  *         grouped by (symbol, side, SUM(qty)). Divergence → INSERT
- *         overshoot_reconciliation_state row + RPC
+ *         audit row + RPC
  *         kill_switch_system_pause(strategy_key='overshoot',
- *         source_ref='overshoot.fill_sweep.a5_divergence').
+ *         source_ref='overshoot.fill_sweep.a5_divergence'), EXCEPT the
+ *         artifact-guard case candidates=0 && ledger=0 && broker>0, which
+ *         emits overshoot.fill_sweep.discovery_shortfall and DOES NOT pause.
  *
  *   Response accounting (never-silent):
  *     candidates_discovered
@@ -86,7 +88,15 @@ import {
 import { OvershootAlpacaFillFetcher } from '../_shared/overshoot-broker/alpaca-fill-fetcher.ts';
 import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpaca-position-fetcher.ts';
 import { RATIFIED_DETECTOR_VERSION } from '../_shared/overshoot/detector/detector.ts';
-import { toEtSessionDate, computeA5SymmetricDiff, type A5Diff } from './pure.ts';
+import {
+  OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
+  OVERSHOOT_FILL_SWEEP_VERSION,
+  toEtSessionDate,
+  computeA5SymmetricDiff,
+  shouldInvokePauseForA5Divergence,
+  shouldSuppressPauseForDiscoveryShortfall,
+  type A5Diff,
+} from './pure.ts';
 export { toEtSessionDate, computeA5SymmetricDiff } from './pure.ts';
 
 // deno-lint-ignore no-explicit-any
@@ -155,6 +165,8 @@ Deno.serve(createHandler(async (req: Request) => {
           status: typeof account.status === 'string' ? account.status : null,
           paper: true, correlation_id: correlationId,
           detector_version: RATIFIED_DETECTOR_VERSION,
+          sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+          discovery_query_fingerprint: OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
         });
       } catch (e) {
         const detail =
@@ -172,6 +184,8 @@ Deno.serve(createHandler(async (req: Request) => {
       note: 'fill-sweep does not consume polygon; probe returned for envelope uniformity only.',
       correlation_id: correlationId,
       detector_version: RATIFIED_DETECTOR_VERSION,
+      sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+      discovery_query_fingerprint: OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
     });
   }
 
@@ -189,6 +203,8 @@ Deno.serve(createHandler(async (req: Request) => {
       return apiSuccess({
         outcome: 'no_op', reason: `kill_switch_${ks.state}`,
         candidates_discovered: 0, lots_adopted: 0,
+        sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+        discovery_query_fingerprint: OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
         correlation_id: correlationId,
       });
     }
@@ -200,6 +216,8 @@ Deno.serve(createHandler(async (req: Request) => {
       return apiSuccess({
         outcome: 'no_op', reason: 'job_disarmed',
         candidates_discovered: 0, lots_adopted: 0,
+        sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+        discovery_query_fingerprint: OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
         correlation_id: correlationId,
       });
     }
@@ -329,7 +347,10 @@ Deno.serve(createHandler(async (req: Request) => {
       broker_count: number;
       ledger_count: number;
       error?: string;
+      discovery_shortfall?: boolean;
+      warning?: string;
     } = { ok: true, symmetric_diff: [], soft_paused: false, broker_count: 0, ledger_count: 0 };
+    const warnings: string[] = [];
     try {
       const brokerPositions = await positionFetcher.listOpenPositions(nowTs);
       const openLots = await sql<{ symbol: string; side: string; qty: number }[]>`
@@ -350,14 +371,45 @@ Deno.serve(createHandler(async (req: Request) => {
         ledgerMap.set(`${l.symbol}|${l.side}`, { side: l.side, qty: Number(l.qty) });
       }
       const diffs = computeA5SymmetricDiff(brokerMap, ledgerMap);
+      const discoveryShortfall = shouldSuppressPauseForDiscoveryShortfall({
+        candidatesDiscovered: tally.candidates_discovered,
+        brokerCount: brokerMap.size,
+        ledgerCount: ledgerMap.size,
+      });
+      const discoveryShortfallWarning = 'discovery_shortfall: broker positions exist while discovery and ledger are both zero; suppressed kill-switch pause and emitted audit on live run';
       a5 = {
         ok: diffs.length === 0,
         symmetric_diff: diffs,
         soft_paused: false,
         broker_count: brokerMap.size,
         ledger_count: ledgerMap.size,
+        discovery_shortfall: discoveryShortfall,
+        warning: discoveryShortfall ? discoveryShortfallWarning : undefined,
       };
-      if (diffs.length > 0 && !dryRun) {
+      if (discoveryShortfall) {
+        warnings.push(discoveryShortfallWarning);
+        if (!dryRun) {
+          await writeStrategyAuditEvent({
+            strategyKey: 'overshoot',
+            action: 'overshoot.fill_sweep.discovery_shortfall',
+            actorId: authCtx.user.id,
+            targetType: 'overshoot_lots',
+            correlationId,
+            metadata: {
+              session_date: sessionDate,
+              broker_count: brokerMap.size,
+              ledger_count: ledgerMap.size,
+              candidates_discovered: tally.candidates_discovered,
+              divergence_count: diffs.length,
+              diffs,
+              kill_switch_pause_suppressed: true,
+              sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+              discovery_query_fingerprint: OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
+            },
+          });
+        }
+      }
+      if (shouldInvokePauseForA5Divergence({ diffCount: diffs.length, dryRun, discoveryShortfall })) {
         // Persist divergence as an audit row (T4 per-strategy audit table).
         // overshoot_reconciliation_state is a firing-frequency tracker with
         // per-(operator,symbol,call_name) shape — wrong home for a full-diff
@@ -375,6 +427,8 @@ Deno.serve(createHandler(async (req: Request) => {
             ledger_count: ledgerMap.size,
             divergence_count: diffs.length,
             diffs,
+            sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+            discovery_query_fingerprint: OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
           },
         });
         await sql`
@@ -410,7 +464,10 @@ Deno.serve(createHandler(async (req: Request) => {
       fetch_errors: tally.fetch_errors,
       adopted,
       a5_reconciliation: a5,
+      warnings,
       detector_version: RATIFIED_DETECTOR_VERSION,
+      sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+      discovery_query_fingerprint: OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
       git_sha: env.gitSha,
       correlation_id: correlationId,
     });
