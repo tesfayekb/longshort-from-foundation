@@ -1,8 +1,16 @@
 // ACT-489 — overshoot-fill-sweep unit tests (pure helpers only; no
 // Deno.serve import — matches parse-as-of-date_test convention so the
 // suite runs without --allow-net / port binds).
-import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { computeA5SymmetricDiff, toEtSessionDate } from './pure.ts';
+import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import {
+  OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
+  OVERSHOOT_FILL_SWEEP_VERSION,
+  computeA5SymmetricDiff,
+  discoverCandidateRowsForTest,
+  shouldInvokePauseForA5Divergence,
+  shouldSuppressPauseForDiscoveryShortfall,
+  toEtSessionDate,
+} from './pure.ts';
 
 Deno.test('toEtSessionDate: DST-safe YYYY-MM-DD for America/New_York', () => {
   // 2026-07-08 13:37:10 UTC = 09:37:10 ET (EDT summer).
@@ -59,6 +67,82 @@ Deno.test('A5 diff: side mismatch (long vs short) surfaces', () => {
   assertEquals(diff.length, 2);
 });
 
+Deno.test('INC-90 artifact guard: discovery shortfall suppresses pause branch', () => {
+  const discoveryShortfall = shouldSuppressPauseForDiscoveryShortfall({
+    candidatesDiscovered: 0,
+    brokerCount: 18,
+    ledgerCount: 0,
+  });
+  assertEquals(discoveryShortfall, true);
+  assertEquals(shouldInvokePauseForA5Divergence({
+    diffCount: 18,
+    dryRun: false,
+    discoveryShortfall,
+  }), false);
+});
+
+Deno.test('INC-90 A5: genuine post-adoption mismatch still invokes pause branch on live run', () => {
+  const discoveryShortfall = shouldSuppressPauseForDiscoveryShortfall({
+    candidatesDiscovered: 18,
+    brokerCount: 18,
+    ledgerCount: 17,
+  });
+  assertEquals(discoveryShortfall, false);
+  assertEquals(shouldInvokePauseForA5Divergence({
+    diffCount: 1,
+    dryRun: false,
+    discoveryShortfall,
+  }), true);
+});
+
+Deno.test('INC-90 A5: dry-run never invokes pause branch even for genuine mismatch', () => {
+  assertEquals(shouldInvokePauseForA5Divergence({
+    diffCount: 1,
+    dryRun: true,
+    discoveryShortfall: false,
+  }), false);
+});
+
+Deno.test('INC-90 discovery contract: real run 3ab99ad5 submitted.entry shape is discovered without session_date metadata', () => {
+  const rows = discoverCandidateRowsForTest([
+    {
+      action: 'overshoot.entry.submitted.entry',
+      created_at: '2026-07-08T13:40:43.631109+00:00',
+      metadata: {
+        attempt: 0,
+        capacity_per_side: 36,
+        client_order_id: 'ovs-3ab99ad5-WFRD-L-entry-0',
+        correlation_id: '50768d6d-6dcf-4dad-8560-866d11bc2de2',
+        i5_reversion_pct: 0.29113924050633316,
+        intent: 'entry',
+        limit_price: 83.23,
+        margin_multiplier: 1,
+        minutes_to_close: 379,
+        orderSide_semantic: 'buy',
+        order_id: 'a0838196-5f5c-4e4d-b73f-c177ae036f26',
+        qty: 30,
+        regime: 'BULL',
+        run_id: '3ab99ad5-a3a6-411e-a9c4-b9f19a75bd4a',
+        side: 'long',
+        sizingBase: 100000,
+        slippage_bps: 50,
+        snapshot_age_ms: 2007,
+        strategy_allocation_pct: 1,
+        ticker: 'WFRD',
+        tier: 'T2',
+      },
+    },
+  ], '2026-07-08', new Set());
+
+  assertEquals(rows, [{
+    order_id: 'a0838196-5f5c-4e4d-b73f-c177ae036f26',
+    ticker: 'WFRD',
+    side: 'long',
+    client_order_id: 'ovs-3ab99ad5-WFRD-L-entry-0',
+    run_id: '3ab99ad5-a3a6-411e-a9c4-b9f19a75bd4a',
+  }]);
+});
+
 Deno.test('ACT-489 sentinel: fill-sweep never imports exit-timing consumers', async () => {
   const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
   // Exit-clock source of truth is overshoot_lots.entry_ts via
@@ -92,5 +176,28 @@ Deno.test('ACT-489 sentinel: broker-truth adoption (no self-computed qty/price)'
   }
   if (/limit_price\s*\*/.test(src)) {
     throw new Error('fill-sweep must not use limit_price as a cost-basis source');
+  }
+});
+
+Deno.test('INC-90 sentinel: response envelope carries bundle-content version echo and discovery fingerprint', async () => {
+  const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
+  assert(OVERSHOOT_FILL_SWEEP_VERSION.length > 0, 'sweep version must be non-empty');
+  assert(OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT.startsWith('sha256:'), 'fingerprint must be labeled');
+  if (!/sweep_version:\s*OVERSHOOT_FILL_SWEEP_VERSION/.test(src)) {
+    throw new Error('fill-sweep response envelope must echo sweep_version');
+  }
+  if (!/discovery_query_fingerprint:\s*OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT/.test(src)) {
+    throw new Error('fill-sweep response envelope must echo discovery_query_fingerprint');
+  }
+});
+
+Deno.test('INC-90 sentinel: discovery-shortfall audit exists and kill-switch pause is guarded away', async () => {
+  const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
+  const shortfallIdx = src.indexOf("action: 'overshoot.fill_sweep.discovery_shortfall'");
+  const pauseIdx = src.indexOf('SELECT public.kill_switch_system_pause(');
+  assert(shortfallIdx > 0, 'missing discovery_shortfall audit action');
+  assert(pauseIdx > 0, 'missing kill_switch_system_pause call for genuine divergence');
+  if (!src.includes('shouldInvokePauseForA5Divergence({ diffCount: diffs.length, dryRun, discoveryShortfall })')) {
+    throw new Error('kill_switch_system_pause must be gated by discoveryShortfall-aware predicate');
   }
 });
