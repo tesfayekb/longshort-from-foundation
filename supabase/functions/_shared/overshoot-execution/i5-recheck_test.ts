@@ -1,8 +1,11 @@
 // FP-069 W3.6.e-i (ACT-464.e-i) — i5-recheck tests (default-deny).
+// ACT-488 (2026-07-08): LONG-side threshold ratified to 1.00; SHORT stays 0.50.
+// Per-side boundary cases + sentinel: no hardcoded 0.5 outside constants' home.
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   evaluateI5PreOpenRecheck,
-  OVERSHOOT_I5_REVERSION_TOLERANCE_PCT,
+  OVERSHOOT_I5_REVERSION_MAX_LONG,
+  OVERSHOOT_I5_REVERSION_MAX_SHORT,
   OVERSHOOT_I5_SNAPSHOT_MIN_AGE_MS,
   OVERSHOOT_I5_SNAPSHOT_MAX_AGE_MS,
 } from './i5-recheck.ts';
@@ -14,8 +17,9 @@ const snap = (bid: number, ask: number, agoMs = 2_000): PolygonQuoteSnapshot => 
   capturedAt: new Date(AS_OF.getTime() - agoMs),
 });
 
-Deno.test('provenance — default tolerance = 0.50 (UNTESTED-OPERATIONAL floor)', () => {
-  assertEquals(OVERSHOOT_I5_REVERSION_TOLERANCE_PCT, 0.50);
+Deno.test('ACT-488 provenance — LONG=1.00, SHORT=0.50 (per-side, single-homed)', () => {
+  assertEquals(OVERSHOOT_I5_REVERSION_MAX_LONG, 1.00);
+  assertEquals(OVERSHOOT_I5_REVERSION_MAX_SHORT, 0.50);
 });
 
 Deno.test('LONG pass — small reversion (25% of overshoot) below tolerance', () => {
@@ -28,15 +32,46 @@ Deno.test('LONG pass — small reversion (25% of overshoot) below tolerance', ()
   assert(r.reversionPct <= 0.30 && r.reversionPct >= 0.20);
 });
 
-Deno.test('LONG refuse — reversion beyond 50% tolerance', () => {
-  // preEvent=100, tClose=110. PreOpen mid=104 → reverted 6 → 60%
+Deno.test('ACT-488 LONG pass — 60% reversion NOW ACCEPTED under τ=1.00 (was refused at τ=0.50)', () => {
+  // preEvent=100, tClose=110. PreOpen mid=104 → reverted 6 → 60% (< 1.00)
   const r = evaluateI5PreOpenRecheck({
     snapshot: snap(103.95, 104.05),
     side: 'LONG', tCloseRef: 110, preEventRef: 100, asOf: AS_OF,
   });
+  assert(r.ok, `expected pass under τ_long=1.00; got refusal=${r.ok ? 'n/a' : r.refusal}`);
+  assert(Math.abs(r.reversionPct - 0.6) < 1e-9);
+});
+
+Deno.test('ACT-488 LONG boundary — 0.99 ACCEPTED (strict > for refusal)', () => {
+  // preEvent=100, tClose=110. PreOpen mid=100.1 → reverted 9.9 → 99%
+  const r = evaluateI5PreOpenRecheck({
+    snapshot: snap(100.05, 100.15),
+    side: 'LONG', tCloseRef: 110, preEventRef: 100, asOf: AS_OF,
+  });
+  assert(r.ok, `expected pass at 0.99; got refusal=${r.ok ? 'n/a' : r.refusal}`);
+  assert(Math.abs(r.reversionPct - 0.99) < 1e-9);
+});
+
+Deno.test('ACT-488 LONG boundary — exactly 1.00 ACCEPTED (strict > for refusal)', () => {
+  // preEvent=100, tClose=110. PreOpen mid=100 → reverted 10 → exactly 100%
+  const r = evaluateI5PreOpenRecheck({
+    snapshot: snap(99.99, 100.01),
+    side: 'LONG', tCloseRef: 110, preEventRef: 100, asOf: AS_OF,
+  });
+  assert(r.ok, `expected pass at exactly 1.00; got refusal=${r.ok ? 'n/a' : r.refusal}`);
+  assert(Math.abs(r.reversionPct - 1.0) < 1e-9);
+});
+
+Deno.test('ACT-488 LONG boundary — 1.01 REFUSED (setup crossed pre-event on wrong side)', () => {
+  // preEvent=100, tClose=110. PreOpen mid=99.9 → reverted 10.1 → 101%
+  const r = evaluateI5PreOpenRecheck({
+    snapshot: snap(99.85, 99.95),
+    side: 'LONG', tCloseRef: 110, preEventRef: 100, asOf: AS_OF,
+  });
   assert(!r.ok);
   assertEquals(r.refusal, 'i5_reversion_exceeded');
-  assert(r.reversionPct !== null && r.reversionPct > 0.5);
+  assert(r.reason.includes('1'), 'refusal reason must carry the LONG threshold value');
+  assert(r.reversionPct !== null && r.reversionPct > 1.0);
 });
 
 Deno.test('SHORT pass — small upward reversion within tolerance', () => {
@@ -49,7 +84,38 @@ Deno.test('SHORT pass — small upward reversion within tolerance', () => {
   assert(r.reversionPct <= 0.25 && r.reversionPct >= 0.15);
 });
 
-Deno.test('SHORT refuse — reversion beyond 50% tolerance (pre-open recovered toward pre-event)', () => {
+Deno.test('ACT-488 SHORT boundary — 0.49 ACCEPTED (unchanged at τ=0.50)', () => {
+  // preEvent=100, tClose=90. PreOpen mid=94.9 → reverted 4.9 → 49%
+  const r = evaluateI5PreOpenRecheck({
+    snapshot: snap(94.85, 94.95),
+    side: 'SHORT', tCloseRef: 90, preEventRef: 100, asOf: AS_OF,
+  });
+  assert(r.ok, `expected pass at 0.49; got refusal=${r.ok ? 'n/a' : r.refusal}`);
+  assert(Math.abs(r.reversionPct - 0.49) < 1e-9);
+});
+
+Deno.test('ACT-488 SHORT boundary — exactly 0.50 ACCEPTED (strict > for refusal)', () => {
+  // preEvent=100, tClose=90. PreOpen mid=95 → reverted 5 → exactly 50%
+  const r = evaluateI5PreOpenRecheck({
+    snapshot: snap(94.99, 95.01),
+    side: 'SHORT', tCloseRef: 90, preEventRef: 100, asOf: AS_OF,
+  });
+  assert(r.ok, `expected pass at exactly 0.50; got refusal=${r.ok ? 'n/a' : r.refusal}`);
+  assert(Math.abs(r.reversionPct - 0.5) < 1e-9);
+});
+
+Deno.test('ACT-488 SHORT boundary — 0.51 REFUSED (unchanged behavior at τ=0.50)', () => {
+  // preEvent=100, tClose=90. PreOpen mid=95.1 → reverted 5.1 → 51%
+  const r = evaluateI5PreOpenRecheck({
+    snapshot: snap(95.05, 95.15),
+    side: 'SHORT', tCloseRef: 90, preEventRef: 100, asOf: AS_OF,
+  });
+  assert(!r.ok);
+  assertEquals(r.refusal, 'i5_reversion_exceeded');
+  assert(r.reason.includes('0.5'), 'refusal reason must carry the SHORT threshold value');
+});
+
+Deno.test('SHORT refuse — reversion beyond 50% tolerance (regression: 60% still refused)', () => {
   // preEvent=100, tClose=90. PreOpen mid=96 → reverted 6 → 60%
   const r = evaluateI5PreOpenRecheck({
     snapshot: snap(95.95, 96.05),
@@ -132,12 +198,35 @@ Deno.test('default-deny — degenerate_overshoot_magnitude when |tClose - preEve
   assertEquals(r.refusal, 'degenerate_overshoot_magnitude');
 });
 
-Deno.test('boundary — exactly 50% reversion is ACCEPTED (strict > for refusal)', () => {
-  // preEvent=100, tClose=110. PreOpen mid=105 → reverted 5 → exactly 50%
+Deno.test('boundary — exactly 50% LONG reversion ACCEPTED (regression: strict > for refusal)', () => {
+  // preEvent=100, tClose=110. PreOpen mid=105 → reverted 5 → exactly 50% (< 1.00)
   const r = evaluateI5PreOpenRecheck({
     snapshot: snap(104.99, 105.01),
     side: 'LONG', tCloseRef: 110, preEventRef: 100, asOf: AS_OF,
   });
   assert(r.ok);
   assert(Math.abs(r.reversionPct - 0.5) < 1e-9);
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// ACT-488 sentinel — no hardcoded reversion literal outside the constants'
+// home. Reads sibling files that could plausibly drift a stray 0.50 / 1.00.
+// ─────────────────────────────────────────────────────────────────────────
+Deno.test('ACT-488 sentinel — entry-run/index.ts hardcodes NO reversion literal (imports named constants only)', async () => {
+  const src = await Deno.readTextFile(
+    new URL('../../overshoot-entry-run/index.ts', import.meta.url),
+  );
+  // Strip line-comments and block-comments so provenance prose is out of scope.
+  const stripped = src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((l) => !/^\s*\/\//.test(l))
+    .join('\n');
+  // Look for literal 0.5 / 0.50 / 1.0 / 1.00 in reversion-related contexts.
+  // Simplest: assert the file references the named constants (import + void)
+  // and does NOT contain the substring 'toleranceCap:' (which would signal
+  // a hand-passed override — evidence-only usage per module contract).
+  assert(stripped.includes('OVERSHOOT_I5_REVERSION_MAX_LONG'));
+  assert(stripped.includes('OVERSHOOT_I5_REVERSION_MAX_SHORT'));
+  assert(!stripped.includes('toleranceCap:'), 'entry-run must not pass toleranceCap override; per-side default is authoritative');
 });

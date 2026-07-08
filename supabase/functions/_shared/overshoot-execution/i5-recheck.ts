@@ -2,15 +2,8 @@
 //
 // PURE MODULE. No DB, no network, no wall-clock. All inputs injected.
 //
-// STATUS: UNTESTED-OPERATIONAL. The module is fully unit-tested for its
-// decision logic (this file's sibling _test.ts), but the OPERATIONAL
-// question "does the pre-open Polygon quote at 09:30-09:35 ET
-// meaningfully reflect the T-close overshoot magnitude?" has not been
-// evidenced against live pre-open microstructure. The default-DENY
-// posture is deliberate: on ANY ambiguity the selection MUST NOT enter.
-// First-light evidence (W5) will parameterise whether the reversion
-// threshold should tighten, loosen, or become side-asymmetric — until
-// then, the constants are conservative floors, not tuned values.
+// STATUS: PARTIALLY-EVIDENCED (LONG side). SHORT side remains
+// UNTESTED-OPERATIONAL. Structural default-DENY posture unchanged.
 //
 // ---- OPERATOR RATIFICATION (I5, ACT-463 + ACT-464) ------------------------
 // The entry engine consults this module for EACH detection-run selection
@@ -21,7 +14,7 @@
 //
 //   LONG selection  (overshoot was UP at T-close):
 //     Reject if the pre-open reference price has REVERTED downward
-//     beyond OVERSHOOT_I5_REVERSION_TOLERANCE_PCT of the T-close-to-
+//     beyond OVERSHOOT_I5_REVERSION_MAX_LONG of the T-close-to-
 //     detection-reference move. Formally:
 //         reversionPct = (tCloseRef - preOpenRef) / (tCloseRef - preEventRef)
 //     reversionPct > tolerance → refuse (`i5_reversion_exceeded`).
@@ -31,9 +24,10 @@
 //         reversionPct = (preOpenRef - tCloseRef) / (preEventRef - tCloseRef)
 //     reversionPct > tolerance → refuse.
 //
-// Default tolerance: 0.50 (half the T-close overshoot reversed). Chosen
-// as a conservative floor per the UNTESTED-OPERATIONAL posture; do NOT
-// tune without W5 evidence.
+// Per-side tolerances (ACT-488, 2026-07-08 DEC — see provenance stanza below):
+//   LONG:  OVERSHOOT_I5_REVERSION_MAX_LONG  = 1.00  (plateau entry per VI.J).
+//   SHORT: OVERSHOOT_I5_REVERSION_MAX_SHORT = 0.50  (unchanged; VI.I.D
+//          established I5-wired > T+1-open all > T-close basis on SHORT).
 //
 // Additional typed refusals guard against silent zero paths:
 //   'polygon_snapshot_unavailable' | 'polygon_snapshot_stale'
@@ -44,6 +38,28 @@
 //
 // DEFAULT-DENY invariant: if ANY input fails validation, the result is
 // ok=false. The caller MUST NOT interpret an absent ok=true as pass.
+//
+// ---- PROVENANCE (ACT-488, LONG-side ratification, 2026-07-08) ------------
+// LONG-side threshold widened from the conservative 0.50 floor to 1.00
+// on operator DEC (2026-07-08), synthesizing:
+//   * VI.I (ACT-487b) — portfolio (a−b)/|a| gap at τ=0.50: LONG T1
+//     14.35%, LONG T2 18.43%; refused-set mean realized return
+//     out-earned survivors 4.4× (T1) / 3.0× (T2) at τ=0.50 → the gate
+//     was functioning as an anti-momentum filter, opposite of charter.
+//   * VI.J (ACT-487c) — τ ∈ {0.25, 0.50, 0.75, 1.00, 1.25, no-gate}
+//     LONG sweep on the 1888e113 corpus. Monotone-increasing port_ret/slot
+//     with a flat plateau above 0.75 (τ=1.00 → no-gate spans 3.2% of arm
+//     return on LONG T1, 2.3% on LONG T2). τ=1.00 captures 33.7% (LONG T1)
+//     and 29.7% (LONG T2) of the VI.I portfolio gap; residuals 9.51%
+//     and 12.97% both fall below the pre-committed 15% Stage-2 GO floor.
+//   * Operator DEC (2026-07-08) — ratified τ_long = 1.00 not `no-gate`,
+//     three load-bearing reasons: preserves default-deny structural
+//     branches, semantically defensible ("full reversion — setup no
+//     longer exists"), captures ~98% of plateau uplift while leaving
+//     W5 evidence room to tighten rather than being forced to loosen.
+// SHORT side stays at 0.50 per VI.I.D SHORT ordering (I5 net-protective).
+// Stage-2 (intraday timing grid) collapses back to NO-GO with live-drift
+// tripwires A/B/C per VI.J.H, standing.
 
 import type { PolygonQuoteSnapshot } from './exit-price-construction.ts';
 import {
@@ -51,9 +67,16 @@ import {
   OVERSHOOT_SNAPSHOT_MAX_AGE_MS,
 } from './snapshot-age-bounds.ts';
 
-/** Fraction of the T-close overshoot that may revert pre-open without
- *  refusing the selection. 0.50 = half the overshoot reversed. */
-export const OVERSHOOT_I5_REVERSION_TOLERANCE_PCT = 0.50;
+/** LONG-side reversion tolerance. 1.00 = "the overshoot fully reverted";
+ *  above this the pre-open price has crossed the pre-event reference on
+ *  the wrong side of the overshoot — setup no longer exists at open.
+ *  Provenance: ACT-488 DEC (2026-07-08); see file-header stanza. */
+export const OVERSHOOT_I5_REVERSION_MAX_LONG = 1.00;
+
+/** SHORT-side reversion tolerance. 0.50 unchanged — VI.I.D established
+ *  I5 as net-protective on the SHORT arm at this threshold. Any change
+ *  requires a separate DEC. */
+export const OVERSHOOT_I5_REVERSION_MAX_SHORT = 0.50;
 
 /** Snapshot staleness cap for the I5 pre-open quote read. Re-exported
  *  from the ratified single-home in ./snapshot-age-bounds.ts (ACT-486 /
@@ -134,7 +157,10 @@ export interface I5RecheckInput {
 
 export function evaluateI5PreOpenRecheck(input: I5RecheckInput): I5RecheckResult {
   const { snapshot, side, tCloseRef, preEventRef, asOf } = input;
-  const toleranceCap = input.toleranceCap ?? OVERSHOOT_I5_REVERSION_TOLERANCE_PCT;
+  const defaultToleranceForSide = side === 'LONG'
+    ? OVERSHOOT_I5_REVERSION_MAX_LONG
+    : OVERSHOOT_I5_REVERSION_MAX_SHORT;
+  const toleranceCap = input.toleranceCap ?? defaultToleranceForSide;
 
   if (snapshot === null) {
     return {
