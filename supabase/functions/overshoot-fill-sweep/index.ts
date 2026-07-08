@@ -378,19 +378,24 @@ Deno.serve(createHandler(async (req: Request) => {
         ledger_count: ledgerMap.size,
       };
       if (diffs.length > 0 && !dryRun) {
-        // Persist divergence + soft-pause via sanctioned RPC.
-        await sql`
-          INSERT INTO overshoot_reconciliation_state
-            (as_of, source, divergence_count, metadata)
-          VALUES
-            (${nowTs.toISOString()}::timestamptz,
-             'overshoot.fill_sweep.a5_divergence',
-             ${diffs.length},
-             ${JSON.stringify({ diffs, session_date: sessionDate, correlation_id: correlationId })}::jsonb)
-        `.catch((err: unknown) => {
-          console.error('[overshoot-fill-sweep] reconciliation_state insert failed', {
-            correlationId, error: err instanceof Error ? err.message : String(err),
-          });
+        // Persist divergence as an audit row (T4 per-strategy audit table).
+        // overshoot_reconciliation_state is a firing-frequency tracker with
+        // per-(operator,symbol,call_name) shape — wrong home for a full-diff
+        // event. The audit row is the durable divergence record; the
+        // soft-pause RPC below is the operational side-effect.
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.fill_sweep.a5_divergence',
+          actorId: authCtx.user.id,
+          targetType: 'overshoot_lots',
+          correlationId,
+          metadata: {
+            session_date: sessionDate,
+            broker_count: brokerMap.size,
+            ledger_count: ledgerMap.size,
+            divergence_count: diffs.length,
+            diffs,
+          },
         });
         await sql`
           SELECT public.kill_switch_system_pause(
