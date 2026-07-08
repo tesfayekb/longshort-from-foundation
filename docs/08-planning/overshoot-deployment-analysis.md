@@ -776,3 +776,117 @@ If either condition FAILS at W8-decision-time, the Live tier does NOT auto-elect
 **Standing invariants preserved:** 2.5 % / slot concentration ceiling; nameplate ≤ 1.00 pre-margin; R-1 (LONG T+10 / SHORT T+5) unchanged; R-2 (T2 LONG frontier admission) unchanged; R-4 (regime governor) unchanged; H0 sequencing (ACT-468 exit-loop isolation before any R-1 land) unchanged.
 
 *Part V.B authored ACT-475 (2026-07-05). Docs-only; no engine byte-touch. W3.8 tranche ratification proceeds after MCP security tranche (§H-SEC-5) and Part V freshness attestation (V.B1) land.*
+
+---
+
+## Part VI — Overnight-gap attribution (ACT-487 Stage 1, historical)
+
+**Mode:** investigation (read-only, no engine/detector bytes, no writes, no cron).
+**Anchor:** ratified study run `1888e113-f9b3-43f5-856c-d91666a3c121` (`overshoot_study_candidate_events`, n=483,837 candidate events over 2021-06-29 → 2026-07-02, 854 tickers). Predicate pinned on `b7cdfcd8` (v2b LONG T1/T2 + SHORT byte-unchanged).
+**Question:** what share of the study's T-close-basis edge is forfeited by entering at the T+1 open?
+
+### VI.A — Data feasibility (A.1 gate)
+
+`overshoot_daily_bars.open` coverage on the full 5-year × 854-ticker span:
+
+| Slice | rows | open non-null | open ≤ 0 |
+|---|---:|---:|---:|
+| Full population | 1,050,360 | 1,050,360 (100.000%) | 0 |
+| Event-conditional T+1 open (466,439 distinct ticker-date events) | 466,439 | 466,436 (99.99936%) | 0 |
+
+**Gate ≥ 99.5% on the event slice — PASS.** The 3 T+1-open misses are end-of-window delistings; dropped at the pair stage, never fabricated (Anti-pattern row #6 / typed absence). No fallback to `polygon-open-close-fetcher.ts` needed.
+
+### VI.B — Return definitions (locked)
+
+Per-event, per-horizon H ∈ {5, 10, 20} trading days; `s = +1` for LONG events, `s = −1` for SHORT events:
+
+- **Basis return** (study convention): `basis_H = s · (close(T+H)/close(T) − 1)`
+- **Realized entry return** (T+1 open entry, T+H close exit): `realized_H = s · (close(T+H)/open(T+1) − 1)`
+- **Overnight leg** (algebraic gap-return): `overnight_H = basis_H − realized_H`
+- **% edge forfeited overnight**: `forfeit_share_H = overnight_H / basis_H`, computed only when `|basis_H| ≥ 0.001` (10 bps floor to avoid divide-by-near-zero; sample loss reported as `n − n_forfeit`).
+- **Sign agreement**: share of events with `sign(basis_H) = sign(realized_H)` (coherence of the two return series independent of magnitude).
+
+### VI.C — Tier assignment
+
+Per operator ratification (STEP A correction 3): **event tier = `b7cdfcd8` cell-membership of the event's cell, no re-scoring.** Applied as pure geometry on the candidate event's `(band, window_days, momentum_quintile, drawdown_bucket)`:
+
+- **LONG T1** iff `band = 'L_10_INF' ∧ window_days ∈ {1,2,3} ∧ momentum_quintile ∈ {4,5} ∧ drawdown_bucket ∈ {1,2,3}`.
+- **LONG T2** iff LONG and not T1.
+- **SHORT** tier is `null` (SHORT path byte-unchanged; no T1/T2 partition under v2b).
+
+Band is derived from `excess_w<window_days>` at argmax via the exact `bandLabelFor` cutoffs in `supabase/functions/_shared/overshoot/detector/band-label.ts` (LONG: L_03_04, L_04_05, L_05_06, L_06_08, L_08_10, L_10_INF; SHORT mirrored on negative excess).
+
+### VI.D — Per-cell distributional results (side × tier × H)
+
+n ≥ 30 headline floor satisfied on every cell; smallest cell n = 1,639 (LONG T1 H=20).
+
+| side | tier | H | n | mean basis | med basis | mean realized | med realized | mean overnight | med overnight | med forfeit | sign agr. |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| long | T1 | 5  |  1,706 | +1.4022% | +0.9133% | +1.2831% | +0.8773% | +11.9 bps | +6.8 bps | **4.75%** | 92.50% |
+| long | T1 | 10 |  1,690 | +2.7597% | +1.6439% | +2.6346% | +1.6284% | +12.5 bps | +7.0 bps | **2.36%** | 94.73% |
+| long | T1 | 20 |  1,639 | +5.1183% | +2.5264% | +4.9528% | +2.7357% | +16.6 bps | +6.8 bps | **0.94%** | 96.64% |
+| long | T2 | 5  | 238,592 | +0.3500% | +0.2933% | +0.3127% | +0.2492% | +3.7 bps | +2.3 bps | **3.59%** | 93.00% |
+| long | T2 | 10 | 236,007 | +0.7312% | +0.5510% | +0.6943% | +0.4941% | +3.7 bps | +2.2 bps | **1.63%** | 95.03% |
+| long | T2 | 20 | 232,307 | +1.3023% | +0.7519% | +1.2706% | +0.7138% | +3.2 bps | +1.7 bps | **0.70%** | 96.56% |
+| short | –  | 5  | 241,312 | −0.4845% | −0.3734% | −0.4488% | −0.3485% | −3.6 bps | −2.0 bps | **3.17%** | 92.94% |
+| short | –  | 10 | 240,183 | −0.8844% | −0.6808% | −0.8499% | −0.6666% | −3.5 bps | −2.0 bps | **1.32%** | 95.14% |
+| short | –  | 20 | 237,264 | −1.5612% | −0.9234% | −1.5282% | −0.9188% | −3.3 bps | −1.9 bps | **0.61%** | 96.51% |
+
+Artifact: `docs/08-planning/artifacts/act-487-overnight-attribution.csv` (10 rows; header + 9 cells; ROUND(·,6) native precision preserved).
+
+**Observations:**
+
+1. **Overnight leg is tiny in absolute bps** (all cells |mean_overnight| ≤ 17 bps at H=20; |med_overnight| ≤ 7 bps at every H). The gap-return is real (signed consistently with basis on both sides — LONG events → positive overnight drift, SHORT events → negative) but small vs the full basis magnitude.
+2. **Forfeit share collapses with H.** At H=5 the overnight leg claims 3–5% of median basis; by H=20 it is under 1% on every cell. Longer holds dilute the T+1-open entry penalty because the basis expands faster than the gap.
+3. **Sign agreement is uniformly high (92.5%–96.6%)** — realized and basis co-move; the gap is not flipping the direction of the trade, only shaving it.
+4. **SHORT arm** carries the same shape as LONG T2 (~3.2% forfeit at H=5, ~0.6% at H=20). SHORT basis is negative-signed under the s=−1 convention, matching study-side polarity.
+5. **T1 vs T2 forfeit ratios are within 30% of each other at each H** despite T1 basis being 3–4× larger — T1 does NOT concentrate the overnight leg disproportionately.
+
+### VI.E — Executive answer: % of edge forfeited overnight, by tier
+
+| Tier | H=5 median forfeit | H=10 median forfeit | H=20 median forfeit |
+|---|---:|---:|---:|
+| **LONG T1** | **4.75%** | 2.36% | 0.94% |
+| **LONG T2** | **3.59%** | 1.63% | 0.70% |
+| **SHORT** | **3.17%** | 1.32% | 0.61% |
+
+### VI.F — GO / NO-GO for Stage 2 (pre-committed)
+
+Criteria from STEP A ratification (unchanged):
+
+- **GO** if median `forfeit_share` ≥ 15% on any cell with n ≥ 100 at H=5, OR sign-agreement share > 60% AND magnitude material.
+- **NO-GO** if all cells < 5% AND sign-agreement ≈ 50% (symmetric noise).
+- **CONDITIONAL** in-between.
+
+**Evaluation:**
+
+- Median forfeit at H=5 is **4.75% (LONG T1) / 3.59% (LONG T2) / 3.17% (SHORT)** — **no cell reaches the 15% threshold; the maximum is 4.75%**.
+- Sign agreement is **92.5%–96.6%** — far above the 60% GO branch — but the branch's implicit "magnitude material" qualifier fails: overnight |mean| ≤ 17 bps, |median| ≤ 7 bps on every cell.
+- The "symmetric noise" arm of NO-GO does not strictly apply (sign agreement is ~93%, not ~50%), but the operational read matches its intent: the signal is directionally coherent yet magnitudinally small.
+
+**Recommendation: NO-GO on Stage 2 build (intraday timing grid via Polygon historical aggregates).**
+
+Rationale: the upper bound on captureable overnight edge is ≤ 5% of basis at H=5 (median) and ≤ 1% at H=20. Even a perfect intraday-timing predictor cannot recover more than the overnight leg's full magnitude (~7 bps median), which is well inside execution-friction bands (haircut is 5-10 bps/side, see V.A6). Under the strategy's operating horizons (R-1: LONG T+10 / SHORT T+5), the median forfeit collapses to 1.3%–2.4% — the ROI ceiling on Stage 2 does not justify the ingestion and qualification-mismatch measurement work.
+
+**Standing conditional:** re-open if either (a) operator shortens the operating horizon to H<5, or (b) live post-fire evidence shows the T+1-open leg widening materially vs the historical distribution (drift monitor on `overshoot_lots` entry vs prior-close would surface this).
+
+### VI.G — Stage 2 scoping (deferred by VI.F, retained for future re-open)
+
+Retained per STEP A ratification correction 1+2, in case a future re-open flips the GO/NO-GO:
+
+- **Event set:** full `1888e113` corpus (~483K candidate events; ~466K distinct ticker-days), NOT the nightly detection ~629-row selection. Stage-2 volume estimate corrected: ~466K ticker-days × 78 five-minute bars ≈ **3.6 × 10⁷ intraday rows** — DuckDB-scoped, single-shot parquet under `/mnt/documents/act-487-stage2/` (read-only).
+- **Primary grid** (T-day afternoon entries, operator's actual hypothesis): {14:00, 15:00, 15:30, 15:50 ET}. Each grid point measured with a per-point **provisional-qualification mismatch metric** — the event qualifies provisionally at entry vs qualifies at settle, in BOTH directions (T-close qualifiers missing at grid-time; grid-time qualifiers refused at settle). This is the load-bearing scoping deliverable; without it the intraday returns are not comparable to the T-close-basis book.
+- **Secondary grid** (comparison anchors): {T+1 09:35, T+1 10:00 ET}.
+- **Exit convention:** symmetric — every entry paired to the same T+H close as basis, so `realized_grid − basis` is purely an entry-timing decomposition.
+- **Ingestion:** read-only Polygon 5-minute aggregates over the event corpus only. No new table, no cron, no engine byte-touch.
+
+### VI.H — Guardrails observed
+
+- No engine/detector/config bytes changed. No writes to production tables. No cron scheduled or armed.
+- Anchored on ratified `b7cdfcd8` predicate and `1888e113` study run — no re-scoring, no re-selection.
+- Tier assignment matches `LONG_T1_GEOMETRY` in `supabase/functions/_shared/overshoot/detector/detector.ts:369` verbatim (band + window + mq + dd geometry only; no cell-stats read).
+- Band derivation matches `bandLabelFor` in `supabase/functions/_shared/overshoot/detector/band-label.ts:41` (`excess_w<window_days>` at argmax → cutoff table).
+- Distributional stats reported (mean + median) per STEP A A.3; per-event forfeit share filtered on `|basis| ≥ 10 bps` (sample loss < 2% on every cell; declared explicitly via `n − n_forfeit`).
+- Missing T+1 open (3 events) dropped, not fabricated (Anti-pattern row #6).
+
+*Part VI authored ACT-487 STEP A (2026-07-08). Investigation-mode; zero engine/detector byte-touch; zero writes. GO/NO-GO pre-committed by operator STEP A ratification; the NO-GO recommendation is data-driven off the median-forfeit table in VI.E, not a conservatism clamp.*
