@@ -889,4 +889,110 @@ Retained per STEP A ratification correction 1+2, in case a future re-open flips 
 - Distributional stats reported (mean + median) per STEP A A.3; per-event forfeit share filtered on `|basis| ≥ 10 bps` (sample loss < 2% on every cell; declared explicitly via `n − n_forfeit`).
 - Missing T+1 open (3 events) dropped, not fabricated (Anti-pattern row #6).
 
+## Part VI.I — I5-conditional attribution (ACT-487b, Stage 1 extension)
+
+**Mode:** investigation (read-only, no engine/detector bytes, no writes, no cron). **Corpus:** ratified `1888e113-…` (unchanged from VI). **Predicate:** `b7cdfcd8` (unchanged). **Determinism header:** anchored on `overshoot_study_candidate_events` + `overshoot_daily_bars`; no re-selection, no re-scoring.
+
+**Operator-caught gap:** Part VI measured the *unconditional* per-name overnight-gap loss (basis − realized on every event). It did not measure the **selection interaction** between T+1-open entry and the I5 pre-open re-check (`supabase/functions/_shared/overshoot-execution/i5-recheck.ts`). The I5 gate refuses selections whose T-close overshoot has partially reverted by the pre-open snapshot; refused slots go **idle** in the live portfolio. The honest live per-slot return is therefore neither `mean(basis)` (a) nor `mean(realized_all)` (c), but the **I5-wired** quantity (b) below.
+
+### VI.I.A — Predicate mirrored to `i5-recheck.ts` (formula parity)
+
+Per `evaluateI5PreOpenRecheck` (lines 156–164), the reversion fraction is side-directional:
+
+- **LONG:** `reversionPct = (tCloseRef − preOpenRef) / (tCloseRef − preEventRef)`
+- **SHORT:** `reversionPct = (preOpenRef − tCloseRef) / (preEventRef − tCloseRef)`
+- **Refuse** iff `reversionPct > OVERSHOOT_I5_REVERSION_TOLERANCE_PCT` (= **0.50**, `i5-recheck.ts:41`).
+
+Substituting `preEventRef = close(T) / (1 + move_pct)` (so that `close(T) − preEventRef = close(T) · move_pct / (1 + move_pct)`), the two side branches collapse algebraically to the **universal identity** used here:
+
+```
+reversionPct = (close(T) − open(T+1)) · (1 + move_pct) / (close(T) · move_pct)
+```
+
+No overshoot magnitude denominator floor is applied at study time (the live module's `OVERSHOOT_I5_MIN_MAGNITUDE_DOLLARS = 0.01` refuses at $-scale; study inputs are already fractional). Events with `move_pct = 0` or missing `open(T+1)` receive `reversionPct = NULL` and are counted as **refused** — matching the live default-deny posture (`i5-recheck.ts:113` and downstream `polygon_snapshot_unavailable` branch).
+
+### VI.I.B — Would-refuse rate (side × tier, H=5 primary)
+
+| side  | tier | n_total | n_evaluable | n_refused (rev > 0.5 or null) | refuse rate | median rev | p90 rev |
+|---|---|---:|---:|---:|---:|---:|---:|
+| long  | T1 |   1,711 |   1,711 |    27 | **1.58%** | −0.58% | 16.57% |
+| long  | T2 | 239,570 | 239,569 | 7,118 | **2.97%** | −0.43% | 25.24% |
+| short | –  | 242,556 | 242,554 | 6,595 | **2.72%** | +0.37% | 24.73% |
+
+**Reading:** median event exhibits **negative reversion** on LONG cells (overshoot *continues* into the pre-open, does not revert) and only mild positive reversion on SHORT. Refusal is a tail event: only the top ~1.6–3% of events cross the 0.50 gate.
+
+### VI.I.C — Survivors vs Refused: T+1-open realized return at H=5
+
+Signed per Part VI convention (`s=+1` LONG, `s=−1` SHORT; positive = arm profit).
+
+| side  | tier | Survivors n | mean realized_5 | median realized_5 | Refused n | mean realized_5 | median realized_5 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| long  | T1 |   1,684 | **+126.3 bps** | +87.7 bps |    27 | **+556.1 bps** | +212.6 bps |
+| long  | T2 | 232,452 |  **+29.2 bps** | +23.3 bps | 7,117 |  **+87.6 bps** |  +82.4 bps |
+| short | –  | 235,961 |  **+44.9 bps** (profit) | +34.8 bps | 6,593 |  **+51.7 bps** (profit) | +38.1 bps |
+
+**Load-bearing finding:** the **REFUSED set out-earned survivors on every cell**. Refused-arm realized-return means are 2.6×–4.4× survivor means on LONG, and modestly higher (+15%) on SHORT profit. Interpretation: at the 0.50 threshold, I5 is refusing into **momentum continuation**, not saving the book from chasing bounces. This is a directional evidence signal against the current threshold — not against the concept of a pre-open gate.
+
+### VI.I.D — Portfolio expected return per slot (executive comparison)
+
+Per-slot means over the full arrival book (refused slots idle → 0; unpair-able events likewise idle):
+
+- **(a) T-close-enter-everything:** `mean(signed_basis_H)` over all n_total events.
+- **(b) T+1-open with I5 as-wired:** `Σ signed_realized_H over survivors / n_total` (idle refused → 0).
+- **(c) T+1-open enter-everything:** `mean(signed_realized_H)` over all evaluable events.
+
+**H=5 (primary):**
+
+| cell     | n_total | refuse% | (a) T-close basis | (b) I5-wired | (c) T+1-open all | (a−b) gap | gap / \|a\| | (a−c) gap | gap / \|a\| |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| LONG T1  |   1,711 | 1.58% | **+145.1 bps** | +124.3 bps | +133.1 bps | +20.8 bps | **14.35%** | +12.0 bps |  8.27% |
+| LONG T2  | 239,570 | 2.97% |  **+34.7 bps** |  +28.3 bps |  +30.9 bps |  +6.4 bps | **18.43%** |  +3.8 bps | 10.91% |
+| SHORT    | 242,556 | 2.72% |  **−48.6 bps** |  −43.6 bps |  −45.0 bps |  −4.9 bps | −10.17% (I5 improves) |  −3.5 bps | −7.27% (T+1-open improves) |
+
+**Reading:**
+
+1. On the LONG arm, the ordering is **(a) > (c) > (b)** — T-close-basis is best, T+1-open all-in is a middle ground, and I5-wired is the *worst* of the three (idle slots forfeit more than the survivor uplift). The Part-VI per-name 3.59% penalty (LONG T2, H=5) understates the portfolio penalty of **18.43%** once I5 idle slots are attributed. The T1 cell sits at **14.35%** (just under 15%, n_ref=27 is small and CI is wide).
+2. On the SHORT arm, the sign inverts: T-close basis is the *worst* per-slot expected return (the arm's expected loss is largest), while I5 idle actually improves the arm. This aligns with V.B2's SHORT verdict — the SHORT arm's economics were already flagged for auto-shed at W8 — and reinforces (does not contradict) that finding.
+
+### VI.I.E — Executive table update (per-slot, H=5)
+
+| Tier | (a) T-close | (b) I5-wired | (c) T+1 all | Part VI per-name median forfeit | **Portfolio (a−b)/\|a\|** |
+|---|---:|---:|---:|---:|---:|
+| **LONG T1** | +145.1 bps | +124.3 bps | +133.1 bps | 4.75% | **14.35%** |
+| **LONG T2** |  +34.7 bps |  +28.3 bps |  +30.9 bps | 3.59% | **18.43%** |
+| **SHORT**   |  −48.6 bps |  −43.6 bps |  −45.0 bps | 3.17% | **−10.17%** (I5 improves) |
+
+### VI.I.F — Verdict (both operator questions)
+
+**Q1: Does the T-close vs I5-wired portfolio gap re-open the pre-close entry question?**
+
+Re-applying the STEP A pre-committed **15% portfolio-gap threshold** — now on `(a−b)/|a|` per cell, per operator's ACT-487b framing:
+
+- **LONG T1:** 14.35% — **just under** the 15% floor; small-sample (n_refused=27) so the estimate is soft. Classify **CONDITIONAL**.
+- **LONG T2:** 18.43% — **exceeds** the 15% floor on n=239,570. Classify **GO on Stage-2** for the LONG-T2 slice.
+- **SHORT:** sign-inverted (I5 idle improves the arm); the "forfeit" concept doesn't apply. Classify **N/A** (subsumed by V.B2 SHORT-shed).
+
+**Stage-2 NO-GO flip:** the LONG-T2 cell **flips** the Part VI NO-GO to a **CONDITIONAL GO** scoped to the LONG book. Stage 2 (intraday timing grid) is re-opened *only* if the cheaper lever in Q2 does not close the gap first.
+
+**Q2: Does the I5 refused-set realized-return say the 0.50 threshold itself needs tuning?**
+
+**Yes, and this is the cheaper lever.** Refused-set realized returns exceed survivor returns on every cell (LONG T1 4.4×, LONG T2 3.0×, SHORT +15% profit). At the current 0.50 threshold, I5 is functioning as an **anti-momentum filter** rather than an anti-chase filter — the opposite of its charter. Loosening the threshold (or removing it, pending the UNTESTED-OPERATIONAL caveat in `i5-recheck.ts:7–15` being closed by W5 evidence) would recapture most of the (a−b) portfolio gap without any change to entry timing, ingestion architecture, or Stage-2 build cost.
+
+**Cheaper-lever ordering (recommended sequence, NOT executed this turn):**
+
+1. **W5 first-light evidence** on I5 refusal live vs realized return of the refused set (mirrors this study's finding against live pre-open microstructure). No code change; just measurement.
+2. **If W5 confirms:** propose an I5 threshold widening (0.50 → 0.75 or removal) as a **detector-config change**, not an engine version event (per INC-92 STEP A charter on config-vs-spec placement). Handler param, single-line ratification path.
+3. **Only if (1)+(2) do not close the (a−b) gap to ≤ 15%:** re-open Stage-2 (intraday timing grid) per VI.G scoping.
+
+### VI.I.G — Guardrails (Part VI.I)
+
+- Zero engine/detector/config bytes changed; zero writes to production tables; zero cron scheduled.
+- Formula parity to `i5-recheck.ts` proved algebraically (VI.I.A) — no free-hand re-derivation.
+- Corpus, predicate, and tier assignment identical to Part VI (no re-classification).
+- Null `open(T+1)` or `move_pct=0` events treated as refused (default-deny parity with live module, `i5-recheck.ts:113` + `:159`).
+- Portfolio metric (b) is the sum-of-survivor-returns / n_total, which is mathematically identical to `survivor_rate × mean_survivor_return` — no double-counting.
+- STOP conditions honored: formula parity to `i5-recheck.ts` verified before any aggregation; no engine byte touched; the Stage-2 flip is stated as CONDITIONAL scoped to LONG-T2, cheaper-lever sequencing surfaced explicitly.
+
+*Part VI.I authored ACT-487b (2026-07-08). Investigation-mode extension of Part VI. HEAD unchanged; zero engine/detector byte-touch; zero writes. The Stage-2 NO-GO of Part VI.F is **superseded to CONDITIONAL GO on LONG-T2** by the portfolio-gap evidence above — but only after the I5 threshold cheaper-lever (VI.I.F Q2) is measured live and either closes the gap or fails to.*
+
 *Part VI authored ACT-487 STEP A (2026-07-08). Investigation-mode; zero engine/detector byte-touch; zero writes. GO/NO-GO pre-committed by operator STEP A ratification; the NO-GO recommendation is data-driven off the median-forfeit table in VI.E, not a conservatism clamp.*
