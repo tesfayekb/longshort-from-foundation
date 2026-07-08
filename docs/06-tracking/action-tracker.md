@@ -5327,3 +5327,84 @@ Verdict: ALL GREEN
 | **Tomorrow's behavioral proof — what to look for** | §9.2 DRY at 09:35 ET (Option C slot): `entry_price.polygon_snapshot_stale` bucket → **0** (or non-zero ONLY at ages > 15000ms or < -1000ms, both of which would be real staleness). If DRY holds, LIVE at 09:35 ET. |
 | **Cross-references** | ACT-485 (parent; closes into this); ACT-484 (root diagnosis); INC-90 (flipped Resolved-structural-and-behavioral here); INC-91 (filed here); `_shared/overshoot-execution/snapshot-age-bounds.ts` (new single home); `_shared/overshoot-execution/entry-price-construction.ts:41-51/115-122` (widened site); `_shared/overshoot-execution/exit-price-construction.ts:37-52/127-134` (widened site); `_shared/overshoot-execution/i5-recheck.ts:54-73` (refactored to import from shared home); `.github/workflows/overshoot-guards.yml` (INC-91 CI gate step). |
 | **Added by** | Lovable at operator direction, 2026-07-07 → ACT-486 INC-91 class-audit close-out + single-home bounds + INC-91 CI gate. |
+
+---
+
+## ACT-489 — Fill-adoption first-light bracket close-out: three-bug `overshoot-fill-sweep` corrective + LIVE 18-lot adoption + A5 PASS + DISARM/fence (INC-93 filed and closed structural+behavioral)
+
+| Field | Value |
+|---|---|
+| **Owner** | Lovable (three corrective deploys, INC-93 authoring, hardening backlog); operator (three Dashboard SQL-editor OOB resets, three sweep invocations, closure). |
+| **Mode** | EXECUTION (Tier A money-adjacent — read-only broker fetch + idempotent ledger INSERT; zero orders placed by fill-sweep at any point). |
+| **Bracket scope** | Adopt 18 broker-truth overshoot lots (opened by the morning §9.2 LIVE entry-run `3ab99ad5`) into `overshoot_lots`, reconcile A5 (broker-vs-ledger set-equality), then DISARM the fill-sweep job and fence cron at 0. |
+| **Correctives landed across the day (three deploys)** | (v1 → v2) session-date verbatim from `as_of` YYYY-MM-DD; discovery predicate re-shaped from non-existent `metadata->>'session_date'` to bounded `created_at` window with `NOT IN overshoot_lots.source_order_id` idempotency guard; A5 artifact guard promoted to active on `candidates=0 && ledger=0 && broker>0` (emits `overshoot.fill_sweep.discovery_shortfall` audit + response warning, does NOT invoke `kill_switch_system_pause`); response envelope echoes `sweep_version` + `discovery_query_fingerprint` per INC-84 §5 standing rule. (v2 → v3) `ON CONFLICT (source_order_id) DO NOTHING` corrected to `ON CONFLICT (source_order_id) WHERE source_order_id IS NOT NULL DO NOTHING` to match the partial UNIQUE index `overshoot_lots_source_order_id_uidx WHERE source_order_id IS NOT NULL`; attestation bumped to `sweep_version=inc90-fill-sweep-v3-20260708`, `discovery_query_fingerprint=sha256:inc90-created-at-window-action-order-id-v2+onconflict-partial-predicate` (the `inc90-` prefix predates the INC-90→INC-93 collision rename; kept as-is for content-attestation stability). |
+| **Bug family closed (INC-93, three classes)** | (1) session-date ET-vs-supplied-`as_of` derivation mismatch; (2) discovery-contract mismatch against real `submitted.entry` metadata shape; (3) `ON CONFLICT` inference mismatch against the partial UNIQUE index predicate. All three carry the same meta-pattern verbatim: **"fill-sweep asserted contracts it did not pin against live artifacts."** |
+| **Sequencing slips recorded (three, INC-93)** | (i) session-date correction patched before an INC row existed; (ii) discovery-metadata correction patched before an INC row existed; (iii) operator-facing OOB-resume SQL emitted with a non-existent `overshoot_audit_logs.actor_id` column (schema-slip caused by transcribing an audit-row shape without re-verifying `information_schema.columns` on the same turn) — required a second operator retry with a corrected INSERT. |
+
+### Full-day evidence summary (single ledger section)
+
+End-to-end fire path for 2026-07-08, in order, with correlation IDs:
+
+| Step | Engine | Correlation / run_id | Outcome |
+|---|---|---|---|
+| §9.1b overnight detection (2026-07-07 as_of) | `overshoot-detection-run` LIVE | run_id **`2b7fe0a4-a6b1-4d6e-8bd5-83d72d39dfac`** | selected_count=20 (all LONG/T2); capacity refusals against the pre-INC-92 20-side detector cap (see INC-92 for the ratified 36/4 propagation gap; money-path zero this bracket because SHORT was structurally 0 and LONG book was half-deployed with zero over-risk). |
+| Morning §9.2 entry-run (09:35 ET / 13:35 UTC slot per ACT-485 Option C) | `overshoot-entry-run` LIVE | run_id **`3ab99ad5-a3a6-411e-a9c4-b9f19a75bd4a`** | 18 orders submitted (down from 20 selections after real market-reason I5 refusals — behavioral surface consistent with the ACT-485/ACT-486 corrective posture that INC-90 `##` and INC-91 landed). Behavioral proof of the entry-run stack for the 3rd time in the ACT-484 → ACT-486 → ACT-489 chain. |
+| Afternoon fill-sweep DRY (final, post v3 deploy) | `overshoot-fill-sweep` DRY | correlation **`e6457258-7194-4bcd-844d-2df5c9943b4b`** | 18 candidates discovered, 18 lots "adopted" (dry — no writes), 0 fetch errors, `sweep_version=inc90-fill-sweep-v3-20260708`, `discovery_query_fingerprint=sha256:inc90-created-at-window-action-order-id-v2+onconflict-partial-predicate`. A5 reports broker=18/ledger=0 (correct pre-LIVE state), `soft_paused=false`, `discovery_shortfall=false` (guard NOT firing because `candidates=18 ≠ 0`). |
+| Afternoon fill-sweep LIVE (behavioral proof) | `overshoot-fill-sweep` LIVE | correlation **`85a0c10c-3631-4e8f-8ff9-d9b31004b764`** | **18/18 lots adopted with `lot_id`s**, 0 fetch errors, `a5_reconciliation.ok=true`, `symmetric_diff=[]`, `broker_count=18`, `ledger_count=18`, `soft_paused=false`, `discovery_shortfall=false`. Bundle-content attestation echoed identical to DRY. |
+| Prior spurious pause (bug class 3 root, historical) | `overshoot-fill-sweep` LIVE | correlation **`909020e4-f074-4e07-ac25-d820a6d8268f`** | `fetch_errors=18` (all 18 threw `there is no unique or exclusion constraint matching the ON CONFLICT specification` per edge-function logs); A5 saw broker=18/ledger=0 as genuine (guard could not suppress because `candidates_discovered=18`); `kill_switch_system_pause` invoked; overshoot re-tripped to `soft_paused`. Root of the v2→v3 corrective. |
+| Bracket closure — DISARM + fence | `job_registry` UPDATE + `cron.job` verify | operator OOB via Dashboard SQL editor, `2026-07-08 15:09:41.204138+00` | `job_registry.overshoot.fill_sweep.enabled=false` (verified). `cron.job` rows matching `overshoot%fill%sweep` OR command `%overshoot-fill-sweep%` → **0 rows** returned. Fence verified. |
+
+**Kill-switch OOB resume audit trail (three operator-attributed rows on the day, ALL LEFT INTACT):** (1) `2026-07-08 14:53:04.72391+00` — first resume after v1→v2 deploy; (2) `2026-07-08 15:06:11.958747+00` — second resume after v2→v3 deploy, `metadata.reason_code=inc90_bug_class_3_on_conflict_predicate_mismatch`; (3) `2026-07-08 15:09:41.204138+00` — bracket closure, `action=overshoot.fill_sweep.disarmed.oob`, `metadata.bracket='ACT-489 / INC-90 closed'`. Historical `INC-90` references inside metadata are collision-artifacts pointing at INC-93 (see INC-93 for the audit-lineage note).
+
+### 18-lot evidence pack (broker lineage, correlation `85a0c10c`)
+
+All 18 lots minted via idempotent INSERT under the v3 `ON CONFLICT (source_order_id) WHERE source_order_id IS NOT NULL DO NOTHING` guard. `source_order_id` is broker-truth from Alpaca `GET /v2/orders/{id}`; `filled_avg_price` is broker-truth `filled_avg_price` verbatim (never our own numbers); `qty` is broker-truth `filled_qty` verbatim. `entry_ts` was written as the LIVE-call `nowTs` (approx `2026-07-08 15:07 UTC`, immediately preceding the disarm audit at `15:09:41`) — the v1 fetcher does NOT surface Alpaca `filled_at`, so per-fill-time upgrade is an open path documented in the sweep header docstring. `lot_id` is the returned `overshoot_lots.lot_id` UUID from the RETURNING clause; nulls in DRY, real UUIDs in LIVE.
+
+| # | ticker | side | qty (filled) | filled_avg_price (broker) | source_order_id | lot_id (LIVE) |
+|---|---|---|---:|---:|---|---|
+|  1 | APA   | long |   72 |  34.693889 | `c6b0a8a8-00d8-47fa-91cb-76493bf28645` | `1c011867-09d4-4def-b5c3-de603d94b7f3` |
+|  2 | CAR   | long |   16 | 155.880000 | `f7dcb75b-0f79-4f63-9df1-069db848d858` | `d119d910-f94a-4b8c-ad46-f553f88d3bb0` |
+|  3 | CBOE  | long |    9 | 266.000000 | `2666f534-f0bd-4fdb-82c2-e1b41c49377f` | `b3dfd326-db40-468e-a071-69fb767488d5` |
+|  4 | DOCN  | long |   17 | 142.000000 | `7a9e0483-e2f1-4028-b515-8cb8f534c375` | `3e8881cc-360a-4ff9-9320-a9f468deaa19` |
+|  5 | FANG  | long |   13 | 184.220000 | `8bb7cdb0-c09b-4376-9f45-4377152210ab` | `6f9682f7-06a3-421c-9bdd-52a092063219` |
+|  6 | HII   | long |    8 | 287.550000 | `af6cfaa1-4e31-4935-9eca-6d3a2e7c2595` | `7b53eb8b-058f-4b9f-9d6b-3cd3d09a4f35` |
+|  7 | HPE   | long |   56 |  44.650536 | `4d1f5a2c-572d-48f6-94ec-221bdc850a66` | `997d1eda-b3e4-482e-bf7a-21f3496d5c13` |
+|  8 | LYB   | long |   44 |  56.060000 | `4f829744-aea9-439b-964f-d3abc76a847b` | `afe1ca60-9bf5-4402-8713-b13e33aead53` |
+|  9 | MMS   | long |   44 |  56.750000 | `213b6d36-61de-46c3-8ba6-49d22984499f` | `5c07e213-98b9-4c55-845d-23f9cffb292f` |
+| 10 | MUR   | long |   74 |  33.790000 | `61dad6a7-f063-40d2-aca8-64ff82b28448` | `fc907e70-3b41-4367-9522-e9ad65d1b9c8` |
+| 11 | NTAP  | long |   15 | 166.450000 | `41d00a6a-a7d5-4ee5-8f4c-1f3d779e89c4` | `e730773e-9b2f-45fb-8728-23b08f83bd60` |
+| 12 | OLN   | long |  118 |  21.030000 | `bd0f5de6-91d9-492b-888a-509ed41f170f` | `27ec88d7-3ed4-49df-892c-82133d291f91` |
+| 13 | PLTR  | long |   19 | 128.195263 | `a5a9088b-ea28-4fa3-b3a2-a8a67ec5eaf2` | `fad9250f-c896-40b9-96e0-3f5ebd47b8ff` |
+| 14 | QCOM  | long |   13 | 185.340000 | `c96baa7e-4dd7-4247-aaa2-689bb1d10e1c` | `ee75259c-a342-4399-be6a-45f9adcc6a44` |
+| 15 | STLD  | long |   10 | 230.660000 | `e085b607-3bbf-4fc3-a709-79e16c7ec2dd` | `89330fbf-0536-46a5-9cc8-5f61d46f7eee` |
+| 16 | WFRD  | long |   30 |  82.820000 | `a0838196-5f5c-4e4d-b73f-c177ae036f26` | `e461e58d-94e2-42ec-b085-ce8a604d3e29` |
+| 17 | WLK   | long |   32 |  77.770000 | `13402070-dc24-4d1d-9d74-4b16bcfeb1e8` | `6ffe15cc-3778-44c7-9177-59887e17122e` |
+| 18 | XOM   | long |   17 | 141.892353 | `bad1d09a-801f-4c95-bfe7-2693b6eaab74` | `c4847822-8dcc-4409-ac5c-147adef0e019` |
+
+**A5 PASS artifact (verbatim from correlation `85a0c10c` envelope):** `a5_reconciliation = { ok: true, symmetric_diff: [], soft_paused: false, broker_count: 18, ledger_count: 18, discovery_shortfall: false }`. All 18 `(symbol, side)` groups map 1:1 between Alpaca `GET /v2/positions` (abs qty) and `SELECT symbol, side, SUM(qty) FROM overshoot_lots WHERE status='open' GROUP BY symbol, side`. `filled_at` per lot is NOT surfaced by the v1 fetcher (documented in the sweep header); `entry_ts` per lot is the LIVE-call `nowTs` verbatim (single value across all 18 lots for this batch).
+
+### Hardening sub-tasks (four, ALL open, tracked as ACT-489-HARDEN-{1..4})
+
+1. **ACT-489-HARDEN-1** — Discovery SQL contract test against real `submitted.entry` audit fixture from run `3ab99ad5` (bug class 2 fence). See INC-93 sub-task 1 for the exact assertion shape.
+2. **ACT-489-HARDEN-2** — `overshoot_lots` INSERT/ON CONFLICT contract test with the partial UNIQUE index shape verbatim (bug class 3 fence). See INC-93 sub-task 2.
+3. **ACT-489-HARDEN-3** — A5 artifact-guard regression fence: guard MUST NOT fire when `candidates_discovered>0 && ledger_count>0` (protects against silently masking a real book divergence). See INC-93 sub-task 3.
+4. **ACT-489-HARDEN-4** — Attestation policy: on LIVE with any `_error`-suffix counter > 0, surface the first error's `{ order_id, ticker, message }` in the response envelope, not just the log. Would have shortened the three-bug loop by two turns. Implement in `overshoot-fill-sweep` first; sibling engines under a separate charter. See INC-93 sub-task 4.
+
+### Gates (bracket closure)
+
+| Gate | Result |
+|---|---|
+| **Kill-switch state (post-closure)** | `overshoot` = `active`, `set_by_kind=operator`, `set_by=c0523131-8964-48c0-8a6a-76275acff631`, `source_ref=NULL`. |
+| **Job registry (post-closure)** | `overshoot.fill_sweep.enabled=false`, `updated_at=2026-07-08 15:09:41.204138+00`. |
+| **Cron fence (post-closure)** | `SELECT ... FROM cron.job WHERE jobname ILIKE '%overshoot%fill%sweep%' OR command ILIKE '%overshoot-fill-sweep%'` → **0 rows** (SUCCESS NO ROWS RETURNED). |
+| **A5 set-equality (LIVE)** | `ok=true`, `symmetric_diff=[]`, `broker_count=ledger_count=18`. |
+| **Bundle-content attestation echoed (DRY + LIVE)** | `sweep_version=inc90-fill-sweep-v3-20260708`, `discovery_query_fingerprint=sha256:inc90-created-at-window-action-order-id-v2+onconflict-partial-predicate`. |
+| **Idempotency invariant** | `overshoot_lots_source_order_id_uidx WHERE source_order_id IS NOT NULL` UNIQUE index enforced; `ON CONFLICT` inference now matches this predicate verbatim. |
+
+**INC filed:** INC-93 (three bug classes + three sequencing slips + meta-pattern + hardening backlog). **INC number collision noted:** INC-90 was already taken by the ACT-485 `NULL::numeric` selection-loader defect; earlier drafts of this incident that used `INC-90` (including three operator-attributed `overshoot_audit_logs` rows written during the resume loop) have been folded into INC-93 with an audit-lineage note; historical audit rows LEFT INTACT (audit immutability preserved).
+
+**ACT-489 status:** **CLOSED (structural + behavioral).** 18/18 lots adopted, A5 PASS, fill_sweep DISARMED, cron fence at 0. Four hardening sub-tasks OPEN — track as ACT-489-HARDEN-{1..4}.
+
+**Cross-references:** INC-93 (three-bug family filed here, closed same-turn structural+behavioral); INC-90 `##` entry (the taken number this bracket's INC could not use — same file, ACT-485 lineage); INC-91/INC-92 (same-week overshoot execution-path INCs); INC-84 §5 GENERALIZATION FINALIZED (bundle-content attestation standing rule this bracket's corrective (e) implements); INC-87 (sibling "partial constant wiring" class — same meta-pattern shape one turn earlier); ACT-485/ACT-486 (upstream entry-run correctives; produced the 18-order source-of-truth run `3ab99ad5`); `supabase/functions/overshoot-fill-sweep/index.ts` (sessionDate branch + discovery SQL + INSERT branch with corrected ON CONFLICT predicate); `supabase/functions/overshoot-fill-sweep/pure.ts` (`OVERSHOOT_FILL_SWEEP_VERSION` / `OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT`); `overshoot_lots_source_order_id_uidx` (ACT-489 migration partial UNIQUE index — the surface bug class 3 mismatched against).
+
+**Added by:** Lovable at operator direction, 2026-07-08 (bracket close-out) → ACT-489 CLOSED structural+behavioral, INC-93 filed and Resolved same-turn, four hardening sub-tasks OPEN.
