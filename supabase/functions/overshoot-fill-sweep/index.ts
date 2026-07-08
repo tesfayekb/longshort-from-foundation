@@ -300,7 +300,7 @@ Deno.serve(createHandler(async (req: Request) => {
             VALUES
               (${c.ticker}, ${nowTs.toISOString()}::timestamptz, ${qty}, ${costBasis},
                ${c.side}, 'open', 'pending', ${c.order_id})
-            ON CONFLICT (source_order_id) DO NOTHING
+            ON CONFLICT (source_order_id) WHERE source_order_id IS NOT NULL DO NOTHING
             RETURNING lot_id::text AS lot_id
           `;
           if (rows.length === 0) {
