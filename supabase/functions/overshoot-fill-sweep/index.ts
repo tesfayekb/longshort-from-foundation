@@ -205,7 +205,14 @@ Deno.serve(createHandler(async (req: Request) => {
     }
 
     const nowTs = productionClock.getWallClockTs();
-    const sessionDate = toEtSessionDate(asOfDate);
+    // Session-date single-homing: entry-run tags submitted.entry rows with the
+    // UTC calendar date of the broker clock at RTH (see overshoot-entry-run
+    // sessionDate derivation). When the operator supplies `as_of` as a
+    // YYYY-MM-DD string, treat it verbatim as the session date so discovery
+    // joins the entry-run ledger. Only fall back to ET conversion when we are
+    // deriving from the wall clock (no `as_of` supplied) — and even then, the
+    // UTC-date shape matches entry-run during RTH.
+    const sessionDate = asOfRaw ? asOfRaw : toEtSessionDate(asOfDate);
 
     // ── (a) discover open CIDs from audit ledger ───────────────────────
     const candidates = await sql<CandidateRow[]>`
