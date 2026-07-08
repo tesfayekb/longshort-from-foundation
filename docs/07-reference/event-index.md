@@ -3100,3 +3100,62 @@ The six events below mirror the short-interest signal's event family exactly, wi
 | **`reconciliation_events.call_name` literals (existing table, no migration)** | `broker_acceptance_received`, `broker_fill_received`, `broker_rejection_no_pause`, `unfillable_skip_terminal`, `cancel_and_replace_race`. Existing `call_name text NOT NULL` column accommodates without schema change (no value-constraining enum). Confirmation at E4 build against the live events table per DEC-068 clause (g) E_evidence_2. |
 | **Charter** | [DEC-068](../decisions/DEC-068-longshort-execution-authorization.md) + [FP-056](../08-planning/feature-proposals.md#fp-056-phase-5-paper-exec-execution-layer--sequential-submitter--two-phase-state-machine--autonomous-three-tier-resolution-longshort). |
 | **Added by** | FP-056 / DEC-068 / ACT-305 (charter landing). Full per-event entries land at the respective E-step build actions. |
+
+## Overshoot Fill-Sweep Events (ACT-489 / INC-90)
+
+#### `overshoot.lot.opened` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit |
+| **Severity** | HIGH |
+| **Owner module** | overshoot |
+| **Consumers** | overshoot operator console / audit trail |
+| **Description** | Fill-sweep idempotently adopted a broker-filled entry order into `overshoot_lots`. Observability only; exit-clock source of truth remains `overshoot_lots.entry_ts`. |
+| **Payload schema** | `{ symbol, side, qty, avg_fill_price, source_order_id, client_order_id, run_id, session_date, adopted_at, exit_clock_source_of_truth, note, correlation_id }` |
+| **Delivery guarantee** | at-least-once |
+| **Ordering** | best-effort |
+| **Idempotency** | DB uniqueness on `overshoot_lots.source_order_id`; duplicate event consumers must tolerate retries. |
+| **Retry policy** | Writer returns structured failure; handler logs and continues after the lot insert. |
+| **Failure handling** | Strategy-audit write failure logs `strategy_audit.write_failed`; lot insert remains source of truth. |
+| **Observability** | Written to `public.overshoot_audit_logs` with top-level and metadata `correlation_id`. |
+| **Related tests** | `overshoot-fill-sweep/index_test.ts` broker-truth + single-home sentinels. |
+| **Lifecycle** | active |
+
+#### `overshoot.fill_sweep.a5_divergence` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, system |
+| **Severity** | CRITICAL |
+| **Owner module** | overshoot |
+| **Consumers** | kill-switch / operator console / audit trail |
+| **Description** | Broker positions and open-lot ledger differ after discovery/adoption, and the mismatch is not the INC-90 discovery-shortfall artifact case. Live runs invoke `kill_switch_system_pause`. |
+| **Payload schema** | `{ session_date, broker_count, ledger_count, divergence_count, diffs, sweep_version, discovery_query_fingerprint, correlation_id }` |
+| **Delivery guarantee** | at-least-once |
+| **Ordering** | best-effort |
+| **Idempotency** | `correlation_id` + diff payload identify one sweep observation; repeated observations may append new audit rows. |
+| **Retry policy** | No retry inside request; failure is logged by strategy-audit helper. |
+| **Failure handling** | Kill-switch RPC is still attempted after audit write; RPC failure is console-error logged. |
+| **Observability** | Response `a5_reconciliation` carries `soft_paused`; audit row carries full diff. |
+| **Related tests** | `overshoot-fill-sweep/index_test.ts` genuine-mismatch pause branch. |
+| **Lifecycle** | active |
+
+#### `overshoot.fill_sweep.discovery_shortfall` — v1
+
+| Field | Value |
+|-------|-------|
+| **Classification** | audit, system |
+| **Severity** | HIGH |
+| **Owner module** | overshoot |
+| **Consumers** | operator console / incident response |
+| **Description** | Artifact-guard event: broker positions exist while both discovery and ledger are zero. This indicates discovery is not joining the audit trail, so the sweep suppresses kill-switch pause and surfaces a warning instead of classifying it as genuine A5 divergence. |
+| **Payload schema** | `{ session_date, broker_count, ledger_count, candidates_discovered, divergence_count, diffs, kill_switch_pause_suppressed: true, sweep_version, discovery_query_fingerprint, correlation_id }` |
+| **Delivery guarantee** | at-least-once |
+| **Ordering** | best-effort |
+| **Idempotency** | `correlation_id` + session_date identify one sweep observation; repeated observations may append new audit rows until fixed. |
+| **Retry policy** | No retry inside request; failure is logged by strategy-audit helper. |
+| **Failure handling** | Audit failure must not trigger the pause RPC; response warning remains. |
+| **Observability** | Response includes `warnings[]` and `a5_reconciliation.discovery_shortfall=true`. |
+| **Related tests** | `overshoot-fill-sweep/index_test.ts` discovery-shortfall/no-pause branch + source sentinel. |
+| **Lifecycle** | active |

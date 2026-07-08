@@ -4613,6 +4613,21 @@ INERT (no reader) until 3.2-c assembler regime-broadcaster is wired.
 | **Files** | `supabase/functions/overshoot-entry-run/index.ts` + `_test.ts`; MIG-154 (`overshoot_strategy_config` table + RLS/GRANTs); MIG-155 (registry seed `overshoot.entry.run` enabled=`false`); `sql/33_overshoot_entry_run_cron_schedule.sql` (ART-047, authored-pending-apply; TWO cron.schedule lines). |
 | **Added by** | ACT-464.e-ii (function + tests + MIG-154 + MIG-155 + sql/33 + deploy + boot-probe). Authenticated 2xx probes + zero-lot dry-run truthful-accounting + first-real-entry end-to-end evidence land at W3.6.e-iii first-light bracket. |
 
+### ACT-489 / INC-90 — `overshoot-fill-sweep`
+
+| Field | Value |
+|---|---|
+| **Module** | overshoot (ACT-489 H1 fill-adoption; INC-90 corrective hardening). |
+| **Classification** | edge function — money-path reconciliation/adoption. Reads entry-run `overshoot.entry.submitted.entry` audit rows, Alpaca broker order/position truth, and `overshoot_lots`; idempotently inserts missing open lots keyed by `source_order_id`; emits per-strategy audit rows; never submits broker orders. |
+| **File** | `supabase/functions/overshoot-fill-sweep/index.ts` |
+| **Tests** | `supabase/functions/overshoot-fill-sweep/index_test.ts` — pure A5 diff tests, idempotency/broker-truth source sentinels, INC-90 artifact-guard branch tests, bundle-content echo sentinel, and a discovery contract fixture shaped exactly like run `3ab99ad5` real `submitted.entry` metadata (no `session_date` field). |
+| **Auth** | `authenticateRequest` + `checkPermissionOrThrow('overshoot.manage')`. `probe` modes require auth and short-circuit before skip gates. |
+| **Contract** | POST `{ as_of?: 'YYYY-MM-DD', probe?: 'alpaca'|'polygon', dry_run?: boolean }`. Normal responses echo `sweep_version` and `discovery_query_fingerprint` per INC-84 content-attestation rule. `dry_run=true` runs discovery/fetch/A5 with zero lot inserts, zero audit writes for adoption/divergence, and zero kill-switch side effects. |
+| **Discovery contract** | Query `overshoot_audit_logs` where `action='overshoot.entry.submitted.entry'`, `created_at` inside `[session_date - 14 days, session_date + 2 days)`, `metadata->>'order_id' IS NOT NULL`, and order id absent from `overshoot_lots.source_order_id`. It intentionally does **not** require `metadata->>'session_date'`; entry-run does not emit that field on submitted rows. |
+| **A5 artifact guard** | If `candidates_discovered=0 && ledger_count=0 && broker_count>0`, treat as discovery shortfall, emit `overshoot.fill_sweep.discovery_shortfall` on live runs, include warning in the envelope, and suppress `kill_switch_system_pause`. Genuine post-adoption mismatches still emit `overshoot.fill_sweep.a5_divergence` and invoke the pause RPC on live runs. |
+| **Related events** | `overshoot.lot.opened`, `overshoot.fill_sweep.a5_divergence`, `overshoot.fill_sweep.discovery_shortfall`. |
+| **Added by** | ACT-489 (initial H1 fill-adoption); INC-90 / ACT-490 corrective hardening. |
+
 ---
 
 ## `mcp` — public MCP tool-surface edge function (ACT-475 ratified)
