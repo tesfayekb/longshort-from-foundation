@@ -86,6 +86,8 @@ import {
 import { OvershootAlpacaFillFetcher } from '../_shared/overshoot-broker/alpaca-fill-fetcher.ts';
 import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpaca-position-fetcher.ts';
 import { RATIFIED_DETECTOR_VERSION } from '../_shared/overshoot/detector/detector.ts';
+import { toEtSessionDate, computeA5SymmetricDiff, type A5Diff } from './pure.ts';
+export { toEtSessionDate, computeA5SymmetricDiff } from './pure.ts';
 
 // deno-lint-ignore no-explicit-any
 type Sql = any;
@@ -101,52 +103,12 @@ function readEnv(): Env {
   };
 }
 
-/** Pure helper — exported for tests. Returns YYYY-MM-DD in America/New_York
- *  for a wall-clock instant. */
-export function toEtSessionDate(ts: Date): string {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  });
-  return fmt.format(ts);
-}
-
 interface CandidateRow {
   order_id: string;
   ticker: string;
   side: 'long' | 'short';
   client_order_id: string;
   run_id: string | null;
-}
-
-interface A5Diff {
-  symbol: string;
-  side: string;
-  broker_qty: number | null;
-  ledger_qty: number | null;
-}
-
-/** Pure helper — exported for tests. Compares two (symbol,side)→qty maps
- *  and returns symmetric-diff rows with one line per mismatch. */
-export function computeA5SymmetricDiff(
-  broker: Map<string, { side: string; qty: number }>,
-  ledger: Map<string, { side: string; qty: number }>,
-): A5Diff[] {
-  const diffs: A5Diff[] = [];
-  const keys = new Set<string>([...broker.keys(), ...ledger.keys()]);
-  for (const k of Array.from(keys).sort()) {
-    const b = broker.get(k) ?? null;
-    const l = ledger.get(k) ?? null;
-    const bQty = b ? b.qty : null;
-    const lQty = l ? l.qty : null;
-    const bSide = b ? b.side : (l ? l.side : '');
-    const lSide = l ? l.side : (b ? b.side : '');
-    const symbol = (b ? k : k).split('|')[0] ?? k;
-    if (bQty === null || lQty === null || Math.abs((bQty ?? 0) - (lQty ?? 0)) > 1e-9 || bSide !== lSide) {
-      diffs.push({ symbol, side: bSide || lSide, broker_qty: bQty, ledger_qty: lQty });
-    }
-  }
-  return diffs;
 }
 
 Deno.serve(createHandler(async (req: Request) => {
