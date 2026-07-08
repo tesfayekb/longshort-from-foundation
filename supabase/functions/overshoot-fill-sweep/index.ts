@@ -215,6 +215,16 @@ Deno.serve(createHandler(async (req: Request) => {
     const sessionDate = asOfRaw ? asOfRaw : toEtSessionDate(asOfDate);
 
     // ── (a) discover open CIDs from audit ledger ───────────────────────
+    // Discovery scoping — entry-run's submitted.entry metadata does NOT
+    // carry a session_date field (verified 2026-07-08 against 18 live
+    // audit rows on run 3ab99ad5: keys are order_id/ticker/side/
+    // client_order_id/run_id/correlation_id/limit_price/qty/regime/etc.,
+    // no session_date). Filtering on it returned zero candidates and left
+    // 18 broker positions unledgered. Scope by created_at instead
+    // (bounded 14-day lookback for scan safety); the authoritative
+    // idempotency invariant remains the NOT IN overshoot_lots guard,
+    // which is enforced regardless of date window and backed by the
+    // partial UNIQUE index on overshoot_lots.source_order_id.
     const candidates = await sql<CandidateRow[]>`
       SELECT DISTINCT
         metadata->>'order_id'         AS order_id,
@@ -224,7 +234,8 @@ Deno.serve(createHandler(async (req: Request) => {
         metadata->>'run_id'           AS run_id
       FROM overshoot_audit_logs
       WHERE action = 'overshoot.entry.submitted.entry'
-        AND metadata->>'session_date' = ${sessionDate}
+        AND created_at >= (${sessionDate}::date - interval '14 days')
+        AND created_at <  (${sessionDate}::date + interval '2 days')
         AND metadata->>'order_id' IS NOT NULL
         AND (metadata->>'order_id') NOT IN (
           SELECT source_order_id::text
