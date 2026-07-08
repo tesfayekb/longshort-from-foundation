@@ -115,7 +115,8 @@ import {
 } from '../_shared/overshoot-execution/entry-price-construction.ts';
 import type { PolygonQuoteSnapshot } from '../_shared/overshoot-execution/exit-price-construction.ts';
 import {
-  OVERSHOOT_I5_REVERSION_TOLERANCE_PCT,
+  OVERSHOOT_I5_REVERSION_MAX_LONG,
+  OVERSHOOT_I5_REVERSION_MAX_SHORT,
   evaluateI5PreOpenRecheck,
 } from '../_shared/overshoot-execution/i5-recheck.ts';
 import {
@@ -310,7 +311,8 @@ Deno.serve(createHandler(async (req: Request) => {
     void OVERSHOOT_CAPACITY_SHORT;
     void OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS;
     void OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS;
-    void OVERSHOOT_I5_REVERSION_TOLERANCE_PCT;
+    void OVERSHOOT_I5_REVERSION_MAX_LONG;
+    void OVERSHOOT_I5_REVERSION_MAX_SHORT;
 
     // T3b (ACT-480) — INC-84 §5 generalization: detector_version boot
     // format assertion + probe-envelope echo (self-attesting deploys).

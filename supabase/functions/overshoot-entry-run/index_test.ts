@@ -16,7 +16,10 @@ import {
   OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS,
   OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS,
 } from '../_shared/overshoot-execution/entry-price-construction.ts';
-import { OVERSHOOT_I5_REVERSION_TOLERANCE_PCT } from '../_shared/overshoot-execution/i5-recheck.ts';
+import {
+  OVERSHOOT_I5_REVERSION_MAX_LONG,
+  OVERSHOOT_I5_REVERSION_MAX_SHORT,
+} from '../_shared/overshoot-execution/i5-recheck.ts';
 
 const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
 
@@ -60,12 +63,14 @@ Deno.test('e-i drift canary: all five e-i constants imported AND void-referenced
   void OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT;
   void OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS;
   void OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS;
-  void OVERSHOOT_I5_REVERSION_TOLERANCE_PCT;
+  void OVERSHOOT_I5_REVERSION_MAX_LONG;
+  void OVERSHOOT_I5_REVERSION_MAX_SHORT;
   assertStringIncludes(SRC, 'void OVERSHOOT_SIDE_ALLOCATION_PCT_LONG');
   assertStringIncludes(SRC, 'void OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT');
   assertStringIncludes(SRC, 'void OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS');
   assertStringIncludes(SRC, 'void OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS');
-  assertStringIncludes(SRC, 'void OVERSHOOT_I5_REVERSION_TOLERANCE_PCT');
+  assertStringIncludes(SRC, 'void OVERSHOOT_I5_REVERSION_MAX_LONG');
+  assertStringIncludes(SRC, 'void OVERSHOOT_I5_REVERSION_MAX_SHORT');
 });
 
 // ─────────────────────────────────────────────────────────────────────────

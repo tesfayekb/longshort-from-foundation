@@ -1172,3 +1172,20 @@ Per-slot portfolio gap vs T-close basis after threshold widening:
 5. Numbers only: the ladder is a decision surface, not a recommendation — the threshold DEC and any Stage-2 revisit remain operator calls made against this table, and the ladder inherits every stamp on Parts V / VI.I / VI.J without weakening.
 
 *Part VI.K authored ACT-487d (2026-07-08). Investigation-mode synthesis. HEAD unchanged; zero corpus compute (rescaling of VI.I / VI.J numbers only); zero engine/detector/config byte-touch; zero writes. **STOP after this table per operator directive.** The threshold DEC and any Stage-2 revisit remain operator calls.*
+
+---
+
+## Part VI.J.G — Ratification note (ACT-488, 2026-07-08)
+
+**Operator DEC ratified 2026-07-08:** `τ_long = 1.00`, `τ_short = 0.50` (unchanged). Landing executed same day as ACT-488 Tier A money-gate:
+
+- `supabase/functions/_shared/overshoot-execution/i5-recheck.ts` — per-side constants single-homed: `OVERSHOOT_I5_REVERSION_MAX_LONG = 1.00`, `OVERSHOOT_I5_REVERSION_MAX_SHORT = 0.50`. Provenance stanza in file header cites VI.I, VI.J, and this DEC.
+- `evaluateI5PreOpenRecheck` selects tolerance per `side` (LONG / SHORT); `toleranceCap` input override retained for evidence-gathering only. Refusal reason string carries the side-appropriate threshold.
+- Tests: `i5-recheck_test.ts` — LONG boundaries at 0.99 / 1.00 / 1.01, SHORT boundaries at 0.49 / 0.50 / 0.51 (accept / accept / refuse each side), regression pin that 60 % LONG reversion now passes, sentinel scanning `overshoot-entry-run/index.ts` for stray `toleranceCap:` overrides + named-constant imports. 71/71 green.
+- Diff scope: 4 files, +153 / −31; `overshoot-detection-run/` + `overshoot-exit-run/` + `fixtures/overshoot-detector-selection/` byte-untouched (git diff --stat = 0).
+
+**Stage-2 disposition (recorded standing per VI.J.H):** NO-GO with live-drift tripwires A / B / C — re-open only if the tripwires fire.
+
+**Behavioral proof (pending):** tomorrow's 09:35 ET bracket — expected materially fewer `i5_reversion_exceeded` refusals on the LONG book vs the τ=0.50 baseline; the refusal count is the DEC's first live datapoint. Deploy / arm / invoke remains an operator step (ARMING GATE H2 unchanged; `sql/32` / `sql/33` authored-only NOT-EXECUTED; fence held at 0 overshoot cron jobs).
+
+*Part VI.J.G authored ACT-488 (2026-07-08). Ratification-of-record note; the money-gate change lives in the source at `i5-recheck.ts` + provenance stanza there.*
