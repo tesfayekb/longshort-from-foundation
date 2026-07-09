@@ -689,3 +689,110 @@ Deno.test('Predicate-spec constants — v2 JSON floors match code constants', ()
   assertEquals(spec.long.tiers.T1.geometry.drawdown_buckets, [...LONG_T1_GEOMETRY.drawdown_buckets]);
   assertEquals(spec.short.byte_unchanged_from_v1, true);
 });
+
+// ─── ACT-490 asymmetric-cap regression (deployment shape) ──────────────
+Deno.test('ACT-490: asymmetric caps LONG=36 / SHORT=4 enforce per-side |selections| <= sleeve-slots', () => {
+  // Construct 40 qualifying LONGs + 10 qualifying SHORTs on a permissive
+  // seeded cell grid. Under caps LONG=36 / SHORT=4 the detector MUST
+  // select exactly 36 LONG and 4 SHORT, and refuse the remainder with
+  // filter_refusal_reason='capacity'. This closes the SHORT 5× hazard
+  // structurally: no data-supply variable (SI availability) can lift the
+  // SHORT cap because it lives in the detector, not in SI gating.
+  const seededLong: StudyCellStats = { mean_fwd_return_5d: 0.02, arrival_count: 500 };
+  const seededShort: StudyCellStats = { mean_fwd_return_5d: -0.02, arrival_count: 500 };
+  const cells = new Map<string, StudyCellStats>();
+  // Seed every LONG (band, w, momentum, drawdown) permutation the fixtures
+  // will touch, plus SHORT counterparts.
+  for (const band of ['L_03_04','L_04_05','L_05_06','L_06_08','L_08_10','L_10_INF']) {
+    for (const w of [1,2,3]) for (const mo of [4,5]) for (const dd of [1,2,3]) {
+      cells.set(`LONG|${band}|${w}|${mo}|${dd}|5`, seededLong);
+    }
+  }
+  for (const band of ['S_03_04','S_04_05','S_05_06','S_06_08','S_08_10','S_10_INF']) {
+    for (const w of [1,2,3,4,5]) for (const mo of [1,5]) for (const dd of [4,5]) {
+      cells.set(`SHORT|${band}|${w}|${mo}|${dd}|5`, seededShort);
+    }
+  }
+
+  const longs: KernelCandidateRow[] = [];
+  for (let i = 0; i < 40; i++) {
+    // Vary excess so rank_score ties don't force tier tie-break into the
+    // count. All 40 qualify under L_10_INF geometry.
+    longs.push(baseLongCandidate({
+      ticker: `L${i.toString().padStart(2, '0')}`,
+      window_days: 3,
+      excess_w3: 0.15 + i * 0.001, // 0.150..0.189
+      momentum_quintile: 5, drawdown_bucket: 2,
+    }));
+  }
+  const shorts: KernelCandidateRow[] = [];
+  const si = new Map<string, ShortInterestRow>();
+  for (let i = 0; i < 10; i++) {
+    const t = `S${i.toString().padStart(2, '0')}`;
+    shorts.push(baseShortCandidate({
+      ticker: t, window_days: 3, excess_w3: -0.12 - i * 0.001,
+      momentum_quintile: 5, drawdown_bucket: 5,
+    }));
+    si.set(t, makeSi(t, 0.25, 5)); // fresh, above squeeze threshold
+  }
+
+  const out = runDetector({
+    candidates: [...longs, ...shorts], shortInterest: si,
+    params: defaultParams({
+      capacityLong: 36, capacityShort: 4,
+      bandLabelFor: realBandLabelFor,
+      studyCellLookup: (k) => cells.get(cellKeyStr(k)) ?? null,
+    }),
+  });
+
+  const selectedLong = out.filter((e) => e.side === 'LONG' && e.selected_for_entry);
+  const selectedShort = out.filter((e) => e.side === 'SHORT' && e.selected_for_entry);
+  assertEquals(selectedLong.length, 36, 'LONG cap = 36 (ratified deployment)');
+  assertEquals(selectedShort.length, 4, 'SHORT cap = 4 (5x hazard structurally closed)');
+
+  const refusedLongCapacity = out.filter(
+    (e) => e.side === 'LONG' && e.filter_refusal_reason === 'capacity',
+  );
+  const refusedShortCapacity = out.filter(
+    (e) => e.side === 'SHORT' && e.filter_refusal_reason === 'capacity',
+  );
+  assertEquals(refusedLongCapacity.length, 4, '40 - 36 = 4 LONG refused capacity');
+  assertEquals(refusedShortCapacity.length, 6, '10 - 4 = 6 SHORT refused capacity');
+});
+
+Deno.test('ACT-490: capacity per-side resolution — caps are independently enforced', () => {
+  // Cap LONG=1, SHORT=1 with 2 qualifiers each — proves the per-side
+  // resolver is not accidentally sharing a single counter.
+  const seededLong: StudyCellStats = { mean_fwd_return_5d: 0.02, arrival_count: 500 };
+  const seededShort: StudyCellStats = { mean_fwd_return_5d: -0.02, arrival_count: 500 };
+  const cells = new Map<string, StudyCellStats>();
+  cells.set('LONG|L_10_INF|3|5|2|5', seededLong);
+  cells.set('SHORT|S_10_INF|3|5|5|5', seededShort);
+
+  const cands: KernelCandidateRow[] = [
+    baseLongCandidate({ ticker: 'L1', window_days: 3, excess_w3: 0.15 }),
+    baseLongCandidate({ ticker: 'L2', window_days: 3, excess_w3: 0.16 }),
+    baseShortCandidate({ ticker: 'S1', window_days: 3, excess_w3: -0.12 }),
+    baseShortCandidate({ ticker: 'S2', window_days: 3, excess_w3: -0.13 }),
+  ];
+  const si = new Map<string, ShortInterestRow>([
+    ['S1', makeSi('S1', 0.25, 5)],
+    ['S2', makeSi('S2', 0.25, 5)],
+  ]);
+  const out = runDetector({
+    candidates: cands, shortInterest: si,
+    params: defaultParams({
+      capacityLong: 1, capacityShort: 1,
+      bandLabelFor: realBandLabelFor,
+      studyCellLookup: (k) => cells.get(cellKeyStr(k)) ?? null,
+    }),
+  });
+  const by = Object.fromEntries(out.map((e) => [e.ticker, e]));
+  // Higher |excess| wins per side.
+  assertEquals(by.L2.selected_for_entry, true);
+  assertEquals(by.L1.selected_for_entry, false);
+  assertEquals(by.L1.filter_refusal_reason, 'capacity');
+  assertEquals(by.S2.selected_for_entry, true);
+  assertEquals(by.S1.selected_for_entry, false);
+  assertEquals(by.S1.filter_refusal_reason, 'capacity');
+});
