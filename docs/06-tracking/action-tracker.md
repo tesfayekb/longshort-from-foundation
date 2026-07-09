@@ -1,3 +1,7 @@
+### ACT-495 (2026-07-09): CI INFRASTRUCTURE NOTE — **GitHub Actions run #712 `strong-evidence` job failed with `runner not acquired` + GitHub internal server error. Root cause: GitHub infrastructure, not repository code. Re-run initiated. Red X on this run must not be read as a code-quality failure.**
+
+---
+
 ### ACT-490 (2026-07-09): EXECUTION — **INC-92 structural closure: detection-time selection capacity bifurcated `capacityLong=36` / `capacityShort=4`; deployment-dial ruling; V2 spec byte-frozen; `RATIFIED_DETECTOR_VERSION` unchanged at `b7cdfcd8`; SHORT 5× hazard structurally impossible; gate-0B CI-red on `overshoot-fill-sweep/index.ts:103` cleared with a properly-narrowed `type Sql = ReturnType<typeof postgres>` (no `any`, no lint-directive). Tier A — touches the versioned predicate-spec boundary.**
 
 **STEP A ruling (deployment dial):** the hash protects SELECTION SEMANTICS (qualifiers, tiering, rank order), not dip depth. Capacity change relabels tail rows between `selected_for_entry=true` and `filter_refusal_reason='capacity'` without touching the ranking function — outside the hash's protection domain. V2 spec JSON stays byte-frozen (sha256 `766c996d88e439f370f5ff34356505818f6b6671d590e2f99d32418ebca7a573` — recomputed post-landing, byte-identical); `capacity_per_side_default: 20` demoted in-place to a HISTORICAL, NON-AUTHORITATIVE default via a comment memo above the spec constant.
