@@ -81,7 +81,8 @@ function defaultParams(over: Partial<DetectorParams> = {}): DetectorParams {
   return {
     runId: RUN_ID,
     asOf: AS_OF,
-    capacityPerSide: 20,
+    capacityLong: 20,
+    capacityShort: 20,
     squeezeSiPctFloatMin: 0.10,
     siStalenessMaxDays: 21,
     exclusionWidthDays: 5,
@@ -364,7 +365,8 @@ Deno.test('ROI-ordering (T2.1b meaningful): higher-mean T2 cell OUTRANKS lower-m
   const out = runDetector({
     candidates: cands, shortInterest: new Map(),
     params: defaultParams({
-      capacityPerSide: 2,
+      capacityLong: 2,
+      capacityShort: 2,
       bandLabelFor: realBandLabelFor,
       studyCellLookup: (k) => seeded.get(cellKeyStr(k)) ?? null,
     }),
@@ -405,7 +407,8 @@ Deno.test('Tier-tie-break determinism — identical rank_score AND |excess|: T1 
   const out = runDetector({
     candidates: cands, shortInterest: new Map(),
     params: defaultParams({
-      capacityPerSide: 1,
+      capacityLong: 1,
+      capacityShort: 1,
       bandLabelFor: perCandBand,
       studyCellLookup: (k) => seeded.get(cellKeyStr(k)) ?? null,
     }),

@@ -7,7 +7,7 @@
 #   kernel_fixture: fixtures/overshoot-detector/2026-04-15.jsonl
 #   cells_input: fixtures/overshoot-detector-selection/inputs/2026-04-15/cells-input.jsonl
 #   si_input: fixtures/overshoot-detector-selection/inputs/2026-04-15/si-input.jsonl
-# detector_params_verbatim: capacityPerSide=20, squeezeSiPctFloatMin=0.20, siStalenessMaxDays=20, exclusionWidthDays=5, longExcessThreshold=0.10, shortExcessThreshold=0.08, longWindowSet=[1,2,3], shortWindowSet=[1,2,3,4,5], longMomentumSet=[4,5], shortMomentumSet=[1,5], longDrawdownSet=[1,2,3], shortDrawdownSet=[4,5]
+# detector_params_verbatim: capacityLong=20, capacityShort=20, squeezeSiPctFloatMin=0.20, siStalenessMaxDays=20, exclusionWidthDays=5, longExcessThreshold=0.10, shortExcessThreshold=0.08, longWindowSet=[1,2,3], shortWindowSet=[1,2,3,4,5], longMomentumSet=[4,5], shortMomentumSet=[1,5], longDrawdownSet=[1,2,3], shortDrawdownSet=[4,5]
 # column_order: ticker,side,tier,rank_score,study_cell_ref,selected_for_entry,filter_refusal_reason,argmax_window_days,argmax_excess
 # null_representation: JSON null
 # row_ordering: (side ASC, tier ASC NULLS LAST, rank_score DESC NULLS LAST, ticker ASC)
