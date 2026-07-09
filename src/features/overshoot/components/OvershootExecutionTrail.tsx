@@ -248,6 +248,86 @@ function AuditRowCell({ row }: { row: AuditRow }) {
   );
 }
 
+/**
+ * ACT-494 item (3): grouped RUN CARD.
+ *   header : timestamp · run type (entry|exit) · targets→submitted→refused counts
+ *   chips  : distinct refusal reasons (regime/i5/typed)
+ *   body   : collapsible per-ticker audit rows (default: collapsed)
+ * Newest-first ordering handled by caller.
+ */
+function RunCard({ correlationId, rows }: { correlationId: string | null; rows: AuditRow[] }) {
+  const [open, setOpen] = useState(false);
+
+  // Sort rows within the run oldest→newest so the trail reads chronologically.
+  const chrono = [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const first = chrono[0];
+
+  const runKind: 'entry' | 'exit' | 'mixed' = (() => {
+    const hasEntry = chrono.some((r) => r.action.startsWith('overshoot.entry.'));
+    const hasExit = chrono.some((r) => r.action.startsWith('overshoot.exit.'));
+    if (hasEntry && hasExit) return 'mixed';
+    if (hasExit) return 'exit';
+    return 'entry';
+  })();
+
+  // Count semantics: submitted → any *.submitted; refused → any *.refused
+  // or *.rejected (T4 refusal taxonomy). Targets → any *.target row or
+  // metadata.target_count on the run header row.
+  let targets = 0;
+  let submitted = 0;
+  let refused = 0;
+  const refusalReasons = new Set<string>();
+  for (const r of chrono) {
+    const m = asMeta(r.metadata);
+    if (r.action.endsWith('.target') || r.action.endsWith('.targeted')) targets += 1;
+    if (typeof m.target_count === 'number') targets = Math.max(targets, m.target_count as number);
+    if (r.action.endsWith('.submitted')) submitted += 1;
+    if (r.action.endsWith('.refused') || r.action.endsWith('.rejected') || r.action.endsWith('.blocked')) {
+      refused += 1;
+      if (m.reason) refusalReasons.add(String(m.reason));
+      if (m.i5_outcome && m.i5_outcome !== 'accept' && m.i5_outcome !== 'accepted') refusalReasons.add(`i5:${m.i5_outcome}`);
+    }
+  }
+
+  const runVariant: 'default' | 'secondary' = runKind === 'exit' ? 'secondary' : 'default';
+  const refusedVariant: 'outline' | 'destructive' = refused === 0 ? 'outline' : 'destructive';
+
+  return (
+    <div className="rounded-md border border-border">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full text-left px-3 py-2 flex flex-wrap items-center gap-2">
+        {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+        <span className="font-mono text-xs text-muted-foreground">{formatTs(first?.created_at)}</span>
+        <Badge variant={runVariant} className="font-mono text-[10px] uppercase">{runKind}</Badge>
+        <span className="text-xs">
+          <span className="text-muted-foreground">targets </span>
+          <span className="font-mono">{targets || '—'}</span>
+          <span className="text-muted-foreground"> → submitted </span>
+          <span className="font-mono">{submitted}</span>
+          <span className="text-muted-foreground"> → refused </span>
+          <Badge variant={refusedVariant} className="ml-1 font-mono text-[10px]">{refused}</Badge>
+        </span>
+        {refusalReasons.size > 0 && (
+          <span className="flex flex-wrap gap-1">
+            {[...refusalReasons].slice(0, 4).map((r) => (
+              <Badge key={r} variant="outline" className="font-mono text-[10px]">{r}</Badge>
+            ))}
+          </span>
+        )}
+        <span className="ml-auto font-mono text-[10px] text-muted-foreground truncate max-w-[240px]">
+          cid: {correlationId ?? '—'}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-border p-3 space-y-3">
+          {chrono.map((r) => (
+            <AuditRowCell key={r.id} row={r} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function OvershootExecutionTrail() {
   // T4 (ACT-481) — recent overshoot_entry_runs (MIG-157). Read-only. Uses
   // the new scoped SELECT policy (`overshoot_entry_runs_view_read`, MIG-158)
