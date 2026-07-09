@@ -153,3 +153,15 @@ export { OvershootDetectorRunDetail as OvershootDetectorRunDetailPage } from './
  * (Portfolio, Execution) to house existing cards in ?tab=-synced tabs.
  */
 export { OvershootHubTabs, OvershootHubEmptyState } from './components/OvershootHubTabs';
+
+/**
+ * ACT-491 Portfolio parity + reconciliation surfacing.
+ *
+ * Broker-truth mirror + reconciliation tab + equity-curve tab. Consumed by
+ * the `OvershootPortfolioPage` wrapper under `src/pages/trading/overshoot/`.
+ */
+export { OvershootPortfolioBrokerTab } from './components/portfolio/OvershootPortfolioBrokerTab';
+export { OvershootPortfolioReconciliationTab } from './components/portfolio/OvershootPortfolioReconciliationTab';
+export { OvershootPortfolioReconciliationBanner } from './components/portfolio/OvershootPortfolioReconciliationBanner';
+export { OvershootEquityCurveTab } from './components/OvershootEquityCurveTab';
+export { useOvershootPortfolioPositions } from './hooks/useOvershootPortfolioPositions';

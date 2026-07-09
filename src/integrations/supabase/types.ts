@@ -1755,6 +1755,57 @@ export type Database = {
         }
         Relationships: []
       }
+      overshoot_equity_snapshots: {
+        Row: {
+          broker_equity: number
+          cash: number | null
+          correlation_id: string
+          created_at: string
+          fetched_at: string
+          long_market_value: number | null
+          operator_id: string
+          position_mark_total: number | null
+          positions_priced: number
+          positions_total: number
+          short_market_value: number | null
+          snapshot_date: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          broker_equity: number
+          cash?: number | null
+          correlation_id: string
+          created_at?: string
+          fetched_at: string
+          long_market_value?: number | null
+          operator_id?: string
+          position_mark_total?: number | null
+          positions_priced?: number
+          positions_total?: number
+          short_market_value?: number | null
+          snapshot_date: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          broker_equity?: number
+          cash?: number | null
+          correlation_id?: string
+          created_at?: string
+          fetched_at?: string
+          long_market_value?: number | null
+          operator_id?: string
+          position_mark_total?: number | null
+          positions_priced?: number
+          positions_total?: number
+          short_market_value?: number | null
+          snapshot_date?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       overshoot_events: {
         Row: {
           argmax_window_days: number | null

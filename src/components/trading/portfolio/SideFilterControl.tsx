@@ -6,6 +6,9 @@
  */
 import { Button } from '@/components/ui/button';
 import type { SideFilter } from './format';
+// Lifted to src/components/trading/portfolio/ (ACT-491, FP-069 W4.h+):
+// shared platform-tier portfolio primitives consumed by both the longshort
+// and overshoot Portfolio surfaces. Neutral home — no strategy in path.
 
 interface Props {
   value: SideFilter;

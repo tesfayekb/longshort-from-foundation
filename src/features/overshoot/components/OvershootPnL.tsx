@@ -4,18 +4,25 @@
  * Sources (RLS-inheriting reads only; ZERO writes, ZERO edge-function calls,
  * ZERO price fetches per the standing LIVE-PRICE SOURCE CONTRACT):
  *   1. `overshoot_lots` filtered to status = 'closed' (exited lots).
- *      Realized P&L per lot is derived from the exit audit trail via
- *      `source_order_id`, but the pre-first-fill honest empty-state is the
- *      full render this turn — the exited-lot slice is scaffolded and
- *      shows the exit fields when they materialize post-first-light.
+ *      Realized P&L per lot is DERIVED at read time from the paired exit
+ *      fill (audit trail via `source_order_id`).
  *
- * Equity curve: DEFERRED to FP-069-CANDIDATE-iii (overshoot equity
- * snapshots). Rendered here as a placeholder Card citing the candidate
- * verbatim — NO console-driven price fetches, NO synthetic curve.
+ * ── ACT-493 DEPENDENCY (chartered, deadline ~2026-07-17) ──────────────
+ *   Today the `overshoot-fill-sweep` discovery filter matches only
+ *   `overshoot.entry.submitted.entry` audit rows, so no code path writes
+ *   `status='closed'` on `overshoot_lots` yet. This tab therefore ships
+ *   honest-empty and will fill in automatically once ACT-493 lands:
+ *     - exit-fill discovery (both exit actions, CID lineage → lot_ids)
+ *     - lot closure writes (status/closed_at/exit_fill_price/exit_qty/
+ *       exit_source_order_id) — realized P&L derived at read time (v1)
+ *     - `overshoot.lot.closed` audit with full lineage
+ *     - partial-fill accounting: decrement-not-flip until cumulative
+ *       fills cover qty; multi-lot allocation FIFO by entry_ts.
+ *   Deadline is before the first T+10 exits (~2026-07-17 based on the
+ *   2026-07-08 first-adopted book of 18 entries).
  *
- * Honest empty-state: no exited lots exist yet; equity-curve requires the
- * candidate-iii table to land. Both empties are the truthful current
- * state — never fabricated.
+ * Equity curve was removed from this file (ACT-491 (4) dedup) — the single
+ * home is `OvershootEquityCurveTab` under the Portfolio tabs.
  */
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -83,14 +90,15 @@ export function OvershootPnL() {
             </p>
           ) : exited.length === 0 ? (
             <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">No exited lots — pending first exit.</p>
+              <p className="font-medium text-foreground">No closed lots yet — honest empty (ACT-493 dep).</p>
               <p className="mt-2">
-                An exited lot appears in <code>overshoot_lots</code> with
-                <code> status = 'closed'</code> after the fixed 5-session exit clock or a
-                manual exit fires and the fill returns. Zero exits recorded because zero
-                entries have filled yet — first-light is <strong>§9 Part 2 EXEC</strong>.
-                Realized P&L per lot will be reconstructed from the paired exit fill
-                (audit trail via <code>source_order_id</code>). No synthetic values.
+                Entries have filled (18 adopted 2026-07-08) and the exit-run submits day
+                limit orders after the SPY T+5 clock. The gap: <code>overshoot-fill-sweep</code>
+                today discovers only <code>overshoot.entry.submitted.entry</code>, so filled
+                exits do not yet flip <code>overshoot_lots.status</code> to <code>'closed'</code>.
+                ACT-493 (chartered, deadline ~2026-07-17) closes the gap: exit-fill discovery,
+                lot closure writes, realized P&L derived at read time, partial-fill decrement,
+                and FIFO multi-lot allocation.
               </p>
             </div>
           ) : (
@@ -133,27 +141,6 @@ export function OvershootPnL() {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Equity curve</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Equity-curve visualization deferred.</p>
-            <p className="mt-2">
-              Per the ratified stub, an honest equity curve requires a persisted
-              <code> overshoot_equity_snapshots</code> table populated by the reconciliation
-              loop — not console-driven live-price fetches, not a client-side synthetic
-              curve. The table awaits <strong>FP-069-CANDIDATE-iii</strong> (overshoot
-              equity-snapshots — "the W4.d placeholder's honest counterpart; no
-              console-driven price fetches, per the standing live-price directive"). Until
-              CANDIDATE-iii lands, this card renders the deferral note verbatim. No
-              fabricated series.
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>
