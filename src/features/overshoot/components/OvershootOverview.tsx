@@ -66,6 +66,34 @@ function fmtTs(ts: string | null | undefined): string {
   try { return new Date(ts).toLocaleString(); } catch { return ts; }
 }
 
+/**
+ * ACT-494c D2 — DATE-ONLY renderer.
+ *
+ * Postgres `date` columns arrive as ISO calendar strings ("2026-07-08").
+ * `new Date("2026-07-08")` parses them as UTC midnight and `toLocaleString`
+ * then TZ-shifts them into the browser locale — a calendar date becomes a
+ * timestamp ("7/7/2026, 8:00:00 PM" for a viewer west of UTC). Calendar
+ * dates MUST render verbatim; never via Date-with-TZ.
+ */
+function fmtDateOnly(d: string | null | undefined): string {
+  if (!d) return '—';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : d;
+}
+
+/**
+ * Date-only day-count: parses YYYY-MM-DD as a calendar date (UTC midnight)
+ * and compares against today's UTC midnight so results are timezone-stable.
+ */
+function daysSinceDate(dateOnly: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly);
+  if (!m) return null;
+  const then = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.floor((today - then) / 86_400_000);
+}
+
 function fmtMoney(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
   return `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -84,7 +112,8 @@ function PendingCandidateIII({ title }: { title: string }) {
       <CardContent>
         <p className="text-2xl font-semibold text-muted-foreground">—</p>
         <p className="mt-2 text-xs text-muted-foreground/80 font-mono">
-          pending FP-069-CANDIDATE-iii (equity-curve snapshots). No synthetic numbers rendered.
+          No equity snapshots — arm overshoot_equity_snapshot via INC-82 bracket
+          (concrete next action for FP-069-CANDIDATE-iii). No synthetic numbers rendered.
         </p>
       </CardContent>
     </Card>
