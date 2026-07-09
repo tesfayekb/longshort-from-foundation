@@ -17,6 +17,7 @@
  * pointing at the seed SQL files (sql/30..33) — the source of truth.
  */
 import { useQuery } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
@@ -125,8 +126,8 @@ function KpiCell({
   variant = 'default',
 }: {
   label: string;
-  value: React.ReactNode;
-  sub?: React.ReactNode;
+  value: ReactNode;
+  sub?: ReactNode;
   variant?: 'default' | 'muted' | 'good' | 'warn' | 'bad';
 }) {
   const valueClass =
