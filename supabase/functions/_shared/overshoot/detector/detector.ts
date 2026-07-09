@@ -44,9 +44,12 @@
 //     higher = better across both sides in a single sort.
 //
 //   SLOT-AWARE SELECTION:
-//     Named parameter `capacityPerSide` (charter default: 20). Selection =
-//     rank_score DESC, |excess| DESC tiebreak. Unselected-but-qualified
-//     candidates persist with `selected_for_entry = false` and
+//     Named parameters `capacityLong` + `capacityShort` (per-side; ACT-490
+//     bifurcation — capacity is a deployment dial, NOT part of the versioned
+//     predicate spec; see the demotion memo above DETECTOR_PREDICATE_SPEC_V2_JSON
+//     below). Selection = rank_score DESC, |excess| DESC tiebreak, tier ASC
+//     as final determinism scaffold. Unselected-but-qualified candidates
+//     persist with `selected_for_entry = false` and
 //     `filter_refusal_reason = 'capacity'` — the W4 console MUST see what
 //     was passed over as well as what was taken.
 //
@@ -185,7 +188,15 @@ export interface DetectedEvent {
 export interface DetectorParams {
   runId: string;
   asOf: string; // YYYY-MM-DD
-  capacityPerSide: number;         // charter default 20
+  // ACT-490: per-side capacity, asymmetric. Ratified deployment values
+  // LONG=36 / SHORT=4 bind provenance to the T3b sizing constants
+  // OVERSHOOT_CAPACITY_LONG / OVERSHOOT_CAPACITY_SHORT in
+  // `_shared/overshoot-execution/sizing.ts` — the invariant
+  // `|selections| <= sleeve-slots per side` becomes structural, not
+  // conditional. Deployment dial (see DETECTOR_PREDICATE_SPEC_V2_JSON
+  // demotion memo below); NOT part of the versioned predicate spec.
+  capacityLong: number;
+  capacityShort: number;
   squeezeSiPctFloatMin: number;    // named param — no hard default
   siStalenessMaxDays: number;      // named param — see header derivation
   exclusionWidthDays: number;      // 5 per priors

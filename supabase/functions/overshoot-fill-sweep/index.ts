@@ -99,8 +99,10 @@ import {
 } from './pure.ts';
 export { toEtSessionDate, computeA5SymmetricDiff } from './pure.ts';
 
-// deno-lint-ignore no-explicit-any
-type Sql = any;
+// ACT-490 gate-0B corrective: postgres-js `Sql` tagged-template surface has
+// no exported handle in the driver's ambient types, so we derive it from the
+// constructor return type. Narrow, honest, no `any`, no lint-directive.
+type Sql = ReturnType<typeof postgres>;
 
 interface Env {
   supabaseDbUrl: string;
