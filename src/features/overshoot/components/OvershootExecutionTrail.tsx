@@ -28,9 +28,12 @@
  * Pattern: useQuery + supabase + Card/Badge/Table/Alert per the
  * ExecutionMonitor.tsx precedent. No longshort imports (guard-clean).
  */
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
@@ -245,6 +248,86 @@ function AuditRowCell({ row }: { row: AuditRow }) {
   );
 }
 
+/**
+ * ACT-494 item (3): grouped RUN CARD.
+ *   header : timestamp · run type (entry|exit) · targets→submitted→refused counts
+ *   chips  : distinct refusal reasons (regime/i5/typed)
+ *   body   : collapsible per-ticker audit rows (default: collapsed)
+ * Newest-first ordering handled by caller.
+ */
+function RunCard({ correlationId, rows }: { correlationId: string | null; rows: AuditRow[] }) {
+  const [open, setOpen] = useState(false);
+
+  // Sort rows within the run oldest→newest so the trail reads chronologically.
+  const chrono = [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const first = chrono[0];
+
+  const runKind: 'entry' | 'exit' | 'mixed' = (() => {
+    const hasEntry = chrono.some((r) => r.action.startsWith('overshoot.entry.'));
+    const hasExit = chrono.some((r) => r.action.startsWith('overshoot.exit.'));
+    if (hasEntry && hasExit) return 'mixed';
+    if (hasExit) return 'exit';
+    return 'entry';
+  })();
+
+  // Count semantics: submitted → any *.submitted; refused → any *.refused
+  // or *.rejected (T4 refusal taxonomy). Targets → any *.target row or
+  // metadata.target_count on the run header row.
+  let targets = 0;
+  let submitted = 0;
+  let refused = 0;
+  const refusalReasons = new Set<string>();
+  for (const r of chrono) {
+    const m = asMeta(r.metadata);
+    if (r.action.endsWith('.target') || r.action.endsWith('.targeted')) targets += 1;
+    if (typeof m.target_count === 'number') targets = Math.max(targets, m.target_count as number);
+    if (r.action.endsWith('.submitted')) submitted += 1;
+    if (r.action.endsWith('.refused') || r.action.endsWith('.rejected') || r.action.endsWith('.blocked')) {
+      refused += 1;
+      if (m.reason) refusalReasons.add(String(m.reason));
+      if (m.i5_outcome && m.i5_outcome !== 'accept' && m.i5_outcome !== 'accepted') refusalReasons.add(`i5:${m.i5_outcome}`);
+    }
+  }
+
+  const runVariant: 'default' | 'secondary' = runKind === 'exit' ? 'secondary' : 'default';
+  const refusedVariant: 'outline' | 'destructive' = refused === 0 ? 'outline' : 'destructive';
+
+  return (
+    <div className="rounded-md border border-border">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full text-left px-3 py-2 flex flex-wrap items-center gap-2">
+        {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+        <span className="font-mono text-xs text-muted-foreground">{formatTs(first?.created_at)}</span>
+        <Badge variant={runVariant} className="font-mono text-[10px] uppercase">{runKind}</Badge>
+        <span className="text-xs">
+          <span className="text-muted-foreground">targets </span>
+          <span className="font-mono">{targets || '—'}</span>
+          <span className="text-muted-foreground"> → submitted </span>
+          <span className="font-mono">{submitted}</span>
+          <span className="text-muted-foreground"> → refused </span>
+          <Badge variant={refusedVariant} className="ml-1 font-mono text-[10px]">{refused}</Badge>
+        </span>
+        {refusalReasons.size > 0 && (
+          <span className="flex flex-wrap gap-1">
+            {[...refusalReasons].slice(0, 4).map((r) => (
+              <Badge key={r} variant="outline" className="font-mono text-[10px]">{r}</Badge>
+            ))}
+          </span>
+        )}
+        <span className="ml-auto font-mono text-[10px] text-muted-foreground truncate max-w-[240px]">
+          cid: {correlationId ?? '—'}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-border p-3 space-y-3">
+          {chrono.map((r) => (
+            <AuditRowCell key={r.id} row={r} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function OvershootExecutionTrail() {
   // T4 (ACT-481) — recent overshoot_entry_runs (MIG-157). Read-only. Uses
   // the new scoped SELECT policy (`overshoot_entry_runs_view_read`, MIG-158)
@@ -310,8 +393,8 @@ export function OvershootExecutionTrail() {
 
   // Group entry/exit rows by correlation_id (rows without one bucket as
   // synthetic per-row groups keyed by id).
-  const entryExitGroups: { key: string; correlationId: string | null; rows: AuditRow[] }[] = [];
-  {
+  const entryExitGroups = useMemo(() => {
+    const groups: { key: string; correlationId: string | null; rows: AuditRow[] }[] = [];
     const byCorr = new Map<string, AuditRow[]>();
     for (const r of entryExitQuery.data ?? []) {
       const k = r.correlation_id ?? `__no_corr__:${r.id}`;
@@ -319,18 +402,26 @@ export function OvershootExecutionTrail() {
       byCorr.get(k)!.push(r);
     }
     for (const [k, rows] of byCorr.entries()) {
-      entryExitGroups.push({
+      groups.push({
         key: k,
         correlationId: k.startsWith('__no_corr__:') ? null : k,
         rows,
       });
     }
-    entryExitGroups.sort((a, b) => {
+    groups.sort((a, b) => {
       const ta = a.rows[0]?.created_at ?? '';
       const tb = b.rows[0]?.created_at ?? '';
       return tb.localeCompare(ta);
     });
-  }
+    return groups;
+  }, [entryExitQuery.data]);
+
+  // ACT-494 item (3): paginate run cards 20/page, newest first.
+  const PAGE_SIZE = 20;
+  const [runPage, setRunPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(entryExitGroups.length / PAGE_SIZE));
+  const currentPage = Math.min(runPage, pageCount - 1);
+  const pagedGroups = entryExitGroups.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -454,33 +545,34 @@ export function OvershootExecutionTrail() {
                 No entry/exit audit rows yet
               </h3>
               <p className="mt-2 max-w-lg mx-auto text-sm text-muted-foreground">
-                Actions matching <code className="font-mono">overshoot.entry.%</code> and{' '}
-                <code className="font-mono">overshoot.exit.%</code> are sparse until the
-                W3.6.e-iii Part-2 first-light bracket executes on a selection morning.
+                Trigger: no <code className="font-mono">overshoot.entry.%</code> or{' '}
+                <code className="font-mono">overshoot.exit.%</code> audit rows since the
+                first-light bracket executes on a selection morning.
               </p>
-              <p className="mt-3 font-mono text-xs text-muted-foreground/80">
-                pending first-light — see docs/04-modules/overshoot/overshoot.md §9
+              <p className="mt-3 text-xs text-muted-foreground">
+                Next action: verify the entry cron is armed on the Overview page; check the Detector tab for a fresh selection.
               </p>
             </div>
           ) : (
             <div className="space-y-4">
-              {entryExitGroups.map((g) => (
-                <div key={g.key} className="rounded-md border border-border p-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-mono text-muted-foreground">
-                      correlation_id: {g.correlationId ?? '—'}
-                    </span>
-                    <span className="font-mono text-muted-foreground">
-                      {formatTs(g.rows[0]?.created_at)}
-                    </span>
-                  </div>
-                  <div className="mt-2 space-y-3">
-                    {g.rows.map((r) => (
-                      <AuditRowCell key={r.id} row={r} />
-                    ))}
+              {pagedGroups.map((g) => (
+                <RunCard key={g.key} correlationId={g.correlationId} rows={g.rows} />
+              ))}
+              {pageCount > 1 && (
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-xs text-muted-foreground">
+                    Page {currentPage + 1} of {pageCount} · {entryExitGroups.length} runs total
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" disabled={currentPage === 0} onClick={() => setRunPage((p) => Math.max(0, p - 1))}>
+                      Previous
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={currentPage >= pageCount - 1} onClick={() => setRunPage((p) => Math.min(pageCount - 1, p + 1))}>
+                      Next
+                    </Button>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </CardContent>
