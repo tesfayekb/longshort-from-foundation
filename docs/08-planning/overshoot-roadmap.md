@@ -242,7 +242,7 @@ by a single criterion = no live. This is not a schedule; it is a gate.
 ## Cross-References
 
 - Runbook: `docs/04-modules/overshoot/overshoot.md` §9 Parts 1-2 (first-light), §10 (W4 completion), §11 (position_already_open gate).
-- FP-069 status ledger: `docs/08-planning/feature-proposals.md` (W4 CLOSED clause + CANDIDATE-i…v).
+- FP-069 status ledger: `docs/08-planning/feature-proposals.md` (W4 CLOSED clause + CANDIDATE-i…vii).
 - Action tracker anchors: ACT-465.a…h (W4 tranches); ACT-466 (entry-gate corrective); ACT-467 (this roadmap); ACT-468 (Hardening charter, opens when NOW banks); ACT-469 (Arming attestation).
 - Master plan: `docs/08-planning/master-plan.md` PLAN-TRADING-001 section (FP-069 sits under trading-panel; W4 closure recorded in that section).
 - Standing directives: anti-phantom-defaults; live-price source contract (Polygon-only); never-silent-drop; one-prompt-in-flight; data-write bracket discipline.
