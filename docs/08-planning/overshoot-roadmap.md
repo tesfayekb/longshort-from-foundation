@@ -1,6 +1,6 @@
 # FP-069 Overshoot — Forward Roadmap (ROI-ordered, evidence-gated)
 
-**Owner:** operator (final authority) · supervisor (draft/review) · Lovable (execution)
+**Owner:** operator (final authority) · supervisor (draft/review) · Lovable (execution) | **Last Reviewed:** 2026-07-09
 **Anchor:** FP-069 (see `docs/08-planning/feature-proposals.md`); master-plan
 linkage recorded at `docs/08-planning/master-plan.md` PLAN-TRADING-001 section
 per the FP-069 W4 CLOSED clause; charter ACT-467 (`docs/06-tracking/action-tracker.md`).
