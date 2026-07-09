@@ -235,6 +235,22 @@ Deno.test('SI read within staleness window (DETECTOR_SI_STALENESS_MAX_DAYS bound
   assertStringIncludes(SRC, '(${asOfDay}::date - ${DETECTOR_SI_STALENESS_MAX_DAYS}::int)');
 });
 
+Deno.test('ACT-490: handler wires ratified asymmetric caps LONG=36 / SHORT=4 via per-side named params', () => {
+  // Positive sentinels: both constants declared with the ratified values.
+  assertStringIncludes(SRC, 'DETECTOR_CAPACITY_LONG = 36');
+  assertStringIncludes(SRC, 'DETECTOR_CAPACITY_SHORT = 4');
+  // Positive sentinels: DetectorInput assembly passes them via the
+  // per-side named-param API (capacityLong / capacityShort).
+  assertStringIncludes(SRC, 'capacityLong: DETECTOR_CAPACITY_LONG');
+  assertStringIncludes(SRC, 'capacityShort: DETECTOR_CAPACITY_SHORT');
+  // Negative sentinel: the pre-ACT-490 scalar constant + call-site MUST
+  // NOT return. This is the exact regression class INC-92 recorded.
+  assertEquals(SRC.includes('DETECTOR_CAPACITY_PER_SIDE'), false,
+    'ACT-490: scalar capacity constant retired');
+  assertEquals(SRC.includes('capacityPerSide:'), false,
+    'ACT-490: scalar capacityPerSide named param retired at handler call site');
+});
+
 Deno.test('POLYGON_API_KEY_PROD_PROBE binding (D2 ratification)', () => {
   assertStringIncludes(SRC, "Deno.env.get('POLYGON_API_KEY_PROD_PROBE')");
   // No fallback chain.

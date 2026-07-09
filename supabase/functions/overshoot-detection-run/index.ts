@@ -87,11 +87,17 @@ import {
 import { bandLabelFor } from '../_shared/overshoot/detector/band-label.ts';
 
 // ── Live-detection defaults. Named parameters, provenance in comments. ────────
-// Ratified priors (FP-069 W3): exclusion_width=5, capacity=20, thresholds L=0.10 S=0.08,
-// window sets L={1,2,3} S={1..5}, momentum L={4,5} S={1,5}, drawdown L={1,2,3} S={4,5},
-// squeeze SI% min = 0.20 (20% of float), SI staleness = 20 calendar days.
+// Ratified priors (FP-069 W3): exclusion_width=5, capacity LONG=36 / SHORT=4
+// (ACT-490 — deployment dial, provenance-bound to T3b sizing constants
+// OVERSHOOT_CAPACITY_LONG=36 / OVERSHOOT_CAPACITY_SHORT=4 in
+// `_shared/overshoot-execution/sizing.ts`; enforces `|selections| <=
+// sleeve-slots per side` structurally, closes the SHORT 5× over-deployment
+// hazard). Thresholds L=0.10 S=0.08, window sets L={1,2,3} S={1..5},
+// momentum L={4,5} S={1,5}, drawdown L={1,2,3} S={4,5}, squeeze SI% min =
+// 0.20 (20% of float), SI staleness = 20 calendar days.
 const DETECTOR_EXCLUSION_WIDTH_DAYS = 5;
-const DETECTOR_CAPACITY_PER_SIDE = 20;
+const DETECTOR_CAPACITY_LONG = 36;
+const DETECTOR_CAPACITY_SHORT = 4;
 const DETECTOR_LONG_EXCESS_THRESHOLD = 0.10;
 const DETECTOR_SHORT_EXCESS_THRESHOLD = 0.08;
 const DETECTOR_SQUEEZE_SI_PCT_FLOAT_MIN = 0.20;
@@ -567,7 +573,8 @@ Deno.serve(createHandler(async (req: Request) => {
       params: {
         runId,
         asOf: asOfDay,
-        capacityPerSide: DETECTOR_CAPACITY_PER_SIDE,
+        capacityLong: DETECTOR_CAPACITY_LONG,
+        capacityShort: DETECTOR_CAPACITY_SHORT,
         squeezeSiPctFloatMin: DETECTOR_SQUEEZE_SI_PCT_FLOAT_MIN,
         siStalenessMaxDays: DETECTOR_SI_STALENESS_MAX_DAYS,
         exclusionWidthDays: DETECTOR_EXCLUSION_WIDTH_DAYS,

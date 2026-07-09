@@ -44,9 +44,12 @@
 //     higher = better across both sides in a single sort.
 //
 //   SLOT-AWARE SELECTION:
-//     Named parameter `capacityPerSide` (charter default: 20). Selection =
-//     rank_score DESC, |excess| DESC tiebreak. Unselected-but-qualified
-//     candidates persist with `selected_for_entry = false` and
+//     Named parameters `capacityLong` + `capacityShort` (per-side; ACT-490
+//     bifurcation — capacity is a deployment dial, NOT part of the versioned
+//     predicate spec; see the demotion memo above DETECTOR_PREDICATE_SPEC_V2_JSON
+//     below). Selection = rank_score DESC, |excess| DESC tiebreak, tier ASC
+//     as final determinism scaffold. Unselected-but-qualified candidates
+//     persist with `selected_for_entry = false` and
 //     `filter_refusal_reason = 'capacity'` — the W4 console MUST see what
 //     was passed over as well as what was taken.
 //
@@ -185,7 +188,15 @@ export interface DetectedEvent {
 export interface DetectorParams {
   runId: string;
   asOf: string; // YYYY-MM-DD
-  capacityPerSide: number;         // charter default 20
+  // ACT-490: per-side capacity, asymmetric. Ratified deployment values
+  // LONG=36 / SHORT=4 bind provenance to the T3b sizing constants
+  // OVERSHOOT_CAPACITY_LONG / OVERSHOOT_CAPACITY_SHORT in
+  // `_shared/overshoot-execution/sizing.ts` — the invariant
+  // `|selections| <= sleeve-slots per side` becomes structural, not
+  // conditional. Deployment dial (see DETECTOR_PREDICATE_SPEC_V2_JSON
+  // demotion memo below); NOT part of the versioned predicate spec.
+  capacityLong: number;
+  capacityShort: number;
   squeezeSiPctFloatMin: number;    // named param — no hard default
   siStalenessMaxDays: number;      // named param — see header derivation
   exclusionWidthDays: number;      // 5 per priors
@@ -417,6 +428,28 @@ export function LONG_ADMISSIBLE(cell: CellForTierEval): boolean {
 // STUDY_FULL_HASH = 'a37e4b963c0ff13f0962e231b6322d11f1210df44812cdd24dcf06e66f354e80'
 // (full `overshoot_study_runs.param_grid_hash` for RATIFIED_STUDY_RUN_ID;
 // UNTOUCHED, boot-asserted separately via RATIFIED_PARAM_GRID_HASH_PREFIX.)
+//
+// ── ACT-490 DEMOTION MEMO (deployment-dial ruling) ──────────────────────
+// The V2 spec JSON below contains `selection.capacity_per_side_default: 20`.
+// Per ACT-490 (INC-92 resolution), that field is HISTORICAL and
+// NON-AUTHORITATIVE — selection capacity is a DEPLOYMENT DIAL passed by
+// the handler at runtime via `capacityLong` / `capacityShort` on
+// DetectorParams, not part of the versioned predicate.
+//
+// Rationale: the RATIFIED_DETECTOR_VERSION hash exists to protect SELECTION
+// SEMANTICS — the deterministic function mapping (candidates, SI, study
+// cells) → (qualified set, rank order). A cap change is a top-N cut applied
+// AFTER semantics resolve; it relabels tail rows between selected and
+// capacity-refused without touching the ranking function. Two runs at
+// cap=20 vs cap=36 on identical inputs produce identical `selected_for_entry`
+// sets for the first 20 rows and diverge only in whether rows 21..36 are
+// selected vs capacity-refused. Alpha function unchanged.
+//
+// Consequence: the V2 spec string stays BYTE-FROZEN for hash stability and
+// audit continuity — no rebind, RATIFIED_DETECTOR_VERSION stays `b7cdfcd8`.
+// The `capacity_per_side_default: 20` field is treated as a documented
+// historical default only. A future V3 spec bump (unrelated to ACT-490)
+// SHOULD drop the field entirely.
 
 export const DETECTOR_PREDICATE_SPEC_V1_JSON =
   '{"version":"v1","long":{"excess_min":0.10,"windows":[1,2,3],"momentum":[4,5],"drawdown":[1,2,3],"earnings_exclusion_days":5,"tiers":{"T1":{"mean_fwd_return_5d_min":0.0020,"arrival_count_min":1}}},"selection":{"ordering":["rank_score_desc","abs_excess_desc"],"capacity_per_side_default":20},"short":{"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
@@ -811,7 +844,10 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
           t === 'T1' ? 0 : t === 'T2' ? 1 : 2;
         return tierRank(a.tier) - tierRank(b.tier);
       });
-    const capacity = params.capacityPerSide;
+    // ACT-490: per-side capacity resolution (deployment dial). LONG and
+    // SHORT are independently bounded so `|selections| <= sleeve-slots per
+    // side` holds structurally, not conditionally on SI availability.
+    const capacity = side === 'LONG' ? params.capacityLong : params.capacityShort;
     for (let i = 0; i < qualified.length; i++) {
       if (i < capacity) {
         qualified[i].selected_for_entry = true;
