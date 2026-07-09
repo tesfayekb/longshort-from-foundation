@@ -66,13 +66,37 @@ function fmtTs(ts: string | null | undefined): string {
   try { return new Date(ts).toLocaleString(); } catch { return ts; }
 }
 
+/**
+ * ACT-494c D2 — DATE-ONLY renderer.
+ *
+ * Postgres `date` columns arrive as ISO calendar strings ("2026-07-08").
+ * `new Date("2026-07-08")` parses them as UTC midnight and `toLocaleString`
+ * then TZ-shifts them into the browser locale — a calendar date becomes a
+ * timestamp ("7/7/2026, 8:00:00 PM" for a viewer west of UTC). Calendar
+ * dates MUST render verbatim; never via Date-with-TZ.
+ */
+function fmtDateOnly(d: string | null | undefined): string {
+  if (!d) return '—';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : d;
+}
+
+/**
+ * Date-only day-count: parses YYYY-MM-DD as a calendar date (UTC midnight)
+ * and compares against today's UTC midnight so results are timezone-stable.
+ */
+function daysSinceDate(dateOnly: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly);
+  if (!m) return null;
+  const then = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.floor((today - then) / 86_400_000);
+}
+
 function fmtMoney(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
   return `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-}
-
-function daysBetween(a: Date, b: Date): number {
-  return Math.floor((b.getTime() - a.getTime()) / 86_400_000);
 }
 
 function PendingCandidateIII({ title }: { title: string }) {
@@ -84,7 +108,8 @@ function PendingCandidateIII({ title }: { title: string }) {
       <CardContent>
         <p className="text-2xl font-semibold text-muted-foreground">—</p>
         <p className="mt-2 text-xs text-muted-foreground/80 font-mono">
-          pending FP-069-CANDIDATE-iii (equity-curve snapshots). No synthetic numbers rendered.
+          No equity snapshots — arm overshoot_equity_snapshot via INC-82 bracket
+          (concrete next action for FP-069-CANDIDATE-iii). No synthetic numbers rendered.
         </p>
       </CardContent>
     </Card>
@@ -117,6 +142,8 @@ interface KpiStripInputs {
   reconciliationRows: number | null;
   killState: string | null;
   killKind: string | null;
+  killLoading: boolean;
+  killError: string | null;
 }
 
 function KpiCell({
@@ -185,7 +212,7 @@ function HealthKpiStrip(k: KpiStripInputs) {
         label="Last detection"
         value={k.latest ? (k.latest.outcome ?? '—') : '—'}
         sub={k.latest
-          ? `${k.latest.selected_count} sel / ${k.latest.event_count} cand · ${fmtTs(k.latest.as_of).split(',')[0]}`
+          ? `${k.latest.selected_count} sel / ${k.latest.event_count} cand · ${fmtDateOnly(k.latest.as_of)}`
           : 'No runs — detector cron pending arm.'}
         variant={detVariant}
       />
@@ -227,11 +254,18 @@ function HealthKpiStrip(k: KpiStripInputs) {
       />
       <KpiCell
         label="Kill-switch"
-        value={k.killState ?? '—'}
-        sub={k.killState
-          ? `attribution: ${k.killKind ?? '—'}`
-          : 'No kill-switch row — defaults to active (no explicit pause).'}
-        variant={killVariant}
+        value={
+          k.killLoading ? '…'
+          : k.killError ? 'read failed'
+          : (k.killState ?? 'absent')
+        }
+        sub={
+          k.killLoading ? 'Loading kill_switches…'
+          : k.killError ? `Read failed — ${k.killError}. Check RLS (ACT-469 scoped-read policy).`
+          : k.killState ? `attribution: ${k.killKind ?? '—'}`
+          : 'No row in kill_switches for strategy_key=overshoot — seed via ops runbook.'
+        }
+        variant={k.killError ? 'bad' : killVariant}
       />
     </div>
   );
@@ -244,7 +278,13 @@ export function OvershootOverview() {
       const { data, error } = await supabase
         .from('overshoot_detection_runs')
         .select('run_id, as_of, outcome, event_count, selected_count')
+        // ACT-494c D1 — secondary sort by detected_at ensures a stable
+        // pick when multiple runs share the same as_of calendar date.
+        // Without it the "latest run" is arbitrary among same-day rows,
+        // producing 0/0/0 tier snapshots when the tie-break picks a
+        // sibling run that has no `overshoot_events` populated.
         .order('as_of', { ascending: false })
+        .order('detected_at', { ascending: false })
         .limit(1);
       if (error) throw error;
       return (data?.[0] ?? null) as DetectionRow | null;
@@ -373,7 +413,7 @@ export function OvershootOverview() {
   const tierShort = latestTiers.filter((e) => e.side === 'short').length;
 
   const si = siFreshQuery.data ?? null;
-  const siStaleDays = si ? daysBetween(new Date(si.as_of_date), new Date()) : null;
+  const siStaleDays = si ? daysSinceDate(si.as_of_date) : null;
 
   const cfg = configQuery.data ?? [];
   const closed = closedLotsQuery.data ?? { count: 0, rows: [] };
@@ -403,6 +443,8 @@ export function OvershootOverview() {
         reconciliationRows={reconRows ? reconRows.length : null}
         killState={kill?.state ?? null}
         killKind={kill?.set_by_kind ?? null}
+        killLoading={killSwitchQuery.isLoading}
+        killError={killSwitchQuery.error ? String((killSwitchQuery.error as Error).message ?? killSwitchQuery.error) : null}
       />
 
       {/* Windowed gain cards — all pending CANDIDATE-iii */}
@@ -483,7 +525,7 @@ export function OvershootOverview() {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">as_of:</span>
-                  <span className="font-mono">{fmtTs(latest.as_of)}</span>
+                  <span className="font-mono">{fmtDateOnly(latest.as_of)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">outcome:</span>
