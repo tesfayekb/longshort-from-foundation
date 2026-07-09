@@ -17,8 +17,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { daysHeldFrom, findBrokerFor } from './reconcile';
-import { PnlCell, sumPriced, type SideFilter } from './format';
-import { SideFilterControl } from './SideFilterControl';
+import { PnlCell, sumPriced, type SideFilter } from '@/components/trading/portfolio/format';
+import { SideFilterControl } from '@/components/trading/portfolio/SideFilterControl';
 import type { BrokerPositionRow, InternalLotRow } from './usePortfolioPositions';
 
 interface Props {

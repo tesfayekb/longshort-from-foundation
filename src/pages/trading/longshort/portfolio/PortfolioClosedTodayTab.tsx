@@ -28,7 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { fmtPrice, PnlCell, sumPriced } from './format';
+import { fmtPrice, PnlCell, sumPriced } from '@/components/trading/portfolio/format';
 import {
   useClosedFillsToday,
   findOpenLotFor,
