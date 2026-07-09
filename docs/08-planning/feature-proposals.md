@@ -1,3 +1,5 @@
+> **Owner:** Project Lead | **Last Reviewed:** 2026-07-09
+
 ### FP-068 — Operator Portfolio + broker-truth positions + broker equity curve + reconciliation surface (READ-ONLY UI over paper broker + persisted ledger; money-path UNTOUCHED)
 
 | Field | Value |
