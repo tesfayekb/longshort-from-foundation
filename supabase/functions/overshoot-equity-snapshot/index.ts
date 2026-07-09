@@ -61,7 +61,7 @@ Deno.serve(createHandler(async (req: Request) => {
   const positionFetcher = new OvershootAlpacaPositionFetcher(client);
   const accountFetcher = new OvershootAlpacaAccountFetcher(client);
 
-  const acct = await accountFetcher.fetchSnapshot(nowTs);
+  const acct = await accountFetcher.fetchAccountSnapshot(nowTs);
   if (acct.ok === false) {
     return apiError(422, 'equity_snapshot_unavailable', {
       correlationId, refusal: acct.refusal, reason: acct.reason,
