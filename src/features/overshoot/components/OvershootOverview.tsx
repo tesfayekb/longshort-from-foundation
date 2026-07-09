@@ -99,10 +99,6 @@ function fmtMoney(n: number | null | undefined): string {
   return `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-function daysBetween(a: Date, b: Date): number {
-  return Math.floor((b.getTime() - a.getTime()) / 86_400_000);
-}
-
 function PendingCandidateIII({ title }: { title: string }) {
   return (
     <Card>
