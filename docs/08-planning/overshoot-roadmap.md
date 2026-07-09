@@ -212,8 +212,9 @@ of paper ≈ 20-40 round-trips (the minimum honest sample for the L-phase gate).
 
 **Pre-live decision items (must resolve BEFORE first live dollar):**
 - **CANDIDATE-iv (wash-sale)** — account structure decision: does overshoot re-entry need a lightweight interlock before the W8 wash-sale ledger lands? Operator ruling required.
+- **CANDIDATE-vii (IBKR broker adapter)** — see `docs/08-planning/feature-proposals.md` FP-069-CANDIDATE-vii. Live broker migration from Alpaca to IBKR is a **Phase-L gate decision only**; no mid-measurement broker change is permitted during W5 paper accumulation. Decision inputs: short-sleeve verdict, leverage-financing spread, scale plan, W5-measured Alpaca fill quality vs IBKR price-improvement stats; cost side is IBKR's always-on session API vs Alpaca-live key swap.
 - **Real-money sizing dial-down proposal** — the paper allocation × sizing rules do not port 1:1 to live; propose an explicit haircut (e.g. 25% of paper notional for first two weeks, 50% for weeks 3-4, 100% conditional on continued gate-green).
-- **IBKR sequencing note** — post-viability only (Alpaca paper → Alpaca live small → IBKR migration is a separate charter, not this phase).
+- **IBKR sequencing note** — post-viability only (Alpaca paper → Alpaca live small → IBKR migration is a separate charter gated by CANDIDATE-vii, not this phase).
 
 **Live sample honesty:** live at week 5-6 if and only if the gates pass. Slippage
 by a single criterion = no live. This is not a schedule; it is a gate.
