@@ -1,6 +1,6 @@
 # FP-069 Overshoot — Forward Roadmap (ROI-ordered, evidence-gated)
 
-**Owner:** operator (final authority) · supervisor (draft/review) · Lovable (execution)
+**Owner:** operator (final authority) · supervisor (draft/review) · Lovable (execution) | **Last Reviewed:** 2026-07-09
 **Anchor:** FP-069 (see `docs/08-planning/feature-proposals.md`); master-plan
 linkage recorded at `docs/08-planning/master-plan.md` PLAN-TRADING-001 section
 per the FP-069 W4 CLOSED clause; charter ACT-467 (`docs/06-tracking/action-tracker.md`).
@@ -212,8 +212,9 @@ of paper ≈ 20-40 round-trips (the minimum honest sample for the L-phase gate).
 
 **Pre-live decision items (must resolve BEFORE first live dollar):**
 - **CANDIDATE-iv (wash-sale)** — account structure decision: does overshoot re-entry need a lightweight interlock before the W8 wash-sale ledger lands? Operator ruling required.
+- **CANDIDATE-vii (IBKR broker adapter)** — see `docs/08-planning/feature-proposals.md` FP-069-CANDIDATE-vii. Live broker migration from Alpaca to IBKR is a **Phase-L gate decision only**; no mid-measurement broker change is permitted during W5 paper accumulation. Decision inputs: short-sleeve verdict, leverage-financing spread, scale plan, W5-measured Alpaca fill quality vs IBKR price-improvement stats; cost side is IBKR's always-on session API vs Alpaca-live key swap.
 - **Real-money sizing dial-down proposal** — the paper allocation × sizing rules do not port 1:1 to live; propose an explicit haircut (e.g. 25% of paper notional for first two weeks, 50% for weeks 3-4, 100% conditional on continued gate-green).
-- **IBKR sequencing note** — post-viability only (Alpaca paper → Alpaca live small → IBKR migration is a separate charter, not this phase).
+- **IBKR sequencing note** — post-viability only (Alpaca paper → Alpaca live small → IBKR migration is a separate charter gated by CANDIDATE-vii, not this phase).
 
 **Live sample honesty:** live at week 5-6 if and only if the gates pass. Slippage
 by a single criterion = no live. This is not a schedule; it is a gate.
@@ -231,6 +232,7 @@ by a single criterion = no live. This is not a schedule; it is a gate.
 | Pyramiding policy | Measurement of `position_already_open` refusal value (are we refusing profitable adds?) | requires ≥N refusals with follow-through data to adjudicate. |
 | FINRA-SI ingestion (CANDIDATE-ii) | Post-L-phase gate green | own charter; augments T2 SI source. |
 | Reconciliation console page (promoted from Portfolio tab) | Post-H2 (A5 alerting matures) | R-4(b) census entry from W4.f. |
+| IBKR broker adapter (CANDIDATE-vii) | Phase-L live gate only | no mid-measurement broker change; see FP-069-CANDIDATE-vii decision inputs. |
 | Study explorer page (R-4(c)) | When study results have operator consumers | UI atop `overshoot_study_runs` + `overshoot_study_cell_results`. |
 | Intraday variant | Own study required (separate charter) | not a delta from the daily variant; a new strategy. |
 | Stop-loss / take-profit revisit | W5 max-adverse-excursion analysis | current design is fixed T+5 exit; any deviation requires MAE evidence. |
@@ -240,7 +242,7 @@ by a single criterion = no live. This is not a schedule; it is a gate.
 ## Cross-References
 
 - Runbook: `docs/04-modules/overshoot/overshoot.md` §9 Parts 1-2 (first-light), §10 (W4 completion), §11 (position_already_open gate).
-- FP-069 status ledger: `docs/08-planning/feature-proposals.md` (W4 CLOSED clause + CANDIDATE-i…v).
+- FP-069 status ledger: `docs/08-planning/feature-proposals.md` (W4 CLOSED clause + CANDIDATE-i…vii).
 - Action tracker anchors: ACT-465.a…h (W4 tranches); ACT-466 (entry-gate corrective); ACT-467 (this roadmap); ACT-468 (Hardening charter, opens when NOW banks); ACT-469 (Arming attestation).
 - Master plan: `docs/08-planning/master-plan.md` PLAN-TRADING-001 section (FP-069 sits under trading-panel; W4 closure recorded in that section).
 - Standing directives: anti-phantom-defaults; live-price source contract (Polygon-only); never-silent-drop; one-prompt-in-flight; data-write bracket discipline.
