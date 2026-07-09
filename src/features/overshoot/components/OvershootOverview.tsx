@@ -146,6 +146,8 @@ interface KpiStripInputs {
   reconciliationRows: number | null;
   killState: string | null;
   killKind: string | null;
+  killLoading: boolean;
+  killError: string | null;
 }
 
 function KpiCell({
@@ -214,7 +216,7 @@ function HealthKpiStrip(k: KpiStripInputs) {
         label="Last detection"
         value={k.latest ? (k.latest.outcome ?? '—') : '—'}
         sub={k.latest
-          ? `${k.latest.selected_count} sel / ${k.latest.event_count} cand · ${fmtTs(k.latest.as_of).split(',')[0]}`
+          ? `${k.latest.selected_count} sel / ${k.latest.event_count} cand · ${fmtDateOnly(k.latest.as_of)}`
           : 'No runs — detector cron pending arm.'}
         variant={detVariant}
       />
@@ -256,11 +258,18 @@ function HealthKpiStrip(k: KpiStripInputs) {
       />
       <KpiCell
         label="Kill-switch"
-        value={k.killState ?? '—'}
-        sub={k.killState
-          ? `attribution: ${k.killKind ?? '—'}`
-          : 'No kill-switch row — defaults to active (no explicit pause).'}
-        variant={killVariant}
+        value={
+          k.killLoading ? '…'
+          : k.killError ? 'read failed'
+          : (k.killState ?? 'absent')
+        }
+        sub={
+          k.killLoading ? 'Loading kill_switches…'
+          : k.killError ? `Read failed — ${k.killError}. Check RLS (ACT-469 scoped-read policy).`
+          : k.killState ? `attribution: ${k.killKind ?? '—'}`
+          : 'No row in kill_switches for strategy_key=overshoot — seed via ops runbook.'
+        }
+        variant={k.killError ? 'bad' : killVariant}
       />
     </div>
   );
