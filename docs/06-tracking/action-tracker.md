@@ -1,3 +1,28 @@
+### ACT-496 (2026-07-09): MILESTONE — **First LIVE overshoot day-two: 14 entry submissions filled and adopted end-to-end; A5 PASS at the new count; six position_already_open defenses fired as designed.**
+
+**Classification.** Behavioral milestone / day-two LIVE closure. NOT an incident (no defect). Filed per operator ruling on Flag A of the §9.2 fill-sweep bracket close (incidents are for defects; this is a green-path first-fire).
+
+**Bracket (§9.2, as_of 2026-07-09).**
+- **Entry — `overshoot-entry-run` LIVE**, run_id `2d95a25f-ee44-47ba-a5a9-803d4eec2b5d`, correlation `441d3ddb-80e0-4f9d-8f17-58b13603aebe`. Manual bracket, second-confirm token `f5b48b67…` consumed inside the 15-min fuse. Detection linkage → `f367e825-e64b-4e77-b378-ac17624705df` (prior SPY session 2026-07-08). Regime `BULL`, capacityLong=36 / capacityShort=4 (ACT-490 bifurcation live). Result: `targets_loaded=20`, `orders_submitted=14`, `dry_run=false`, `outcome=completed`.
+- **Six position_already_open defenses fired as designed** (`refusals.position_already_open=6`; audit trail `overshoot.entry.position_already_open × 6` under correlation `441d3ddb`). These six symbols were the residual open lots from the 2026-07-08 first-LIVE cohort; the pre-submit defense correctly suppressed duplicate orders. Accounting identity: 20 targets = 14 submitted + 6 already-open + 0 other refusals ✅.
+- **Fill-sweep — `overshoot-fill-sweep` LIVE**, correlation `2c1483f3-16b0-49d9-a68b-f9b28d18a54a`. Preceded by DRY sweep `10d74d72-3335-4b1c-916d-cfaacee6f5d8` which predicted 14 divergences (broker_count=32, ledger_count=18, symmetric_diff=14, discovery_shortfall=false). LIVE sweep closed them: `candidates_discovered=14, lots_adopted=14, already_ledgered_skipped=0, fill_unfilled_still_working=0, fill_partial_no_price=0, fetch_errors=0`. **A5 reconciliation PASS: broker_count=32, ledger_count=32, symmetric_diff=[], ok=true, soft_paused=false** at the new count. `sweep_version=inc90-fill-sweep-v3-20260708`, `detector_version=b7cdfcd8`, `git_sha=0c5ad0d9`.
+- **Lot lineage — 14 `overshoot_lots` rows written, broker-fill-price faithful.** All rows `status=open`, `settlement_state=pending`, `entry_ts=2026-07-09 13:55:41.581Z`. `entry_avg = cost_basis / qty` matches the sweep's broker `avg_price` byte-exact for every row (AKAM 128.05, BKR 57.118372, CHRD 119.52, DVN 42.60, FIVE 183.56, HAL 34.36, MP 52.79, MTZ 394.97, ONTO 324.41, OXY 52.559575, RMBS 119.79, SITM 667.84, SNX 251.32, VAL 76.33). No fabricated zeros; no defaulted prices.
+- **T+10 exit clock armed.** Per ACT-489 ruling, the T+10 exit horizon is single-homed on `overshoot_lots.entry_ts` and consumed as session-age at exit-scheduler time (computed, never persisted). All 14 lots carry a real `entry_ts` → all 14 clocks armed at 2026-07-09 13:55:41.581Z.
+
+**Fences (governance evidence).**
+- Pre-bracket + post-bracket FENCE: `cron.job ILIKE '%overshoot%'` → **0** (ACT-481.AMEND structural invariant, re-proved twice this session).
+- Registry ARM/DISARM discipline: `overshoot.entry.run` enabled-only → LIVE → disarmed; `overshoot.fill_sweep` enabled-only → LIVE → disarmed. Final registry state: all 5 overshoot rows `enabled=false, status=registered`.
+
+**Settlement-ts charter deviation (Flag B, folded forward — NOT a defect).**
+- Observation: all 14 adopted lots have `expected_settlement_ts = NULL`. Per operator ruling, `expected_settlement_ts` is the T+2 SETTLEMENT column (distinct from the T+10 exit horizon, which is single-homed on `entry_ts`), and has **zero current consumers** — the exit path does not read it. The NULL is a minor charter deviation, not an exit-clock defect.
+- Forward hand-off: populate `expected_settlement_ts = filled_at + T+2` inside ACT-493's lot-lifecycle scope when that ACT charter is filed. Recorded here so the deviation cannot be lost between ACTs.
+
+**Scope discipline.** Read-only queries + one enable/disable pair on `overshoot.fill_sweep`; zero code touched; zero migrations; zero cron changes; zero fixture / detector / spec byte-touch. Operator drove the LIVE invocations from the console — this ACT records evidence and closes the day, it does not execute money-path code.
+
+**References.** run_id `2d95a25f-ee44-47ba-a5a9-803d4eec2b5d` (entry); correlation `441d3ddb-80e0-4f9d-8f17-58b13603aebe` (entry audit); correlation `10d74d72-3335-4b1c-916d-cfaacee6f5d8` (DRY sweep); correlation `2c1483f3-16b0-49d9-a68b-f9b28d18a54a` (LIVE sweep); detection_run_id `f367e825-e64b-4e77-b378-ac17624705df`; second_confirm_token `f5b48b67…` (consumed); prior day-one milestone under ACT-489 (fill-sweep charter) + ACT-490 (capacity bifurcation).
+
+---
+
 ### ACT-495 (2026-07-09): CI INFRASTRUCTURE NOTE — **GitHub Actions run #712 `strong-evidence` job failed with `runner not acquired` + GitHub internal server error. Root cause: GitHub infrastructure, not repository code. Re-run initiated. Red X on this run must not be read as a code-quality failure.**
 
 ---
