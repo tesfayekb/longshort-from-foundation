@@ -282,7 +282,13 @@ export function OvershootOverview() {
       const { data, error } = await supabase
         .from('overshoot_detection_runs')
         .select('run_id, as_of, outcome, event_count, selected_count')
+        // ACT-494c D1 — secondary sort by detected_at ensures a stable
+        // pick when multiple runs share the same as_of calendar date.
+        // Without it the "latest run" is arbitrary among same-day rows,
+        // producing 0/0/0 tier snapshots when the tie-break picks a
+        // sibling run that has no `overshoot_events` populated.
         .order('as_of', { ascending: false })
+        .order('detected_at', { ascending: false })
         .limit(1);
       if (error) throw error;
       return (data?.[0] ?? null) as DetectionRow | null;
@@ -411,7 +417,7 @@ export function OvershootOverview() {
   const tierShort = latestTiers.filter((e) => e.side === 'short').length;
 
   const si = siFreshQuery.data ?? null;
-  const siStaleDays = si ? daysBetween(new Date(si.as_of_date), new Date()) : null;
+  const siStaleDays = si ? daysSinceDate(si.as_of_date) : null;
 
   const cfg = configQuery.data ?? [];
   const closed = closedLotsQuery.data ?? { count: 0, rows: [] };
@@ -441,6 +447,8 @@ export function OvershootOverview() {
         reconciliationRows={reconRows ? reconRows.length : null}
         killState={kill?.state ?? null}
         killKind={kill?.set_by_kind ?? null}
+        killLoading={killSwitchQuery.isLoading}
+        killError={killSwitchQuery.error ? String((killSwitchQuery.error as Error).message ?? killSwitchQuery.error) : null}
       />
 
       {/* Windowed gain cards — all pending CANDIDATE-iii */}
@@ -521,7 +529,7 @@ export function OvershootOverview() {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">as_of:</span>
-                  <span className="font-mono">{fmtTs(latest.as_of)}</span>
+                  <span className="font-mono">{fmtDateOnly(latest.as_of)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">outcome:</span>
