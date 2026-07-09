@@ -232,6 +232,7 @@ by a single criterion = no live. This is not a schedule; it is a gate.
 | Pyramiding policy | Measurement of `position_already_open` refusal value (are we refusing profitable adds?) | requires ≥N refusals with follow-through data to adjudicate. |
 | FINRA-SI ingestion (CANDIDATE-ii) | Post-L-phase gate green | own charter; augments T2 SI source. |
 | Reconciliation console page (promoted from Portfolio tab) | Post-H2 (A5 alerting matures) | R-4(b) census entry from W4.f. |
+| IBKR broker adapter (CANDIDATE-vii) | Phase-L live gate only | no mid-measurement broker change; see FP-069-CANDIDATE-vii decision inputs. |
 | Study explorer page (R-4(c)) | When study results have operator consumers | UI atop `overshoot_study_runs` + `overshoot_study_cell_results`. |
 | Intraday variant | Own study required (separate charter) | not a delta from the daily variant; a new strategy. |
 | Stop-loss / take-profit revisit | W5 max-adverse-excursion analysis | current design is fixed T+5 exit; any deviation requires MAE evidence. |
