@@ -43,9 +43,18 @@ const DATES = ['2022-05-24', '2024-05-02', '2026-04-15'] as const;
 // Ratified live-runtime params (verbatim mirror of overshoot-detection-run
 // constants — a drift here relative to that handler is caught by the
 // separation guard + a future T2.3 shared-constants extraction).
+// ACT-490 note: the parity domain intentionally preserves the SYMMETRIC
+// cap `capacityLong=20 / capacityShort=20` (NOT the ratified deployment
+// values 36/4). Rationale: these fixtures prove the detector's SELECTION
+// FUNCTION is byte-identical across HEADs on a fixed snapshot; they are
+// NOT deployment-behaviour proofs. The deployment shape (asymmetric 36/4)
+// is exercised by the asymmetric-cap regression test in `detector_test.ts`.
+// Keeping the parity cap at 20/20 lets the fixture bodies + sha256s stay
+// byte-unchanged across the ACT-490 landing.
 const RATIFIED_PARAMS = {
   runId: '00000000-0000-0000-0000-000000000000', // capture-only; selection output does NOT include run_id
-  capacityPerSide: 20,
+  capacityLong: 20,
+  capacityShort: 20,
   squeezeSiPctFloatMin: 0.20,
   siStalenessMaxDays: 20,
   exclusionWidthDays: 5,
@@ -133,7 +142,8 @@ function buildParams(asOf: string, cells: Map<string, StudyCellStats>): Detector
   return {
     runId: RATIFIED_PARAMS.runId,
     asOf,
-    capacityPerSide: RATIFIED_PARAMS.capacityPerSide,
+    capacityLong: RATIFIED_PARAMS.capacityLong,
+    capacityShort: RATIFIED_PARAMS.capacityShort,
     squeezeSiPctFloatMin: RATIFIED_PARAMS.squeezeSiPctFloatMin,
     siStalenessMaxDays: RATIFIED_PARAMS.siStalenessMaxDays,
     exclusionWidthDays: RATIFIED_PARAMS.exclusionWidthDays,
@@ -241,7 +251,7 @@ for (const day of DATES) {
         `#   kernel_fixture: fixtures/overshoot-detector/${day}.jsonl\n` +
         `#   cells_input: fixtures/overshoot-detector-selection/inputs/${day}/cells-input.jsonl\n` +
         `#   si_input: fixtures/overshoot-detector-selection/inputs/${day}/si-input.jsonl\n` +
-        `# detector_params_verbatim: capacityPerSide=20, squeezeSiPctFloatMin=0.20, ` +
+        `# detector_params_verbatim: capacityLong=20, capacityShort=20, squeezeSiPctFloatMin=0.20, ` +
         `siStalenessMaxDays=20, exclusionWidthDays=5, longExcessThreshold=0.10, ` +
         `shortExcessThreshold=0.08, longWindowSet=[1,2,3], shortWindowSet=[1,2,3,4,5], ` +
         `longMomentumSet=[4,5], shortMomentumSet=[1,5], longDrawdownSet=[1,2,3], shortDrawdownSet=[4,5]\n` +
