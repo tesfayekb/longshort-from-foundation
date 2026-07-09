@@ -1555,19 +1555,6 @@ Overshoot re-entry of the same ticker post-exit crosses IRS wash-sale territory 
 
 Every named refusal already writes to `overshoot_audit_logs` (never-silent-drop is proven). But an audit row is not an alert — nothing reaches the operator until they check the console. **Correction (ACT-465.e):** candidate-v blocks the **ARMING GATE**, not Part-2 EXEC — the first-light bracket is operator-attended by design (the operator IS the alerting layer through the bracket window). Before the arming gate flips, we need an alerting surface for: (a) any handler 5xx / boot-assertion failure; (b) any A5 reconciliation refusal class (lot_without_broker_position / unknown_broker_position / side_mismatch / qty_mismatch); (c) any accounting-identity break in the response envelope (`targets_loaded ≠ sum(all counters)`). Delivery channel undecided (Supabase Webhooks / email / Slack / operator dashboard toast); scope, dependency graph, and integration test contract to be scoped by candidate-v STEP A. Stub only — not opened; blocks arming per operator ruling.
 
-**FP-069-CANDIDATE-vii (2026-07-09) — IBKR broker adapter (Phase-L live gate decision point; operator-ratified: no mid-measurement broker change).**
-
-Live broker migration from Alpaca to Interactive Brokers is gated at the **Phase-L live-readiness review**, NOT earlier. During the W5 paper-accumulation window and any pre-live Alpaca-live small-capital phase the broker remains Alpaca so that slippage / fill-quality / price-improvement measurements are **broker-homogeneous**; a mid-measurement broker change is explicitly out of bounds per operator ratification.
-
-**Decision inputs (recorded verbatim for the future Phase-L gate):**
-1. **Short-sleeve verdict:** IBKR borrow/locate infrastructure vs Alpaca's thin shortability surface (Alpaca exposes only a `shortable` boolean with no locate endpoint; IBKR has real locate/borrow depth). This verdict determines whether the short 10% allocation is viable at scale or must be further reduced/retired before live sizing.
-2. **Leverage plan:** if live margin multiplier > 1.0 is ratified, the financing spread (~9–10% Alpaca vs ~5.8–6% IBKR Pro today) consumes ~4% of equity/year at 2.0× leverage, i.e. 15–25% of the strategy's realistic-band return — a first-order ROI term per the operator directive. The leverage decision and the broker-financing decision cannot be separated.
-3. **Scale plan:** target account size vs ADV/market-impact; Alpaca vs IBKR clearing and market-access quality at the planned scale.
-4. **W5-measured Alpaca fill quality vs IBKR price-improvement stats:** slippage vs modeled caps is measured on Alpaca only during the paper window; any IBKR comparison must come from a separate, post-gate measurement or from a broker-homogeneous migration test, not from a mid-stream switch.
-
-**Cost side (recorded verbatim):** IBKR's session-based API (TWS Gateway / a kept-alive Client Portal session) requires an always-on service tier foreign to the current stateless edge-function architecture — estimated ~2 weeks loop time plus a permanent ops surface. Alpaca-live is near-zero implementation work (key swap on the existing adapter). This cost is a Phase-L gate input, not a pre-gate build item.
-
-**Operator-ratified boundary:** no IBKR adapter code, no TWS/CP session plumbing, and no live-secret wiring may be started before Phase-L gate green. Docs-only registration this turn.
 
 **FP-069-CANDIDATE-vi (2026-07-05, ACT-475 closure) — Supervisor MCP verification channel (OAuth-prerequisite; SEQUENCED after the critical month).**
 
