@@ -90,6 +90,152 @@ function PendingCandidateIII({ title }: { title: string }) {
   );
 }
 
+/**
+ * ACT-494b — front-door HEALTH KPI STRIP.
+ *
+ * One-glance answer to "is the overshoot system healthy right now?" —
+ * six live cells sourced from tables the console can already read
+ * (post-ACT-494a RLS fix). Every cell renders a real value where data
+ * exists and an HONEST-EMPTY (with named trigger + next action) where
+ * it doesn't. NO dash-placeholders where live data is available.
+ *
+ * Cells (left → right):
+ *   1. Last detection run — outcome badge + selected/candidates
+ *   2. Deployed slots — open-lot count vs ratified capacity (36 long / 4 short)
+ *   3. Open positions — long/short totals (live)
+ *   4. Day P&L — pending FP-069-CANDIDATE-iii equity snapshots (honest-empty)
+ *   5. Reconciliation — active escalation count from overshoot_reconciliation_state
+ *   6. Kill-switch — state + attribution kind from public.kill_switches
+ */
+interface KpiStripInputs {
+  latest: DetectionRow | null;
+  openLongs: number;
+  openShorts: number;
+  equitySnapshotsCount: number;
+  reconciliationEscalations: number | null;
+  reconciliationRows: number | null;
+  killState: string | null;
+  killKind: string | null;
+}
+
+function KpiCell({
+  label,
+  value,
+  sub,
+  variant = 'default',
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  variant?: 'default' | 'muted' | 'good' | 'warn' | 'bad';
+}) {
+  const valueClass =
+    variant === 'good' ? 'text-emerald-600 dark:text-emerald-400'
+    : variant === 'warn' ? 'text-amber-600 dark:text-amber-400'
+    : variant === 'bad' ? 'text-destructive'
+    : variant === 'muted' ? 'text-muted-foreground'
+    : 'text-foreground';
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-xl font-semibold font-mono ${valueClass}`}>{value}</div>
+        {sub && <div className="mt-1 text-[11px] text-muted-foreground/90 font-mono">{sub}</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function HealthKpiStrip(k: KpiStripInputs) {
+  // Ratified deployment capacity (INC-92 charter): LONG 36 / SHORT 4.
+  // Displayed as deployment context, not a live-price computation.
+  const LONG_CAPACITY = 36;
+  const SHORT_CAPACITY = 4;
+
+  const detOutcome = k.latest?.outcome ?? null;
+  const detVariant: 'good' | 'bad' | 'warn' | 'muted' =
+    detOutcome === 'completed' ? 'good'
+    : detOutcome === 'failed' ? 'bad'
+    : detOutcome === 'no_op' ? 'warn'
+    : 'muted';
+
+  const openTotal = k.openLongs + k.openShorts;
+  const capacityTotal = LONG_CAPACITY + SHORT_CAPACITY;
+  const deployedPct = capacityTotal > 0 ? (openTotal / capacityTotal) * 100 : 0;
+
+  const reconVariant: 'good' | 'bad' | 'muted' =
+    k.reconciliationEscalations === null ? 'muted'
+    : k.reconciliationEscalations > 0 ? 'bad'
+    : 'good';
+
+  const killVariant: 'good' | 'bad' | 'warn' | 'muted' =
+    k.killState === 'active' ? 'good'
+    : k.killState === 'soft_paused' ? 'warn'
+    : k.killState === 'hard_paused' || k.killState === 'liquidating' ? 'bad'
+    : 'muted';
+
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <KpiCell
+        label="Last detection"
+        value={k.latest ? (k.latest.outcome ?? '—') : '—'}
+        sub={k.latest
+          ? `${k.latest.selected_count} sel / ${k.latest.event_count} cand · ${fmtTs(k.latest.as_of).split(',')[0]}`
+          : 'No runs — detector cron pending arm.'}
+        variant={detVariant}
+      />
+      <KpiCell
+        label="Deployed slots"
+        value={`${openTotal} / ${capacityTotal}`}
+        sub={`long ${k.openLongs}/${LONG_CAPACITY} · short ${k.openShorts}/${SHORT_CAPACITY} · ${deployedPct.toFixed(0)}% of ratified capacity`}
+        variant={openTotal > 0 ? 'default' : 'muted'}
+      />
+      <KpiCell
+        label="Open positions"
+        value={openTotal}
+        sub={openTotal === 0
+          ? 'No open lots — pre-first-fill (§9 Part 2 EXEC pending).'
+          : `${k.openLongs} long · ${k.openShorts} short`}
+        variant={openTotal > 0 ? 'default' : 'muted'}
+      />
+      <KpiCell
+        label="Day P&L"
+        value="—"
+        sub={k.equitySnapshotsCount === 0
+          ? 'No equity snapshots — arm overshoot_equity_snapshot via INC-82 bracket.'
+          : 'Pending FP-069-CANDIDATE-iii day-P&L derivation.'}
+        variant="muted"
+      />
+      <KpiCell
+        label="Reconciliation"
+        value={k.reconciliationEscalations === null
+          ? '—'
+          : k.reconciliationEscalations > 0
+            ? `${k.reconciliationEscalations} active`
+            : 'OK'}
+        sub={k.reconciliationRows === 0
+          ? 'No divergences in rolling window.'
+          : k.reconciliationEscalations && k.reconciliationEscalations > 0
+            ? 'A5 escalation active — inspect Portfolio › Reconciliation.'
+            : `${k.reconciliationRows ?? 0} state rows tracked; no escalations.`}
+        variant={reconVariant}
+      />
+      <KpiCell
+        label="Kill-switch"
+        value={k.killState ?? '—'}
+        sub={k.killState
+          ? `attribution: ${k.killKind ?? '—'}`
+          : 'No kill-switch row — defaults to active (no explicit pause).'}
+        variant={killVariant}
+      />
+    </div>
+  );
+}
+
 export function OvershootOverview() {
   const latestRunQuery = useQuery({
     queryKey: ['overshoot', 'overview', 'latest-run'],
@@ -173,6 +319,43 @@ export function OvershootOverview() {
     },
   });
 
+  // ACT-494b — KPI strip queries: reconciliation state + kill-switch state
+  // + equity-snapshot count. All RLS-inheriting SELECT-only.
+  const reconciliationStateQuery = useQuery({
+    queryKey: ['overshoot', 'overview', 'reconciliation-state'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('overshoot_reconciliation_state')
+        .select('symbol, call_name, escalation_active, escalation_count_24h, updated_at');
+      if (error) throw error;
+      return (data ?? []) as { escalation_active: boolean }[];
+    },
+  });
+
+  const killSwitchQuery = useQuery({
+    queryKey: ['overshoot', 'overview', 'kill-switch'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('kill_switches')
+        .select('strategy_key, state, set_by_kind, set_at, reason')
+        .eq('strategy_key', 'overshoot')
+        .maybeSingle();
+      if (error) throw error;
+      return data as { state: string; set_by_kind: string | null } | null;
+    },
+  });
+
+  const equitySnapshotCountQuery = useQuery({
+    queryKey: ['overshoot', 'overview', 'equity-snapshot-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('overshoot_equity_snapshots')
+        .select('snapshot_id', { count: 'exact', head: true });
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
   const open = openLotsQuery.data ?? [];
   const longs = open.filter((l) => l.side === 'long');
   const shorts = open.filter((l) => l.side === 'short');
@@ -194,6 +377,11 @@ export function OvershootOverview() {
   const cfg = configQuery.data ?? [];
   const closed = closedLotsQuery.data ?? { count: 0, rows: [] };
 
+  const reconRows = reconciliationStateQuery.data ?? null;
+  const reconEscalations = reconRows ? reconRows.filter((r) => r.escalation_active).length : null;
+  const kill = killSwitchQuery.data ?? null;
+  const equitySnapshotCount = equitySnapshotCountQuery.data ?? 0;
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -203,6 +391,18 @@ export function OvershootOverview() {
           equity snapshots land (no synthetic numbers, no console price fetches).
         </p>
       </header>
+
+      {/* ACT-494b — front-door HEALTH KPI STRIP (one-glance system status). */}
+      <HealthKpiStrip
+        latest={latest}
+        openLongs={longs.length}
+        openShorts={shorts.length}
+        equitySnapshotsCount={equitySnapshotCount}
+        reconciliationEscalations={reconEscalations}
+        reconciliationRows={reconRows ? reconRows.length : null}
+        killState={kill?.state ?? null}
+        killKind={kill?.set_by_kind ?? null}
+      />
 
       {/* Windowed gain cards — all pending CANDIDATE-iii */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
