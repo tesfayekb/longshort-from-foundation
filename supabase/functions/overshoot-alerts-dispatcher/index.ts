@@ -36,12 +36,14 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { evaluateOverdue } from '../_shared/cron-schedule.ts';
+import { OvershootAlpacaPaperClient } from '../_shared/overshoot-broker/alpaca-paper-client.ts';
+import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpaca-position-fetcher.ts';
 
 /**
  * Version echo — bumped on every dispatcher deploy so `GET /` proves the
  * running build. See INC-95 (cron-aware overdue + slot-based idempotency).
  */
-export const OVERSHOOT_ALERTS_DISPATCHER_VERSION = 'inc95-cron-aware-overdue-v1-20260710';
+export const OVERSHOOT_ALERTS_DISPATCHER_VERSION = 'inc97-independent-a5-v1-20260710';
 
 const RAW_RECIPIENT =
   (Deno.env.get('ALERT_RECIPIENT_EMAIL') ?? Deno.env.get('EDGAR_CONTACT_EMAIL') ?? '').trim();
@@ -107,6 +109,34 @@ interface DispatchResult {
   outcome: 'dispatched' | 'failed' | 'skipped_idempotent';
   provider_message_id?: string;
   error_message?: string;
+}
+
+interface IndependentA5Diff {
+  symbol: string;
+  side: string;
+  broker_qty: number | null;
+  ledger_qty: number | null;
+}
+
+function computeIndependentA5Diff(
+  broker: Map<string, { side: string; qty: number }>,
+  ledger: Map<string, { side: string; qty: number }>,
+): IndependentA5Diff[] {
+  const diffs: IndependentA5Diff[] = [];
+  const keys = new Set([...broker.keys(), ...ledger.keys()]);
+  for (const key of Array.from(keys).sort()) {
+    const b = broker.get(key);
+    const l = ledger.get(key);
+    if (!b || !l || b.side !== l.side || Math.abs(b.qty - l.qty) > 1e-9) {
+      diffs.push({
+        symbol: key.split('|')[0] ?? key,
+        side: b?.side ?? l?.side ?? '',
+        broker_qty: b?.qty ?? null,
+        ledger_qty: l?.qty ?? null,
+      });
+    }
+  }
+  return diffs;
 }
 
 async function sendEmail(subject: string, body: string, severity: 'CRITICAL'|'HIGH'|'INFO'): Promise<DispatchResult> {
@@ -287,25 +317,24 @@ async function scanFailedRuns(correlationId: string): Promise<DispatchResult[]> 
 async function scanFillSweepShortfall(correlationId: string): Promise<DispatchResult[]> {
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const { data } = await supabaseAdmin
-    .from('overshoot_entry_runs')
-    .select('run_id, submitted_count, adopted_count, created_at')
+    .from('overshoot_audit_logs')
+    .select('id, action, metadata, created_at, correlation_id')
+    .in('action', ['overshoot.fill_sweep.discovery_shortfall', 'overshoot.fill_sweep.a5_divergence'])
     .gte('created_at', since)
     .limit(50);
   const results: DispatchResult[] = [];
   for (const r of (data ?? []) as Array<Record<string, unknown>>) {
-    const sub = Number(r.submitted_count ?? 0);
-    const ado = Number(r.adopted_count ?? 0);
-    if (sub > 0 && ado < sub) {
-      results.push(await dispatchOne({
-        trigger_kind: 'fill_sweep_discovery_shortfall',
-        severity: 'HIGH',
-        source_table: 'overshoot_entry_runs',
-        source_row_id: String(r.run_id),
-        subject: `Overshoot fill-sweep shortfall: ${ado}/${sub}`,
-        body_preview: `run_id=${r.run_id} submitted=${sub} adopted=${ado} shortfall=${sub - ado} at=${r.created_at}`,
-        correlation_id: correlationId,
-      }));
-    }
+    const action = String(r.action);
+    const md = (r.metadata ?? {}) as Record<string, unknown>;
+    results.push(await dispatchOne({
+      trigger_kind: action.endsWith('a5_divergence') ? 'fill_sweep_a5_divergence' : 'fill_sweep_discovery_shortfall',
+      severity: action.endsWith('a5_divergence') ? 'CRITICAL' : 'HIGH',
+      source_table: 'overshoot_audit_logs',
+      source_row_id: String(r.id),
+      subject: `Overshoot fill-sweep alert: ${action}`,
+      body_preview: `action=${action} broker_count=${md.broker_count ?? '?'} ledger_count=${md.ledger_count ?? '?'} candidates=${md.candidates_discovered ?? '?'} at=${r.created_at}`,
+      correlation_id: String(r.correlation_id ?? correlationId),
+    }));
   }
   return results;
 }
@@ -334,6 +363,52 @@ async function scanReconciliationDivergence(correlationId: string): Promise<Disp
 }
 
 /**
+ * INC-97 independent A5 watchdog. Broker-vs-ledger truth is fetched here,
+ * not inferred from a sweep-produced artifact: a dead sweep cannot suppress
+ * the alert that reports its own failure.
+ */
+async function scanBrokerLedgerDivergence(correlationId: string): Promise<DispatchResult[]> {
+  const now = new Date();
+  const positionFetcher = new OvershootAlpacaPositionFetcher(new OvershootAlpacaPaperClient());
+  const brokerPositions = await positionFetcher.listOpenPositions(now);
+  const { data: lots, error } = await supabaseAdmin
+    .from('overshoot_lots')
+    .select('symbol, side, qty')
+    .eq('status', 'open');
+  if (error) throw new Error(`independent_a5_ledger_read_failed:${error.message}`);
+
+  const brokerMap = new Map<string, { side: string; qty: number }>();
+  for (const p of brokerPositions) {
+    const raw = p as typeof p & { side?: string };
+    const side = raw.side ?? (p.qty >= 0 ? 'long' : 'short');
+    brokerMap.set(`${p.symbol}|${side}`, { side, qty: Math.abs(p.qty) });
+  }
+  const ledgerMap = new Map<string, { side: string; qty: number }>();
+  for (const row of (lots ?? []) as Array<{ symbol: string; side: string; qty: number }>) {
+    const key = `${row.symbol}|${row.side}`;
+    const prior = ledgerMap.get(key)?.qty ?? 0;
+    ledgerMap.set(key, { side: row.side, qty: prior + Number(row.qty) });
+  }
+  const diffs = computeIndependentA5Diff(brokerMap, ledgerMap);
+  if (diffs.length === 0) return [];
+
+  const day = now.toISOString().slice(0, 10);
+  const signature = diffs.map((d) => `${d.symbol}:${d.side}:${d.broker_qty ?? 'x'}:${d.ledger_qty ?? 'x'}`).join('|');
+  return [await dispatchOne({
+    trigger_kind: 'a5_broker_ledger_divergence',
+    severity: 'CRITICAL',
+    source_table: 'alpaca_positions+overshoot_lots',
+    source_row_id: `${day}:${signature}`,
+    subject: `Overshoot broker-ledger divergence: ${brokerMap.size}/${ledgerMap.size}`,
+    body_preview:
+      `broker_count=${brokerMap.size} ledger_count=${ledgerMap.size} ` +
+      `divergence_count=${diffs.length} diffs=${JSON.stringify(diffs).slice(0, 1200)} ` +
+      `dispatcher_version=${OVERSHOOT_ALERTS_DISPATCHER_VERSION}`,
+    correlation_id: correlationId,
+  })];
+}
+
+/**
  * Watchdog: cron-expected-run missing by T+30min. Reads job_registry
  * (enabled=true, owner_module='overshoot') and compares last-fire evidence.
  */
@@ -347,11 +422,11 @@ async function scanCronOverdue(correlationId: string): Promise<DispatchResult[]>
   const now = new Date();
   const nowMs = now.getTime();
   const TOLERANCE_MS = 30 * 60 * 1000;
-  const map: Record<string, { table: string; tsCol: string }> = {
+  const map: Record<string, { table: string; tsCol: string; action?: string }> = {
     'overshoot.detection.run':          { table: 'overshoot_detection_runs',   tsCol: 'detected_at' },
     'overshoot.entry.run':              { table: 'overshoot_entry_runs',       tsCol: 'created_at'  },
     'overshoot.exit.run':               { table: 'overshoot_entry_runs',       tsCol: 'created_at'  },
-    'overshoot.fill_sweep':             { table: 'overshoot_entry_runs',       tsCol: 'created_at'  },
+    'overshoot.fill_sweep':             { table: 'overshoot_audit_logs',       tsCol: 'created_at', action: 'overshoot.fill_sweep.tick' },
     'overshoot.short_interest.compute': { table: 'overshoot_short_interest',   tsCol: 'as_of_date'  },
     'overshoot.equity_snapshot':        { table: 'overshoot_equity_snapshots', tsCol: 'created_at'  },
     'overshoot_equity_snapshot':        { table: 'overshoot_equity_snapshots', tsCol: 'created_at'  },
@@ -361,11 +436,13 @@ async function scanCronOverdue(correlationId: string): Promise<DispatchResult[]>
     const schedule = String(r.schedule ?? '');
     const m = map[id];
     if (!m || !schedule) continue;
-    const { data: last } = await supabaseAdmin
+    let lastQuery = supabaseAdmin
       // Dynamic table + column names — same `as never` pattern as above.
       .from(m.table as never)
       .select(m.tsCol as never)
-      .order(m.tsCol as never, { ascending: false })
+      .order(m.tsCol as never, { ascending: false });
+    if (m.action) lastQuery = lastQuery.eq('action' as never, m.action as never);
+    const { data: last } = await lastQuery
       .limit(1)
       .maybeSingle();
     const lastTs = last ? new Date(String((last as Record<string, unknown>)[m.tsCol])).getTime() : 0;
@@ -493,19 +570,21 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   // watchdog (default)
-  const [ks, fr, fs, rd, co] = await Promise.all([
+  const [ks, fr, fs, rd, independentA5, co] = await Promise.all([
     scanKillSwitchChanges(correlationId),
     scanFailedRuns(correlationId),
     scanFillSweepShortfall(correlationId),
     scanReconciliationDivergence(correlationId),
+    scanBrokerLedgerDivergence(correlationId),
     scanCronOverdue(correlationId),
   ]);
-  const all = [...ks, ...fr, ...fs, ...rd, ...co];
+  const all = [...ks, ...fr, ...fs, ...rd, ...independentA5, ...co];
   const summary = {
     kill_switch: ks.length,
     failed_runs: fr.length,
     fill_sweep: fs.length,
-    a5_diverge: rd.length,
+    a5_diverge: rd.length + independentA5.length,
+    independent_a5: independentA5.length,
     cron_overdue: co.length,
     total: all.length,
     dispatched: all.filter(x => x.outcome === 'dispatched').length,
