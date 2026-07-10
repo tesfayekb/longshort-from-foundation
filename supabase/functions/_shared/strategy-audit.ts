@@ -169,6 +169,82 @@ export async function writeStrategyAuditEvent(
   }
 }
 
+// ─── ACT-497 H2 — non-blocking alerts dispatcher notifier ───────────────
+//
+// Fires AFTER a successful strategy-audit write when the action matches an
+// alert-tagged pattern AND `ALERTS_DISPATCHER_URL` env var is configured.
+// Wrapped in try/catch with a 3-second hard timeout — a failed notify NEVER
+// blocks the audit write or the engine call. Belt-and-suspenders alongside
+// the 5-min pg_cron watchdog scan.
+//
+// Money-path immutable: this is a fire-and-forget notification. Alert
+// delivery failure does not affect engine outcome.
+
+const ALERT_TAGGED_ACTIONS: ReadonlyMap<string, { severity: 'CRITICAL'|'HIGH'|'INFO'; kind: string }> = new Map([
+  ['overshoot.entry.run.failed',     { severity: 'HIGH',     kind: 'engine_failed_entry'     }],
+  ['overshoot.exit.run.failed',      { severity: 'HIGH',     kind: 'engine_failed_exit'      }],
+  ['overshoot.detection.run.failed', { severity: 'HIGH',     kind: 'engine_failed_detection' }],
+  ['overshoot.fill_sweep.shortfall', { severity: 'HIGH',     kind: 'fill_sweep_shortfall'    }],
+  ['overshoot.reconciliation.divergent', { severity: 'CRITICAL', kind: 'a5_reconciliation_divergence' }],
+])
+
+export function shouldNotifyAlert(action: string): boolean {
+  return ALERT_TAGGED_ACTIONS.has(action)
+}
+
+async function notifyAlertsDispatcher(
+  params: WriteStrategyAuditEventParams,
+  auditId: string,
+): Promise<void> {
+  const url = Deno.env.get('ALERTS_DISPATCHER_URL') ?? ''
+  if (!url) return
+  const tag = ALERT_TAGGED_ACTIONS.get(params.action)
+  if (!tag) return
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 3_000)
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        mode: 'push',
+        trigger_kind: tag.kind,
+        severity: tag.severity,
+        source_table: `${params.strategyKey}_audit_logs`,
+        source_row_id: auditId,
+        subject: `${params.strategyKey}: ${params.action}`,
+        body_preview: `action=${params.action} target=${params.targetType ?? '-'}/${params.targetId ?? '-'} metadata=${JSON.stringify(params.metadata ?? {}).slice(0, 500)}`,
+        correlation_id: params.correlationId,
+      }),
+    })
+  } catch (err) {
+    console.warn('[strategy_audit.notify_failed]', {
+      action: params.action,
+      correlationId: params.correlationId,
+      reason: err instanceof Error ? err.message : String(err),
+    })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Wrap main export at module scope: monkey-patch the original with the
+// post-write notifier. We keep the original as a private symbol so tests
+// can still exercise the pure write path.
+const _writeStrategyAuditEvent_pure = writeStrategyAuditEvent
+export async function writeStrategyAuditEventWithAlerts(
+  params: WriteStrategyAuditEventParams,
+): Promise<StrategyAuditWriteResult> {
+  const result = await _writeStrategyAuditEvent_pure(params)
+  if (result.success && shouldNotifyAlert(params.action)) {
+    // Fire and forget — do NOT await.
+    void notifyAlertsDispatcher(params, result.auditId)
+  }
+  return result
+}
+
 // ─── Internal helpers ───────────────────────────────────────────────────────
 
 /**

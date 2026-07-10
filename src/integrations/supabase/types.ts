@@ -1478,6 +1478,60 @@ export type Database = {
         }
         Relationships: []
       }
+      overshoot_alert_dispatch: {
+        Row: {
+          body_preview: string | null
+          channel: string
+          correlation_id: string
+          created_at: string
+          dispatched_at: string
+          error_message: string | null
+          id: string
+          outcome: string
+          provider_message_id: string | null
+          recipient: string
+          severity: string
+          source_row_id: string
+          source_table: string
+          subject: string
+          trigger_kind: string
+        }
+        Insert: {
+          body_preview?: string | null
+          channel?: string
+          correlation_id: string
+          created_at?: string
+          dispatched_at?: string
+          error_message?: string | null
+          id?: string
+          outcome: string
+          provider_message_id?: string | null
+          recipient: string
+          severity: string
+          source_row_id: string
+          source_table: string
+          subject: string
+          trigger_kind: string
+        }
+        Update: {
+          body_preview?: string | null
+          channel?: string
+          correlation_id?: string
+          created_at?: string
+          dispatched_at?: string
+          error_message?: string | null
+          id?: string
+          outcome?: string
+          provider_message_id?: string | null
+          recipient?: string
+          severity?: string
+          source_row_id?: string
+          source_table?: string
+          subject?: string
+          trigger_kind?: string
+        }
+        Relationships: []
+      }
       overshoot_audit_logs: {
         Row: {
           action: string
