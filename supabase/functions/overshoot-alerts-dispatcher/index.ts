@@ -38,7 +38,6 @@ import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { evaluateOverdue } from '../_shared/cron-schedule.ts';
 import { OvershootAlpacaPaperClient } from '../_shared/overshoot-broker/alpaca-paper-client.ts';
 import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpaca-position-fetcher.ts';
-import { computeA5SymmetricDiff } from '../overshoot-fill-sweep/pure.ts';
 
 /**
  * Version echo — bumped on every dispatcher deploy so `GET /` proves the
@@ -110,6 +109,34 @@ interface DispatchResult {
   outcome: 'dispatched' | 'failed' | 'skipped_idempotent';
   provider_message_id?: string;
   error_message?: string;
+}
+
+interface IndependentA5Diff {
+  symbol: string;
+  side: string;
+  broker_qty: number | null;
+  ledger_qty: number | null;
+}
+
+function computeIndependentA5Diff(
+  broker: Map<string, { side: string; qty: number }>,
+  ledger: Map<string, { side: string; qty: number }>,
+): IndependentA5Diff[] {
+  const diffs: IndependentA5Diff[] = [];
+  const keys = new Set([...broker.keys(), ...ledger.keys()]);
+  for (const key of Array.from(keys).sort()) {
+    const b = broker.get(key);
+    const l = ledger.get(key);
+    if (!b || !l || b.side !== l.side || Math.abs(b.qty - l.qty) > 1e-9) {
+      diffs.push({
+        symbol: key.split('|')[0] ?? key,
+        side: b?.side ?? l?.side ?? '',
+        broker_qty: b?.qty ?? null,
+        ledger_qty: l?.qty ?? null,
+      });
+    }
+  }
+  return diffs;
 }
 
 async function sendEmail(subject: string, body: string, severity: 'CRITICAL'|'HIGH'|'INFO'): Promise<DispatchResult> {
@@ -363,7 +390,7 @@ async function scanBrokerLedgerDivergence(correlationId: string): Promise<Dispat
     const prior = ledgerMap.get(key)?.qty ?? 0;
     ledgerMap.set(key, { side: row.side, qty: prior + Number(row.qty) });
   }
-  const diffs = computeA5SymmetricDiff(brokerMap, ledgerMap);
+  const diffs = computeIndependentA5Diff(brokerMap, ledgerMap);
   if (diffs.length === 0) return [];
 
   const day = now.toISOString().slice(0, 10);

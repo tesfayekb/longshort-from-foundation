@@ -5,6 +5,7 @@ Deno.test('INC-97 watchdog owns an independent Alpaca-vs-ledger A5 scan', async 
   assert(src.includes('async function scanBrokerLedgerDivergence('));
   assert(src.includes('new OvershootAlpacaPositionFetcher'));
   assert(src.includes(".from('overshoot_lots')"));
+  assert(src.includes('computeIndependentA5Diff(brokerMap, ledgerMap)'));
   assert(src.includes("trigger_kind: 'a5_broker_ledger_divergence'"));
   assert(src.includes('scanBrokerLedgerDivergence(correlationId)'));
 });
