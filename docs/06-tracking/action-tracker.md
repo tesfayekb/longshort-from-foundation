@@ -2,6 +2,102 @@
 
 **CYCLE-1 VERDICT OVERRIDE / INC-97 ADDENDUM (2026-07-10).** Prior conditional-GREEN is superseded: cycle-1 is NOT GREEN. Operator broker truth showed 50 positions vs 32 ledger and 18 broker orphans. `net._http_response` proved 105 sweep ticks returned HTTP 401 (`Invalid or expired token`, 13:30:01Z-15:13:00Z) because the handler unconditionally authenticated the anon cron bearer as a user before inspecting `X-Cron-Secret`. The checklist's "18 still working" claim reused stale submit-time state and is recorded as the INC-93 meta-pattern recurrence. INC-97 repaired cron auth, added sweep-owned tick artifacts, replaced the inert/nonexistent entry-run-counter alert scan, and added dispatcher-owned broker-ledger A5. First post-fix autonomous tick at 15:14Z restored parity: 18 adopted, real broker fill prices, zero fetch errors, A5 50=50, correlation `4e33a56a-b4cb-4392-b125-04da29ae5fff`. Version echoes: sweep `inc97-cycle1-v2-20260710`; dispatcher `inc97-independent-a5-v1-20260710`. **REVISED GATE:** Monday entry remains manual. Monday must show one full day where cron sweep autonomously adopts that day's fills AND a controlled synthetic or real divergence provably dispatches a CRITICAL alert. Autonomous entry arms Tuesday only on that evidence; otherwise it remains disarmed.
 
+---
+
+### ACT-498 (2026-07-10): CHARTER — **SELF-HEALING RECONCILIATION LADDER (STEP A DESIGN ONLY, STOP FOR RATIFICATION).** Sequenced AFTER ACT-493 (shares lot-lifecycle code region). No code, no migration in STEP A.
+
+**Operator directive (verbatim, standing):** "Prevention first; where not prevented, AUTOMATIC resolution without human intervention wherever broker evidence can justify the repair; human adjudication reserved ONLY for divergences no broker evidence explains — and even those are auto-contained immediately."
+
+**Design principle.** Every A5 divergence event is classified into exactly one of three rungs at detection time. The rung determines severity, blast radius, and whether human eyes are required. Broker evidence — Alpaca `orders`, `activities/fills`, `positions` — is the sole justification source for any auto-repair. Absence of evidence never justifies a mutation; it justifies containment.
+
+#### (1) Classification rungs
+
+| Rung | Name | Trigger shape | Severity | Human? | Blast radius |
+|---|---|---|---|---|---|
+| **R1** | `AUTO_REPAIRED` | Divergence + attached broker evidence that fully justifies a deterministic ledger mutation restoring parity. | INFO (digest line, no page) | No | Symbol-scoped mutation only; no trading pause. |
+| **R2** | `AUTO_CONTAINED` | Divergence with no sufficient broker evidence, OR partial evidence, OR evidence that is stale/contradictory. | HIGH (page, one-question adjudication) | Yes, next business touch | Symbol-scoped freeze: entry+exit refuse this symbol; symbol excluded from sizing & aggregate-cap math; rest of book unaffected. |
+| **R3** | `HUMAN_REQUIRED` | Structural divergence orthogonal to any single symbol (schema drift, dispatcher/kill-switch tamper, mass-orphan > N symbols, broker feed failing/auth-401, cron overdue). | CRITICAL (page) | Yes, immediate | Global overshoot pause: entry+exit disarmed engine-wide until operator ack. |
+
+Only R3 pages CRITICAL. R2 pages HIGH with a single adjudication payload. R1 does not page.
+
+#### (2) AUTO_REPAIR rules — each with mandatory broker-evidence attachment
+
+Every rule writes an `overshoot_reconciliation_state` row with `outcome='auto_repaired'`, a `repair_kind` discriminator, and a `broker_evidence` JSON block whose contents ARE the rule's evidence contract. Repair is refused (falls to R2) if the contract is unmet.
+
+| # | Repair kind | Trigger (ledger vs broker) | Required broker evidence (all fields present, non-null, mutually consistent) | Ledger mutation | Idempotency key |
+|---|---|---|---|---|---|
+| **R1.a** | `sweep_adopt_fill` — EXISTS TODAY. Cite: `supabase/functions/overshoot-fill-sweep/index.ts` post-INC-97, version `inc97-cycle1-v2-20260710`; proved at 15:14Z (correlation `4e33a56a-b4cb-4392-b125-04da29ae5fff`). | Broker has filled qty; ledger has an open `overshoot_entry_runs` submit-side record with no adopted lot yet. | Alpaca `orders`: `id`, `status ∈ {filled, partially_filled}` with `filled_qty>0`, `filled_avg_price`, `filled_at`, `symbol`, `side`, `client_order_id` matching the submit record. | INSERT `overshoot_lots`(qty=`filled_qty`, price=`filled_avg_price`, `entry_ts=filled_at`, `source_order_id`=broker id); UPDATE entry-run adopted counters. | `(client_order_id, filled_at)` |
+| **R1.b** | `void_ghost_terminal_order` — NEW. | Ghost lot: ledger open lot with `source_order_id=X`; broker order `X` is terminal non-fill. | Alpaca `orders` for `X`: `status ∈ {canceled, expired, rejected}`, `filled_qty=0`, terminal timestamp present; zero `activities/fills` for `X`; terminal-state age > 5 min (live-cancel-race guard). | UPDATE `overshoot_lots` SET `closed_at=<terminal_ts>`, `close_reason='auto_void_terminal_order'`, `metadata.void_evidence=<order_row>`; NO cash/PnL side-effect. | `(source_order_id, terminal_ts)` |
+| **R1.c** | `adjust_qty_from_fill_history` — NEW. | Qty mismatch: ledger open qty for `(symbol, side)` ≠ broker position qty; delta fully explained by unadopted `activities/fills` (partial fills after adoption, or exit fills in the same `client_order_id` family). | Complete `activities/fills` list for the covering `client_order_id` family; signed-qty sum = observed broker delta exactly; every fill's `transaction_time` newer than ledger's last `entry_ts`/`exit_ts`; no inter-fill gap > threshold. | INSERT compensating lot rows (or exit rows) mirroring each unadopted fill; recompute open qty; refuse (fall to R2) if post-mutation parity check fails. | `(activity_id)` per fill |
+
+**Evidence-integrity contract, all rules:** broker API call retried up to N=3 with exponential backoff; any 4xx/5xx or empty response invalidates evidence and repair falls to R2. Evidence blocks stored verbatim in `broker_evidence` (raw JSON) so any repair is reproducible from the row alone. Rule execution is transactional: ledger mutation + `overshoot_audit_logs` write + `overshoot_reconciliation_state` write commit together or none commit.
+
+#### (3) AUTO_CONTAIN (R2) — unexplained residue
+
+Trigger: any A5 divergence for symbol `S` not resolvable by an R1 rule.
+
+Actions, atomic at detection time (BEFORE the page fires):
+1. INSERT `overshoot_symbol_freeze`(`symbol=S`, `reason=<r2_kind>`, `frozen_at=now()`, `evidence_snapshot=<broker+ledger dump>`, `correlation_id`).
+2. Entry engine + exit engine consult `overshoot_symbol_freeze` and refuse any order for `S` (both directions).
+3. Sizing + aggregate-cap math (INC-96) exclude `S`'s open MV from both numerators and denominators until unfreeze.
+4. HIGH alert dispatched with a single-question adjudication payload:
+   - **A — `keep_and_adopt`**: broker is truth; ledger snaps to broker (INSERT/UPDATE lots to match position at latest broker fill prices; prior ledger state preserved in audit trail).
+   - **B — `operator_owned_ignore`**: broker position intentionally out-of-band (manual hedge, external tool); symbol tagged `manual_reserved=true`, permanently excluded from overshoot reconciliation until operator clears the tag.
+   - **C — `investigate`**: freeze stays; no mutation; re-escalates to CRITICAL after T=24h if not adjudicated.
+
+Freeze is symbol-scoped by design — rest of book keeps trading.
+
+#### (4) Severity remap
+
+| Rung | Old (pre-ACT-498) | New (post-ACT-498) |
+|---|---|---|
+| R1 AUTO_REPAIRED | Mixed: silent adoption (sweep) OR HIGH/CRITICAL per scanner. | **INFO** — daily digest line, no email page. |
+| R2 AUTO_CONTAINED | CRITICAL if independent-A5 fires; else silent. | **HIGH** — email page with adjudication payload; symbol frozen. |
+| R3 HUMAN_REQUIRED | Mixed. | **CRITICAL** — email page; global overshoot disarm. |
+
+Dispatcher `severity` enum unchanged. R1 emits to a new `overshoot_daily_digest` sink (one email/day summarizing R1 counts + evidence links). Only R2 and R3 write `overshoot_alert_dispatch` rows.
+
+#### (5) Retrospective mapping — Friday + today
+
+Reconstructed from ACT-497 CYCLE-1 OVERRIDE + INC-97 pack + today's W1 proof.
+
+| Event | Actual outcome | Rung under ACT-498 | Notes |
+|---|---|---|---|
+| **Fri 13:30–15:13Z**: sweep 401'd for ~100 cron ticks, 18 broker fills unadopted. | Invisible — silent auth failure; operator screenshot surfaced it. | **R3** for the auth-401 outage (dispatcher `cron_overdue` on `overshoot.fill_sweep` HIGH → CRITICAL after N consecutive misses) + **R1.a** on the first successful post-fix tick. | Under ACT-498 the outage pages within minutes, not hours; ledger auto-repairs on recovery. Zero human ledger touch. |
+| **Today 15:14Z**: sweep autonomously adopts 18 fills, parity restored. | Silent success. | **R1.a** | One INFO digest line: "18 fills auto-adopted, correlation `4e33a56a…`, 18 broker order ids attached." No page. |
+| **Today 16:48Z**: synthetic `ZZINC97` ghost (W1 watchdog proof). | Fired CRITICAL (correct for test — evidence-of-repair intentionally absent). | Under ACT-498: dispatcher fetches broker order for `INC97-WATCHDOG-PROOF-…` → 404 (synthetic id) → **NOT R1.b** (evidence contract unmet) → **R2 AUTO_CONTAIN**: `ZZINC97` frozen (moot), HIGH page with adjudication payload. | **Not CRITICAL** under new taxonomy — a single-symbol ghost is symbol-scoped by definition. Current W1 proof over-severed; ACT-498 corrects. |
+| **Hypothetical: real broker-cancelled order → ghost lot.** | Would fire CRITICAL independent-A5 today. | **R1.b** | Terminal-order row justifies auto-void; INFO digest only. |
+| **Hypothetical: qty mismatch, two unrecorded 25-share partials explain it.** | Would fire CRITICAL today. | **R1.c** | Signed-qty sum matches delta; compensating lots inserted; INFO digest. |
+| **Hypothetical: ledger 100, broker 0, no broker record explaining exit.** | Would fire CRITICAL today. | **R2** | No evidence for auto-delete; freeze symbol, HIGH page. |
+| **Hypothetical: dispatcher kill-switch tampered mid-day.** | Fires CRITICAL today via kill-switch scanner. | **R3** | Global disarm + CRITICAL. Structural, not symbol-scoped. |
+
+#### Blast radius summary
+
+- **R1 mutations**: single symbol, single event, deterministic, idempotent; reversible via audit trail (`broker_evidence` verbatim + `prior_ledger_snapshot`).
+- **R2 freeze**: single symbol, both directions, symbol excluded from cap math; rest of book trades; auto-escalates to CRITICAL after T=24h without adjudication.
+- **R3 disarm**: engine-wide entry+exit disarmed; positions untouched; requires operator un-disarm after root-cause fix landed.
+- **All rungs**: broker never mutated. Ledger mutations only. Every repair writes `overshoot_audit_logs`(`evidence_kind`, `repair_kind`, `correlation_id`, `broker_evidence_hash`).
+
+#### STEP A deliverables (this filing)
+
+1. Rung taxonomy (R1/R2/R3) with severity + human-adjudication contract. ✅
+2. R1.a/b/c rule table with evidence contracts + idempotency keys + mutation shapes. ✅
+3. R2 containment mechanics (`overshoot_symbol_freeze` shape + adjudication trichotomy). ✅
+4. Severity remap (dispatcher enum unchanged; new `overshoot_daily_digest` sink for R1). ✅
+5. Retrospective mapping of Friday + today's events. ✅
+6. Blast radius per rung. ✅
+
+**Sequencing (per operator directive).** ACT-498 execution begins ONLY after ACT-493 (lot-lifecycle incl. `expected_settlement_ts` populator) is CLOSED. Reason: R1.b/R1.c mutate the lot-lifecycle surface ACT-493 owns; concurrent work risks merge collisions and lifecycle-invariant drift.
+
+**Open questions for operator ratification (STOP HERE, no code):**
+- **Q1** — R1.b live-cancel-race guard: 5 min terminal-state age, or a different threshold?
+- **Q2** — R1.c partial-fills-gap tolerance: max inter-fill gap that still counts as "explained"?
+- **Q3** — R2 escalation timer: single 24h clock, or 4h intraday / 24h overnight split?
+- **Q4** — R2 `operator_owned_ignore` scope: overshoot-only, or also excludes symbol from Longshort/other strategies?
+- **Q5** — `overshoot_daily_digest` cadence: single 21:15Z post-close email, or Monday-morning weekly recap?
+
+**STOP for operator ratification before STEP B (implementation plan).**
+
 **INC-97 EVIDENCE PACK FILED (2026-07-10).** Tuesday-gate consumable pack appended under `docs/06-tracking/incidental-findings.md` § "INC-97 Evidence Pack": (1) root cause verbatim + timeline-anomaly resolution (15:14Z success is single-cause attributable to the cron-auth deploy between 14:40Z and 15:14Z; no other change in interval); (2) transient "build unsuccessful" was a sweep Deno-test iteration, retried green, deployed artifact matches the 21/21 test bundle, version echoes `inc97-cycle1-v2-20260710` (sweep) / `inc97-independent-a5-v1-20260710` (dispatcher); (3) three findings — cron silent failure, checklist stale-data (INC-93 meta-pattern recurrence), watchdog blind spot — with fixes shipped; (4) CRITICAL-page proof plan = synthetic ledger-only ghost row in sandbox scope (tagged `source_order_id='INC97-WATCHDOG-PROOF-<ts>'`, teardown by DELETE), Monday post-close, single invocation, evidence attached to Tuesday-arm decision; real divergence organically pages → synthetic skipped; (5) Monday plan: operator-driven manual entry, all other crons autonomous, Tuesday-arm requires same-day autonomous adoption + CRITICAL page + clean (D) probe.
 
 **ARMING-PROTOCOL AMENDMENT — VERIFIED-TEST-FIRE (2026-07-10, INC-97-derived, binding forward + retroactive).** Rule filed to `docs/04-modules/overshoot/overshoot.md` §13 and INC-97 Evidence Pack row (6): ARMING A CRON LEG REQUIRES ONE VERIFIED TEST-FIRE THROUGH THE ACTUAL HTTP PATH. After cron.job install + registry `enabled=true`, and before the leg is declared armed, either verify the first natural tick's `net._http_response` (200 + expected typed envelope) or trigger one authenticated synthetic tick. Registry + cron.job-row evidence remains necessary but is NOT sufficient. Wave-1's five-leg arm on registry evidence alone was the class defect INC-97 surfaced; a single test-fire against the actual HTTP path would have caught the sweep 401 within one tick window. **Monday checklist item (E) added** — one `net._http_response` 200 + valid envelope per armed leg: (E1) sweep = already proven at 15:14:00Z (correlation `4e33a56a-b4cb-4392-b125-04da29ae5fff`); (E2) dispatcher = trivially proven from any in-window `overshoot_alert_dispatch` row with `inc97-independent-a5-v1-20260710` echo; (E3) equity-snapshot = prove at Monday 21:10Z first natural tick (paste `net._http_response.status_code=200` + one `overshoot_equity_snapshots` row with `snapshot_date=<Monday ET>`); (E4) detection = prove at Monday 22:00Z first natural tick (paste 200 + one `overshoot_detection_runs` row); (E5) `overshoot.short_interest.compute` = first natural tick is 2026-07-15 21:00Z (weekly), leg is DISARMED-EQUIVALENT until that tick returns 200 + one `overshoot_short_interest` batch row or typed `no_op`. Any leg missing (E) evidence at Tuesday-arm decision does NOT count toward the autonomous-entry gate.
