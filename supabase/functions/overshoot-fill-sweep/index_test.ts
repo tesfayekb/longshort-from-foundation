@@ -214,3 +214,13 @@ Deno.test('INC-97 sentinel: cron secret is authenticated before manual JWT/RBAC'
     throw new Error('cron writes must use the canonical system operator identity');
   }
 });
+
+Deno.test('INC-97 sentinel: every live sweep writes its own watchdog heartbeat artifact', async () => {
+  const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
+  if (!src.includes("action: 'overshoot.fill_sweep.tick'")) {
+    throw new Error('live sweep must write overshoot.fill_sweep.tick');
+  }
+  if (!src.includes('if (!dryRun) {')) {
+    throw new Error('sweep heartbeat must remain live-only');
+  }
+});

@@ -1,7 +1,7 @@
 // ACT-489 — pure helpers extracted for unit tests (mirrors parse-as-of-date
 // pattern: no Deno.serve, no side-effects at import, no --allow-net needed).
 
-export const OVERSHOOT_FILL_SWEEP_VERSION = 'inc97-cron-auth-v1-20260710';
+export const OVERSHOOT_FILL_SWEEP_VERSION = 'inc97-cycle1-v2-20260710';
 export const OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT = 'sha256:inc90-created-at-window-action-order-id-v2+onconflict-partial-predicate';
 
 /** YYYY-MM-DD in America/New_York for an instant. DST-safe. */

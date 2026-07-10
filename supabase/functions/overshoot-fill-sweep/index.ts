@@ -464,6 +464,31 @@ Deno.serve(createHandler(async (req: Request) => {
       console.error('[overshoot-fill-sweep] A5 reconcile failed', { correlationId, error: a5.error });
     }
 
+    // INC-97: durable per-tick artifact. The watchdog must observe the sweep's
+    // own execution, never borrow a fresh entry-run timestamp as a proxy.
+    if (!dryRun) {
+      const tickAudit = await writeStrategyAuditEvent({
+        strategyKey: 'overshoot',
+        action: 'overshoot.fill_sweep.tick',
+        actorId,
+        targetType: 'job_registry',
+        targetId: 'overshoot.fill_sweep',
+        correlationId,
+        metadata: {
+          session_date: sessionDate,
+          candidates_discovered: tally.candidates_discovered,
+          lots_adopted: tally.lots_adopted,
+          fill_unfilled_still_working: tally.fill_unfilled_still_working,
+          fetch_errors: tally.fetch_errors,
+          a5_ok: a5.ok,
+          broker_count: a5.broker_count,
+          ledger_count: a5.ledger_count,
+          sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+        },
+      });
+      if (!tickAudit.success) warnings.push(`tick_audit_failed:${tickAudit.code}`);
+    }
+
     await sql.end({ timeout: 5 });
 
     return apiSuccess({
