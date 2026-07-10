@@ -4,7 +4,7 @@
 -- STATUS: AUTHORED ONLY. NOT executed by the H2 build. The operator applies
 -- this file at the Wave-1 ARM step (before all other overshoot crons) so
 -- that any Wave-1 arming failure alerts. Pattern byte-mirrored on sql/31
--- (overshoot detection-run cron) — same MIG-102/sql-20 convention.
+-- (overshoot detection-run cron) -- same MIG-102/sql-20 convention.
 --
 -- PURPOSE (POST-APPLY, once operator-armed): wires the
 -- `overshoot-alerts-dispatcher` handler in WATCHDOG mode to pg_cron at
@@ -18,7 +18,7 @@
 --   3. Scans `overshoot_entry_runs` for fill-sweep adopted<submitted shortfall.
 --   4. Scans `overshoot_reconciliation_state` for divergent outcomes.
 --   5. Scans `job_registry` (enabled=true, owner_module='overshoot') for
---      cron overdue (last-fire > 18h) — the WATCHDOG-OF-CRONS.
+--      cron overdue (last-fire > 18h) -- the WATCHDOG-OF-CRONS.
 -- Each alert insert-first against the unique idempotency index; already-
 -- dispatched triggers write 'skipped_idempotent' rows and skip Resend.
 --
