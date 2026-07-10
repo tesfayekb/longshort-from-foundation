@@ -26,8 +26,41 @@ const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
 Deno.test('DEC-023 envelope: createHandler + authenticateRequest + overshoot.manage RBAC', () => {
   assertStringIncludes(SRC, "import { createHandler, apiSuccess } from '../_shared/handler.ts'");
   assertStringIncludes(SRC, "import { authenticateRequest } from '../_shared/authenticate-request.ts'");
-  assertStringIncludes(SRC, "checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage')");
+  // ACT-503 cron-first shim renamed the JWT-branch local to `jwtCtx` so
+  // the manual-RBAC check is authoritative on the real user id (never
+  // the synthetic cron operator id).
+  assertStringIncludes(SRC, "checkPermissionOrThrow(jwtCtx.user.id, 'overshoot.manage')");
   assertStringIncludes(SRC, 'Deno.serve(createHandler(');
+});
+
+// ACT-503 / INC-99 / I6 ruling (a)(b): cron-first auth + shim safety.
+Deno.test('ACT-503 cron-first auth: verifyCronSecret precedes authenticateRequest; CRON_OPERATOR_ID shim + isCronAuth flag present', () => {
+  assertStringIncludes(SRC, "import { verifyCronSecret } from '../_shared/cron-auth.ts'");
+  assertStringIncludes(SRC, "req.headers.has('X-Cron-Secret')");
+  assertStringIncludes(SRC, 'verifyCronSecret(req)');
+  // I6 ruling (b): synthetic operator id matches fill-sweep reserved UUID
+  // and is NOT associated with any auth.users row.
+  assertStringIncludes(SRC, "const CRON_OPERATOR_ID = '00000000-0000-0000-0000-000000000001'");
+  assertStringIncludes(SRC, 'let isCronAuth = false');
+  assertStringIncludes(SRC, 'isCronAuth = true');
+  const idxCron = SRC.indexOf("req.headers.has('X-Cron-Secret')");
+  const idxJwt  = SRC.indexOf('await authenticateRequest(req)');
+  assert(idxCron > 0 && idxJwt > 0, 'both auth branches present');
+  assert(idxCron < idxJwt, 'X-Cron-Secret branch MUST precede JWT branch');
+});
+
+Deno.test('ACT-503 I6 ruling (a): cron-authenticated path HARD-REJECTS manual_confirm=true with 428', () => {
+  // The shim widens auth (cron may execute) but MUST NOT widen the
+  // two-man rule: manual_confirm on the cron path is a hard 428.
+  assertStringIncludes(SRC, 'if (isCronAuth) {');
+  assertStringIncludes(SRC, "apiError(428, 'manual_confirm_forbidden_on_cron_auth'");
+  // Hard-reject MUST occur inside the manual-confirm branch, before any
+  // token lookup — assert ordering against the token-missing 428.
+  const idxHardReject = SRC.indexOf("'manual_confirm_forbidden_on_cron_auth'");
+  const idxTokenGate  = SRC.indexOf("'manual_confirm_token_missing_or_invalid'");
+  assert(idxHardReject > 0 && idxTokenGate > 0);
+  assert(idxHardReject < idxTokenGate,
+    'cron-auth hard-reject MUST precede token-missing 428 (widen auth, never widen two-man rule)');
 });
 
 Deno.test('injected clock: productionClock; Date.now() only in I6 window cutoff', () => {

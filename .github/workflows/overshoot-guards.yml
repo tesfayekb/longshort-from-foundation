@@ -69,3 +69,53 @@ jobs:
             exit 1
           fi
           echo "INC-91 gate clean: all snapshot-age bounds routed through the single home."
+      - name: "INC-99 gate — cron-first auth ordering in overshoot money handlers (ACT-503)"
+        run: |
+          # INC-99 / ACT-503 standing invariant. Scheduled overshoot money
+          # handlers MUST authenticate cron invocations via
+          # verifyCronSecret BEFORE falling through to authenticateRequest.
+          # A JWT-first branch order silently 401s on cron ticks (pg_net
+          # sends only the anon Authorization header, not a user JWT),
+          # which is what INC-99 diagnosed on Friday. The gate scans every
+          # money handler in the list below and fails when either
+          # (a) verifyCronSecret is not imported, or
+          # (b) authenticateRequest(req) appears BEFORE the
+          #     X-Cron-Secret branch in the file.
+          set -e
+          FAIL=0
+          for h in \
+            overshoot-detection-run \
+            overshoot-entry-run \
+            overshoot-exit-run \
+            overshoot-short-interest-compute \
+            overshoot-equity-snapshot \
+            overshoot-fill-sweep; do
+            F="supabase/functions/$h/index.ts"
+            if [ ! -f "$F" ]; then
+              echo "::error file=$F::INC-99 gate: handler file missing"
+              FAIL=1; continue
+            fi
+            if ! grep -q "from '../_shared/cron-auth.ts'" "$F"; then
+              echo "::error file=$F::INC-99 violation: missing cron-auth import (verifyCronSecret)"
+              FAIL=1; continue
+            fi
+            CRON_LINE=$(grep -n "req.headers.has('X-Cron-Secret')" "$F" | head -1 | cut -d: -f1)
+            JWT_LINE=$(grep -n "await authenticateRequest(req)" "$F" | head -1 | cut -d: -f1)
+            if [ -z "$CRON_LINE" ]; then
+              echo "::error file=$F::INC-99 violation: no X-Cron-Secret branch"
+              FAIL=1; continue
+            fi
+            if [ -z "$JWT_LINE" ]; then
+              echo "::error file=$F::INC-99 violation: no authenticateRequest call"
+              FAIL=1; continue
+            fi
+            if [ "$CRON_LINE" -ge "$JWT_LINE" ]; then
+              echo "::error file=$F,line=$JWT_LINE::INC-99 violation: authenticateRequest (line $JWT_LINE) precedes X-Cron-Secret branch (line $CRON_LINE) — cron ticks will 401"
+              FAIL=1; continue
+            fi
+          done
+          if [ "$FAIL" -ne 0 ]; then
+            echo "::error::INC-99 gate failed. See ACT-503 in docs/06-tracking/action-tracker.md."
+            exit 1
+          fi
+          echo "INC-99 gate clean: all overshoot money handlers authenticate cron-first."

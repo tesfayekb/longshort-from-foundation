@@ -38,8 +38,21 @@ Deno.test('(2) RBAC: overshoot.manage via authenticateRequest + checkPermissionO
   assert(HANDLER_SOURCE.includes("await authenticateRequest(req)"), 'authenticateRequest not called');
   assert(HANDLER_SOURCE.includes("checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage')"),
     "missing checkPermissionOrThrow('overshoot.manage')");
-  assert(!HANDLER_SOURCE.includes('verifyCronSecret'),
-    'unexpected verifyCronSecret on manual RBAC-gated handler');
+  // ACT-503 / INC-99: cron-first auth is now the ratified contract for
+  // scheduled overshoot money handlers. verifyCronSecret MUST be imported
+  // and the X-Cron-Secret branch MUST short-circuit BEFORE the JWT branch
+  // so pg_cron invocations (which do not carry a user JWT) authenticate
+  // via the shared secret. Manual RBAC callers fall through to
+  // authenticateRequest + checkPermissionOrThrow('overshoot.manage').
+  assert(HANDLER_SOURCE.includes("from '../_shared/cron-auth.ts'"),
+    'ACT-503 drift: missing cron-auth import');
+  assert(HANDLER_SOURCE.includes('verifyCronSecret(req)'),
+    'ACT-503 drift: verifyCronSecret(req) not invoked');
+  const idxCron = HANDLER_SOURCE.indexOf("req.headers.has('X-Cron-Secret')");
+  const idxJwt  = HANDLER_SOURCE.indexOf('await authenticateRequest(req)');
+  assert(idxCron > 0 && idxJwt > 0, 'ACT-503 drift: cron/jwt branches not both present');
+  assert(idxCron < idxJwt,
+    'ACT-503 drift: X-Cron-Secret branch MUST precede authenticateRequest');
 });
 
 Deno.test('(3) wall-clock discipline: productionClock is sole source; no new Date() / Date.now()', () => {
