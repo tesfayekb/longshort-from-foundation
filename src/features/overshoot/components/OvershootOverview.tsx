@@ -21,6 +21,8 @@ import type { ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { OvershootCapCompliance } from './portfolio/OvershootCapCompliance';
+import { useOvershootEquitySnapshots } from '../hooks/useOvershootEquitySnapshots';
 
 /**
  * SI staleness display window — MUST mirror the engine's named parameter:
@@ -144,6 +146,12 @@ interface KpiStripInputs {
   killKind: string | null;
   killLoading: boolean;
   killError: string | null;
+  /** Ratified sizing base (equity × strategy_allocation_pct × margin_multiplier), USD. */
+  sizingBaseUsd: number | null;
+  /** Aggregate LONG book MV — cost-basis fallback on the Overview cell. */
+  longMvUsd: number | null;
+  /** Aggregate SHORT book MV — cost-basis fallback on the Overview cell. */
+  shortMvUsd: number | null;
 }
 
 function KpiCell({
@@ -266,6 +274,29 @@ function HealthKpiStrip(k: KpiStripInputs) {
           : 'No row in kill_switches for strategy_key=overshoot — seed via ops runbook.'
         }
         variant={k.killError ? 'bad' : killVariant}
+      />
+    </div>
+  );
+}
+
+/**
+ * CapComplianceRow — one-line strip below the KPI cells surfacing the
+ * INC-96 ratified vs actual per-side allocation posture. Placed below
+ * the DEPLOYED cell so operators reading the deployed-slot count also
+ * see, in the same viewport, the ratified $-cap it maps to.
+ */
+function CapComplianceRow({
+  sizingBaseUsd,
+  longMvUsd,
+  shortMvUsd,
+}: Pick<KpiStripInputs, 'sizingBaseUsd' | 'longMvUsd' | 'shortMvUsd'>) {
+  return (
+    <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
+      <OvershootCapCompliance
+        sizingBaseUsd={sizingBaseUsd}
+        longMvUsd={longMvUsd}
+        shortMvUsd={shortMvUsd}
+        labelPrefix="Cap compliance:"
       />
     </div>
   );
