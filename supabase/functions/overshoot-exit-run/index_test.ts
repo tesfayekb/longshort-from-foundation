@@ -39,6 +39,30 @@ Deno.test('DEC-023 envelope: createHandler + authenticateRequest + overshoot.man
   assertStringIncludes(SRC, 'Deno.serve(createHandler(');
 });
 
+// ACT-503 / INC-99 / I6 ruling (a)(b): cron-first auth + shim safety.
+Deno.test('ACT-503 cron-first auth: verifyCronSecret precedes authenticateRequest; CRON_OPERATOR_ID shim + isCronAuth flag present', () => {
+  assertStringIncludes(SRC, "import { verifyCronSecret } from '../_shared/cron-auth.ts'");
+  assertStringIncludes(SRC, "req.headers.has('X-Cron-Secret')");
+  assertStringIncludes(SRC, 'verifyCronSecret(req)');
+  assertStringIncludes(SRC, "const CRON_OPERATOR_ID = '00000000-0000-0000-0000-000000000001'");
+  assertStringIncludes(SRC, 'let isCronAuth = false');
+  assertStringIncludes(SRC, 'isCronAuth = true');
+  const idxCron = SRC.indexOf("req.headers.has('X-Cron-Secret')");
+  const idxJwt  = SRC.indexOf('await authenticateRequest(req)');
+  assert(idxCron > 0 && idxJwt > 0, 'both auth branches present');
+  assert(idxCron < idxJwt, 'X-Cron-Secret branch MUST precede JWT branch');
+});
+
+Deno.test('ACT-503 I6 ruling (a): cron-authenticated path HARD-REJECTS manual_confirm=true with 428', () => {
+  assertStringIncludes(SRC, 'if (isCronAuth) {');
+  assertStringIncludes(SRC, "apiError(428, 'manual_confirm_forbidden_on_cron_auth'");
+  const idxHardReject = SRC.indexOf("'manual_confirm_forbidden_on_cron_auth'");
+  const idxTokenGate  = SRC.indexOf("'manual_confirm_token_missing_or_invalid'");
+  assert(idxHardReject > 0 && idxTokenGate > 0);
+  assert(idxHardReject < idxTokenGate,
+    'cron-auth hard-reject MUST precede token-missing 428 (widen auth, never widen two-man rule)');
+});
+
 Deno.test('injected clock: productionClock; Date.now() only in I6 window cutoff (documented)', () => {
   assertStringIncludes(SRC, "import { productionClock } from '../_shared/longshort-clock.ts'");
   // Strip line-/block-comments before counting Date.now() references so
