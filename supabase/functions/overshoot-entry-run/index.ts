@@ -73,6 +73,7 @@
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
+import { verifyCronSecret } from '../_shared/cron-auth.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
@@ -277,8 +278,20 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(405, 'method_not_allowed', { correlationId });
   }
 
-  const authCtx = await authenticateRequest(req);
-  await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+  // INC-99 / ACT-503: cron-first branch mirrors overshoot-fill-sweep
+  // (supabase/functions/overshoot-fill-sweep/index.ts:132-143). Cron path
+  // substitutes a synthetic operator id (matches fill-sweep CRON_OPERATOR_ID).
+  const CRON_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
+  let authCtx: { user: { id: string } };
+  if (req.headers.has('X-Cron-Secret')) {
+    const cronAuthError = verifyCronSecret(req);
+    if (cronAuthError) return cronAuthError;
+    authCtx = { user: { id: CRON_OPERATOR_ID } };
+  } else {
+    const jwtCtx = await authenticateRequest(req);
+    await checkPermissionOrThrow(jwtCtx.user.id, 'overshoot.manage');
+    authCtx = { user: { id: jwtCtx.user.id } };
+  }
 
   let body: Record<string, unknown> = {};
   try {
