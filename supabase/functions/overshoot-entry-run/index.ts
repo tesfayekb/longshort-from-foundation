@@ -890,12 +890,13 @@ Deno.serve(createHandler(async (req: Request) => {
       // orthogonal to the RegT-margin BP guard below — the BP guard
       // enforces broker-margin availability; this guard enforces
       // OPERATOR-RATIFIED gross-leverage. Both must pass.
+      const capSide: 'long' | 'short' = sel.side === 'short' ? 'short' : 'long';
       const capEval = evaluateAllocationCap({
-        side: sel.side,
+        side: capSide,
         sizingBase,
-        sideAllocationPct: sideAllocationPctByKey[sel.side],
-        currentOpenMV: openMV[sel.side],
-        acceptedNotionalThisRun: acceptedNotionalBySide[sel.side],
+        sideAllocationPct: sideAllocationPctByKey[capSide],
+        currentOpenMV: openMV[capSide],
+        acceptedNotionalThisRun: acceptedNotionalBySide[capSide],
         thisOrderNotional: sizing.slotNotional,
       });
       if (!capEval.ok) {
@@ -914,9 +915,9 @@ Deno.serve(createHandler(async (req: Request) => {
             current_open_mv_usd: capEval.current_open_mv_usd,
             accepted_notional_this_run_usd: capEval.accepted_notional_this_run_usd,
             this_order_notional_usd: capEval.this_order_notional_usd,
-            side_allocation_pct: sideAllocationPctByKey[sel.side],
+            side_allocation_pct: sideAllocationPctByKey[capSide],
             sizing_base_usd: sizingBase,
-            mv_basis_mix: openMV.basis_mix[sel.side],
+            mv_basis_mix: openMV.basis_mix[capSide],
             handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
             session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
           },
@@ -988,7 +989,7 @@ Deno.serve(createHandler(async (req: Request) => {
       // INC-96: mirror per-side tracker for the aggregate cap gate.
       // Incremented on the same path as cumulativeIntendedNotional so
       // downstream iterations see the same commitment view.
-      acceptedNotionalBySide[sel.side] += sizing.slotNotional;
+      acceptedNotionalBySide[capSide] += sizing.slotNotional;
 
       const cid = buildOvershootClientOrderId({
         runId, ticker: sel.ticker, side: sideUpper, intent, attempt: 0,
