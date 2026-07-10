@@ -429,6 +429,12 @@ Deno.serve(createHandler(async (req: Request) => {
 
     // ── (6) I6 second-confirm token gate (manual path only) ─────────────
     if (manualConfirm) {
+      // INC-99 ruling (a): cron-authenticated caller can NEVER submit via
+      // the manual path. Hard-reject before the token lookup.
+      if (isCronAuth) {
+        await sql.end({ timeout: 5 });
+        return apiError(428, 'manual_confirm_forbidden_on_cron_auth', { correlationId });
+      }
       if (!secondConfirmToken) {
         await sql.end({ timeout: 5 });
         return apiError(428, 'manual_confirm_token_missing_or_invalid', { correlationId });
