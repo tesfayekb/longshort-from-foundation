@@ -1124,6 +1124,23 @@ Deno.serve(createHandler(async (req: Request) => {
       detector_version: RATIFIED_DETECTOR_VERSION,
       capacity_long: OVERSHOOT_CAPACITY_LONG,
       capacity_short: OVERSHOOT_CAPACITY_SHORT,
+      // INC-96 diagnostics: pin the deployed handler + surface the cap
+      // decision surface every response for operator triage / attestation.
+      handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
+      allocation_cap: {
+        side_allocation_pct: {
+          long:  OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
+          short: OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+        },
+        side_cap_usd:            sideCapUsd,
+        open_mv_usd_by_side:     { long: openMV.long, short: openMV.short },
+        mv_basis_mix:            openMV.basis_mix,
+        accepted_notional_usd:   acceptedNotionalBySide,
+        projected_side_mv_usd: {
+          long:  openMV.long  + acceptedNotionalBySide.long,
+          short: openMV.short + acceptedNotionalBySide.short,
+        },
+      },
       correlation_id: correlationId,
     });
   } catch (err) {
