@@ -36,11 +36,52 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 
-const RECIPIENT = Deno.env.get('EDGAR_CONTACT_EMAIL') ?? '';
+const RAW_RECIPIENT =
+  (Deno.env.get('ALERT_RECIPIENT_EMAIL') ?? Deno.env.get('EDGAR_CONTACT_EMAIL') ?? '').trim();
+const RECIPIENT_SOURCE = Deno.env.get('ALERT_RECIPIENT_EMAIL')
+  ? 'ALERT_RECIPIENT_EMAIL'
+  : (Deno.env.get('EDGAR_CONTACT_EMAIL') ? 'EDGAR_CONTACT_EMAIL' : 'none');
 const RESEND_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
 const LOVABLE_KEY = Deno.env.get('LOVABLE_API_KEY') ?? '';
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/resend';
+
+/**
+ * Boot-time recipient normalization. Accepts:
+ *   - bare email:            "user@example.com"
+ *   - RFC-5322 name form:    "Display Name <user@example.com>"
+ * Returns the bare address only (Resend `to` requires that).
+ * On invalid input, RECIPIENT is '' and RECIPIENT_INVALID_REASON is set;
+ * dispatchOne then routes to alert.dispatch_failed instead of Resend.
+ */
+const BARE_EMAIL_RE = /^[^\s<>@,;"]+@[^\s<>@,;"]+\.[^\s<>@,;"]+$/;
+const NAME_ADDR_RE  = /<\s*([^\s<>@,;"]+@[^\s<>@,;"]+\.[^\s<>@,;"]+)\s*>\s*$/;
+function normalizeRecipient(raw: string): { email: string; reason?: string } {
+  if (!raw) return { email: '', reason: 'recipient_env_missing' };
+  if (BARE_EMAIL_RE.test(raw)) return { email: raw };
+  const m = raw.match(NAME_ADDR_RE);
+  if (m && BARE_EMAIL_RE.test(m[1])) return { email: m[1] };
+  return { email: '', reason: 'invalid_recipient' };
+}
+const { email: RECIPIENT, reason: RECIPIENT_INVALID_REASON } = normalizeRecipient(RAW_RECIPIENT);
+
+/** Masked shape for diagnostic GET — never returns the local part. */
+function maskedRecipientShape(raw: string): string {
+  if (!raw) return '(empty)';
+  // Extract any @domain we can find; mask local part entirely.
+  const at = raw.lastIndexOf('@');
+  if (at < 0) return `(no @; len=${raw.length})`;
+  const localLen = at - Math.max(0, raw.lastIndexOf('<') + 1);
+  const tail = raw.slice(at);
+  const domainEnd = tail.search(/[\s>]/);
+  const domain = domainEnd < 0 ? tail : tail.slice(0, domainEnd);
+  const hasAngle = /<[^>]*>/.test(raw);
+  const suffix = raw.slice(at + domain.length).trim();
+  const shape = hasAngle
+    ? `Name <***${domain}>`
+    : (suffix ? `***${domain} ${suffix}` : `***${domain}`);
+  return `${shape} (local_len=${localLen}, total_len=${raw.length})`;
+}
 
 interface PushBody {
   mode: 'push';
@@ -66,7 +107,7 @@ async function sendEmail(subject: string, body: string, severity: 'CRITICAL'|'HI
     return { outcome: 'failed', error_message: 'resend_or_lovable_key_missing' };
   }
   if (!RECIPIENT) {
-    return { outcome: 'failed', error_message: 'edgar_contact_email_missing' };
+    return { outcome: 'failed', error_message: RECIPIENT_INVALID_REASON ?? 'recipient_missing' };
   }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -379,7 +420,15 @@ Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
 
   if (req.method === 'GET') {
-    return apiSuccess({ ok: true, handler: 'overshoot-alerts-dispatcher', correlation_id: correlationId });
+    return apiSuccess({
+      ok: true,
+      handler: 'overshoot-alerts-dispatcher',
+      correlation_id: correlationId,
+      recipient_source: RECIPIENT_SOURCE,
+      recipient_valid: RECIPIENT !== '',
+      recipient_invalid_reason: RECIPIENT_INVALID_REASON ?? null,
+      recipient_shape_masked: maskedRecipientShape(RAW_RECIPIENT),
+    });
   }
   if (req.method !== 'POST') return apiError(405, 'method_not_allowed', { correlationId });
 
