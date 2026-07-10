@@ -1,3 +1,43 @@
+### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+
+**Operator adjudications received 2026-07-10 (binding, verbatim):**
+
+1. **Live-DB arming state confirmed** (option (c) — both live-DB SELECT and proceed to Track B). Arming-state matrix corrected from live evidence:
+
+| Registry id | enabled | schedule | cron jobid | cron active | Notes |
+|---|---|---|---|---|---|
+| `overshoot.alerts.dispatcher` | true | `*/5 * * * *` | 120 | true | Wave-1 armed |
+| `overshoot.short_interest.compute` | true | `0 21 1,15 * *` | 121 | true | **CORRECTS prior sql/30 matrix claim — jobid 121 exists from Wave-1** |
+| `overshoot.detection.run` | true | `0 22 * * 1-5` | 122 | true | Wave-1 armed |
+| `overshoot.exit.run` | **false** | `50 19 * * 1-5` | 123 | true | Cron armed, registry disarmed — handler no-ops until registry flip |
+| `overshoot.entry.run` | **false** | `35 13 * * 1-5` | 124 (slot-a) + 127 (slot-b `35 14`) | true | Dual-slot DST cover; registry disarmed pending Tuesday arm decision |
+| `overshoot.fill_sweep` | true | `* 13-21 * * 1-5` | 128 | true | Post-INC-97 armed |
+| `overshoot.equity_snapshot` | true | `10 21 * * 1-5` | 129 | true | Wave-1 armed |
+
+   Anomaly surfaced: stale `overshoot_equity_snapshot` row (underscore-form, enabled=false, schedule `30 21`) coexists alongside canonical dotted row — filed as **INC-98** in `docs/06-tracking/incidental-findings.md`. Money-path impact zero (no cron wired to schedule `30 21`). Deferred cleanup queued as ACT-500 candidate.
+
+2. **P0 #3 (overnight-gap circuit breaker) RECLASSIFIED — STRATEGY CHANGE, not ops fix.** Rationale: an unmeasured auto-exit would sell the deepest dislocations at their worst prints, the exact VI.I trap (refused bouncers earned 4.4×). Split:
+   - **(3a)** Gap-detector-that-PAGES = pure observability → chartered into the alerting wave (meta-alerting bundle below).
+   - **(3b)** Auto-exit threshold requires STUDY EXTENSION first → **ACT-487e candidate**: conditional on held day 1-10, what do further gap-downs of 10/15/20/25% do over the remaining horizon, per tier? Pre-committed-threshold discipline per VI.J. NO auto-exit code until study lands and threshold ratified.
+
+3. **P0 sequencing folded:**
+   - **Into ACT-493 scope** (same exit-lifecycle code region, one Tier-A landing, deadline 07-17 held): P0 #1 (exit-miss same-day catch-up cron), P0 #2 (half-day-aware exit slot), P0 #8 (priority fast-page for exit-run failures), P1 #17 (exit-run failure classification). If scope growth threatens 07-17, #2 and #17 may trail by days — ACT-493 implementer to state at STEP B.
+   - **Own small charter (meta-alerting bundle, cheap-form):** P0 #6 (external watchdog-of-the-watchdog heartbeat) + P0 #7 (second independent alert channel non-Resend) + (3a) gap-detector-that-PAGES → single charter: external heartbeat service the dispatcher pings; its silence-detection emails independently of Resend; gap-detector emits into same page channel. Queue as **ACT-501 candidate**.
+   - **Own small charter (post-ACT-493):** P0 #4 CRON_SECRET vault-reference (move out of embedded `cron.job.command` bodies per sql/30-36 pattern). Queue as **ACT-502 candidate**.
+   - **Confirmed ACT-498 STEP B scope additions:** P0 #5 (symbol_rename → R1.d) + P0 #9 (corporate_action → R1.e). Already ratified to sequence behind ACT-493.
+
+4. **UNATTENDED-WEEK POSTURE PARAGRAPH (verbatim quote, binding — appears in ACT-499 record AND Phase-9 (ARM) gate criteria):**
+
+   > *The system is **safe from catastrophic runaway execution** due to passive safeguards (kill-switches, fail-closed patterns), but **not safe from silent value erosion, and not productive**. Over 7 days unattended, it's likely to quietly stop (paused book, stale SI, missed exits) rather than incur blown-up accounts. The current paging chain (18h/30-min generic `cron_overdue`, single-channel Resend, no watchdog-of-the-watchdog) is the weakest link, leading to potential "safe-and-quiet" or "unsafe-and-quiet" failures.*
+
+   **Phase-9 (ARM) gate criterion (binding):** The walk-away state is NOT reached until the P0 list is burned down, INDEPENDENT of Tuesday's entry arm. Tuesday arming autonomous entry does NOT satisfy Phase-9; the P0 burn-down (ACT-493 + ACT-498 STEP B + ACT-501 meta-alerting + ACT-502 CRON_SECRET vault) is the gate.
+
+**Track B dispatched:** security audit subagent spawned (agent `sub_v2fs98wn`) — OVERSHOOT scope, read-only, findings table + proposed charters. Coverage: edge-function auth surface (X-Cron-Secret consistency; anon-bearer bypass paths per INC-97 root cause), RLS + GRANTs on every `overshoot_*` table, secrets exposure (CRON_SECRET embedded in `cron.job` bodies; ALPACA_PAPER_KEY_OVERSHOOT usage), SECURITY DEFINER function caller-role gates, T4 audit-writer trap, cross-strategy import leakage. Report on completion.
+
+**Files touched:** `docs/06-tracking/action-tracker.md` (this record), `docs/06-tracking/incidental-findings.md` (INC-98 filed). NO code, NO migrations, NO schema changes.
+
+---
+
 ### ACT-497 (2026-07-10): EXECUTION — **H2 ALERTING channel proven end-to-end (dispatcher -> Resend -> operator inbox) + Wave-1 pre-arm corrective landing (equity-snapshot registry seed + sql/36 cron authored + ARM-comment protocol drift fixed across all 6 cron files + dispatcher CI-red cleared).**
 
 **CYCLE-1 VERDICT OVERRIDE / INC-97 ADDENDUM (2026-07-10).** Prior conditional-GREEN is superseded: cycle-1 is NOT GREEN. Operator broker truth showed 50 positions vs 32 ledger and 18 broker orphans. `net._http_response` proved 105 sweep ticks returned HTTP 401 (`Invalid or expired token`, 13:30:01Z-15:13:00Z) because the handler unconditionally authenticated the anon cron bearer as a user before inspecting `X-Cron-Secret`. The checklist's "18 still working" claim reused stale submit-time state and is recorded as the INC-93 meta-pattern recurrence. INC-97 repaired cron auth, added sweep-owned tick artifacts, replaced the inert/nonexistent entry-run-counter alert scan, and added dispatcher-owned broker-ledger A5. First post-fix autonomous tick at 15:14Z restored parity: 18 adopted, real broker fill prices, zero fetch errors, A5 50=50, correlation `4e33a56a-b4cb-4392-b125-04da29ae5fff`. Version echoes: sweep `inc97-cycle1-v2-20260710`; dispatcher `inc97-independent-a5-v1-20260710`. **REVISED GATE:** Monday entry remains manual. Monday must show one full day where cron sweep autonomously adopts that day's fills AND a controlled synthetic or real divergence provably dispatches a CRITICAL alert. Autonomous entry arms Tuesday only on that evidence; otherwise it remains disarmed.
