@@ -231,13 +231,21 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   // INC-99 / ACT-503: cron-first branch mirrors overshoot-fill-sweep
-  // (supabase/functions/overshoot-fill-sweep/index.ts:132-143). See INC-99.
+  // (supabase/functions/overshoot-fill-sweep/index.ts:132-143). Scheduled
+  // invocations carry the anon Authorization header plus X-Cron-Secret; the
+  // anon JWT is not a user session, so the cron branch MUST be authenticated
+  // before the manual JWT/RBAC branch. Cron path substitutes a synthetic
+  // operator id (matches fill-sweep CRON_OPERATOR_ID).
+  const CRON_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
+  let authCtx: { user: { id: string } };
   if (req.headers.has('X-Cron-Secret')) {
     const cronAuthError = verifyCronSecret(req);
     if (cronAuthError) return cronAuthError;
+    authCtx = { user: { id: CRON_OPERATOR_ID } };
   } else {
-    const authCtx = await authenticateRequest(req);
-    await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+    const jwtCtx = await authenticateRequest(req);
+    await checkPermissionOrThrow(jwtCtx.user.id, 'overshoot.manage');
+    authCtx = { user: { id: jwtCtx.user.id } };
   }
 
   let body: Record<string, unknown> = {};
