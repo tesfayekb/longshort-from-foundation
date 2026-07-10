@@ -881,6 +881,49 @@ Deno.serve(createHandler(async (req: Request) => {
         continue;
       }
 
+      // ── INC-96 aggregate allocation-cap gate ─────────────────────────
+      // Refuses when projected_side_MV = currentOpenMV_side
+      //                                + acceptedNotionalThisRun_side
+      //                                + this_order_notional
+      // would exceed sizingBase × OVERSHOOT_SIDE_ALLOCATION_PCT_<SIDE>.
+      // Rank-order preserved (iteration order unchanged). This gate is
+      // orthogonal to the RegT-margin BP guard below — the BP guard
+      // enforces broker-margin availability; this guard enforces
+      // OPERATOR-RATIFIED gross-leverage. Both must pass.
+      const capEval = evaluateAllocationCap({
+        side: sel.side,
+        sizingBase,
+        sideAllocationPct: sideAllocationPctByKey[sel.side],
+        currentOpenMV: openMV[sel.side],
+        acceptedNotionalThisRun: acceptedNotionalBySide[sel.side],
+        thisOrderNotional: sizing.slotNotional,
+      });
+      if (!capEval.ok) {
+        tally.allocation_cap_reached += 1;
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.entry.allocation_cap_reached',
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: {
+            ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
+            reason: capEval.reason,
+            side_cap_usd: capEval.side_cap_usd,
+            projected_side_mv_usd: capEval.projected_side_mv_usd,
+            overshoot_usd: capEval.overshoot_usd,
+            current_open_mv_usd: capEval.current_open_mv_usd,
+            accepted_notional_this_run_usd: capEval.accepted_notional_this_run_usd,
+            this_order_notional_usd: capEval.this_order_notional_usd,
+            side_allocation_pct: sideAllocationPctByKey[sel.side],
+            sizing_base_usd: sizingBase,
+            mv_basis_mix: openMV.basis_mix[sel.side],
+            handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+          },
+        });
+        continue;
+      }
+
       // R-gamma cumulative BP guardrail BEFORE this submission.
       const bpCheck = assertBuyingPowerCoversNotional({
         snapshot: accountSnapshot,
