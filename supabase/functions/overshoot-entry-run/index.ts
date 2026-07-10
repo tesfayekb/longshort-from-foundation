@@ -230,6 +230,10 @@ interface RefusalTally {
   entry_price: { polygon_snapshot_unavailable: number; polygon_snapshot_stale: number; polygon_snapshot_malformed: number; polygon_snapshot_crossed: number };
   submissions_failed: number;
   fill_unfilled_no_lots: number;
+  // INC-96: aggregate per-side allocation-cap refusals. Counted alongside
+  // the existing typed refusal reasons; identity extends to
+  // targets_loaded = orders_submitted + ... + allocation_cap_reached.
+  allocation_cap_reached: number;
 }
 function newTally(): RefusalTally {
   return {
@@ -245,6 +249,7 @@ function newTally(): RefusalTally {
     entry_price: { polygon_snapshot_unavailable: 0, polygon_snapshot_stale: 0, polygon_snapshot_malformed: 0, polygon_snapshot_crossed: 0 },
     submissions_failed: 0,
     fill_unfilled_no_lots: 0,
+    allocation_cap_reached: 0,
   };
 }
 
