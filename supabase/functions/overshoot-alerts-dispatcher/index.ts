@@ -35,6 +35,13 @@
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
+import { evaluateOverdue } from '../_shared/cron-schedule.ts';
+
+/**
+ * Version echo — bumped on every dispatcher deploy so `GET /` proves the
+ * running build. See INC-95 (cron-aware overdue + slot-based idempotency).
+ */
+export const OVERSHOOT_ALERTS_DISPATCHER_VERSION = 'inc95-cron-aware-overdue-v1-20260710';
 
 const RAW_RECIPIENT =
   (Deno.env.get('ALERT_RECIPIENT_EMAIL') ?? Deno.env.get('EDGAR_CONTACT_EMAIL') ?? '').trim();
@@ -337,19 +344,23 @@ async function scanCronOverdue(correlationId: string): Promise<DispatchResult[]>
     .eq('owner_module', 'overshoot')
     .eq('enabled', true);
   const results: DispatchResult[] = [];
-  const nowMs = Date.now();
-  const cutoffMs = nowMs - 30 * 60 * 1000;
+  const now = new Date();
+  const nowMs = now.getTime();
+  const TOLERANCE_MS = 30 * 60 * 1000;
   const map: Record<string, { table: string; tsCol: string }> = {
     'overshoot.detection.run':          { table: 'overshoot_detection_runs',   tsCol: 'detected_at' },
     'overshoot.entry.run':              { table: 'overshoot_entry_runs',       tsCol: 'created_at'  },
     'overshoot.exit.run':               { table: 'overshoot_entry_runs',       tsCol: 'created_at'  },
     'overshoot.fill_sweep':             { table: 'overshoot_entry_runs',       tsCol: 'created_at'  },
     'overshoot.short_interest.compute': { table: 'overshoot_short_interest',   tsCol: 'as_of_date'  },
+    'overshoot.equity_snapshot':        { table: 'overshoot_equity_snapshots', tsCol: 'created_at'  },
+    'overshoot_equity_snapshot':        { table: 'overshoot_equity_snapshots', tsCol: 'created_at'  },
   };
   for (const r of (reg ?? []) as Array<Record<string, unknown>>) {
     const id = String(r.id);
+    const schedule = String(r.schedule ?? '');
     const m = map[id];
-    if (!m) continue;
+    if (!m || !schedule) continue;
     const { data: last } = await supabaseAdmin
       // Dynamic table + column names — same `as never` pattern as above.
       .from(m.table as never)
@@ -358,19 +369,33 @@ async function scanCronOverdue(correlationId: string): Promise<DispatchResult[]>
       .limit(1)
       .maybeSingle();
     const lastTs = last ? new Date(String((last as Record<string, unknown>)[m.tsCol])).getTime() : 0;
-    // Fire watchdog only when last fire is older than cutoff AND schedule
-    // implies a fire should have happened. We treat >18h since last as the
-    // MVP overdue heuristic (per-schedule parsing is a future refinement).
-    const staleMs = nowMs - lastTs;
-    if (staleMs > 18 * 3600 * 1000) {
-      const bucket = Math.floor(nowMs / (30 * 60 * 1000)); // 30-min bucket for idempotency
+    // INC-95 fix — cron-aware overdue predicate. Compute the most recent
+    // slot the schedule expression called for; page only when that slot is
+    // (a) older than tolerance, AND (b) strictly newer than the last
+    // actual fire evidence. This correctly handles weekday/hour/DoW gates
+    // (no false pages overnight for `* 13-21 * * 1-5`, no false pages
+    // mid-month for `0 21 1,15 * *`). Unparseable schedule → skip (no
+    // fabricated verdict).
+    const { overdue, lastExpected } = evaluateOverdue(schedule, now, lastTs, TOLERANCE_MS);
+    if (overdue && lastExpected) {
+      // INC-95 fix — slot-based dedup key. One alert per genuinely missed
+      // slot; a subsequent watchdog tick against the SAME missed slot
+      // insert-conflicts on the unique index (trigger_kind, source_table,
+      // source_row_id) WHERE outcome='dispatched'. Re-page only when a
+      // NEW expected slot has also been missed.
+      const slotKey = lastExpected.toISOString();
+      const staleMs = nowMs - lastTs;
       results.push(await dispatchOne({
         trigger_kind: 'cron_overdue',
         severity: 'HIGH',
         source_table: 'job_registry',
-        source_row_id: `${id}:${bucket}`,
+        source_row_id: `${id}@${slotKey}`,
         subject: `Overshoot cron overdue: ${id}`,
-        body_preview: `job=${id} schedule=${r.schedule} last_fire=${last ? String((last as Record<string, unknown>)[m.tsCol]) : 'never'} stale_hours=${(staleMs/3600000).toFixed(1)}`,
+        body_preview:
+          `job=${id} schedule=${schedule} last_expected_slot=${slotKey} ` +
+          `last_actual_fire=${last ? String((last as Record<string, unknown>)[m.tsCol]) : 'never'} ` +
+          `stale_hours=${(staleMs / 3600000).toFixed(1)} ` +
+          `dispatcher_version=${OVERSHOOT_ALERTS_DISPATCHER_VERSION}`,
         correlation_id: correlationId,
       }));
     }
@@ -423,6 +448,7 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiSuccess({
       ok: true,
       handler: 'overshoot-alerts-dispatcher',
+      version: OVERSHOOT_ALERTS_DISPATCHER_VERSION,
       correlation_id: correlationId,
       recipient_source: RECIPIENT_SOURCE,
       recipient_valid: RECIPIENT !== '',
@@ -486,5 +512,10 @@ Deno.serve(createHandler(async (req: Request) => {
     skipped: all.filter(x => x.outcome === 'skipped_idempotent').length,
     failed: all.filter(x => x.outcome === 'failed').length,
   };
-  return apiSuccess({ mode: 'watchdog', correlation_id: correlationId, summary });
+  return apiSuccess({
+    mode: 'watchdog',
+    version: OVERSHOOT_ALERTS_DISPATCHER_VERSION,
+    correlation_id: correlationId,
+    summary,
+  });
 }));
