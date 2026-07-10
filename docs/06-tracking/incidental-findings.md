@@ -1,3 +1,15 @@
+### INC-98 (2026-07-10): `job_registry` stale-row drift — duplicate equity-snapshot registration surfaced by ACT-499 Track A live-DB arming-state SELECT.
+
+Live rows (from `SELECT id, enabled, schedule, updated_at FROM public.job_registry WHERE owner_module='overshoot' OR id LIKE 'overshoot.%'` at 2026-07-10):
+- Stale: `id='overshoot_equity_snapshot'` (underscore-form, DEC-061 dotted-convention violation), `enabled=false`, `schedule='30 21 * * 1-5'`, `updated_at='2026-07-09 14:08:16.768338+00'`.
+- Canonical: `id='overshoot.equity_snapshot'` (dotted-form), `enabled=true`, `schedule='10 21 * * 1-5'`, `updated_at='2026-07-10 04:13:47.131399+00'`.
+
+Cross-check `cron.job`: only jobid 129 (`overshoot-equity-snapshot`, `10 21 * * 1-5`, active=true) exists. NO cron is wired to schedule `30 21` — the stale row cannot fire. Money-path impact: ZERO.
+
+Latent risk: an operator arming the wrong id via Dashboard SQL editor would silently no-op (no cron wired) while emitting false-armed telemetry to any future watchdog that enumerates all registry rows (not just enabled=true).
+
+Corrective (charter, NOT touched under ACT-499 — investigation mode is read-only): queue as ACT-500 candidate "job_registry stale-row sweep" — DELETE migration for the stale underscore row after operator confirmation + CI regex check enforcing DEC-061 dotted convention on `job_registry.id`. Deferred until after ACT-493.
+
 ### INC-93 (2026-07-08): `overshoot-fill-sweep` three-bug zero-discovery / spurious A5 soft-pause loop — session-date derivation mismatch + discovery-contract mismatch against real `submitted.entry` audit rows + `ON CONFLICT` inference against the partial UNIQUE index. Closed at ACT-489.
 
 **Number collision note (LOAD-BEARING):** an earlier draft of this incident was appended at the head of this file as `### INC-90` on 2026-07-08. `INC-90` was already taken by the ACT-485 `NULL::numeric` selection-loader defect (see `## INC-90` below, filed 2026-07-07). The correct number for this fill-sweep incident is `INC-93` (next free after the `##`-headed INC-92, filed same day). The prior draft's contents have been folded into this row and the erroneous `### INC-90` header removed. Downstream references to `INC-90` inside audit metadata emitted before renumbering (see **Audit-row lineage** below) are historical artifacts; they reference this row.
