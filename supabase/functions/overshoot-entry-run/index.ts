@@ -108,6 +108,13 @@ import {
   type OvershootSizeSide,
 } from '../_shared/overshoot-execution/sizing.ts';
 import {
+  evaluateAllocationCap,
+  computeOpenMVBySide,
+  type BrokerPositionForCap,
+  type OpenLotForCap,
+  type MvBySideResult,
+} from '../_shared/overshoot-execution/allocation-cap.ts';
+import {
   OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS,
   OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS,
   constructEntryLimitPrice,
@@ -136,6 +143,14 @@ const OVERSHOOT_MANUAL_CONFIRM_WINDOW_MS = 15 * 60 * 1000;
 
 // Single-account key ratified for v1 (A3, ACT-464 STEP A).
 const OVERSHOOT_ACCOUNT_KEY = 'overshoot-paper-primary';
+
+/**
+ * Handler version echo — INC-84 §5 standing rule. Bumped by INC-96
+ * (aggregate allocation-cap gate). Surfaced in every response envelope
+ * as `handler_version` so operator triage / attestation can pin the
+ * deployed shape without a source lookup.
+ */
+export const OVERSHOOT_ENTRY_RUN_VERSION = 'inc96-aggregate-cap-v1-20260710';
 
 interface Env {
   supabaseDbUrl: string;
