@@ -454,6 +454,23 @@ export function OvershootOverview() {
   const kill = killSwitchQuery.data ?? null;
   const equitySnapshotCount = equitySnapshotCountQuery.data ?? 0;
 
+  // Latest equity snapshot supplies the sizingBase for the cap-compliance
+  // affordance. Long/short MV on the Overview uses lot cost-basis (the
+  // console can't fetch broker marks — Portfolio page renders the
+  // broker-mark variant). Cost-basis is the allocation-cap module's
+  // documented fallback and NEVER understates exposure vs the ledger.
+  const latestEquityQuery = useOvershootEquitySnapshots(1);
+  const latestEquity = latestEquityQuery.data && latestEquityQuery.data.length > 0
+    ? latestEquityQuery.data[latestEquityQuery.data.length - 1]
+    : null;
+  const sizingBaseUsd = latestEquity ? latestEquity.broker_equity : null;
+  const longMvUsd = openLotsQuery.isLoading
+    ? null
+    : longs.reduce((acc, l) => acc + Math.abs(Number(l.cost_basis) || 0), 0);
+  const shortMvUsd = openLotsQuery.isLoading
+    ? null
+    : shorts.reduce((acc, l) => acc + Math.abs(Number(l.cost_basis) || 0), 0);
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -476,6 +493,16 @@ export function OvershootOverview() {
         killKind={kill?.set_by_kind ?? null}
         killLoading={killSwitchQuery.isLoading}
         killError={killSwitchQuery.error ? String((killSwitchQuery.error as Error).message ?? killSwitchQuery.error) : null}
+        sizingBaseUsd={sizingBaseUsd}
+        longMvUsd={longMvUsd}
+        shortMvUsd={shortMvUsd}
+      />
+
+      {/* INC-96 cap-compliance affordance — ratified vs actual per side. */}
+      <CapComplianceRow
+        sizingBaseUsd={sizingBaseUsd}
+        longMvUsd={longMvUsd}
+        shortMvUsd={shortMvUsd}
       />
 
       {/* Windowed gain cards — all pending CANDIDATE-iii */}
