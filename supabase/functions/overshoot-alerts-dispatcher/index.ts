@@ -317,25 +317,24 @@ async function scanFailedRuns(correlationId: string): Promise<DispatchResult[]> 
 async function scanFillSweepShortfall(correlationId: string): Promise<DispatchResult[]> {
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const { data } = await supabaseAdmin
-    .from('overshoot_entry_runs')
-    .select('run_id, submitted_count, adopted_count, created_at')
+    .from('overshoot_audit_logs')
+    .select('id, action, metadata, created_at, correlation_id')
+    .in('action', ['overshoot.fill_sweep.discovery_shortfall', 'overshoot.fill_sweep.a5_divergence'])
     .gte('created_at', since)
     .limit(50);
   const results: DispatchResult[] = [];
   for (const r of (data ?? []) as Array<Record<string, unknown>>) {
-    const sub = Number(r.submitted_count ?? 0);
-    const ado = Number(r.adopted_count ?? 0);
-    if (sub > 0 && ado < sub) {
-      results.push(await dispatchOne({
-        trigger_kind: 'fill_sweep_discovery_shortfall',
-        severity: 'HIGH',
-        source_table: 'overshoot_entry_runs',
-        source_row_id: String(r.run_id),
-        subject: `Overshoot fill-sweep shortfall: ${ado}/${sub}`,
-        body_preview: `run_id=${r.run_id} submitted=${sub} adopted=${ado} shortfall=${sub - ado} at=${r.created_at}`,
-        correlation_id: correlationId,
-      }));
-    }
+    const action = String(r.action);
+    const md = (r.metadata ?? {}) as Record<string, unknown>;
+    results.push(await dispatchOne({
+      trigger_kind: action.endsWith('a5_divergence') ? 'fill_sweep_a5_divergence' : 'fill_sweep_discovery_shortfall',
+      severity: action.endsWith('a5_divergence') ? 'CRITICAL' : 'HIGH',
+      source_table: 'overshoot_audit_logs',
+      source_row_id: String(r.id),
+      subject: `Overshoot fill-sweep alert: ${action}`,
+      body_preview: `action=${action} broker_count=${md.broker_count ?? '?'} ledger_count=${md.ledger_count ?? '?'} candidates=${md.candidates_discovered ?? '?'} at=${r.created_at}`,
+      correlation_id: String(r.correlation_id ?? correlationId),
+    }));
   }
   return results;
 }

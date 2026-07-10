@@ -21,3 +21,9 @@ Deno.test('INC-97 dispatcher response echoes independent A5 count and version', 
   assert(src.includes('independent_a5: independentA5.length'));
   assert(src.includes("'inc97-independent-a5-v1-20260710'"));
 });
+
+Deno.test('INC-97 fill-sweep alert scan reads real audit artifacts, not nonexistent entry-run counters', async () => {
+  const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
+  assert(src.includes(".in('action', ['overshoot.fill_sweep.discovery_shortfall', 'overshoot.fill_sweep.a5_divergence'])"));
+  assert(!src.includes(".select('run_id, submitted_count, adopted_count, created_at')"));
+});
