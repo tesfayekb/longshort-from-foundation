@@ -201,3 +201,16 @@ Deno.test('INC-90 sentinel: discovery-shortfall audit exists and kill-switch pau
     throw new Error('kill_switch_system_pause must be gated by discoveryShortfall-aware predicate');
   }
 });
+
+Deno.test('INC-97 sentinel: cron secret is authenticated before manual JWT/RBAC', async () => {
+  const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
+  const cronBranch = src.indexOf("req.headers.has('X-Cron-Secret')");
+  const cronVerify = src.indexOf('verifyCronSecret(req)');
+  const manualAuth = src.indexOf('authenticateRequest(req)');
+  assert(cronBranch > 0, 'missing X-Cron-Secret branch');
+  assert(cronVerify > cronBranch, 'cron branch must verify X-Cron-Secret');
+  assert(manualAuth > cronVerify, 'manual JWT auth must follow the cron-secret branch');
+  if (!src.includes("actorId = CRON_OPERATOR_ID")) {
+    throw new Error('cron writes must use the canonical system operator identity');
+  }
+});

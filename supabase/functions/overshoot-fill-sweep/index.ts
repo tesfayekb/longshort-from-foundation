@@ -15,8 +15,8 @@
  * Charter (ACT-489, operator-ratified):
  *   Request  : POST { as_of?: 'YYYY-MM-DD', probe?: 'alpaca'|'polygon',
  *                     dry_run?: boolean }
- *   Auth     : DEC-023 envelope via createHandler + authenticateRequest +
- *              overshoot.manage RBAC.
+ *   Auth     : X-Cron-Secret for pg_cron, otherwise DEC-023 envelope via
+ *              authenticateRequest + overshoot.manage RBAC.
  *   Clock    : injected productionClock; no Date.now() in kernel.
  *   Gates    : (i) kill-switch (strategy_key='overshoot' non-'active'),
  *              (ii) job-disarmed (overshoot.fill_sweep.enabled=false),
@@ -73,6 +73,7 @@
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
+import { verifyCronSecret } from '../_shared/cron-auth.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
@@ -103,6 +104,7 @@ export { toEtSessionDate, computeA5SymmetricDiff } from './pure.ts';
 // no exported handle in the driver's ambient types, so we derive it from the
 // constructor return type. Narrow, honest, no `any`, no lint-directive.
 type Sql = ReturnType<typeof postgres>;
+const CRON_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
 interface Env {
   supabaseDbUrl: string;
@@ -127,8 +129,18 @@ Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
   if (req.method !== 'POST') return apiError(405, 'method_not_allowed', { correlationId });
 
-  const authCtx = await authenticateRequest(req);
-  await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+  // INC-97: scheduled invocations carry the anon Authorization header plus
+  // X-Cron-Secret. The anon JWT is not a user session, so the cron branch must
+  // be authenticated before the manual JWT/RBAC branch.
+  let actorId = CRON_OPERATOR_ID;
+  if (req.headers.has('X-Cron-Secret')) {
+    const cronAuthError = verifyCronSecret(req);
+    if (cronAuthError) return cronAuthError;
+  } else {
+    const authCtx = await authenticateRequest(req);
+    await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+    actorId = authCtx.user.id;
+  }
 
   let body: Record<string, unknown> = {};
   try {
@@ -316,7 +328,7 @@ Deno.serve(createHandler(async (req: Request) => {
           await writeStrategyAuditEvent({
             strategyKey: 'overshoot',
             action: 'overshoot.lot.opened',
-            actorId: authCtx.user.id,
+            actorId,
             targetType: 'overshoot_lots',
             targetId: lotId,
             correlationId,
@@ -394,7 +406,7 @@ Deno.serve(createHandler(async (req: Request) => {
           await writeStrategyAuditEvent({
             strategyKey: 'overshoot',
             action: 'overshoot.fill_sweep.discovery_shortfall',
-            actorId: authCtx.user.id,
+            actorId,
             targetType: 'overshoot_lots',
             correlationId,
             metadata: {
@@ -420,7 +432,7 @@ Deno.serve(createHandler(async (req: Request) => {
         await writeStrategyAuditEvent({
           strategyKey: 'overshoot',
           action: 'overshoot.fill_sweep.a5_divergence',
-          actorId: authCtx.user.id,
+          actorId,
           targetType: 'overshoot_lots',
           correlationId,
           metadata: {
