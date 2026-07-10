@@ -718,6 +718,39 @@ Deno.serve(createHandler(async (req: Request) => {
     for (const r of openLotRows as { symbol: string; side: 'long' | 'short' }[]) heldTickers.add(r.symbol);
     for (const p of brokerPositions) if (p.qty !== 0) heldTickers.add(p.symbol);
 
+    // ── INC-96 aggregate allocation-cap pre-loop state ────────────────────
+    // Fetch open lots WITH cost_basis so the ledger-only fallback path in
+    // computeOpenMVBySide can contribute for any symbol the broker doesn't
+    // report (never silently understates exposure vs the ledger).
+    const openLotsForCap = await sql<{ symbol: string; side: 'long' | 'short'; cost_basis: string | number }[]>`
+      SELECT symbol, side, cost_basis::float8 AS cost_basis
+      FROM overshoot_lots
+      WHERE status = 'open'
+    `;
+    const brokerPositionsForCap: BrokerPositionForCap[] = (brokerPositions as Array<{
+      symbol: string; qty: number; avg_entry_price: number; market_value?: number;
+    }>).map((p) => ({
+      symbol: p.symbol,
+      qty: p.qty,
+      avg_entry_price: p.avg_entry_price,
+      ...(typeof p.market_value === 'number' ? { market_value: p.market_value } : {}),
+    }));
+    const openLotsForCapTyped: OpenLotForCap[] = (openLotsForCap as { symbol: string; side: 'long' | 'short'; cost_basis: string | number }[]).map((l) => ({
+      symbol: l.symbol,
+      side: l.side,
+      cost_basis: Number(l.cost_basis),
+    }));
+    const openMV: MvBySideResult = computeOpenMVBySide(brokerPositionsForCap, openLotsForCapTyped);
+    const acceptedNotionalBySide: { long: number; short: number } = { long: 0, short: 0 };
+    const sideAllocationPctByKey = {
+      long:  OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
+      short: OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+    } as const;
+    const sideCapUsd = {
+      long:  sizingBase * OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
+      short: sizingBase * OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+    } as const;
+
     for (const sel of selections) {
       const sideUpper: OvershootSide = sel.side === 'long' ? 'LONG' : 'SHORT';
       const sizeSide: OvershootSizeSide = sideUpper;
