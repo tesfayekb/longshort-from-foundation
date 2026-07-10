@@ -238,10 +238,12 @@ Deno.serve(createHandler(async (req: Request) => {
   // operator id (matches fill-sweep CRON_OPERATOR_ID).
   const CRON_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
   let authCtx: { user: { id: string } };
+  let isCronAuth = false;
   if (req.headers.has('X-Cron-Secret')) {
     const cronAuthError = verifyCronSecret(req);
     if (cronAuthError) return cronAuthError;
     authCtx = { user: { id: CRON_OPERATOR_ID } };
+    isCronAuth = true;
   } else {
     const jwtCtx = await authenticateRequest(req);
     await checkPermissionOrThrow(jwtCtx.user.id, 'overshoot.manage');
@@ -381,6 +383,14 @@ Deno.serve(createHandler(async (req: Request) => {
 
     // ── (6) I6 second-confirm token gate (manual path only) ─────────────
     if (manualConfirm) {
+      // INC-99 ruling (a): cron-authenticated caller can NEVER submit via
+      // the manual path. The shim widens auth, never narrows the two-man
+      // rule. Hard-reject before the token lookup so the operator_id ==
+      // CRON_OPERATOR_ID coincidence can never be exploited.
+      if (isCronAuth) {
+        await sql.end({ timeout: 5 });
+        return apiError(428, 'manual_confirm_forbidden_on_cron_auth', { correlationId });
+      }
       if (!secondConfirmToken) {
         await sql.end({ timeout: 5 });
         return apiError(428, 'manual_confirm_token_missing_or_invalid', { correlationId });
