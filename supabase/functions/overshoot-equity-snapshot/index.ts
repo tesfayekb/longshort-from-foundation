@@ -17,6 +17,7 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
+import { verifyCronSecret } from '../_shared/cron-auth.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { OvershootAlpacaPaperClient } from '../_shared/overshoot-broker/alpaca-paper-client.ts';
 import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpaca-position-fetcher.ts';
@@ -44,8 +45,15 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(405, 'method_not_allowed', { correlationId });
   }
 
-  const auth = await authenticateRequest(req);
-  await checkPermissionOrThrow(auth.user.id, 'overshoot.manage');
+  // INC-99 / ACT-503: cron-first branch mirrors overshoot-fill-sweep
+  // (supabase/functions/overshoot-fill-sweep/index.ts:132-143).
+  if (req.headers.has('X-Cron-Secret')) {
+    const cronAuthError = verifyCronSecret(req);
+    if (cronAuthError) return cronAuthError;
+  } else {
+    const auth = await authenticateRequest(req);
+    await checkPermissionOrThrow(auth.user.id, 'overshoot.manage');
+  }
 
   let body: Body = {};
   try { body = (await req.json()) as Body; } catch { body = {}; }

@@ -110,6 +110,7 @@
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
+import { verifyCronSecret } from '../_shared/cron-auth.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
@@ -204,13 +205,23 @@ function deriveRows(
 }
 
 Deno.serve(createHandler(async (req: Request) => {
+  const correlationId = crypto.randomUUID();
   if (req.method !== 'POST') {
-    return apiError(405, 'method_not_allowed', { correlationId: crypto.randomUUID() });
+    return apiError(405, 'method_not_allowed', { correlationId });
   }
 
-  const authCtx = await authenticateRequest(req);
-  await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
-  const correlationId = authCtx.correlationId;
+  // INC-99 / ACT-503: cron-first branch mirrors overshoot-fill-sweep
+  // (supabase/functions/overshoot-fill-sweep/index.ts:132-143). Scheduled
+  // invocations carry the anon Authorization header plus X-Cron-Secret; the
+  // anon JWT is not a user session, so the cron branch MUST be authenticated
+  // before the manual JWT/RBAC branch.
+  if (req.headers.has('X-Cron-Secret')) {
+    const cronAuthError = verifyCronSecret(req);
+    if (cronAuthError) return cronAuthError;
+  } else {
+    const authCtx = await authenticateRequest(req);
+    await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+  }
 
   let body: Record<string, unknown> = {};
   try { body = (await req.json()) as Record<string, unknown> ?? {}; }
