@@ -131,7 +131,7 @@ SELECT cron.schedule(
 -- `overshoot_short_interest`:
 --
 --   UPDATE public.job_registry
---     SET enabled = true, status = 'enabled', updated_at = now()
+--     SET enabled = true, updated_at = now()  -- status stays 'registered' (job_registry_status_check rejects 'enabled')
 --     WHERE id = 'overshoot.short_interest.compute';
 
 -- Step 4 -- after the first '0 21 1,15 * *' fire, confirm cron-attributable

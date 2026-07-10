@@ -136,7 +136,7 @@ SELECT cron.schedule(
 -- bracket:
 --
 --   UPDATE public.job_registry
---     SET enabled = true, status = 'enabled', updated_at = now()
+--     SET enabled = true, updated_at = now()  -- status stays 'registered' (job_registry_status_check rejects 'enabled')
 --     WHERE id = 'overshoot.entry.run';
 --
 --   PASTE all three step outputs into the ACT-464.e-arm closure record.

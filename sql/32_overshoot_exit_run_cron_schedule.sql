@@ -127,7 +127,7 @@ SELECT cron.schedule(
 -- gated on a clean dry-run + first-real-exit attestation:
 --
 --   UPDATE public.job_registry
---     SET enabled = true, status = 'enabled', updated_at = now()
+--     SET enabled = true, updated_at = now()  -- status stays 'registered' (job_registry_status_check rejects 'enabled')
 --     WHERE id = 'overshoot.exit.run';
 --
 --   PASTE all three step outputs into the ACT-463.d-ii closure record.
