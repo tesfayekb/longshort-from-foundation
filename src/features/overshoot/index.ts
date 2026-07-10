@@ -165,3 +165,5 @@ export { OvershootPortfolioReconciliationTab } from './components/portfolio/Over
 export { OvershootPortfolioReconciliationBanner } from './components/portfolio/OvershootPortfolioReconciliationBanner';
 export { OvershootEquityCurveTab } from './components/OvershootEquityCurveTab';
 export { useOvershootPortfolioPositions } from './hooks/useOvershootPortfolioPositions';
+export { OvershootCapCompliance } from './components/portfolio/OvershootCapCompliance';
+export { useOvershootEquitySnapshots } from './hooks/useOvershootEquitySnapshots';
