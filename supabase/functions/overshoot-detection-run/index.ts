@@ -44,6 +44,7 @@
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
+import { verifyCronSecret } from '../_shared/cron-auth.ts';
 import { apiError } from '../_shared/api-error.ts';
 import { parseAsOfDate } from '../_shared/parse-as-of-date.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
@@ -192,8 +193,15 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(405, 'method_not_allowed', { correlationId });
   }
 
-  const authCtx = await authenticateRequest(req);
-  await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+  // INC-99 / ACT-503: cron-first branch mirrors overshoot-fill-sweep
+  // (supabase/functions/overshoot-fill-sweep/index.ts:132-143). See INC-99.
+  if (req.headers.has('X-Cron-Secret')) {
+    const cronAuthError = verifyCronSecret(req);
+    if (cronAuthError) return cronAuthError;
+  } else {
+    const authCtx = await authenticateRequest(req);
+    await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+  }
 
   let body: Record<string, unknown> = {};
   try {
