@@ -990,3 +990,24 @@ The operator console at `/trading/overshoot/*` is complete across seven read-onl
 **Tests.** 51 passed / 0 failed (`deno test --allow-read intents_test.ts sizing_test.ts session-age_test.ts regime_test.ts`, 336 ms). Re-parameterized `sizing_test.ts` (7 test-case expected slot notionals updated + provenance + slot-concentration + nameplate-sum invariants); new R-1 tests in `intents_test.ts`; new `regime_test.ts` (12 tests).
 
 **T2 readiness.** UNBLOCKED per §V.A5 restatement; **NOT started this turn** per one-prompt-in-flight binding. T2 STEP A obligations pinned in the ACT-475 CLOSURE restatement — parity-protocol tranche with `RATIFIED_PARAM_GRID_HASH_PREFIX_v2` publication + v1 preserved in `SUPERSEDED_HASHES`, 3-regime parity fixture regeneration + attestation, 2026-06-18 anchor re-attestation, tier-distribution snapshot from 1-run dry deploy, operator+supervisor sign-off before any T3 merge.
+
+## §13 Arming protocol amendment — VERIFIED-TEST-FIRE binding (2026-07-10, INC-97-derived)
+
+**Binding forward-rule (Catalog + per-file protocol both).** ARMING A CRON LEG REQUIRES ONE VERIFIED TEST-FIRE THROUGH THE ACTUAL HTTP PATH. After the `cron.job` row is installed and `job_registry.enabled=true` is flipped, and BEFORE the leg is declared armed, the operator MUST either (a) wait for and verify the FIRST natural tick's `net._http_response` — HTTP 200 + expected typed envelope from the handler — or (b) trigger one synthetic tick via authenticated `curl` against the deployed function URL and verify the same. A leg is NOT "armed" until one real invocation has round-tripped end-to-end and been pasted into the arming closure record.
+
+**Rationale.** Wave-1 declared five legs armed on registry-row + `cron.job`-row evidence alone. INC-97 proved that pattern insufficient: the sweep's cron-auth branch rejected 105 consecutive ticks with HTTP 401 while `cron.job_run_details.status='succeeded'` masked the failure. A single verified test-fire against the actual HTTP path would have surfaced the 401 within one tick window — the arming closure would never have completed. Registry + cron-row evidence proves scheduling; only a 200 + valid envelope proves handling.
+
+**Applies to (retroactive to Monday's checklist item (E) — one per armed leg):**
+
+| Leg | Test-fire evidence obligation |
+| --- | --- |
+| `overshoot-fill-sweep` | ALREADY PROVEN by the 15:14:00Z post-fix tick (correlation `4e33a56a-b4cb-4392-b125-04da29ae5fff`, echo `inc97-cycle1-v2-20260710`, A5 50=50). Cite that row. |
+| `overshoot-alerts-dispatcher` | Trivially proven — any of the 234+ in-window `overshoot_alert_dispatch` rows with `inc97-independent-a5-v1-20260710` echo satisfies. Cite one. |
+| `overshoot-equity-snapshot` | Verify at Monday 21:10Z first natural tick: one `overshoot_equity_snapshots` row with `snapshot_date` = Monday ET + `net._http_response.status_code=200`. |
+| `overshoot-detection-run` | Verify at Monday 22:00Z first natural tick: one `overshoot_detection_runs` row with `outcome ∈ {completed, no_op}` + `net._http_response.status_code=200`. |
+| `overshoot.short_interest.compute` | First natural tick is 2026-07-15 21:00Z (weekly). Verify then; leg does NOT count as armed until that tick returns 200 + one `overshoot_short_interest` batch row (or typed `no_op`). |
+| Any future leg (entry, exit, or new) | Same rule. No leg is armed on cron.job-row evidence alone. |
+
+**Evidence shape (paste per leg into the arming closure record):** `SELECT id, status_code, timed_out, error_msg FROM net._http_response WHERE created >= '<tick-ts>' AND created < '<tick-ts>' + interval '2 min' AND status_code = 200` (must return ≥1 row) PLUS the corresponding artifact row (audit / run / snapshot) that proves the handler committed the intended side-effect. Registry + cron.job evidence remains required but is now necessary-not-sufficient.
+
+**Monday's checklist item (E) — retroactive close-out for Wave-1 armed legs.** (E1) sweep — cite 15:14Z row. (E2) dispatcher — cite one in-window dispatch. (E3) equity-snapshot — capture at 21:10Z. (E4) detection — capture at 22:00Z. (E5) SI compute — deferred to 2026-07-15 21:00Z tick; leg is DISARMED-EQUIVALENT until proven. Any leg without (E) evidence at Tuesday's arming decision is NOT counted toward the autonomous-entry gate.
