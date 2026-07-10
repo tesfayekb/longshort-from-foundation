@@ -35,7 +35,10 @@ const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
 Deno.test('DEC-023 envelope: createHandler + authenticateRequest + overshoot.manage RBAC', () => {
   assertStringIncludes(SRC, "import { createHandler, apiSuccess } from '../_shared/handler.ts'");
   assertStringIncludes(SRC, "import { authenticateRequest } from '../_shared/authenticate-request.ts'");
-  assertStringIncludes(SRC, "checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage')");
+  // ACT-503 cron-first shim renamed the JWT-branch local to `jwtCtx` so
+  // the manual-RBAC check is authoritative on the real user id (never
+  // the synthetic cron operator id).
+  assertStringIncludes(SRC, "checkPermissionOrThrow(jwtCtx.user.id, 'overshoot.manage')");
   assertStringIncludes(SRC, 'Deno.serve(createHandler(');
 });
 
