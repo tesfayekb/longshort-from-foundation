@@ -36,6 +36,7 @@ These patterns are banned in financial-logic paths:
 | 13 | Verify-after-mutation in financial paths | CROSSWIND §7.5 / FP-008.4 Commit 7 | `scripts/check-verify-after-mutation.ts` | `// gate-13-allow: <reason>` |
 | 14 | Dual Supabase-client type identity (esm.sh vs npm) | FP-008.4 Commit 7.5 / DW-082 A1.b | `scripts/check-supabase-client-specifier.ts` | (no override; specifier unification is non-negotiable) |
 | 15 | Enabled+scheduled `job_registry` row pointing at NOT-FOR-LIVE / MOCK_*_FETCHER handler, OR enabled+scheduled with NULL `handler_path` | FP-008.4 Commit 10 / DW-084 / INC-39 | `scripts/check-handler-liveness-markers.ts` | `// gate-15-allow: <ID>` (P1 only; P2 has no override — register the handler in `job_registry.handler_path`) |
+| 16 | `EXECUTE` dynamic SQL composed from `cron.job.command` bodies via any read/error path (Postgres error surfaces echo the offending command verbatim, leaking any secret embedded in it — X-Cron-Secret, Authorization bearers, connection strings). Read `cron.job` metadata into typed variables; mutate via `cron.schedule()` upsert-by-jobname (INC-101 canonical path). | INC-100 (2026-07-12) | (backlog — CI sentinel to scan for `EXECUTE ... cron.job.command` compositions; interim enforcement is reviewer discipline) | (no override; secret-echo is non-negotiable) |
 
 ## Sanctioned Exception Locations
 
