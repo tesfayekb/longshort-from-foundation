@@ -128,7 +128,7 @@ SELECT cron.schedule(
 -- artifact set on `overshoot_events` + `overshoot_target_positions`:
 --
 --   UPDATE public.job_registry
---     SET enabled = true, status = 'enabled', updated_at = now()
+--     SET enabled = true, updated_at = now()  -- status stays 'registered' (job_registry_status_check rejects 'enabled')
 --     WHERE id = 'overshoot.detection.run';
 
 -- Step 4 -- after the first '0 22 * * 1-5' fire, confirm cron-attributable

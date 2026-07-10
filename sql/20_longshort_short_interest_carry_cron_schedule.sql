@@ -110,7 +110,7 @@ SELECT cron.schedule(
 -- gated on a clean first-fire artifact:
 --
 --   UPDATE public.job_registry
---     SET enabled = true, status = 'enabled', updated_at = now()
+--     SET enabled = true, updated_at = now()  -- status stays 'registered' (job_registry_status_check rejects 'enabled')
 --     WHERE id = 'longshort.short_interest_carry.compute';
 
 -- Step 4 -- after the first weekday 22:30 UTC fire, confirm

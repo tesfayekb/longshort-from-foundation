@@ -93,7 +93,7 @@ SELECT cron.schedule(
 -- bracket attestation):
 --
 --   UPDATE public.job_registry
---     SET enabled = true, status = 'enabled', updated_at = now()
+--     SET enabled = true, updated_at = now()  -- status stays 'registered' (job_registry_status_check rejects 'enabled')
 --     WHERE id = 'overshoot.fill_sweep';
 --
 --   PASTE all three step outputs into the ACT-489.arm closure record.
