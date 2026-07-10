@@ -1,14 +1,11 @@
-/**
- * INC-95 fix — cron-aware overdue predicate + slot-based idempotency
- * coverage for the five schedules the overshoot watchdog surveils:
- *   1. */5 * * * *                 (dispatcher itself — every 5m)
- *   2. * 13-21 * * 1-5             (fill_sweep — every minute, RTH window)
- *   3. 10 21 * * 1-5               (equity_snapshot — weekday 21:10Z)
- *   4. 0 22 * * 1-5                (detection — weekday 22:00Z)
- *   5. 0 21 1,15 * *               (short_interest — twice-monthly TRAP)
- *
- * Uses Deno.test only (no --allow-net / --allow-env required for these).
- */
+// INC-95 fix — cron-aware overdue predicate + slot-based idempotency
+// coverage for the five schedules the overshoot watchdog surveils:
+//   1. every 5 min                (dispatcher itself)
+//   2. every-minute RTH window    (fill_sweep, "* 13-21 * * 1-5")
+//   3. weekday 21:10Z             (equity_snapshot, "10 21 * * 1-5")
+//   4. weekday 22:00Z             (detection, "0 22 * * 1-5")
+//   5. twice-monthly TRAP         (short_interest, "0 21 1,15 * *")
+// Uses Deno.test only (no --allow-net / --allow-env required).
 import { assertEquals, assert } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   parseCron,
