@@ -985,6 +985,10 @@ Deno.serve(createHandler(async (req: Request) => {
       `;
 
       cumulativeIntendedNotional += sizing.slotNotional;
+      // INC-96: mirror per-side tracker for the aggregate cap gate.
+      // Incremented on the same path as cumulativeIntendedNotional so
+      // downstream iterations see the same commitment view.
+      acceptedNotionalBySide[sel.side] += sizing.slotNotional;
 
       const cid = buildOvershootClientOrderId({
         runId, ticker: sel.ticker, side: sideUpper, intent, attempt: 0,
