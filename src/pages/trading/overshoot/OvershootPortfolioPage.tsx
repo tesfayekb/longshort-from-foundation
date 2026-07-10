@@ -22,6 +22,8 @@ import {
   OvershootPortfolioReconciliationBanner,
   OvershootEquityCurveTab,
   useOvershootPortfolioPositions,
+  OvershootCapCompliance,
+  useOvershootEquitySnapshots,
 } from '@/features/overshoot';
 
 function formatRelative(ts: number | null): string {
@@ -39,6 +41,33 @@ export default function OvershootPortfolioPage() {
   const updatedAt = query.dataUpdatedAt || null;
   const fetchedAt = query.data?.fetched_at ?? null;
 
+  // Latest equity snapshot supplies the ratified sizingBase (broker_equity
+  // × strategy_allocation_pct=1.0 × margin_multiplier=1.0 by ratified
+  // defaults). Cap-compliance line is display-only; the money-path gate
+  // remains evaluateAllocationCap in the entry handler.
+  const equityQuery = useOvershootEquitySnapshots(1);
+  const latestSnapshot = equityQuery.data && equityQuery.data.length > 0
+    ? equityQuery.data[equityQuery.data.length - 1]
+    : null;
+
+  // Prefer broker-mark MV; fall back to cost basis per allocation-cap
+  // module rules (marks preferred, cost-basis fallback — never understate).
+  const longMv = broker
+    .filter((p) => p.side === 'long')
+    .reduce((acc, p) => acc + (
+      p.market_value !== null && Number.isFinite(p.market_value)
+        ? Math.abs(p.market_value)
+        : Math.abs(p.avg_entry_price * p.qty)
+    ), 0);
+  const shortMv = broker
+    .filter((p) => p.side === 'short')
+    .reduce((acc, p) => acc + (
+      p.market_value !== null && Number.isFinite(p.market_value)
+        ? Math.abs(p.market_value)
+        : Math.abs(p.avg_entry_price * p.qty)
+    ), 0);
+  const sizingBase = latestSnapshot ? latestSnapshot.broker_equity : null;
+
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => (t + 1) % 1_000_000), 1000);
@@ -51,6 +80,15 @@ export default function OvershootPortfolioPage() {
         title="Overshoot · Portfolio"
         subtitle="Broker-truth positions (Alpaca paper) and the reconciled internal ledger. Read-only display; the money-path is untouched."
       />
+
+      <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
+        <OvershootCapCompliance
+          sizingBaseUsd={sizingBase}
+          longMvUsd={query.isLoading ? null : longMv}
+          shortMvUsd={query.isLoading ? null : shortMv}
+          labelPrefix="Cap compliance:"
+        />
+      </div>
 
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs text-muted-foreground">
