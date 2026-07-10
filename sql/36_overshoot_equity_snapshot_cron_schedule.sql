@@ -31,7 +31,7 @@
 --     EST winter: 21:10 UTC = 16:10 ET  (10 min after 16:00 ET close)
 --   Both regimes are safe (never before-close), so a single slot suffices.
 --   The ~1h EDT drift is acceptable because equity snapshot is a settled-state
---   read — the ~1h delay does NOT affect the value captured; the snapshot
+--   read - the ~1h delay does NOT affect the value captured; the snapshot
 --   carries its own broker-side `fetched_at` for exact attribution.
 --   Contrast: sql/33 (entry-run) requires exact 09:35 ET in both regimes so
 --   it uses DUAL-SLOT + handler idempotency. Snapshot has no such precision
