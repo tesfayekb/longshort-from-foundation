@@ -108,6 +108,13 @@ import {
   type OvershootSizeSide,
 } from '../_shared/overshoot-execution/sizing.ts';
 import {
+  evaluateAllocationCap,
+  computeOpenMVBySide,
+  type BrokerPositionForCap,
+  type OpenLotForCap,
+  type MvBySideResult,
+} from '../_shared/overshoot-execution/allocation-cap.ts';
+import {
   OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS,
   OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS,
   constructEntryLimitPrice,
@@ -136,6 +143,14 @@ const OVERSHOOT_MANUAL_CONFIRM_WINDOW_MS = 15 * 60 * 1000;
 
 // Single-account key ratified for v1 (A3, ACT-464 STEP A).
 const OVERSHOOT_ACCOUNT_KEY = 'overshoot-paper-primary';
+
+/**
+ * Handler version echo — INC-84 §5 standing rule. Bumped by INC-96
+ * (aggregate allocation-cap gate). Surfaced in every response envelope
+ * as `handler_version` so operator triage / attestation can pin the
+ * deployed shape without a source lookup.
+ */
+export const OVERSHOOT_ENTRY_RUN_VERSION = 'inc96-aggregate-cap-v1-20260710';
 
 interface Env {
   supabaseDbUrl: string;
@@ -215,6 +230,10 @@ interface RefusalTally {
   entry_price: { polygon_snapshot_unavailable: number; polygon_snapshot_stale: number; polygon_snapshot_malformed: number; polygon_snapshot_crossed: number };
   submissions_failed: number;
   fill_unfilled_no_lots: number;
+  // INC-96: aggregate per-side allocation-cap refusals. Counted alongside
+  // the existing typed refusal reasons; identity extends to
+  // targets_loaded = orders_submitted + ... + allocation_cap_reached.
+  allocation_cap_reached: number;
 }
 function newTally(): RefusalTally {
   return {
@@ -230,6 +249,7 @@ function newTally(): RefusalTally {
     entry_price: { polygon_snapshot_unavailable: 0, polygon_snapshot_stale: 0, polygon_snapshot_malformed: 0, polygon_snapshot_crossed: 0 },
     submissions_failed: 0,
     fill_unfilled_no_lots: 0,
+    allocation_cap_reached: 0,
   };
 }
 
@@ -698,6 +718,39 @@ Deno.serve(createHandler(async (req: Request) => {
     for (const r of openLotRows as { symbol: string; side: 'long' | 'short' }[]) heldTickers.add(r.symbol);
     for (const p of brokerPositions) if (p.qty !== 0) heldTickers.add(p.symbol);
 
+    // ── INC-96 aggregate allocation-cap pre-loop state ────────────────────
+    // Fetch open lots WITH cost_basis so the ledger-only fallback path in
+    // computeOpenMVBySide can contribute for any symbol the broker doesn't
+    // report (never silently understates exposure vs the ledger).
+    const openLotsForCap = await sql<{ symbol: string; side: 'long' | 'short'; cost_basis: string | number }[]>`
+      SELECT symbol, side, cost_basis::float8 AS cost_basis
+      FROM overshoot_lots
+      WHERE status = 'open'
+    `;
+    const brokerPositionsForCap: BrokerPositionForCap[] = (brokerPositions as Array<{
+      symbol: string; qty: number; avg_entry_price: number; market_value?: number;
+    }>).map((p) => ({
+      symbol: p.symbol,
+      qty: p.qty,
+      avg_entry_price: p.avg_entry_price,
+      ...(typeof p.market_value === 'number' ? { market_value: p.market_value } : {}),
+    }));
+    const openLotsForCapTyped: OpenLotForCap[] = (openLotsForCap as { symbol: string; side: 'long' | 'short'; cost_basis: string | number }[]).map((l) => ({
+      symbol: l.symbol,
+      side: l.side,
+      cost_basis: Number(l.cost_basis),
+    }));
+    const openMV: MvBySideResult = computeOpenMVBySide(brokerPositionsForCap, openLotsForCapTyped);
+    const acceptedNotionalBySide: { long: number; short: number } = { long: 0, short: 0 };
+    const sideAllocationPctByKey = {
+      long:  OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
+      short: OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+    } as const;
+    const sideCapUsd = {
+      long:  sizingBase * OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
+      short: sizingBase * OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+    } as const;
+
     for (const sel of selections) {
       const sideUpper: OvershootSide = sel.side === 'long' ? 'LONG' : 'SHORT';
       const sizeSide: OvershootSizeSide = sideUpper;
@@ -828,6 +881,50 @@ Deno.serve(createHandler(async (req: Request) => {
         continue;
       }
 
+      // ── INC-96 aggregate allocation-cap gate ─────────────────────────
+      // Refuses when projected_side_MV = currentOpenMV_side
+      //                                + acceptedNotionalThisRun_side
+      //                                + this_order_notional
+      // would exceed sizingBase × OVERSHOOT_SIDE_ALLOCATION_PCT_<SIDE>.
+      // Rank-order preserved (iteration order unchanged). This gate is
+      // orthogonal to the RegT-margin BP guard below — the BP guard
+      // enforces broker-margin availability; this guard enforces
+      // OPERATOR-RATIFIED gross-leverage. Both must pass.
+      const capSide: 'long' | 'short' = sel.side === 'short' ? 'short' : 'long';
+      const capEval = evaluateAllocationCap({
+        side: capSide,
+        sizingBase,
+        sideAllocationPct: sideAllocationPctByKey[capSide],
+        currentOpenMV: openMV[capSide],
+        acceptedNotionalThisRun: acceptedNotionalBySide[capSide],
+        thisOrderNotional: sizing.slotNotional,
+      });
+      if (!capEval.ok) {
+        tally.allocation_cap_reached += 1;
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.entry.allocation_cap_reached',
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: {
+            ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
+            reason: capEval.reason,
+            side_cap_usd: capEval.side_cap_usd,
+            projected_side_mv_usd: capEval.projected_side_mv_usd,
+            overshoot_usd: capEval.overshoot_usd,
+            current_open_mv_usd: capEval.current_open_mv_usd,
+            accepted_notional_this_run_usd: capEval.accepted_notional_this_run_usd,
+            this_order_notional_usd: capEval.this_order_notional_usd,
+            side_allocation_pct: sideAllocationPctByKey[capSide],
+            sizing_base_usd: sizingBase,
+            mv_basis_mix: openMV.basis_mix[capSide],
+            handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+          },
+        });
+        continue;
+      }
+
       // R-gamma cumulative BP guardrail BEFORE this submission.
       const bpCheck = assertBuyingPowerCoversNotional({
         snapshot: accountSnapshot,
@@ -889,6 +986,10 @@ Deno.serve(createHandler(async (req: Request) => {
       `;
 
       cumulativeIntendedNotional += sizing.slotNotional;
+      // INC-96: mirror per-side tracker for the aggregate cap gate.
+      // Incremented on the same path as cumulativeIntendedNotional so
+      // downstream iterations see the same commitment view.
+      acceptedNotionalBySide[capSide] += sizing.slotNotional;
 
       const cid = buildOvershootClientOrderId({
         runId, ticker: sel.ticker, side: sideUpper, intent, attempt: 0,
@@ -1024,6 +1125,23 @@ Deno.serve(createHandler(async (req: Request) => {
       detector_version: RATIFIED_DETECTOR_VERSION,
       capacity_long: OVERSHOOT_CAPACITY_LONG,
       capacity_short: OVERSHOOT_CAPACITY_SHORT,
+      // INC-96 diagnostics: pin the deployed handler + surface the cap
+      // decision surface every response for operator triage / attestation.
+      handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
+      allocation_cap: {
+        side_allocation_pct: {
+          long:  OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
+          short: OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+        },
+        side_cap_usd:            sideCapUsd,
+        open_mv_usd_by_side:     { long: openMV.long, short: openMV.short },
+        mv_basis_mix:            openMV.basis_mix,
+        accepted_notional_usd:   acceptedNotionalBySide,
+        projected_side_mv_usd: {
+          long:  openMV.long  + acceptedNotionalBySide.long,
+          short: openMV.short + acceptedNotionalBySide.short,
+        },
+      },
       correlation_id: correlationId,
     });
   } catch (err) {
