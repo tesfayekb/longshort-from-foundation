@@ -116,6 +116,10 @@ import {
   type MvBySideResult,
 } from '../_shared/overshoot-execution/allocation-cap.ts';
 import {
+  OVERSHOOT_DAILY_ENTRY_BUDGET,
+  evaluateDailyBudget,
+} from '../_shared/overshoot-execution/daily-budget.ts';
+import {
   OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS,
   OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS,
   constructEntryLimitPrice,
@@ -151,7 +155,7 @@ const OVERSHOOT_ACCOUNT_KEY = 'overshoot-paper-primary';
  * as `handler_version` so operator triage / attestation can pin the
  * deployed shape without a source lookup.
  */
-export const OVERSHOOT_ENTRY_RUN_VERSION = 'inc96-aggregate-cap-v1-20260710';
+export const OVERSHOOT_ENTRY_RUN_VERSION = 'act501-daily-budget-k5-v1-20260711';
 
 interface Env {
   supabaseDbUrl: string;
@@ -235,6 +239,10 @@ interface RefusalTally {
   // the existing typed refusal reasons; identity extends to
   // targets_loaded = orders_submitted + ... + allocation_cap_reached.
   allocation_cap_reached: number;
+  // ACT-501: daily entry budget (K=5, ACT-500 Part 1 DEC). Counted AFTER
+  // allocation_cap_reached in the evaluation order and the identity —
+  // a name refused by the cap does NOT consume budget.
+  daily_budget_reached: number;
 }
 function newTally(): RefusalTally {
   return {
@@ -251,6 +259,7 @@ function newTally(): RefusalTally {
     submissions_failed: 0,
     fill_unfilled_no_lots: 0,
     allocation_cap_reached: 0,
+    daily_budget_reached: 0,
   };
 }
 
