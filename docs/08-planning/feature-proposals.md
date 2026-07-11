@@ -1692,3 +1692,17 @@ prior corrective holds — no re-drops). Roadmap H-SEC records the Dashboard
 checklist (signups-disabled, leaked-password protection, MFA, linter paste-back)
 as operator out-of-band items. Part-2 EXEC (Monday evening Session 1) continues
 to outrank everything the moment operator evidence lands.
+
+---
+
+## FP-CANDIDATE-vii — IBKR borrow / availability feed (ACT-504 §4-e)
+
+**Registered:** 2026-07-11 (ACT-504 DEC-504-8 ratified). **Status:** ledger-note only.
+
+Broker-native shortability + borrow-rate feed via IBKR (already in the operator's execution surface). Orthogonal to the short-interest publication cadence problem (ACT-504 §3): SI answers "how heavy is the crowd?"; borrow answers "can we actually short it, at what cost?". Not a substitute for either. Sequenced **behind the W5 SHORT-sleeve verdict**; opportunistic when IBKR wiring exists for other reasons.
+
+## FP-CANDIDATE-viii — Daily FINRA short-sale-volume ingestion (ACT-504 §4-c)
+
+**Registered:** 2026-07-11 (ACT-504 DEC-504-6 ratified). **Status:** scope-only.
+
+Free-tier FINRA `ShortVolume` daily bulk file (T+1). Not a substitute for the semi-monthly SI report — it's a **short-flow proxy**, not a crowded-short quantity. Requires its own study to establish whether short-sale-volume/total-volume correlates with subsequent overshoot behavior before wiring into the detector. Deferred behind W5 SHORT verdict; scoped here so we don't re-derive it from scratch when the verdict lands.

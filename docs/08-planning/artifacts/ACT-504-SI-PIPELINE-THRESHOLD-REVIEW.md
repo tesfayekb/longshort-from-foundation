@@ -145,6 +145,25 @@ Every SHORT-side investment above (b, c, d, e) is **conditioned on the W5 SHORT-
 
 ---
 
+## §6.1 — DEC ratification (operator, 2026-07-11) — investigation CLOSED
+
+All eight ratified. Landing notes below are binding.
+
+| # | Ruling | Landing / follow-through |
+|---|---|---|
+| **DEC-504-1** | RATIFY | Diagnosis accepted. 07-15 21:00 UTC firing is the autonomous heal. Add to week's watchlist: (a) `net._http_response` = HTTP 200; (b) fresh `overshoot_short_interest` rows at `as_of_date = 2026-06-30`; (c) that evening's detection-run showing `si_unavailable` refusal-count drop. |
+| **DEC-504-2** | RATIFY | `DETECTOR_SI_STALENESS_MAX_DAYS`: 20 → 21 at `overshoot-detection-run/index.ts:105` (single-homed). Runbook-aligned (`overshoot.md:537`). Detector-golden fixture regen accounted for in the landing PR. **Folded together with INC-102 attribution-row fix** onto the next detection-run touch — one landing, two items. |
+| **DEC-504-3** | RATIFY | SI-freshness watchdog. Alert thresholds aligned to the corrected constant: `si_stale_imminent` > 15d (HIGH digest), `si_stale_active` > 21d (post-fix). Folded onto the dispatcher's next touch alongside the deferred cap-compliance digest line. |
+| **DEC-504-4** | RATIFY **with two guards** | Short-sleeve → LONG reallocation during `si_stale_active` windows, auto-reversing on heal. **Guards:** (i) implemented as **SIZING-LAYER overlay ONLY** — detector continues to evaluate and refuse shorts normally so the W5 SHORT-sleeve measurement stays uncontaminated; (ii) sizing reads sleeve state at run time, typed audit event on every flip. **Tier-A** change; lands in the **ACT-493 window** (dormant until cap unfreezes ~07-20 regardless). |
+| **DEC-504-5** | RATIFY (DEFER) | Chartered as **W5-05** behind the SHORT-sleeve verdict. |
+| **DEC-504-6** | RATIFY (DEFER) | Scope-only entry to `docs/08-planning/feature-proposals.md` as **FP-CANDIDATE-viii**. |
+| **DEC-504-7** | RATIFY (REJECT) | Paid Ortex-class feed rejected at current scale. Re-open conditions per §4 stand. |
+| **DEC-504-8** | RATIFY | Ledger note on `FP-CANDIDATE-vii` (IBKR borrow feed). |
+
+**ACT-504 CLOSED.** Terminal artifact = this file.
+
+---
+
 ## §7 — Evidence appendix
 
 - Fetcher endpoint URL construction: `supabase/functions/_shared/overshoot/polygon-short-interest-fetcher.ts:178-190`
