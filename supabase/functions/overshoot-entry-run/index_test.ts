@@ -20,8 +20,62 @@ import {
   OVERSHOOT_I5_REVERSION_MAX_LONG,
   OVERSHOOT_I5_REVERSION_MAX_SHORT,
 } from '../_shared/overshoot-execution/i5-recheck.ts';
+import { OVERSHOOT_DAILY_ENTRY_BUDGET } from '../_shared/overshoot-execution/daily-budget.ts';
 
 const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
+
+// ─────────────────────────────────────────────────────────────────────────
+// ACT-501 — Daily entry budget (K=5) source sentinels.
+// ─────────────────────────────────────────────────────────────────────────
+
+Deno.test('ACT-501: handler version echo bumped to act501-daily-budget-k5-v1-20260711', () => {
+  assertStringIncludes(SRC, "OVERSHOOT_ENTRY_RUN_VERSION = 'act501-daily-budget-k5-v1-20260711'");
+});
+
+Deno.test('ACT-501: OVERSHOOT_DAILY_ENTRY_BUDGET imported + void-referenced + === 5', () => {
+  assertStringIncludes(SRC, "from '../_shared/overshoot-execution/daily-budget.ts'");
+  assertStringIncludes(SRC, 'OVERSHOOT_DAILY_ENTRY_BUDGET,');
+  assertStringIncludes(SRC, 'evaluateDailyBudget,');
+  assertStringIncludes(SRC, 'void OVERSHOOT_DAILY_ENTRY_BUDGET');
+  assertEquals(OVERSHOOT_DAILY_ENTRY_BUDGET, 5);
+});
+
+Deno.test('ACT-501: daily_budget_reached counter present in RefusalTally + newTally', () => {
+  assertStringIncludes(SRC, 'daily_budget_reached: number;');
+  assertStringIncludes(SRC, 'daily_budget_reached: 0,');
+});
+
+Deno.test('ACT-501: daily-budget gate placed AFTER allocation_cap_reached, BEFORE BP guard (identity + BP-spend hygiene)', () => {
+  const idxCap    = SRC.indexOf("action: 'overshoot.entry.allocation_cap_reached'");
+  const idxBudget = SRC.indexOf("action: 'overshoot.entry.daily_budget_reached'");
+  const idxBp     = SRC.indexOf('assertBuyingPowerCoversNotional({');
+  assert(idxCap > 0 && idxBudget > 0 && idxBp > 0);
+  assert(idxCap    < idxBudget, 'allocation_cap_reached MUST precede daily_budget_reached (cap-refused names never consume budget)');
+  assert(idxBudget < idxBp,     'daily_budget_reached MUST precede BP guard (budget-refused names never spend BP)');
+});
+
+Deno.test('ACT-501: admittedByDailyBudget counter incremented ONLY after budget gate passes', () => {
+  assertStringIncludes(SRC, 'let admittedByDailyBudget = 0');
+  assertStringIncludes(SRC, 'admittedByDailyBudget += 1');
+  const idxGate = SRC.indexOf('const budgetEval = evaluateDailyBudget({');
+  const idxInc  = SRC.indexOf('admittedByDailyBudget += 1');
+  assert(idxGate > 0 && idxInc > 0 && idxGate < idxInc,
+    'counter increment MUST follow the budget gate (no cap-refused/budget-refused increments)');
+});
+
+Deno.test('ACT-501: response envelope carries daily_budget { budget, consumed, refusals }', () => {
+  assertStringIncludes(SRC, 'daily_budget: {');
+  assertStringIncludes(SRC, 'budget: OVERSHOOT_DAILY_ENTRY_BUDGET,');
+  assertStringIncludes(SRC, 'consumed: admittedByDailyBudget,');
+  assertStringIncludes(SRC, 'refusals: tally.daily_budget_reached,');
+});
+
+Deno.test('ACT-501 never-silent-drop: daily_budget_reached writes an overshoot_audit_logs row with full signal context', () => {
+  assertStringIncludes(SRC, "action: 'overshoot.entry.daily_budget_reached'");
+  assertStringIncludes(SRC, 'ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score');
+  assertStringIncludes(SRC, 'budget: budgetEval.budget');
+  assertStringIncludes(SRC, 'admitted_this_run: budgetEval.admitted_this_run');
+});
 
 Deno.test('DEC-023 envelope: createHandler + authenticateRequest + overshoot.manage RBAC', () => {
   assertStringIncludes(SRC, "import { createHandler, apiSuccess } from '../_shared/handler.ts'");

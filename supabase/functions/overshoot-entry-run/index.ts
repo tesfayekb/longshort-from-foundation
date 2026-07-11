@@ -116,6 +116,10 @@ import {
   type MvBySideResult,
 } from '../_shared/overshoot-execution/allocation-cap.ts';
 import {
+  OVERSHOOT_DAILY_ENTRY_BUDGET,
+  evaluateDailyBudget,
+} from '../_shared/overshoot-execution/daily-budget.ts';
+import {
   OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS,
   OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS,
   constructEntryLimitPrice,
@@ -151,7 +155,7 @@ const OVERSHOOT_ACCOUNT_KEY = 'overshoot-paper-primary';
  * as `handler_version` so operator triage / attestation can pin the
  * deployed shape without a source lookup.
  */
-export const OVERSHOOT_ENTRY_RUN_VERSION = 'inc96-aggregate-cap-v1-20260710';
+export const OVERSHOOT_ENTRY_RUN_VERSION = 'act501-daily-budget-k5-v1-20260711';
 
 interface Env {
   supabaseDbUrl: string;
@@ -235,6 +239,10 @@ interface RefusalTally {
   // the existing typed refusal reasons; identity extends to
   // targets_loaded = orders_submitted + ... + allocation_cap_reached.
   allocation_cap_reached: number;
+  // ACT-501: daily entry budget (K=5, ACT-500 Part 1 DEC). Counted AFTER
+  // allocation_cap_reached in the evaluation order and the identity —
+  // a name refused by the cap does NOT consume budget.
+  daily_budget_reached: number;
 }
 function newTally(): RefusalTally {
   return {
@@ -251,6 +259,7 @@ function newTally(): RefusalTally {
     submissions_failed: 0,
     fill_unfilled_no_lots: 0,
     allocation_cap_reached: 0,
+    daily_budget_reached: 0,
   };
 }
 
@@ -348,6 +357,8 @@ Deno.serve(createHandler(async (req: Request) => {
     void OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS;
     void OVERSHOOT_I5_REVERSION_MAX_LONG;
     void OVERSHOOT_I5_REVERSION_MAX_SHORT;
+    // ACT-501 drift canary: single-homed daily-budget constant.
+    void OVERSHOOT_DAILY_ENTRY_BUDGET;
 
     // T3b (ACT-480) — INC-84 §5 generalization: detector_version boot
     // format assertion + probe-envelope echo (self-attesting deploys).
@@ -719,6 +730,10 @@ Deno.serve(createHandler(async (req: Request) => {
     }> = [];
     let cumulativeIntendedNotional = 0;
     let ordersSubmitted = 0;
+    // ACT-501 daily-budget counter. Incremented AFTER a slot passes the
+    // allocation-cap gate (and thus consumes budget). Cap-refused names
+    // never touch this counter — identity + rank-preservation guarantee.
+    let admittedByDailyBudget = 0;
 
     const shortabilityFetcher = new OvershootAlpacaShortabilityFetcher(client);
     const fillFetcher = new OvershootAlpacaFillFetcher(client);
@@ -946,6 +961,43 @@ Deno.serve(createHandler(async (req: Request) => {
         continue;
       }
 
+      // ── ACT-501 daily entry budget gate ──────────────────────────────
+      // Positioned AFTER allocation_cap_reached (cap-refused names do NOT
+      // consume budget) and BEFORE the R-gamma BP guard (no BP spent on
+      // budget-refused names). Rank-order preserved by upstream ORDER BY
+      // (side, rank_score DESC): the top-K eligible names claim the
+      // budget; the tail truncates cleanly with `daily_budget_reached`.
+      // Ratified K=5 by ACT-500 Part 1 DEC; W5 4-week live tripwire may
+      // drop to 4 on evidence.
+      const budgetEval = evaluateDailyBudget({
+        budget: OVERSHOOT_DAILY_ENTRY_BUDGET,
+        admittedThisRun: admittedByDailyBudget,
+      });
+      if (!budgetEval.ok) {
+        tally.daily_budget_reached += 1;
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.entry.daily_budget_reached',
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: {
+            ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
+            reason: budgetEval.reason,
+            budget: budgetEval.budget,
+            admitted_this_run: budgetEval.admitted_this_run,
+            handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+          },
+        });
+        continue;
+      }
+      // Budget consumed on admission through this gate. Downstream
+      // refusals (BP / shortability / entry-price / submit_failed) still
+      // count as a consumed slot — the sim modeled K as ADMISSIONS/day,
+      // not as SUCCESSFUL FILLS/day. This is the same accounting the W5
+      // live-tripwire will measure against.
+      admittedByDailyBudget += 1;
+
       // R-gamma cumulative BP guardrail BEFORE this submission.
       const bpCheck = assertBuyingPowerCoversNotional({
         snapshot: accountSnapshot,
@@ -1162,6 +1214,14 @@ Deno.serve(createHandler(async (req: Request) => {
           long:  openMV.long  + acceptedNotionalBySide.long,
           short: openMV.short + acceptedNotionalBySide.short,
         },
+      },
+      // ACT-501 daily entry budget surface (dormant while the cap is
+      // full — consumed=0 expected — but PRESENT and correct on every
+      // response for operator triage / attestation).
+      daily_budget: {
+        budget: OVERSHOOT_DAILY_ENTRY_BUDGET,
+        consumed: admittedByDailyBudget,
+        refusals: tally.daily_budget_reached,
       },
       correlation_id: correlationId,
     });
