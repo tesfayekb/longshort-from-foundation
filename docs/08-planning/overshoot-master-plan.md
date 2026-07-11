@@ -87,7 +87,7 @@ small → scaled, margin ratchet evidence-gated, IBKR build if elected.
 ### Phase 13 — Expansion ⬜ (parallel from Phase 9)
 - ACT-498 self-healing ladder STEP B (after 493)
 - gap-breaker study (ACT-487e candidate — strategy question, not ops patch)
-- shadow universe expansion
+- shadow universe expansion — **GATED on PERF-D-A (detection-kernel sharding)** per ACT-499 Track D DEC 2026-07-11; kernel busts 150s wall-clock at ~1.6× universe (~1,350 symbols), so no expansion beyond current 839 until sharding lands. 10× economics additionally gated on **PERF-D-C** (capacity-dilution study).
 - FINRA SI procurement (named, uncharted)
 - PEAD
 - CROSSWIND resumes
