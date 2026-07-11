@@ -111,3 +111,23 @@ Using same-ticker proxy (OLD ≡ NEW distribution) computed corpus-wide on n=160
 ACT-502 CLOSED (NO-GO). Next in queue: **Track B F2–F13 report**, then **Tracks C/D of ACT-499**.
 
 ## STOP — awaiting operator DEC ruling before Track B kicks off.
+
+---
+
+## Operator DEC (2026-07-11) — NO-GO RATIFIED + tripwire filed
+
+**Verdict:** NO-GO ratified per the pre-committed bar. The **rigorous identical-window frame** (log-return, [open(T+10), close(T+11)]) is the accepted accounting basis of record. The stylized decomposition's double-count of the new lot's day-1 return is noted for the methodology record as a lesson (do not decompose across non-identical windows without a covariance term).
+
+**Tripwire — TRIP-502-A (filed with closure):**
+- **Assumption under test:** the −3.3 bps rigorous+haircut verdict assumes a **5 bp/side open-print haircut** (10 bp round-trip). Slippage estimate is derived, not measured on our fills.
+- **Trigger:** when Phase 10 (W5) live slippage measurement lands with real fills against our actual marketable-limit construction.
+- **Action IF measured entry slippage is materially under 5 bp/side:** re-run the rigorous frame using the measured haircut. Re-open ACT-502 only if the **lower 90% CI clears the 8 bp complexity floor with measured frictions**. Otherwise the case remains parked permanently alongside pre-close entry.
+- **Owner:** Phase 10 slippage workstream. **Not** a live-books item.
+
+**Preserved observations promoted to standing W5 context:**
+- Day-10 marginal ≈ 5.6% of the T+10 hold return (rank-decay logic confirmed on our corpus).
+- Overnight drift on top-decile LONG admissions = +12.7 bps mean (real, not zero).
+
+**Companion NOT-recommended:** pre-close entry — parked permanently alongside ACT-502 under the same tripwire discipline (would need its own pre-committed bar + rigorous window before any re-open).
+
+**ACT-502 CLOSED PERMANENTLY** subject only to TRIP-502-A firing on measured slippage.
