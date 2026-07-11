@@ -961,6 +961,37 @@ Deno.serve(createHandler(async (req: Request) => {
         continue;
       }
 
+      // ── ACT-501 daily entry budget gate ──────────────────────────────
+      // Positioned AFTER allocation_cap_reached (cap-refused names do NOT
+      // consume budget) and BEFORE the R-gamma BP guard (no BP spent on
+      // budget-refused names). Rank-order preserved by upstream ORDER BY
+      // (side, rank_score DESC): the top-K eligible names claim the
+      // budget; the tail truncates cleanly with `daily_budget_reached`.
+      // Ratified K=5 by ACT-500 Part 1 DEC; W5 4-week live tripwire may
+      // drop to 4 on evidence.
+      const budgetEval = evaluateDailyBudget({
+        budget: OVERSHOOT_DAILY_ENTRY_BUDGET,
+        admittedThisRun: admittedByDailyBudget,
+      });
+      if (!budgetEval.ok) {
+        tally.daily_budget_reached += 1;
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.entry.daily_budget_reached',
+          actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+          correlationId,
+          metadata: {
+            ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
+            reason: budgetEval.reason,
+            budget: budgetEval.budget,
+            admitted_this_run: budgetEval.admitted_this_run,
+            handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+          },
+        });
+        continue;
+      }
+
       // R-gamma cumulative BP guardrail BEFORE this submission.
       const bpCheck = assertBuyingPowerCoversNotional({
         snapshot: accountSnapshot,
