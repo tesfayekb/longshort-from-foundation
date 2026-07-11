@@ -1215,6 +1215,14 @@ Deno.serve(createHandler(async (req: Request) => {
           short: openMV.short + acceptedNotionalBySide.short,
         },
       },
+      // ACT-501 daily entry budget surface (dormant while the cap is
+      // full — consumed=0 expected — but PRESENT and correct on every
+      // response for operator triage / attestation).
+      daily_budget: {
+        budget: OVERSHOOT_DAILY_ENTRY_BUDGET,
+        consumed: admittedByDailyBudget,
+        refusals: tally.daily_budget_reached,
+      },
       correlation_id: correlationId,
     });
   } catch (err) {
