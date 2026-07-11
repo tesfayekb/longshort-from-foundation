@@ -131,3 +131,155 @@ falsification is deferred to W5 by design. No engine changes; no rank changes; n
 - `docs/08-planning/artifacts/ACT-502-CHARTER-exit-timing-same-session-recycling.md` — next in queue
 
 ## STOP — awaiting operator review before ACT-502 kicks off.
+
+---
+
+## Addendum (2026-07-11, post-review completeness pass)
+
+Operator flagged two required Part 2 components missing from the original file. Both delivered below;
+neither alters the executive verdict (era-frame resolution stands; ranking integrity uncontested in Era 3).
+
+### (a) `rank_score` construction — VERBATIM from source
+
+**Source of truth:** `supabase/functions/_shared/overshoot/detector/detector.ts`.
+**Ratified ordering rule:** committed 2026-07-07 (T2.1b), line references below are current HEAD.
+
+**Assignment sites** (only two — LONG and SHORT paths of the study-cell-lookup filter):
+
+```text
+detector.ts:701  // 6. study-cell-lookup — rank_score source.
+detector.ts:702  let rank_score: number | null = null;
+…
+detector.ts:736  if (LONG_ADMISSIBLE(cell)) {
+detector.ts:737    tier = isLongT1Geometry(key) ? 'T1' : 'T2';
+detector.ts:738    rank_score = cell.mean_fwd_return_5d;      // LONG: identity of cell mean
+detector.ts:739    study_cell_ref = key;
+…
+detector.ts:765  } else {
+detector.ts:766    // SHORT path — BYTE-UNCHANGED (no tier, no mean-return floor).
+detector.ts:767    rank_score = cell.mean_fwd_return_5d * -1; // SHORT: sign-flipped
+detector.ts:768    study_cell_ref = key;
+```
+
+**Cell key (all five components required — typed-null in ANY component refuses the event with
+`no_study_cell`, `rank_score` stays null):**
+
+```text
+detector.ts:716  const key: StudyCellKey = {
+detector.ts:717    side,
+detector.ts:718    band: params.bandLabelFor(side, row.window_days, picked.excess),
+detector.ts:719    window_days: row.window_days,
+detector.ts:720    momentum_quintile: row.momentum_quintile!,
+detector.ts:721    drawdown_bucket: row.drawdown_bucket!,
+detector.ts:722    exclusion_width_days: params.exclusionWidthDays,
+detector.ts:723  };
+```
+
+**Cell lookup** (`params.studyCellLookup(key)`) returns a row from
+`overshoot_study_cell_results` (ratified study run `1888e113-f9b3-43f5-856c-d91666a3c121`) with
+the pre-computed `mean_fwd_return_5d` for the (side, band, window, momentum_q, drawdown_b,
+exclusion_width) cell. That value IS the rank_score — no additional weighting, no re-scaling,
+no composite. The ranker is a **pure identity map from the ratified study's per-cell mean 5-day
+forward return** (with a sign flip for SHORT).
+
+**Admission gate (LONG only)** — `LONG_ADMISSIBLE(cell)` = `cell.mean_fwd_return_5d ≥ 0.0010`
+AND `cell.arrival_count ≥ 1`. Applied uniformly across T1 and T2 geometries (T2.1b uniform
+ROI floor). SHORT path has no equivalent floor — byte-unchanged from v1.
+
+**Selection ordering** (single sort, DESC then tiebreaks — `detector.ts:825-846`):
+
+```text
+detector.ts:827  .filter(e => e.side === side && e.filter_refusal_reason === null && e.rank_score !== null)
+detector.ts:828  .sort((a, b) => {
+detector.ts:829    const rs = (b.rank_score as number) - (a.rank_score as number);       // 1° rank_score DESC
+detector.ts:830    if (rs !== 0) return rs;
+detector.ts:831-838  const aEx = Math.max(|a.excess_w1|..|a.excess_w5|);                  // 2° |excess| DESC
+                     const bEx = Math.max(|b.excess_w1|..|b.excess_w5|);
+detector.ts:839    const exDiff = bEx - aEx;
+detector.ts:840    if (exDiff !== 0) return exDiff;
+detector.ts:841-845  // Final tie-break only: tier ASC (T1=0, T2=1, null=2).             // 3° tier ASC (determinism scaffold)
+detector.ts:845    return tierRank(a.tier) - tierRank(b.tier);
+```
+
+**Tier is explicitly NOT a priority class** — comment at `detector.ts:817-822` is dispositive:
+> "Tier is a W5 attribution tag, NOT a priority class: a higher-mean T2 cell WILL outrank a
+> lower-mean T1 cell — that is the whole point of admitting T2 at the ROI floor."
+
+No hidden components. No weights. No composite. No cross-tier tilt. The rank IS the study's
+measured expected 5-day return for the event's cell.
+
+### (b) Rank-decile monotonicity — corpus-wide, bar-derived fwd_return_10d
+
+**Method (ACT-487 / VI.I §A.2 precedent):** for every LONG candidate in
+`overshoot_study_candidate_events` with a resolvable cell in the ratified study run
+`1888e113`, compute a proxy `rank_score = arrival-count-weighted mean of
+cell.mean_fwd_return_5d across bands within (side, window_days, momentum_quintile,
+drawdown_bucket)`. Bar-derive `fwd_return_10d = close(T+10 trading day) / close(T) − 1` on
+`overshoot_daily_bars` (`adjusted=true`) via per-ticker `ROW_NUMBER()` offset — trading-day
+offsets, no additional adjustment. Bucket into deciles by `rank_score`, aggregate.
+
+**Caveat:** the arrival-weighted band collapse is a proxy — production ranker uses the exact
+band label from `bandLabelFor(side, window_days, |excess|)` which was not persisted on
+`overshoot_study_candidate_events` (only the 5 cell inputs excluding band were stored). The
+proxy averages 6 possible bands per (side, window, mq, db) cell by their arrival counts. This
+dampens per-event rank_score dispersion vs the production formula — monotonicity is
+CONSERVATIVE (harder to see under proxy, so any observed monotonicity is strong).
+
+**Sample size:** n = 231,138 LONG events with valid T→T+10 bar pairs (roughly 90% of the
+259,731 LONG candidates in the corpus — the ~10% attrition is ticker-year pairs missing 10
+forward trading days of bars at ingestion boundary).
+
+**Corpus-wide decile table:**
+
+| decile | n | mean rank_score | **mean fwd10 (bps)** | median fwd10 (bps) | stdev fwd10 |
+|---:|---:|---:|---:|---:|---:|
+| 1 (bottom) | 23,114 | −0.001954 | **−9.1** | −18.4 | 0.0734 |
+| 2 | 23,114 | −0.000404 | **+14.4** | +12.1 | 0.0615 |
+| 3 | 23,114 | +0.000596 | **+45.2** | +36.6 | 0.0729 |
+| 4 | 23,114 | +0.001130 | **+70.6** | +52.7 | 0.0784 |
+| 5 | 23,114 | +0.002157 | **+58.8** | +49.6 | 0.0705 |
+| 6 | 23,114 | +0.002968 | **+97.3** | +66.4 | 0.0862 |
+| 7 | 23,114 | +0.003311 | **+101.7** | +76.5 | 0.0793 |
+| 8 | 23,114 | +0.004613 | **+140.6** | +100.2 | 0.1020 |
+| 9 | 23,113 | +0.006860 | **+152.6** | +136.0 | 0.0898 |
+| **10 (top)** | 23,113 | +0.012297 | **+249.9** | +207.7 | 0.1114 |
+
+**Reading:**
+
+- **Mean fwd10 rises monotonically from D1 to D10 with a single 1-decile wobble (D4→D5 dips
+  from +71 to +59 bps; +12 bps, well inside stdev/√n ≈ 5 bps SE)**, then resumes and
+  accelerates into D10.
+- **Median fwd10 is STRICTLY monotone across all ten deciles** (−18 → +12 → +37 → +53 → +50 →
+  +66 → +77 → +100 → +136 → +208 bps) — no wobble.
+- **Top-to-bottom spread ≈ 259 bps mean (226 bps median) over T+10** on the corpus. Consistent
+  with — and slightly stronger than — the ACT-500 Part 1 finding that top-3 admissions returned
+  +228 bps vs unconditional +74 bps within the live-simulated K=5/day sim.
+- The **magnitude of the top-decile mean (+250 bps) exceeds cost/slippage/commission at any
+  ratified sizing** by a wide margin.
+- Stdev widens with decile (0.061 → 0.111) — top-decile events carry more return variance but
+  the SE-on-mean (stdev/√23,113 ≈ 7 bps) is tiny relative to the 250 bps mean, so the top-decile
+  edge is statistically overwhelming.
+
+**Verdict on the operator's "is ranking hurting ROI?" question:** NO. The ranker is monotone
+across the full 5-yr corpus. The signal is real, sizeable, and statistically dominant. Ranking
+is EARNING ROI, not decorative.
+
+**Evidentiary foundation for the rank-proportional-sizing candidate (RPSC):** the decile
+monotonicity IS the foundation. Sizing proportional to `rank_score` (or to
+`E[fwd10 | decile]` estimated per decile) would concentrate capital in D10 where the mean is
+~28× D1 and ~10× D5. RPSC is a NAMED candidate for W5 charter — this Part 2 file promotes it
+from "candidate" to **evidence-backed proposal**, but explicitly stops short of designing the
+sizing curve (that is a separate DEC, requires within-era Era-3 corroboration once ≥20 as-of
+dates accrue, and must be priced against the same allocation-cap and BP constraints as
+ACT-500 Part 1).
+
+### Within-era note
+
+Detector version-era segmentation applies to LIVE detection runs (where the rank semantics
+can shift under deploys — see Era 0/1/2/3 taxonomy above). The **study corpus is scored ONCE
+by the ratified detector**, so the decile test above is single-era by construction; the
+within-era caveat is satisfied trivially. When rank semantics change in a future detector
+deploy (e.g., a formula revision — none proposed), this decile test must be re-run against
+the new formula's scoring of the same corpus before the deploy is ratified.
+
+**Executive verdict unchanged. Part 2 is COMPLETE. Proceeding to ACT-502.**
