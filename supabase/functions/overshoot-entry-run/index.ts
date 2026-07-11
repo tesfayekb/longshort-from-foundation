@@ -357,6 +357,8 @@ Deno.serve(createHandler(async (req: Request) => {
     void OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS;
     void OVERSHOOT_I5_REVERSION_MAX_LONG;
     void OVERSHOOT_I5_REVERSION_MAX_SHORT;
+    // ACT-501 drift canary: single-homed daily-budget constant.
+    void OVERSHOOT_DAILY_ENTRY_BUDGET;
 
     // T3b (ACT-480) — INC-84 §5 generalization: detector_version boot
     // format assertion + probe-envelope echo (self-attesting deploys).
@@ -728,6 +730,10 @@ Deno.serve(createHandler(async (req: Request) => {
     }> = [];
     let cumulativeIntendedNotional = 0;
     let ordersSubmitted = 0;
+    // ACT-501 daily-budget counter. Incremented AFTER a slot passes the
+    // allocation-cap gate (and thus consumes budget). Cap-refused names
+    // never touch this counter — identity + rank-preservation guarantee.
+    let admittedByDailyBudget = 0;
 
     const shortabilityFetcher = new OvershootAlpacaShortabilityFetcher(client);
     const fillFetcher = new OvershootAlpacaFillFetcher(client);
