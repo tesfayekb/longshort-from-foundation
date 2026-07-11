@@ -991,6 +991,12 @@ Deno.serve(createHandler(async (req: Request) => {
         });
         continue;
       }
+      // Budget consumed on admission through this gate. Downstream
+      // refusals (BP / shortability / entry-price / submit_failed) still
+      // count as a consumed slot — the sim modeled K as ADMISSIONS/day,
+      // not as SUCCESSFUL FILLS/day. This is the same accounting the W5
+      // live-tripwire will measure against.
+      admittedByDailyBudget += 1;
 
       // R-gamma cumulative BP guardrail BEFORE this submission.
       const bpCheck = assertBuyingPowerCoversNotional({
