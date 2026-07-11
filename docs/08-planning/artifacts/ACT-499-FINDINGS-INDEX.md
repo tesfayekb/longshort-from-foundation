@@ -93,3 +93,13 @@
 **Weekend audit CLOSED.** Six brackets ratified, one Tier-A engine change shipped and verified clean, one NO-GO ratified with tripwire, security posture substantively clean, entry-slippage headline confirms W5 haircuts are conservative, operational headroom identified as the near-term bottleneck (PERF-D-A blocks universe expansion). Exit-slippage measurement window opens **2026-07-22**; TRIP-502-A fires or dies on that data.
 
 **The night is done.**
+
+---
+
+## 9. Standing state into Monday (operator, 2026-07-11)
+
+- Nothing executes over the weekend except the armed autonomous legs (dispatcher, SI, detection, snapshot, fill-sweep).
+- **Next build priority:** ACT-493 (exit adoption + Option-B smoothing scope, deadline **2026-07-17**).
+- **Monday attended bracket:** ACT-501 / cap-probe behavioral proof (last manual entry bracket → autonomous adoption proof).
+- **PERF-D-A** wired as binding gate on Phase-13 shadow-universe expansion.
+- **Exit-slippage window** opens 2026-07-22 → decides TRIP-502-A.
