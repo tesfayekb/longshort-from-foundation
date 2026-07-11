@@ -283,3 +283,16 @@ deploy (e.g., a formula revision — none proposed), this decile test must be re
 the new formula's scoring of the same corpus before the deploy is ratified.
 
 **Executive verdict unchanged. Part 2 is COMPLETE. Proceeding to ACT-502.**
+
+---
+
+## W5 candidate register (as of Part 2 close)
+
+| W5 row | Charter | Trigger | Origin |
+|---|---|---|---|
+| **W5-01** | Option-C revalidation of ACT-500 Part 1 daily-budget sim in permanent harness | 4-week live tripwire | ACT-500 Part 1 DEC |
+| **W5-02** | Rank-at-entry vs realized-P&L series, per-tier + per-cell, with bias-axes review | 4-week live tripwire (≥20 as-of dates) | ACT-500 Part 1 DEC |
+| **W5-03 — RANK-HORIZON ALIGNMENT (RHA)** | Test whether ranking LONG events by cell `mean_fwd_return_10d` (bar-derived from `overshoot_daily_bars` via ACT-487 method if `overshoot_study_cell_results.mean_fwd_return_10d` is not populated; column exists for 1d/5d/20d only, so 10d must be derived) orders realized fwd_return_10d MORE monotonically than the current 5d-based rank. Deliverable = side-by-side decile tables (5d-ranked vs 10d-ranked) computed identically to Part 2 §(b). GO condition: 10d-ranked decile spread strictly dominates 5d-ranked spread by ≥25 bps at D10 AND monotonicity ties or beats. If GO: one-line detector change (`rank_score = cell.mean_fwd_return_10d`) — but this IS a rank-semantics change, therefore a **VERSION-HASH event** requiring detector version bump + full fixture regeneration under `fixtures/overshoot-detector-selection/` + selection-parity re-ratification. The table decides whether the fixture-regen cost is earned. | Evidence-gated (no live gate needed; W5 slot when there is bandwidth to design the cell-10d derivation and run the sim) | Part 2 verbatim-construction review (2026-07-11) |
+| **W5-04 — RANK-PROPORTIONAL-SIZING CANDIDATE (RPSC)** | Design sizing curve as a function of decile / `E[fwd10 \| decile]`; simulate under ACT-500 Part 1 constraints (allocation cap, BP guard, K=5); DEC-input table with pre-committed GO bar | Era-3 corroboration once ≥20 as-of dates accrue | Part 2 §(b) decile evidence |
+
+RHA and RPSC are both rank-formula changes — if both GO independently, sequencing matters: RHA first (changes what rank_score IS), THEN RPSC (changes how rank_score MAPS to size). Do NOT ship both in the same detector version; they carry independent fixture-regen costs and must be independently attributable in W5 attribution.
