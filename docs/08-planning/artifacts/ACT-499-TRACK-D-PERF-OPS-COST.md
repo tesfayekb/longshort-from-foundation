@@ -81,7 +81,7 @@ Detection kernel is per-symbol dominant (Polygon bar traversal + I5/I3 window co
 
 **F-D-04 (LOAD-BEARING):** `net._http_response` averages **~245 KB per row** — Polygon bar response bodies are being persisted verbatim by `pg_net` async HTTP. At 1× this is manageable (7.7 MB/day) but at 10× universe **the bar-fetch response volume scales linearly** → ~77 MB/day = ~28 GB/year uncapped. Also: responses containing vendor data may create a **data-residency / vendor-TOS surface** (Polygon response bodies persist in the DB indefinitely) — flag for legal review under Track D-adjacent posture (deferred).
 
-**Charter PERF-D-B filed:** retention migration for `cron.job_run_details` (14-day rolling) + `net._http_response` (7-day rolling for successful 2xx, 30-day for non-2xx to preserve debug window). Runs nightly under existing `audit_cleanup` job.
+**Charter PERF-D-B filed** (operator-ratified 2026-07-11): retention migration for `cron.job_run_details` (**14-day rolling**) + `net._http_response` (**7-day rolling**, uniform — no 2xx/non-2xx split). Runs nightly under existing `audit_cleanup` job. **Forensic-window note (per INC-99):** `net._http_response` is our post-hoc forensic surface for vendor HTTP behavior; the 7-day window is sized to cover the operational-forensics horizon (same-week incident reconstruction). Anything requiring deeper retrospective must be captured out-of-band before the 7d rollover.
 
 ---
 
@@ -136,7 +136,7 @@ Detection kernel is per-symbol dominant (Polygon bar traversal + I5/I3 window co
 | id | title | urgency | blocking |
 |---|---|---|---|
 | **PERF-D-A** | Shard detection kernel by symbol range | HIGH | any universe expansion beyond ~1,350 symbols |
-| **PERF-D-B** | Retention on `cron.job_run_details` + `net._http_response` | MEDIUM | none (hygiene); recommended within W5 |
+| **PERF-D-B** | Retention on `cron.job_run_details` (14d) + `net._http_response` (7d, forensic-window per INC-99) | MEDIUM | none (hygiene); recommended within W5 |
 | **PERF-D-C** | Capacity-dilution study: does top-decile alpha survive 10× universe? | MEDIUM | 10× rollout DEC |
 | **INC-104** | Measure edge-function peak memory during detection kernel run | LOW | none |
 
@@ -151,3 +151,16 @@ Detection kernel is per-symbol dominant (Polygon bar traversal + I5/I3 window co
 - ✅ Charters PERF-D-A/B/C + INC-104 (§6)
 
 **Track D CLOSED.** Weekend audit complete.
+
+---
+
+## 8. Operator DEC — 2026-07-11 (Track D closure)
+
+Ratified in full:
+
+1. **PERF-D-A is BINDING as a stated precondition on Phase-13 shadow-universe expansion.** Wired into `overshoot-master-plan.md` Phase 13 as a gate — universe expansion beyond ~1,350 symbols does not proceed until kernel sharding lands.
+2. **PERF-D-B approved** with retention windows 14d (`cron.job_run_details`) / 7d (`net._http_response`); forensic-window rationale recorded per INC-99.
+3. **PERF-D-C ratified** as the gate on 10× economics (capacity dilution must be measured, not assumed).
+4. **INC-104 approved** (edge-function peak-memory measurement).
+
+**ACT-499 CLOSED** with `ACT-499-FINDINGS-INDEX.md` as terminal artifact.
