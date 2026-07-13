@@ -22,6 +22,30 @@
 
 ---
 
+### ACT-512 RATIFICATION (2026-07-13, late evening, operator DEC): **OPTION A ADOPTED** — `accounts` table + `account_id` FK stamped on all money-path rows, single-account backfill to `'alpaca_paper_overshoot'`, ZERO behavior change. Allocator, IRA gates, credential fan-out, and runtime `/v2/account` cross-check remain **DEFERRED to the Phase-L broker decision** as chartered (§2.3, §3, §5 of the ACT-512 charter).
+
+**SEQUENCING FENCE (operator directive):** Lands AFTER ACT-493 is CLOSED and Thursday's first T+6 exits (AKAM, CHRD → 2026-07-16) complete cleanly. **Target landing: Friday 2026-07-17 or the weekend.** Rationale: both migrations touch `overshoot_lots` in the same week; the exit engine is the critical path and gets the table to itself until first round-trips are booked.
+
+**Landing contract (execution charter ACT-513 to be filed after ACT-493 closure):**
+1. **Prereq gate:** ACT-493 v1 landed + first T+6 exits (07-16) booked and reconciled clean. Absent either, ACT-512 landing slips one session.
+2. **Migration scope (single migration, idempotent, halt-on-fail):**
+   - `CREATE TABLE public.accounts` per charter §1.1 (broker, account_type, capability profile, credentials_ref, IRA DB CHECK constraints, RLS enabled, GRANTs to `authenticated` SELECT + `service_role` ALL).
+   - Seed one row: `account_id='alpaca_paper_overshoot'`, `broker='alpaca'`, `account_type='paper'`, `margin_max=<current overshoot_strategy_config.margin_multiplier>`, `shorts_allowed=true`, `settlement_regime='margin'`, `allocation_usd=<current strategy_allocation_pct × latest equity snapshot>`, `credentials_ref='ALPACA_PAPER_OVERSHOOT'`.
+   - `ALTER TABLE ... ADD COLUMN account_id text` (nullable) on the 7 tables: `overshoot_lots`, `overshoot_entry_runs`, `overshoot_target_positions`, `overshoot_equity_snapshots`, `overshoot_reconciliation_state`, `overshoot_audit_logs`, `overshoot_alert_dispatch`.
+   - Backfill: `UPDATE ... SET account_id='alpaca_paper_overshoot' WHERE account_id IS NULL` on each.
+   - Same-migration `SET NOT NULL` + `ADD CONSTRAINT ... FOREIGN KEY (account_id) REFERENCES accounts(account_id)` + halt-on-fail `SELECT count(*) WHERE account_id IS NULL` MUST equal 0 on each table.
+3. **Code writes-forward (same PR):** every INSERT site on the 7 tables writes the constant `account_id='alpaca_paper_overshoot'` — fill-sweep adoption, entry-run planner, target-position writer, equity snapshot job, reconcile state writer, audit-log writer (`writeOvershootAuditEvent`), alerts dispatcher. Mechanical, patch-shaped; zero business-logic change.
+4. **NO engine loop, NO allocator, NO per-account fan-out.** Broker client construction, secret names (`ALPACA_PAPER_KEY_OVERSHOOT` / `ALPACA_PAPER_SECRET_OVERSHOOT`), sizing basis, cap arithmetic, margin_multiplier read from `overshoot_strategy_config` — **all unchanged.** `accounts.credentials_ref` is populated but not yet consumed; that consumer lands with Phase-L.
+5. **§22.5.1 evidence required at landing:** (a) migration text (CREATE + ALTER + backfill UPDATE + FK add + post-assertion for all 7 tables); (b) live-DB read-back showing `accounts` row present, `account_id` NOT NULL on every table, every row = `'alpaca_paper_overshoot'`; (c) INSERT-site code diffs (7 sites) writing the constant; (d) test artifact confirming zero behavior delta on a full run (entry sizing, exit clock, reconcile, snapshot).
+
+**W5 note (STANDS, reinforced):** every measurement row from the ACT-512 landing forward carries `account_id`. Rows written between now and landing (T+6 exits 07-16, entry runs 07-14/15/16) will be backfilled to `'alpaca_paper_overshoot'` by the migration UPDATE — so W5's per-slot-per-day queries have the `account_id` dimension present for the ENTIRE measurement window without retrofit. Attribution starts clean from day 1 of the window.
+
+**Deferred to Phase-L broker decision (explicit, so it does not silently drift back into scope):** allocator (charter §2.3), IRA enforcement + settled-cash accounting + GFV math + ACT-510 cash-regime re-run (§3), self-competition sequencing + aggregate-AUM cap from ACT-506 W5 (§4), credential fan-out + runtime `/v2/account` cross-check + per-broker driver (§5), per-account engine loops (§2.1).
+
+**Files touched this turn:** `docs/06-tracking/action-tracker.md` (this ratification record). NO code, NO migrations — the migration lands with ACT-513 execution charter per the fence above.
+
+---
+
 ### SCHEMA RULING for ACT-493 (2026-07-13, night, operator DEC): **BACKFILL `tier` ONTO `overshoot_lots` in the landing migration — do NOT join `overshoot_events` at exit-eval time.** Provenance columns REQUIRED: `tier_source_event_run_id uuid` + `tier_source_as_of_date date`, both populated from the source `overshoot_events` row at backfill time.
 
 **Rationale (verbatim per operator directive):** the exit clock's inputs should be single-homed ON THE LOT — same principle as `entry_ts` single-homing from ACT-489. A join re-derives per tick from a table the exit engine otherwise never reads, widening its blast radius. A backfilled column with provenance is deterministic, audit-stable, and makes the tier-conditional horizon a pure lot-local read.
