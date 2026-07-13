@@ -1,4 +1,18 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### SCHEMA RULING for ACT-493 (2026-07-13, night, operator DEC): **BACKFILL `tier` ONTO `overshoot_lots` in the landing migration — do NOT join `overshoot_events` at exit-eval time.** Provenance columns REQUIRED: `tier_source_event_run_id uuid` + `tier_source_as_of_date date`, both populated from the source `overshoot_events` row at backfill time.
+
+**Rationale (verbatim per operator directive):** the exit clock's inputs should be single-homed ON THE LOT — same principle as `entry_ts` single-homing from ACT-489. A join re-derives per tick from a table the exit engine otherwise never reads, widening its blast radius. A backfilled column with provenance is deterministic, audit-stable, and makes the tier-conditional horizon a pure lot-local read.
+
+**Migration contract (ACT-493 same-migration, idempotent):** (1) `ALTER TABLE overshoot_lots ADD COLUMN IF NOT EXISTS tier text` + provenance columns; (2) backfill from `overshoot_events` join `(ticker=symbol, as_of_date ≤ entry_ts::date, selected_for_entry=true)`, latest event before entry, recording `run_id` + `as_of_date`; (3) same-migration halt-on-fail assertion `SELECT count(*) FROM overshoot_lots WHERE exit_ts IS NULL AND tier IS NULL` MUST equal 0; (4) exit engine reads `lot.tier` only — NO `overshoot_events` join in the exit path.
+
+**Forward path:** the fill-sweep adoption (ACT-489, `overshoot-fill-sweep`) writes `tier` + provenance at lot creation from the target's event row — no separate backfill for post-landing lots. Adoption INSERT diff lands in the same PR as ACT-493 v1.
+
+**§22.5.1 evidence required at ACT-493 landing:** (a) migration text (ALTER + backfill UPDATE + post-assertion); (b) live-DB read-back showing every open lot has `tier`, `tier_source_event_run_id`, `tier_source_as_of_date` populated (expected n=6 open T1 lots per acceleration ruling above, plus all open T2 lots); (c) exit-engine code diff showing lot-local read; (d) fill-sweep adoption diff writing tier at insert. All four artifacts cited in the landing closure record.
+
+**Files touched (this record only):** `docs/06-tracking/action-tracker.md` (this entry), `docs/08-planning/artifacts/ACT-510-CHARTER-tier-conditional-entry-day-and-exit-horizon.md` (§4 schema ruling revision + revision banner). NO code, NO migrations this turn — the migration lands with ACT-493 v1 per contract above.
+
+---
+
 ### STANDING ORDER (2026-07-13, evening, operator directive, filed verbatim): **"No evidence-passing ROI item is ever deprioritized by subjective size framing — the pre-committed rule decides adoption, and every adopted item is implemented with full priority."** Applied retroactively: ACT-510's T1 uplift (+33.4% per-$/day, +$2,328 per $100K per slot per year) is a **first-class capture**, not a footnote. Binding on all future ACT/DEC prioritization: once an item clears its pre-committed GO gate (thresholds + N + stability), size framing (bps, $/yr, slot count) MAY NOT be used to demote its implementation priority. Sequencing may only be adjusted by evidence-based blockers (deadlines, dependencies, safety), never by aesthetic "is it worth it".
 
 ---
