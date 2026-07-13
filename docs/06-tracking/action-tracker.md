@@ -1,4 +1,18 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-506 / ACT-507 / ACT-508 (2026-07-13): CHARTERS FILED — **W5 follow-up bundle from ACT-505 parity audit; all three read-only, sequenced behind ACT-493 (07-17 deadline unmoved), free to interleave among themselves.**
+
+- **ACT-506 (W5-01, ROI rank #1)** — True slippage decomposition per lot from `overshoot_audit_logs`: split the ACT-505-measured 1–2% close→fill entry gap into overnight (compared vs VI.I's full distribution, not just median) / open-drift / controllable. Deliverable: controllable component in bps + verdict on limit construction vs fire timing. Charter: `docs/08-planning/artifacts/ACT-506-CHARTER-W5-01-slippage-decomposition.md`.
+- **ACT-507 (W5-02, ROI rank #2)** — Day-k conditional means per cohort × tier × cell from the ratified study corpus. Replaces the ACT-505 study-path proxy with the true benchmark; feeds honest percentile scoring for every future daily mark. Includes retrospective KS-directional scoring of the 50 live lots. Charter: `docs/08-planning/artifacts/ACT-507-CHARTER-W5-02-day-k-conditional-means.md`.
+- **ACT-508 (W5-03, ROI rank #3)** — Bundled per-name cell-membership echo (Part A, n=50) + 10-lot mechanical spot-audit re-derivation (Part B) — receipts-level selection audit; exonerates or indicts the detector name-by-name for cohorts 07-07/07-08/07-09. Charter: `docs/08-planning/artifacts/ACT-508-CHARTER-W5-03-cell-membership-and-mechanical-audit.md`.
+
+**Sequencing (binding):** ALL THREE behind ACT-493 (exit adoption, Thursday 2026-07-17). ACT-493 gates real-money events; W5-01/02/03 are read-only investigations and free to interleave among themselves in any order. Tonight's E3-Mon snapshot (21:10Z) re-anchors the book at a settled mark before any of these run.
+
+**Provenance:** promoted from ACT-505 (parity audit) follow-ups FU-1 + FU-2 + FU-3 + FU-4; operator-directed 2026-07-13. FU-1 + FU-4 bundled into ACT-508 because they share the same data pull and audit posture.
+
+**Files touched (this record only):** `docs/08-planning/artifacts/ACT-506-CHARTER-W5-01-slippage-decomposition.md` (new), `docs/08-planning/artifacts/ACT-507-CHARTER-W5-02-day-k-conditional-means.md` (new), `docs/08-planning/artifacts/ACT-508-CHARTER-W5-03-cell-membership-and-mechanical-audit.md` (new), `docs/06-tracking/action-tracker.md` (this entry). NO code, NO migrations, NO schema changes.
+
+---
+
 
 **Operator adjudications received 2026-07-10 (binding, verbatim):**
 
