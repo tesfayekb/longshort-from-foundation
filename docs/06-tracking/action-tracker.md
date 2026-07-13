@@ -1,4 +1,18 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-509 (2026-07-13): CHARTER FILED — **Entry-day × horizon × intraday-timing ROI grid. Read-only corpus + audit-log investigation. Sequenced BEHIND ACT-493 (07-17). SUPERSEDES/ABSORBS ACT-507 (W5-02) — same corpus slice, wider ROI question.**
+
+- **Stage 1 (run first):** conditional-return matrix R[entry_day ∈ T+1..T+5][exit_day ∈ entry+3..T+20] per cell × tier over the ratified 1888e113 corpus. Pre-committed ranking metric: **per-slot-day return** (edge ÷ holding days) × turnover-adjusted annualized projection at the Part V deployment cap, with survivorship stamp. Deliverables (a) tier heatmaps, (b) T+2/T+3 vs T+1 verdict, (c) shorter-hold vs T+10 verdict with turnover math, (d) refusal-interaction selection funnel per entry day under τ_long = 1.00.
+- **Stage 2 (scope only, conditional):** IF Stage-1 keeps T+1 AND ACT-506's open-drift ≥ 25% of the close→fill gap, scope intraday grid {09:35, 10:00, 10:30, 11:00, 14:00} + qualification-drift measurement. STOP before implementation.
+- **Pre-committed decision rule (binding):** GO only if ≥ 15% annualized per-dollar improvement over (T+1→T+10) AND N ≥ 1000 per contributing cell AND monotone-stable across ±1 day perturbations. Otherwise current config stands with tripwire.
+- **Cross-touchpoints (must flag in results):** ACT-493 (exit engine absorbs any hold-horizon delta — do NOT land horizon change until ACT-493 lands); ACT-506 (Stage-2 trigger); VI.I / Part V / VI.J (pre-DEC gates); R-1 (any change is a DEC requiring the full evidence ladder — NOT auto-applied).
+- **Supersession:** ACT-507 charter retained for provenance; deliverables absorbed into ACT-509 Stage-1. All future references: ACT-509.
+
+**Sequencing:** BEHIND ACT-493 (Thursday 07-17, unmoved). Free to interleave with ACT-506 and ACT-508.
+
+**Files touched (this record only):** `docs/08-planning/artifacts/ACT-509-CHARTER-entry-day-horizon-intraday-ROI-grid.md` (new), `docs/06-tracking/action-tracker.md` (this entry). NO code, NO migrations, NO schema changes.
+
+---
+
 ### ACT-506 / ACT-507 / ACT-508 (2026-07-13): CHARTERS FILED — **W5 follow-up bundle from ACT-505 parity audit; all three read-only, sequenced behind ACT-493 (07-17 deadline unmoved), free to interleave among themselves.**
 
 - **ACT-506 (W5-01, ROI rank #1)** — True slippage decomposition per lot from `overshoot_audit_logs`: split the ACT-505-measured 1–2% close→fill entry gap into overnight (compared vs VI.I's full distribution, not just median) / open-drift / controllable. Deliverable: controllable component in bps + verdict on limit construction vs fire timing. Charter: `docs/08-planning/artifacts/ACT-506-CHARTER-W5-01-slippage-decomposition.md`.
