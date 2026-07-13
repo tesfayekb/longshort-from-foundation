@@ -1,6 +1,31 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
 ### ACT-514 (2026-07-13, late evening): INVESTIGATION — **Portfolio backtest: equity curve + drawdown profile of the ratified machine over the full ~5yr corpus.** Read-only, corpus-based, parallel to everything; behind nothing. Charter filed at `docs/08-planning/artifacts/ACT-514-CHARTER-portfolio-backtest-equity-curve-drawdown.md`.
 
+### ACT-514 (2026-07-13, late evening, DELIVERABLE): INVESTIGATION COMPLETE — **Six-part readout filed.** Ratified live-selection cells (`045d2dfc`, excl=5) × full-corpus events (`1888e113`) × T1 T+2/T+6 · T2 T+1/T+11 · SHORT T+1/T+6 · v2 ROI floor 0.0010 · earnings ±5d · haircut 5/15 bps · BEAR governor throttles T2. Window 2022-06-29 → 2026-07-10 (n=1,011 days, 4.03 yr); 39,536 fully-priced round-trips (T1=530, T2=34,988, SHORT=4,018).
+
+**Headline:** Start $100k → End **$975,183** (+875%); **CAGR +75.96%**; **max DD −57.03%** (trough 2022-09-26, SPY BEAR onset); Sharpe 0.905; Sortino 1.258; 99.8% days deployed; mean/max open lots 368/380.
+
+**🚨 CRITICAL STAMP** (front-of-deliverable): aggregate wallet cap NOT enforced. Daily-cohort cap (36L+4S) admits without checking existing book; 6–11d holds saturate the book at ~380 concurrent lots × $2,500 ≈ **9.5× gross leverage on $100k**. Production `evaluateAllocationCap` would refuse admissions past 40 concurrent lots — this backtest does not model that. **Numbers above are strategy-edge theoretical upper bound, NOT deployable risk profile.** Magnitudes scale ~10× smaller under a capped-40 sim.
+
+**Bear-onset bleed confirmed as structural, not bug:** Sep 2022 −38.6% strat vs SPY −9.9% — governor throttled new T2 entries at BEAR crossing but ~380 open lots opened during the CORRECTION descent rolled their MTM losses through the BEAR band before 6–11d exits fired. Realized cumulative bleed 2022-08-30 → 2022-09-30: −$77k on $100k starting equity. The T1/T2 hold-through design carries this risk by construction.
+
+**2022 measured (H2 only — data coverage begins 2022-06-29, misses Jan–Jun bear leg):** Jul +107.5%, Aug −2.6%, **Sep −38.6% (max-DD event)**, Oct +30.5%, Nov +30.6%, Dec −21.5%. H2-2022 total ≈+70% strat vs ≈−1.5% SPY. First-leg 2022 bear NOT in window — data gap.
+
+**Starvation:** immaterial. 97% mean book utilization, 99.8% days deployed. Only meaningful starvation windows: 2022-09-26→2022-10-13 (BEAR, T2-throttled, lots dropped to 164–240 for ~2 weeks) and 2025-04-04→2025-04-25 (flash-bear, ~3 weeks). Governor cash-drag <2% of possible book-days across 4yr.
+
+**Honest caveats stamped:** (1) wallet cap not enforced — the loud one; (2) UPPER_BOUND_SURVIVORSHIP_BIASED per study run; (3) T+1 open entry proxy, no intraday marks; (4) constant $2,500/slot no-compounding sizing; (5) N=1 bear-regime sample — statistical significance weak (ACT-473); (6) H1-2022 first-leg bear NOT simulated.
+
+**Phase-L risk sentence (plain language, stamped-honest version):** "Given a properly-capped 40-slot deployment, expect ~5–7% drawdowns in normal correction quarters, ~15–20% during a bear-regime crossing (single-leg), ±2% daily marks routinely and ±5% in dislocations. Bear-crossing recovery historically 4–6 months. Governor is stop-new-entries, not liquidate-book — bleed-through is a design feature. N=1 bear sample means these are best-guesses, not confidence intervals."
+
+**Follow-on actions proposed (require operator ratification):**
+- **ACT-515 (blocking Phase-L funding-scale decision):** stateful CAPPED-40-CONCURRENT-LOTS simulation — the deployable risk profile. Approximately 10× smaller magnitudes on both CAGR and DD.
+- **ACT-516:** 2022-H1 bear-onset simulation — requires bar-history backfill pre-2022-06-29 or accept H1-2022 stays uncovered.
+- **ACT-517:** survivorship-deflator methodology — put defensible number on H2-2022 / 2023 return understatement.
+
+**Pre-commit honored: numbers reported as measured. Stamp is loud because honest number requires it.** Deliverable filed at `docs/08-planning/artifacts/ACT-514-DELIVERABLE-portfolio-backtest-readout.md`. STOP for operator ratification.
+
+**Files touched this turn:** `docs/08-planning/artifacts/ACT-514-DELIVERABLE-portfolio-backtest-readout.md` (new), `docs/06-tracking/action-tracker.md` (this entry). NO code, NO migrations, NO schema changes. Read-only DB queries against `overshoot_study_candidate_events` / `overshoot_study_cell_results` / `overshoot_daily_bars`.
+
 **Operator question (verbatim):** what is the historical max drawdown and risk profile of the ratified configuration — a number that does not currently exist. Per-event ROI is measured; portfolio-level risk is not. Phase-L funding cannot be ratified on "each trade is +bps" without the portfolio drawdown sentence.
 
 **Method (pre-committed, no post-hoc knob-turning):** simulate the CURRENT ratified config uniformly over the full corpus — 36/4 caps, τ=1.00, 0.90/0.10 long/short, 2.5% slot sizing, aggregate-AUM wallet cap, T1 T+2-entry/T+6-exit + T2 T+1-entry/T+11-exit per ACT-510, regime governor as coded (BEAR throttles T2 admission only; existing lots NOT liquidated — this is the bear-onset-bleed measurement target), I5 at T+1-open proxy, mark-to-market at settled close. Slippage = study-ratified per-side haircut (stated in deliverable header, pending ACT-506 live number).
