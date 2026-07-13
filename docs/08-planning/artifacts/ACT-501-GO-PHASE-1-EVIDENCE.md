@@ -103,3 +103,45 @@
 ---
 
 *In-turn persistence discipline (Track B process note) — this file written same turn as the LIVE receipt, before the E3-Mon / E4-Mon polls.*
+
+---
+
+## 8. Tuesday-gate ruling (operator, 2026-07-13 EOD)
+
+**Ruling:** "Same-day autonomous adoption" (Tuesday-gate receipt **(a)**) is **SATISFIED** by the standing 2026-07-10 15:14Z sweep receipt — 18 real fills autonomously adopted post-INC-97-fix, zero human involvement. Today's zero-submission day **cannot re-prove and does not weaken** that receipt. Today contributes: 6+ healthy autonomous sweep ticks, `candidates_discovered=0`, honest no-adoption (A5 clean).
+
+### Tuesday arm gate — receipts scorecard
+
+| receipt | status | evidence |
+|---|---|---|
+| **(a)** sweep same-day autonomous adoption | ✅ SATISFIED | 2026-07-10 15:14Z: 18 fills adopted autonomously (post-INC-97-fix) |
+| **(b)** ZZINC97 page double-receipted | ✅ SATISFIED | prior filings |
+| **(D)** cap-probe (today's LIVE) | ✅ PASSED | §3–§5 above; `run_id=df31b38f`, `allocation_cap_reached=8`, identity 36 = 0 + 18 + 10 + 8 |
+| **(E)** tonight's E3-Mon / E4-Mon natural ticks | ⏳ QUEUED | polls at 21:12Z / 22:02Z per §6 |
+
+**Arm decision** rides on **(E)** landing green tonight. If green → arm Tuesday.
+
+## 9. Tuesday plan (2026-07-14) — first autonomous entry (Wave-2 protocol)
+
+| step | time (UTC) | time (ET) | action | verification |
+|---|---|---|---|---|
+| pre-arm | ~13:20Z | ~09:20 | operator flips `overshoot.entry.run` registry `enabled=true` (enabled-only; no manual fire, no token mint) | registry row updated_at |
+| autonomous fire | 13:35Z | 09:35 | slot-a cron fires itself | `net._http_response 200`; new `overshoot_entry_runs` row appears |
+| verify (Wave-2, ≤15 min) | by 13:50Z | by 09:50 | inspect run row + refusal identity | see expectation-set below |
+
+### Expectation-set for Tuesday's first autonomous entry
+
+With the book still at ~133% of LONG cap and 18 position_already_open:
+
+- **`orders_submitted = 0`** — cap + already-open refusals dominate
+- **Typed refusal identity holds** — `36 = 0 (submitted) + 18 (position_already_open) + ~10 (i5_refusals) + ~8 (allocation_cap_reached)` (magnitudes vary slightly with intraday mark drift; identity must sum to `targets_loaded`)
+- **Persisted `overshoot_entry_runs` row** with `outcome=completed`, `manual=false`, `slot='a'`, non-null `correlation_id`
+- **A zero-submission autonomous run with typed refusals + persisted run row IS the success receipt.** Non-zero submissions are neither required nor expected until exits recycle capital (~2026-07-22).
+
+### Post-arm week priorities
+
+- **ACT-493** (exit adoption engine) — deadline **Thursday 2026-07-17**; first autonomous exits ≈ **2026-07-22** (window when LONG sleeve drops below cap and admission-path probe becomes possible).
+- Continue nightly E3/E4 receipts.
+- INC-105 watchdog cursor fix remains backlog (self-heals on 07-14 21:00Z natural fire per INC-95 refinement note).
+
+*Ruling filed same turn as gate acknowledgement; supersedes §6 row for receipt (a) which is now marked N/A-by-design.*
