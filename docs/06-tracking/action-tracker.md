@@ -1,4 +1,18 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-509 STAGE-1 RESULTS (2026-07-13, evening): DELIVERED — **T1 GO on (entry=T+2, exit=T+6, hold=4) at +33.4% per-$/day; T2 NO-GO (best-alt +2.9%). Refusal funnel τ_long=1.00 trivial. Stage-2 partial-trigger. RESEQUENCED per operator directive: Stage-1 executed NOW in parallel with ACT-493; the "behind ACT-493" gate applies only to any resulting config flip, not the read-only computation.**
+
+- **Corpus:** ratified `1888e113-f9b3-43f5-856c-d91666a3c121` / detector `b7cdfcd8` / bars ≤ 2026-07-02. Survivorship stamp `UPPER_BOUND_SURVIVORSHIP_BIASED` inherited.
+- **Universe:** LONG admissible (n=134,385: T1=1,711 + T2=132,674), `exclusion_width_days=5`, cell floor `mean_fwd_return_5d ≥ 0.0010`.
+- **T1 verdict — GO** on `(entry=T+2, exit=T+6, hold=4)`: 36.89 bps/slot-day vs current 27.65 = +33.4% ≫ 15% floor ✓; N=1,711 ≥ 1,000 ✓; monotone-stable across ±1 perturbations ✓. Refusal attrition at T+2 = 0.6%. Dollar arithmetic per $100K per slot per year: **$6,968 → $9,296 (+$2,328)**.
+- **T2 verdict — NO-GO**: best-alt `(1,4)` = 13.28 bps/day vs current 12.90 = +2.9% ≪ 15%. Current `(T+1, T+11)` stands. Tripwire T2-A filed on the `(1,12)`/`(2,12)` shelf.
+- **Stage-2 gating:** partial trigger — T2 keeps T+1 (would fire) but T1 moves off T+1 (would not). Operator DEC required: scope Stage-2 to T2-only (P1) or defer to post-DEC (P2). Otherwise gated on ACT-506 open-drift finding, unchanged.
+- **Adoption gate:** the T1 finding is a **DEC** re-parameterizing R-1 — NOT auto-applied. Cross-touchpoints flagged: ACT-493 must ship tier-conditional exit horizon; INC-96 LIFO attribution sanity-check under 63×/yr turnover; T1 slot-count re-parameterization bounded to ~6 by arrival rate.
+- **Deliverables:** two heatmaps (T1, T2), plain-language answers to both operator questions, dollar arithmetic, pre-committed rule application, honest caveats. Filed at `docs/08-planning/artifacts/ACT-509-RESULTS-stage1-entry-day-horizon-grid.md`.
+
+**Files touched (this record only):** `docs/08-planning/artifacts/ACT-509-RESULTS-stage1-entry-day-horizon-grid.md` (new), `docs/06-tracking/action-tracker.md` (this entry). READ-ONLY corpus SQL against ratified run 1888e113; NO code, NO migrations, NO schema changes.
+
+---
+
 ### ACT-509 (2026-07-13): CHARTER FILED — **Entry-day × horizon × intraday-timing ROI grid. Read-only corpus + audit-log investigation. Sequenced BEHIND ACT-493 (07-17). SUPERSEDES/ABSORBS ACT-507 (W5-02) — same corpus slice, wider ROI question.**
 
 - **Stage 1 (run first):** conditional-return matrix R[entry_day ∈ T+1..T+5][exit_day ∈ entry+3..T+20] per cell × tier over the ratified 1888e113 corpus. Pre-committed ranking metric: **per-slot-day return** (edge ÷ holding days) × turnover-adjusted annualized projection at the Part V deployment cap, with survivorship stamp. Deliverables (a) tier heatmaps, (b) T+2/T+3 vs T+1 verdict, (c) shorter-hold vs T+10 verdict with turnover math, (d) refusal-interaction selection funnel per entry day under τ_long = 1.00.
