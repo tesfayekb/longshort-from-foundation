@@ -1,4 +1,28 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### STANDING ORDER (2026-07-13, evening, operator directive, filed verbatim): **"No evidence-passing ROI item is ever deprioritized by subjective size framing — the pre-committed rule decides adoption, and every adopted item is implemented with full priority."** Applied retroactively: ACT-510's T1 uplift (+33.4% per-$/day, +$2,328 per $100K per slot per year) is a **first-class capture**, not a footnote. Binding on all future ACT/DEC prioritization: once an item clears its pre-committed GO gate (thresholds + N + stability), size framing (bps, $/yr, slot count) MAY NOT be used to demote its implementation priority. Sequencing may only be adjusted by evidence-based blockers (deadlines, dependencies, safety), never by aesthetic "is it worth it".
+
+---
+
+### ACT-511 (2026-07-13, evening): CHARTER FILED — **T1 SUPPLY EXPANSION STUDY. INVESTIGATION, read-only, interleaves with the W5 set (ACT-506/508/509→ACT-510). Sequenced behind nothing; runs when compute is free.**
+
+- **Motivation:** T1 edge validated at +33.4% per-$/day (ACT-509 Stage-1 / ACT-510), but SUPPLY-CONSTRAINED — ~400 T1-grade events/yr in the 839-name ratified universe supports only ~6 T1 slots. The uplift is real but capped by arrival rate. Question: does universe expansion unlock proportionally more T1 arrivals, and at what honest cost?
+- **Method (pre-committed):** re-run T1 cell qualification (exact ACT-509 predicate: `LONG_T1 ≡ side='LONG' ∧ mean_fwd_return_5d ≥ 0.0010 ∧ arrival_count ≥ 1 ∧ tier-specific cell membership per ratified detector b7cdfcd8`) over a widened candidate universe. Increments (nested, monotone): U0 = current 839 (baseline); U1 = Russell-1000-minus-current, liquidity-floored per ratified universe rules (ADV, price, borrow, no ADR/OTC); U2 = Russell-2000 top-half by ADV; U3 = Russell-3000 top-quartile by ADV. Same cell-membership rules — NO predicate loosening.
+- **Deliverable per increment (Uk):** (a) added tickers count and net (post liquidity floor); (b) additional T1-grade **events/yr**; (c) marginal **slot count** at current concentration (2.5%/slot); (d) projected **$/yr** at ACT-510 T1 economics (36.89 bps/slot-day × slot-days/yr × slot capital); (e) events/yr AND $/yr **per additional ticker** (marginal ROI curve) so the operator can pick a diminishing-returns cut-off on arithmetic.
+- **Honest costs (must be quantified alongside upside — no post-hoc reframing):**
+  1. **Data backfill:** 5-yr daily bars + intraday for new tickers (bytes, ingestion runtime, Polygon cost lines) — cite $ estimate per Uk.
+  2. **Study-basis integrity:** new tickers need their OWN 5-yr corpus BEFORE trading — cannot ride current ratified fixture. Estimate re-ratification calendar cost.
+  3. **Survivorship discipline on expansion set:** Russell reconstitutions since 2021-06-29 anchor must be replayed forward (not point-in-time-current); delisted / merged names must be included. Stamp `POINT_IN_TIME_UNIVERSE_REQUIRED`.
+  4. **Liquidity floor drift:** confirm ratified ADV / borrow / price floors still admissible on Uk; report refusal count per floor.
+  5. **Regime coverage on new names:** the SPY-drawdown regime bands (ACT-473) must hold on the wider set — no name-specific regime redefinition.
+- **Pre-committed GO/NO-GO rule for future universe-expansion DEC:** an increment `Uk → Uk+1` is a "GO for ratification study" only if (i) marginal events/yr ≥ 100 net-of-floors, (ii) marginal $/yr ≥ backfill+ratification cost within 12 months, (iii) survivorship replay executable (data available). Below thresholds ⇒ NO-GO recorded; above ⇒ hands off to a SEPARATE ratification-study charter, NOT auto-adopted.
+- **Scope disclaimers:** READ-ONLY. NO ingestion changes, NO universe-list edits, NO detector edits, NO corpus regeneration this charter. Numbers computed against existing bars where available; new-ticker events/yr estimated via published Russell membership + ADV screens + a documented back-of-envelope arrival-rate model whose assumptions are pinned before computing.
+- **Sequencing:** interleaves with ACT-506 / ACT-508 / ACT-509-followups. Behind NOTHING for execution. Deliverable does NOT gate ACT-510 landing — ACT-510 ships the current-universe uplift regardless; ACT-511 answers "should we grow the universe" as an independent, additive question. Both are first-class per today's standing order.
+- **INC / cross-touchpoints:** none new. Overlaps: ACT-470/473 (frontier + regime evidence, inherited); ACT-509 Stage-1 (T1 gate definition); ACT-510 (economics constant used for $/yr projection); INC-96 (aggregate wallet — expansion does NOT create sleeves).
+
+**Files touched (this record only):** `docs/08-planning/artifacts/ACT-511-CHARTER-t1-supply-expansion-study.md` (new), `docs/06-tracking/action-tracker.md` (this entry, standing order + charter). NO code, NO migrations, NO schema changes.
+
+---
+
 ### ACT-510 (2026-07-13, evening): CHARTER FILED — **Tier-conditional entry-day + exit-horizon. Operator DEC RATIFIED IN PRINCIPLE from ACT-509 Stage-1: T1 → (entry T+2, exit T+6, hold=4); T2 → unchanged (T+1, T+11). Sequenced AFTER ACT-493 v1 (07-17). Money-path — full DEC evidence ladder at landing.**
 
 - **Scope (entry side):** detection selects at T; entry engine holds T1 targets one session; T1 fires T+2 with the standard I5 recheck (τ_long=1.00 unchanged); T+3 stale-drop with typed refusal `t1_entry_window_expired`. T2 fires T+1 unchanged.
