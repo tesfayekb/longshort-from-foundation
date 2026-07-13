@@ -13,7 +13,8 @@
 
 ---
 
-### ACT-509 STAGE-1 RESULTS (2026-07-13, evening): DELIVERED — **T1 GO on (entry=T+2, exit=T+6, hold=4) at +33.4% per-$/day; T2 NO-GO (best-alt +2.9%). Refusal funnel τ_long=1.00 trivial. Stage-2 partial-trigger → operator DEC deferred to P2. Operator ACCEPTED: T2 current validated + tripwire T2-A filed; T1 ratified IN PRINCIPLE, implementation chartered as ACT-510.**
+### ACT-509 STAGE-1 RESULTS (2026-07-13, evening): DELIVERED — **T1 GO on (entry=T+2, exit=T+6, hold=4) at +33.4% per-$/day; T2 NO-GO (best-alt +2.9%). Refusal funnel τ_long=1.00 trivial. Stage-2 partial-trigger. RESEQUENCED per operator directive: Stage-1 executed NOW in parallel with ACT-493; the "behind ACT-493" gate applies only to any resulting config flip, not the read-only computation.**
+### ACT-509 STAGE-1 ADJUDICATION (2026-07-13, evening): OPERATOR DEC APPLIED — **T2 NO-GO ACCEPTED, current `(T+1,T+11)` validated, tripwire T2-A filed. T1 GO RATIFIED IN PRINCIPLE, implementation chartered as ACT-510 (sequenced after ACT-493 v1 07-17 landing). Stage-2 DEC = P2 (defer until ACT-506 open-drift lands). INC-96 convergence: T1 slots inside aggregate wallet, no sleeve accounting.**
 
 ### ACT-509 STAGE-1 RESULTS (2026-07-13, evening): DELIVERED — **T1 GO on (entry=T+2, exit=T+6, hold=4) at +33.4% per-$/day; T2 NO-GO (best-alt +2.9%). Refusal funnel τ_long=1.00 trivial. Stage-2 partial-trigger. RESEQUENCED per operator directive: Stage-1 executed NOW in parallel with ACT-493; the "behind ACT-493" gate applies only to any resulting config flip, not the read-only computation.**
 
