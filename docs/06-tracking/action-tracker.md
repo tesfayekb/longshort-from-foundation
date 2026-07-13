@@ -1,4 +1,21 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-510 (2026-07-13, evening): CHARTER FILED — **Tier-conditional entry-day + exit-horizon. Operator DEC RATIFIED IN PRINCIPLE from ACT-509 Stage-1: T1 → (entry T+2, exit T+6, hold=4); T2 → unchanged (T+1, T+11). Sequenced AFTER ACT-493 v1 (07-17). Money-path — full DEC evidence ladder at landing.**
+
+- **Scope (entry side):** detection selects at T; entry engine holds T1 targets one session; T1 fires T+2 with the standard I5 recheck (τ_long=1.00 unchanged); T+3 stale-drop with typed refusal `t1_entry_window_expired`. T2 fires T+1 unchanged.
+- **Scope (exit side):** ACT-493's exit engine grows a tier-conditional exit trigger `exit_session = entry_session + (tier=='T1' ? 4 : 10)` for NEW lots only. Existing lots exit on entered terms — no in-flight repricing.
+- **INC-96 convergence (operator DEC):** T1 slots stay within the SAME AGGREGATE WALLET — no separate sleeve accounting. Cap-arithmetic tests extended for the 63×/yr T1 cadence LIFO interleave.
+- **Stage-2 (intraday minutes):** DEFERRED per operator DEC (P2) — decide with ACT-506's open-drift number in hand rather than blind. No Stage-2 scoping under ACT-510.
+- **Sequencing (binding):** ACT-493 v1 lands 07-17 with uniform horizon (deadline-safe, first exits 07-22 unaffected). ACT-510 opens for build AFTER 493 stabilizes. Cutover by lot creation date, not wall-clock.
+- **T2 NO-GO ruling (operator adjudication):** T2 current config `(T+1, T+11)` accepted as VALIDATED (not assumed). Tripwire T2-A filed on the `(1,12)`/`(2,12)` shelf for the next quarterly corpus refresh.
+- **Adoption discipline:** ratified IN PRINCIPLE. Landing requires the full DEC evidence ladder: DEC record entry, R-1 config artifact update, machine-form gates, VI.I/Part V/VI.J sanity re-check, live receipt of first T+2 fire + first T+6 exit.
+
+**Files touched (this record only):** `docs/08-planning/artifacts/ACT-510-CHARTER-tier-conditional-entry-day-and-exit-horizon.md` (new), `docs/06-tracking/action-tracker.md` (this entry). NO code, NO migrations, NO schema changes.
+
+---
+
+### ACT-509 STAGE-1 RESULTS (2026-07-13, evening): DELIVERED — **T1 GO on (entry=T+2, exit=T+6, hold=4) at +33.4% per-$/day; T2 NO-GO (best-alt +2.9%). Refusal funnel τ_long=1.00 trivial. Stage-2 partial-trigger. RESEQUENCED per operator directive: Stage-1 executed NOW in parallel with ACT-493; the "behind ACT-493" gate applies only to any resulting config flip, not the read-only computation.**
+### ACT-509 STAGE-1 ADJUDICATION (2026-07-13, evening): OPERATOR DEC APPLIED — **T2 NO-GO ACCEPTED, current `(T+1,T+11)` validated, tripwire T2-A filed. T1 GO RATIFIED IN PRINCIPLE, implementation chartered as ACT-510 (sequenced after ACT-493 v1 07-17 landing). Stage-2 DEC = P2 (defer until ACT-506 open-drift lands). INC-96 convergence: T1 slots inside aggregate wallet, no sleeve accounting.**
+
 ### ACT-509 STAGE-1 RESULTS (2026-07-13, evening): DELIVERED — **T1 GO on (entry=T+2, exit=T+6, hold=4) at +33.4% per-$/day; T2 NO-GO (best-alt +2.9%). Refusal funnel τ_long=1.00 trivial. Stage-2 partial-trigger. RESEQUENCED per operator directive: Stage-1 executed NOW in parallel with ACT-493; the "behind ACT-493" gate applies only to any resulting config flip, not the read-only computation.**
 
 - **Corpus:** ratified `1888e113-f9b3-43f5-856c-d91666a3c121` / detector `b7cdfcd8` / bars ≤ 2026-07-02. Survivorship stamp `UPPER_BOUND_SURVIVORSHIP_BIASED` inherited.
