@@ -1,4 +1,27 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-512 (2026-07-13, late evening): INVESTIGATION — **Multi-account / multi-user architecture study.** Read-only, parallel, blocks nothing this week. Charter filed at `docs/08-planning/artifacts/ACT-512-CHARTER-multi-account-multi-user-architecture-study.md`.
+
+**Design principle under evaluation:** ONE BRAIN, MANY WALLETS — detection/selection runs once per strategy per day (single book, single detector version); a per-account ALLOCATOR maps the book through each account's capability profile (`margin_max`, `shorts_allowed`, `settlement_regime`, `allocation_usd`); execution/fills/lots/reconciliation/equity are account-scoped.
+
+**Deliverables in the charter (all six):** (1) `accounts` table schema + `account_id` FK on 7 strategy-scoped tables (`overshoot_lots`, `overshoot_entry_runs`, `overshoot_target_positions`, `overshoot_equity_snapshots`, `overshoot_reconciliation_state`, `overshoot_audit_logs`, `overshoot_alert_dispatch`) + honest single-account-today migration (backfill to `'alpaca_paper_overshoot'`); (2) engine-touch census (per-account: broker client, BP/equity fetch, sizing basis, cap arithmetic, A5/reconcile, snapshots, exit engine, fill-sweep, alerts — global: universe, SI, bars, detection, selection, regime, study corpus); (3) IRA enforcement in 5 defense-in-depth layers incl. DB CHECK constraints + T+1 GFV math showing ACT-510 T1 economics DO NOT transfer to IRA cash regime without re-run; (4) self-competition = sequential-with-jitter + aggregate-AUM cap sourced from ACT-506 W5 slippage decomposition (deferred); (5) credentials pattern under INC-100 (secret-name prefix per account, runtime `/v2/account` cross-check, N × 2 secrets under the 100-cap); (6) cost table.
+
+**Cost table (verbatim summary):**
+| Option | Now cost | Later cost | W5 attribution | Retrofit risk |
+|---|---|---|---|---|
+| **A — account_id NOW, single-run** | ~1 day migration + ~7 INSERT-site edits | Full multi at real N | ✅ from day 1 | ✅ none |
+| B — full multi now | 2–4 weeks | 0 | ✅ | ✅ |
+| C — do nothing until IBKR | 0 | 3–5× A + re-ratification | ❌ | ❌ high |
+
+**Charter recommendation:** Option A — land `account_id` schema BEFORE W5 measurement window hardens; single-account-today INSERTs write the constant; no allocator, no per-account loops until account #2 is scheduled. W5 acquires the `account_id` dimension for free; no retrofit later.
+
+**Deadline-bound piece:** §1.3 (single-account migration) MUST land before ACT-506/507/508 W5 measurement window hardens — else hardened per-slot-per-day queries lose per-account attribution and require rewrite. Everything else in the charter can defer to a follow-on execution charter.
+
+**STOP for operator ratification.** No code, no migrations, no adoption this turn. Follow-on execution charter (ACT-513+) implements the ratified option. Cross-refs: ACT-489 (entry_ts single-homing precedent), ACT-493 (`tier` write-forward pattern reused), ACT-506 (W5 slippage → aggregate-AUM cap input), ACT-510 (IRA cash-regime economics re-run flagged as prerequisite for any IRA slot trading), ACT-511 (orthogonal — more names, not more wallets), INC-96 (LIFO within-account, NEVER cross-account), INC-100 (secrets discipline conformed).
+
+**Files touched this turn:** `docs/08-planning/artifacts/ACT-512-CHARTER-multi-account-multi-user-architecture-study.md` (new), `docs/06-tracking/action-tracker.md` (this entry).
+
+---
+
 ### SCHEMA RULING for ACT-493 (2026-07-13, night, operator DEC): **BACKFILL `tier` ONTO `overshoot_lots` in the landing migration — do NOT join `overshoot_events` at exit-eval time.** Provenance columns REQUIRED: `tier_source_event_run_id uuid` + `tier_source_as_of_date date`, both populated from the source `overshoot_events` row at backfill time.
 
 **Rationale (verbatim per operator directive):** the exit clock's inputs should be single-homed ON THE LOT — same principle as `entry_ts` single-homing from ACT-489. A join re-derives per tick from a table the exit engine otherwise never reads, widening its blast radius. A backfilled column with provenance is deterministic, audit-stable, and makes the tier-conditional horizon a pure lot-local read.
