@@ -1,5 +1,7 @@
 # ACT-507 — W5-02 CHARTER: Day-k Conditional Means per Cohort × Tier × Cell
 
+> **⚠️ SUPERSEDED 2026-07-13 by ACT-509** (`ACT-509-CHARTER-entry-day-horizon-intraday-ROI-grid.md`). Same corpus / same day-k slice; ACT-509 asks the wider ROI question (entry-day × exit-day per-slot-day return). Deliverables of this charter are absorbed into ACT-509 Stage-1. Retained for historical provenance; DO NOT execute independently — route to ACT-509.
+
 > **Owner:** Overshoot strategy | **Filed:** 2026-07-13 (operator-directed, promoted from ACT-505 follow-up FU-3)
 > **Mode:** INVESTIGATION only — read-only, NO engine changes | **Queue position:** BEHIND ACT-493. Interleaves with ACT-506 (W5-01) and ACT-508 (W5-03).
 > **ROI rank:** SECOND of the three W5 follow-ups — replaces the ACT-505 audit's *study-path proxy* with the true study-corpus benchmark and gives every future daily mark its honest percentile.
