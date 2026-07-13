@@ -4,6 +4,8 @@
 > **Provenance:** operator DEC 2026-07-13 ratifying ACT-509 Stage-1 T1 finding *in principle*. Basis: `docs/08-planning/artifacts/ACT-509-RESULTS-stage1-entry-day-horizon-grid.md` (T1 `(entry=T+2, exit=T+6, hold=4)` = 36.89 bps/slot-day vs current 27.65 = +33.4%, n=1,711, monotone-stable, τ-attrition 0.6%).
 >
 > **REVISION 2026-07-13 (late evening, operator DEC — acceleration ruling):** exit-side tier-conditional horizon is EXTENDED TO EXISTING T1 LOTS (see §4 revised) and FOLDED INTO ACT-493 v1 scope (was: separate landing post-ACT-493). ACT-493 target landing accelerated to Wed 2026-07-15. Entry-side scope (§3 T+2 gating + target persistence) UNCHANGED — that portion of ACT-510 still lands post-ACT-493 for new T1 lots only. See action-tracker acceleration ruling for lot enumeration + arithmetic + revert-plan.
+>
+> **REVISION 2026-07-13 (night, operator DEC — schema ruling for ACT-493):** exit engine reads `tier` as a LOT-LOCAL column, not via join. ACT-493's landing migration MUST **backfill `tier` onto `overshoot_lots`** (idempotent, same migration) with provenance columns citing the source `overshoot_events` row (event `run_id` + `as_of_date`). Forward: the fill-sweep adoption path (ACT-489) writes `tier` at lot creation from the target's event row. Join-at-exit-eval is REJECTED. See §4 revised.
 
 ## 1. Ratified DEC (in principle) — the new R-1 parameterization
 
@@ -76,7 +78,20 @@ Only new step: `target-persistence-check` at the front (drop expired T1 targets;
 
 where `lot.tier` is persisted at lot creation from the detection-time tier tag (already present in `overshoot_lots` as of ACT-479 provenance). No re-tagging.
 
-**Backfill behavior (revised):** every open lot at ACT-493 v1 activation uses the tier-conditional read — no cutover-date column, no `horizon_regime` sentinel. `lot.tier` is the sole selector. Verification requirement at ACT-493 machine-form time: **enumerate every open lot's tier from `overshoot_events` join and confirm no NULLs** (pre-tag lots must be tier-backfilled or the exit engine will refuse them typed). Reality check on 2026-07-13: `overshoot_lots` schema has no direct `tier` column; the exit engine must join `overshoot_events` on `(ticker=symbol, as_of_date ≤ entry_ts::date, selected_for_entry=true)` and take the latest tier before entry, or ACT-493 must backfill `tier` onto `overshoot_lots` in a same-migration idempotent step. DEC-record the exact mechanism at ACT-493 machine-form verification.
+**Backfill behavior (revised 2026-07-13 night — schema ruling):** every open lot at ACT-493 v1 activation uses the tier-conditional read — no cutover-date column, no `horizon_regime` sentinel. `lot.tier` is the sole selector.
+
+**Schema ruling (operator DEC 2026-07-13 night):** `tier` is single-homed **ON THE LOT**. ACT-493's landing migration MUST include an idempotent backfill step that adds `tier` (+ provenance columns) to `overshoot_lots`. Join-at-exit-eval is REJECTED.
+
+*Rationale:* the exit clock's inputs should be single-homed on the lot (same principle as `entry_ts` single-homing from ACT-489). A join re-derives per tick from a table the exit engine otherwise never reads, widening its blast radius. A backfilled column with provenance is deterministic, audit-stable, and makes the tier-conditional horizon a pure lot-local read.
+
+*Migration contract (ACT-493 same-migration, idempotent):*
+
+1. `ALTER TABLE public.overshoot_lots ADD COLUMN IF NOT EXISTS tier text` + provenance columns `tier_source_event_run_id uuid` and `tier_source_as_of_date date` (nullable during backfill; typed refusal in exit engine on NULL).
+2. Backfill: for each open lot, resolve tier from `overshoot_events` on `(ticker=symbol, as_of_date ≤ entry_ts::date, selected_for_entry=true)`, taking the latest event before entry. Record `run_id` and `as_of_date` into the provenance columns.
+3. Post-backfill assertion (same migration, halts on failure): `SELECT count(*) FROM overshoot_lots WHERE exit_ts IS NULL AND tier IS NULL` MUST return 0.
+4. Forward path: **fill-sweep adoption (ACT-489) writes `tier` + provenance at lot creation** from the target's event row — no separate backfill needed for post-landing lots. Update `overshoot-fill-sweep` adoption INSERT accordingly in the same PR that lands ACT-493 v1.
+
+**§22.5.1 evidence required in ACT-493 landing:** (a) migration text with the `ADD COLUMN` + backfill UPDATE + post-assertion; (b) live-DB read-back showing every open lot has `tier`, `tier_source_event_run_id`, `tier_source_as_of_date` populated (expected n=6 open T1 lots per acceleration ruling, plus all T2 open lots); (c) exit-engine code diff showing lot-local read (no `overshoot_events` join in the exit path); (d) fill-sweep adoption diff showing tier write at insert. All four artifacts cited in the landing closure record.
 
 ## 5. INC-96 convergence (operator DEC 2026-07-13)
 
