@@ -3,6 +3,51 @@
 
 ---
 
+### ACCELERATION RULINGS (2026-07-13, late evening, operator directive):
+
+**(1) ACT-510 RULING REVISED — T+6 EXIT HORIZON APPLIES TO EXISTING T1 LOTS.**
+Evidence cited: ACT-509 Stage-1 grid — the T+1-entry row (matches existing T1 lots' actual entry day) itself peaks at exit=6 with **32.1 bps/day** vs **27.6 bps/day** at exit=11, same n=1,711 sample that cleared the pre-committed GO rule (thresholds + N + monotone-stable). Prior "new lots only" carve-out from the 2026-07-13 evening ratification is **superseded**: the evidence does not distinguish existing from future T1 lots — leaving existing lots on T+11 would forgo captured edge on evidence, which the standing order forbids.
+
+**Existing T1 open long lots (as of 2026-07-13, from `overshoot_lots` ⋈ `overshoot_events.tier`):**
+
+| Symbol | Event T (as_of) | Entry T+1 | Uniform T+11 exit (superseded) | Tier-conditional T+6 exit (new) |
+|--------|-----------------|-----------|--------------------------------|---------------------------------|
+| AKAM   | 2026-07-08      | 2026-07-09 | 2026-07-23 (Thu)              | **2026-07-16 (Thu)**            |
+| CHRD   | 2026-07-08      | 2026-07-09 | 2026-07-23 (Thu)              | **2026-07-16 (Thu)**            |
+| ONTO   | 2026-07-08      | 2026-07-09 | 2026-07-23 (Thu)              | **2026-07-16 (Thu)**            |
+| ALGM   | 2026-07-09      | 2026-07-10 | 2026-07-24 (Fri)              | **2026-07-17 (Fri)**            |
+| LITE   | 2026-07-09      | 2026-07-10 | 2026-07-24 (Fri)              | **2026-07-17 (Fri)**            |
+| SNDK   | 2026-07-09      | 2026-07-10 | 2026-07-24 (Fri)              | **2026-07-17 (Fri)**            |
+
+n=6 existing T1 lots (fewer than the 6-8 expected by operator; SNDK/ALGM/LITE/ONTO fills confirmed as T1, AKAM/CHRD confirmed as T1, no other Friday T1 fills). **Arithmetic flag (honest correction of operator's estimate):** first T+6 maturity is **Thursday 2026-07-16**, not Friday. Six-session count from event T: 07-08 Wed → 09,10,13,14,15,**16** Thu; 07-09 Thu → 10,13,14,15,16,**17** Fri. Operator's "07-17..07-20 / first maturities Friday" appears to have off-by-one; correct window is **07-16..07-17 (Thu-Fri, both trading days)**. This tightens the ACT-493 deadline dependency: exit engine must be armed with tier-conditional horizon by market open Thu 07-16, not Fri 07-17.
+
+**Sequencing consequence:** tier-conditional exit horizon is FOLDED INTO ACT-493 v1 scope (was: layered on afterward under ACT-510). It is one parameter read at exit-evaluation time (`exit_at_session = entry_session + (tier=='T1' ? 4 : 10)`) — mechanically one branch on `lot.tier`. ACT-493 implementer to state at machine-form-verification time whether this fold genuinely threatens the accelerated Wed 07-15 landing target; if yes, **revert to the split** (ACT-493 v1 uniform T+11, ACT-510 layers tier-conditional on top post-landing) and accept that AKAM/CHRD/ONTO will exit 07-16 under uniform T+11 = 07-23 (one week of forgone edge on ~3 lots).
+
+**T2 lots UNCHANGED.** ACT-509 T2 grid is a flat plateau, T+11 optimal; existing T2 lots' 07-22..07-24 exit dates are **correct, not slow** — operator's directive explicit on this.
+
+**Lot-scope cutover mechanism (updated):** ACT-510 charter §1 "applies to new T1 lots only" clause is REPEALED. Cutover is **by wall-clock activation** now — every open T1 lot at activation time uses T+6; every open T2 lot uses T+11 unchanged. No in-flight repricing hazard: exit-side is a pure trigger-time read, no cost-basis mutation, no P&L re-attribution.
+
+**(2) ACT-493 ACCELERATED.** Target landing **Wednesday 2026-07-15** (was Thursday 07-17). Exit-arm bracket + one-time-key-turn immediately after machine-form verification, so the exit engine has **multiple proven days** before the first T+6 maturities Thu 07-16 / Fri 07-17. Governance: acceleration is scope-neutral (uniform vs tier-conditional decided at machine-form time per §1 above), does NOT waive any DEC-023 envelope / idempotency / audit-writer-trap / regression-tests gate. If Wednesday landing slips, first T+6 maturity Thu 07-16 forces revert to §1's split path (existing T1 lots on uniform T+23 exits; new T1 lots on tier-conditional post-landing).
+
+**(3) FIRE NOW, PARALLEL, READ-ONLY.** Both dispatched to run in parallel now:
+
+- **ACT-506 (W5-01, slippage decomposition):** deliver the controllable-bps number per-lot from `overshoot_audit_logs` (`snapshot_mid_at_construction` vs `limit_price` vs `filled_avg_price`), decomposed as `close→fill = overnight + open_drift + controllable` per charter §Decomposition, over the 07-07/07-08/07-09 cohorts (n=50 filled long lots). Deliverable **also serves as ACT-509 Stage-2 GO/NO-GO input** (charter threshold: open-drift ≥ 25% of close→fill gap on bps-weighted basis → Stage-2 intraday grid charters separately; below threshold → NO-GO recorded, Stage-2 shelved). Read-only, no engine changes.
+- **ACT-511 (T1 supply expansion grid):** re-run T1 qualification predicate over U0→U1→U2→U3 increments per charter §2.2, deliver per-Uk table (events/yr, marginal slot count, projected $/yr at ACT-510 economics, marginal ROI curve, honest costs). Read-only, no ingestion changes.
+
+Both interleave freely with the accelerated ACT-493 build (different code regions; ACT-506/511 touch NO engine files). Neither gates ACT-493 landing.
+
+**(4) CONFIRMED NOT-ACCELERABLE (operator record, filed to preempt drift):**
+
+- **T2 maturities (07-22..07-24):** calendar-driven, not queue-driven. 10-session hold from entry is the ratified parameter; nothing to accelerate.
+- **Live-gate sample size (~20 round-trips required for the strategy verdict date):** statistical convergence, not implementation impatience. Compressing the sample invalidates the verdict — refuse any acceleration of this specifically.
+- **SI (short interest) freshness:** FINRA publishes on its calendar; not accelerable by us. Mitigation: tomorrow's 21:00Z SI fire + the 06-30 backfill should heal the current staleness this week. Monitor via existing SI freshness alert; do NOT introduce polling or synthetic-fill workarounds.
+
+**(5) Tonight's polls and tomorrow's ARM: UNCHANGED.** E3-Mon 21:12Z and E4-Mon 22:02Z fire on schedule; tomorrow's ARM proceeds regardless of ACT-493 acceleration outcome (ARM does not depend on tier-conditional exit horizon — uniform T+11 arms cleanly).
+
+**Files touched (this record only):** `docs/06-tracking/action-tracker.md` (this entry), `docs/08-planning/artifacts/ACT-510-CHARTER-tier-conditional-entry-day-and-exit-horizon.md` (charter revised — existing-lots clause repealed, sequencing consequence folded, honest-arithmetic flag added). NO code, NO migrations, NO schema changes. ACT-506 and ACT-511 status flipped from "sequenced, awaiting compute" to "**FIRE NOW (parallel, read-only)**" — no charter edits needed (both already read-only, non-blocking).
+
+---
+
 ### ACT-511 (2026-07-13, evening): CHARTER FILED — **T1 SUPPLY EXPANSION STUDY. INVESTIGATION, read-only, interleaves with the W5 set (ACT-506/508/509→ACT-510). Sequenced behind nothing; runs when compute is free.**
 
 - **Motivation:** T1 edge validated at +33.4% per-$/day (ACT-509 Stage-1 / ACT-510), but SUPPLY-CONSTRAINED — ~400 T1-grade events/yr in the 839-name ratified universe supports only ~6 T1 slots. The uplift is real but capped by arrival rate. Question: does universe expansion unlock proportionally more T1 arrivals, and at what honest cost?

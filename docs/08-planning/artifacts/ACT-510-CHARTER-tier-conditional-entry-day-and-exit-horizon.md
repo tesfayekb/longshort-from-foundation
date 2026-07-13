@@ -2,6 +2,8 @@
 
 > **Filed:** 2026-07-13 (evening) | **Status:** CHARTERED, sequenced AFTER ACT-493 v1 landing (07-17). | **Mode when built:** EXECUTION (money-path — full DEC evidence ladder required before flip).
 > **Provenance:** operator DEC 2026-07-13 ratifying ACT-509 Stage-1 T1 finding *in principle*. Basis: `docs/08-planning/artifacts/ACT-509-RESULTS-stage1-entry-day-horizon-grid.md` (T1 `(entry=T+2, exit=T+6, hold=4)` = 36.89 bps/slot-day vs current 27.65 = +33.4%, n=1,711, monotone-stable, τ-attrition 0.6%).
+>
+> **REVISION 2026-07-13 (late evening, operator DEC — acceleration ruling):** exit-side tier-conditional horizon is EXTENDED TO EXISTING T1 LOTS (see §4 revised) and FOLDED INTO ACT-493 v1 scope (was: separate landing post-ACT-493). ACT-493 target landing accelerated to Wed 2026-07-15. Entry-side scope (§3 T+2 gating + target persistence) UNCHANGED — that portion of ACT-510 still lands post-ACT-493 for new T1 lots only. See action-tracker acceleration ruling for lot enumeration + arithmetic + revert-plan.
 
 ## 1. Ratified DEC (in principle) — the new R-1 parameterization
 
@@ -12,22 +14,34 @@
 
 **Scope discipline:** ACT-510 IMPLEMENTS the ratified DEC. It does NOT re-open the GO/NO-GO ruling. Any change to the horizon numbers requires a separate DEC citing new evidence.
 
-**Applies to NEW T1 lots only.** Existing T1 lots (any already-entered under uniform T+1/T+11 as of ACT-510 landing) exit on their entered terms — no in-flight repricing. Cutover is by lot creation date, not by wall-clock.
+**REVISED 2026-07-13 late-evening (operator DEC):**
+- **Exit-side tier-conditional horizon (§4):** applies to **ALL open T1 lots at activation time**, existing and future. Rationale: ACT-509 Stage-1 T+1-entry row (which matches existing T1 lots) peaks at exit=6 (32.1 bps/day) vs 27.6 at exit=11 on the same n=1,711 sample; leaving existing lots on T+11 forgoes captured edge on evidence, which the 07-13 standing order forbids. Cutover is **by wall-clock activation** (activation time = the deploy that flips the tier-conditional exit switch). Exit-side is a pure trigger-time read (no cost-basis mutation, no P&L re-attribution) — no in-flight repricing hazard.
+- **Entry-side T+2 gating + target persistence (§3):** UNCHANGED — applies to **NEW T1 lots only** (post-activation event detections). Existing T1 lots were entered at T+1 vintage and remain so; §3 does not retro-mutate entry.
+- **See action-tracker acceleration ruling (2026-07-13 late evening) for existing-T1-lot enumeration + T+6 arithmetic + honest correction of first-maturity date (Thu 07-16, not Fri as originally estimated).**
 
 ## 2. Sequencing (binding — operator DEC 2026-07-13)
 
 ```
- Thu 07-17           ACT-493 v1 lands  (uniform horizon T+11 for BOTH tiers — deadline-safe)
-   │                 First exits 07-22 fire under uniform horizon; no ACT-510 dependency
+ Wed 07-15 target    ACT-493 v1 lands (ACCELERATED per 2026-07-13 late-evening DEC)
+   │                 SCOPE FOLD: tier-conditional exit horizon INCLUDED in v1 (was post-landing)
+   │                 Exit engine reads lot.tier; T+6 for T1, T+11 for T2, one branch.
+   │                 Existing T1 lots (AKAM/CHRD/ONTO/ALGM/LITE/SNDK, n=6) exit T+6:
+   │                   - AKAM/CHRD/ONTO → Thu 2026-07-16
+   │                   - ALGM/LITE/SNDK → Fri 2026-07-17
+   │                 REVERT CONDITION: if Wed landing slips past machine-form gate, split
+   │                   back to (i) ACT-493 v1 uniform T+11 by Thu 07-17, existing T1 lots
+   │                   exit uniform 07-23..07-24 (forgone edge on ~3 lots), (ii) ACT-510
+   │                   layers tier-conditional post-landing for new T1 lots only.
    ▼
- post-07-17          ACT-510 opens for build (this charter)
-   │
+ post-ACT-493 land   ACT-510 ENTRY-SIDE opens for build (§3 only — exit-side already
+   │                 landed inside ACT-493 v1 per fold above)
    ▼
- ACT-510 lands       Tier-conditional entry-day + horizon activates for NEW lots only
-                     Existing lots continue under whatever horizon they entered under
+ ACT-510 lands       Entry-side T+2 gating + target persistence activate for NEW T1 lots
+                     only. Existing T1 lots retain T+1 entry vintage; only their exit
+                     horizon was tier-conditionalized (inside ACT-493 v1).
 ```
 
-**Rationale (binding):** Thursday's ACT-493 deadline is not negotiable; first exits 07-22 must not slip. ACT-493 v1 lands with the uniform CURRENT horizon (deadline-safe). ACT-510 layers the tier-conditional mechanics on top *after* 493 stabilizes — no coupling, no risk to the 07-22 exit path.
+**Rationale (revised):** first T+6 maturity is **Thu 2026-07-16** (six sessions from event 07-08 → 09,10,13,14,15,16 = Thu). Exit engine must be armed with tier-conditional horizon by market open Thu 07-16 or existing T1 lots miss their T+6 exit. Folding tier-conditional exit into ACT-493 v1 collapses the risk to one landing; the fold is mechanically one branch (`entry_session + (tier=='T1'?4:10)`) so risk to the 07-15 target is bounded. If risk materializes at machine-form time, revert per the split path above and accept ~one-week forgone edge on 3 T1 lots (AKAM/CHRD/ONTO).
 
 ## 3. Scope — entry side (T1 target persistence + T+2 gating)
 
@@ -54,7 +68,7 @@ Only new step: `target-persistence-check` at the front (drop expired T1 targets;
 
 ## 4. Scope — exit side (tier-conditional horizon)
 
-**Contract:** ACT-493's exit engine (as landed 07-17 in v1 uniform form) grows a tier-conditional exit trigger:
+**Contract (revised 2026-07-13 late evening):** ACT-493's exit engine (v1 target land Wed 07-15) INCLUDES tier-conditional exit trigger from v1:
 
 ```
  exit_at_session = entry_session + (lot.tier == 'T1' ? 4 : 10)   // trading days
@@ -62,7 +76,7 @@ Only new step: `target-persistence-check` at the front (drop expired T1 targets;
 
 where `lot.tier` is persisted at lot creation from the detection-time tier tag (already present in `overshoot_lots` as of ACT-479 provenance). No re-tagging.
 
-**Backfill behavior:** lots created BEFORE ACT-510 lands MAY have `tier IS NULL` (pre-tag era) or `tier = 'T1'` under uniform horizon. Rule: **only lots with `entry_session ≥ ACT-510 activation date` use the tier-conditional horizon.** Prior lots use uniform T+11 as before. Enforced by a cutover-date column or a `horizon_regime` sentinel on the lot — DEC-record the exact mechanism at implementation time.
+**Backfill behavior (revised):** every open lot at ACT-493 v1 activation uses the tier-conditional read — no cutover-date column, no `horizon_regime` sentinel. `lot.tier` is the sole selector. Verification requirement at ACT-493 machine-form time: **enumerate every open lot's tier from `overshoot_events` join and confirm no NULLs** (pre-tag lots must be tier-backfilled or the exit engine will refuse them typed). Reality check on 2026-07-13: `overshoot_lots` schema has no direct `tier` column; the exit engine must join `overshoot_events` on `(ticker=symbol, as_of_date ≤ entry_ts::date, selected_for_entry=true)` and take the latest tier before entry, or ACT-493 must backfill `tier` onto `overshoot_lots` in a same-migration idempotent step. DEC-record the exact mechanism at ACT-493 machine-form verification.
 
 ## 5. INC-96 convergence (operator DEC 2026-07-13)
 
