@@ -1,4 +1,25 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-520 + ACT-521 (2026-07-14, evening): NEW-STRATEGY FEASIBILITY STUDIES — read-only, executed in-turn per standing rule. NO code, NO migrations.
+
+**Adoption floor (both studies):** per-slot-day ≥ 1.15× best-alt = **42.42 bps/slot-day** (OVERSHOOT T1 T+2 ratified 36.89 × 1.15).
+
+**ACT-520 (Put-Write Proxy) — NO-GO.** Corpus: 523,694 events. Method: cash-secured put-write, H=5d, k∈{0,−2.5%,−5%}, premium proxy `max(0, 0.4·σ_5d − |k|·0.5)` stamped **IV-PROXY-UNRATIFIED**. Assignment probabilities empirical from `fwd_return_5d ≤ k`. **Peak cell:** short-side L_10_INF ATM = **18.08 bps/slot-day** (ann RoC 45.56%), reaching only **42.6% of the floor**. OTM k=−2.5% peak 12.28 bps/slot-day; k=−5% turns NEGATIVE in most cells. REFUSED across every cell × strike × side. Real-chain re-study needs implied-IV uplift ≥ 2.4× realized-vol to plausibly clear — not what equity-options literature supports post-move. Filed: `docs/08-planning/artifacts/ACT-520-RESULTS-put-write-proxy-study.md`. Real-cost quotes: Polygon Options Starter $199/mo (EOD chains, sufficient for retro); Alpaca options paper Level-2 supports cash-secured writes (entitlement flag not verified this turn). Per-name liquidity floor proposal recorded for any future re-open.
+
+**ACT-521 (PEAD Feasibility) — GO FOR CHARTER, pending.** Field audit: 15,845 usable-surprise rows of 373,040 total earnings (Finnhub coverage intact at 95%; **FMP fetcher field-name bug** — documented in `earnings-calendar-fetcher.ts` — nulled ~355k historical actuals). Drift by surprise quintile is monotone Q1→Q5 across 5/10/21d horizons; sweet spot is 5d at extreme deciles:
+
+| leg               | horizon | bps/slot-day | vs floor 42.42 | verdict          |
+|-------------------|--------:|-------------:|---------------:|------------------|
+| Long-Q5           |    5d   |    **48.15** | +13.5%         | clears           |
+| L/S paired (Q5-Q1)|    5d   |    **61.91** | +45.9%         | clears           |
+| Long-Q5           |   10d   |     25.86    | −39.0%         | fails            |
+| Long-Q5           |   21d   |     15.42    | −63.6%         | fails            |
+
+Annual supply ~615/yr per extreme quintile → ~1,230 paired L/S events/yr — supply is NOT binding vs OVERSHOOT's 3–4 slot capacity. **Pending gates before ratification:** (a) Winsorized-surprise re-run to bound noise, (b) T+1-open entry basis re-computation (close-basis inflates by ~overnight-gap fraction; implementable per-slot-day likely 38–42), (c) **ACT-522-CANDIDATE** FMP field-name repair backfill (would 20× the panel), (d) ACT-517 survivorship deflator applied. Filed: `docs/08-planning/artifacts/ACT-521-RESULTS-pead-feasibility-study.md`.
+
+**ACT-522-CANDIDATE (named, not chartered):** FMP earnings-actuals field-name repair (`eps`/`revenue` → `epsActual`/`revenueActual`, per verified 2026-07-04 probe already in fetcher docstring). Impact: panel size 15.8k → ~300k usable surprise rows. Queues behind ACT-521 charter decision.
+
+**Filing lane:** both studies are analysis-tooling read-only compute per the standing rule (charter-and-execute-same-turn); no money-path code touched; no schema, no migrations.
+
 ### ACT-518 CLOSE + ACT-519-CANDIDATE FILING + INC-83 LANE ADDENDUM + E3/E4 POLL RECEIPT (2026-07-14, evening): NO-CODE FILINGS + LIVE POLL CONFIRMATION.
 
 **ACT-518 status:** CLOSED. Pre-close (T+0) entry re-examination revalidated NO-GO for T1 (peak 30.45 bps/day @ (T+0,T+6), +10.1% vs live baseline — fails 15% floor; strictly dominated by ratified (T+2,T+6) = 36.89) and T2 (peak 14.01 bps/day @ (T+0,T+3), +8.6%). Fast-cycle corner (D) verdict: **the corner is not flat/negative — it is not front-loaded.** Overnight snap-back is not a harvestable fast-cycle sleeve on the current book. All T+0 numbers held as **UPPER BOUNDS** pending intraday qualification-drift measurement (C, NOT-COMPUTABLE-WITHOUT-INTRADAY). Deliverable: `docs/08-planning/artifacts/ACT-518-RESULTS-pre-close-entry-reexamination.md`. τ_long=1.00 tripwire ledger opened (n=3 refusals since 2026-07-08, 0% winners, mean counterfactual −136 bps — non-actionable, weakly reinforces current setting).
