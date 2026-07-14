@@ -6023,3 +6023,50 @@ All 18 lots minted via idempotent INSERT under the v3 `ON CONFLICT (source_order
 - **ACT-521 full re-run with T+1-open + winsorization:** SHELVE. Best cell = mega-cap Long-Q5 3d = 36.13 bps/slot-day (n=173), 85 % of the 42.42 dominance floor. Survivorship-deflated (ACT-517 band): 26.74–31.79 bps/slot-day — still below floor at every band point. L/S paired collapses to 3.12 bps/slot-day @ 5d (−95 % vs v1). See `artifacts/ACT-521-RESULTS-pead-honesty-gates-rerun.md`.
 - **ACT-522 (FMP field-name backfill):** code fix ALREADY MERGED in `earnings-calendar-fetcher.ts`. DB BACKFILL NOT EXECUTED — requires batch FMP API calls (edge-function run, thousands of requests with rate-limit pacing). Charter pending; not turn-computable. Only becomes valuable if PEAD is revisited.
 - **Strategy-#3 selection:** PEAD SHELVED alongside put-write (ACT-520). No new-strategy candidate currently clears the dominance floor.
+
+## PEAD SHELVE — closure filings (2026-07-14, operator-accepted)
+
+**(1) Mechanism note (why the shelve is structural, not sample-dependent).**
+PEAD's measured alpha is concentrated in the announcement gap — the price move between the T+0 announcement (BMO/AMC) and the T+1 open. Once entry basis is moved to T+1-open (the only implementable entry for a scheduled-event strategy without pre-market execution machinery), the harvestable residual collapses 71–95 % vs the T+0-close v1 numbers. This is a **structural mechanism finding**, not a small-sample noise result: the gap is unharvestable at T+1-open under any winsorization / cell-slicing we can apply. Corpus expansion (ACT-522 backfill) or L/S long-only sleeving will not close the gap because the gap is the alpha. **PEAD does not re-open unless (a) pre-market execution lands as its own charter, or (b) a different mechanism than post-announcement drift is proposed.** Filed alongside `artifacts/ACT-521-RESULTS-pead-honesty-gates-rerun.md`.
+
+**(2) ACT-522 downgrade → data-hygiene backlog.**
+**Priority: LOW (data-hygiene, batch-when-convenient).** Code fix already merged in `earnings-calendar-fetcher.ts` (field names `epsActual`/`revenueActual`/`epsEstimated`/`revenueEstimated`); DB backfill of the 355,184 FMP-source rows deferred indefinitely. Rationale: repairs the corpus and enables future re-tests, but is NOT strategy work and consumes no urgency budget. Will be batched opportunistically (e.g. next time an FMP-backed edge function is deployed under an unrelated charter). No SLA.
+
+**(3) MONEY-PATH VERIFICATION — FMP field-name bug scope confirmed BOUNDED (does not touch exclusion path).**
+
+The live detector's earnings-proximity exclusion reads `overshoot_earnings_calendar.announcement_date` (the ISO date), which is populated by the FMP fetcher from FMP response field `date` — NOT one of the four bug-affected fields. The bug affected only surprise/estimate numerics: `epsActual`, `revenueActual`, `epsEstimated`, `revenueEstimated` (see `supabase/functions/_shared/overshoot/earnings-calendar-fetcher.ts` inline comment marking the four repaired names verbatim). Announcement-date parsing has always been correct.
+
+**Cited fields (verbatim from `earnings-calendar-fetcher.ts`, FmpEarningsRow):**
+- `date` → `announcement_date` (**unaffected — exclusion path reads this**)
+- `symbol` → `ticker` (unaffected)
+- `epsActual` / `revenueActual` / `epsEstimated` / `revenueEstimated` (the four bug-affected numeric fields — surprise-computation only)
+
+**Proof query (executed 2026-07-14):**
+```sql
+SELECT source, COUNT(*) AS total, COUNT(*) FILTER (WHERE announcement_date IS NULL) AS null_dates,
+       COUNT(*) FILTER (WHERE announcement_date::text ~ '^\d{4}-\d{2}-\d{2}$') AS parses_iso
+FROM overshoot_earnings_calendar GROUP BY source;
+```
+Result:
+
+| source | total | null_dates | parses_iso |
+|---|---:|---:|---:|
+| finnhub |  16,572 | 0 |  16,572 |
+| fmp     | 356,468 | 0 | 356,468 |
+| **all** | **373,040** | **0** | **373,040** |
+
+**Verdict:** 373,040 / 373,040 exclusion-date rows parse as ISO dates with zero nulls. The FMP field-name bug is confined to surprise/estimate numerics. The detector's exclusion window logic has never admitted an event inside an earnings window because of this bug. **NO INC filed** — bug scope is bounded to a research-only path (surprise-magnitude computation for PEAD study), and PEAD is shelved.
+
+**(4) Strategy-#3 question — CLOSED.**
+No new-strategy candidate currently clears the OVERSHOOT dominance floor (42.42 bps/slot-day). Both feasibility studies chartered this cycle failed:
+- **ACT-520 put-write proxy:** 18.08 bps/slot-day (42.6 % of floor) → SHELF-UNLESS-REAL-IV (needs ≥2.4× premium uplift vs proxy, unsupported by equity-options literature). Tradier forward-observation plan filed dormant.
+- **ACT-521 PEAD:** 36.13 bps/slot-day best cell (85 % of floor) after honesty gates → SHELVE structural (this filing).
+
+**Marginal-capital ruling:** the best measured use of the next dollar of capital remains **additional OVERSHOOT slots**. The live growth levers — all already ratified, no new-strategy dependency — are:
+1. **ACT-510** — tier-conditional entry-day + exit-horizon (T1 timing tune, landing this week).
+2. **DEC-504-4** — sleeve reallocation (recycling capital across T1/T2/T3 per ratified caps).
+3. **ACT-511** — U2 universe expansion (the supply-side path to more T1 slots).
+
+**Strategy scouting resumes at Phase-L scale** — the AUM point where OVERSHOOT's event supply saturates (ACT-511 measures this threshold; per the Operator Dominance Test standing rule, diversification value only counts at that scale). Until then, strategy-#3 is a NON-QUESTION: capital deploys into OVERSHOOT, period.
+
+**Cross-references:** `artifacts/ACT-521-RESULTS-pead-honesty-gates-rerun.md` (mechanism evidence); `artifacts/ACT-520-RESCOPE-tradier-options-feasibility.md` (put-write SHELF-UNLESS-REAL-IV filing); `_shared/overshoot/earnings-calendar-fetcher.ts` (repaired field names, inline comment); ACT-510, DEC-504-4, ACT-511 (ratified growth levers).
