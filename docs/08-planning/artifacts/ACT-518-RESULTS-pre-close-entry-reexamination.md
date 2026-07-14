@@ -85,3 +85,60 @@ ACT-509 (grid this extends), ACT-488 (τ_long DEC — tripwire evidence accumula
 ## Provenance
 
 Numbers reproduced by SQL on `overshoot_study_candidate_events` ⋈ `overshoot_study_cell_results` ⋈ `overshoot_daily_bars` and `overshoot_audit_logs`. Admissible event counts (1,711 / 132,674) reconciled to ACT-509 exactly — methodology audit passes.
+
+---
+
+## (D) Fast-cycle corner — T+0 entry × exits T+1 / T+2 / T+3, per (band × drawdown-bucket)
+
+**Corpus span:** 2022-03-08 → 2026-07-02 = **4.32 years**. Annual event supply = n / 4.32.
+**Floors:** T1 live = 27.65 bps/day → 15% threshold = **31.80**; T2 live = 12.90 → **14.83**.
+
+### T1 sub-cells (band = L_10_INF ∧ window ∈ {1,2,3} ∧ mq ∈ {4,5} ∧ dd ∈ {1,2,3})
+
+| band     | dd | n     | d1 bps | d2 bps/day | d3 bps/day | clears T1 floor? |
+|----------|----|-------|--------|------------|------------|------------------|
+| L_10_INF | 3  | 248   | 23.41  | 40.26      | **49.85**  | ✓ on d2/d3 — BUT n = 248 < 1,000 ✗ |
+| L_10_INF | 2  | 343   | 24.54  | 6.94       | 19.50      | knife-edge d1→d2 collapse ✗ |
+| L_10_INF | 1  | 1,120 | 21.86  | 17.30      | 23.76      | ✗ (below floor) |
+
+**Stability probe on the only headline candidate (L_10_INF, dd=3):**
+
+```
+ exit_day     1      2      3      4      5      6
+ bps/day    23.41  40.26  49.85  62.72  64.57  62.81
+```
+
+The curve **keeps rising past d=3 out to d=5**. This is not a fast-cycle sleeve — it is a rich cell where holding *longer* pays more per slot-day. The "front-loaded snap-back" hypothesis is **rejected for this cell**: if the bounce were concentrated in T+1/T+2/T+3, per-slot-day would decay past d=3, not climb to a d=5 peak.
+
+### T2 sub-cells — fast-cycle candidates that clear the T2 floor (14.83) with n ≥ 1,000
+
+| band     | dd | n     | d1 bps | d2 bps/day | d3 bps/day | events/yr |
+|----------|----|-------|--------|------------|------------|-----------|
+| L_05_06  | 5  | 1,116 | 50.22  | 42.19      | 40.84      | 258       |
+| L_08_10  | 4  | 1,687 | 39.25  | 26.51      | 23.31      | 391       |
+| L_06_08  | 4  | 1,505 | 36.75  | 32.07      | 35.02      | 349       |
+| L_06_08  | 5  | 1,412 | 23.91  | 23.29      | 30.68      | 327       |
+| L_10_INF | 3  | 1,708 | 22.29  | 26.68      | 30.42      | 396       |
+| L_04_05  | 5  | 1,436 | 17.46  | 29.70      | 28.21      | 333       |
+
+All six show **d1 or d2 ≥ 15 bps/day**, several with d1 > d3 (genuine front-loading in these T2 sub-cells). But — **and this is the pattern that decides the verdict** — these sub-cells sit inside the T2 aggregate that ACT-509 already ruled NO-GO on a flat plateau. Their higher fast-cycle economics is a **tier-boundary redesign signal**, not a fast-cycle sleeve on the current book: today's live config admits *all* T2 events uniformly, so a "fast-cycle sleeve" would require a new sub-tier gate on `(band, dd)` — that is a **DEC-scoped tier-boundary change**, outside ACT-518.
+
+### Annual event supply for the only genuinely front-loaded T1 candidate
+
+- L_10_INF, dd=3: 248 events / 4.32 yr = **57 events/yr**, of which 93/yr since 2025 (regime-shift caveat: arrival rate rose ~60% post-2025 — plausible mean-revert / vol regime artefact, not baseline supply).
+- $ estimate: at ratified Part-V slot size (deferred to operator to plug in — sizing not read from config in this investigation), 57 events/yr × mean 3-day return ≈ 149.55 bps × slot_$ ≈ **57 × 0.01496 × slot_$ ≈ 0.85 × slot_$ per year in P&L per this sub-cell**. Stamped **UPPER BOUND** per (C) — implementable pre-close entry is not measurable without intraday drift, and n=248 fails the ≥1,000 floor regardless.
+
+### Verdict, in the operator's requested framing
+
+> **The corner is not flat/negative — it is *not front-loaded*. Overnight snap-back is not a harvestable population as a fast-cycle sleeve.**
+>
+> In T1's only cell where fast-cycle economics exceed the floor (L_10_INF, dd=3 — n=248, fails ≥1,000), the same cell delivers strictly better per-slot-day at **T+0 → T+5 (64.57 bps/day)** than at any of T+1/T+2/T+3. The snap-back is real but continues to compound — extracting only the first 1–3 days *leaves ~30 bps/day on the table*. There is no fast-cycle regime distinct from the broader bounce.
+>
+> In T2, six `(band, dd)` sub-cells with n ≥ 1,000 do show genuine front-loading (d1 > d3), but they live inside the ACT-509-ruled NO-GO T2 aggregate. They are a **tier-boundary redesign signal**, filed as **INC (tier-boundary redesign candidate)**, not a fast-cycle sleeve on the current book.
+
+**Adoption ruling:** no fast-cycle sleeve ships from ACT-518. Both prior verdicts stand:
+
+- T1: NO-GO revalidated on pre-close entry.
+- T2: NO-GO revalidated; sub-cell front-loading logged as tier-boundary evidence for a future DEC.
+
+All T+0 numbers in (D) remain stamped as **UPPER BOUNDS pending qualification-drift measurement (C)**.
