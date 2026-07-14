@@ -1,4 +1,28 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-520 RE-SCOPE + STANDING-RULE FILING (2026-07-14, late evening): OPERATOR DOMINANCE TEST + TRADIER OPTIONS FEASIBILITY. Read-only; no code, no migrations.
+
+**Standing rule filed (governance-level):** OPERATOR DOMINANCE TEST — a new strategy charters for BUILD only if it beats deploying the same capital as OVERSHOOT slots on **[ROI]** OR **[equal-ROI, lower-DD]** OR **[materially faster path to live evidence]**. Diversification value applies only at Phase-L scale where OVERSHOOT event supply saturates (cite ACT-511 U0 = 839 tickers, ~6 slots/4d). Floor derivation: OVERSHOOT T1 T+2 ratified 36.89 bps/slot-day × 1.15 = **42.42 bps/slot-day**.
+
+**Tradier capability (docs.tradier.com, 2026-07-14):** chains + real IV/greeks via ORATS YES; real-time = PRODUCTION-Brokerage only; sandbox = delayed ~15min; paper trading + cash-secured puts YES at Level 2; historical options **non-expired only** — expired contracts UNAVAILABLE, so Tradier cannot retroactively supply real IV for the 523,694 corpus events. IV-PROXY-UNRATIFIED stamp on the corpus study stands; real chains accrue forward-only.
+
+**Operator provisioning (§22.5.3):** `TRADIER_API_KEY` exists but scope unverified. Path 1 (recommended first) = sandbox token from developer.tradier.com; confirm/rotate. Path 2 (only after F3 gate) = Tradier Brokerage account + Level-2 options approval + separate `TRADIER_PROD_API_KEY`.
+
+**Spot-check status:** **SPOT-CHECK-DEFERRED-EXEC-BLOCKED.** `TRADIER_API_KEY` is edge-function-scoped, not injected in sandbox exec shell; live chain snapshots require operator picking **Option X** (deploy read-only `tradier-chain-probe` edge function, sandbox URL, writes diagnostic table) OR **Option Y** (operator local curl + paste JSON). Corpus-peak band L_10_INF skews larger-cap (dollar-vol filtering) → most likely tradeable at live spreads. AT-RISK names in the 10-name list: AAON, ACGL, ACI (mid-cap). LIQUID-expected: AAPL, ABBV, AAL, A, ABT, ABNB, AA.
+
+**Re-scoped ACT-520 plan (forward-only, not a strategy charter — a forward-observation study charter under diagnostic tables):** F1 = pick Option X/Y; F2 = 2 wk daily E4-close chain snapshots per selected event; F3 = at n≥30 compare real premium vs 0.4·σ·√T proxy — required uplift to clear dominance gap **≥2.4×**; F4 = sandbox paper put write on 10 events ONLY if F3 clears.
+
+**Dominance-test verdicts filed:**
+
+| Study | bps/slot-day | vs 42.42 | verdict |
+|---|---:|---:|---|
+| ACT-520 put-write IV-proxy peak (short L_10_INF ATM 5d) | 18.08 | 42.6% of floor | **FAILS on ROI** — SHELF-UNLESS-REAL-IV |
+| ACT-521 PEAD Long-Q5 5d (close basis) | 48.15 | +13.5% | clears paper; SHELF-UNLESS-SURPRISE (T+1-open likely 38–42) |
+| ACT-521 PEAD L/S paired 5d (close basis) | 61.91 | +45.9% | clears materially; same SHELF-UNLESS-SURPRISE lane |
+
+**Diversification carve-out:** does not apply — U0 saturates ~6 slots/4d; both PEAD and put-write compete for the same capital until Phase-L is on the roadmap. It is not.
+
+**Filed artifact:** `docs/08-planning/artifacts/ACT-520-RESCOPE-tradier-options-feasibility.md`. No code, no migrations.
+
 ### ACT-520 + ACT-521 (2026-07-14, evening): NEW-STRATEGY FEASIBILITY STUDIES — read-only, executed in-turn per standing rule. NO code, NO migrations.
 
 **Adoption floor (both studies):** per-slot-day ≥ 1.15× best-alt = **42.42 bps/slot-day** (OVERSHOOT T1 T+2 ratified 36.89 × 1.15).
