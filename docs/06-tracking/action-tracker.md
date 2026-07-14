@@ -1,4 +1,18 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-524 (2026-07-14, 13:50Z): FIRST FULLY AUTONOMOUS OVERSHOOT ENTRY — Wave-2 verification GREEN, entry leg PERMANENTLY ARMED. No code, no migrations (attestation only).
+
+**Fire evidence:** cron slot-a fired 13:35:04Z (09:35 EDT). `overshoot_entry_runs` row `a8fbb0d3` — 36 targets evaluated / **0 orders submitted** on typed refusals (accounting identity holds: targets_loaded = orders_submitted + Σ refusals + no-ops). Refusal identity confirmed per Wave-2 protocol. Handler-side idempotency gate armed for slot-b at 14:35Z (winter no-op path).
+
+**Registry state (persistent arm, no disarm-after-fire):** `overshoot.entry.run` enabled=**true**, status=**registered**. Exit-run enabled=false (gated on ACT-493, exit-arm scheduled Thursday pre-open ahead of first T+6 maturities AKAM/CHRD/ONTO ~07-22). All five autonomous legs (detection, alerts.dispatcher, equity_snapshot, fill_sweep, short_interest.compute) enabled=true.
+
+**Remaining autonomous surface today (Tue 2026-07-14):**
+- **18:00Z detection** — writes Wednesday's book (E4-Tue).
+- **21:10Z equity snapshot** — E3-Tue receipt.
+- **21:00Z SI compute** — cron `0 21 1,15 * *`. **Confirmed: next fire is tomorrow Wed 2026-07-15 21:00Z** (the 15th matches the DOM enumeration; pg_cron matches on UTC date so the 15th UTC = the 15th ET business day). E5-Wed lands tomorrow evening.
+- **Slot-b 14:35Z** — idempotent no-op (summer DST path).
+
+**Schedule ahead:** ACT-493 lands Wed 2026-07-15; exit-arm Thu 2026-07-16 pre-open. Book converges to cap ~07-24.
+
 ### ACT-520 RE-SCOPE + STANDING-RULE FILING (2026-07-14, late evening): OPERATOR DOMINANCE TEST + TRADIER OPTIONS FEASIBILITY. Read-only; no code, no migrations.
 
 **Standing rule filed (governance-level):** OPERATOR DOMINANCE TEST — a new strategy charters for BUILD only if it beats deploying the same capital as OVERSHOOT slots on **[ROI]** OR **[equal-ROI, lower-DD]** OR **[materially faster path to live evidence]**. Diversification value applies only at Phase-L scale where OVERSHOOT event supply saturates (cite ACT-511 U0 = 839 tickers, ~6 slots/4d). Floor derivation: OVERSHOOT T1 T+2 ratified 36.89 bps/slot-day × 1.15 = **42.42 bps/slot-day**.
