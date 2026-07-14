@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Shield, Key, FileText, Activity, Cog, UserPlus, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Users, Shield, Key, FileText, Activity, Cog, UserPlus, ShieldCheck, Plug } from 'lucide-react';
 import type { NavSection } from './navigation.types';
 import { ROUTES } from './routes';
 
@@ -67,6 +67,12 @@ export const adminNavigation: NavSection[] = [
         title: 'Security',
         url: ROUTES.ADMIN_SECURITY,
         icon: ShieldCheck,
+        permission: 'admin.config',
+      },
+      {
+        title: 'API Connections',
+        url: ROUTES.ADMIN_API_CONNECTIONS,
+        icon: Plug,
         permission: 'admin.config',
       },
     ],
