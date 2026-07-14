@@ -6,7 +6,7 @@
 **Registry state (persistent arm, no disarm-after-fire):** `overshoot.entry.run` enabled=**true**, status=**registered**. Exit-run enabled=false (gated on ACT-493, exit-arm scheduled Thursday pre-open ahead of first T+6 maturities AKAM/CHRD/ONTO ~07-22). All five autonomous legs (detection, alerts.dispatcher, equity_snapshot, fill_sweep, short_interest.compute) enabled=true.
 
 **Remaining autonomous surface today (Tue 2026-07-14):**
-- **18:00Z detection** — writes Wednesday's book (E4-Tue).
+- **22:00Z detection** (18:00 ET) — writes Wednesday's book (E4-Tue).
 - **21:10Z equity snapshot** — E3-Tue receipt.
 - **21:00Z SI compute** — cron `0 21 1,15 * *`. **Confirmed: next fire is tomorrow Wed 2026-07-15 21:00Z** (the 15th matches the DOM enumeration; pg_cron matches on UTC date so the 15th UTC = the 15th ET business day). E5-Wed lands tomorrow evening.
 - **Slot-b 14:35Z** — idempotent no-op (summer DST path).
