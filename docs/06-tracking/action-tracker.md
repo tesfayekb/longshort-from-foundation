@@ -1,4 +1,34 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-518 CLOSE + ACT-519-CANDIDATE FILING + INC-83 LANE ADDENDUM + E3/E4 POLL RECEIPT (2026-07-14, evening): NO-CODE FILINGS + LIVE POLL CONFIRMATION.
+
+**ACT-518 status:** CLOSED. Pre-close (T+0) entry re-examination revalidated NO-GO for T1 (peak 30.45 bps/day @ (T+0,T+6), +10.1% vs live baseline — fails 15% floor; strictly dominated by ratified (T+2,T+6) = 36.89) and T2 (peak 14.01 bps/day @ (T+0,T+3), +8.6%). Fast-cycle corner (D) verdict: **the corner is not flat/negative — it is not front-loaded.** Overnight snap-back is not a harvestable fast-cycle sleeve on the current book. All T+0 numbers held as **UPPER BOUNDS** pending intraday qualification-drift measurement (C, NOT-COMPUTABLE-WITHOUT-INTRADAY). Deliverable: `docs/08-planning/artifacts/ACT-518-RESULTS-pre-close-entry-reexamination.md`. τ_long=1.00 tripwire ledger opened (n=3 refusals since 2026-07-08, 0% winners, mean counterfactual −136 bps — non-actionable, weakly reinforces current setting).
+
+**ACT-519-CANDIDATE (named, NOT chartered — §7.1 nothing-evaporates queue):** TIER-BOUNDARY-REDESIGN EVIDENCE from ACT-518(D) T2 sub-cell breakdown. Six sub-cells in the current T2 aggregate simultaneously (i) clear the T2 floor (14.83 bps/day @ 15% over baseline), (ii) satisfy n ≥ 1,000, AND (iii) show genuine front-loading (several with d1 > d3) — indicating the T2 tier boundary as currently drawn averages a heterogeneous population and a redesign could isolate a harvestable sub-population. **Cell list (from `overshoot_study_candidate_events` ⋈ `overshoot_study_cell_results`, corpus 2022-03-08 → 2026-07-02):**
+
+| band       | dd | n     | d1 (bps/d) | d2    | d3    | annual supply (events/yr) |
+|------------|----|-------|------------|-------|-------|---------------------------|
+| L_05_06    | 5  | 1,116 | 50.22      | 42.19 | 40.84 | 258 |
+| L_08_10    | 4  | 1,687 | 39.25      | 26.51 | 23.31 | 391 |
+| L_06_08    | 4  | 1,505 | 36.75      | 32.07 | 35.02 | 349 |
+| L_06_08    | 5  | 1,412 | 23.91      | 23.29 | 30.68 | 327 |
+| L_10_INF   | 3  | 1,708 | 22.29      | 26.68 | 30.42 | 396 |
+| L_04_05    | 5  | 1,436 | 17.46      | 29.70 | 28.21 | 333 |
+
+**Pre-committed sequencing:** ACT-519-CANDIDATE **queues behind the W5 live sample** — a T2 boundary redesign wants live confirmation of the corpus pattern before charter. Target trigger: **~mid-August 2026** (post ≥20 round-trips + Phase-10 attribution). Filing is NAMED-ONLY per operator directive; NO charter, NO adoption gate, NO code, NO migration. Adjacent T1 candidate cell (`L_10_INF, dd=3, n=248`) does NOT join ACT-519 — it fails n ≥ 1,000, was probed for fast-cycle front-loading, and the probe rejected it (d=5 peak 64.57 bps/day → continues compounding, not front-loaded).
+
+**INC-83 lane addendum (stale-snapshot refusal counterfactuals):** the n=30 refusal-set counterfactuals from ACT-518 tripwire investigation are **noisy** (n=30 is non-actionable for measurement, only for pattern-marking) and are **filed into the INC-83 data-quality lane** as the baseline sample against which an ACT-506 `retry-once-on-stale-snapshot` charter — if it ever fires — would be measured. Not adopted, not chartered; recorded so the data does not evaporate. Cross-ref appended to INC-83 row this turn.
+
+**E3/E4 Monday poll receipts (2026-07-13, autonomous):**
+
+| Gate | Scheduled | Actual (UTC)          | Row | Evidence |
+|------|-----------|-----------------------|-----|----------|
+| E3   | 21:12Z    | **2026-07-13 21:10:03Z** ✓ | `overshoot_equity_snapshots.correlation_id=15a37f13-5fb3-4cb3-80a2-b9f9a0bf041b` | `positions_priced=50 / positions_total=50` (100% priced), `broker_equity=$97,818.63`, `long_market_value=$117,154.92`, `cash=-$19,336.29` (margin used, expected), `operator_id=00000000-0000-0000-0000-000000000001` (CRON), `source=alpaca_paper_overshoot`. **E3 RECEIPT BANKED.** |
+| E4   | 22:02Z    | **2026-07-13 22:00:02Z** ✓ | `overshoot_detection_runs.run_id=328a6bcd-b77b-46d5-b16b-0d25505f1441`, `correlation_id=86eec6c5-8bd2-4f51-b9b4-0b3fbcf64a5a` | `outcome=completed`, `dry_run=false`, `event_count=535`, `selected_count=36` (exactly at cap), `durations.kernel_ms=83,696` (~84s — well under 150s bust threshold per ACT-499 Track D), `total_ms=87,920`, `git_sha` stamped (stale per INC-102, non-blocking). **E4 RECEIPT BANKED — first autonomous detection on Monday's book confirmed.** |
+
+**Tuesday ARM decision inputs consumed:** both gates green. E3 proves autonomous snapshot pipeline is cron-adopted end-to-end with 100% pricing coverage against the live 50-lot book; E4 proves autonomous detection produces the standard 535/36 shape at kernel-cost inside budget on the current 839-symbol universe. Path is clear for Tuesday morning entry-arm per Phase 9 sequencing.
+
+**Files touched:** `docs/06-tracking/action-tracker.md` (this entry); `docs/06-tracking/incidental-findings.md` (INC-83 data-quality-lane addendum); `docs/08-planning/artifacts/ACT-519-CANDIDATE-t2-tier-boundary-redesign-evidence.md` (new, NAMED-NOT-CHARTERED). NO code, NO migrations, NO schema changes, NO adoption.
+
 ### ACT-506 / ACT-511 / ACT-516 / ACT-517 (2026-07-14, RESULTS BATCH — standing-rule charter-and-execute): READ-ONLY COMPUTE + METHODOLOGY, executed same-turn per 2026-07-14 operator ruling (Option A, amended).
 
 **ACT-506 RESULTS (slippage decomposition, adapted):** measured n=32 lots across 2026-07-08/09 cohorts (07-07 cohort empty in audit logs). `snapshot_mid_at_construction` is NOT persisted on `overshoot.entry.submitted.entry` — the limit-vs-mid / fill-vs-limit-fill-through sub-split is NOT COMPUTABLE at this deliverable; the collapsed `open→limit` leg carries both. Cohort means (bps of `close(T-1)`): 07-08 → overnight +24.2, open→limit +129.2, limit→fill −50.5, close→fill **+102.8**; 07-09 → overnight +164.2, open→limit +83.1, limit→fill −50.4, close→fill **+196.8**. Weighted headline close→fill = **143.9 bps ≈ 1.44%** — matches ACT-505's 1–2% ratifying prior. `limit_to_fill ≈ −50 bps` on both cohorts (fills print INSIDE the limit → NOT indicting queue-position). `logged slippage_bps = 50.0` on every row is a construction constant, NOT a measurement — must not be cited as observed slippage anywhere. Controllable bleed box: **+33 to +79 bps per cohort** inside `open→limit`; discrimination between limit-band / fire-timing / open-drift blocked on `snapshot_mid_at_construction` persistence (code change, gated). Filed: `docs/08-planning/artifacts/ACT-506-RESULTS-slippage-decomposition.md`.
