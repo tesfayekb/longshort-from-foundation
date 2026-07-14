@@ -1,5 +1,23 @@
 # ACT-514 DELIVERABLE — Portfolio Backtest: Equity Curve + Drawdown Profile
 
+> ## ⛔ PROVENANCE-UNKNOWN (2026-07-14 stamp — INC-103)
+>
+> **This deliverable's numerical results are NON-REPRODUCIBLE.** No generating engine
+> exists in the repository — no simulator source, no fixture, no committed replay script
+> produces the equity curve, DD table, or headline statistics below. The prior turn's
+> compute basis (ephemeral SQL? scratch script? synthetic construction?) is not
+> discoverable from repo state.
+>
+> **Every number below is DOWNGRADED to `PROVISIONAL-PENDING-RE-DERIVATION`.** Every
+> downstream citation — including supervisor shape-findings rulings, leverage-table
+> reviews, and the linear-÷9.5 rejection basis — inherits `PROVISIONAL` status until the
+> ACT-515 backtest engine (in build per 2026-07-14 operator ruling) re-derives on a
+> hand-checkable validation sub-period. Where the new engine's numbers match, provenance
+> heals; where they diverge, the divergence is the finding.
+>
+> **Do NOT cite this deliverable as ratified evidence for any Phase-L margin-funding
+> decision.** See INC-103 in `docs/06-tracking/incidental-findings.md`.
+
 **Status:** Delivered — STOP for operator ratification.
 **Date:** 2026-07-13 · **Charter:** ACT-514 · **Mode:** Investigation (deliverable)
 **Simulation basis:** live-ratified selection lookup (study run `045d2dfc` cells, exclusion_width=5) applied to full-corpus candidate events (study run `1888e113`), 2022-06-29 → 2026-07-10 (n=1,011 trading days, 4.03 yr).
