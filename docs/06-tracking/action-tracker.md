@@ -1,4 +1,29 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-515 (2026-07-14, AMENDED SPEC RATIFIED): INVESTIGATION CHARTER — **Capped stateful sim, TRI-CONFIG leverage comparison. Linear ÷9.5 scaling REJECTED as decision input.**
+
+**Ruling:** Post-ACT-514 leverage-table review vetoed the linear-scaling shortcut on four grounds documented in the charter: (1) implicit leverage was TIME-VARYING (constant $2.5k slots × compounding equity ⇒ ~5× at the Sept-2022 event, not 9.5×; even the linear method properly applied gives ≈−11–12% P2T at 1×, not −6%); (2) composition-under-scarcity is non-linear (rank-order admission concentrates the 40-lot basket in top-decile / deepest-dislocation names, NOT a random 40 pulled from the ~380 uncapped book); (3) idiosyncratic concentration at N=40 unmodeled; (4) the two prior capped estimates disagreed (−15/−20% vs −6/−15%) — that inconsistency IS the signal. **No leverage-comparison numbers are quotable until this sim runs.**
+
+**Amended spec (three configurations, measured curves only):**
+- **(a) 1.0× — cash-deployable baseline:** aggregate cap ENFORCED (per `evaluateAllocationCap` semantics, 0.90 long / 0.10 short), 40-slot concurrent cap hard-enforced against OPEN BOOK (not just daily cohort), K=5 per-day admission cap, rank-order admission exactly as coded (`allocation_cap_reached` refusal path).
+- **(b) 2.0× — Reg-T-consistent margin scenario:** double sizingBase headroom, WITH margin-interest line at **50 bps/mo on the debit balance** AND a **Reg-T maintenance-call check** flagging any day the book would have been callable (25% maintenance ratio). Call-days are a flag, not a forced-liquidation — sim rides through, reports the count.
+- **(c) SPY buy-and-hold, same window** as the benchmark column.
+
+**Sizing variants — BOTH required for (a) and (b):** constant-notional ($2,500/slot, sizingBase frozen at $100k — matches ACT-514 basis for comparability) AND compounding (slot notional = equity_t × 0.025 × margin_multiplier, recomputed daily — **the compounding one is what a real funded account experiences and is the primary Phase-L input**).
+
+**Deliverable — the leverage table, rebuilt from measured curves:** five rows (1×-const, 1×-comp, 2×-const, 2×-comp, SPY-B&H) × twelve columns (Sept-2022 month, max P2T DD, peak/trough/recovery dates, DD duration, recovery duration, CAGR, Sharpe, Sortino, days-in-margin-call (2× only), margin interest paid (2× only), mean/max open lots, % days at cap). Plus five-deepest-DDs table per config; plus 2022-H2 monthly matrix per config vs SPY.
+
+**Caveat block carried forward + extended:** H1-2022 uncovered (ACT-516 addresses), UPPER_BOUND_SURVIVORSHIP_BIASED (ACT-517 formalizes), N=1 bear-regime sample, T+1-open entry proxy with study-ratified haircut (ACT-506 supersedes when landed), 2× margin-interest = 50 bps/mo flat modeling assumption, Reg-T call check is FLAG not liquidation, composition-under-scarcity now MEASURED not modeled.
+
+**Pre-commit stamp:** report the numbers whatever they say. If measured 2× DD exceeds SPY DD, that's the number. If 1× DD is inside SPY, that's the number. **This deliverable is the Phase-L margin-funding decision input.**
+
+**Sequencing:** fires now — parallel to ACT-493 exits, ACT-506/507/508 W5, ACT-510, ACT-512/513 `account_id`. Read-only, corpus-based, no money-path touch. Blocks Phase-L margin decision. ACT-516 (H1-2022 cost quote) and ACT-517 (survivorship deflator) proceed as ratified.
+
+**Status at filing:** amended charter ratified; sim not yet run; **NO numbers quotable from this charter alone**. Deliverable will follow at `docs/08-planning/artifacts/ACT-515-DELIVERABLE-capped-tri-config-leverage-table.md`.
+
+**Files touched this turn:** `docs/08-planning/artifacts/ACT-515-CHARTER-capped-stateful-sim-leverage-comparison.md` (new), `docs/06-tracking/action-tracker.md` (this entry). NO code, NO migrations, NO schema changes.
+
+**Cross-refs:** ACT-514 (parent, uncapped upper bound); ACT-473 (N=1 bear stamp); ACT-478; ACT-506/507/508; ACT-510; ACT-512/513; INC-96 (`evaluateAllocationCap` in `supabase/functions/_shared/overshoot-execution/allocation-cap.ts`).
+
 ### ACT-514 (2026-07-13, late evening): INVESTIGATION — **Portfolio backtest: equity curve + drawdown profile of the ratified machine over the full ~5yr corpus.** Read-only, corpus-based, parallel to everything; behind nothing. Charter filed at `docs/08-planning/artifacts/ACT-514-CHARTER-portfolio-backtest-equity-curve-drawdown.md`.
 
 ### ACT-514 (2026-07-13, late evening, DELIVERABLE): INVESTIGATION COMPLETE — **Six-part readout filed.** Ratified live-selection cells (`045d2dfc`, excl=5) × full-corpus events (`1888e113`) × T1 T+2/T+6 · T2 T+1/T+11 · SHORT T+1/T+6 · v2 ROI floor 0.0010 · earnings ±5d · haircut 5/15 bps · BEAR governor throttles T2. Window 2022-06-29 → 2026-07-10 (n=1,011 days, 4.03 yr); 39,536 fully-priced round-trips (T1=530, T2=34,988, SHORT=4,018).
