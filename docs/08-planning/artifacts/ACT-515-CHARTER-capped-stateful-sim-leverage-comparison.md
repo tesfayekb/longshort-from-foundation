@@ -39,6 +39,45 @@ Run the CAPPED STATEFUL simulation THREE ways over the same window (2022-06-29 �
 - No trading costs, no rebalance. Pure benchmark.
 - Reported columns identical to (a) and (b).
 
+### (d) Regime-exit counterfactual — protection-without-ROI-cost, made measurable
+
+Run inside the capped **1.0×** simulation (config (a)) — three variants of a bear-onset liquidation policy, each measured against the (a) baseline hold-to-horizon:
+
+- **(d1) FULL EXIT AT CROSSING** — at the close of the BEAR-crossing day, liquidate ALL in-flight lots. Baseline governor already blocks NEW T2 entries; (d1) adds a book-liquidation step. Re-entry resumes when regime governor permits (per existing thresholds).
+- **(d2) TAIL-ONLY EXIT** — at the crossing close, liquidate only lots with **>5 days of remaining horizon**. Short-tail lots (≤5d to their scheduled exit) hold to horizon.
+- **(d3) HORIZON-HALVING** — at the crossing close, do not liquidate; instead REDUCE each in-flight lot's remaining horizon by half (ceiling), rounded up to 1 day minimum. Softer than (d1)/(d2): pulls exits forward rather than firing at close.
+
+**Trigger events measured (both):** Sept-2022 BEAR crossing (the primary event, N=1 deep sample) and Apr-2025 2-day BEAR touch (the shallow N=1 flash sample). Both events reported; combined statistics not aggregated — samples are structurally different.
+
+**Per-event reporting (each of d1/d2/d3, each of the two events):**
+
+| Metric | Definition |
+|---|---|
+| Bleed avoided | Realized loss on the liquidated / accelerated lots between crossing close and their baseline scheduled exit — the MTM drop that (a) ate but (d) did not. |
+| Bounce forgone | Realized gain those same lots would have captured post-crossing if held to baseline horizon — the recovery leg (d) did not participate in. |
+| Net P&L delta | Bleed avoided − Bounce forgone. Positive = mechanism helped; negative = mechanism paid to reduce DD. |
+| Lots affected | Count of lots liquidated (d1/d2) or horizon-shortened (d3). |
+| Remaining-horizon distribution | Histogram at crossing — informs whether "the tail" is even a meaningful cohort. |
+| Realized cost basis vs mark | So the reader can see whether the affected lots were already underwater or riding gains at crossing. |
+
+**Full-window impact reporting (each mechanism as its own 12-column row alongside 1×-const / 1×-comp):**
+
+- New rows: `1×-const + d1`, `1×-const + d2`, `1×-const + d3` (and compounding equivalents if the constant-notional row shows a mechanism warrants further examination — do not proliferate rows for mechanisms already refused by the adoption rule).
+
+### PRE-COMMITTED ADOPTION RULE for (d)
+
+A regime-exit mechanism ships from this charter as an operator recommendation **ONLY IF ALL** of the following hold on the measured curves:
+
+1. **Full-window CAGR ≥ baseline (a) 1×-const CAGR** (mechanism does not cost aggregate return);
+2. **Max-DD reduction ≥ 5 percentage points** vs baseline (a) (meaningful risk attenuation, not a rounding-band change);
+3. **No single calendar year has CAGR reduction > 0.5 pp** vs baseline (a) (no hidden year-scale ROI transfer masked by full-window aggregation).
+
+If ANY criterion fails, the mechanism is **REFUSED** and the finding is filed as **evidence that the bear-onset bleed is paid-for risk** — a structural feature of the T1/T2 hold-through design, not a bug amenable to policy patching. In that case the ACT-514 §6 stamped-honest risk sentence stands as-is; no protection mechanism is adopted; the bleed is disclosed to Phase-L operators as the cost of the strategy's return profile.
+
+Adoption is a BINARY per-mechanism verdict — d1, d2, d3 are evaluated independently. If two mechanisms both pass, the one with the higher (Max-DD reduction) / (CAGR cost) ratio is recommended; the other is filed as a viable alternative. Ties broken toward the softer mechanism (d3 > d2 > d1).
+
+**Pre-commit stamp for (d):** the rule is written BEFORE the numbers. No post-hoc criterion adjustment. If all three mechanisms fail the rule, the deliverable states so plainly and the charter has done its job — the question "can we cheaply protect against the bleed?" has been answered NO with evidence.
+
 ### Sizing variants — BOTH required for (a) and (b)
 
 - **Constant-notional:** `$2,500 × margin_multiplier` per slot, `sizingBase` frozen at $100k throughout (matches ACT-514 basis for direct comparability).

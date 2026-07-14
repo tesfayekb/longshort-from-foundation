@@ -1,4 +1,30 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-515 (2026-07-14, SPEC ADDITION (d) RATIFIED): INVESTIGATION CHARTER — **Regime-exit counterfactual added. Protection-without-ROI-cost question, made measurable, with a pre-committed adoption rule.**
+
+**Addition (d) inside the capped 1.0× sim (config (a)):** three bear-onset liquidation policies, each measured against the (a) baseline hold-to-horizon:
+- **(d1) FULL EXIT AT CROSSING** — liquidate ALL in-flight lots at the BEAR-crossing close.
+- **(d2) TAIL-ONLY EXIT** — liquidate only lots with >5 days remaining horizon; short-tail lots hold.
+- **(d3) HORIZON-HALVING** — pull each in-flight lot's remaining horizon in by half (ceiling, min 1 day) rather than liquidate.
+
+**Trigger events (both, reported separately — not aggregated):** Sept-2022 BEAR crossing (primary, deep N=1) and Apr-2025 2-day BEAR touch (shallow N=1).
+
+**Per-event reporting per mechanism:** bleed avoided (MTM drop the mechanism escapes), bounce forgone (recovery leg the mechanism does not participate in), net P&L delta (bleed avoided − bounce forgone), lots affected count, remaining-horizon histogram at crossing, cost-basis-vs-mark at crossing.
+
+**Full-window impact:** each mechanism gets its own row in the 12-column leverage table alongside 1×-const / 1×-comp. Compounding equivalents added only for mechanisms that survive the adoption rule on constant-notional.
+
+**PRE-COMMITTED ADOPTION RULE (written before numbers, no post-hoc adjustment):** a mechanism ships as an operator recommendation ONLY IF ALL hold:
+1. Full-window CAGR ≥ baseline (a) 1×-const CAGR;
+2. Max-DD reduction ≥ 5 percentage points vs baseline (a);
+3. No single calendar year has CAGR reduction > 0.5 pp vs baseline (a).
+
+Any failure → mechanism REFUSED and the finding is filed as **evidence that the bear-onset bleed is paid-for risk** — a structural feature of the T1/T2 hold-through design, not a bug patchable by policy. In that case the ACT-514 §6 stamped-honest risk sentence stands; no mechanism is adopted; the bleed is disclosed to Phase-L operators as the cost of the return profile. Mechanisms evaluated independently; ties broken toward the softer mechanism (d3 > d2 > d1).
+
+**"Fire the full ACT-515 now" acknowledged.** Charter is now COMPLETE (configs a/b/c/d + sizing variants + adoption rule). Per anti-completion-theater: no numbers are quotable from this turn — the sim has not been run. Deliverable will file at `docs/08-planning/artifacts/ACT-515-DELIVERABLE-capped-tri-config-leverage-table.md` with the (d) counterfactual as a distinct section (per-event tables + full-window rows + adoption verdict per mechanism).
+
+**Files touched this turn:** `docs/08-planning/artifacts/ACT-515-CHARTER-capped-stateful-sim-leverage-comparison.md` (amended §1(d) + §PRE-COMMITTED ADOPTION RULE), `docs/06-tracking/action-tracker.md` (this entry). NO code, NO migrations, NO schema changes.
+
+**Cross-refs:** parent tracker entry ACT-515 (2026-07-14, AMENDED SPEC RATIFIED) — tri-config charter; ACT-514 (parent uncapped upper bound); ACT-473 (N=1 bear stamp — reaffirmed here: (d) findings are structurally N=1-deep + N=1-shallow, not a distribution).
+
 ### ACT-515 (2026-07-14, AMENDED SPEC RATIFIED): INVESTIGATION CHARTER — **Capped stateful sim, TRI-CONFIG leverage comparison. Linear ÷9.5 scaling REJECTED as decision input.**
 
 **Ruling:** Post-ACT-514 leverage-table review vetoed the linear-scaling shortcut on four grounds documented in the charter: (1) implicit leverage was TIME-VARYING (constant $2.5k slots × compounding equity ⇒ ~5× at the Sept-2022 event, not 9.5×; even the linear method properly applied gives ≈−11–12% P2T at 1×, not −6%); (2) composition-under-scarcity is non-linear (rank-order admission concentrates the 40-lot basket in top-decile / deepest-dislocation names, NOT a random 40 pulled from the ~380 uncapped book); (3) idiosyncratic concentration at N=40 unmodeled; (4) the two prior capped estimates disagreed (−15/−20% vs −6/−15%) — that inconsistency IS the signal. **No leverage-comparison numbers are quotable until this sim runs.**
