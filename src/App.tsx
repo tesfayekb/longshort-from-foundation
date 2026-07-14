@@ -41,6 +41,7 @@ const AdminJobsPage = lazy(() => import("./pages/admin/AdminJobsPage"));
 const AdminKillSwitchPage = lazy(() => import("./pages/admin/AdminKillSwitchPage"));
 const AdminOnboardingPage = lazy(() => import("./pages/admin/AdminOnboardingPage"));
 const AdminSecurityPage = lazy(() => import("./pages/admin/AdminSecurityPage"));
+const AdminApiConnectionsPage = lazy(() => import("./pages/admin/AdminApiConnectionsPage"));
 const UserDetailPage = lazy(() => import("./pages/admin/UserDetailPage"));
 const RoleDetailPage = lazy(() => import("./pages/admin/RoleDetailPage"));
 
@@ -197,6 +198,11 @@ const App = () => (
                 <Route path="security" element={
                   <PermissionGate permission="admin.config">
                     <AdminSecurityPage />
+                  </PermissionGate>
+                } />
+                <Route path="api-connections" element={
+                  <PermissionGate permission="admin.config">
+                    <AdminApiConnectionsPage />
                   </PermissionGate>
                 } />
                 <Route path="kill-switch" element={

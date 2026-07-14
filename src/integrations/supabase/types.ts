@@ -160,6 +160,57 @@ export type Database = {
         }
         Relationships: []
       }
+      api_provider_registry: {
+        Row: {
+          consumers: string[]
+          cost_monthly_usd: number | null
+          cost_surface: boolean
+          created_at: string
+          endpoint_classes: string[]
+          env_key_names: string[]
+          feeds: string
+          freshness_source: string
+          id: string
+          notes: string | null
+          product_tier: string
+          provider: string
+          strategy: string
+          updated_at: string
+        }
+        Insert: {
+          consumers?: string[]
+          cost_monthly_usd?: number | null
+          cost_surface?: boolean
+          created_at?: string
+          endpoint_classes?: string[]
+          env_key_names?: string[]
+          feeds: string
+          freshness_source: string
+          id?: string
+          notes?: string | null
+          product_tier: string
+          provider: string
+          strategy: string
+          updated_at?: string
+        }
+        Update: {
+          consumers?: string[]
+          cost_monthly_usd?: number | null
+          cost_surface?: boolean
+          created_at?: string
+          endpoint_classes?: string[]
+          env_key_names?: string[]
+          feeds?: string
+          freshness_source?: string
+          id?: string
+          notes?: string | null
+          product_tier?: string
+          provider?: string
+          strategy?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -3554,6 +3605,15 @@ export type Database = {
           current_rate_per_day: number
           exceeds_3x_threshold: boolean
           ratio_current_vs_baseline: number
+        }[]
+      }
+      get_api_provider_freshness: {
+        Args: never
+        Returns: {
+          freshness_source: string
+          last_seen_at: string
+          product_tier: string
+          provider: string
         }[]
       }
       get_my_authorization_context: { Args: never; Returns: Json }
