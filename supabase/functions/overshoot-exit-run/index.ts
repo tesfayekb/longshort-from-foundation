@@ -148,6 +148,23 @@ import {
 // I6 manual-confirm window (ratified: 15 minutes).
 const OVERSHOOT_MANUAL_CONFIRM_WINDOW_MS = 15 * 60 * 1000;
 
+// ACT-493 v1 M3 — half-day awareness threshold. When Alpaca /v2/clock
+// reports fewer than this many minutes to regular-session close, the
+// entire tick refuses run-level with `market_closing_soon`. Rationale
+// per operator ratification: DAY-limit exits submitted <10 min from close
+// on a half-day face high partial-fill / DIF-expiry risk with no next-day
+// residual work. Threshold is deliberately conservative; increase requires
+// operator DEC (not a code sweep).
+const OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE = 10;
+
+// ACT-493 v1 M5 groundwork — CID intent-segment regex used by the
+// in-flight-exit-order guard. Matches only exit intents; entry orders
+// are irrelevant to the double-submit fence. CID shape from
+// _shared/overshoot-execution/client-order-id.ts:
+//   ovs-{run8}-{ticker}-{side1}-{intent}-{attempt}
+const OVERSHOOT_EXIT_CID_REGEX =
+  /^ovs-[0-9a-f]{8}-([A-Z0-9.]{1,10})-([LS])-(exit_time|exit_manual)-\d+$/;
+
 interface Env {
   supabaseDbUrl: string;
   polygonKey: string;
