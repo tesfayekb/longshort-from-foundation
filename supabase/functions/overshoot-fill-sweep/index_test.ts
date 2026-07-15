@@ -4,12 +4,17 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
 import {
   OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
+  OVERSHOOT_FILL_SWEEP_EXIT_DISCOVERY_QUERY_FINGERPRINT,
   OVERSHOOT_FILL_SWEEP_VERSION,
   computeA5SymmetricDiff,
   discoverCandidateRowsForTest,
   shouldInvokePauseForA5Divergence,
   shouldSuppressPauseForDiscoveryShortfall,
   toEtSessionDate,
+  allocateExitFillToLots,
+  nextAvgExitPrice,
+  realizedPnlDelta,
+  OVERSHOOT_EXIT_CID_REGEX_STRING,
 } from './pure.ts';
 
 Deno.test('toEtSessionDate: DST-safe YYYY-MM-DD for America/New_York', () => {
@@ -223,4 +228,177 @@ Deno.test('INC-97 sentinel: every live sweep writes its own watchdog heartbeat a
   if (!src.includes('if (!dryRun) {')) {
     throw new Error('sweep heartbeat must remain live-only');
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// ACT-493 v1 Turn 3B canaries — M7 exit-fill adoption + overfill safety.
+// ─────────────────────────────────────────────────────────────────────
+
+Deno.test('ACT-493 T3B: allocateExitFillToLots — clean partial fill distributes FIFO', () => {
+  const r = allocateExitFillToLots({
+    brokerFilledQty: 7,
+    lots: [
+      { lot_id: 'A', qty: 5, filled_qty: 0, remaining_qty: 5 },
+      { lot_id: 'B', qty: 5, filled_qty: 0, remaining_qty: 5 },
+    ],
+  });
+  assertEquals(r.overflow, false);
+  assertEquals(r.delta_to_apply, 7);
+  assertEquals(r.per_lot_deltas.length, 2);
+  assertEquals(r.per_lot_deltas[0], { lot_id: 'A', delta_qty: 5, will_close: true });
+  assertEquals(r.per_lot_deltas[1], { lot_id: 'B', delta_qty: 2, will_close: false });
+});
+
+Deno.test('ACT-493 T3B: allocateExitFillToLots — idempotent when broker cumulative equals prior applied', () => {
+  const r = allocateExitFillToLots({
+    brokerFilledQty: 5,
+    lots: [{ lot_id: 'A', qty: 5, filled_qty: 5, remaining_qty: 0 }],
+  });
+  assertEquals(r.overflow, false);
+  assertEquals(r.delta_to_apply, 0);
+  assertEquals(r.per_lot_deltas.length, 0);
+});
+
+Deno.test('ACT-493 T3B: OVERFILL HALT — broker over-fills beyond total order intent', () => {
+  // Total lot qty is 5, but broker reports filled_qty=6 — double-submit
+  // signature. HALT, do not clamp.
+  const r = allocateExitFillToLots({
+    brokerFilledQty: 6,
+    lots: [{ lot_id: 'A', qty: 5, filled_qty: 0, remaining_qty: 5 }],
+  });
+  assertEquals(r.overflow, true);
+  assert(r.overflow_reason && r.overflow_reason.includes('broker_over_filled_order'));
+  // Critical: NO per-lot delta emitted on overflow.
+  assertEquals(r.per_lot_deltas.length, 0);
+  assertEquals(r.unallocated_residual, 1);
+});
+
+Deno.test('ACT-493 T3B: OVERFILL HALT — cumulative would push filled_qty past qty', () => {
+  // Lot already has 3/5 filled; broker cumulative reports 8 — that would
+  // push this lot to 8 filled on a 5-qty lot. Halt.
+  const r = allocateExitFillToLots({
+    brokerFilledQty: 8,
+    lots: [{ lot_id: 'A', qty: 5, filled_qty: 3, remaining_qty: 2 }],
+  });
+  assertEquals(r.overflow, true);
+  assert(r.overflow_reason);
+  assertEquals(r.per_lot_deltas.length, 0);
+});
+
+Deno.test('ACT-493 T3B: nextAvgExitPrice — weighted average across partials', () => {
+  const p1 = nextAvgExitPrice({
+    prevFilledQty: 0, prevAvgExitPrice: null,
+    deltaQty: 3, brokerAvgFillPrice: 100,
+  });
+  assertEquals(p1, 100);
+  const p2 = nextAvgExitPrice({
+    prevFilledQty: 3, prevAvgExitPrice: 100,
+    deltaQty: 2, brokerAvgFillPrice: 110,
+  });
+  // (100*3 + 110*2) / 5 = 520/5 = 104
+  assertEquals(p2, 104);
+});
+
+Deno.test('ACT-493 T3B: realizedPnlDelta — sign flips for short side', () => {
+  const longPnl = realizedPnlDelta({
+    side: 'long', deltaQty: 10, brokerAvgFillPrice: 110, entryAvgPrice: 100,
+  });
+  assertEquals(longPnl, 100);
+  const shortPnl = realizedPnlDelta({
+    side: 'short', deltaQty: 10, brokerAvgFillPrice: 110, entryAvgPrice: 100,
+  });
+  assertEquals(shortPnl, -100);
+  const shortWin = realizedPnlDelta({
+    side: 'short', deltaQty: 10, brokerAvgFillPrice: 90, entryAvgPrice: 100,
+  });
+  assertEquals(shortWin, 100);
+});
+
+Deno.test('ACT-493 T3B: exit CID regex string byte-matches the exit-run handler', async () => {
+  // Byte-identical to overshoot-exit-run's OVERSHOOT_EXIT_CID_REGEX.
+  // Any drift causes discovery-side + handler-side to disagree.
+  const src = await Deno.readTextFile(
+    new URL('../overshoot-exit-run/index.ts', import.meta.url),
+  );
+  // The handler declares the regex as a JS literal; extract its body.
+  const m = src.match(/OVERSHOOT_EXIT_CID_REGEX\s*=\s*\/([^/]+)\//);
+  assert(m, 'exit-run must declare OVERSHOOT_EXIT_CID_REGEX literal');
+  // JS regex body → normalize the doubled backslash form used in a TS
+  // string constant.
+  const expected = OVERSHOOT_EXIT_CID_REGEX_STRING.replace(/\\\\/g, '\\');
+  assertEquals(m![1], expected);
+});
+
+Deno.test('ACT-493 T3B sentinel: fill-sweep has M7 exit-fill loop + overflow HALT + A5 uses remaining_qty', async () => {
+  const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
+  // M7 loop present.
+  assert(
+    src.includes("overshoot.exit.submitted.%'"),
+    'M7 must discover exit orders via overshoot.exit.submitted.% audit action prefix',
+  );
+  assert(
+    src.includes('allocateExitFillToLots'),
+    'M7 must delegate allocation to the pure helper',
+  );
+  // Overflow → HIGH-severity typed audit, no silent clamp.
+  assert(
+    src.includes("action: 'overshoot.exit_fill_overflow'"),
+    'overflow must emit overshoot.exit_fill_overflow typed audit',
+  );
+  assert(
+    src.includes("severity: 'high'"),
+    'exit_fill_overflow audit must be severity=high',
+  );
+  assert(
+    src.includes('halted_no_clamp'),
+    'overflow must halt without clamping — silent clamp is forbidden',
+  );
+  // exit_attempts resets on ANY fill (partial included) per M4a intent.
+  assert(
+    src.includes('exit_attempts         = 0'),
+    'exit_attempts must reset to 0 on any per-lot fill (M4a intent)',
+  );
+  assert(
+    src.includes('exit_attempts_reset_to_zero: true'),
+    'exit_attempts_reset_to_zero must be recorded in the applied-audit metadata',
+  );
+  // A5 semantics: SUM(remaining_qty) not SUM(qty).
+  assert(
+    src.includes('SUM(remaining_qty)::float8 AS qty'),
+    'A5 reconcile must SUM(remaining_qty), not SUM(qty)',
+  );
+  // Exit discovery fingerprint threaded into response.
+  assert(
+    src.includes('exit_discovery_query_fingerprint'),
+    'response must expose exit_discovery_query_fingerprint for arm-time evidence',
+  );
+});
+
+Deno.test('ACT-493 T3B sentinel: entry-run INSERT overshoot_lots writes tier + remaining_qty at INSERT forward (M8)', async () => {
+  const src = await Deno.readTextFile(
+    new URL('../overshoot-entry-run/index.ts', import.meta.url),
+  );
+  assert(
+    src.includes('tier, tier_source_event_run_id, tier_source_as_of_date'),
+    'entry-run INSERT must include tier + provenance columns',
+  );
+  assert(
+    src.includes('remaining_qty, filled_qty, exit_attempts'),
+    'entry-run INSERT must include remaining_qty/filled_qty/exit_attempts at creation',
+  );
+  assert(
+    src.includes('event_run_id: linkage.runId'),
+    'entry submitted.entry audit must carry event_run_id for fill-sweep single-homing',
+  );
+});
+
+Deno.test('ACT-493 T3B sentinel: exit-fill fingerprint is exported and non-empty', () => {
+  assert(
+    typeof OVERSHOOT_FILL_SWEEP_EXIT_DISCOVERY_QUERY_FINGERPRINT === 'string',
+    'fingerprint must be a string',
+  );
+  assert(
+    OVERSHOOT_FILL_SWEEP_EXIT_DISCOVERY_QUERY_FINGERPRINT.startsWith('sha256:'),
+    'fingerprint must be sha256-prefixed',
+  );
 });

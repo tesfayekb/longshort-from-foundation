@@ -91,12 +91,17 @@ import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpa
 import { RATIFIED_DETECTOR_VERSION } from '../_shared/overshoot/detector/detector.ts';
 import {
   OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
+  OVERSHOOT_FILL_SWEEP_EXIT_DISCOVERY_QUERY_FINGERPRINT,
   OVERSHOOT_FILL_SWEEP_VERSION,
   toEtSessionDate,
   computeA5SymmetricDiff,
   shouldInvokePauseForA5Divergence,
   shouldSuppressPauseForDiscoveryShortfall,
+  allocateExitFillToLots,
+  nextAvgExitPrice,
+  realizedPnlDelta,
   type A5Diff,
+  type ExitFillAllocationInputLot,
 } from './pure.ts';
 export { toEtSessionDate, computeA5SymmetricDiff } from './pure.ts';
 
@@ -123,6 +128,25 @@ interface CandidateRow {
   side: 'long' | 'short';
   client_order_id: string;
   run_id: string | null;
+  // M8 (ACT-493 v1 Turn 3B) — provenance carried at INSERT forward. Read
+  // verbatim from the entry-run's `overshoot.entry.submitted.entry` audit
+  // metadata; these fields are ADDITIVE (older audit rows without them
+  // simply write NULL to overshoot_lots.tier_source_*).
+  tier: string | null;
+  event_run_id: string | null;
+  as_of_date: string | null;
+}
+
+// ACT-493 v1 Turn 3B — M7 exit-fill discovery row.
+interface ExitCandidateRow {
+  order_id: string;
+  client_order_id: string;
+  symbol: string;
+  side: 'long' | 'short';
+  qty: number;
+  intent: string;
+  lot_ids: string[];
+  audit_created_at: string;
 }
 
 Deno.serve(createHandler(async (req: Request) => {
@@ -263,7 +287,10 @@ Deno.serve(createHandler(async (req: Request) => {
         metadata->>'ticker'           AS ticker,
         (metadata->>'side')::text     AS side,
         metadata->>'client_order_id'  AS client_order_id,
-        metadata->>'run_id'           AS run_id
+        metadata->>'run_id'           AS run_id,
+        metadata->>'tier'             AS tier,
+        metadata->>'event_run_id'     AS event_run_id,
+        metadata->>'as_of_date'       AS as_of_date
       FROM overshoot_audit_logs
       WHERE action = 'overshoot.entry.submitted.entry'
         AND created_at >= (${sessionDate}::date - interval '14 days')
@@ -288,6 +315,15 @@ Deno.serve(createHandler(async (req: Request) => {
       fill_unfilled_still_working: 0,
       fill_partial_no_price: 0,
       fetch_errors: 0,
+      // ACT-493 v1 Turn 3B — M7 exit-fill loop tallies.
+      exit_candidates_discovered: 0,
+      exit_fills_applied_lots: 0,
+      exit_fills_no_delta: 0,
+      exit_fills_unfilled_still_working: 0,
+      exit_fills_partial_no_price: 0,
+      exit_fill_overflow_halted: 0,
+      exit_fetch_errors: 0,
+      lots_closed_by_exit_fill: 0,
     };
     const adopted: Array<{ ticker: string; side: string; qty: number; avg_price: number; lot_id: string | null; order_id: string }> = [];
 
@@ -310,10 +346,14 @@ Deno.serve(createHandler(async (req: Request) => {
         if (!dryRun) {
           const rows = await sql<{ lot_id: string }[]>`
             INSERT INTO overshoot_lots
-              (symbol, entry_ts, qty, cost_basis, side, status, settlement_state, source_order_id)
+              (symbol, entry_ts, qty, cost_basis, side, status, settlement_state, source_order_id,
+               tier, tier_source_event_run_id, tier_source_as_of_date,
+               remaining_qty, filled_qty, exit_attempts)
             VALUES
               (${c.ticker}, ${nowTs.toISOString()}::timestamptz, ${qty}, ${costBasis},
-               ${c.side}, 'open', 'pending', ${c.order_id})
+               ${c.side}, 'open', 'pending', ${c.order_id},
+               ${c.tier}, ${c.event_run_id}, ${c.as_of_date},
+               ${qty}, 0, 0)
             ON CONFLICT (source_order_id) WHERE source_order_id IS NOT NULL DO NOTHING
             RETURNING lot_id::text AS lot_id
           `;
@@ -336,6 +376,8 @@ Deno.serve(createHandler(async (req: Request) => {
               symbol: c.ticker, side: c.side, qty, avg_fill_price: avg,
               source_order_id: c.order_id, client_order_id: c.client_order_id,
               run_id: c.run_id, session_date: sessionDate,
+              tier: c.tier, tier_source_event_run_id: c.event_run_id,
+              tier_source_as_of_date: c.as_of_date,
               adopted_at: nowTs.toISOString(),
               exit_clock_source_of_truth: 'overshoot_lots.entry_ts via computeSessionAge',
               note: 'observability_only_never_consumed_for_exit_timing',
@@ -353,6 +395,263 @@ Deno.serve(createHandler(async (req: Request) => {
       }
     }
 
+    // ── (M7) exit-fill adoption loop ──────────────────────────────────
+    // Charter (ACT-493 v1 Turn 3B, operator-ratified):
+    //   Discover our OWN exit orders by `overshoot.exit.submitted.%` audit
+    //   rows, read broker truth via GET /v2/orders/{id}, and apply
+    //   per-lot fill deltas atomically under the M9 status/closed_at
+    //   invariant trigger. Overfill (Σ fills > lot.qty) HALTS the order's
+    //   update with a HIGH-severity audit — silent clamp is FORBIDDEN
+    //   because it would hide exactly the defect class the in-flight
+    //   guard exists to prevent (double-submit / CID collision that
+    //   slipped every gate). Partial-exit accounting resets
+    //   exit_attempts to 0 on ANY fill (M4a: consecutive fruitless
+    //   attempts only).
+    const exitAdopted: Array<{
+      order_id: string; symbol: string; side: string;
+      broker_filled_qty: number; broker_avg_price: number;
+      delta_applied: number; lots_touched: number; lots_closed: number;
+      overflow: boolean;
+    }> = [];
+    try {
+      const exitCandidates = await sql<ExitCandidateRow[]>`
+        SELECT DISTINCT ON (metadata->>'order_id')
+          metadata->>'order_id'         AS order_id,
+          metadata->>'client_order_id'  AS client_order_id,
+          metadata->>'symbol'           AS symbol,
+          (metadata->>'side')::text     AS side,
+          (metadata->>'qty')::float8    AS qty,
+          metadata->>'intent'           AS intent,
+          COALESCE(
+            (SELECT array_agg(x::text) FROM jsonb_array_elements_text(metadata->'lot_ids') x),
+            ARRAY[]::text[]
+          )                             AS lot_ids,
+          created_at::text              AS audit_created_at
+        FROM overshoot_audit_logs
+        WHERE action LIKE 'overshoot.exit.submitted.%'
+          AND created_at >= (${sessionDate}::date - interval '14 days')
+          AND created_at <  (${sessionDate}::date + interval '2 days')
+          AND metadata->>'order_id' IS NOT NULL
+          AND jsonb_typeof(metadata->'lot_ids') = 'array'
+        ORDER BY metadata->>'order_id', created_at DESC
+      `;
+      tally.exit_candidates_discovered = exitCandidates.length;
+
+      for (const ec of exitCandidates) {
+        // CID sanity: filter to our own exit intents; belt-and-braces
+        // (the action-prefix filter already scopes to overshoot exit
+        // submissions, but reject anything whose CID does not match the
+        // strategy regex — INC-99-class defense).
+        if (!/^ovs-[0-9a-f]{8}-[A-Z0-9.]{1,10}-[LS]-(exit_time|exit_manual)-\d+$/.test(ec.client_order_id)) {
+          continue;
+        }
+        if (!ec.lot_ids || ec.lot_ids.length === 0) continue;
+
+        let fill;
+        try {
+          fill = await fillFetcher.fetchFill(ec.order_id, nowTs);
+        } catch (fe) {
+          tally.exit_fetch_errors += 1;
+          console.error('[overshoot-fill-sweep] exit fetch error', {
+            correlationId, order_id: ec.order_id, symbol: ec.symbol,
+            error: fe instanceof Error ? fe.message : String(fe),
+          });
+          continue;
+        }
+        if (fill.filled_qty === 0) {
+          tally.exit_fills_unfilled_still_working += 1;
+          continue;
+        }
+        if (fill.avg_fill_price === null) {
+          tally.exit_fills_partial_no_price += 1;
+          continue;
+        }
+
+        // Atomic per-order transaction: SELECT ... FOR UPDATE the lots,
+        // compute pure allocation (overfill-safety), then UPDATE inside
+        // the same transaction so the M9 trigger applies to the same
+        // (status, closed_at) tuple we compute.
+        let overflowed = false;
+        let deltaAppliedThisOrder = 0;
+        let lotsClosedThisOrder = 0;
+        let lotsTouchedThisOrder = 0;
+        try {
+          await sql.begin(async (tx) => {
+            const lots = await tx<{
+              lot_id: string; symbol: string; side: string;
+              qty: number; filled_qty: number; remaining_qty: number;
+              cost_basis: number; status: string;
+              avg_exit_price: number | null; realized_pnl_partial: number;
+            }[]>`
+              SELECT lot_id::text AS lot_id, symbol, side,
+                     qty::float8 AS qty,
+                     filled_qty::float8 AS filled_qty,
+                     remaining_qty::float8 AS remaining_qty,
+                     cost_basis::float8 AS cost_basis,
+                     status,
+                     avg_exit_price::float8 AS avg_exit_price,
+                     realized_pnl_partial::float8 AS realized_pnl_partial
+              FROM overshoot_lots
+              WHERE lot_id::text = ANY(${ec.lot_ids})
+              ORDER BY array_position(${ec.lot_ids}::text[], lot_id::text)
+              FOR UPDATE
+            `;
+            if (lots.length === 0) return;
+
+            const allocInputs: ExitFillAllocationInputLot[] = lots.map((l) => ({
+              lot_id: l.lot_id,
+              qty: l.qty,
+              filled_qty: l.filled_qty,
+              remaining_qty: l.remaining_qty,
+            }));
+            const alloc = allocateExitFillToLots({
+              brokerFilledQty: fill.filled_qty,
+              lots: allocInputs,
+            });
+
+            if (alloc.overflow) {
+              overflowed = true;
+              // HALT: emit HIGH-severity audit; do NOT mutate lots. A5
+              // reconcile (SUM(remaining_qty) below) provides independent
+              // catchment for any residue.
+              if (!dryRun) {
+                await writeStrategyAuditEvent({
+                  strategyKey: 'overshoot',
+                  action: 'overshoot.exit_fill_overflow',
+                  actorId,
+                  targetType: 'overshoot_lots',
+                  targetId: ec.order_id,
+                  correlationId,
+                  metadata: {
+                    severity: 'high',
+                    order_id: ec.order_id,
+                    client_order_id: ec.client_order_id,
+                    symbol: ec.symbol,
+                    side: ec.side,
+                    intent: ec.intent,
+                    broker_filled_qty: alloc.broker_filled_qty,
+                    already_applied_total: alloc.already_applied_total,
+                    delta_to_apply: alloc.delta_to_apply,
+                    unallocated_residual: alloc.unallocated_residual,
+                    lot_ids: ec.lot_ids,
+                    reason: alloc.overflow_reason,
+                    action_taken: 'halted_no_clamp',
+                    guidance:
+                      'Silent clamp is forbidden. This means a double-submit or CID collision slipped every guard; a human must investigate before re-arming exits.',
+                    sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+                    exit_discovery_query_fingerprint:
+                      OVERSHOOT_FILL_SWEEP_EXIT_DISCOVERY_QUERY_FINGERPRINT,
+                  },
+                });
+              }
+              return; // abort tx body; no UPDATE
+            }
+
+            if (alloc.per_lot_deltas.length === 0) {
+              // No delta — cumulative broker fill equals already-applied
+              // total; idempotent no-op.
+              return;
+            }
+
+            for (const d of alloc.per_lot_deltas) {
+              const lot = lots.find((l) => l.lot_id === d.lot_id)!;
+              const entryAvg = lot.qty > 0 ? lot.cost_basis / lot.qty : 0;
+              const nextAvg = nextAvgExitPrice({
+                prevFilledQty: lot.filled_qty,
+                prevAvgExitPrice: lot.avg_exit_price,
+                deltaQty: d.delta_qty,
+                brokerAvgFillPrice: fill.avg_fill_price!,
+              });
+              const pnlInc = realizedPnlDelta({
+                side: (lot.side === 'long' ? 'long' : 'short'),
+                deltaQty: d.delta_qty,
+                brokerAvgFillPrice: fill.avg_fill_price!,
+                entryAvgPrice: entryAvg,
+              });
+              const newFilled = lot.filled_qty + d.delta_qty;
+              const newRemaining = lot.qty - newFilled;
+              const willClose = d.will_close;
+
+              if (!dryRun) {
+                await tx`
+                  UPDATE overshoot_lots
+                     SET filled_qty            = ${newFilled},
+                         remaining_qty         = ${newRemaining},
+                         avg_exit_price        = ${nextAvg},
+                         realized_pnl_partial  = realized_pnl_partial + ${pnlInc},
+                         exit_attempts         = 0,
+                         status                = ${willClose ? 'closed' : 'open'},
+                         closed_at             = ${willClose ? nowTs.toISOString() : null},
+                         updated_at            = now()
+                   WHERE lot_id = ${d.lot_id}::uuid
+                `;
+                await writeStrategyAuditEvent({
+                  strategyKey: 'overshoot',
+                  action: 'overshoot.exit.fill.applied',
+                  actorId,
+                  targetType: 'overshoot_lots',
+                  targetId: d.lot_id,
+                  correlationId,
+                  metadata: {
+                    order_id: ec.order_id,
+                    client_order_id: ec.client_order_id,
+                    symbol: ec.symbol,
+                    side: ec.side,
+                    intent: ec.intent,
+                    lot_id: d.lot_id,
+                    delta_qty: d.delta_qty,
+                    filled_qty_after: newFilled,
+                    remaining_qty_after: newRemaining,
+                    avg_exit_price_after: nextAvg,
+                    realized_pnl_partial_delta: pnlInc,
+                    broker_filled_qty: fill.filled_qty,
+                    broker_avg_fill_price: fill.avg_fill_price,
+                    lot_closed: willClose,
+                    exit_attempts_reset_to_zero: true,
+                    sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+                    exit_discovery_query_fingerprint:
+                      OVERSHOOT_FILL_SWEEP_EXIT_DISCOVERY_QUERY_FINGERPRINT,
+                  },
+                });
+              }
+              deltaAppliedThisOrder += d.delta_qty;
+              lotsTouchedThisOrder += 1;
+              if (willClose) lotsClosedThisOrder += 1;
+            }
+          });
+        } catch (txErr) {
+          tally.exit_fetch_errors += 1;
+          console.error('[overshoot-fill-sweep] exit tx error', {
+            correlationId, order_id: ec.order_id,
+            error: txErr instanceof Error ? txErr.message : String(txErr),
+          });
+          continue;
+        }
+
+        if (overflowed) {
+          tally.exit_fill_overflow_halted += 1;
+        } else if (deltaAppliedThisOrder === 0) {
+          tally.exit_fills_no_delta += 1;
+        } else {
+          tally.exit_fills_applied_lots += lotsTouchedThisOrder;
+          tally.lots_closed_by_exit_fill += lotsClosedThisOrder;
+        }
+        exitAdopted.push({
+          order_id: ec.order_id, symbol: ec.symbol, side: ec.side,
+          broker_filled_qty: fill.filled_qty,
+          broker_avg_price: fill.avg_fill_price ?? 0,
+          delta_applied: deltaAppliedThisOrder,
+          lots_touched: lotsTouchedThisOrder,
+          lots_closed: lotsClosedThisOrder,
+          overflow: overflowed,
+        });
+      }
+    } catch (m7err) {
+      console.error('[overshoot-fill-sweep] M7 exit-fill loop failed', {
+        correlationId, error: m7err instanceof Error ? m7err.message : String(m7err),
+      });
+    }
+
     // ── (e) A5 set-equality reconcile ──────────────────────────────────
     let a5: {
       ok: boolean;
@@ -367,11 +666,18 @@ Deno.serve(createHandler(async (req: Request) => {
     const warnings: string[] = [];
     try {
       const brokerPositions = await positionFetcher.listOpenPositions(nowTs);
+      // ACT-493 v1 Turn 3B — A5 now compares broker qty against
+      // SUM(remaining_qty) — not SUM(qty) — so partial-exit adoption
+      // reconciles correctly (a lot in status='open' with filled_qty>0
+      // has a smaller residual than its original qty). Closed lots are
+      // filtered out; their remaining_qty=0 anyway.
       const openLots = await sql<{ symbol: string; side: string; qty: number }[]>`
-        SELECT symbol, side, SUM(qty)::float8 AS qty
+        SELECT symbol, side, SUM(remaining_qty)::float8 AS qty
         FROM overshoot_lots
         WHERE status = 'open'
+          AND remaining_qty > 0
         GROUP BY symbol, side
+        HAVING SUM(remaining_qty) > 0
       `;
       const brokerMap = new Map<string, { side: string; qty: number }>();
       for (const p of brokerPositions) {
@@ -502,6 +808,17 @@ Deno.serve(createHandler(async (req: Request) => {
       fill_partial_no_price: tally.fill_partial_no_price,
       fetch_errors: tally.fetch_errors,
       adopted,
+      // ACT-493 v1 Turn 3B — M7 exit-fill accounting (never-silent).
+      exit_candidates_discovered: tally.exit_candidates_discovered,
+      exit_fills_applied_lots: tally.exit_fills_applied_lots,
+      exit_fills_no_delta: tally.exit_fills_no_delta,
+      exit_fills_unfilled_still_working: tally.exit_fills_unfilled_still_working,
+      exit_fills_partial_no_price: tally.exit_fills_partial_no_price,
+      exit_fill_overflow_halted: tally.exit_fill_overflow_halted,
+      exit_fetch_errors: tally.exit_fetch_errors,
+      lots_closed_by_exit_fill: tally.lots_closed_by_exit_fill,
+      exit_adopted: exitAdopted,
+      exit_discovery_query_fingerprint: OVERSHOOT_FILL_SWEEP_EXIT_DISCOVERY_QUERY_FINGERPRINT,
       a5_reconciliation: a5,
       warnings,
       detector_version: RATIFIED_DETECTOR_VERSION,
