@@ -300,6 +300,63 @@ Deno.test('ACT-468 H0: accounting identity docstring lists new refusal classes',
   assertStringIncludes(SRC, '+ per_lot_unexpected');
 });
 
+// ── ACT-493 v1 Turn 2 delta — canary pins for M3 + M5-groundwork ────────
+// Additive envelope surface. Q1c HARD: horizon constants LONG=10 / SHORT=5
+// are unchanged; no test is added or modified for them. These pins fail
+// loudly if a future edit strips the additive keys or the guard blocks.
+
+Deno.test('ACT-493 v1 M3: market_closing_soon run-level refusal + threshold constant', () => {
+  assertStringIncludes(SRC, 'const OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE = 10');
+  assertStringIncludes(SRC, 'clockSnap.minutesToClose < OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE');
+  assertStringIncludes(SRC, "reason: 'market_closing_soon'");
+  assertStringIncludes(SRC, "action: 'overshoot.exit.run_refusal.market_closing_soon'");
+  assertStringIncludes(SRC, 'earlyTally.market_closing_soon = 1');
+  // Runs AFTER market_closed short-circuit — proven by source order.
+  const idxMarketClosed  = SRC.indexOf("reason: 'market_closed'");
+  const idxClosingSoon   = SRC.indexOf("reason: 'market_closing_soon'");
+  assert(idxMarketClosed > 0 && idxClosingSoon > 0 && idxMarketClosed < idxClosingSoon,
+    'market_closed short-circuit precedes market_closing_soon');
+});
+
+Deno.test('ACT-493 v1 M5 groundwork: in-flight-exit-order guard fetches /v2/orders and filters by CID', () => {
+  assertStringIncludes(SRC, "'/v2/orders?status=open&limit=500'");
+  assertStringIncludes(SRC, 'const OVERSHOOT_EXIT_CID_REGEX =');
+  assertStringIncludes(SRC, 'exit_time|exit_manual');
+  assertStringIncludes(SRC, 'inFlightExitKeys');
+  assertStringIncludes(SRC, "action: 'overshoot.exit.in_flight_exit_order_skipped'");
+  assertStringIncludes(SRC, "action: 'overshoot.exit.in_flight_guard_degraded'");
+  // Per-lot skip is placed at the TOP of the per-lot body (before session-age).
+  const idxSkip     = SRC.indexOf('inFlightExitKeys.has(inFlightKey)');
+  const idxSessAge  = SRC.indexOf("perLotStage = 'session_age_query';", idxSkip);
+  assert(idxSkip > 0 && idxSessAge > 0 && idxSkip < idxSessAge,
+    'in-flight skip precedes session-age query in per-lot body');
+});
+
+Deno.test('ACT-493 v1: additive tally keys wired in RefusalTally + newTally()', () => {
+  assertStringIncludes(SRC, 'market_closing_soon: number');
+  assertStringIncludes(SRC, 'in_flight_exit_order_skipped: number');
+  assertStringIncludes(SRC, 'market_closing_soon: 0');
+  assertStringIncludes(SRC, 'in_flight_exit_order_skipped: 0');
+});
+
+Deno.test('ACT-493 v1: horizon constants UNCHANGED (Q1c ratification — canary pins remain byte-locked)', () => {
+  // The two HARD ratifications (ACT-471 LONG=10, ACT-472 SHORT=5) live in
+  // _shared/overshoot-execution/intents.ts. This handler must NOT declare
+  // OR override them. Sentinel: no local literal assignment to those
+  // symbols in this file.
+  assertEquals(/OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_LONG\s*=/.test(SRC),  false,
+    'engine must not redefine LONG horizon constant');
+  assertEquals(/OVERSHOOT_EXIT_TIME_HOLDING_SESSIONS_SHORT\s*=/.test(SRC), false,
+    'engine must not redefine SHORT horizon constant');
+  // The docstring records the operator ratification for audit.
+  assertStringIncludes(SRC, 'LONG=10 (ACT-471 HARD), SHORT=5 (ACT-472 HARD)');
+});
+
+Deno.test('ACT-493 v1: accounting identity docstring lists new additive classes', () => {
+  assertStringIncludes(SRC, '+ market_closing_soon');
+  assertStringIncludes(SRC, '+ in_flight_exit_order_skipped');
+});
+
 Deno.test('session-age (PIN-1): SPY prior-session query strictly > entry_ts::date; earliest lot anchors', () => {
   assertStringIncludes(SRC, "WHERE ticker = 'SPY'");
   assertStringIncludes(SRC, 'trade_date > (');
