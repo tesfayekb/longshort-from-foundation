@@ -81,9 +81,9 @@ export function OvershootCapCompliance({
     shortMvUsd === null
   ) {
     return (
-      <span className={className}>
+      <div className={`flex flex-wrap items-center gap-2 ${className ?? ''}`}>
         Cap compliance — pending equity snapshot (arm overshoot_equity_snapshot).
-      </span>
+      </div>
     );
   }
 
@@ -95,11 +95,10 @@ export function OvershootCapCompliance({
   ];
 
   return (
-    <span className={className}>
-      {labelPrefix ? <span className="mr-1">{labelPrefix}</span> : null}
-      {lines.map((l, i) => (
-        <span key={l.side} className="whitespace-nowrap">
-          {i > 0 ? <span className="mx-2 text-muted-foreground/60">·</span> : null}
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${className ?? ''}`}>
+      {labelPrefix ? <span className="shrink-0">{labelPrefix}</span> : null}
+      {lines.map((l) => (
+        <span key={l.side} className="inline-flex items-center gap-1 whitespace-nowrap">
           <span className="font-semibold">{l.side}</span>{' '}
           <span className="font-mono">
             {fmtK(l.mv)} / {fmtK(l.cap)} cap · {l.pct.toFixed(0)}%
@@ -111,10 +110,10 @@ export function OvershootCapCompliance({
             {l.over ? 'over' : 'under'}
           </Badge>
           {l.over ? (
-            <span className="ml-2 text-muted-foreground">{INC96_CONVERGENCE_NOTE}</span>
+            <span className="ml-2 text-muted-foreground text-[11px]">{INC96_CONVERGENCE_NOTE}</span>
           ) : null}
         </span>
       ))}
-    </span>
+    </div>
   );
 }
