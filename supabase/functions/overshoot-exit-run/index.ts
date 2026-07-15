@@ -67,6 +67,8 @@
  *                        + per_lot_unexpected           -- ACT-468 H0
  *                        + exit_price_refusals (4 classes)
  *                        + market_closed_skips
+ *                        + market_closing_soon          -- ACT-493 v1 M3 (half-day / near-close guard, run-level)
+ *                        + in_flight_exit_order_skipped -- ACT-493 v1 M5 groundwork (double-submit guard)
  *   Per-lot isolation (ACT-468 H0): the per-lot for-body is wrapped so
  *   ANY per-lot failure (session-age SQL throw, polygon snapshot throw,
  *   or unexpected error in exit-price / submit) yields a TYPED per-lot
