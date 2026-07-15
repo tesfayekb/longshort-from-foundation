@@ -6273,3 +6273,48 @@ If ACT-527(b) — the long-flip squeeze-ride candidate — clears the pre-commit
 
 **Proposal:** CI-time check (deno test or scripts/ linter) that enumerates every edge function importing `RATIFIED_DETECTOR_VERSION` and fails a pre-commit if the constant changes without a matching deploy manifest listing all importers. Also: an optional runtime check where entry-run reads `overshoot_detection_runs.detector_version` and refuses with a typed `detector_version_mismatch` reason if the linked run's stamp ≠ bundled constant (converts the class rule from "process discipline" to "code-enforced invariant"). Deferred behind ACT-527 curve verdict; no operator gate until then.
 
+## ACT-531 — Signal-conditioned continuation map (INVESTIGATION, queued behind ACT-527)
+
+**Mode:** INVESTIGATION — read-only corpus compute. Same executor lane as ACT-527; kicks off when ACT-527's backfill + curve compute completes (no contention, strict sequencing). No live-gate change may reference this work until the deliverable lands and the operator rules.
+
+**Operator hypothesis under test:** upward dislocations that carry an identifiable catalyst signature should CONTINUE (trend), in contrast to OVERSHOOT's premise that no-signal dislocations REVERT. The deliverable is the direction map — per-bucket "continue / revert / flat" with the measured number — not a strategy.
+
+### Method (pre-committed before any number exists)
+
+1. **Event set.** Scan the full `overshoot_daily_bars` corpus for UPWARD dislocations using the OVERSHOOT excess geometry mirrored to the upside — same |excess| thresholds, same momentum/drawdown bands — but **without** the earnings exclusion. This is a NEW event set (not the overshoot corpus); it must be materialised as its own study cell surface.
+2. **Buckets (catalyst signature within ±3 trading days of the event, in-db sources only):**
+   - (a) **earnings-proximate** — `overshoot_earnings_calendar` (~373k rows)
+   - (b) **analyst-action-proximate** — grades / price-target changes (longshort FMP tables)
+   - (c) **M&A / news-proximate** — longshort catalyst tables (`classify-catalyst-event` output)
+   - (d) **insider-proximate** — Form 4 activity (`insider_form4_rows`)
+   - (e) **high-SI** — `si_pct_float >= 0.15` on the ACT-527 backfilled SI corpus (the squeeze signature; cite ACT-527 rather than recompute)
+   - (f) **no-identifiable-signal** — none of (a)–(e); the pure-noise bucket
+3. **Cuts.** Report both EXCLUSIVE (each event assigned to at most one primary bucket by precedence) and OVERLAPPING (an event may appear in multiple buckets) surfaces. Overlap matrix is part of the deliverable.
+4. **Return grid.** For each bucket × regime × horizon ∈ {3, 5, 10, 21} trading days: forward return LONG and SHORT from **T+1 open buyable basis**, per-slot-day economics, n, events/yr. Regime strata as per ACT-527 (bull/bear/chop tags on SPY).
+
+### Deliverable: the direction map
+
+One table per bucket answering **continue (go long) / revert (go short) / flat (no trade)** with the measured statistic (bps/slot-day, n, events/yr), plus the honest overlays:
+
+- **(i) Cross-check.** Bucket (f) — no-signal — SHORT side must reproduce the ACT-527 short curve within noise. Divergence here is a methods finding that invalidates the whole surface, not a discovery.
+- **(ii) Squeeze-ride carve-out.** Bucket (e) IS the squeeze-ride surface studied under ACT-527/528; **cite** the ACT-527 numbers rather than recompute. Any duplicated compute must match — divergence is a methods finding.
+- **(iii) PEAD reconciliation.** Bucket (a) LONG side must reconcile with the PEAD full-panel rerun (~14 bps/day baseline). Divergence is a methods finding.
+- **(iv) Arbitrage-density disclosure.** Catalyst-continuation is a heavily-arbitraged space. The dominance floor is **frozen NOW**, before any number is seen, and decides adoption:
+  - `>= 42.42 bps/slot-day` vs the frozen OVERSHOOT deployment baseline
+  - 15%-class margin
+  - `n >= 1000`
+  - monotone across the bucket ordering being claimed
+  - regime-stratum dispositive (per-regime, not pooled)
+
+### Stop rule
+
+**STOP after the map for operator review.** ACT-531 charters no strategy, edits no gate, and adds no code path outside the study surface. Any strategy that follows charters SEPARATELY under the ACT-528 scaffold rules (own module, own Alpaca account, own console section — the one-brain-many-wallets shape), and only after operator ratification of a specific bucket-direction claim against the frozen dominance floor.
+
+### Sequencing
+
+- **T0:** ACT-527 backfill + curve compute completes.
+- **T0 + step 1:** materialise the upward-dislocation event set (mirrored excess geometry, no earnings exclusion) into `overshoot_study_candidate_events` under a new `study_cell` tag; verify count is plausible before proceeding.
+- **T0 + step 2:** join catalyst-signature buckets (a)–(e) from in-db sources; produce exclusive + overlapping partition telemetry.
+- **T0 + step 3:** compute per-bucket × regime × horizon return grid from T+1-open basis; write to `overshoot_study_cell_results` under the ACT-531 run tag.
+- **T0 + step 4:** produce the direction-map table + the four overlays (i)–(iv); operator review; **STOP**.
+
