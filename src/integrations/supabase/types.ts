@@ -1996,14 +1996,19 @@ export type Database = {
       }
       overshoot_lots: {
         Row: {
+          avg_exit_price: number | null
           closed_at: string | null
           cost_basis: number
           created_at: string
           entry_ts: string
+          exit_attempts: number
           expected_settlement_ts: string | null
+          filled_qty: number
           lot_id: string
           operator_id: string
           qty: number
+          realized_pnl_partial: number
+          remaining_qty: number
           settlement_state: string
           side: string
           source_order_id: string | null
@@ -2015,14 +2020,19 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          avg_exit_price?: number | null
           closed_at?: string | null
           cost_basis: number
           created_at?: string
           entry_ts: string
+          exit_attempts?: number
           expected_settlement_ts?: string | null
+          filled_qty?: number
           lot_id?: string
           operator_id?: string
           qty: number
+          realized_pnl_partial?: number
+          remaining_qty?: number
           settlement_state?: string
           side: string
           source_order_id?: string | null
@@ -2034,14 +2044,19 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          avg_exit_price?: number | null
           closed_at?: string | null
           cost_basis?: number
           created_at?: string
           entry_ts?: string
+          exit_attempts?: number
           expected_settlement_ts?: string | null
+          filled_qty?: number
           lot_id?: string
           operator_id?: string
           qty?: number
+          realized_pnl_partial?: number
+          remaining_qty?: number
           settlement_state?: string
           side?: string
           source_order_id?: string | null
