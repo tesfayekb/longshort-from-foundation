@@ -313,7 +313,10 @@ function RunCard({ correlationId, rows }: { correlationId: string | null; rows: 
             ))}
           </span>
         )}
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground truncate max-w-[240px]">
+        <span
+          className="ml-auto font-mono text-[10px] text-muted-foreground truncate max-w-[240px] min-w-0"
+          title={correlationId ?? undefined}
+        >
           cid: {correlationId ?? '—'}
         </span>
       </button>
