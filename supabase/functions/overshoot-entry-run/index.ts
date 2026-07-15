@@ -1098,6 +1098,11 @@ Deno.serve(createHandler(async (req: Request) => {
             limit_price: priced.limitPrice, slippage_bps: priced.slippageBps,
             snapshot_age_ms: priced.snapshotAgeMs, minutes_to_close: minutesToClose,
             intent, attempt: 0, run_id: runId,
+            // ACT-493 v1 Turn 3B — M8 provenance carried on the submission
+            // audit so overshoot-fill-sweep can single-home tier +
+            // provenance onto overshoot_lots at ANY adoption path.
+            event_run_id: linkage.runId,
+            as_of_date: sessionDate,
             sizingBase, strategy_allocation_pct: strategyAllocationPct, margin_multiplier: marginMultiplier,
             i5_reversion_pct: i5.reversionPct, orderSide_semantic: priced.orderSide,
           },
@@ -1110,8 +1115,17 @@ Deno.serve(createHandler(async (req: Request) => {
         let lotId: string | null = null;
         if (fill.filled_qty > 0 && fill.avg_fill_price !== null) {
           const [lot] = await sql<{ lot_id: string }[]>`
-            INSERT INTO overshoot_lots (symbol, entry_ts, qty, cost_basis, side, status, settlement_state, source_order_id)
-            VALUES (${sel.ticker}, ${nowTs.toISOString()}::timestamptz, ${fill.filled_qty}, ${fill.avg_fill_price * fill.filled_qty}, ${sel.side}, 'open', 'pending', ${acc.order_id})
+            INSERT INTO overshoot_lots
+              (symbol, entry_ts, qty, cost_basis, side, status, settlement_state, source_order_id,
+               tier, tier_source_event_run_id, tier_source_as_of_date,
+               remaining_qty, filled_qty, exit_attempts)
+            VALUES (
+              ${sel.ticker}, ${nowTs.toISOString()}::timestamptz,
+              ${fill.filled_qty}, ${fill.avg_fill_price * fill.filled_qty},
+              ${sel.side}, 'open', 'pending', ${acc.order_id},
+              ${sel.tier}, ${linkage.runId}, ${sessionDate}::date,
+              ${fill.filled_qty}, 0, 0
+            )
             RETURNING lot_id::text AS lot_id
           `;
           lotId = lot?.lot_id ?? null;
