@@ -6178,3 +6178,66 @@ No new-strategy candidate currently clears the OVERSHOOT dominance floor (42.42 
 **Strategy scouting resumes at Phase-L scale** — the AUM point where OVERSHOOT's event supply saturates (ACT-511 measures this threshold; per the Operator Dominance Test standing rule, diversification value only counts at that scale). Until then, strategy-#3 is a NON-QUESTION: capital deploys into OVERSHOOT, period.
 
 **Cross-references:** `artifacts/ACT-521-RESULTS-pead-honesty-gates-rerun.md` (mechanism evidence); `artifacts/ACT-520-RESCOPE-tradier-options-feasibility.md` (put-write SHELF-UNLESS-REAL-IV filing); `_shared/overshoot/earnings-calendar-fetcher.ts` (repaired field names, inline comment); ACT-510, DEC-504-4, ACT-511 (ratified growth levers).
+
+---
+
+## ACT-528 (2026-07-15) — INC-106 DIRECTION FIX + ACT-527 EXECUTION + STRATEGY-SCAFFOLD RULING (three-part dispatch)
+
+**Type:** DEFECT-FIX (Part 1) + STUDY-EXECUTION (Part 2) + CHARTER-RULING (Part 3). Operator directive, 2026-07-15 pre-21:00Z SI heal.
+
+### Part 1 — INC-106 DIRECTION FIX (SHIPPED PRE-21:00Z HEAL)
+
+**Ruling:** the squeeze-gate inversion is a DEFECT against ratified R2 (`docs/08-planning/approved-decisions.md:852`), NOT a parameter question. The pre-committed curve rule (ACT-526) governs THRESHOLD VALUES, not restoration of ratified DIRECTION.
+
+**Change (merged, deployed):**
+- `supabase/functions/_shared/overshoot/detector/detector.ts`
+  - Comparison flipped: `si.si_pct_float < params.squeezeSiPctFloatMin` (admit low-SI shorts).
+  - Refusal reason renamed: `si_below_squeeze_threshold` → `si_above_squeeze_threshold`.
+  - `RATIFIED_DETECTOR_VERSION` bumped `b7cdfcd8 → a026dc51` (= `sha256('b7cdfcd8||INC-106-direction-flip-v2b')[0:8]`) — surfaces via the boot-assertion + INC-84 §5 dry-run envelope echo.
+  - R2 compound clauses (days-to-cover, 5d-return conditions) tagged NOT-IMPLEMENTED gaps in the header comment — direction first, compound fidelity later (blocked on same SI-backfill as ACT-527).
+- `supabase/functions/_shared/overshoot/detector/detector_test.ts`
+  - Old `si_below_squeeze_threshold` test retired (semantics inverted).
+  - Three canary tests added, R2 line-cited: (a) high-SI (0.25) → `si_above_squeeze_threshold`; (b) at-threshold (0.10) → `si_above_squeeze_threshold` (exclusion closed on the right); (c) low-SI (0.05) admitted.
+- Deployed: `overshoot-detection-run`, `overshoot-sweep-diagnostic` (both consume the detector; no local refusal-string references — only the detector module owns the string).
+- Threshold VALUE unchanged: `squeezeSiPctFloatMin = 0.20` (pending ACT-527 curve).
+
+**Effect on the natural experiment (21:00Z SI heal + Thu 22:00Z detection):** the expected refusal tally converts — high-SI residuals that would formerly have been ADMITTED are now refused as `si_above_squeeze_threshold`. This is the ratified-safe state; the operator's "gate refusing everything until the curve rules" directive from ACT-526 is now structural, not accidental.
+
+**Disarm trigger unchanged:** if the Thu 22:00Z detection selects any high-SI short (i.e. any `si_pct_float >= 0.20` admission), disarm `overshoot.detection.run` immediately — the direction fix would then be regressed.
+
+### Part 2 — ACT-527 (a)–(d) APPROVED, executing
+
+**Deliverable widened at zero marginal cost** (single SI backfill funds all three axes):
+
+1. **(a) Short P&L** — SI-bucket × regime × horizon {3,5,10}d. Threshold re-derivation evidence for the exclusion gate.
+2. **(b) Long-flip SQUEEZE-RIDE CANDIDATE** — same grid, opposite side. Tests whether high-SI names are LONGABLE (ride the squeeze) rather than merely shortable.
+3. **(c) Trailing-stop ladder grid** for the flip, simulated on daily OHLC (granularity caveat stated: intraday trigger noise unmeasured — bull-case ceiling, not fidelity claim). Ladders: `{initial 20/15/10%} × {tighten step 2.5/5% per +5% gain} × {floor 5/7.5%}` + no-stop baseline; per-slot-day economics net of stop-outs per cell.
+
+**Pre-committed adoption rules (FROZEN, cited before any number exists):**
+- Dominance floor vs OVERSHOOT slots at **15%-class margin** (i.e. ≥ 15% above the OVERSHOOT 42.42 bps/slot-day floor per bucket claimed for adoption).
+- **n ≥ 1000** per adopted cell.
+- **Monotone-stable** across adjacent SI buckets and regime strata (no cherry-picked isolated cell).
+- **Regime stratum DISPOSITIVE:** bull-only edge yields at most a REGIME-GATED sleeve proposal with 2022 bear-cost quantified — never an all-weather adoption.
+- **Capacity priced:** events/yr per qualifying bucket, so any adoption comes with a realistic slot-count.
+
+**Execution sequence (this filing = start-of-run):**
+1. Feasibility probe (1 Polygon call — pin field shape + date coverage).
+2. Dry-run (1 batch — pin idempotent upsert into `overshoot_short_interest`).
+3. 14-invocation production backfill (~839 calls across 14 edge-function batches).
+4. Coverage verification (target ≥ 95% of the 4-year corpus with a non-null SI row).
+5. Regime-stratified curve (all three axes above), pre-committed rule evaluation.
+
+### Part 3 — STRATEGY-SCAFFOLD RULING (structure ratified; BUILD GATED on curve verdict)
+
+**Ruling filed to charter (this action = the charter entry):**
+
+If ACT-527(b) — the long-flip squeeze-ride candidate — clears the pre-committed rules above, it charters as:
+- A **NEW strategy module** (not an addition to OVERSHOOT). `src/features/<squeezeride>/`, own docs at `docs/04-modules/<squeezeride>/`, own perms `<squeezeride>.{view,manage,execute}`, own tables `<squeezeride>_*`, own edge functions `<squeezeride>-*`, own audit table `<squeezeride>_audit_logs` — full T1–T9 discipline.
+- A **NEW Alpaca paper account #3** (secrets `ALPACA_PAPER_KEY_SQUEEZERIDE` / `ALPACA_PAPER_SECRET_SQUEEZERIDE`; the paper-only URL fence and PA-account-number allowlist extend one row). Same one-brain-many-wallets shape as the ACT-459 overshoot-broker split from longshort-broker.
+- Its **own trading-panel console section** at `/trading/<squeezeride>/`, registered via `src/config/trading-navigation.ts` (T5 façade-import carve-out).
+
+**Rationale for the structural separation** (opposite-side rule): OVERSHOOT and squeeze-ride would take **opposite sides of the same underlying events** — a high-SI event that OVERSHOOT (post-fix) refuses as `si_above_squeeze_threshold` is exactly the event squeeze-ride would enter LONG. Sharing a book would produce internal offset, contaminated attribution, and cross-strategy lot-selection risk. They must live as independent books with independent capital.
+
+**Build gate:** ZERO build turns until the ACT-527 curve rules. No premature scaffolding, no "prep work" — the curve verdict is the sole trigger. If the flip fails the pre-committed rules, this ruling files as a NULL charter and the scaffold is never built.
+
+**Cross-references:** `_shared/overshoot/detector/detector.ts` (INC-106 fix, direction + version bump); `detector_test.ts` (R2 canaries); `docs/08-planning/approved-decisions.md:852` (R2 ratification); ACT-526 (pre-committed curve rule); ACT-527 (SI backfill charter, now executing); ACT-459 (one-brain-many-wallets precedent — overshoot-broker split from longshort-broker); INC-106 (direction-inversion defect, now closed by this fix).

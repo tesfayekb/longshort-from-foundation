@@ -515,19 +515,33 @@ Deno.test('SHORT byte-unchanged — si_stale (age > staleness_max_days)', () => 
   assertEquals(out[0].filter_refusal_reason, 'si_stale');
 });
 
-Deno.test('SHORT byte-unchanged — si_below_squeeze_threshold', () => {
-  const out = runDetector({
-    candidates: [baseShortCandidate()],
-    shortInterest: new Map([['BBB', makeSi('BBB', 0.05, 5)]]),
-    params: defaultParams(),
-  });
-  assertEquals(out[0].filter_refusal_reason, 'si_below_squeeze_threshold');
-});
+// INC-106 direction fix (2026-07-15): squeeze gate is EXCLUSION
+// (admit si_pct_float < threshold; refuse si_pct_float >= threshold).
+// R2 canary — ratified at docs/08-planning/approved-decisions.md:852.
+// Default squeezeSiPctFloatMin in defaultParams() is 0.10.
 
-Deno.test('SHORT byte-unchanged — low-mean cell (below LONG ROI floor) still admits on SHORT (no floor)', () => {
+Deno.test('SHORT INC-106 canary — high SI (0.25 >= 0.10) → si_above_squeeze_threshold (R2 exclusion, approved-decisions.md:852)', () => {
   const out = runDetector({
     candidates: [baseShortCandidate()],
     shortInterest: new Map([['BBB', makeSi('BBB', 0.25, 5)]]),
+    params: defaultParams(),
+  });
+  assertEquals(out[0].filter_refusal_reason, 'si_above_squeeze_threshold');
+});
+
+Deno.test('SHORT INC-106 canary — at-threshold (0.10 >= 0.10) → si_above_squeeze_threshold (exclusion is closed on the right)', () => {
+  const out = runDetector({
+    candidates: [baseShortCandidate()],
+    shortInterest: new Map([['BBB', makeSi('BBB', 0.10, 5)]]),
+    params: defaultParams(),
+  });
+  assertEquals(out[0].filter_refusal_reason, 'si_above_squeeze_threshold');
+});
+
+Deno.test('SHORT INC-106 — low-SI short admitted (0.05 < 0.10), still passes squeeze gate; ranks on study cell', () => {
+  const out = runDetector({
+    candidates: [baseShortCandidate()],
+    shortInterest: new Map([['BBB', makeSi('BBB', 0.05, 5)]]),
     params: defaultParams({
       studyCellLookup: () => ({ mean_fwd_return_5d: 0.0005, arrival_count: 10 }),
     }),
