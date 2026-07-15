@@ -2009,6 +2009,9 @@ export type Database = {
           source_order_id: string | null
           status: string
           symbol: string
+          tier: string | null
+          tier_source_as_of_date: string | null
+          tier_source_event_run_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2025,6 +2028,9 @@ export type Database = {
           source_order_id?: string | null
           status?: string
           symbol: string
+          tier?: string | null
+          tier_source_as_of_date?: string | null
+          tier_source_event_run_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2041,6 +2047,9 @@ export type Database = {
           source_order_id?: string | null
           status?: string
           symbol?: string
+          tier?: string | null
+          tier_source_as_of_date?: string | null
+          tier_source_event_run_id?: string | null
           updated_at?: string
         }
         Relationships: []
