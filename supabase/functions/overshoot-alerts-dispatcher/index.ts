@@ -43,7 +43,7 @@ import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpa
  * Version echo — bumped on every dispatcher deploy so `GET /` proves the
  * running build. See INC-95 (cron-aware overdue + slot-based idempotency).
  */
-export const OVERSHOOT_ALERTS_DISPATCHER_VERSION = 'inc97-independent-a5-v1-20260710';
+export const OVERSHOOT_ALERTS_DISPATCHER_VERSION = 'inc107-exit-artifact-fix-and-arm-floor-20260715';
 
 const RAW_RECIPIENT =
   (Deno.env.get('ALERT_RECIPIENT_EMAIL') ?? Deno.env.get('EDGAR_CONTACT_EMAIL') ?? '').trim();
@@ -415,17 +415,28 @@ async function scanBrokerLedgerDivergence(correlationId: string): Promise<Dispat
 async function scanCronOverdue(correlationId: string): Promise<DispatchResult[]> {
   const { data: reg } = await supabaseAdmin
     .from('job_registry')
-    .select('id, schedule, enabled, status')
+    .select('id, schedule, enabled, status, updated_at')
     .eq('owner_module', 'overshoot')
     .eq('enabled', true);
   const results: DispatchResult[] = [];
   const now = new Date();
   const nowMs = now.getTime();
   const TOLERANCE_MS = 30 * 60 * 1000;
-  const map: Record<string, { table: string; tsCol: string; action?: string }> = {
+  // INC-107 (2026-07-15): exit.run mapping repointed from overshoot_entry_runs
+  // to overshoot_audit_logs with action-prefix `overshoot.exit.` — the
+  // exit-run family writes no dedicated runs table (per exit-run source
+  // comment L56), only audit rows with actions overshoot.exit.submitted.*,
+  // overshoot.exit.reconciliation_refusal.*, overshoot.exit.price_refusal.*,
+  // overshoot.exit.<class>, overshoot.exit.submit_failed, etc. The prior
+  // mapping (`overshoot_entry_runs.created_at`) is a TWO-SIDED defect:
+  // (a) false pages when a fresh entry-run row is older than the expected
+  // exit slot (today's 19:50Z Wed exit slot vs 13:35Z entry-run), (b)
+  // MASKED DEATH when a fresh entry-run row lands after the expected exit
+  // slot but exit-run died silently. The masked case is the dangerous one.
+  const map: Record<string, { table: string; tsCol: string; action?: string; actionPrefix?: string }> = {
     'overshoot.detection.run':          { table: 'overshoot_detection_runs',   tsCol: 'detected_at' },
     'overshoot.entry.run':              { table: 'overshoot_entry_runs',       tsCol: 'created_at'  },
-    'overshoot.exit.run':               { table: 'overshoot_entry_runs',       tsCol: 'created_at'  },
+    'overshoot.exit.run':               { table: 'overshoot_audit_logs',       tsCol: 'created_at', actionPrefix: 'overshoot.exit.' },
     'overshoot.fill_sweep':             { table: 'overshoot_audit_logs',       tsCol: 'created_at', action: 'overshoot.fill_sweep.tick' },
     'overshoot.short_interest.compute': { table: 'overshoot_short_interest',   tsCol: 'as_of_date'  },
     'overshoot.equity_snapshot':        { table: 'overshoot_equity_snapshots', tsCol: 'created_at'  },
@@ -442,6 +453,7 @@ async function scanCronOverdue(correlationId: string): Promise<DispatchResult[]>
       .select(m.tsCol as never)
       .order(m.tsCol as never, { ascending: false });
     if (m.action) lastQuery = lastQuery.eq('action' as never, m.action as never);
+    if (m.actionPrefix) lastQuery = lastQuery.like('action' as never, `${m.actionPrefix}%` as never);
     const { data: last } = await lastQuery
       .limit(1)
       .maybeSingle();
@@ -453,7 +465,15 @@ async function scanCronOverdue(correlationId: string): Promise<DispatchResult[]>
     // (no false pages overnight for `* 13-21 * * 1-5`, no false pages
     // mid-month for `0 21 1,15 * *`). Unparseable schedule → skip (no
     // fabricated verdict).
-    const { overdue, lastExpected } = evaluateOverdue(schedule, now, lastTs, TOLERANCE_MS);
+    //
+    // INC-107 pull-forward of INC-95 backlog refinement (2026-07-15):
+    // floor `lastExpected` at `job_registry.updated_at` — the row's
+    // last state change is the arm-transition proxy. Any expected slot
+    // that predates the arm is operationally void and MUST NOT page.
+    // This ends the arm-day false-page class permanently (fill_sweep
+    // was the first leg; exit.run the second).
+    const armedAtMs = r.updated_at ? new Date(String(r.updated_at)).getTime() : 0;
+    const { overdue, lastExpected } = evaluateOverdue(schedule, now, lastTs, TOLERANCE_MS, armedAtMs);
     if (overdue && lastExpected) {
       // INC-95 fix — slot-based dedup key. One alert per genuinely missed
       // slot; a subsequent watchdog tick against the SAME missed slot

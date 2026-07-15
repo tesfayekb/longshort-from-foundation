@@ -1,5 +1,45 @@
 ### INC-106 (2026-07-15): OVERSHOOT SHORT SI-SQUEEZE GATE **DIRECTION INVERTED vs RATIFIED THESIS** — live money-path gate admits the measured-worst SI slice; currently masked by SI-staleness starvation (Door 1 hiding Door 3). Discovered under ACT-526 gate-direction audit.
 
+### INC-107 (2026-07-15): `overshoot-alerts-dispatcher` watchdog exit-leg artifact family MISMAPPED to entry-run rows — TWO-SIDED defect (false pages now, MASKED death later); pull-forward of the INC-95 install-time floor refinement bundled in the same fix.
+
+**Discovery.** Operator 10:40Z alert email: watchdog page for `overshoot.exit.run` cites `last_actual_fire=2026-07-14T13:35:04.249683Z`. That timestamp is BYTE-IDENTICAL to entry-run `overshoot_entry_runs` row `a8fbb0d3`'s `created_at` — entry-run's 13:35Z Tue slot. The watchdog is proving exit-leg liveness by reading entry-run artifacts.
+
+**File:line — implementation (verbatim, pre-fix).** `supabase/functions/overshoot-alerts-dispatcher/index.ts:428` (dispatcher trigger→artifact map):
+```
+'overshoot.exit.run':               { table: 'overshoot_entry_runs',       tsCol: 'created_at'  },
+```
+The scanner at :439 selects `m.tsCol` from `m.table` for the exit.run row's most-recent artifact — but `m.table` is the ENTRY-run table. There is no dedicated `overshoot_exit_runs` table (exit-run source comment `supabase/functions/overshoot-exit-run/index.ts:56` — "run row (overshoot_exit_runs? — NOT built this wave"); the exit-run family writes only `overshoot_audit_logs` rows with actions in the `overshoot.exit.` namespace (submitted.*, reconciliation_refusal.*, price_refusal.*, in_flight_guard_*, submit_failed, `<class>`, etc.).
+
+**Two-sided risk (both are real):**
+
+- **FALSE PAGE (visible today).** Wed exit slot is 19:50Z. When dispatcher fires at ~20:20Z Wed, `lastExpected = 2026-07-15T19:50Z`, `lastActual = <entry-run last created_at>` = 2026-07-14T13:35Z (Tue's entry-run — today's entry-run at Wed 13:35Z also predates the exit slot). `lastExpected > lastActual + 30min AND now > lastExpected + 30min` → paged. The alert is arithmetically valid but references the wrong artifact family — exit-run may have fired perfectly.
+- **MASKED DEATH (the dangerous case).** Reverse scenario: consider any weekday morning after an exit slot dies silently the prior evening. Today's entry-run lands at 13:35Z. Dispatcher fires at 14:00Z. `lastExpected` for exit-run at 14:00Z = yesterday's 19:50Z. `lastActual = today 13:35Z` (entry-run). `lastExpected < lastActual` → NOT overdue. Watchdog reports exit-leg healthy while it is dead. This is the failure mode paging exists to prevent.
+
+**Prediction filed at 20:00Z-ish tonight (Wed 2026-07-15).** Without this fix, a false `cron_overdue` dispatch for `overshoot.exit.run@2026-07-15T19:50:00.000Z` will land in `overshoot_alert_dispatch` shortly after 20:20Z, `severity=HIGH`, dispatcher version `inc97-independent-a5-v1-20260710`, even if the 19:50Z rehearsal tick is perfect. Operator standing instruction: **ignore tonight's page knowingly if the fix is not yet deployed at 20:20Z; the tick's own audit trail (`overshoot.exit.reconciliation_refusal.*` or `overshoot.exit.<class>`) is the ground truth.**
+
+**Fix (deployed 2026-07-15 in same commit).**
+
+1. **Exit-run mapping repointed** — `overshoot.exit.run` now maps to `overshoot_audit_logs` with `actionPrefix='overshoot.exit.'`; the scanner threads an optional `actionPrefix` through as `.like('action', 'overshoot.exit.%')`. Any audit row in the exit-run family satisfies the liveness proof.
+2. **INC-95 install-time floor refinement PULLED FORWARD (backlog since 2026-07-10).** The watchdog now floors `lastExpected` at `job_registry.updated_at` (the arm-transition proxy) via the new fifth argument to `evaluateOverdue(expr, now, lastActual, tol, floorMs)`. Any expected slot that predates the floor is operationally void — pgcron cannot fire slots that predate the cron row, and the registry-arm floor eliminates pre-arm phantom slots. **Second leg to page on pre-arm slots ends here** (fill_sweep was the first, on 2026-07-09; exit.run is the second, today). The refinement is now in the shared cron primitive, so any future dispatcher owner-module inherits the floor automatically.
+3. **Dispatcher version echo bumped** — `OVERSHOOT_ALERTS_DISPATCHER_VERSION = 'inc107-exit-artifact-fix-and-arm-floor-20260715'`.
+
+**Regression tests landed (`supabase/functions/_shared/cron-schedule_test.ts` + `overshoot-alerts-dispatcher/index_test.ts`, 5 new tests):**
+
+- exit.run pre-arm slot (Tue 19:50Z with Wed 10:39Z arm) → `overdue=false` under floor.
+- exit.run post-arm missed slot (Wed 19:50Z with Wed 10:39Z arm, watchdog at Wed 20:25Z) → `overdue=true` (correct behaviour when arm precedes the slot and the slot genuinely missed).
+- fill_sweep 2026-07-09 arm-day fence retested with floor → no page for the pre-arm 21:59Z Thu slot (the INC-95 backlog case, retroactively covered).
+- floor default (0) preserves pre-INC-107 caller semantics.
+- Dispatcher source-anchor asserts: mapping is `overshoot_audit_logs` + `actionPrefix`, entry-run mapping banned, `updated_at` selected from job_registry, `evaluateOverdue` called with the 5-arg floor.
+
+**Money-path impact.** ZERO — the money paths (exit-run engine, entry-run engine, fill-sweep engine) are untouched. This is an ALERTING-layer correctness fix. Pre-fix: false pages (nuisance) + masked deaths (dangerous latent). Post-fix: exit-run liveness proved from the correct artifact family; pre-arm slots never page.
+
+**Version-uniformity (ACT-529 rule, applied per-function).** Only `overshoot-alerts-dispatcher` bundles the watchdog code; other functions do not consume `evaluateOverdue` or the mapping table. Single-function redeploy is sufficient (unlike the detector-version bump which spans four functions).
+
+**Cross-references.** INC-95 parent (the install-time floor refinement backlog now closed via this pull-forward); INC-97 (the sibling fill_sweep artifact-mapping fix that this INC completes for the exit leg — same class defect on a different leg); INC-105 (equity-snapshot cursor lag noted the pattern of watchdog cursors misreading artifact families); INC-106 (the direction-flip landing running in parallel — separate track, verified independent by version echo `a026dc51`). `supabase/functions/overshoot-alerts-dispatcher/index.ts:415-481` (`scanCronOverdue` — the corrected scanner); `supabase/functions/_shared/cron-schedule.ts:134-149` (`evaluateOverdue` with floor); `supabase/functions/overshoot-exit-run/index.ts:56` (source comment attesting no exit-runs table exists — the reason the fix routes through audit_logs). ACT-529 version-uniformity class rule (dispatcher-only redeploy scope here).
+
+**Queue.** Resolved same-turn (fixed + deployed + tested). Follow-up: the class rule "trigger→artifact mappings for jobs without a dedicated runs table MUST use an action-prefix filter on the audit table, never a sibling job's runs table" is now filed twice (INC-97 for fill_sweep, INC-107 for exit.run). If a third instance surfaces, promote to a lint-time guard in `check-overshoot-separation.ts` or similar.
+
+
 **File:line — implementation (verbatim).** `supabase/functions/_shared/overshoot/detector/detector.ts:684` — `const ok = si.si_pct_float >= params.squeezeSiPctFloatMin;`. Semantics: `ok=true` (PASS, ADMIT for shorting) iff `si_pct_float ≥ threshold`. Refusal reason for `ok=false` is `si_below_squeeze_threshold` (`detector.ts:689`) — LOW-SI names are refused, HIGH-SI names are admitted. Confirmed by header comment lines 21–33 ("`si_pct_float < squeezeSiPctFloatMin` → REFUSED `si_below_squeeze_threshold`") and by production evidence: HIMS admitted at `si_pct_float = 29.3 %` in the ACT-526 funnel (Door 3 pass).
 
 **Ratified thesis (verbatim citations).**

@@ -115,3 +115,48 @@ Deno.test('CLASS-1 regression fence: fill_sweep at 07:45Z when last actual > las
   const v = evaluateOverdue('* 13-21 * * 1-5', at, lastActualMs, TOL);
   assertEquals(v.overdue, false);
 });
+
+// INC-107 pull-forward of the INC-95 install-time floor refinement.
+Deno.test('INC-107: expected slot predating armedAt floor must NOT page (exit.run today-scenario)', () => {
+  // Wed 2026-07-15 armed at 10:39:12Z. Exit-run schedule `50 19 * * 1-5`;
+  // dispatcher runs at ~20:25Z (past 19:50Z + 30min tolerance). Last
+  // expected = today 19:50Z (AFTER arm), last_actual = 0. With the floor
+  // set to the arm time, 19:50Z ≥ armedAt → pages, which IS the correct
+  // behaviour when the arm precedes the slot and the slot genuinely
+  // missed.
+  const at = new Date('2026-07-15T20:25:00Z');
+  const armedAtMs = Date.parse('2026-07-15T10:39:12Z');
+  const v = evaluateOverdue('50 19 * * 1-5', at, 0, TOL, armedAtMs);
+  assertEquals(v.overdue, true);
+  assertEquals(v.lastExpected?.toISOString(), '2026-07-15T19:50:00.000Z');
+});
+
+Deno.test('INC-107: expected slot predating armedAt floor must NOT page (arm-day pre-arm slot)', () => {
+  // Cron installed/armed at 15:00Z Wed. Schedule 50 19 * * 1-5. Tuesday's
+  // 19:50Z slot is the "last expected" pre-arm; must not page.
+  const at = new Date('2026-07-15T13:00:00Z'); // Wed before today's 19:50Z
+  const armedAtMs = Date.parse('2026-07-15T10:39:12Z');
+  // Last expected pre-13:00Z on Wed → Tue 2026-07-14T19:50Z (before arm).
+  const v = evaluateOverdue('50 19 * * 1-5', at, 0, TOL, armedAtMs);
+  assertEquals(v.overdue, false, 'pre-arm slot must not page under the INC-107 floor');
+  assertEquals(v.lastExpected?.toISOString(), '2026-07-14T19:50:00.000Z');
+});
+
+Deno.test('INC-107: fill_sweep arm-day (2026-07-09 fence) — pre-arm 21:59Z slot must NOT page under floor', () => {
+  // Sibling defect: the INC-95 backlog case. Cron.job row installed Thu
+  // evening after 22:00Z; schedule `* 13-21 * * 1-5`; watchdog fires
+  // Fri 07:45Z. Under the floor (armedAt = Thu 22:15Z), Thu 21:59Z is
+  // BEFORE the floor and must not page.
+  const at = new Date('2026-07-10T07:45:00Z');
+  const armedAtMs = Date.parse('2026-07-09T22:15:00Z');
+  const v = evaluateOverdue('* 13-21 * * 1-5', at, 0, TOL, armedAtMs);
+  assertEquals(v.overdue, false);
+});
+
+Deno.test('INC-107: floor default (0) preserves pre-INC-107 behaviour for callers not passing floor', () => {
+  // Backwards-compat: floor default 0 → any lastExpected >= 0 → floor never
+  // suppresses. Same result as the original CLASS-1 regression fence.
+  const at = new Date('2026-07-10T07:45:00Z');
+  const v = evaluateOverdue('* 13-21 * * 1-5', at, 0, TOL);
+  assertEquals(v.overdue, true);
+});
