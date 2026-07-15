@@ -22,6 +22,7 @@
  * applies in the money path).
  */
 import { Badge } from '@/components/ui/badge';
+import { InfoHint } from '@/components/dashboard/InfoHint';
 
 // Engine-mirrored ratified per-side allocation pcts.
 // Source of truth: OVERSHOOT_SIDE_ALLOCATION_PCT_{LONG,SHORT} in
@@ -33,7 +34,7 @@ export const OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT = 0.10;
 // T+10 exits from the first over-cap entry date (2026-07-22). The engine
 // gate (evaluateAllocationCap) refuses NEW cap-breaching entries; the
 // carry is bounded above and dated below.
-const INC96_CONVERGENCE_NOTE = 'INC-96 carry — converging via T+10 exits from 07-22';
+const INC96_SHORT = 'INC-96 carry';
 
 export interface OvershootCapComplianceProps {
   /** equity × strategy_allocation_pct × margin_multiplier (USD). */
@@ -95,10 +96,10 @@ export function OvershootCapCompliance({
   ];
 
   return (
-    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${className ?? ''}`}>
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0 ${className ?? ''}`}>
       {labelPrefix ? <span className="shrink-0">{labelPrefix}</span> : null}
       {lines.map((l) => (
-        <span key={l.side} className="inline-flex items-center gap-1 whitespace-nowrap">
+        <span key={l.side} className="inline-flex items-center gap-1 whitespace-nowrap min-w-0">
           <span className="font-semibold">{l.side}</span>{' '}
           <span className="font-mono">
             {fmtK(l.mv)} / {fmtK(l.cap)} cap · {l.pct.toFixed(0)}%
@@ -110,7 +111,14 @@ export function OvershootCapCompliance({
             {l.over ? 'over' : 'under'}
           </Badge>
           {l.over ? (
-            <span className="ml-2 text-muted-foreground text-[11px]">{INC96_CONVERGENCE_NOTE}</span>
+            <span className="ml-2 inline-flex items-center gap-1 text-muted-foreground text-[11px]">
+              <span>{INC96_SHORT}</span>
+              <InfoHint label="INC-96 carry — convergence">
+                Existing over-cap carry unwinds naturally via T+10 exits from the first over-cap entry
+                date (2026-07-22). The engine gate <span className="font-mono">evaluateAllocationCap</span>
+                {' '}refuses new cap-breaching entries — the carry is bounded above and dated below.
+              </InfoHint>
+            </span>
           ) : null}
         </span>
       ))}
