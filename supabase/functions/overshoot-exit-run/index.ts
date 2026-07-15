@@ -690,6 +690,36 @@ Deno.serve(createHandler(async (req: Request) => {
       // the correct typed class without brittle error-message parsing.
       let perLotStage: 'session_age_query' | 'snapshot_fetch' | 'exit_price' | 'submit' = 'session_age_query';
       try {
+      // ── ACT-493 v1 M5 groundwork: in-flight-exit-order skip ─────────
+      // A resting DAY-limit exit for this (symbol, side) exists at the
+      // broker — do NOT re-submit. Persist a typed skip audit and continue.
+      // Placed at the TOP of the per-lot body so no SQL / network work is
+      // performed on lots we've already committed exit orders for.
+      const inFlightKey = `${m.symbol}::${m.side}`;
+      if (inFlightExitKeys.has(inFlightKey)) {
+        tally.in_flight_exit_order_skipped += 1;
+        try {
+          await writeStrategyAuditEvent({
+            strategyKey: 'overshoot',
+            action: 'overshoot.exit.in_flight_exit_order_skipped',
+            actorId: authCtx.user.id, targetType: 'overshoot_lots', targetId: m.symbol,
+            correlationId,
+            metadata: {
+              symbol: m.symbol, side: m.side, lot_ids: m.lotIds,
+              reason: 'resting_exit_order_present',
+              dry_run: dryRun, manual: manualConfirm,
+            },
+          });
+        } catch (auditErr) {
+          console.error(JSON.stringify({
+            event: 'in_flight_skip_audit_write_failed',
+            correlationId, symbol: m.symbol,
+            err: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          }));
+        }
+        continue;
+      }
+
       // (e) session-age (cron path only). Manual override bypasses.
       if (!manualConfirm) {
         perLotStage = 'session_age_query';
