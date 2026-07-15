@@ -52,6 +52,44 @@
 // symbol is ABSENT from this file's source.
 import { holdingSessionsForSide } from './intents.ts';
 
+// ── ACT-510 TIER-CONDITIONAL EXIT ANCHOR (operator-ratified 2026-07-15) ────
+//
+// Tier-conditional asymmetry (INTENTIONAL — stated explicitly at landing):
+//
+//   T1 (LONG) — EVENT-ANCHORED. Fires when
+//       sessions_since(tier_source_as_of_date) >= 6.
+//     Rationale: the ACT-509 grid coordinate T+6 exit is EVENT-relative,
+//     not entry-relative. A T1 lot entered at T+1 vintage reaches
+//     holding-5 at event T+6 (one session earlier than the canonical
+//     T+2 vintage which reaches holding-4). Using the event date as the
+//     anchor reproduces both cohort behaviours automatically without a
+//     per-vintage lookup, and consumes the `tier_source_as_of_date`
+//     provenance column populated at INSERT time (M8, ACT-493 v1).
+//
+//   T2 (LONG) + SHORT — ENTRY-ANCHORED (UNCHANGED). Fires on
+//       holdingDayOrdinal >= holdingSessionsForSide(side).
+//     Preserves ACT-471 LONG H=10 (Q1c HARD, canary-pinned) and ACT-472
+//     SHORT H=5 (HARD). T2 has no event coupling, so its exit horizon
+//     remains the per-day-ROI-derived entry-anchored value.
+//
+// The asymmetry is deliberate: T1 tier membership is defined by an
+// event window (ACT-509), so its exit horizon is naturally
+// event-relative; T2 has no such coupling and retains the per-day-ROI
+// entry-anchored horizon. Do NOT collapse to a uniform anchor — that
+// destroys the reason T1 exists as a distinct tier.
+//
+// CENSUS FILED AT LANDING (charter §22.5.2, evidence for ACT-510).
+// 6 T1 lots on the book at 2026-07-15:
+//   AKAM/ALGM/ONTO — event 2026-07-09 (Thu)
+//   CHRD           — event 2026-07-08 (Wed)
+//   LITE/SNDK      — event 2026-07-10 (Fri)
+// Deploy-Saturday hold: Friday 2026-07-17 first tick runs the PRE-510
+// build (uniform T+10 entry-anchored) as a live rehearsal — expected
+// exits_submitted=0, session_age_no_fire=50. Post-deploy Monday 2026-07-20
+// first tick, ALL SIX T1 lots reach sessions_since_event >= 6
+// (AKAM/ALGM/ONTO=7, CHRD=8, LITE/SNDK=6) and fire in one wave.
+export const OVERSHOOT_EXIT_T1_EVENT_ANCHOR_SESSIONS = 6;
+
 /**
  * Injected market-clock snapshot (PIN-2 seam). Source at the edge:
  * Alpaca /v2/clock. Populated as `null` when unavailable — a null
@@ -85,8 +123,11 @@ export interface SessionAgeRefusal {
 
 export interface SessionAgeOk {
   ok: true;
-  /** Number of trading sessions strictly AFTER entryDate, inclusive of
-   *  the in-progress session when it counts (see PIN-1). */
+  /** Number of trading sessions strictly AFTER the anchor date, inclusive
+   *  of the in-progress session when it counts (see PIN-1). In entry-anchor
+   *  mode (T2/SHORT) this is sessions-since-entry; in event-anchor mode
+   *  (T1/LONG, ACT-510) this is sessions-since-event. Historical name
+   *  retained for backwards compatibility with existing consumers. */
   sessionsSinceEntry: number;
   /**
    * 1-indexed holding-day ordinal: entry day itself = 1; the next
@@ -107,6 +148,17 @@ export interface SessionAgeOk {
   inProgressCounted: boolean;
   /** Recorded verbatim on the exit event for PIN-2 measurement. */
   minutesToClose: number;
+  /** ACT-510 provenance: which anchor was used to compute
+   *  sessionsSinceEntry / shouldFireTimeExit. */
+  anchorMode: 'entry' | 'event_t1';
+  /** ACT-510 provenance: the actual date used as the anchor. Equal to
+   *  entryDate in entry-anchor mode; equal to tierSourceAsOfDate in
+   *  event-anchor mode. */
+  anchorDate: string;
+  /** ACT-510 provenance: threshold applied to the fire predicate.
+   *  Entry-anchor: holdingSessionsForSide(side) (10 LONG / 5 SHORT).
+   *  Event-anchor: OVERSHOOT_EXIT_T1_EVENT_ANCHOR_SESSIONS (6). */
+  threshold: number;
 }
 
 export type SessionAgeResult = SessionAgeOk | SessionAgeRefusal;
@@ -123,6 +175,10 @@ export interface ComputeSessionAgeInput {
    * ascending, DEDUPLICATED. Represents SETTLED sessions only (today's
    * bar is NOT here at 19:50 UTC cron time — see PIN-1). Caller supplies
    * the query; this module does not touch the DB.
+   *
+   * ACT-510: in event-anchor mode the caller MUST widen the SQL bound to
+   * `trade_date > LEAST(entryDate, tierSourceAsOfDate)` so the settled
+   * set is complete relative to whichever anchor this module selects.
    */
   spyPriorSessionDates: readonly string[];
   /**
@@ -130,12 +186,20 @@ export interface ComputeSessionAgeInput {
    * (`market_clock_unavailable`) — never silently proceed.
    */
   clock: OvershootMarketClockSnapshot | null;
+  /** ACT-510: lot tier as recorded on overshoot_lots.tier (T1 or T2).
+   *  When 'T1' AND side='LONG' AND tierSourceAsOfDate is a valid date,
+   *  the module switches to event-anchor. Any other combination falls
+   *  through to entry-anchor unchanged. */
+  tier?: 'T1' | 'T2' | null;
+  /** ACT-510: the T1 event date (overshoot_lots.tier_source_as_of_date).
+   *  Required for event-anchor to activate; otherwise ignored. */
+  tierSourceAsOfDate?: string | null;
 }
 
 const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/;
 
 export function computeSessionAge(input: ComputeSessionAgeInput): SessionAgeResult {
-  const { entryDate, side, spyPriorSessionDates, clock } = input;
+  const { entryDate, side, spyPriorSessionDates, clock, tier, tierSourceAsOfDate } = input;
 
   if (side !== 'LONG' && side !== 'SHORT') {
     return { ok: false, refusal: 'malformed_session_date',
@@ -169,27 +233,47 @@ export function computeSessionAge(input: ComputeSessionAgeInput): SessionAgeResu
       reason: `market not in regular session (isMarketOpen=${clock.isMarketOpen}, isHoliday=${clock.isHoliday})` };
   }
 
-  if (clock.sessionDate < entryDate) {
+  // ACT-510: choose anchor. T1 LONG with a valid event date → event-anchor;
+  // everything else → entry-anchor (preserves ACT-471/472 behavior).
+  const t1EventAnchorActive =
+    tier === 'T1' &&
+    side === 'LONG' &&
+    typeof tierSourceAsOfDate === 'string' &&
+    YYYY_MM_DD.test(tierSourceAsOfDate);
+
+  const anchorMode: 'entry' | 'event_t1' = t1EventAnchorActive ? 'event_t1' : 'entry';
+  const anchorDate = t1EventAnchorActive ? (tierSourceAsOfDate as string) : entryDate;
+
+  if (clock.sessionDate < anchorDate) {
     return { ok: false, refusal: 'entry_date_in_future',
-      reason: `entryDate ${entryDate} is after clock.sessionDate ${clock.sessionDate}` };
+      reason: `anchorDate ${anchorDate} (mode=${anchorMode}) is after clock.sessionDate ${clock.sessionDate}` };
   }
 
-  // Settled sessions strictly > entryDate, deduped defensively.
+  // Settled sessions strictly > anchorDate, deduped defensively.
   const settled = new Set<string>();
   for (const d of spyPriorSessionDates) {
-    if (d > entryDate) settled.add(d);
+    if (d > anchorDate) settled.add(d);
   }
 
   // PIN-1: in-progress session contributes +1 iff its date is strictly
-  // after entryDate AND not already present in the settled set.
+  // after anchorDate AND not already present in the settled set.
   const inProgressCounted =
-    clock.sessionDate > entryDate && !settled.has(clock.sessionDate);
+    clock.sessionDate > anchorDate && !settled.has(clock.sessionDate);
 
   const sessionsSinceEntry = settled.size + (inProgressCounted ? 1 : 0);
   const holdingDayOrdinal = sessionsSinceEntry + 1;
-  // T3a (ACT-480): per-side horizon — LONG H=10 (ACT-471), SHORT H=5 (ACT-472).
-  const shouldFireTimeExit =
-    holdingDayOrdinal >= holdingSessionsForSide(side);
+  // Fire predicate:
+  //   entry-anchor (T2/SHORT):  holdingDayOrdinal >= holdingSessionsForSide(side)
+  //                             (ACT-471 LONG H=10, ACT-472 SHORT H=5)
+  //   event-anchor (T1 LONG):   sessionsSinceEntry >= OVERSHOOT_EXIT_T1_EVENT_ANCHOR_SESSIONS
+  //                             (ACT-510; sessions_since_event >= 6, event day itself does
+  //                             NOT contribute — first post-event session = count 1).
+  const threshold = t1EventAnchorActive
+    ? OVERSHOOT_EXIT_T1_EVENT_ANCHOR_SESSIONS
+    : holdingSessionsForSide(side);
+  const shouldFireTimeExit = t1EventAnchorActive
+    ? sessionsSinceEntry >= threshold
+    : holdingDayOrdinal >= threshold;
 
   return {
     ok: true,
@@ -198,5 +282,8 @@ export function computeSessionAge(input: ComputeSessionAgeInput): SessionAgeResu
     shouldFireTimeExit,
     inProgressCounted,
     minutesToClose: clock.minutesToClose,
+    anchorMode,
+    anchorDate,
+    threshold,
   };
 }

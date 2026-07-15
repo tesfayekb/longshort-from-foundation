@@ -406,12 +406,20 @@ Deno.test('ACT-493 v1 M5 refinement: CATCH-UP branch — fail-closed typed refus
   assertStringIncludes(SRC, 'hasSameSessionPriorRun = true;');
 });
 
-Deno.test('session-age (PIN-1): SPY prior-session query strictly > entry_ts::date; earliest lot anchors', () => {
+Deno.test('session-age (PIN-1 + ACT-510): SPY prior-session strictly > spyLowerBound; per-group tier fetch anchors', () => {
   assertStringIncludes(SRC, "WHERE ticker = 'SPY'");
-  assertStringIncludes(SRC, 'trade_date > (');
-  assertStringIncludes(SRC, 'SELECT MIN(entry_ts)::date FROM overshoot_lots');
+  // ACT-510: the SPY window is bounded strictly-> spyLowerBound, which is
+  // either earliestEntry (entry-anchor mode) or earliestEvent (T1 group
+  // event-anchor mode). The per-group tier query anchors both.
+  assertStringIncludes(SRC, 'AND trade_date > ${spyLowerBound}');
+  assertStringIncludes(SRC, 'MIN(entry_ts)::date::text AS earliest_entry');
+  assertStringIncludes(SRC, 'MIN(tier_source_as_of_date)::text AS earliest_event');
+  assertStringIncludes(SRC, 'bool_and(tier = \'T1\') AS all_t1');
   assertStringIncludes(SRC, 'computeSessionAge({');
   assertStringIncludes(SRC, 'shouldFireTimeExit');
+  // ACT-510 provenance: the module receives tier + tierSourceAsOfDate.
+  assertStringIncludes(SRC, 'tier: isT1Group ? \'T1\' : null');
+  assertStringIncludes(SRC, 'tierSourceAsOfDate: isT1Group ? eventDate : null');
 });
 
 Deno.test('probe short-circuit taxonomy: alpaca / polygon only; else 400', () => {

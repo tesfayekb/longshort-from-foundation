@@ -265,3 +265,138 @@ Deno.test('SPY dates <= entryDate ignored', () => {
   assert(r.ok);
   assertEquals(r.sessionsSinceEntry, 2);
 });
+
+// ── ACT-510 tier-conditional event-anchor tests ────────────────────────────
+
+// Charter §22.5.2 census fixtures. Book anchors: 6 T1 LONG lots.
+// Monday 2026-07-20 first-tick (post-ACT-510 deploy). Sessions strictly
+// after each event date, up to and INCLUDING the in-progress Monday.
+const SPY_JUL_ALL = [
+  '2026-07-09', '2026-07-10', '2026-07-13', '2026-07-14',
+  '2026-07-15', '2026-07-16', '2026-07-17',
+];
+
+Deno.test('ACT-510: T1 LONG event-anchor — AKAM event 07-09 fires Monday 07-20 (sessions_since_event=7 >= 6)', () => {
+  const r = computeSessionAge({
+    entryDate: '2026-07-09',
+    side: 'LONG',
+    spyPriorSessionDates: SPY_JUL_ALL,
+    clock: openClock('2026-07-20'),
+    tier: 'T1',
+    tierSourceAsOfDate: '2026-07-09',
+  });
+  assert(r.ok);
+  assertEquals(r.anchorMode, 'event_t1');
+  assertEquals(r.anchorDate, '2026-07-09');
+  assertEquals(r.threshold, 6);
+  assertEquals(r.sessionsSinceEntry, 7); // 07-10,13,14,15,16,17 settled + 07-20 in-progress
+  assertEquals(r.shouldFireTimeExit, true);
+});
+
+Deno.test('ACT-510: T1 LONG event-anchor — LITE event 07-10 (later-entered) fires Monday 07-20 EXACTLY at threshold (6)', () => {
+  const r = computeSessionAge({
+    entryDate: '2026-07-10',
+    side: 'LONG',
+    spyPriorSessionDates: SPY_JUL_ALL,
+    clock: openClock('2026-07-20'),
+    tier: 'T1',
+    tierSourceAsOfDate: '2026-07-10',
+  });
+  assert(r.ok);
+  assertEquals(r.anchorMode, 'event_t1');
+  assertEquals(r.sessionsSinceEntry, 6); // 07-13..07-17 settled + 07-20 in-progress
+  assertEquals(r.shouldFireTimeExit, true);
+});
+
+Deno.test('ACT-510: T1 LONG event-anchor — LITE event 07-10 does NOT fire Friday 07-17 (sessions_since_event=5)', () => {
+  // Rehearsal-day check: even if ACT-510 were deployed by Friday, LITE/SNDK
+  // would not fire (5 < 6). Confirms census math against operator ruling.
+  const r = computeSessionAge({
+    entryDate: '2026-07-10',
+    side: 'LONG',
+    spyPriorSessionDates: ['2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16'],
+    clock: openClock('2026-07-17'),
+    tier: 'T1',
+    tierSourceAsOfDate: '2026-07-10',
+  });
+  assert(r.ok);
+  assertEquals(r.sessionsSinceEntry, 5);
+  assertEquals(r.shouldFireTimeExit, false);
+});
+
+Deno.test('ACT-510: T1-with-later-entry — event 07-08 CHRD (entry 07-09) — anchors on EVENT not entry', () => {
+  // CHRD: entry T+1 vintage. Event-anchor gives sessions_since_event=7 on Fri 07-17
+  // (07-09,10,13,14,15,16 settled + 07-17 in-progress = 7). Would already fire
+  // by Fri if deployed. Confirms the T+1 vintage does not gate later than T+0.
+  const r = computeSessionAge({
+    entryDate: '2026-07-09',
+    side: 'LONG',
+    spyPriorSessionDates: ['2026-07-09', '2026-07-10', '2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16'],
+    clock: openClock('2026-07-17'),
+    tier: 'T1',
+    tierSourceAsOfDate: '2026-07-08',
+  });
+  assert(r.ok);
+  assertEquals(r.anchorDate, '2026-07-08');
+  assertEquals(r.sessionsSinceEntry, 7);
+  assertEquals(r.shouldFireTimeExit, true);
+});
+
+Deno.test('ACT-510: T2 LONG unchanged — entry-anchored, H=10 (Q1c HARD, canary)', () => {
+  // 8 settled + in-progress = 9 sessionsSince → ordinal 10 → fires at H=10 exactly.
+  const r = computeSessionAge({
+    entryDate: '2026-06-01',
+    side: 'LONG',
+    spyPriorSessionDates: ['2026-06-02','2026-06-03','2026-06-04','2026-06-05','2026-06-08','2026-06-09','2026-06-10','2026-06-11'],
+    clock: openClock('2026-06-15'),
+    tier: 'T2',
+    tierSourceAsOfDate: '2026-05-30', // ignored in entry-anchor mode
+  });
+  assert(r.ok);
+  assertEquals(r.anchorMode, 'entry');
+  assertEquals(r.anchorDate, '2026-06-01');
+  assertEquals(r.threshold, 10);
+  assertEquals(r.holdingDayOrdinal, 10);
+  assertEquals(r.shouldFireTimeExit, true);
+});
+
+Deno.test('ACT-510: SHORT never event-anchors even when tier=T1 supplied — safety fallthrough', () => {
+  const r = computeSessionAge({
+    entryDate: '2026-07-10',
+    side: 'SHORT',
+    spyPriorSessionDates: SPY_JUL_ALL,
+    clock: openClock('2026-07-20'),
+    tier: 'T1',
+    tierSourceAsOfDate: '2026-07-08',
+  });
+  assert(r.ok);
+  assertEquals(r.anchorMode, 'entry');
+  assertEquals(r.anchorDate, '2026-07-10');
+  assertEquals(r.threshold, 5); // SHORT H=5 preserved
+});
+
+Deno.test('ACT-510: tier=T1 without tierSourceAsOfDate falls back to entry-anchor (defensive)', () => {
+  const r = computeSessionAge({
+    entryDate: '2026-06-01',
+    side: 'LONG',
+    spyPriorSessionDates: ['2026-06-02','2026-06-03','2026-06-04','2026-06-05','2026-06-08','2026-06-09','2026-06-10','2026-06-11'],
+    clock: openClock('2026-06-15'),
+    tier: 'T1',
+    tierSourceAsOfDate: null,
+  });
+  assert(r.ok);
+  assertEquals(r.anchorMode, 'entry');
+  assertEquals(r.threshold, 10);
+});
+
+Deno.test('ACT-510: null tier fields → entry-anchor unchanged (pre-M8 vintage safety)', () => {
+  const r = computeSessionAge({
+    entryDate: '2026-06-01',
+    side: 'LONG',
+    spyPriorSessionDates: [],
+    clock: openClock('2026-06-02'),
+    // tier/tierSourceAsOfDate omitted entirely
+  });
+  assert(r.ok);
+  assertEquals(r.anchorMode, 'entry');
+});

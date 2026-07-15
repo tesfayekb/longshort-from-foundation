@@ -857,28 +857,52 @@ Deno.serve(createHandler(async (req: Request) => {
       // (e) session-age (cron path only). Manual override bypasses.
       if (!manualConfirm) {
         perLotStage = 'session_age_query';
+        // ACT-510: fetch group tier + earliest entry + earliest event in
+        // one query. Group is (symbol, side). `all_t1` gates event-anchor
+        // activation — mixed-tier groups (should not occur post-M8, but
+        // possible for legacy pre-tier rows) fall through to entry-anchor
+        // for safety. `earliest_event` may be null when no lot in the
+        // group has tier_source_as_of_date populated (pre-M8 vintage).
+        const [groupInfo] = await sql<{
+          earliest_entry: string | null;
+          earliest_event: string | null;
+          all_t1: boolean;
+        }[]>`
+          SELECT MIN(entry_ts)::date::text AS earliest_entry,
+                 MIN(tier_source_as_of_date)::text AS earliest_event,
+                 bool_and(tier = 'T1') AS all_t1
+          FROM overshoot_lots
+          WHERE status='open' AND symbol=${m.symbol} AND side=${m.side}
+        `;
+        const entryDate = groupInfo?.earliest_entry ?? clockSnap.sessionDate;
+        const eventDate = groupInfo?.earliest_event ?? null;
+        const isT1Group =
+          groupInfo?.all_t1 === true &&
+          typeof eventDate === 'string' &&
+          m.side.toUpperCase() === 'LONG';
+        // Widen SPY lower bound so event-anchor has a complete settled
+        // set when eventDate < entryDate. In entry-anchor mode the module
+        // filters internally on entryDate anyway.
+        const spyLowerBound =
+          isT1Group && eventDate && eventDate < entryDate ? eventDate : entryDate;
         const spyPriorSessionDates = await sql<{ trade_date: string }[]>`
           SELECT trade_date::text AS trade_date
           FROM overshoot_daily_bars
           WHERE ticker = 'SPY'
-            AND trade_date > (
-              SELECT MIN(entry_ts)::date FROM overshoot_lots
-              WHERE status='open' AND symbol=${m.symbol} AND side=${m.side}
-            )
+            AND trade_date > ${spyLowerBound}
           ORDER BY trade_date ASC
         `;
-        // Anchor entryDate at the EARLIEST open-lot entry date for this
-        // (symbol, side) — the T+5 stop fires when the OLDEST lot ages out.
-        const [earliest] = await sql<{ d: string | null }[]>`
-          SELECT MIN(entry_ts)::date::text AS d FROM overshoot_lots
-          WHERE status='open' AND symbol=${m.symbol} AND side=${m.side}
-        `;
-        const entryDate = earliest?.d ?? clockSnap.sessionDate;
         const age = computeSessionAge({
           entryDate,
           side: m.side.toUpperCase() as 'LONG' | 'SHORT',
           spyPriorSessionDates: spyPriorSessionDates.map((r) => r.trade_date),
           clock: clockSnap,
+          // ACT-510: event-anchor activates only when the whole group is
+          // T1 AND has a valid event date AND side is LONG (module also
+          // gates on this defensively). Non-T1 / mixed / SHORT / missing
+          // event date → tier=null → entry-anchor unchanged.
+          tier: isT1Group ? 'T1' : null,
+          tierSourceAsOfDate: isT1Group ? eventDate : null,
         });
         if (!age.ok || !age.shouldFireTimeExit) {
           tally.session_age_no_fire += 1;
