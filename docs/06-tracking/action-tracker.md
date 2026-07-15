@@ -1,4 +1,51 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-526 (2026-07-15): SHORT-SIDE FUNNEL DECOMPOSITION — **accepted; DEC-504-5a RATIFIED, pull W5-05 forward to run PARALLEL with W5.** Rulings + study-augment first evidence + coverage caveat filed.
+
+**Rulings (operator, verbatim intent).**
+1. **DEC-504-5a RATIFIED.** Pull W5-05 (squeeze-filter / τ_short / cell-floor re-derivation) **forward** to run **parallel** with W5, not behind it. Rationale: current short-sleeve performance is structurally starved (0 admissions in the live funnel across all runs since 07-07); no W5 short verdict is valid until the gates and the study measure the same short surface.
+2. **Staleness ruling.** Fixed **21-day** staleness threshold + DEC-504-3 watchdog is **sufficient**. Calendar-aware staleness filed as **FP-CANDIDATE-ix** (not chartered; opens only if the 21d+watchdog combo produces a documented false-refusal class in production).
+3. **Natural experiment (item 4) proceeds tonight** — 21:00Z autonomous SI compute + Thursday 22:00Z detection run. Before/after comparison reported when both land.
+4. **STUDY↔LIVE PARITY NOTE — PROMINENT.** The live short gate stack (`si_squeeze.si_pct_float_min≈0.20`, `default_deny_on_missing=true`) was **NEVER part of the studied short surface**. `overshoot_study_candidate_events` for `side='short'` (n=263,963, 2022-03-08 → 2026-07-02) was assembled **without** any SI filter. The same parity-audit discipline ACT-505 applied to longs now applies to the short sleeve: **no W5 short verdict is valid until the gates and the study measure the same thing.** Gate-set for the W5-05 rerun MUST include the SI-squeeze filter (or the re-derived replacement) applied to the study corpus verbatim.
+
+**Pre-committed adoption rule (frozen BEFORE any curve number was surfaced; no post-hoc revision permitted).** A gate/threshold change adopts **ONLY IF** the study augment's squeeze-vs-forward-return curve shows a bucket/threshold clearing **ALL** of:
+  (a) per-slot-day short-side P&L ≥ **standard 15%-class floor** (OVERSHOOT dominance-band anchor);
+  (b) `n ≥ 1000` in that bucket;
+  (c) **monotone stability** across adjacent buckets on the same curve;
+  (d) sign-corrected short P&L (`-fwd_return_5d`) — positive means "shorting won."
+The curve may equally conclude **(i)** the current tight gates are correct (short edge concentrated in few names), or **(ii)** the filter's direction needs revisiting, or **(iii)** no adoption clears (a)–(c). **The curve decides, not the desire for a fuller sleeve.**
+
+**Study augment — first-pass evidence (READ-ONLY corpus work, execute-in-turn per standing rule).**
+
+*Substrate:* `overshoot_study_candidate_events` (`side='short'`, n=263,963, 2022-03-08 → 2026-07-02) LEFT JOIN `overshoot_short_interest` (5,034 rows, 2026-03-13 → 2026-06-15) on ticker with `as_of_date ∈ [event_date − 30d, event_date]`, most-recent-per-event.
+
+*⚠️ COVERAGE CAVEAT — SURFACED BEFORE THE CURVE (blocks pre-committed adoption gate (b) on high-SI buckets).* Only **43,723 / 263,963 = 16.56 %** of historical short arrivals have any SI datapoint within 30d. The `overshoot_short_interest` table covers 2026-03-13 → 2026-06-15 — a **~3-month single-regime slice** — vs the 4+ year corpus. A full historical SI backfill (2022-2026, Polygon or FINRA source) is required to run the pre-committed adoption gate at n≥1000 with monotone stability on high-SI buckets. **Filed as blocker: DEC-504-5a cannot adopt until historical SI backfill lands.** Charter proposal: **ACT-527 HISTORICAL SI BACKFILL** (feasibility check → source selection → dry-run → prod backfill).
+
+*First-pass curve (SI-covered subset only, n=40,227 with fwd_return_5d, sign-corrected short P&L in bps/slot-day):*
+
+| SI bucket (si_pct_float) | n | short bps/slot-day | notes |
+|---|---:|---:|---|
+| <5 %          | 24,238 | **−13.84** | fails gate (a), (n adequate) |
+| 5–10 %        | 10,716 | **−15.49** | fails gate (a) |
+| 10–15 %       |  3,625 | **−26.18** | fails gate (a) |
+| 15–20 %       |    934 | **−12.31** | fails (a) and (b) |
+| **20–30 %**   |    290 | **−49.56** | fails (b), directionally "worst to short" |
+| **≥30 %**     |    111 | **−66.57** | fails (b), directionally "worst to short" |
+| SI null       |    313 | +0.86 | comparator |
+
+*Directional read (PRELIMINARY, subject to n and regime caveats).* Short-side P&L is **negative across every SI bucket** on the covered subset, and **monotonically more negative** as SI rises through the 20 %+ range. This is directionally consistent with the current gate's premise (`si_pct_float_min≈0.20` **excludes** the higher-squeeze buckets) — high-SI names bounce harder after a big drop, which is exactly the loss case for a short. **BUT:** (i) the covered subset is a bull-regime 3-month slice, not representative of the 4-year corpus; (ii) the 20–30 % and ≥30 % buckets fail pre-committed gate (b) at n=290 / n=111; (iii) no bucket clears pre-committed gate (a). **Under the pre-committed adoption rule, NO gate change adopts on this evidence.**
+
+*Excess-threshold re-derivation:* deferred until historical SI backfill lands — running excess-band curves on a 3-month single-regime slice would violate the same discipline as ACT-521's honesty-gates re-run.
+
+**Immediate consequences.**
+- W5-05 CANNOT COMPLETE tonight — blocked on ACT-527 historical SI backfill.
+- Natural experiment (21:00Z SI fire + Thu 22:00Z detection) still runs; expected to collapse `si_unavailable` refusals to zero and reveal `si_below_squeeze_threshold` as the primary blocker (Door 3 in the funnel decomposition).
+- Live short gate stack remains **UNCHANGED** pending the augmented curve; parity note stands.
+- **W5 short-side verdict is on hold** until the study corpus is stamped with SI and the same gate stack applied to it.
+
+**Cross-references:** ACT-504 (SI pipeline & threshold review — parent), DEC-504-1 (SI cadence/backfill), DEC-504-3 (staleness watchdog), DEC-504-5a (this ratification), FP-CANDIDATE-ix (calendar-aware staleness, dormant), ACT-505 (long-side study-vs-live parity precedent), ACT-521 (honesty-gates discipline precedent), **ACT-527** (historical SI backfill — new charter to be opened), `overshoot_study_candidate_events`, `overshoot_short_interest`, `_shared/overshoot/detector/detector.ts` (`SHORT_SI_SQUEEZE_PARAMS_JSON`).
+
+**Added by:** Lovable at operator direction, 2026-07-15 (ACT-526 accepted; DEC-504-5a ratified; augment first-pass filed with coverage blocker surfaced).
+
 ### ACT-493 (2026-07-15, 10:39Z): EXIT-RUN ARM — **PLAN DEVIATION FILED, expectations unchanged.**
 
 **Deviation:** primary `overshoot.exit.run` registry row flipped `enabled=false → true` on **Wed 2026-07-15 10:39:12Z** (operator "GO exit-arm" paste), not the ratified Friday 2026-07-17 ~15:45 ET bracket window. `overshoot.exit.run.catchup` remains disarmed as specced.
