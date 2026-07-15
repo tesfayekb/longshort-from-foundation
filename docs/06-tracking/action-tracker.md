@@ -1,4 +1,37 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-527 (2026-07-15): CHARTER — **Historical SI backfill for W5-05 full-corpus regime-stratified curve.** APPROVED CONDITIONAL on source+cost statement (this filing); execute-on-approval-of-statement.
+
+**Motivation.** ACT-526 augment first-pass runs on 16.56 % (43,723/263,963) corpus coverage — a 3-month single-regime bull-slice — which fails the pre-committed adoption gate (n≥1000 with monotone stability) on every high-SI bucket. The pre-committed rule holds and no gate change adopts. To resolve W5-05 (and to rule on the INC-106 gate-direction inversion) the corpus needs SI stamped across its full span (2022-03-08 → 2026-07-02) with a regime cut.
+
+**Source + cost statement (for operator approval BEFORE execution).**
+
+*Source.* **Polygon `/stocks/v1/short-interest`** — the existing `_shared/overshoot/polygon-short-interest-fetcher.ts` (FP-069 W3.3.a). Endpoint returns settlement-date-keyed report rows with `short_interest` (RAW share count), `avg_daily_volume`, `days_to_cover`. Historical reach: SEC bi-monthly filings back to at least 2005; Polygon's Stocks Advanced entitlement is required (already held via `POLYGON_API_KEY`). `si_pct_float` is derived downstream in the compute (fetcher deliberately returns raw counts per header comment lines 15–30). No FINRA-direct integration required; no new vendor onboarding.
+
+*Call volume.* Corpus span 2022-03-08 → 2026-07-02 ≈ **4.32 years × 2 SEC settlements/month ≈ 104 settlement dates**. Universe from `overshoot_universe`: **839 tickers**. Naïve upper bound: **839 × 104 ≈ 87,256 report-points**. Fetcher shape returns most-recent-first with `limit` param; a single call per ticker with `limit=120` (~5 years of bi-monthly points, headroom) covers the full span → **~839 API calls minimum** (one per ticker), each returning up to 120 rows. Retry/backfill for tickers with entitlement-gated `unavailable` responses adds negligible overhead (typed absence, no retry loop per fetcher lines 32–37).
+
+*Tier/cost implication.* Stocks Advanced subscription: **subscription-flat, no per-call charge** (verified against key rotation in `POLYGON_API_KEY_PROD_PROBE` register). Rate limits: unlimited requests/min on Stocks Advanced. **Wall-clock:** at ~1.5 s/call sequential (retry-tolerant), 839 calls × 1.5 s ≈ **21 minutes** end-to-end. Batched in the existing W1b `full:true` cursor-resume shape (§22.8.5 CPU/wall-clock ceiling — ~60 tickers/invocation): **⌈839/60⌉ ≈ 14 edge-function invocations**. Operator loop matches the earnings-calendar D-5 backfill pattern (per `overshoot.md:173-181`).
+
+*Ingest shape.* Writes to the existing **`overshoot_short_interest`** table (`(operator_id, ticker, as_of_date)` PRIMARY-KEY-scoped, per §22.5.1). Columns already correct: `ticker`, `as_of_date` (= `settlement_date`), `si_pct_float` (derived downstream from `share_class_shares_outstanding`), `dtc`, `source_run_id`, `created_at`. **No schema migration required.** Idempotent upsert on `(operator_id, ticker, as_of_date)` — re-running the backfill is a no-op on already-populated rows. Typed absence preserved: entitlement-gated / `data_unavailable` → row omitted (NEVER fabricated 0/NULL).
+
+**Approach — sequenced execution on statement approval.**
+1. **Feasibility probe (1 ticker, wall-clock check).** Call the fetcher for `AAPL, limit=120` — confirm settlement-date coverage extends to 2022-03 or earlier; measure round-trip latency; verify no entitlement 403 on the historical range.
+2. **Dry-run (10 tickers, no writes).** Fetch, compute `si_pct_float` via existing derivation, emit expected-row-count histogram — sanity-check bucket distribution vs the 3-month coverage subset (guardrail: high-SI buckets should scale to n≥1000 by regime).
+3. **Prod backfill (batched, cursor-resume, 14 invocations).** Same operator loop as the ratified W1b/D-5 batching pattern; batch-cap 60 tickers/invocation; `done: boolean` termination.
+4. **Verify.** Coverage query analogous to the ACT-526 augment: `(covered_events / total_short_events)` should rise from 16.56 % toward ≥95 % (small residual = entitlement-gated tickers, typed absence).
+5. **Re-run curve — MANDATORY REGIME CUT.** SI-bucket × regime, where regime is derived from the study's ratified regime stamps (bull 2023H2–2026, bear 2022, transition 2023H1). The full-corpus curve MUST show whether short edge is regime-conditional; if it is, the finding points at a **regime-gated sleeve** rather than an SI-gated one, and DEC-504-5a's adoption question broadens accordingly.
+
+**Pre-committed rule inheritance.** The ACT-526 adoption gate (per-slot-day ≥ 15%-class floor + n≥1000 + monotone stability) applies verbatim to the full-corpus curve. Regime stratification adds a fourth gate: **(e) regime-conditional edge must clear the floor within its stratum, not aggregated over the pooled corpus** (protects against a bear-regime cell single-handedly carrying the average).
+
+**INC-106 sequencing.** The gate-direction inversion filed as INC-106 is BLOCKED on this backfill + regime-stratified curve. Direction and threshold must be ruled on jointly; a direction fix without the curve would violate the ACT-526 pre-committed rule.
+
+**Natural experiment posture (unchanged).** DEC-504-1 arms tonight 21:00Z; Thu 22:00Z detection run reports before/after. The expected outcome (`si_below_squeeze_threshold` becomes the primary blocker → zero shorts admitted) is now identified as the SAFE state per INC-106 — the gate refusing everything is the safe state until the curve rules on direction.
+
+**Approval required BEFORE step 1 executes.** Operator confirmation on: (a) Polygon as source (FINRA-direct alternative filed as FP-CANDIDATE-x, dormant unless Polygon entitlement gaps discovered at step 1); (b) 839 × 104 volume envelope; (c) Stocks Advanced subscription-flat cost posture; (d) `overshoot_short_interest` ingest shape verbatim.
+
+**Cross-references:** ACT-526 (parent — augment first-pass + DEC-504-5a ratification), INC-106 (gate-direction inversion — BLOCKED on this backfill), DEC-504-1 (SI cadence), DEC-504-3 (staleness watchdog — 21d fixed), DEC-504-5a (W5-05 pull-forward), `overshoot_short_interest` table (§22.5.1), `_shared/overshoot/polygon-short-interest-fetcher.ts` (FP-069 W3.3.a), `overshoot-backfill-*-manual` W1b/D-5 batching pattern (`overshoot.md:173-181`), `POLYGON_API_KEY` (Stocks Advanced entitlement).
+
+**Added by:** Lovable at operator direction, 2026-07-15 (ACT-527 source+cost statement filed; execute-on-approval).
+
 ### ACT-526 (2026-07-15): SHORT-SIDE FUNNEL DECOMPOSITION — **accepted; DEC-504-5a RATIFIED, pull W5-05 forward to run PARALLEL with W5.** Rulings + study-augment first evidence + coverage caveat filed.
 
 **Rulings (operator, verbatim intent).**
