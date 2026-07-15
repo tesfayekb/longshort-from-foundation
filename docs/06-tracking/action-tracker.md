@@ -6355,3 +6355,34 @@ One table per bucket answering **continue (go long) / revert (go short) / flat (
 >
 > **Rationale:** self-describing artifacts (spec JSON strings, sha pins, version constants, parity fixtures) are one system with the code they describe. Updating any subset silently splits truth from description and turns the audit trail into a lie. The 2026-07-15 gate-11 red on `detector_test.ts:704` + `selection-parity_test.ts:280` + the T2.1b reproducibility test was CI catching exactly this class of miss — the tests worked, the earlier flip landing did not.
 
+---
+
+### ACT-533 — INC-107 filed + fixed (watchdog exit-leg artifact remap + INC-95 arm-floor pull-forward)
+
+**Date:** 2026-07-15 · **Mode:** revision-fix (single-commit).
+
+**INC filed.** INC-107 grep-verified as the next free number (`grep -rohE 'INC-[0-9]+' docs/` → max prior = INC-106). Filing narrates:
+
+- Trigger→artifact map for `overshoot.exit.run` read `overshoot_entry_runs.created_at` — attributing the entry-run's Tue 13:35Z artifact to the exit leg. Operator's 10:40Z alert `last_actual_fire=2026-07-14T13:35:04.249683Z` is byte-identical to entry-run row `a8fbb0d3`'s `created_at`.
+- Two-sided defect: (1) FALSE PAGE visible today because the entry-run row predates today's expected 19:50Z exit slot; (2) MASKED DEATH — a fresh entry-run row (today 13:35Z) will make a dead exit slot (yesterday 19:50Z) appear "healthy" any weekday morning after ~14:00Z. The masked case is the dangerous one — watchdog paging is precisely the surface that must not silently fail-open.
+
+**Fix landed same commit.**
+
+1. `supabase/functions/overshoot-alerts-dispatcher/index.ts:428` — `overshoot.exit.run` mapping repointed to `{ table: 'overshoot_audit_logs', tsCol: 'created_at', actionPrefix: 'overshoot.exit.' }`. Scanner threads new optional `actionPrefix` field through `.like('action', 'overshoot.exit.%')`. Rationale: exit-run family has no dedicated runs table (`overshoot-exit-run/index.ts:56` — "run row (overshoot_exit_runs? — NOT built this wave"); ~10 distinct `overshoot.exit.*` audit actions cover every executed-tick outcome (submitted, refusals, guards, submit_failed, `<class>`).
+2. `supabase/functions/_shared/cron-schedule.ts:134` — `evaluateOverdue` gained optional 5th arg `floorMs`; suppresses paging on any `lastExpected < floorMs`. Dispatcher passes `armedAtMs = job_registry.updated_at` for each row. **This is the INC-95 install-time refinement, backlogged since 2026-07-10, pulled forward under operator ruling — the second leg to page on pre-arm slots (fill_sweep 2026-07-09; exit.run 2026-07-15) shows the pattern is recurring, closing the arm-day false-page class permanently.**
+3. Dispatcher version echo bumped `inc97-independent-a5-v1-20260710 → inc107-exit-artifact-fix-and-arm-floor-20260715`.
+
+**Regression tests (5 new).** Deno cron-schedule tests + dispatcher source-anchor asserts. All 21 tests in the dispatcher / cron-schedule scope pass. Anchors verified:
+
+- exit.run pre-arm slot must NOT page under floor;
+- exit.run post-arm missed slot must page (correctness preserved);
+- fill_sweep 2026-07-09 arm-day fence retested with floor → no page (INC-95 backlog case retroactively covered);
+- floor default 0 preserves pre-INC-107 caller semantics;
+- Dispatcher source: no entry-run mapping for exit.run, actionPrefix threaded, `updated_at` selected, `evaluateOverdue` called with the 5-arg floor.
+
+**Deploy & verify.** `overshoot-alerts-dispatcher` redeployed. Live GET returns `version=inc107-exit-artifact-fix-and-arm-floor-20260715`, `ok=true`. Version-uniformity scope (ACT-529 rule): dispatcher is the sole consumer of `evaluateOverdue` and the trigger→artifact map — single-function redeploy is sufficient here, unlike the detector-version bump.
+
+**Tonight's natural-experiment reporting stands** — 21:00Z SI heal → 22:00Z detection under flipped gate `a026dc51`. Under the corrected 2026-04-15 parity fixture, fresh SI + flipped gate may produce the FIRST live short candidates passing the squeeze gate. If any SHORT is actually SELECTED tonight, that is a NEW behavioral first and gets its own evidence block. **Reminder recorded:** entry-side shorts still face shortability/locate gates downstream — detection-run SELECTION ≠ entry-run EXECUTION; a selected short can still be refused by the borrow lookup before an order reaches the broker.
+
+**Class rule filed twice, promotion threshold reached at 3.** INC-97 (fill_sweep) + INC-107 (exit.run) both exhibit "trigger→artifact mapping for a job without a dedicated runs table incorrectly points at a sibling job's runs table." If a third instance surfaces, promote to a lint-time guard (`check-overshoot-separation.ts` extension or new `check-watchdog-artifact-mapping.ts`). Not built this turn.
+
