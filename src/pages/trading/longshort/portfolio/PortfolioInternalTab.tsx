@@ -61,8 +61,8 @@ export function PortfolioInternalTab({ lots, positions, isLoading }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="text-xs text-muted-foreground min-w-0 flex-1">
           Reconciled internal ledger — open lots in longshort_lots. Since-fill
           P&amp;L is derived from the matched broker mark when available;
           otherwise not shown.

@@ -9,7 +9,8 @@
 import {
   OvershootExecutionPage as OvershootExecutionTrailCard,
   OvershootHubTabs,
-  OvershootHubEmptyState,
+  OvershootExecutionRefusals,
+  OvershootExecutionAuditLog,
 } from '@/features/overshoot';
 
 export default function OvershootExecutionPage() {
@@ -25,24 +26,12 @@ export default function OvershootExecutionPage() {
         {
           value: 'refusals',
           label: 'Reconciliation Refusals',
-          content: (
-            <OvershootHubEmptyState
-              title="A5 reconciliation refusals"
-              description="Typed refusals from the entry gate (position_already_open, etc.) and exit-side reconciliation blocks surface here once the A5 alerting layer lands. Refusal rows are already persisted to overshoot_audit_logs — this tab will filter them into their own stream."
-              note="Pending — FP-069-CANDIDATE-v (A5 alerting)"
-            />
-          ),
+          content: <OvershootExecutionRefusals />,
         },
         {
           value: 'audit',
           label: 'Audit Log',
-          content: (
-            <OvershootHubEmptyState
-              title="Raw audit log"
-              description="Unfiltered overshoot_audit_logs stream (all event types) with correlation-id grouping. The Entry/Exit Trail tab already surfaces the two most operator-relevant event families; this tab is the full-fidelity fallback."
-              note="Pending — pairs with the A5 tab"
-            />
-          ),
+          content: <OvershootExecutionAuditLog />,
         },
       ]}
     />

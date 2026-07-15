@@ -112,6 +112,10 @@ export const overshootNav: NavSection = {
 export { OvershootOverview as OvershootOverviewPage } from './components/OvershootOverview';
 export { OvershootDetectorRuns as OvershootDetectorPage } from './components/OvershootDetectorRuns';
 export { OvershootExecutionTrail as OvershootExecutionPage } from './components/OvershootExecutionTrail';
+export {
+  OvershootExecutionRefusals,
+  OvershootExecutionAuditLog,
+} from './components/OvershootExecutionTrail';
 export { OvershootPositions as OvershootPortfolioPositionsPage } from './components/OvershootPositions';
 export { OvershootPnL as OvershootPortfolioPnLPage } from './components/OvershootPnL';
 export { OvershootConfigPanel as OvershootConfigPage } from './components/OvershootConfigPanel';

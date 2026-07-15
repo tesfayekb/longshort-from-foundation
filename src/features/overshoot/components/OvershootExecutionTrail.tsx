@@ -313,7 +313,10 @@ function RunCard({ correlationId, rows }: { correlationId: string | null; rows: 
             ))}
           </span>
         )}
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground truncate max-w-[240px]">
+        <span
+          className="ml-auto font-mono text-[10px] text-muted-foreground truncate max-w-[240px] min-w-0"
+          title={correlationId ?? undefined}
+        >
           cid: {correlationId ?? '—'}
         </span>
       </button>
@@ -328,6 +331,10 @@ function RunCard({ correlationId, rows }: { correlationId: string | null; rows: 
   );
 }
 
+/**
+ * Trail tab — Entry runs (MIG-157) + Entry/Exit money-path grouped by
+ * correlation_id. Sparse until first-light bracket executes.
+ */
 export function OvershootExecutionTrail() {
   // T4 (ACT-481) — recent overshoot_entry_runs (MIG-157). Read-only. Uses
   // the new scoped SELECT policy (`overshoot_entry_runs_view_read`, MIG-158)
@@ -346,21 +353,6 @@ export function OvershootExecutionTrail() {
     },
   });
 
-  // Recent audit rows (all-actions view, most recent 50) — arm/disarm +
-  // config + short-interest lifecycle + (once EXEC lands) entry/exit.
-  const auditQuery = useQuery({
-    queryKey: ['overshoot', 'execution', 'audit-recent'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('overshoot_audit_logs')
-        .select('id,action,target_type,target_id,correlation_id,created_at,metadata')
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return (data ?? []) as AuditRow[];
-    },
-  });
-
   // Entry/exit slice — the "money-path" surface. Sparse until first-light.
   const entryExitQuery = useQuery({
     queryKey: ['overshoot', 'execution', 'entry-exit'],
@@ -373,21 +365,6 @@ export function OvershootExecutionTrail() {
         .limit(200);
       if (error) throw error;
       return (data ?? []) as AuditRow[];
-    },
-  });
-
-  // A5 reconciliation refusals — render as destructive Alert rows when present.
-  const reconciliationQuery = useQuery({
-    queryKey: ['overshoot', 'execution', 'reconciliation-refusals'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('reconciliation_events')
-        .select('event_id,call_name,outcome,tier,symbol,ts')
-        .in('call_name', A5_RECONCILIATION_CLASSES as unknown as string[])
-        .order('ts', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data ?? [];
     },
   });
 
@@ -443,6 +420,7 @@ export function OvershootExecutionTrail() {
               until first-light. Scoped read policy visible to <code className="font-mono">overshoot.view</code>.
             </p>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -481,7 +459,10 @@ export function OvershootExecutionTrail() {
                       <TableCell className="font-mono text-[10px] text-muted-foreground">
                         {r.dry_run ? 'true' : 'false'}
                       </TableCell>
-                      <TableCell className="font-mono text-[10px] text-muted-foreground max-w-[280px] truncate">
+                      <TableCell
+                        className="font-mono text-[10px] text-muted-foreground max-w-[280px] truncate"
+                        title={ctx || undefined}
+                      >
                         {ctx || '—'}
                       </TableCell>
                     </TableRow>
@@ -489,39 +470,6 @@ export function OvershootExecutionTrail() {
                 })}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* A5 reconciliation refusal alerts */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Reconciliation Refusals (A5 classes)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {reconciliationQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : reconciliationQuery.isError ? (
-            <p className="text-sm text-destructive">
-              Failed to load reconciliation events: {(reconciliationQuery.error as Error).message}
-            </p>
-          ) : (reconciliationQuery.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No A5 reconciliation refusals recorded ({A5_RECONCILIATION_CLASSES.join(', ')}).
-              This surface fires only after the exit engine has run against real broker positions.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {(reconciliationQuery.data ?? []).map((ev) => (
-                <Alert key={ev.event_id} variant="destructive">
-                  <AlertTitle className="font-mono text-xs">
-                    {ev.call_name} · {ev.symbol ?? '—'} · {formatTs(ev.ts)}
-                  </AlertTitle>
-                  <AlertDescription className="font-mono text-[11px]">
-                    outcome={ev.outcome ?? '—'} · tier={ev.tier ?? '—'}
-                  </AlertDescription>
-                </Alert>
-              ))}
             </div>
           )}
         </CardContent>
@@ -577,24 +525,100 @@ export function OvershootExecutionTrail() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
 
-      {/* Recent audit trail (all actions) — current live fixtures live here */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Audit Trail (last 50)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {auditQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : auditQuery.isError ? (
-            <p className="text-sm text-destructive">
-              Failed to load audit rows: {(auditQuery.error as Error).message}
-            </p>
-          ) : (auditQuery.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No overshoot audit rows visible under current RLS.
-            </p>
-          ) : (
+/**
+ * Reconciliation refusals tab — A5 typed refusals from reconciliation_events.
+ * ACT-525 (UI sweep item 3): moved out of OvershootExecutionTrail into its
+ * own tab so the Execution page's three tabs each render their own content.
+ */
+export function OvershootExecutionRefusals() {
+  const reconciliationQuery = useQuery({
+    queryKey: ['overshoot', 'execution', 'reconciliation-refusals'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reconciliation_events')
+        .select('event_id,call_name,outcome,tier,symbol,ts')
+        .in('call_name', A5_RECONCILIATION_CLASSES as unknown as string[])
+        .order('ts', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Reconciliation Refusals (A5 classes)</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {reconciliationQuery.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : reconciliationQuery.isError ? (
+          <p className="text-sm text-destructive">
+            Failed to load reconciliation events: {(reconciliationQuery.error as Error).message}
+          </p>
+        ) : (reconciliationQuery.data ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No A5 reconciliation refusals recorded ({A5_RECONCILIATION_CLASSES.join(', ')}).
+            This surface fires only after the exit engine has run against real broker positions.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {(reconciliationQuery.data ?? []).map((ev) => (
+              <Alert key={ev.event_id} variant="destructive">
+                <AlertTitle className="font-mono text-xs break-all">
+                  {ev.call_name} · {ev.symbol ?? '—'} · {formatTs(ev.ts)}
+                </AlertTitle>
+                <AlertDescription className="font-mono text-[11px]">
+                  outcome={ev.outcome ?? '—'} · tier={ev.tier ?? '—'}
+                </AlertDescription>
+              </Alert>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Audit log tab — full-fidelity overshoot_audit_logs stream (last 50).
+ * ACT-525 (UI sweep item 3): moved out of OvershootExecutionTrail.
+ */
+export function OvershootExecutionAuditLog() {
+  const auditQuery = useQuery({
+    queryKey: ['overshoot', 'execution', 'audit-recent'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('overshoot_audit_logs')
+        .select('id,action,target_type,target_id,correlation_id,created_at,metadata')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []) as AuditRow[];
+    },
+  });
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Recent Audit Trail (last 50)</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {auditQuery.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : auditQuery.isError ? (
+          <p className="text-sm text-destructive">
+            Failed to load audit rows: {(auditQuery.error as Error).message}
+          </p>
+        ) : (auditQuery.data ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No overshoot audit rows visible under current RLS.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -606,22 +630,25 @@ export function OvershootExecutionTrail() {
               <TableBody>
                 {(auditQuery.data ?? []).map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="align-top font-mono text-xs">
+                    <TableCell className="align-top font-mono text-xs whitespace-nowrap">
                       {formatTs(row.created_at)}
                     </TableCell>
-                    <TableCell className="align-top">
+                    <TableCell className="align-top min-w-0">
                       <AuditRowCell row={row} />
                     </TableCell>
-                    <TableCell className="align-top font-mono text-[10px] text-muted-foreground">
+                    <TableCell
+                      className="align-top font-mono text-[10px] text-muted-foreground break-all"
+                      title={row.correlation_id ?? undefined}
+                    >
                       {row.correlation_id ?? '—'}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

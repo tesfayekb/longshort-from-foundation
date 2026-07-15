@@ -14,6 +14,39 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/dashboard/PageHeader';
+import { PnlCell, sumPriced } from '@/components/trading/portfolio/format';
+
+function BookTotalStrip({
+  label,
+  daily,
+  since,
+  bold,
+}: {
+  label: string;
+  daily: ReturnType<typeof sumPriced>;
+  since: ReturnType<typeof sumPriced>;
+  bold?: boolean;
+}) {
+  return (
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${bold ? 'font-semibold' : ''}`}>
+      <span className="text-muted-foreground uppercase text-[10px] tracking-wide">{label}</span>
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <span className="text-muted-foreground text-[10px]">daily</span>
+        <PnlCell v={daily.sum} />
+        {daily.total > 0 && daily.priced !== daily.total && (
+          <span className="text-[10px] text-muted-foreground">({daily.priced}/{daily.total})</span>
+        )}
+      </span>
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <span className="text-muted-foreground text-[10px]">since-fill</span>
+        <PnlCell v={since.sum} />
+        {since.total > 0 && since.priced !== since.total && (
+          <span className="text-[10px] text-muted-foreground">({since.priced}/{since.total})</span>
+        )}
+      </span>
+    </div>
+  );
+}
 import {
   OvershootHubTabs,
   OvershootPortfolioPnLPage,
@@ -68,6 +101,18 @@ export default function OvershootPortfolioPage() {
     ), 0);
   const sizingBase = latestSnapshot ? latestSnapshot.broker_equity : null;
 
+  // ACT-525 (UI sweep item 2) — top-of-page totals strip so the day's P&L
+  // is legible without scrolling the tabs. Sums broker rows (typed-absence
+  // honesty via sumPriced; nulls excluded, never fabricated to 0).
+  const longRows = broker.filter((p) => p.side === 'long');
+  const shortRows = broker.filter((p) => p.side === 'short');
+  const longDaily = sumPriced(longRows.map((r) => r.unrealized_intraday_pl));
+  const longSince = sumPriced(longRows.map((r) => r.unrealized_pl));
+  const shortDaily = sumPriced(shortRows.map((r) => r.unrealized_intraday_pl));
+  const shortSince = sumPriced(shortRows.map((r) => r.unrealized_pl));
+  const netDaily = sumPriced(broker.map((r) => r.unrealized_intraday_pl));
+  const netSince = sumPriced(broker.map((r) => r.unrealized_pl));
+
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => (t + 1) % 1_000_000), 1000);
@@ -89,6 +134,37 @@ export default function OvershootPortfolioPage() {
           labelPrefix="Cap compliance:"
         />
       </div>
+
+      {/* Book totals summary — day's P&L legible above the tabs. */}
+      {!query.isLoading && broker.length > 0 ? (
+        <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+            Book totals (broker-truth)
+          </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs">
+            {longRows.length > 0 && (
+              <BookTotalStrip
+                label={`Long book · ${longRows.length}`}
+                daily={longDaily}
+                since={longSince}
+              />
+            )}
+            {shortRows.length > 0 && (
+              <BookTotalStrip
+                label={`Short book · ${shortRows.length}`}
+                daily={shortDaily}
+                since={shortSince}
+              />
+            )}
+            <BookTotalStrip
+              label={`Net · ${broker.length}`}
+              daily={netDaily}
+              since={netSince}
+              bold
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs text-muted-foreground">
