@@ -1,4 +1,18 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
+### ACT-493 (2026-07-15, 10:39Z): EXIT-RUN ARM — **PLAN DEVIATION FILED, expectations unchanged.**
+
+**Deviation:** primary `overshoot.exit.run` registry row flipped `enabled=false → true` on **Wed 2026-07-15 10:39:12Z** (operator "GO exit-arm" paste), not the ratified Friday 2026-07-17 ~15:45 ET bracket window. `overshoot.exit.run.catchup` remains disarmed as specced.
+
+**Rationale (operator, filed verbatim):** *"Safe by arithmetic — no lot can reach horizon before 07-22 under the deployed engine; tonight/Thu/Fri become three rehearsal ticks."*
+
+**Arithmetic safety proof.** Deployed exit-run today is pre-ACT-510 (uniform T+10 horizon; ACT-510 code merged, deploy held to Saturday). All 50 open lots were entered ≤ 2026-07-10, oldest T+10 maturity ≥ 2026-07-24 (>Fri 07-17). Session-age gate refuses every lot each of the three pre-Saturday ticks (`session_age_no_fire=50`, `exits_submitted=0`, `in_flight_guard.branch="primary"`, no `cron_reason`). Wed/Thu/Fri 19:50Z ticks become **three rehearsal ticks** instead of one, each with the same predicted shape as the original Friday bracket. Zero incremental risk (no lot can fire), added benefit (2 extra live-firing observations before the Monday post-deploy ACT-510 first-exit wave).
+
+**Fence state at ARM (evidence).** `SELECT ... FROM job_registry` — both rows `enabled=false` pre-flip; schedules byte-match (`50 19 * * 1-5` primary, `0 14 * * 1-5` catchup). Open-lot census: 50 open / 0 negative_qty / 0 null_qty. `T_arm` pinned `2026-07-14 21:59:00.897343+00` (max `overshoot_audit_logs.created_at`). Zero non-active kill-switches on strategy `overshoot`. Post-flip verification confirms `overshoot.exit.run` `enabled=true, updated_at=2026-07-15 10:39:12Z`, catchup untouched.
+
+**Expectations (unchanged from Friday bracket, now applying to three ticks Wed/Thu/Fri 19:50Z pre-Saturday-deploy):** `status=completed`, `positions_examined=50`, `exits_submitted=0`, `refusals.session_age_no_fire=50`, `refusals.market_closing_soon=0`, `in_flight_guard.branch="primary"`, `minutes_to_close≈10`, `cron_reason` absent, zero pages. Any deviation → immediate DISARM (`UPDATE job_registry SET enabled=false WHERE id='overshoot.exit.run'`).
+
+**Saturday deploy + Monday first-exit wave + Tuesday catchup gate sequencing unchanged.**
+
 ### ACT-524 (2026-07-14, 13:50Z): FIRST FULLY AUTONOMOUS OVERSHOOT ENTRY — Wave-2 verification GREEN, entry leg PERMANENTLY ARMED. No code, no migrations (attestation only).
 
 **Fire evidence:** cron slot-a fired 13:35:04Z (09:35 EDT). `overshoot_entry_runs` row `a8fbb0d3` — 36 targets evaluated / **0 orders submitted** on typed refusals (accounting identity holds: targets_loaded = orders_submitted + Σ refusals + no-ops). Refusal identity confirmed per Wave-2 protocol. Handler-side idempotency gate armed for slot-b at 14:35Z (winter no-op path).
