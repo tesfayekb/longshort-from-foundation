@@ -119,12 +119,12 @@ Deno.test('CLASS-1 regression fence: fill_sweep at 07:45Z when last actual > las
 // INC-107 pull-forward of the INC-95 install-time floor refinement.
 Deno.test('INC-107: expected slot predating armedAt floor must NOT page (exit.run today-scenario)', () => {
   // Wed 2026-07-15 armed at 10:39:12Z. Exit-run schedule `50 19 * * 1-5`;
-  // dispatcher runs at ~20:00Z. Last expected = today 19:50Z (AFTER arm),
-  // last_actual = 0. Without the floor this pages. With the floor set to
-  // the arm time, 19:50Z ≥ armedAt → still pages. This is the CORRECT
-  // behaviour when the arm precedes the slot — the exit-run genuinely
-  // should have fired.
-  const at = new Date('2026-07-15T20:05:00Z');
+  // dispatcher runs at ~20:25Z (past 19:50Z + 30min tolerance). Last
+  // expected = today 19:50Z (AFTER arm), last_actual = 0. With the floor
+  // set to the arm time, 19:50Z ≥ armedAt → pages, which IS the correct
+  // behaviour when the arm precedes the slot and the slot genuinely
+  // missed.
+  const at = new Date('2026-07-15T20:25:00Z');
   const armedAtMs = Date.parse('2026-07-15T10:39:12Z');
   const v = evaluateOverdue('50 19 * * 1-5', at, 0, TOL, armedAtMs);
   assertEquals(v.overdue, true);
