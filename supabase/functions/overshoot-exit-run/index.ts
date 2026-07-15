@@ -79,6 +79,25 @@
  *              dry_run=true so the accounting identity above is
  *              observable without moving money.
  *
+ * ACT-493 v1 delta (Turn 2, uniform T+11 = Q1c ZERO horizon delta):
+ *   - M3 half-day awareness: OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE=10 gates
+ *     a run-level 'market_closing_soon' typed refusal AFTER the existing
+ *     'market_closed' short-circuit. Prevents partial fills near the bell
+ *     on early-close sessions where the catch-up cron might fire late.
+ *   - M5 groundwork: pre-loop fetch of Alpaca open orders filtered by CID
+ *     intent segment ('exit_time' | 'exit_manual') builds an
+ *     inFlightExitKeys set. Matched (symbol, side) pairs already carrying
+ *     a resting DAY-limit exit are skipped with the new
+ *     'in_flight_exit_order_skipped' tally class + audit row. Guards the
+ *     catch-up cron (Turn 3 landing) against double-submit against the
+ *     primary tick's still-open order. Degraded-to-empty on broker
+ *     /v2/orders transient failure: engine CONTINUES with an empty guard
+ *     set + audit 'overshoot.exit.in_flight_guard_degraded' — never-exit
+ *     is a worse failure mode than a rare double-submit.
+ *   Horizons UNCHANGED: LONG=10 (ACT-471 HARD), SHORT=5 (ACT-472 HARD).
+ *   Canary pins for those two constants remain in place; the additive
+ *   tally keys land with test canary updates in the same commit.
+ *
  * Price source: POLYGON ONLY (Stocks Advanced, POLYGON_API_KEY_PROD_PROBE).
  * Alpaca market-data endpoints (the data-host / stocks-quotes surface) are
  * FORBIDDEN in this file -- see the separation-guard grep in W3.6.d-ii
