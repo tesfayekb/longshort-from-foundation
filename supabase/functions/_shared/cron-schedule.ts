@@ -127,21 +127,32 @@ export function lastExpectedFireAt(expr: string, at: Date): Date | null {
  * Convenience wrapper: is a scheduled job overdue?
  * Returns { overdue, lastExpected } where `overdue` is true iff
  *   lastExpected != null AND lastExpected > lastActual + tolerance AND
- *   now > lastExpected + tolerance.
+ *   now > lastExpected + tolerance AND lastExpected >= floorMs.
  * Caller passes `lastActualMs = 0` when the job has never fired; the
  * comparison then trivially reports overdue against the most recent slot.
+ *
+ * INC-95 refinement (INC-107 pull-forward, 2026-07-15): `floorMs` (optional)
+ * is the LATER of the cron.job install time and the registry-arm time
+ * (`job_registry.updated_at` on the enabled=true transition). Any expected
+ * slot that predates `floorMs` is operationally void — pgcron cannot fire
+ * slots that predate the cron row, and the registry-arm floor eliminates
+ * pre-arm phantom slots (the sibling class defect that produced the
+ * fill_sweep false-page on 2026-07-09 and would produce the exit.run
+ * false-page on today's 19:50Z slot without this floor).
  */
 export function evaluateOverdue(
   expr: string,
   now: Date,
   lastActualMs: number,
   toleranceMs: number,
+  floorMs: number = 0,
 ): { overdue: boolean; lastExpected: Date | null } {
   const lastExpected = lastExpectedFireAt(expr, now);
   if (!lastExpected) return { overdue: false, lastExpected: null };
   const expMs = lastExpected.getTime();
   const overdue =
     now.getTime() > expMs + toleranceMs &&
-    expMs > lastActualMs + toleranceMs;
+    expMs > lastActualMs + toleranceMs &&
+    expMs >= floorMs;
   return { overdue, lastExpected };
 }
