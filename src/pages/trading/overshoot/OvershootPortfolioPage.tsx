@@ -15,6 +15,38 @@ import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { PnlCell, sumPriced } from '@/components/trading/portfolio/format';
+
+function BookTotalStrip({
+  label,
+  daily,
+  since,
+  bold,
+}: {
+  label: string;
+  daily: ReturnType<typeof sumPriced>;
+  since: ReturnType<typeof sumPriced>;
+  bold?: boolean;
+}) {
+  return (
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${bold ? 'font-semibold' : ''}`}>
+      <span className="text-muted-foreground uppercase text-[10px] tracking-wide">{label}</span>
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <span className="text-muted-foreground text-[10px]">daily</span>
+        <PnlCell v={daily.sum} />
+        {daily.total > 0 && daily.priced !== daily.total && (
+          <span className="text-[10px] text-muted-foreground">({daily.priced}/{daily.total})</span>
+        )}
+      </span>
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <span className="text-muted-foreground text-[10px]">since-fill</span>
+        <PnlCell v={since.sum} />
+        {since.total > 0 && since.priced !== since.total && (
+          <span className="text-[10px] text-muted-foreground">({since.priced}/{since.total})</span>
+        )}
+      </span>
+    </div>
+  );
+}
 import {
   OvershootHubTabs,
   OvershootPortfolioPnLPage,
