@@ -6318,3 +6318,40 @@ One table per bucket answering **continue (go long) / revert (go short) / flat (
 - **T0 + step 3:** compute per-bucket × regime × horizon return grid from T+1-open basis; write to `overshoot_study_cell_results` under the ACT-531 run tag.
 - **T0 + step 4:** produce the direction-map table + the four overlays (i)–(iv); operator review; **STOP**.
 
+---
+
+### ACT-532 — INC-106 SPEC-TRUTH CORRECTION (self-describing artifact atomicity, Catalog-class)
+
+**Date:** 2026-07-15 · **Mode:** revision-fix (single-commit atomic correction).
+
+**Miss recorded against INC-106.** The direction-flip commit updated the SHORT gate code + `RATIFIED_DETECTOR_VERSION` (`b7cdfcd8` → `a026dc51`) + boot-echoes, but LEFT three self-description anchors STALE against the code they describe:
+
+1. `supabase/functions/_shared/overshoot/detector/detector.ts:472` — `DETECTOR_PREDICATE_SPEC_V2_JSON`'s `short` block still asserted `byte_unchanged_from_v1:true`. Falsified by the flip. **Fix:** rewrote the short block to declare `byte_unchanged_from_v1:false` and added an `inc_106_direction_flip` object citing `approved-decisions.md:852 (R2)`, comparison direction verbatim (`si_pct_float < squeezeSiPctFloatMin admits; >= refuses as si_above_squeeze_threshold`), `refusal_reason=si_above_squeeze_threshold`, `threshold_value=0.20`, `threshold_status=pending_ACT-527_curve`. Not test-appeasement — the deployed spec was misdescribing its own code.
+2. `detector_test.ts:704` — re-pinned to the corrected claim; added five assertions on the new `inc_106_direction_flip` block (act_ref, ratification, refusal_reason, threshold_value, threshold_status).
+3. `detector_test.ts:661` — the T2.1b composite-derivation invariant (`sha256(study_full_hash || spec_v2_json)[:8] == RATIFIED_DETECTOR_VERSION`) was ALSO stale. INC-106 rebased the version derivation onto the incident anchor `sha256('b7cdfcd8||INC-106-direction-flip-v2b')[:8] = a026dc51`. Test rewritten to assert the INC-106 derivation while preserving the v1 composite invariant verbatim.
+4. `selection-parity_test.ts` — recomputed `PREDICATE_SPEC_V2_SHA256` to `df339497e747cb2cd76b5ac34a34ffcf0007f8d50a048fab3d875d21d93b288b` (post-flip spec); re-pinned `RATIFIED_DETECTOR_VERSION` assertion at `:286` from `b7cdfcd8` → `a026dc51`; header comment re-baselined.
+
+**Parity fixture delta (behavioral receipt of the flip):**
+
+| Day | Body sha256 delta | Selected delta | Notes |
+|---|---|---|---|
+| 2022-05-24 | `950cae9b…` → `950cae9b…` (UNCHANGED) | SHORT=298, selected=0 (unchanged) | Pre-commons SI: every SHORT refused `si_unavailable` regardless of gate direction — the flip is invisible on this day by construction. Reportable zero-delta. |
+| 2024-05-02 | `1ad83bad…` → `1ad83bad…` (UNCHANGED) | LONG_T1=2 LONG_T2=112 SHORT=209 selected=20 (all 20 LONG; unchanged) | Same — pre-commons; every SHORT `si_unavailable`. Reportable zero-delta. |
+| 2026-04-15 | `9a07a36c…` → `127096fe…` (**CHANGED**) | LONG_T1=1 LONG_T2=102 SHORT=528; selected 20 → **31** | First live-SI day. Under the old (inclusion) gate the frontier admitted 20 selections; under the flipped (exclusion) gate the same input admits 31, and the specific ticker set diverges — high-SI SHORT residuals now refuse `si_above_squeeze_threshold`, sub-threshold SHORTs now admit. This is the flip's on-the-record behavioral proof. |
+
+**Version-uniformity class rule (ACT-529, second application).** All four functions that bundle `RATIFIED_DETECTOR_VERSION` (`overshoot-detection-run`, `overshoot-entry-run`, `overshoot-exit-run`, `overshoot-fill-sweep`) redeployed in the same landing so the boot-format assert + INC-84 §5 dry-run envelope echo `a026dc51` uniformly under the corrected bundle bytes.
+
+**Local verification:** `deno test _shared/overshoot/detector/` → 51 passed / 0 failed / 4 ignored; filtered overshoot run → 21 passed / 0 failed; no residual `byte_unchanged_from_v1:true` or `si_below_squeeze_threshold` under `supabase/functions/`.
+
+**Catalog-class flip-checklist (filed against INC-106 for future direction/semantic bumps):**
+
+> A detector byte-change updates, in ONE commit:
+> 1. Code path (gate comparison + refusal reason).
+> 2. `DETECTOR_PREDICATE_SPEC_V*_JSON` (the self-describing artifact — MUST NOT lie about the code it describes).
+> 3. `PREDICATE_SPEC_V*_SHA256` pin(s) in every parity harness that freezes it.
+> 4. `RATIFIED_DETECTOR_VERSION` value + the reproducibility test's derivation formula (whether composite of study+spec or incident-anchor).
+> 5. Every parity fixture whose selection sha256 the flip changes — regenerated honestly, with the per-day delta stated (zero-delta days are reportable too when SI availability makes the flip invisible).
+> 6. Every function bundling the constant — redeployed same landing (ACT-529 uniformity rule).
+>
+> **Rationale:** self-describing artifacts (spec JSON strings, sha pins, version constants, parity fixtures) are one system with the code they describe. Updating any subset silently splits truth from description and turns the audit trail into a lie. The 2026-07-15 gate-11 red on `detector_test.ts:704` + `selection-parity_test.ts:280` + the T2.1b reproducibility test was CI catching exactly this class of miss — the tests worked, the earlier flip landing did not.
+

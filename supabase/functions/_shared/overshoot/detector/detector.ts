@@ -459,17 +459,28 @@ export function LONG_ADMISSIBLE(cell: CellForTierEval): boolean {
 // sets for the first 20 rows and diverge only in whether rows 21..36 are
 // selected vs capacity-refused. Alpha function unchanged.
 //
-// Consequence: the V2 spec string stays BYTE-FROZEN for hash stability and
-// audit continuity — no rebind, RATIFIED_DETECTOR_VERSION stays `b7cdfcd8`.
+// Consequence (ACT-490 era): the V2 spec string stayed BYTE-FROZEN for
+// hash stability, RATIFIED_DETECTOR_VERSION stayed `b7cdfcd8`.
 // The `capacity_per_side_default: 20` field is treated as a documented
 // historical default only. A future V3 spec bump (unrelated to ACT-490)
 // SHOULD drop the field entirely.
+//
+// ── INC-106 SPEC-TRUTH CORRECTION (2026-07-15) ──────────────────────────
+// The prior "SHORT byte_unchanged_from_v1:true" claim was falsified by the
+// INC-106 direction-flip landing: the SHORT squeeze gate is no longer a
+// v1-clone. The V2 spec JSON below therefore now describes the flipped
+// gate truthfully (byte_unchanged_from_v1:false + inc_106_direction_flip
+// block citing R2 / approved-decisions.md:852, refusal reason
+// `si_above_squeeze_threshold`, threshold value 0.20 pending ACT-527).
+// Self-describing-artifact discipline (catalog-class): a detector
+// byte-change updates code + spec JSON + spec sha + version pin + parity
+// fixtures in ONE commit.
 
 export const DETECTOR_PREDICATE_SPEC_V1_JSON =
   '{"version":"v1","long":{"excess_min":0.10,"windows":[1,2,3],"momentum":[4,5],"drawdown":[1,2,3],"earnings_exclusion_days":5,"tiers":{"T1":{"mean_fwd_return_5d_min":0.0020,"arrival_count_min":1}}},"selection":{"ordering":["rank_score_desc","abs_excess_desc"],"capacity_per_side_default":20},"short":{"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
 
 export const DETECTOR_PREDICATE_SPEC_V2_JSON =
-  '{"version":"v2","long":{"universe":"kernel_move_pct_min_3pct","event_gates":["earnings_exclusion_5d"],"admission":"study_cell_membership","tiers":{"T1":{"geometry":{"bands":["L_10_INF"],"windows":[1,2,3],"momentum_quintiles":[4,5],"drawdown_buckets":[1,2,3]},"cell_gate":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1}},"T2":{"geometry":"complement_of_T1_within_long_study_grid","cell_gate":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1},"disjoint_from":"T1"}},"uniform_roi_floor":{"mean_fwd_return_5d_min":0.0010,"scope":"all_long_tiers","behavior_delta_vs_v1":"v1_admitted_any_non_null_mean; v2b_refuses_below_floor_including_t1_geometry"}},"selection":{"ordering":["rank_score_desc","abs_excess_desc","tier_asc"],"capacity_per_side_default":20,"tier_role":"w5_attribution_tag_not_priority_class"},"short":{"byte_unchanged_from_v1":true,"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
+  '{"version":"v2","long":{"universe":"kernel_move_pct_min_3pct","event_gates":["earnings_exclusion_5d"],"admission":"study_cell_membership","tiers":{"T1":{"geometry":{"bands":["L_10_INF"],"windows":[1,2,3],"momentum_quintiles":[4,5],"drawdown_buckets":[1,2,3]},"cell_gate":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1}},"T2":{"geometry":"complement_of_T1_within_long_study_grid","cell_gate":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1},"disjoint_from":"T1"}},"uniform_roi_floor":{"mean_fwd_return_5d_min":0.0010,"scope":"all_long_tiers","behavior_delta_vs_v1":"v1_admitted_any_non_null_mean; v2b_refuses_below_floor_including_t1_geometry"}},"selection":{"ordering":["rank_score_desc","abs_excess_desc","tier_asc"],"capacity_per_side_default":20,"tier_role":"w5_attribution_tag_not_priority_class"},"short":{"byte_unchanged_from_v1":false,"inc_106_direction_flip":{"act_ref":"INC-106","ratification":"approved-decisions.md:852 (R2)","comparison":"si_pct_float < squeezeSiPctFloatMin admits; si_pct_float >= squeezeSiPctFloatMin refuses as si_above_squeeze_threshold","refusal_reason":"si_above_squeeze_threshold","threshold_value":0.20,"threshold_status":"pending_ACT-527_curve"},"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
 
 /**
  * Currently-ratified detector version prefix (sha256(study_full_hash ‖
@@ -478,12 +489,17 @@ export const DETECTOR_PREDICATE_SPEC_V2_JSON =
  * asserting this in T2.4 (additive; no v1 removal, no boot-broken window).
  */
 // INC-106 (2026-07-15): direction fix bump. Prefix derived from
-//   sha256('b7cdfcd8||INC-106-direction-flip-v2b')[0:8].
-// Predicate semantics changed structurally (squeeze gate flipped to
-// exclusion direction, refusal reason renamed) — recomputed prefix
-// makes the change surface via the boot-assertion + dry-run envelope
-// echo (INC-84 §5). ACT-527 curve verdict may re-bump when the
-// threshold VALUE is re-derived.
+//   sha256('b7cdfcd8||INC-106-direction-flip-v2b')[0:8] = a026dc51.
+// This derivation intentionally does NOT re-hash the composite
+// (study_full_hash || DETECTOR_PREDICATE_SPEC_V2_JSON): the V2 spec
+// JSON itself was updated in the same commit to describe the flipped
+// gate truthfully (byte_unchanged_from_v1:false + inc_106_direction_flip
+// block), so the T2.1b composite-derivation invariant is retired in
+// favor of the INC-106 anchor above. Predicate semantics changed
+// structurally (squeeze gate flipped to exclusion direction, refusal
+// reason renamed) — recomputed prefix makes the change surface via
+// the boot-assertion + dry-run envelope echo (INC-84 §5). ACT-527
+// curve verdict may re-bump when the threshold VALUE is re-derived.
 export const RATIFIED_DETECTOR_VERSION = 'a026dc51' as const;
 
 export interface DetectorVersionHistoryEntry {

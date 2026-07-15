@@ -1,7 +1,11 @@
 // @ts-nocheck — Deno offline parity harness.
 //
-// FP-069 W3.8 T2.2 (ACT-479) — SELECTION-SURFACE parity gate under
-// RATIFIED_DETECTOR_VERSION b7cdfcd8.
+// FP-069 W3.8 T2.2 (ACT-479) — SELECTION-SURFACE parity gate.
+// Re-pinned 2026-07-15 to RATIFIED_DETECTOR_VERSION a026dc51 under the
+// INC-106 direction-flip landing (SHORT squeeze gate flipped to
+// exclusion semantics per approved-decisions.md:852 R2; refusal reason
+// renamed to `si_above_squeeze_threshold`; V2 spec JSON updated to
+// describe the flipped gate truthfully → new PREDICATE_SPEC_V2_SHA256).
 //
 // FULLY OFFLINE by construction (per operator T2.2 STOP adjudication):
 //   * runDetector() is pure (W3.4 ratified design).
@@ -216,7 +220,12 @@ async function readCaptureHeadSha(): Promise<string> {
 }
 
 // Predicate v2 sha256 — captured constant (recomputed at boot in T2.4).
-const PREDICATE_SPEC_V2_SHA256 = '766c996d88e439f370f5ff34356505818f6b6671d590e2f99d32418ebca7a573';
+// Re-pinned 2026-07-15 (INC-106 direction-flip). Prior value:
+//   766c996d88e439f370f5ff34356505818f6b6671d590e2f99d32418ebca7a573
+// (pre-flip spec asserting SHORT byte_unchanged_from_v1:true — falsified
+// by the flip). New value corresponds to the post-flip spec JSON with the
+// inc_106_direction_flip block + byte_unchanged_from_v1:false.
+const PREDICATE_SPEC_V2_SHA256 = 'df339497e747cb2cd76b5ac34a34ffcf0007f8d50a048fab3d875d21d93b288b';
 
 for (const day of DATES) {
   Deno.test(`selection-parity — ${day} (OFFLINE, byte-exact, no tolerance)`, async () => {
@@ -282,6 +291,6 @@ for (const day of DATES) {
   });
 }
 
-Deno.test('selection-parity — RATIFIED_DETECTOR_VERSION frozen at b7cdfcd8', () => {
-  assertEquals(RATIFIED_DETECTOR_VERSION, 'b7cdfcd8');
+Deno.test('selection-parity — RATIFIED_DETECTOR_VERSION re-pinned at a026dc51 (INC-106 direction-flip)', () => {
+  assertEquals(RATIFIED_DETECTOR_VERSION, 'a026dc51');
 });
