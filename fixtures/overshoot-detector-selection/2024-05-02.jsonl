@@ -1,6 +1,6 @@
 # FP-069 W3.8 T2.2 (ACT-479) — selection-surface parity fixture — 2024-05-02
-# detector_version_prefix: b7cdfcd8
-# predicate_spec_v2_sha256: 766c996d88e439f370f5ff34356505818f6b6671d590e2f99d32418ebca7a573
+# detector_version_prefix: a026dc51
+# predicate_spec_v2_sha256: df339497e747cb2cd76b5ac34a34ffcf0007f8d50a048fab3d875d21d93b288b
 # capture_head_sha: 70ed2a9083c42fa62f4fbfcfd6dec97e6b399762
 # si_disposition: empty_map (commons began 2026-03-13; 0 rows ≤ date)
 # input_provenance:

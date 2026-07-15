@@ -425,10 +425,14 @@ Deno.test('Tier-tie-break determinism — identical rank_score AND |excess|: T1 
 });
 
 // ─── SHORT byte-unchanged proofs ─────────────────────────────────────
-Deno.test('SHORT byte-unchanged — passes all v1 filters and is selected', () => {
+Deno.test('SHORT admission under INC-106 flip — sub-threshold SI (0.05<0.10) passes all filters and is selected', () => {
+  // Pre-flip this test used si=0.25 with the OLD inclusion gate
+  // (admit if si>=threshold). INC-106 (approved-decisions.md:852, R2)
+  // flipped to exclusion semantics: admit iff si<threshold. Sub-threshold
+  // SI (0.05<0.10) is the post-flip admission path.
   const out = runDetector({
     candidates: [baseShortCandidate()],
-    shortInterest: new Map([['BBB', makeSi('BBB', 0.25, 5)]]),
+    shortInterest: new Map([['BBB', makeSi('BBB', 0.05, 5)]]),
     params: defaultParams(),
   });
   assertEquals(out[0].filter_refusal_reason, null);
@@ -626,7 +630,8 @@ Deno.test('W3.5.c regression: |excess|=0.11 routes to L_10_INF / S_10_INF cells 
   });
   const out = runDetector({
     candidates: [longRow, shortRow],
-    shortInterest: new Map([['SHT', { ticker: 'SHT', as_of_date: '2026-07-01', si_pct_float: 0.25, dtc: 4 }]]),
+    // INC-106 flip: sub-threshold SI admits the SHORT under the exclusion gate.
+    shortInterest: new Map([['SHT', { ticker: 'SHT', as_of_date: '2026-07-01', si_pct_float: 0.05, dtc: 4 }]]),
     params: defaultParams({
       bandLabelFor: realBandLabelFor,
       studyCellLookup: (k) => seededCells.get(cellKeyStr(k)) ?? null,
@@ -658,14 +663,23 @@ Deno.test('LONG shortability recorded when lookup provided; null when absent; ne
 });
 
 // ─── Version-hash reproducibility ────────────────────────────────────
-Deno.test('RATIFIED_DETECTOR_VERSION — reproducible from study_full_hash + spec_v2_json (T2.1b)', async () => {
-  const STUDY_FULL = 'a37e4b963c0ff13f0962e231b6322d11f1210df44812cdd24dcf06e66f354e80';
-  const input = new TextEncoder().encode(STUDY_FULL + '||' + DETECTOR_PREDICATE_SPEC_V2_JSON);
+Deno.test('RATIFIED_DETECTOR_VERSION — reproducible from INC-106 anchor (post-flip); v1 T2.1b composite still holds', async () => {
+  // INC-106 direction-flip (2026-07-15): the RATIFIED_DETECTOR_VERSION
+  // derivation was rebased off the composite (study_full_hash ‖
+  // DETECTOR_PREDICATE_SPEC_V2_JSON) onto the INC-106 anchor string
+  // 'b7cdfcd8||INC-106-direction-flip-v2b' so the version bump is a
+  // deterministic function of the incident id (not of the spec bytes,
+  // which were also edited in the same commit to describe the flipped
+  // gate truthfully). See detector.ts note above RATIFIED_DETECTOR_VERSION.
+  const INC_106_ANCHOR = 'b7cdfcd8||INC-106-direction-flip-v2b';
+  const input = new TextEncoder().encode(INC_106_ANCHOR);
   const digest = await crypto.subtle.digest('SHA-256', input);
   const hex = Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
   assertEquals(hex.slice(0, 8), RATIFIED_DETECTOR_VERSION);
+  // v1 composite invariant preserved verbatim (v1 spec is byte-frozen).
+  const STUDY_FULL = 'a37e4b963c0ff13f0962e231b6322d11f1210df44812cdd24dcf06e66f354e80';
   const inputV1 = new TextEncoder().encode(STUDY_FULL + '||' + DETECTOR_PREDICATE_SPEC_V1_JSON);
   const digestV1 = await crypto.subtle.digest('SHA-256', inputV1);
   const hexV1 = Array.from(new Uint8Array(digestV1))
@@ -701,7 +715,18 @@ Deno.test('Predicate-spec constants — v2 JSON floors match code constants', ()
   assertEquals(spec.long.tiers.T1.geometry.windows, [...LONG_T1_GEOMETRY.windows]);
   assertEquals(spec.long.tiers.T1.geometry.momentum_quintiles, [...LONG_T1_GEOMETRY.momentum_quintiles]);
   assertEquals(spec.long.tiers.T1.geometry.drawdown_buckets, [...LONG_T1_GEOMETRY.drawdown_buckets]);
-  assertEquals(spec.short.byte_unchanged_from_v1, true);
+  // INC-106 direction-flip: SHORT is no longer byte-unchanged from v1.
+  // Spec truthfully describes the flipped gate + R2 citation + threshold
+  // value pending the ACT-527 curve verdict.
+  assertEquals(spec.short.byte_unchanged_from_v1, false);
+  assertEquals(spec.short.inc_106_direction_flip.act_ref, 'INC-106');
+  assertEquals(spec.short.inc_106_direction_flip.refusal_reason, 'si_above_squeeze_threshold');
+  assertEquals(spec.short.inc_106_direction_flip.threshold_value, 0.20);
+  assertEquals(spec.short.inc_106_direction_flip.threshold_status, 'pending_ACT-527_curve');
+  assertEquals(
+    spec.short.inc_106_direction_flip.ratification,
+    'approved-decisions.md:852 (R2)',
+  );
 });
 
 // ─── ACT-490 asymmetric-cap regression (deployment shape) ──────────────
@@ -747,7 +772,8 @@ Deno.test('ACT-490: asymmetric caps LONG=36 / SHORT=4 enforce per-side |selectio
       ticker: t, window_days: 3, excess_w3: -0.12 - i * 0.001,
       momentum_quintile: 5, drawdown_bucket: 5,
     }));
-    si.set(t, makeSi(t, 0.25, 5)); // fresh, above squeeze threshold
+    // INC-106 flip: sub-threshold SI admits under the exclusion gate.
+    si.set(t, makeSi(t, 0.05, 5)); // fresh, BELOW squeeze threshold (post-flip admission)
   }
 
   const out = runDetector({
@@ -789,9 +815,10 @@ Deno.test('ACT-490: capacity per-side resolution — caps are independently enfo
     baseShortCandidate({ ticker: 'S1', window_days: 3, excess_w3: -0.12 }),
     baseShortCandidate({ ticker: 'S2', window_days: 3, excess_w3: -0.13 }),
   ];
+  // INC-106 flip: sub-threshold SI admits under the exclusion gate.
   const si = new Map<string, ShortInterestRow>([
-    ['S1', makeSi('S1', 0.25, 5)],
-    ['S2', makeSi('S2', 0.25, 5)],
+    ['S1', makeSi('S1', 0.05, 5)],
+    ['S2', makeSi('S2', 0.05, 5)],
   ]);
   const out = runDetector({
     candidates: cands, shortInterest: si,
