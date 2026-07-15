@@ -67,6 +67,8 @@
  *                        + per_lot_unexpected           -- ACT-468 H0
  *                        + exit_price_refusals (4 classes)
  *                        + market_closed_skips
+ *                        + market_closing_soon          -- ACT-493 v1 M3 (half-day / near-close guard, run-level)
+ *                        + in_flight_exit_order_skipped -- ACT-493 v1 M5 groundwork (double-submit guard)
  *   Per-lot isolation (ACT-468 H0): the per-lot for-body is wrapped so
  *   ANY per-lot failure (session-age SQL throw, polygon snapshot throw,
  *   or unexpected error in exit-price / submit) yields a TYPED per-lot
@@ -76,6 +78,25 @@
  *   dry_run  : full pipeline; ZERO order submissions; response marks
  *              dry_run=true so the accounting identity above is
  *              observable without moving money.
+ *
+ * ACT-493 v1 delta (Turn 2, uniform T+11 = Q1c ZERO horizon delta):
+ *   - M3 half-day awareness: OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE=10 gates
+ *     a run-level 'market_closing_soon' typed refusal AFTER the existing
+ *     'market_closed' short-circuit. Prevents partial fills near the bell
+ *     on early-close sessions where the catch-up cron might fire late.
+ *   - M5 groundwork: pre-loop fetch of Alpaca open orders filtered by CID
+ *     intent segment ('exit_time' | 'exit_manual') builds an
+ *     inFlightExitKeys set. Matched (symbol, side) pairs already carrying
+ *     a resting DAY-limit exit are skipped with the new
+ *     'in_flight_exit_order_skipped' tally class + audit row. Guards the
+ *     catch-up cron (Turn 3 landing) against double-submit against the
+ *     primary tick's still-open order. Degraded-to-empty on broker
+ *     /v2/orders transient failure: engine CONTINUES with an empty guard
+ *     set + audit 'overshoot.exit.in_flight_guard_degraded' — never-exit
+ *     is a worse failure mode than a rare double-submit.
+ *   Horizons UNCHANGED: LONG=10 (ACT-471 HARD), SHORT=5 (ACT-472 HARD).
+ *   Canary pins for those two constants remain in place; the additive
+ *   tally keys land with test canary updates in the same commit.
  *
  * Price source: POLYGON ONLY (Stocks Advanced, POLYGON_API_KEY_PROD_PROBE).
  * Alpaca market-data endpoints (the data-host / stocks-quotes surface) are
@@ -126,6 +147,23 @@ import {
 
 // I6 manual-confirm window (ratified: 15 minutes).
 const OVERSHOOT_MANUAL_CONFIRM_WINDOW_MS = 15 * 60 * 1000;
+
+// ACT-493 v1 M3 — half-day awareness threshold. When Alpaca /v2/clock
+// reports fewer than this many minutes to regular-session close, the
+// entire tick refuses run-level with `market_closing_soon`. Rationale
+// per operator ratification: DAY-limit exits submitted <10 min from close
+// on a half-day face high partial-fill / DIF-expiry risk with no next-day
+// residual work. Threshold is deliberately conservative; increase requires
+// operator DEC (not a code sweep).
+const OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE = 10;
+
+// ACT-493 v1 M5 groundwork — CID intent-segment regex used by the
+// in-flight-exit-order guard. Matches only exit intents; entry orders
+// are irrelevant to the double-submit fence. CID shape from
+// _shared/overshoot-execution/client-order-id.ts:
+//   ovs-{run8}-{ticker}-{side1}-{intent}-{attempt}
+const OVERSHOOT_EXIT_CID_REGEX =
+  /^ovs-[0-9a-f]{8}-([A-Z0-9.]{1,10})-([LS])-(exit_time|exit_manual)-\d+$/;
 
 interface Env {
   supabaseDbUrl: string;
@@ -199,6 +237,10 @@ interface RefusalTally {
   snapshot_fetch_failed: number;
   per_lot_unexpected: number;
   submissions_failed: number;
+  // ACT-493 v1 M3 — run-level early-close refusal (canary-observable via tally).
+  market_closing_soon: number;
+  // ACT-493 v1 M5 groundwork — per-lot double-submit guard skip class.
+  in_flight_exit_order_skipped: number;
 }
 function newTally(): RefusalTally {
   return {
@@ -209,6 +251,8 @@ function newTally(): RefusalTally {
     snapshot_fetch_failed: 0,
     per_lot_unexpected: 0,
     submissions_failed: 0,
+    market_closing_soon: 0,
+    in_flight_exit_order_skipped: 0,
   };
 }
 
@@ -453,6 +497,49 @@ Deno.serve(createHandler(async (req: Request) => {
       });
     }
 
+    // ACT-493 v1 M3 — half-day / near-close guard. If we're within
+    // OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE of the regular-session close,
+    // refuse run-level with `market_closing_soon`. The additive tally
+    // key surfaces the trip count for canary observability. Manual path
+    // is intentionally NOT exempt — a near-close manual liquidation
+    // should go through a different code path (operator-driven MOC or
+    // widened-limit re-fire post-open next session), not this handler.
+    if (clockSnap.minutesToClose < OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE) {
+      await sql.end({ timeout: 5 });
+      const earlyTally = newTally();
+      earlyTally.market_closing_soon = 1;
+      try {
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.exit.run_refusal.market_closing_soon',
+          actorId: authCtx.user.id,
+          targetType: 'overshoot_exit_run',
+          targetId: 'run-level',
+          correlationId,
+          metadata: {
+            minutes_to_close: clockSnap.minutesToClose,
+            threshold_minutes: OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE,
+            session_date: clockSnap.sessionDate,
+            dry_run: dryRun,
+            manual: manualConfirm,
+          },
+        });
+      } catch (auditErr) {
+        console.error(JSON.stringify({
+          event: 'market_closing_soon_audit_write_failed',
+          correlationId, err: auditErr instanceof Error ? auditErr.message : String(auditErr),
+        }));
+      }
+      return apiSuccess({
+        outcome: 'no_op', reason: 'market_closing_soon',
+        minutes_to_close: clockSnap.minutesToClose,
+        threshold_minutes: OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE,
+        positions_examined: 0, exits_submitted: 0,
+        refusals: earlyTally,
+        correlation_id: correlationId, dry_run: dryRun, manual: manualConfirm,
+      });
+    }
+
     // (b) broker positions + (c) open lots.
     const positionFetcher = new OvershootAlpacaPositionFetcher(client);
     const brokerPositionsRaw = await positionFetcher.listOpenPositions(nowTs);
@@ -500,6 +587,75 @@ Deno.serve(createHandler(async (req: Request) => {
       });
     }
 
+    // ── ACT-493 v1 M5 groundwork: in-flight-exit-order guard ────────────
+    // Fetch Alpaca open orders and build a Set of (symbol::side) keys for
+    // any resting DAY-limit whose CID marks an exit intent
+    // (`exit_time` | `exit_manual`). Matched lots colliding with the set
+    // are skipped at the top of the per-lot loop with
+    // `in_flight_exit_order_skipped` tally + audit — no re-submit against
+    // a live order. This is the pre-condition for arming the Turn-3
+    // catch-up cron 15 min post-primary. Degraded-to-empty on transient
+    // broker failure: engine CONTINUES with an empty guard set and audits
+    // the degradation — never-exit is a worse failure mode than a rare
+    // double-submit.
+    interface AlpacaOpenOrderRow {
+      client_order_id?: string;
+      symbol?: string;
+      side?: string;
+      status?: string;
+      qty?: string;
+    }
+    const inFlightExitKeys = new Set<string>();
+    try {
+      const openOrders = await client.getJson<AlpacaOpenOrderRow[]>(
+        '/v2/orders?status=open&limit=500',
+      );
+      if (Array.isArray(openOrders)) {
+        for (const o of openOrders) {
+          if (typeof o.client_order_id !== 'string') continue;
+          const m = OVERSHOOT_EXIT_CID_REGEX.exec(o.client_order_id);
+          if (!m) continue;
+          const cidTicker = m[1];
+          const cidSideLetter = m[2]; // 'L' | 'S'
+          const lotSide: ReconciliationSide = cidSideLetter === 'L' ? 'long' : 'short';
+          const brokerSymbol = typeof o.symbol === 'string' ? o.symbol : cidTicker;
+          // Guard on both the CID-embedded ticker AND the broker symbol
+          // (defense against CID/symbol drift). Populate both keys.
+          inFlightExitKeys.add(`${cidTicker}::${lotSide}`);
+          if (brokerSymbol !== cidTicker) {
+            inFlightExitKeys.add(`${brokerSymbol}::${lotSide}`);
+          }
+        }
+      }
+    } catch (guardErr) {
+      console.error(
+        '[overshoot-exit-run] open-orders fetch failed (in-flight guard degraded to empty):',
+        String(guardErr), { correlationId },
+      );
+      try {
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.exit.in_flight_guard_degraded',
+          actorId: authCtx.user.id,
+          targetType: 'overshoot_exit_run',
+          targetId: 'run-level',
+          correlationId,
+          metadata: {
+            error: guardErr instanceof Error ? guardErr.message : String(guardErr),
+            session_date: clockSnap.sessionDate,
+            dry_run: dryRun,
+            manual: manualConfirm,
+          },
+        });
+      } catch (auditErr) {
+        console.error(JSON.stringify({
+          event: 'in_flight_guard_degraded_audit_write_failed',
+          correlationId, err: auditErr instanceof Error ? auditErr.message : String(auditErr),
+        }));
+      }
+      // inFlightExitKeys remains empty — proceed with rare-double-submit risk.
+    }
+
     // Group matched entries so we can attribute per (symbol, side) with all
     // constituent lot_ids captured in the CID metadata / audit rows.
     const submissions: Array<{
@@ -534,6 +690,36 @@ Deno.serve(createHandler(async (req: Request) => {
       // the correct typed class without brittle error-message parsing.
       let perLotStage: 'session_age_query' | 'snapshot_fetch' | 'exit_price' | 'submit' = 'session_age_query';
       try {
+      // ── ACT-493 v1 M5 groundwork: in-flight-exit-order skip ─────────
+      // A resting DAY-limit exit for this (symbol, side) exists at the
+      // broker — do NOT re-submit. Persist a typed skip audit and continue.
+      // Placed at the TOP of the per-lot body so no SQL / network work is
+      // performed on lots we've already committed exit orders for.
+      const inFlightKey = `${m.symbol}::${m.side}`;
+      if (inFlightExitKeys.has(inFlightKey)) {
+        tally.in_flight_exit_order_skipped += 1;
+        try {
+          await writeStrategyAuditEvent({
+            strategyKey: 'overshoot',
+            action: 'overshoot.exit.in_flight_exit_order_skipped',
+            actorId: authCtx.user.id, targetType: 'overshoot_lots', targetId: m.symbol,
+            correlationId,
+            metadata: {
+              symbol: m.symbol, side: m.side, lot_ids: m.lotIds,
+              reason: 'resting_exit_order_present',
+              dry_run: dryRun, manual: manualConfirm,
+            },
+          });
+        } catch (auditErr) {
+          console.error(JSON.stringify({
+            event: 'in_flight_skip_audit_write_failed',
+            correlationId, symbol: m.symbol,
+            err: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          }));
+        }
+        continue;
+      }
+
       // (e) session-age (cron path only). Manual override bypasses.
       if (!manualConfirm) {
         perLotStage = 'session_age_query';
