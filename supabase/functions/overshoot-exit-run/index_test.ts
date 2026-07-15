@@ -335,8 +335,10 @@ Deno.test('ACT-493 v1 M5 groundwork: in-flight-exit-order guard fetches /v2/orde
 Deno.test('ACT-493 v1: additive tally keys wired in RefusalTally + newTally()', () => {
   assertStringIncludes(SRC, 'market_closing_soon: number');
   assertStringIncludes(SRC, 'in_flight_exit_order_skipped: number');
+  assertStringIncludes(SRC, 'in_flight_guard_unavailable: number');
   assertStringIncludes(SRC, 'market_closing_soon: 0');
   assertStringIncludes(SRC, 'in_flight_exit_order_skipped: 0');
+  assertStringIncludes(SRC, 'in_flight_guard_unavailable: 0');
 });
 
 Deno.test('ACT-493 v1: horizon constants UNCHANGED (Q1c ratification — canary pins remain byte-locked)', () => {
@@ -355,6 +357,53 @@ Deno.test('ACT-493 v1: horizon constants UNCHANGED (Q1c ratification — canary 
 Deno.test('ACT-493 v1: accounting identity docstring lists new additive classes', () => {
   assertStringIncludes(SRC, '+ market_closing_soon');
   assertStringIncludes(SRC, '+ in_flight_exit_order_skipped');
+  assertStringIncludes(SRC, '+ in_flight_guard_unavailable');
+});
+
+// ── ACT-493 v1 Turn 2 addendum — context-dependent degradation policy ──
+// The in-flight guard's fetch-failure handling MUST branch on invocation
+// context. PRIMARY (first-of-session, cron-auth without X-Cron-Reason:
+// catchup, no prior same-session submit audit) → degrade-to-empty stands.
+// CATCH-UP (cron-auth AND (header=catchup OR prior same-session submit
+// exists)) → FAIL CLOSED with typed refusal + high-severity audit.
+// Both branches are canary-pinned here; a future edit that collapses the
+// two paths fails these tests loudly.
+
+Deno.test('ACT-493 v1 M5 refinement: PRIMARY branch — degrade-to-empty audit + rationale', () => {
+  // Primary branch keeps the pre-existing degraded audit action and
+  // documents the DAY-TIF rationale in the audit metadata payload.
+  assertStringIncludes(SRC, "action: 'overshoot.exit.in_flight_guard_degraded'");
+  assertStringIncludes(SRC, "rationale: 'primary_first_of_session_day_tif_no_carryover'");
+  assertStringIncludes(SRC, 'catchup: false');
+  // Primary branch does NOT return early — the empty guard set feeds the
+  // per-lot loop as before. Proven by the branch being gated on
+  // `guardFetchFailed && !isCatchupInvocation`-equivalent flow: the
+  // fail-closed branch runs FIRST with an explicit early return, so any
+  // subsequent guardFetchFailed handling is by definition the primary
+  // path.
+  const idxFailClosed = SRC.indexOf('if (guardFetchFailed && isCatchupInvocation)');
+  const idxDegraded   = SRC.indexOf('if (guardFetchFailed) {', idxFailClosed);
+  assert(idxFailClosed > 0 && idxDegraded > 0 && idxFailClosed < idxDegraded,
+    'fail-closed catch-up branch precedes primary degrade-to-empty branch');
+});
+
+Deno.test('ACT-493 v1 M5 refinement: CATCH-UP branch — fail-closed typed refusal + HIGH severity audit', () => {
+  // Detection surface: header + same-session prior-run probe.
+  assertStringIncludes(SRC, "const OVERSHOOT_EXIT_CRON_REASON_HEADER = 'X-Cron-Reason'");
+  assertStringIncludes(SRC, "const OVERSHOOT_EXIT_CRON_REASON_CATCHUP = 'catchup'");
+  assertStringIncludes(SRC, "action LIKE 'overshoot.exit.submitted.%'");
+  assertStringIncludes(SRC, "AT TIME ZONE 'America/New_York'");
+  assertStringIncludes(SRC, 'isCatchupInvocation = isCronAuth &&');
+  // Header is only trusted under cron auth (manual JWT cannot flip branch).
+  assertStringIncludes(SRC, 'const cronReasonHeader = isCronAuth');
+  // Fail-closed audit + typed run-level refusal + severity=high.
+  assertStringIncludes(SRC, "action: 'overshoot.exit.in_flight_guard_unavailable'");
+  assertStringIncludes(SRC, "severity: 'high'");
+  assertStringIncludes(SRC, "reason: 'in_flight_guard_unavailable'");
+  assertStringIncludes(SRC, 'failClosedTally.in_flight_guard_unavailable = 1');
+  // Same-session probe failure conservatively falls to catch-up branch.
+  assertStringIncludes(SRC, 'same_session_probe_failed_treating_as_catchup');
+  assertStringIncludes(SRC, 'hasSameSessionPriorRun = true;');
 });
 
 Deno.test('session-age (PIN-1): SPY prior-session query strictly > entry_ts::date; earliest lot anchors', () => {
