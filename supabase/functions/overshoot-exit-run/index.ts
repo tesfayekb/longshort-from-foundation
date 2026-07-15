@@ -237,6 +237,10 @@ interface RefusalTally {
   snapshot_fetch_failed: number;
   per_lot_unexpected: number;
   submissions_failed: number;
+  // ACT-493 v1 M3 — run-level early-close refusal (canary-observable via tally).
+  market_closing_soon: number;
+  // ACT-493 v1 M5 groundwork — per-lot double-submit guard skip class.
+  in_flight_exit_order_skipped: number;
 }
 function newTally(): RefusalTally {
   return {
@@ -247,6 +251,8 @@ function newTally(): RefusalTally {
     snapshot_fetch_failed: 0,
     per_lot_unexpected: 0,
     submissions_failed: 0,
+    market_closing_soon: 0,
+    in_flight_exit_order_skipped: 0,
   };
 }
 
