@@ -343,11 +343,11 @@ Deno.test('ACT-510: T1-with-later-entry — event 07-08 CHRD (entry 07-09) — a
 });
 
 Deno.test('ACT-510: T2 LONG unchanged — entry-anchored, H=10 (Q1c HARD, canary)', () => {
-  // 9 sessions since entry → ordinal 10 → fires at H=10 exactly.
+  // 8 settled + in-progress = 9 sessionsSince → ordinal 10 → fires at H=10 exactly.
   const r = computeSessionAge({
     entryDate: '2026-06-01',
     side: 'LONG',
-    spyPriorSessionDates: ['2026-06-02','2026-06-03','2026-06-04','2026-06-05','2026-06-08','2026-06-09','2026-06-10','2026-06-11','2026-06-12'],
+    spyPriorSessionDates: ['2026-06-02','2026-06-03','2026-06-04','2026-06-05','2026-06-08','2026-06-09','2026-06-10','2026-06-11'],
     clock: openClock('2026-06-15'),
     tier: 'T2',
     tierSourceAsOfDate: '2026-05-30', // ignored in entry-anchor mode
@@ -379,7 +379,7 @@ Deno.test('ACT-510: tier=T1 without tierSourceAsOfDate falls back to entry-ancho
   const r = computeSessionAge({
     entryDate: '2026-06-01',
     side: 'LONG',
-    spyPriorSessionDates: ['2026-06-02','2026-06-03','2026-06-04','2026-06-05','2026-06-08','2026-06-09','2026-06-10','2026-06-11','2026-06-12'],
+    spyPriorSessionDates: ['2026-06-02','2026-06-03','2026-06-04','2026-06-05','2026-06-08','2026-06-09','2026-06-10','2026-06-11'],
     clock: openClock('2026-06-15'),
     tier: 'T1',
     tierSourceAsOfDate: null,
