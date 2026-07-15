@@ -624,10 +624,59 @@ Deno.serve(createHandler(async (req: Request) => {
     // are skipped at the top of the per-lot loop with
     // `in_flight_exit_order_skipped` tally + audit — no re-submit against
     // a live order. This is the pre-condition for arming the Turn-3
-    // catch-up cron 15 min post-primary. Degraded-to-empty on transient
-    // broker failure: engine CONTINUES with an empty guard set and audits
-    // the degradation — never-exit is a worse failure mode than a rare
-    // double-submit.
+    // catch-up cron 15 min post-primary.
+    //
+    // ACT-493 v1 M5 refinement (operator ratification, Turn 2 addendum):
+    // guard-fetch degradation is CONTEXT-DEPENDENT. See the module header
+    // for the full rationale. Branch is decided BEFORE the fetch so both
+    // outcomes are pre-classified:
+    //   PRIMARY   → degrade-to-empty on fetch failure (rare double-submit
+    //               beats never-exit; DAY-TIF means nothing carries
+    //               across sessions, so on a first-of-session tick there
+    //               is nothing to collide against).
+    //   CATCH-UP  → FAIL CLOSED on fetch failure (a resting DAY-limit
+    //               from the primary tick may still be live; double-
+    //               submit could flip an AZD5 short-enabled name
+    //               accidentally short — decisively worse than a 15-min
+    //               delayed retry).
+    // Catch-up detection: cron-auth AND (X-Cron-Reason:catchup header OR
+    // a same-session prior submitted-audit row exists in
+    // overshoot_audit_logs). The header is only trusted under cron auth
+    // (verified above); manual JWT callers cannot flip the branch.
+    const cronReasonHeader = isCronAuth
+      ? (req.headers.get(OVERSHOOT_EXIT_CRON_REASON_HEADER) ?? '').toLowerCase()
+      : '';
+    const cronReasonIsCatchup = cronReasonHeader === OVERSHOOT_EXIT_CRON_REASON_CATCHUP;
+    let hasSameSessionPriorRun = false;
+    if (isCronAuth) {
+      // Same-session prior run marker: any prior `overshoot.exit.submitted.*`
+      // audit row whose created_at falls on the current NY session date.
+      // The submit audit is written on every successful order handoff,
+      // so its presence provably means an earlier tick already fenced
+      // orders into the broker for this session. Cheap indexed scan.
+      try {
+        const priorRuns = await sql<{ n: number }[]>`
+          SELECT 1 AS n
+          FROM overshoot_audit_logs
+          WHERE action LIKE 'overshoot.exit.submitted.%'
+            AND (created_at AT TIME ZONE 'America/New_York')::date
+                = ${clockSnap.sessionDate}::date
+          LIMIT 1
+        `;
+        hasSameSessionPriorRun = priorRuns.length > 0;
+      } catch (priorErr) {
+        // Same-session probe failure is itself a signal that we cannot
+        // safely assume PRIMARY. Fall to catch-up branch (fail-closed on
+        // guard failure) rather than risk double-submit.
+        console.error(JSON.stringify({
+          event: 'same_session_probe_failed_treating_as_catchup',
+          correlationId,
+          err: priorErr instanceof Error ? priorErr.message : String(priorErr),
+        }));
+        hasSameSessionPriorRun = true;
+      }
+    }
+    const isCatchupInvocation = isCronAuth && (cronReasonIsCatchup || hasSameSessionPriorRun);
     interface AlpacaOpenOrderRow {
       client_order_id?: string;
       symbol?: string;
@@ -636,6 +685,8 @@ Deno.serve(createHandler(async (req: Request) => {
       qty?: string;
     }
     const inFlightExitKeys = new Set<string>();
+    let guardFetchFailed = false;
+    let guardFetchErrMsg = '';
     try {
       const openOrders = await client.getJson<AlpacaOpenOrderRow[]>(
         '/v2/orders?status=open&limit=500',
@@ -658,10 +709,61 @@ Deno.serve(createHandler(async (req: Request) => {
         }
       }
     } catch (guardErr) {
+      guardFetchFailed = true;
+      guardFetchErrMsg = guardErr instanceof Error ? guardErr.message : String(guardErr);
       console.error(
-        '[overshoot-exit-run] open-orders fetch failed (in-flight guard degraded to empty):',
-        String(guardErr), { correlationId },
+        `[overshoot-exit-run] open-orders fetch failed (catchup=${isCatchupInvocation}):`,
+        guardFetchErrMsg, { correlationId },
       );
+    }
+
+    // ── Fail-closed branch (CATCH-UP + guard fetch failure) ─────────────
+    // Skip ALL per-lot submissions, audit at severity=high (pageable),
+    // return typed run-level refusal. The next scheduled tick retries.
+    if (guardFetchFailed && isCatchupInvocation) {
+      const failClosedTally = newTally();
+      failClosedTally.in_flight_guard_unavailable = 1;
+      try {
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.exit.in_flight_guard_unavailable',
+          actorId: authCtx.user.id,
+          targetType: 'overshoot_exit_run',
+          targetId: 'run-level',
+          correlationId,
+          metadata: {
+            severity: 'high',
+            error: guardFetchErrMsg,
+            session_date: clockSnap.sessionDate,
+            cron_reason_catchup: cronReasonIsCatchup,
+            same_session_prior_run: hasSameSessionPriorRun,
+            dry_run: dryRun,
+            manual: manualConfirm,
+            reason: 'catchup_guard_fetch_failed_fail_closed',
+          },
+        });
+      } catch (auditErr) {
+        console.error(JSON.stringify({
+          event: 'in_flight_guard_unavailable_audit_write_failed',
+          correlationId, err: auditErr instanceof Error ? auditErr.message : String(auditErr),
+        }));
+      }
+      await sql.end({ timeout: 5 });
+      return apiSuccess({
+        outcome: 'no_op', reason: 'in_flight_guard_unavailable',
+        positions_examined: positionsExamined,
+        matched_count: report.matched.length,
+        exits_submitted: 0,
+        refusals: failClosedTally,
+        minutes_to_close: clockSnap.minutesToClose,
+        correlation_id: correlationId,
+        dry_run: dryRun, manual: manualConfirm,
+        catchup: true,
+      });
+    }
+
+    // ── Degrade-to-empty branch (PRIMARY + guard fetch failure) ─────────
+    if (guardFetchFailed) {
       try {
         await writeStrategyAuditEvent({
           strategyKey: 'overshoot',
@@ -671,10 +773,12 @@ Deno.serve(createHandler(async (req: Request) => {
           targetId: 'run-level',
           correlationId,
           metadata: {
-            error: guardErr instanceof Error ? guardErr.message : String(guardErr),
+            error: guardFetchErrMsg,
             session_date: clockSnap.sessionDate,
             dry_run: dryRun,
             manual: manualConfirm,
+            catchup: false,
+            rationale: 'primary_first_of_session_day_tif_no_carryover',
           },
         });
       } catch (auditErr) {
