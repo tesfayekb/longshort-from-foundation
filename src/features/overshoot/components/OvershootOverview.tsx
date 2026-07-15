@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { OvershootCapCompliance } from './portfolio/OvershootCapCompliance';
 import { useOvershootEquitySnapshots } from '../hooks/useOvershootEquitySnapshots';
+import { InfoHint } from '@/components/dashboard/InfoHint';
 
 /**
  * SI staleness display window — MUST mirror the engine's named parameter:
@@ -104,14 +105,22 @@ function fmtMoney(n: number | null | undefined): string {
 function PendingCandidateIII({ title }: { title: string }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground truncate">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-2xl font-semibold text-muted-foreground">—</p>
-        <p className="mt-2 text-xs text-muted-foreground/80 font-mono">
-          No equity snapshots — arm overshoot_equity_snapshot via INC-82 bracket
-          (concrete next action for FP-069-CANDIDATE-iii). No synthetic numbers rendered.
+        {/* ACT-525 R2 (b) — short status label + info hint. Full governance
+            prose lives in the tooltip and in FP-069-CANDIDATE-iii detail. */}
+        <div className="flex items-baseline gap-2">
+          <p className="text-2xl font-semibold text-muted-foreground">—</p>
+          <InfoHint label="Windowed gain — pending">
+            No equity snapshots yet. Arm <span className="font-mono">overshoot_equity_snapshot</span> via
+            the INC-82 bracket to populate this window. No synthetic numbers are rendered — this is a
+            typed-absence per FP-069-CANDIDATE-iii.
+          </InfoHint>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground/80">
+          Pending — equity snapshots not armed
         </p>
       </CardContent>
     </Card>
@@ -158,11 +167,13 @@ function KpiCell({
   label,
   value,
   sub,
+  hint,
   variant = 'default',
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
+  hint?: ReactNode;
   variant?: 'default' | 'muted' | 'good' | 'warn' | 'bad';
 }) {
   const valueClass =
@@ -174,13 +185,18 @@ function KpiCell({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {label}
+        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+          <span className="truncate">{label}</span>
+          {hint ? <InfoHint label={`${label} — details`}>{hint}</InfoHint> : null}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className={`text-xl font-semibold font-mono ${valueClass}`}>{value}</div>
-        {sub && <div className="mt-1 text-[11px] text-muted-foreground/90 font-mono">{sub}</div>}
+        <div className={`text-xl font-semibold font-mono truncate ${valueClass}`}>{value}</div>
+        {sub && (
+          <div className="mt-1 text-[11px] text-muted-foreground/90 font-mono truncate" title={typeof sub === 'string' ? sub : undefined}>
+            {sub}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
