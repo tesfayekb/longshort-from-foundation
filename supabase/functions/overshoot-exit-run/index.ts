@@ -497,6 +497,49 @@ Deno.serve(createHandler(async (req: Request) => {
       });
     }
 
+    // ACT-493 v1 M3 — half-day / near-close guard. If we're within
+    // OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE of the regular-session close,
+    // refuse run-level with `market_closing_soon`. The additive tally
+    // key surfaces the trip count for canary observability. Manual path
+    // is intentionally NOT exempt — a near-close manual liquidation
+    // should go through a different code path (operator-driven MOC or
+    // widened-limit re-fire post-open next session), not this handler.
+    if (clockSnap.minutesToClose < OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE) {
+      await sql.end({ timeout: 5 });
+      const earlyTally = newTally();
+      earlyTally.market_closing_soon = 1;
+      try {
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.exit.run_refusal.market_closing_soon',
+          actorId: authCtx.user.id,
+          targetType: 'overshoot_exit_run',
+          targetId: 'run-level',
+          correlationId,
+          metadata: {
+            minutes_to_close: clockSnap.minutesToClose,
+            threshold_minutes: OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE,
+            session_date: clockSnap.sessionDate,
+            dry_run: dryRun,
+            manual: manualConfirm,
+          },
+        });
+      } catch (auditErr) {
+        console.error(JSON.stringify({
+          event: 'market_closing_soon_audit_write_failed',
+          correlationId, err: auditErr instanceof Error ? auditErr.message : String(auditErr),
+        }));
+      }
+      return apiSuccess({
+        outcome: 'no_op', reason: 'market_closing_soon',
+        minutes_to_close: clockSnap.minutesToClose,
+        threshold_minutes: OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE,
+        positions_examined: 0, exits_submitted: 0,
+        refusals: earlyTally,
+        correlation_id: correlationId, dry_run: dryRun, manual: manualConfirm,
+      });
+    }
+
     // (b) broker positions + (c) open lots.
     const positionFetcher = new OvershootAlpacaPositionFetcher(client);
     const brokerPositionsRaw = await positionFetcher.listOpenPositions(nowTs);
