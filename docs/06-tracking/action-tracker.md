@@ -6241,3 +6241,35 @@ If ACT-527(b) — the long-flip squeeze-ride candidate — clears the pre-commit
 **Build gate:** ZERO build turns until the ACT-527 curve rules. No premature scaffolding, no "prep work" — the curve verdict is the sole trigger. If the flip fails the pre-committed rules, this ruling files as a NULL charter and the scaffold is never built.
 
 **Cross-references:** `_shared/overshoot/detector/detector.ts` (INC-106 fix, direction + version bump); `detector_test.ts` (R2 canaries); `docs/08-planning/approved-decisions.md:852` (R2 ratification); ACT-526 (pre-committed curve rule); ACT-527 (SI backfill charter, now executing); ACT-459 (one-brain-many-wallets precedent — overshoot-broker split from longshort-broker); INC-106 (direction-inversion defect, now closed by this fix).
+
+## ACT-529 — Cross-function version-propagation audit (RATIFIED_DETECTOR_VERSION a026dc51)
+
+**Trigger:** Operator directive after INC-106 direction fix bumped `RATIFIED_DETECTOR_VERSION` from `b7cdfcd8` → `a026dc51`. Only `overshoot-detection-run` was redeployed in that turn; entry-run, exit-run, and fill-sweep continued to serve pre-fix bundles carrying the old constant. Half-propagated version constants across a linked pipeline is a defect class regardless of whether today's code path compares them.
+
+**(a) Cross-function detector_version comparison — source-audited (READ-ONLY).**
+- `overshoot-entry-run/index.ts` fetches the linked detection run via `SELECT run_id::text AS run_id, as_of::text AS as_of, outcome, selected_count FROM overshoot_detection_runs` (line 535–537) and joins `overshoot_events e JOIN overshoot_detection_runs dr ON dr.run_id = e.run_id` (line 679–680) selecting `e.ticker, e.side, e.rank_score, e.tier, e.argmax_window_days, dr.as_of` — **no column reads `dr.detector_version` and no comparison exists between the fetched row's stamp and the bundled `RATIFIED_DETECTOR_VERSION` constant.** The constant is only echoed OUTBOUND into audit metadata (lines 388, 407, 718, 1212), never compared inbound.
+- `overshoot-exit-run/index.ts` — line :307 is the cron-first auth branch (`X-Cron-Secret` verification per INC-99/ACT-503), not a detector_version canary. The file's only detector_version usage is (i) the boot-format assert at line 381–388 against the bundled constant and (ii) probe-envelope echo (lines 404, 424). Exit-run reads `overshoot_lots` and open positions; it never joins `overshoot_detection_runs` or reads any `detector_version` column.
+- `overshoot-fill-sweep/index.ts` — same pattern: boot-format assert (line 189) + outbound echo (lines 205, 224, 824). No inbound comparison.
+
+**Answer to (a):** NO — none of entry-run, exit-run, or fill-sweep validates a linked detection run's `detector_version` against its bundled `RATIFIED_DETECTOR_VERSION`. Tomorrow's slot-a would NOT have refused the `a026dc51` book on version-linkage grounds even if entry-run had continued serving the `b7cdfcd8` bundle. The pipeline's version discipline today is boot-format-only (per-function, in isolation).
+
+**(b) Class rule filed (per operator directive):**
+> **CLASS RULE (ratified 2026-07-15):** A `RATIFIED_DETECTOR_VERSION` bump requires redeploying EVERY edge function that imports the constant, in the SAME landing. Functions with the import today: `overshoot-detection-run`, `overshoot-entry-run`, `overshoot-exit-run`, `overshoot-fill-sweep`. Half-propagated version constants across a linked pipeline is a defect class independent of whether the code path currently compares them — the invariant is "one constant value across the pipeline at any deployed instant." A CI/pre-commit guard is deferred to ACT-530 (below); until then, any turn that edits `RATIFIED_DETECTOR_VERSION` MUST redeploy all four functions in the same turn and confirm via OPTIONS probe.
+
+**Action taken this turn:** Redeployed `overshoot-entry-run`, `overshoot-exit-run`, `overshoot-fill-sweep` (Wed 2026-07-15 ~11:24Z). Detection-run was already deployed with `a026dc51` in the INC-106 fix turn. All four functions now bundle `a026dc51`.
+
+**(c) Tonight's 22:00Z detection expectation (unchanged from the INC-106 ruling):**
+- Detection row will stamp `detector_version = a026dc51` in `overshoot_detection_runs`.
+- Post-21:00Z SI-heal → high-SI residuals (HIMS, etc.) reach the squeeze gate; under the flipped exclusion semantics they refuse with reason `si_above_squeeze_threshold` (R2-safe state). Report to be filed after the 22:00Z run.
+
+**(d) Tomorrow's 13:35Z slot-a expectation:**
+- Entry-run loads the `a026dc51` detection book without any version-linkage refusal (per (a) — no such gate exists).
+- Expected submissions ≈ 0 driven by orthogonal refusals: `capacity_exhausted`, `i5_recovery`, `already_open_lot`, `bp_insufficient`, or (for shorts) the post-flip absence of qualifying candidates. **Not** version-linkage.
+- Post-run tally to confirm the refusal-class breakdown and the absence of any version-mismatch code path being exercised.
+
+**Cross-references:** INC-106 (direction fix + version bump); ACT-526 (pre-committed curve rule); ACT-527 (SI backfill, executing in parallel); `_shared/overshoot/detector/detector.ts:487` (constant source-of-truth); `overshoot-entry-run/index.ts:535,679`; `overshoot-exit-run/index.ts:307,381`; `overshoot-fill-sweep/index.ts:189`.
+
+## ACT-530 — Version-propagation guard (queued, not chartered)
+
+**Proposal:** CI-time check (deno test or scripts/ linter) that enumerates every edge function importing `RATIFIED_DETECTOR_VERSION` and fails a pre-commit if the constant changes without a matching deploy manifest listing all importers. Also: an optional runtime check where entry-run reads `overshoot_detection_runs.detector_version` and refuses with a typed `detector_version_mismatch` reason if the linked run's stamp ≠ bundled constant (converts the class rule from "process discipline" to "code-enforced invariant"). Deferred behind ACT-527 curve verdict; no operator gate until then.
+
