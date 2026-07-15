@@ -237,29 +237,35 @@ function HealthKpiStrip(k: KpiStripInputs) {
         value={k.latest ? (k.latest.outcome ?? '—') : '—'}
         sub={k.latest
           ? `${k.latest.selected_count} sel / ${k.latest.event_count} cand · ${fmtDateOnly(k.latest.as_of)}`
-          : 'No runs — detector cron pending arm.'}
+          : 'No runs yet'}
+        hint={k.latest
+          ? <>Selected / candidate counts from the most-recent <span className="font-mono">overshoot_detection_runs</span> row, ordered by <span className="font-mono">as_of</span> then <span className="font-mono">detected_at</span>.</>
+          : <>Detector cron is pending arm. Once armed (<span className="font-mono">sql/31</span>), the latest run's outcome and selection counts render here.</>}
         variant={detVariant}
       />
       <KpiCell
         label="Deployed slots"
         value={`${openTotal} / ${capacityTotal}`}
-        sub={`long ${k.openLongs}/${LONG_CAPACITY} · short ${k.openShorts}/${SHORT_CAPACITY} · ${deployedPct.toFixed(0)}% of ratified capacity`}
+        sub={`L ${k.openLongs}/${LONG_CAPACITY} · S ${k.openShorts}/${SHORT_CAPACITY} · ${deployedPct.toFixed(0)}%`}
+        hint={<>Open lots vs the INC-92 ratified deployment capacity (long 36 / short 4). Percentage is <span className="font-mono">open / capacity</span>, not a $-cap measure — see the cap-compliance strip below for $ allocation posture.</>}
         variant={openTotal > 0 ? 'default' : 'muted'}
       />
       <KpiCell
         label="Open positions"
         value={openTotal}
-        sub={openTotal === 0
-          ? 'No open lots — pre-first-fill (§9 Part 2 EXEC pending).'
-          : `${k.openLongs} long · ${k.openShorts} short`}
+        sub={openTotal === 0 ? 'No open lots' : `${k.openLongs} long · ${k.openShorts} short`}
+        hint={openTotal === 0
+          ? <>Pre-first-fill — §9 Part 2 EXEC pending. Lots appear here once entry-run submits and the fill-sweep adopts broker fills into <span className="font-mono">overshoot_lots</span>.</>
+          : <>Aggregated from <span className="font-mono">overshoot_lots</span> WHERE <span className="font-mono">status='open'</span>.</>}
         variant={openTotal > 0 ? 'default' : 'muted'}
       />
       <KpiCell
         label="Day P&L"
         value="—"
-        sub={k.equitySnapshotsCount === 0
-          ? 'No equity snapshots — arm overshoot_equity_snapshot via INC-82 bracket.'
-          : 'Pending FP-069-CANDIDATE-iii day-P&L derivation.'}
+        sub={k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Derivation pending'}
+        hint={k.equitySnapshotsCount === 0
+          ? <>No equity snapshots exist. Arm <span className="font-mono">overshoot_equity_snapshot</span> via the INC-82 bracket to begin populating this cell. No synthetic P&L is fabricated.</>
+          : <>Day-P&L derivation lands with FP-069-CANDIDATE-iii once at least two snapshots span the trading day.</>}
         variant="muted"
       />
       <KpiCell
@@ -270,10 +276,13 @@ function HealthKpiStrip(k: KpiStripInputs) {
             ? `${k.reconciliationEscalations} active`
             : 'OK'}
         sub={k.reconciliationRows === 0
-          ? 'No divergences in rolling window.'
+          ? 'Clean window'
           : k.reconciliationEscalations && k.reconciliationEscalations > 0
-            ? 'A5 escalation active — inspect Portfolio › Reconciliation.'
-            : `${k.reconciliationRows ?? 0} state rows tracked; no escalations.`}
+            ? 'A5 escalation'
+            : `${k.reconciliationRows ?? 0} tracked · clean`}
+        hint={k.reconciliationEscalations && k.reconciliationEscalations > 0
+          ? <>An A5 escalation is active. Inspect <span className="font-mono">Portfolio → Reconciliation</span> for the specific broker-orphan / ledger-orphan / qty-mismatch rows.</>
+          : <>Rolling-window rows in <span className="font-mono">overshoot_reconciliation_state</span> with no <span className="font-mono">escalation_active</span> flags set.</>}
         variant={reconVariant}
       />
       <KpiCell
@@ -284,10 +293,15 @@ function HealthKpiStrip(k: KpiStripInputs) {
           : (k.killState ?? 'absent')
         }
         sub={
-          k.killLoading ? 'Loading kill_switches…'
-          : k.killError ? `Read failed — ${k.killError}. Check RLS (ACT-469 scoped-read policy).`
-          : k.killState ? `attribution: ${k.killKind ?? '—'}`
-          : 'No row in kill_switches for strategy_key=overshoot — seed via ops runbook.'
+          k.killLoading ? 'Loading…'
+          : k.killError ? 'Read failed'
+          : k.killState ? `by ${k.killKind ?? '—'}`
+          : 'No row'
+        }
+        hint={
+          k.killError ? <>Kill-switch read failed: <span className="font-mono">{k.killError}</span>. Check ACT-469 scoped-read RLS policy on <span className="font-mono">kill_switches</span>.</>
+          : k.killState ? <>Current state / attribution kind. Transitions live in <span className="font-mono">audit_logs</span> under <span className="font-mono">kill_switch.*</span> actions.</>
+          : <>No row in <span className="font-mono">kill_switches</span> for <span className="font-mono">strategy_key='overshoot'</span>. Seed via the ops runbook.</>
         }
         variant={k.killError ? 'bad' : killVariant}
       />
