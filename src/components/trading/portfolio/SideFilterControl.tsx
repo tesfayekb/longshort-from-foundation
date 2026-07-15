@@ -23,14 +23,14 @@ const OPTS: Array<{ value: SideFilter; label: string }> = [
 
 export function SideFilterControl({ value, onChange }: Props) {
   return (
-    <div className="inline-flex rounded-md border border-border overflow-hidden">
+    <div className="inline-flex flex-shrink-0 rounded-md border border-border overflow-hidden">
       {OPTS.map((o) => (
         <Button
           key={o.value}
           type="button"
           variant={value === o.value ? 'default' : 'ghost'}
           size="sm"
-          className="rounded-none border-0 h-8 px-3 text-xs"
+          className="rounded-none border-0 h-8 px-3 text-xs whitespace-nowrap"
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
         >
