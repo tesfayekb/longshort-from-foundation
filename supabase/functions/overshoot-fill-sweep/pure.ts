@@ -184,6 +184,11 @@ export function allocateExitFillToLots(args: {
     result.overflow_reason =
       `broker_over_filled_order: unallocated_residual=${remaining} across ${args.lots.length} lot(s)`;
     result.unallocated_residual = remaining;
+    // CRITICAL (operator-ratified): on overflow, DROP all per-lot deltas.
+    // Even partial application would be a silent clamp of the tail — the
+    // caller must halt the whole order and audit HIGH so a human can
+    // investigate. A5 SUM(remaining_qty) catches any residue independently.
+    result.per_lot_deltas = [];
   }
   return result;
 }
