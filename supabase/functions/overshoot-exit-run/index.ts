@@ -69,6 +69,7 @@
  *                        + market_closed_skips
  *                        + market_closing_soon          -- ACT-493 v1 M3 (half-day / near-close guard, run-level)
  *                        + in_flight_exit_order_skipped -- ACT-493 v1 M5 groundwork (double-submit guard)
+ *                        + in_flight_guard_unavailable  -- ACT-493 v1 M5 refinement (catch-up fail-closed run-level)
  *   Per-lot isolation (ACT-468 H0): the per-lot for-body is wrapped so
  *   ANY per-lot failure (session-age SQL throw, polygon snapshot throw,
  *   or unexpected error in exit-price / submit) yields a TYPED per-lot
@@ -90,10 +91,27 @@
  *     a resting DAY-limit exit are skipped with the new
  *     'in_flight_exit_order_skipped' tally class + audit row. Guards the
  *     catch-up cron (Turn 3 landing) against double-submit against the
- *     primary tick's still-open order. Degraded-to-empty on broker
- *     /v2/orders transient failure: engine CONTINUES with an empty guard
- *     set + audit 'overshoot.exit.in_flight_guard_degraded' — never-exit
- *     is a worse failure mode than a rare double-submit.
+ *     primary tick's still-open order.
+ *
+ *     Guard-fetch degradation is CONTEXT-DEPENDENT (operator refinement,
+ *     Turn 2 addendum). Two branches, chosen by invocation context:
+ *       PRIMARY   invocation (cron auth WITHOUT X-Cron-Reason:catchup AND
+ *                 no same-session prior completed run in audit): degrade
+ *                 to an EMPTY guard set and continue. DAY-TIF means no
+ *                 exit order carries across sessions, so on the first
+ *                 tick of a session there is nothing to double-submit
+ *                 against — never-exit beats rare-double-submit here.
+ *                 Manual paths also take this branch (no catch-up sibling
+ *                 exists for operator-driven runs).
+ *       CATCH-UP  invocation (cron auth AND (X-Cron-Reason:catchup OR a
+ *                 same-session prior submitted-audit row exists)): FAIL
+ *                 CLOSED. A DAY-limit from the primary tick may be
+ *                 resting; degraded-to-empty could double-submit and flip
+ *                 the position accidentally short on shorting-enabled
+ *                 names. Skip ALL submissions with typed run-level
+ *                 refusal 'in_flight_guard_unavailable', audit at
+ *                 severity=high (pageable), and let the next cron tick
+ *                 retry with a fresh /v2/orders read.
  *   Horizons UNCHANGED: LONG=10 (ACT-471 HARD), SHORT=5 (ACT-472 HARD).
  *   Canary pins for those two constants remain in place; the additive
  *   tally keys land with test canary updates in the same commit.
@@ -164,6 +182,13 @@ const OVERSHOOT_EXIT_MIN_MINUTES_TO_CLOSE = 10;
 //   ovs-{run8}-{ticker}-{side1}-{intent}-{attempt}
 const OVERSHOOT_EXIT_CID_REGEX =
   /^ovs-[0-9a-f]{8}-([A-Z0-9.]{1,10})-([LS])-(exit_time|exit_manual)-\d+$/;
+
+// ACT-493 v1 M5 refinement — header key used by the catch-up cron
+// invocation (Turn 3 landing). Only trusted under cron auth (X-Cron-Secret
+// verified above); a manual JWT caller cannot flip the branch by setting
+// this header. Value is compared case-insensitively against 'catchup'.
+const OVERSHOOT_EXIT_CRON_REASON_HEADER = 'X-Cron-Reason';
+const OVERSHOOT_EXIT_CRON_REASON_CATCHUP = 'catchup';
 
 interface Env {
   supabaseDbUrl: string;
@@ -241,6 +266,10 @@ interface RefusalTally {
   market_closing_soon: number;
   // ACT-493 v1 M5 groundwork — per-lot double-submit guard skip class.
   in_flight_exit_order_skipped: number;
+  // ACT-493 v1 M5 refinement — run-level fail-closed count for catch-up
+  // invocations when the broker /v2/orders fetch fails. PRIMARY invocations
+  // continue degraded-to-empty; only catch-up trips this class.
+  in_flight_guard_unavailable: number;
 }
 function newTally(): RefusalTally {
   return {
@@ -253,6 +282,7 @@ function newTally(): RefusalTally {
     submissions_failed: 0,
     market_closing_soon: 0,
     in_flight_exit_order_skipped: 0,
+    in_flight_guard_unavailable: 0,
   };
 }
 
