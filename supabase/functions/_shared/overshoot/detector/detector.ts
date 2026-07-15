@@ -19,18 +19,32 @@
 //                 exclusion_width   = +/-5d.
 //
 //   SI SQUEEZE GATE (SHORTS ONLY, UNCONDITIONAL — DEFAULT-DENY):
-//     Required inputs: `squeezeSiPctFloatMin` (named param — no hard default
+//     Required inputs: `squeezeSiPctFloatMin` (LEGACY NAME — see INC-106
+//     ruling; the parameter now denotes the EXCLUSION THRESHOLD: candidates
+//     with `si_pct_float >= squeezeSiPctFloatMin` are REFUSED as
+//     `si_above_squeeze_threshold`. Ratified direction per DEC / R2 clause
+//     at docs/08-planning/approved-decisions.md:852 (short-squeeze exclusion
+//     — admit low-SI shorts, refuse crowded/high-SI names likely to squeeze).
+//     Prior implementation had the comparison INVERTED (INC-106, filed
+//     2026-07-15); this constitutes a defect against R2, not a parameter
+//     re-tune. The THRESHOLD VALUE (currently 0.20) remains pending the
+//     ACT-527 curve re-derivation; only the DIRECTION is fixed here.
+//     R2's compound clauses (days-to-cover, 5d-return conditions) are
+//     NOT-IMPLEMENTED gaps tracked separately — direction first, compound
+//     fidelity later.) `siStalenessMaxDays` (named param — no hard default
 //     baked here; caller MUST supply the operator-ratified value) and
-//     `siStalenessMaxDays` (named param — derivation: SEC settles short
+//     derivation: SEC settles short
 //     interest twice per calendar month at mid-month + month-end with a
 //     roughly 8-business-day publication delay; a fresh row therefore lands
 //     within ~15 calendar days of publication. `siStalenessMaxDays` >= 21
 //     spans one full missed cycle plus a small grace; caller supplies the
-//     ratified value). Missing SI row -> REFUSED `si_unavailable`; row present
+//     ratified value. Missing SI row -> REFUSED `si_unavailable`; row present
 //     but `(asOf - as_of_date) > siStalenessMaxDays` -> REFUSED `si_stale`;
 //     `si_pct_float === null` -> REFUSED `si_unavailable` (typed absence, not
-//     zero — never pass-through the DW-208 sentinel); `si_pct_float <
-//     squeezeSiPctFloatMin` -> REFUSED `si_below_squeeze_threshold`.
+//     zero — never pass-through the DW-208 sentinel); `si_pct_float >=
+//     squeezeSiPctFloatMin` -> REFUSED `si_above_squeeze_threshold`
+//     (INC-106 direction fix; refusal-reason string renamed to reflect
+//     the true admission direction).
 //
 //   RANK-SCORE LOOKUP (P-B#4):
 //     study-cell mean_fwd_return_5d against `overshoot_study_cell_results` for
@@ -93,7 +107,7 @@ export type RefusalReason =
   | 'exclusion_earnings_proximity'
   | 'si_unavailable'
   | 'si_stale'
-  | 'si_below_squeeze_threshold'
+  | 'si_above_squeeze_threshold'
   | 'no_study_cell'
   | 'capacity';
 
@@ -463,7 +477,14 @@ export const DETECTOR_PREDICATE_SPEC_V2_JSON =
  * Frozen; not recomputed at runtime this tranche. Consumers begin
  * asserting this in T2.4 (additive; no v1 removal, no boot-broken window).
  */
-export const RATIFIED_DETECTOR_VERSION = 'b7cdfcd8' as const;
+// INC-106 (2026-07-15): direction fix bump. Prefix derived from
+//   sha256('b7cdfcd8||INC-106-direction-flip-v2b')[0:8].
+// Predicate semantics changed structurally (squeeze gate flipped to
+// exclusion direction, refusal reason renamed) — recomputed prefix
+// makes the change surface via the boot-assertion + dry-run envelope
+// echo (INC-84 §5). ACT-527 curve verdict may re-bump when the
+// threshold VALUE is re-derived.
+export const RATIFIED_DETECTOR_VERSION = 'a026dc51' as const;
 
 export interface DetectorVersionHistoryEntry {
   version: 'v1' | 'v2';
@@ -681,19 +702,25 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
           });
           setRefusal('si_unavailable');
         } else {
-          const ok = si.si_pct_float >= params.squeezeSiPctFloatMin;
+          // INC-106 direction fix (2026-07-15): admit LOW-SI shorts;
+          // refuse crowded/high-SI names per ratified R2 exclusion
+          // semantics (docs/08-planning/approved-decisions.md:852).
+          // Threshold VALUE (params.squeezeSiPctFloatMin, currently 0.20)
+          // is a re-derivation candidate under ACT-527; the DIRECTION is
+          // ratified.
+          const ok = si.si_pct_float < params.squeezeSiPctFloatMin;
           passes.push({
             filter: 'si-squeeze-gate',
             passed: ok,
             ...(ok ? {} : {
-              reason: 'si_below_squeeze_threshold' as const,
+              reason: 'si_above_squeeze_threshold' as const,
               detail: {
                 si_pct_float: si.si_pct_float,
                 threshold: params.squeezeSiPctFloatMin,
               },
             }),
           });
-          if (!ok) setRefusal('si_below_squeeze_threshold');
+          if (!ok) setRefusal('si_above_squeeze_threshold');
         }
       }
     }
