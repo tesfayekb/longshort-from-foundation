@@ -587,6 +587,75 @@ Deno.serve(createHandler(async (req: Request) => {
       });
     }
 
+    // ── ACT-493 v1 M5 groundwork: in-flight-exit-order guard ────────────
+    // Fetch Alpaca open orders and build a Set of (symbol::side) keys for
+    // any resting DAY-limit whose CID marks an exit intent
+    // (`exit_time` | `exit_manual`). Matched lots colliding with the set
+    // are skipped at the top of the per-lot loop with
+    // `in_flight_exit_order_skipped` tally + audit — no re-submit against
+    // a live order. This is the pre-condition for arming the Turn-3
+    // catch-up cron 15 min post-primary. Degraded-to-empty on transient
+    // broker failure: engine CONTINUES with an empty guard set and audits
+    // the degradation — never-exit is a worse failure mode than a rare
+    // double-submit.
+    interface AlpacaOpenOrderRow {
+      client_order_id?: string;
+      symbol?: string;
+      side?: string;
+      status?: string;
+      qty?: string;
+    }
+    const inFlightExitKeys = new Set<string>();
+    try {
+      const openOrders = await client.getJson<AlpacaOpenOrderRow[]>(
+        '/v2/orders?status=open&limit=500',
+      );
+      if (Array.isArray(openOrders)) {
+        for (const o of openOrders) {
+          if (typeof o.client_order_id !== 'string') continue;
+          const m = OVERSHOOT_EXIT_CID_REGEX.exec(o.client_order_id);
+          if (!m) continue;
+          const cidTicker = m[1];
+          const cidSideLetter = m[2]; // 'L' | 'S'
+          const lotSide: ReconciliationSide = cidSideLetter === 'L' ? 'long' : 'short';
+          const brokerSymbol = typeof o.symbol === 'string' ? o.symbol : cidTicker;
+          // Guard on both the CID-embedded ticker AND the broker symbol
+          // (defense against CID/symbol drift). Populate both keys.
+          inFlightExitKeys.add(`${cidTicker}::${lotSide}`);
+          if (brokerSymbol !== cidTicker) {
+            inFlightExitKeys.add(`${brokerSymbol}::${lotSide}`);
+          }
+        }
+      }
+    } catch (guardErr) {
+      console.error(
+        '[overshoot-exit-run] open-orders fetch failed (in-flight guard degraded to empty):',
+        String(guardErr), { correlationId },
+      );
+      try {
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.exit.in_flight_guard_degraded',
+          actorId: authCtx.user.id,
+          targetType: 'overshoot_exit_run',
+          targetId: 'run-level',
+          correlationId,
+          metadata: {
+            error: guardErr instanceof Error ? guardErr.message : String(guardErr),
+            session_date: clockSnap.sessionDate,
+            dry_run: dryRun,
+            manual: manualConfirm,
+          },
+        });
+      } catch (auditErr) {
+        console.error(JSON.stringify({
+          event: 'in_flight_guard_degraded_audit_write_failed',
+          correlationId, err: auditErr instanceof Error ? auditErr.message : String(auditErr),
+        }));
+      }
+      // inFlightExitKeys remains empty — proceed with rare-double-submit risk.
+    }
+
     // Group matched entries so we can attribute per (symbol, side) with all
     // constituent lot_ids captured in the CID metadata / audit rows.
     const submissions: Array<{
