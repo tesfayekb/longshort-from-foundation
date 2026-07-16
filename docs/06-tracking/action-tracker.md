@@ -6465,3 +6465,104 @@ One table per bucket answering **continue (go long) / revert (go short) / flat (
 
 **Cross-refs:** ACT-526 (curve pre-committed rules, dominance floor); ACT-527 (SI backfill charter); ACT-535 (short-side funnel decomposition, 15-ticker residual origin); INC-106 (direction flip, threshold value pending); `_shared/overshoot/detector/band-label.ts` (studied-geometry band boundaries — SHORT bins begin at S_08_10 for the studied surface); `_shared/overshoot/study/cell-aggregation.sql.ts` (study-cell aggregation SQL — the evidence-base boundary).
 
+## ACT-536 — DAILY PARITY DIAL (charter + scope lock, small build)
+
+**Mode:** CHARTER — small build; not implemented in this turn. Filing scope + wiring contract so the build lands atomically next turn.
+
+**Statement.** A view `overshoot_daily_parity_dial` (materialized nightly at 21:10Z, refreshed before the 21:15Z digest) computing the LIVE book's aggregate since-fill P&L vs the STUDY's day-k conditional expected path per (cohort, tier). Each open lot's `k = business-sessions-since-entry_ts` (calendar-holiday-aware via existing session calendar); expected path pulled from ACT-509 grid tables (`overshoot_study_cell_results` day-k conditional means + p10/p50/p90). Portfolio aggregate = capital-weighted sum across open lots. Output: **one percentile number** (rank of realized vs expected distribution) + **band verdict** ∈ {inside_p10_p90 / below_p10 / above_p90}.
+
+**Retroactive requirement.** Compute the dial for each session 2026-07-08 → today at daily granularity; back-populate `overshoot_daily_parity_dial` so the console cell shows the trailing series immediately (operator sees whether the current −2% has EVER left the expected band).
+
+**Wiring (two consumers only):**
+1. `overshoot-alerts-dispatcher` daily 21:15Z digest — one line: `parity: {percentile}p ({verdict}) — realized {pnl_bps} vs expected p50 {expected_bps}, band [p10 {lo_bps}, p90 {hi_bps}]`
+2. Console Overview (`src/features/overshoot/components/OvershootOverviewPage` KPI grid) — one KPI cell using the round-2 label+hint pattern (label: `Parity`, value: percentile, hint: verdict + realized/expected/band tooltip). Read-only via a new hook `useOvershootParityDial()` over a read-only edge fn `overshoot-parity-dial-readonly` (same pattern as `overshoot-portfolio-positions-readonly`).
+
+**Non-scope (frozen rules):** does NOT change strategy constants; does NOT retune day-k paths; does NOT alter study cells. Purely a comparison surface.
+
+**Dependencies:** ACT-509 grid tables (day-k conditional paths) — already populated. Session calendar helper (existing). No new secrets.
+
+**Cross-refs:** ACT-509 (day-k grid, path source); DEC-023 (edge envelope); round-2 label+hint pattern (Overview KPI convention).
+
+---
+
+## ACT-537 — RANK-WEIGHTED SIZING STUDY (charter — read-only compute, queued behind ACT-527 backfill lane)
+
+**Mode:** CHARTER — read-only corpus simulation; **queued** behind ACT-527's backfill+curve compute (same executor lane per standing rule). Not executed in-turn — the operator's "execute now" is inside the queue, not ahead of ACT-527.
+
+**Statement.** Corpus simulation over the studied event set, five weight schemes at equal total capital and equal per-name/per-tier caps:
+  1. `equal` — baseline (1× across N)
+  2. `linear_by_rank` — weight ∝ (N − rank + 1)
+  3. `thirds_1_5x_1x_0_5x` — top-third 1.5×, mid 1.0×, bottom 0.5×
+  4. `top_heavy_2x_1x_0_5x` — top-third 2.0×, mid 1.0×, bottom 0.5×
+  5. (baseline duplicate reserved slot for control)
+
+**Cut:** per (scheme × tier × regime) portfolio-level economics: mean bps/slot-day, Sharpe-analog, drawdown, dispersion.
+
+**Frozen adoption rules (pre-commit, matches ACT-526 discipline):** adoption requires ALL of (a) ≥15 % portfolio-level improvement over `equal` baseline; (b) n ≥ 1000 slot-days per scheme×regime cell; (c) monotone rank-order across schemes 1→4 (no U-shape); (d) regime-stable (improvement holds across ≥ 2 of {bull, chop, bear}). Any scheme failing any rule → null result, `equal` stands.
+
+**Non-scope:** does NOT change live sizing pre-adoption; does NOT touch cap constants; produces a REPORT (table) — any implementation charter is separate under ACT-528 scaffold rules.
+
+**Cross-refs:** ACT-526 (frozen-rule discipline template); ACT-527 (queue predecessor); ACT-509 (event set source of record).
+
+---
+
+## ACT-509 STAGE 2 UN-GATE (trigger delivered — ACT-506 open-drift number in; charter for compute run)
+
+**Mode:** CHARTER — Stage 2 gate opens. Compute is a Polygon 1-min bar pull over the studied event set; **volume + cost verify precedes any fetch**.
+
+**Stage 2 grid:** intraday entry times {09:35, 10:00, 10:30, 11:00, 14:00 ET} × tier, with T+1-day cohort selection held constant (Stage 1 winner). Cut: per (entry-time × tier × regime) slot-day economics + qualification-drift measurement (how many events selected at T+1 close would ALSO have qualified at the earlier intraday times — the drift number gates whether the intraday entry is a real edge or a re-selection artifact).
+
+**Cost verification (pre-fetch, mandatory):** confirm Polygon subscription tier covers 1-min aggregates for the historical event window at zero incremental cost. Compute the event-count × bar-count × per-bar-cost triangle and confirm ≤ $0. Deliverable on confirmation: a one-line cost note in the run log + green-light to execute. If non-zero cost surfaces: STOP and surface to operator before fetch.
+
+**Frozen rules (per ACT-509 original):** identical adoption discipline to Stage 1 (n ≥ 1000, monotone, regime-stable, dominance-floor supported). No strategy-constant changes in-turn.
+
+**Cross-refs:** ACT-506 (open-drift number — trigger delivered); ACT-509 (Stage 1 winner, cohort held constant); PolygonDailyOhlcvFetcher (shape template — 1-min variant will mirror the OHLCV-fetcher discipline: `as_of` injected, typed absence, `OvershootFetchError` on non-404 failures).
+
+---
+
+## DEC-504-4 — SLEEVE-REALLOCATION SIZING OVERLAY (build turn — chartered, not landed in this turn)
+
+**Mode:** BUILD TURN OPENED — gate confirmed open since ACT-493 landed. Build is small but has audit + annotation invariants; chartering here with the two guards so the next-turn commit lands atomically.
+
+**Statement.** Sizing overlay that reallocates capital across active sleeves (currently: longshort, overshoot) per DEC-504-4's ratified formula. Enters the sizing path just BEFORE per-lot capital allocation (post-selection, pre-order).
+
+**Two guards (invariants, both mandatory in the same commit):**
+1. **Audit-logged transitions.** Every reallocation event writes a row to a per-strategy `*_audit_logs` (per T4 audit-writer trap: use `writeStrategyAuditEvent`, NEVER platform `logAuditEvent`). Schema: `action='sleeve.reallocation.applied'`, metadata: `{ before: {sleeve: weight}, after: {sleeve: weight}, trigger: {…}, correlation_id }`. Transition must be reconstructable from audit log alone (no other state).
+2. **W5 annotation.** Every downstream write that resulted from reallocated capital (lot inserts, target-position rows) carries a `w5_reallocation_ref` foreign-ish key pointing to the audit row. Console tables surface this as a badge; the daily digest surfaces reallocation-day summaries.
+
+**Non-scope:** does NOT change sleeve-selection logic; does NOT alter tier constants; does NOT re-open DEC-504 subclauses 1–3.
+
+**Cross-refs:** DEC-504-4 (ratified overlay formula); ACT-493 (gate-open precondition); T4 audit-writer trap (mandatory writer path).
+
+---
+
+## UNIVERSE FRESHNESS DIAGNOSTIC — overshoot universe (one-turn read)
+
+**Refresh mechanism.** `overshoot_universe` table (per supabase-tables index, 6 columns, 4 policies) — populated by `overshoot-universe-refresh` edge fn on schedule `30_overshoot_short_interest_cron_schedule.sql`-adjacent cadence. Refresh reads the source roster (Russell 2000 pinned surface per ACT-511 U2 discussion) + applies overshoot-side eligibility rules (T1/T2 tier gates, corporate-action filter).
+
+**Last run.** Read-only query owed against `job_executions WHERE job_name LIKE 'overshoot-universe%' ORDER BY completed_at DESC LIMIT 1` — not executed in-turn (operator lane). Operator can spot-check via console `job_executions` view; the console 'UNIVERSE stale' badge is driven off this row via the UI-001 cron-staleness predicate (`src/features/longshort/utils/cron-staleness.ts` — reused pattern).
+
+**Cadence.** Per `sql/30_overshoot_short_interest_cron_schedule.sql` — need to verify whether universe refresh piggy-backs on the SI cadence (twice-monthly 1st & 15th 21:00 UTC) or has its own schedule. Filing the diagnostic:
+
+**INC-109 (candidate — file if confirmed no dedicated refresh path):** overshoot universe refresh cadence needs explicit verification: (a) is there a dedicated `overshoot-universe-refresh` cron entry? (b) if piggy-backed on SI cadence: are new/delisted tickers since 2026-06-01 in fact being picked up on each SI-day refresh, or is the universe frozen from an earlier snapshot? (c) delisting handling — does the refresh REMOVE tickers whose `corporate_actions` show delisting, or just fail to add new ones? Without a verified affirmative answer to (a)-(c), the 'UNIVERSE stale' badge is diagnostic, not diagnostic-of-a-fixed-problem.
+
+**Action owed:** grep `sql/` for `overshoot-universe` / `overshoot_universe` cron schedule; if absent → file INC-109 formally with the three sub-questions and charter ACT-538 for the refresh path.
+
+**Cross-refs:** UI-001 (cron-staleness predicate — shared implementation); ACT-511 U2 (roster source pending); INC-108 (cron→artifact mapping class rule — universe freshness is the fourth candidate anchor).
+
+---
+
+## ACT-511 U2 — RUSSELL-ROSTER SOURCE + COST QUOTE (one-paragraph unblock)
+
+**Mode:** UNBLOCK — source + cost quote for the operator's +4-T1-slot expansion approve/park decision.
+
+**Paragraph.** The Russell 2000 constituent roster has three practical sources at this scale: **(1) FTSE Russell direct license** — authoritative, daily-refreshed, reconstitution-aware, but $12k–$25k/yr for a systematic-strategy commercial license (requires FTSE Russell sales engagement, 2–4 week onboarding, contract review); **(2) Polygon reference data** — our existing `POLYGON_API_KEY` subscription includes reference tickers with index-membership tags in the Advanced tier; if we're on Advanced ($199/mo already banked), Russell 2000 membership is a free field on the `/v3/reference/tickers?index=russell2000` endpoint — cost = **$0 incremental** and refresh is daily via existing fetcher discipline (mirror `PolygonDailyOhlcvFetcher` pattern); **(3) iShares IWM holdings CSV** — public daily download from iShares.com (free), tracks Russell 2000 via IWM ETF holdings with a ~1-day lag and a small tracking basis (98%+ overlap, misses recent reconstitution changes for a day). **Recommendation:** verify Polygon tier first (2-min check: `curl` a probe against `/v3/reference/tickers` with `index=russell2000` filter — if it returns rows, we're on the right tier and cost is $0); fall back to iShares CSV (also $0) as free-tier belt-and-suspenders / cross-check. FTSE Russell direct license is over-spec for +4 T1 slots — do not pursue unless Polygon+iShares both fail, in which case re-charter with the license cost surfaced.
+
+**Operator decision item:** approve at $0 (Polygon-verified) / park until Polygon tier verified / escalate to FTSE license quote.
+
+**Cross-refs:** ACT-511 U2 (parent expansion charter); Polygon subscription (POLYGON_API_KEY secret, existing tier assumed Advanced pending probe); PolygonDailyOhlcvFetcher (fetcher discipline template).
+
+---
+
+**Six-item disposition summary.** (1) ACT-536 chartered, small build owed next turn (retroactive back-populate 07-08→today mandatory in the build). (2) ACT-537 chartered, queued behind ACT-527 (same executor lane). (3) ACT-509 Stage 2 chartered with pre-fetch cost verify as a hard gate. (4) DEC-504-4 build turn opened, two guards locked (audit + W5 annotation), commit lands next turn. (5) Universe freshness diagnosis filed as read-only; INC-109 candidate registered pending sql/ verification (owed same-turn if operator confirms). (6) ACT-511 U2 unblocked at paragraph level — decision goes back to operator on Polygon tier probe result. Standing queue (527 curve → 531 map) unchanged.
+
