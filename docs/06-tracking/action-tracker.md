@@ -15,6 +15,38 @@
 
 ## 2026-07-16 (later) — DEC-504-4 MIGRATION LEDGER GAP CLOSED (MIG-159)
 
+---
+
+## 2026-07-16 (evening) — ACT-538 LANDED (INC-109 FIX PATH CHARTERED, DISARMED-AT-SEED) + RUSSELL-PROBE BUNDLED
+
+**Status:** ACT-538 build landed atomically per operator ruling — universe weekly-refresh cron + Russell-probe edge fn bundled. Both ship **DISARMED at seed** (job_registry enabled=false); operator flips enabled=true at ACT-538-arm STEP after the six-point attestation catalogued in `sql/39` header. INC-109 remains OPEN as CHARTERED — closes formally at arm-step success (refresh path live + attested).
+
+### Files added (this landing)
+- `supabase/functions/overshoot-russell-probe/index.ts` — one-shot page-1 probe against Polygon `/v3/reference/tickers?index=russell2000&active=true&limit=1000`. Returns `{ok, status, http_status, page1_result_count, polygon_reported_count, sample_first_10, next_url_seen, correlationId}`. **NO DB writes. NO secret material in the response.** JWT + `overshoot.manage` gate; no cron-secret path (schedule='manual').
+- `supabase/functions/overshoot-universe-refresh/index.ts` — DEC-023-enveloped handler. Cron-first branch (verifyCronSecret then disarm gates); manual path requires `overshoot.manage`. Probe short-circuits BEFORE the disarm gates (a paused system remains probeable). Contract: `{probe?:'polygon', dry_run?:boolean, as_of?:'YYYY-MM-DD'}`. Fetches Russell 2000 via Polygon (paginated `next_url`, MAX_PAGES=8 bound), diffs against `overshoot_universe WHERE active=true`, upserts fresh roster (`source='polygon:russell2000'`, `active=true`), soft-deactivates tickers present in current-active but absent from fresh roster (`active=false`; NO hard DELETEs — audit-preserving). Emits T4-compliant `overshoot.universe.refresh.completed` audit row via `writeStrategyAuditEvent`. `productionClock` sole wall-clock source. `dry_run=true` returns the diff without writing.
+- `sql/39_overshoot_universe_refresh_cron_schedule.sql` — placeholders (`PROJECT_REF`/`YOUR_ANON_KEY`/`YOUR_CRON_SECRET_VALUE`) per MIG-031 discipline. Schedule `'0 10 * * 1'` (10:00 UTC every Monday). Six-point arm-attestation checklist in the header. Slot-collision pre-checked against the live overshoot cron set (queried 2026-07-16 via `supabase--read_query` on `job_registry`): 21:00 UTC 1/15 SI · 19:50 UTC weekday exit · 22:00 UTC weekday detection · 13:35 UTC weekday entry · 21:10 UTC weekday equity snapshot · */5 alerts — no collision at 10:00 UTC Monday.
+- **MIG-160** applied (`supabase--migration`) — disarmed job_registry seeds: `'overshoot.universe.refresh'` (schedule='0 10 * * 1', trigger_type='scheduled', enabled=false) + `'overshoot.russell_probe'` (schedule='manual', trigger_type='manual', enabled=false). Idempotent (ON CONFLICT DO NOTHING). §22.5.1 evidence lands with the ledger entry (owed same-PR).
+
+### Byte-match invariant
+- `sql/39` schedule string `'0 10 * * 1'` == `job_registry.schedule` for id='overshoot.universe.refresh'. Drift = §22.5 DRIFT-class defect.
+
+### Arm-step gates (deferred, operator-owned)
+1. `overshoot-russell-probe` returns `{ok:true, status:'reports', polygon_reported_count:>~2000}` with the production POLYGON_API_KEY (INC-109 gate (a)/(b) — refresh has an authoritative roster source).
+2. `overshoot-universe-refresh` handler deployed (this sub-turn lands the code; deployment is automatic).
+3. Manual `{probe:'polygon'}` returns 2xx from the EDGE runtime.
+4. Manual `{dry_run:true}` returns `roster_count≈2000`, `would_upsert≈2000`, `would_deactivate` small (typically ≤10; sanity-check against `corporate_actions` before arm).
+5. First real (non-dry) manual invocation writes an `overshoot.universe.refresh.completed` audit row with matching counts (DEC-043 end-to-end evidence).
+6. Apply `sql/39` (placeholder-substituted) via Supabase SQL Editor; flip `job_registry.enabled=true` for `'overshoot.universe.refresh'`. INC-109 closes here.
+
+### ROI section
+No signal-logic / threshold / sizing / execution-timing change. This is a **missing-refresh-path fix**; delta = eliminates measurement drift (delistings carried, IPO/new-listing silent zeros) rather than changing prediction economics. Dormant-at-seed (enabled=false) → zero live-book effect at landing.
+
+### Cross-refs
+ACT-538 (charter); INC-109 (candidate → chartered → closes at arm-step); ACT-511 U2 (Russell-probe is the authoritative-roster prerequisite — the probe answers Polygon-tier feasibility once and the refresh handler consumes the same endpoint on cadence); MIG-160 (job_registry seed); `sql/39` (cron placeholder); T4 audit writer via `writeStrategyAuditEvent`.
+
+### Tonight's 19:50Z exit tick — report OWED, cannot land this turn
+Tick fires at 19:50 UTC; the tally row + INC-107/108 quiet-window check + daily ACT-536 dial reading are **future** at the time of this landing. Reporting queue: `overshoot_audit_logs WHERE action='overshoot.exit.run.completed' ORDER BY created_at DESC LIMIT 1` → expected metadata `{positions_examined:50, exits_submitted:0, session_age_no_fire:50, guard:'primary'}`; window-scan for HIGH pages 19:50Z±30m; ACT-536 anxiety-dial percentile + band verdict. Delivered next turn after the tick lands.
+
 **Trigger.** Operator §22.5.1 audit surfaced that the DEC-504-4 landing turn shipped `sql/38_overshoot_w5_reallocation_ref.sql` as an authored file only — `supabase--migration` was never invoked and no MIG-NNN ledger entry was added. Live-DB read-back on 2026-07-16 confirmed `w5_reallocation_ref` **absent** on both `overshoot_lots` and `overshoot_target_positions` — the sizing overlay's guard-2 write path would have failed on first `si_stale_active` INSERT (~early August). Author-vs-apply gap per ADR-004; dormant-at-birth timing masked the exposure but did not eliminate it.
 
 **Landing.** Applied the migration via `supabase--migration` (SQL byte-identical to `sql/38_*.sql`) and added **MIG-159** to `docs/07-reference/database-migration-ledger.md` with §22.5.1 evidence.
