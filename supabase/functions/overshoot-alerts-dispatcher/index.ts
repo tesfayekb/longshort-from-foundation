@@ -438,7 +438,15 @@ async function scanCronOverdue(correlationId: string): Promise<DispatchResult[]>
     'overshoot.entry.run':              { table: 'overshoot_entry_runs',       tsCol: 'created_at'  },
     'overshoot.exit.run':               { table: 'overshoot_audit_logs',       tsCol: 'created_at', actionPrefix: 'overshoot.exit.' },
     'overshoot.fill_sweep':             { table: 'overshoot_audit_logs',       tsCol: 'created_at', action: 'overshoot.fill_sweep.tick' },
-    'overshoot.short_interest.compute': { table: 'overshoot_short_interest',   tsCol: 'as_of_date'  },
+    // INC-108 (2026-07-15): SI mapping repointed from `as_of_date`
+    // (settlement/publish date — FINRA's most-recent snapshot, e.g. 06-30
+    // on 07-15) to `computed_at` (row ingest time — the actual fire
+    // heartbeat). Prior mapping paged as cron_overdue on every clean
+    // twice-monthly fire because settlement dates trail wall-clock by
+    // ~15 days. THIRD instance of trigger->artifact mapping defect
+    // (INC-97 fill_sweep, INC-107 exit.run, INC-108 SI) — per today's
+    // class rule, three instances promote to a lint-time guard.
+    'overshoot.short_interest.compute': { table: 'overshoot_short_interest',   tsCol: 'computed_at' },
     'overshoot.equity_snapshot':        { table: 'overshoot_equity_snapshots', tsCol: 'created_at'  },
     'overshoot_equity_snapshot':        { table: 'overshoot_equity_snapshots', tsCol: 'created_at'  },
   };
