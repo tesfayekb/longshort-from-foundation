@@ -58,7 +58,7 @@ Deno.serve(createHandler(async (req: Request) => {
     const body = await req.json();
     if (body && typeof body === 'object' && typeof (body as { symbol?: unknown }).symbol === 'string') {
       const s = (body as { symbol: string }).symbol.trim().toUpperCase();
-      if (/^[A-Z][A-Z0-9.\-]{0,9}$/.test(s)) symbol = s;
+      if (/^[A-Z][A-Z0-9.-]{0,9}$/.test(s)) symbol = s;
     }
   } catch {
     // no body / non-JSON → default symbol.
