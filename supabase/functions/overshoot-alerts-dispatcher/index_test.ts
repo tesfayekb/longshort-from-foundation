@@ -16,12 +16,24 @@ Deno.test('INC-97 fill-sweep overdue mapping uses sweep-owned heartbeat, never e
   assert(!src.includes("'overshoot.fill_sweep':             { table: 'overshoot_entry_runs'"));
 });
 
-Deno.test('INC-97 dispatcher response echoes independent A5 count and version (INC-107 rebumped)', async () => {
+Deno.test('INC-97 dispatcher response echoes independent A5 count and version (INC-108 rebumped)', async () => {
   const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
   assert(src.includes('independent_a5: independentA5.length'));
-  // INC-107 (2026-07-15) bumped the version echo to reflect the exit-run
-  // artifact-family fix + the armedAt floor pull-forward.
-  assert(src.includes("'inc107-exit-artifact-fix-and-arm-floor-20260715'"));
+  // INC-108 (2026-07-15) bumped the version echo to reflect the SI
+  // mapping repoint from settlement date (as_of_date) to ingest time
+  // (computed_at).
+  assert(src.includes("'inc108-si-computed-at-mapping-20260715'"));
+});
+
+Deno.test('INC-108 SI overdue mapping uses computed_at (ingest time), never as_of_date (settlement date)', async () => {
+  const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
+  // Positive: the SI mapping must read the ingest-time column.
+  assert(src.includes("'overshoot.short_interest.compute': { table: 'overshoot_short_interest',   tsCol: 'computed_at' }"));
+  // Negative: the settlement-date column must NOT appear as a watchdog
+  // heartbeat column for any leg. `as_of_date` is a publish/settlement
+  // date, not a fire time. THIRD-instance guard against the trigger->
+  // artifact mapping defect class (INC-97 / INC-107 / INC-108).
+  assert(!src.includes("tsCol: 'as_of_date'"));
 });
 
 Deno.test('INC-107 exit.run overdue mapping repointed from overshoot_entry_runs to audit-prefix', async () => {
