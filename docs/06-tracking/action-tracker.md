@@ -7,6 +7,31 @@
 
 ---
 
+## 2026-07-17 (weekend) — WEEKEND COMPUTE BATCH CHARTERED (six items, sequential, evidence-per-turn)
+
+**Mode:** research/compute batch — all items are read-only against production tables OR isolated study-run writes into `overshoot_study_*` / `overshoot_backfill_runs` (already-chartered study surfaces). **No strategy code changes, no threshold/sizing/cap edits, no live-book impact.** Frozen rules stand on every study: numbers report against pre-committed floors; **no adoption without the rules passing**.
+
+**Execution discipline:** one item per turn, evidence bundle per completion, next item only after current lands. Wall-clock realism: ACT-527 backfill ~21 min, ACT-509 Stage-2 ~3 h — these are edge-function-invocation-plus-poll patterns, not single-shell tasks. **Saturday ACT-510 deploy interleaves as scheduled** (minutes, orthogonal blast radius).
+
+**Priority queue (execute in order):**
+
+1. **ACT-527 FULL COMPLETION** — historical SI backfill (chartered 07-15, approved conditional) → coverage verify → three-pronged curve (W5-05 full-corpus, regime-stratified) → **squeeze-ride flip verdict** → stop-ladder grid. Unblocks the downstream queue. Frozen rule: flip requires pre-committed floor pass on ALL three prongs; miss on any → NO flip, document and hold.
+2. **ACT-536 retroactive dial series** 07-08 → today, **plus the 20-lot defect audit expansion** (ACT-539 ladder-mandated follow-up, owed). Frozen rule: dial series reports notional-weighted deltas per day; audit expands the ACT-539 factor-cluster read from 10 → 20 lots and confirms/denies the semi/networking concentration as the residual driver.
+3. **ACT-531** — signals map on the fresh SI table (post-E5 07-15 computed_at corpus). Frozen rule: map is descriptive (correlation matrix, quintile decomposition) — no signal adoption without the pre-committed Sharpe/hit-rate floors met on out-of-sample fold.
+4. **ACT-537** — sizing study. Frozen rule: sizing table reports per-cell realized-vs-Kelly ratios; adoption requires the pre-committed max-drawdown / turnover floors.
+5. **ACT-515 engine** — 2023-Q2 byte-match validation fixture FIRST (engine correctness gate), then configs (a)-(e) including sector-cap variants → **operator's drawdown number**. Frozen rule: no config runs until byte-match passes; drawdown number reports against pre-committed portfolio-variance-under-clustering floor.
+6. **ACT-509 Stage-2** — 1-min bar pull (~3 h wall clock, fits weekend) + intraday grid. Frozen rule: grid reports per-cell fill-quality decomposition; adoption gated on the pre-committed intraday-slippage floor.
+
+**Monday morning operator deliverables (target):** flip verdict (1), signals map (3), sizing table (4), dial series + 20-lot audit (2), drawdown number (5), timing grid (6). **Entire pending-ROI queue converts from estimates to measurements.**
+
+**Interleave — Saturday ACT-510 deploy:** proceeds as scheduled per its own charter; independent of this batch. **No coupling.**
+
+**Governance stance:** every item honors T5 carve-out, D1-D5 migration discipline, anti-phantom defaults (no wall-clock in kernels, no silent sentinels in money paths, boundary sources are primes). ROI guardrails apply — any measurement that would silently reduce ROI is flagged in that item's landing evidence, never adopted without explicit operator sign-off.
+
+**Handoff commitment:** each item's completion is reported as it lands. This turn charters the batch; ACT-527 backfill kick-off is next turn.
+
+---
+
 ## 2026-07-16 (late) — DEC-504-4 LANDED (ATOMIC, DORMANT-AT-BIRTH)
 
 **Status:** all three disambiguations ratified by operator; build landed one turn as directed. **Dormant-at-birth by design** — SI is FRESH (freshest `overshoot_short_interest.as_of_date` behind computed_at 2026-07-15; `siStaleActive('2026-07-16', ..., 21) === FALSE`), so the overlay is present in code but reallocates nothing until the next stale window (~early August by FINRA's twice-monthly + ~8-biz-day publication cadence). **Zero effect on the live book at landing is CORRECT BEHAVIOR, not a defect** — the canary test pins the dormant-at-birth invariant so nobody can misread it as a wire-through failure.
