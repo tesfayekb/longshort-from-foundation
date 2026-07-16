@@ -31,8 +31,7 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   const auth = await authenticateRequest(req);
-  if (!auth.ok) return auth.response;
-  await checkPermissionOrThrow(auth.userId, 'overshoot.manage');
+  await checkPermissionOrThrow(auth.user.id, 'overshoot.manage');
 
   const apiKey = Deno.env.get('POLYGON_API_KEY') ?? '';
   if (!apiKey) {
