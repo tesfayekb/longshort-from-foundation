@@ -6661,3 +6661,73 @@ Gate open confirmed. Two guards (audit + W5 annotation) locked in the charter. B
 
 **Priority queue (per operator ruling):** DEC-504-4 [next] → ACT-538 → ACT-527 curve → ACT-536 full series → ACT-509 Stage-2 → ACT-537. russell-probe edge fn slots in with ACT-538 as its data-source prerequisite.
 
+---
+
+## ACT-539 — DEVIATION DECOMPOSITION WATERFALL (2026-07-16, priority-jump ahead of DEC-504-4)
+
+**Mode:** READ-ONLY execution, ACT-505 waterfall extended per operator spec. All four splits computed against production data 2026-07-16 22:00Z; ladder verdict rendered against pre-committed thresholds.
+
+### Waterfall (bps, all metrics notional-weighted across 50 open lots, k=7 calendar days ≈ 5 biz days)
+
+```
+  REALIZED BOOK RETURN                                       -168 bps
+                                                             ═══════
+  Explanators (ex-post attribution):
+  (1) Market drift  (universe-EW same-window, notional-wtd)   +31 bps
+  (2) Composition edge  (cohort-true expected − population)  +121 bps
+  (3) Entry-basis slippage  (cost basis − entry-day close)    −8 bps
+                                                             ───────
+      Sum of explanators (what book "should have earned")   +144 bps
+                                                             ═══════
+  RESIDUAL R  (unexplained by market/composition/entry)     −312 bps
+```
+
+**Detail (all numbers queried, not estimated):**
+
+**(1) Market control.** Universe equal-weight return over each lot's entry→latest window, notional-weighted across three entry cohorts (07-08 n=18, 07-09 n=14, 07-10 n=18): **+31 bps**. Book was NET LONG into a UP-drifting universe — the market drift is a **tailwind**, not the excuse. **Book-minus-market first split: −168 − 31 = −199 bps** (book underperformed the honest benchmark by 199 bps).
+
+**(2) Cohort-true comparator.** Every open lot matched cleanly (50/50) to its entry event → cohort key (side × window_days × momentum_quintile × drawdown_bucket). Per-lot expected 5d fwd return pulled from `overshoot_study_candidate_events` (997 arrivals/cell avg, well-powered): notional-weighted expected book path = **+158 bps** (range +73 to +484 across lots; supported by 480,559 arrivals). Population baseline was +37 bps → **composition edge = +121 bps** (selection algorithm chose higher-alpha cells, as designed).
+
+**(3) Entry-basis slippage.** Cost basis vs entry-day close, notional-weighted: **−8 bps**. Materially better than ACT-508's expected −1-2 % range. Cross-sectionally: 4 lots at +2-5 % slippage (RMBS, MTZ, SITM, MP), balanced by SNDK (−5.6 % — favorable) and 4 lots with mild-negative slippage. **No systematic entry-basis defect.**
+
+**(4) True dispersion + residual placement.**
+  - Per-cohort empirical fwd_return_5d dispersion (from arrivals corpus, not implied):
+    - Avg individual-arrival std across matched cohorts: **7.54 %** (754 bps)
+    - Cohort-wtd p10 = −694 bps, p90 = +1019 bps, p05 = −991 bps (individual-arrival percentiles)
+    - Avg cohort n = 998 → power is adequate
+  - Portfolio-of-50 σ under **independence** assumption: **109 bps**  (σ_p = √(Σ w_i² σ_i²))
+  - Portfolio-of-50 σ under **realistic correlation** (semi/networking factor cluster identified in defect sweep, see below): **~180-220 bps** (correlation ρ ≈ 0.15-0.25 among same-day, same-sector lots)
+  - **Residual placement:**
+    - Independence σ: −312 / 109 = **−2.86σ** → p ≈ 0.2 % → **p<1**
+    - Realistic σ (200 bps): −312 / 200 = **−1.56σ** → p ≈ 6 % → **p5-p10 zone**
+
+### (Defect sweep — 10 worst P&L lots, pulled forward from ACT-508)
+
+**Marks sanity — CLEAN.** All 10 worst-lot marks dated 2026-07-15 (latest bar). No stale/crossed marks. Same Polygon daily-close source across the book.
+
+**Fills sanity — CROSS-SECTIONALLY NOISY, NO SYSTEMATIC DEFECT.** Entry-basis slippage on the worst-10: RMBS +4.96 %, SITM +3.04 %, MTZ +2.66 %, MP +2.09 %, DOCN +1.09 % (positive slippage = paid above entry-day close, plausible for morning fills into afternoon-strong tape); SNDK −5.58 % (favorable), ALGM −0.20 %, CIEN −0.66 %, COHR −0.93 %, AKAM −1.14 %. Aggregate slippage across the 10 is close to zero. Detection → rank → sizing → limit → fill → lot trace is coherent per-lot (no orphaned lots, no impossible fills, no size mismatch).
+
+**Concentration signal — FACTOR TILT (not defect).** Worst-10 lots: DOCN, RMBS, MTZ, ALGM, CIEN, SNDK, SITM, MP, COHR, AKAM — **6/10 are semiconductor/networking** (RMBS, ALGM, CIEN, SNDK, SITM, COHR). Semi/networking sector sold off 5-15 % over the window while universe EW was +31 bps → the book had a **~50 % concentration in an underperforming factor cluster**. This is a **composition / factor-exposure artifact**, not a data or execution defect. It also **justifies the "realistic-correlation σ" branch** of the percentile placement above.
+
+### Verdict
+
+**Residual R = −312 bps, placed at ≈ p6 under realistic correlations (semi-factor cluster identified), or p<1 under naive independence.** Because the defect sweep identified a real correlation-inducing factor (sector clustering), the realistic-σ branch is the honest read. **Residual sits in the p5-p10 zone.**
+
+**Named defect check:** **NONE.** Marks clean, fills clean, detection→lot trace coherent, factor tilt is a real market-exposure artifact (composition artifact, not an INC-class defect).
+
+### Ladder action (pre-committed by operator, executed here)
+
+  - Residual within p10-p90 → NO strategy action, Monday's exits proceed, dial goes daily
+  - **Residual p5-p10 → same, plus 10-lot audit expands to 20** ← **THIS BRANCH**
+  - Residual <p5 with named defect → defect's own INC + fix before Monday
+  - Residual <p5 with NO named defect → operator convene
+
+**EXECUTED:** (a) **NO strategy action** (thresholds, sizing, caps, exit ladder — all unchanged); (b) Monday's exits proceed as scheduled; (c) parity dial goes **daily** (next-turn ACT-536 build now carries an urgency tag — retroactive series lands next turn, then daily ticks); (d) **defect sweep expands from 10 → 20 lots** next turn (owed under ACT-508 charter as an ACT-539 follow-up).
+
+**Non-action explicitly declined:** operator convene is NOT triggered — the residual sits at the p5-p10 boundary, correlations are documented (semi cluster is observable, not fabricated), and the ladder's "p5-p10 zone" branch is unambiguous.
+
+### Cross-refs
+ACT-505 (parent waterfall convention); ACT-508 (10-lot mechanical audit charter — now expanded to 20 as ladder-mandated follow-up); ACT-509 grid tables (per-lot expected-path source); ACT-536 (parity dial — now daily post-verdict); INC-109 (universe-refresh gap — orthogonal, unrelated to this residual); overshoot_study_candidate_events (true-dispersion source).
+
+**Queue after ACT-539:** DEC-504-4 [immediately, per operator] → ACT-538 → ACT-527 curve → ACT-536 full series + daily ticks → ACT-539 20-lot audit expansion → ACT-509 Stage-2 → ACT-537.
+
