@@ -6386,3 +6386,17 @@ One table per bucket answering **continue (go long) / revert (go short) / flat (
 
 **Class rule filed twice, promotion threshold reached at 3.** INC-97 (fill_sweep) + INC-107 (exit.run) both exhibit "trigger→artifact mapping for a job without a dedicated runs table incorrectly points at a sibling job's runs table." If a third instance surfaces, promote to a lint-time guard (`check-overshoot-separation.ts` extension or new `check-watchdog-artifact-mapping.ts`). Not built this turn.
 
+
+## ACT-533 — Promote watchdog trigger→artifact mapping guard to CI lint (INC-108, three-instance class-rule threshold)
+
+**Status:** FILED — build gated behind ACT-527 backfill+curve completion (same executor lane; low priority — the three data-plane fixes have already closed the pageable surface).
+**Trigger:** Three instances of trigger→artifact mapping defects filed today: INC-97 (fill_sweep pointed at wrong sibling-job runs table), INC-107 (exit.run pointed at entry-run runs table), INC-108 (SI pointed at `as_of_date` settlement column instead of `computed_at` ingest column). Under the standing three-instance promotion rule, the class rule earns a lint-time guard.
+**Deliverable:** `scripts/check-watchdog-artifact-mapping.ts` (+ `_test.ts`) that parses `supabase/functions/overshoot-alerts-dispatcher/index.ts` and enforces, for every entry in the dispatcher's `map` object:
+  1. `tsCol` never matches the banned publish/settlement pattern (`^(as_of|settlement|publish|effective|report_)_?date$` case-insensitive) — those columns are DATA freshness, not fire freshness.
+  2. When `table = 'overshoot_audit_logs'`, one of `action` or `actionPrefix` MUST be set; the raw table (no filter) is never a valid mapping.
+  3. Every mapped `id` must correspond to a row in `job_registry` (cross-check against the seeded IDs — prevents typo-drift between the seed and the mapping).
+  4. Optional runtime probe (behind `--live` flag): for each mapping, assert at least one row exists in the mapped stream matching the filter (positive existence, not staleness) — reserved for post-first-fire attestation, not baseline CI.
+**Registration:** added to `.github/workflows/overshoot-guards.yml` after the check-overshoot-separation job in the same lane.
+**Cross-refs:** INC-97, INC-107, INC-108; ACT-529 (uniformity-deploy rule); the class rule filed alongside INC-107 today.
+**Non-goals:** the guard does NOT validate mapping SEMANTICS for other strategies' watchdogs — scope is overshoot only; longshort has its own dispatcher lineage. Cross-strategy generalisation is a separate charter if/when it becomes concrete.
+
