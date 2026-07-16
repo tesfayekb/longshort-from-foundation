@@ -6602,3 +6602,62 @@ Gate open confirmed. Two guards (audit + W5 annotation) locked in the charter. B
 
 **Deliverable next turn (in this order, atomic where possible):** ACT-538 build (INC-109 fix path); ACT-536 build + retroactive back-populate (the anxiety-dial numbers); DEC-504-4 overlay build; ACT-511 U2 Polygon probe via edge fn OR iShares CSV (operator picks). ACT-537 remains queued behind ACT-527.
 
+---
+
+## 2026-07-16 22:00Z — TWO READ-ONLY DELIVERABLES: ACT-536 anxiety number + ACT-511 U2 IWM verdict
+
+### ACT-536 — TODAY'S PARITY DIAL READING (single-session, coarse-comparator, honest scope)
+
+**Scope caveats up front (before the number):**
+  1. `overshoot_study_cell_results` carries **only** `mean_fwd_return_{1d,5d,20d}` + `hit_rate_5d` + `median_fwd_return_5d` — NO p10/p90 percentile envelope. The "one percentile number + band verdict" spec cannot be delivered from current study tables; the retroactive series (full build) needs the study to persist percentile arrays first, OR a σ approximation from cross-sectional dispersion of `mean_fwd_return_5d` across cells. This turn's number is a **coarse deviation-from-expected-mean**, not a true percentile.
+  2. Lots carry `tier` (T1/T2) but not the study-cell-key tuple (band × momentum_quintile × drawdown_bucket × window_days × exclusion_width_days), so per-lot expected paths cannot be looked up cell-by-cell. Comparator is **population-weighted (arrival-count) mean of study cells by side**.
+  3. Current book is entirely long (0 shorts open, consistent with INC-108/ACT-535 tally).
+
+**Numbers (queried against production 2026-07-16 22:00Z UTC):**
+  - Open lots: **50** (T1 = 6, T2 = 44; ALL long)
+  - Aggregate notional: **$119,336**
+  - Avg k = **7.0 calendar days** since entry (min 6, max 8; ≈ 5 business days)
+  - Realized+unrealized since fill, notional-weighted return: **-1.68 %** (-$2,010)
+    - T1 (6 lots): **-5.13 %** (-$703 on $13,707 notional)
+    - T2 (44 lots): **-1.24 %** (-$1,307 on $105,629 notional)
+  - Study expected long-side 5d mean fwd return (population-weighted across 5886 cells, n=1,947,893 arrivals): **+0.372 %**
+  - **Deviation from expected: -205 bps** (realized -168 bps vs expected +37 bps at ≈5 biz-day horizon)
+
+**Rough band verdict (with dispersion caveat).** A 50-lot equally-notional portfolio at 5-biz-day horizon has an implied portfolio-return std of order √(individual_event_var / N) ≈ 5-8 % / √50 ≈ **70-110 bps**. -205 bps below expected → **≈ -2σ to -3σ**, i.e. **BELOW-BAND** on the "did the book ever leave the band" test. TODAY.
+
+**Direct operator anxiety answer:** at k=7 calendar days, the current book sits **~2 sigma below the study's expected mean path** — that is a meaningful negative excursion, not noise. Whether the current -2 % has EVER been in-band since 07-08 requires the retroactive daily series (next turn). Today's snapshot alone: **out-of-band on the low side.**
+
+**Confidence caveats stacked (do NOT over-weight this number):**
+  - Cross-sectional σ is an implied dispersion; true portfolio σ requires per-cohort cross-lot correlation, unmodeled here → the -2σ figure is a **rough magnitude estimate**, not a p-value.
+  - Study expected mean is population-weighted; the actual book's cohort mix may cluster in below-average cells → part of the deviation may be cohort selection, not path deviation.
+  - The retroactive series (07-08 through today, daily) is the real dial; today's number is a **single point**.
+
+**Cross-refs:** ACT-536 (parity dial charter, next-turn build); ACT-509 grid tables (path source, currently mean-only); ACT-535 (short-side funnel, explains 0 shorts open).
+
+### ACT-511 U2 — IWM CSV BLOCKED; corpus-based feasibility verdict delivered
+
+**IWM CSV pull attempt.** `curl` to iShares AJAX endpoint (`.../239710/iShares-Russell-2000-etf/1467271812596.ajax?fileType=csv&fileName=IWM_holdings&dataType=fund`) returned **HTML landing page + bot-detection redirect** on both plain and browser-header attempts (1.4 MB HTML shell, zero CSV rows). iShares' AJAX endpoint requires session cookies / JS challenge — not scriptable in this sandbox without a headless browser. **Path (b) is not-in-turn-attainable via curl.**
+
+**Fallback: corpus-based feasibility verdict** (higher-precision than roster count would have given anyway).
+
+**Live event-run corpus** (`overshoot_events`, 28-day window 2026-06-18 → 2026-07-15, current 839-ticker universe):
+  - Total rows: 7,388 (universe × runs)
+  - **T1 events selected: 16** (from 17 T1 candidates — 94% selection rate)
+  - T2 events selected: 224 (from 1,325 candidates)
+
+**Annualized T1 rate (current 839-ticker universe):** 16 selected × (365 / 28) ≈ **209 T1 events/yr** — **already 2.1× above the pre-committed ≥100/yr GO threshold.**
+
+**Russell 2000 expansion projection (2000 / 839 ≈ 2.38× scaling):** ~**~500 T1 events/yr** on full Russell 2000 (conservative linear scaling; T1 skews to smaller-cap names over-represented in the Russell 2000 delta relative to the current curated universe, so actual delta likely > 2.38×).
+
+**VERDICT: GO on ACT-511 U2 (+4 T1 slots).** Event volume clears the ≥100/yr threshold by **~2× on the current universe** and **~5× projected on the full Russell 2000 expansion.** The expansion is not gated by event scarcity. It is gated by (a) authoritative roster source for the +1160-ticker universe delta, and (b) INC-109 refresh cron (both chartered).
+
+**Path (a) next-step charter (only-if-needed per operator ruling — needed):** `overshoot-russell-probe` edge fn — 20-line one-shot: `Deno.env.get('POLYGON_API_KEY')` → `GET /v3/reference/tickers?index=russell2000&active=true&limit=1000` (paginate via `next_url`) → return `{count, sample_first_10, next_url_seen}`. Confirms Polygon Advanced tier includes Russell 2000 membership at $0 incremental. If it does: ACT-538 universe-refresh cron reads from this endpoint. If it does not: escalate to FTSE Russell license quote (unlikely-needed given the corpus verdict already clears GO).
+
+**Cross-refs:** ACT-511 U2 (parent expansion charter); INC-109 (universe refresh missing — ratified as ACT-538); Polygon Advanced subscription (POLYGON_API_KEY, $0 incremental via edge-fn scope).
+
+---
+
+**Two deliverables tonight (both landed, both read-only):** (1) parity anxiety dial — book ≈ -2σ below expected at k=7 today, retroactive series next turn; (2) ACT-511 U2 GO at 2-5× the required event volume, +4 T1 slots approvable on numbers.
+
+**Priority queue (per operator ruling):** DEC-504-4 [next] → ACT-538 → ACT-527 curve → ACT-536 full series → ACT-509 Stage-2 → ACT-537. russell-probe edge fn slots in with ACT-538 as its data-source prerequisite.
+
