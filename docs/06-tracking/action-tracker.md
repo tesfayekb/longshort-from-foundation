@@ -1,6 +1,57 @@
 ### ACT-499 (2026-07-10): INVESTIGATION — **Comprehensive weekend review, OVERSHOOT scope, Track A closed with operator adjudications; Track B (security audit) dispatched to subagent.** Read-only; no code, no migrations.
 ### ACT-527 (2026-07-15): CHARTER — **Historical SI backfill for W5-05 full-corpus regime-stratified curve.** APPROVED CONDITIONAL on source+cost statement (this filing); execute-on-approval-of-statement.
 
+---
+
+## 2026-07-16 (evening) — ACT-539 STRUCTURAL FINDING FILED + DEC-504-4 BUILD STOP
+
+### ACT-539 Δ — SECTOR-CLUSTERING as unstudied portfolio dimension (folded, not chartered)
+**Finding.** 6/10 worst-performing lots in tonight's decomposition sat in one sector cluster (semiconductor/networking). ACT-509 measured **per-event edge**, never **portfolio variance under clustering**. Sector-correlated dislocations co-occur by construction; sizing that admits N clustered lots at slot-cap has hidden max-DD tail vs its per-slot-day expectation.
+
+**Disposition — folded as config (e) into ACT-515 backtest engine run matrix.** Add sector-cap variants `{ none (baseline), max_8_per_sector, max_6_per_sector }` × existing (a)-(d) configs. Report **per-slot-day economics AND max-DD** per variant. No new charter, no live change — the engine answers when it runs.
+
+**Frozen adoption rule (pre-committed, VI.I lesson binding).** A sector cap adopts ONLY if it cuts **max-DD ≥ 20% relative** while costing **< 5% per-slot-day economics** (risk-adjusted dominance). Refusing clustered dislocations may refuse exactly the best events — reflexive de-risking is FORBIDDEN.
+
+**Cross-refs:** ACT-515 (backtest engine — receives config (e)); ACT-539 (decomposition parent); VI.I (anti-reflexive-de-risking lesson).
+
+### MONDAY FIRST-EXITS NOTE (record; owed in Monday's evidence pack)
+The **six T1 exits due Monday** are the residual-p6 read's first hard test. Monday's first-exits pack MUST state, **per-lot**, expected-vs-realized round-trip:
+- **Validates p6-bad-luck read** iff realized round-trips land inside their cells' realized distributions (late-bounce materialization consistent with a p6 draw).
+- **Starts indicting the read** iff exits are at losses **beyond** their cells' realized distributions (multiple lots outside the study-measured tail = residual is not p6 sampling; a named defect is owed).
+
+Format: `lot_id | cohort | tier | entry_ts | exit_ts | realized_r | cell_p50 | cell_p10 | cell_p05 | inside_or_beyond`.
+
+### DEC-504-4 BUILD TURN — **STOPPED, disambiguation owed before code lands**
+**Mode:** BUILD → STOPPED under uncertainty=STOP (Constitution + anti-phantom / money-path guard). Not a stall — a scope-vs-primitive mismatch that must resolve before writing to sizing.
+
+**What's ready.** `_shared/strategy-audit.ts::writeStrategyAuditEvent` exists (DEC-033 v4.1), so T4 audit writer is on the shelf. Charter's two guards are correctly locked (audit event + W5 annotation).
+
+**What's NOT resolved (three questions the "ratified formula" alone doesn't answer):**
+
+1. **Sleeve granularity.** DEC-504-4 statement says "SHORT-sleeve → LONG reallocation." Is this:
+   - **(A) within-overshoot** (overshoot short-tier envelope shifts to overshoot long-tier envelope during `si_stale_active`), OR
+   - **(B) cross-strategy** (overshoot-short budget → longshort long budget)?
+   Non-scope clause "does NOT change sleeve-selection logic" is consistent with (A) (envelope-only shift, same selector). (B) requires a cross-strategy capital primitive that does not exist in `_shared/` today.
+
+2. **Sleeve-state reader.** `si_stale_active` today lives implicitly in the detector via `DETECTOR_SI_STALENESS_MAX_DAYS=21`. The overlay needs a **single-homed reader** — sizing must read the SAME state the detector reads, or the two decouple and guard-1 ("reconstructable from audit alone") breaks. Options:
+   - Extract `_shared/overshoot/si-freshness.ts` helper called by both detector and sizing (recommended);
+   - Or thread staleness through the detection-run output row into sizing (couples runs sequentially).
+
+3. **W5 annotation column.** Guard-2 requires `w5_reallocation_ref` on downstream writes. That's a **schema change** on `overshoot_lots` and/or `overshoot_target_positions` (and possibly longshort tables under reading B). Migration + MIG-NNN ledger + reference-index update + RLS-first per D1 — a Tier-A landing, not "small." Confirm: (i) which tables, (ii) nullable UUID FK-shape vs JSONB metadata.
+
+**Why STOP not guess.** Money-path anti-phantom rule: I will not silently pick (A) vs (B), invent a sleeve-state reader path, or add a schema column on my own recognizance. Any guess could quietly reduce ROI or contaminate W5 SHORT measurement — the exact class of harm guard-1 exists to prevent.
+
+**Recommended default (for operator single-word ack, then I land in one turn):**
+- Reading **(A) within-overshoot** — matches "sizing-layer overlay only" and keeps blast radius inside one strategy.
+- Sleeve-state reader: **new `_shared/overshoot/si-freshness.ts` helper**, called by detector AND sizing (single-home).
+- W5 annotation: **`w5_reallocation_ref uuid NULL` on `overshoot_lots` and `overshoot_target_positions`**, FK-shape (nullable, references `overshoot_audit_logs(id)`, `ON DELETE SET NULL`, idempotent per D3).
+
+**With those three acks: build lands next turn, atomic, with tests + migration ledger + docs updates.** Without them: I do not write to money paths.
+
+**Cross-refs:** DEC-504-4 (charter); DEC-033 v4.1 (audit writer); T4 (audit-writer trap); D1/D3/D5 (RLS-first / idempotent / ledgered migration); anti-phantom money-path guard.
+
+---
+
 **Motivation.** ACT-526 augment first-pass runs on 16.56 % (43,723/263,963) corpus coverage — a 3-month single-regime bull-slice — which fails the pre-committed adoption gate (n≥1000 with monotone stability) on every high-SI bucket. The pre-committed rule holds and no gate change adopts. To resolve W5-05 (and to rule on the INC-106 gate-direction inversion) the corpus needs SI stamped across its full span (2022-03-08 → 2026-07-02) with a regime cut.
 
 **Source + cost statement (for operator approval BEFORE execution).**
