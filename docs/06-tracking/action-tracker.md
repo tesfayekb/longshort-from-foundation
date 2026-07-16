@@ -6979,3 +6979,29 @@ F3: overshoot_lots.exit_attempts, `overshoot-alerts-dispatcher` (WATCHDOG mode e
 F4: Polygon dividends v3, overshoot_reconciliation_state, A5 runbook in overshoot.md.  
 F5: kill_switches, kill_switch_hard_pause RPC, job_registry.
 
+## Fable-max F1.a + F3 — SEQUENCING PIN (operator ruling, 2026-07-16)
+
+**Ruling:** F1.a (dispatcher `market_closed_streak` guard) + F3 (`exit_attempts >= 3` HIGH alert) land as **one small dispatcher build turn BEFORE Monday 2026-07-20 open**. Slot: **immediately after ACT-527 curve compute lands**, before anything else in the weekend batch resumes.
+
+**Rationale:** F3 is live-relevant the moment Monday's six T+6 exits fire. An unfillable name climbs the `exit_attempts` counter with **no alarm** under today's dispatcher — exactly the silent-escalation class Fable-max flagged. Landing F3 pre-open converts a latent gap into a paged one on the very session that most needs it. F1.a rides along in the same patch (five-line scanner in the same file, same test surface, same deploy) — no reason to split.
+
+**F2 + F4 (read-only queries):** unchanged — queue behind ACT-527 curve as previously filed.
+
+**Updated weekend batch order:**
+1. ACT-527 backfill → coverage verify → three-pronged curve + squeeze-ride flip verdict + stop-ladder grid
+2. **Fable-max F1.a + F3 dispatcher patch** (small build, pre-Monday open)
+3. ACT-536 retroactive dial series 07-08→today + 20-lot defect audit
+4. ACT-531 signal-conditioned continuation map (fresh SI)
+5. ACT-537 rank-weighted sizing study
+6. ACT-515 engine — 2023-Q2 byte-match → configs (a)–(e) → drawdown number
+7. ACT-509 Stage-2 — 1-min bar pull + intraday grid
+
+Saturday ACT-510 deploy interleaves as scheduled (minutes-scale, independent).
+
+**Build-turn scope preview (F1.a + F3, single patch):**
+- `supabase/functions/overshoot-alerts-dispatcher/index.ts`: add `scanMarketClosedStreak()` (rolling 5-business-day window on `overshoot_audit_logs` action=`overshoot.entry.run.refused`, reason=`market_closed`, ≥2 consecutive → HIGH, dedup-keyed per streak start ts) + `scanExitAttemptsEscalation()` (SELECT from `overshoot_lots` WHERE status='open' AND exit_attempts >= 3 → HIGH, dedup-keyed per `lot_id`).
+- `supabase/functions/overshoot-alerts-dispatcher/index_test.ts`: canary asserts for both scanners (import presence + trigger_kind strings + dedup key shapes).
+- Version echo bump on dispatcher response (`inc108-...` → `fablemax-f1a-f3-...`) per the standing INC-97/107/108 mapping-defect prevention pattern.
+- Zero schema motion; zero migration; zero cron change. Landing = one edge fn deploy + test run.
+
+**Cross-refs:** INC-110 (DST silent-death class, F1.a is its dispatcher-side guard); Fable-max sweep entry above (F1/F3 charters).
