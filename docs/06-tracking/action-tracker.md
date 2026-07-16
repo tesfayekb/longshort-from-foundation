@@ -19,6 +19,25 @@
 
 ## 2026-07-16 (evening) — ACT-538 LANDED (INC-109 FIX PATH CHARTERED, DISARMED-AT-SEED) + RUSSELL-PROBE BUNDLED
 
+---
+
+## 2026-07-16 (night) — ACT-538 ARM-TIMING RULING: TUESDAY 07-21 CONSOLIDATED BRACKET (sql/37 + sql/39)
+
+**Ruling (operator).** Universe-refresh cron arms **Tuesday 2026-07-21**, NOT this weekend. Rationale: Monday 07-20 is the **T+6 exit test and the p6-residual's first hard read** (ACT-539 ladder + six T1 exits' realized round-trips as the p6-bad-luck vs indicting-the-read discriminator). Changing universe composition the same weekend as ACT-510's deploy would introduce a **second variable into Monday's attribution evidence**. The 3-day staleness cost is a **slow leak** (delistings carried, IPO silent-zeros — measurement drift, not capital risk; no broker-reject exposure per INC-109 filing); **clean attribution on Monday is worth more**.
+
+**Consolidated Tuesday operator Dashboard session — ONE bracket, TWO placeholder-resolved applies:**
+
+1. **`sql/37_overshoot_exit_run_catchup_cron_schedule.sql`** — arms exit catch-up. **Gated on Monday 07-20 M7 adoption evidence** (first-exits round-trip pack lands the p6 verdict; catch-up arms only if the primary exit path proves clean under load).
+2. **`sql/39_overshoot_universe_refresh_cron_schedule.sql`** — arms universe weekly refresh. **Gated on the six-point attestation catalogued in the `sql/39` header** (russell-probe {ok, ~2000} → handler deployed → BOOT probe 2xx → dry_run diff sanity → first real invocation audit row → apply sql/39 + flip `job_registry.enabled=true`).
+
+**INC-109 closure moves to Tuesday 07-21 arm-step** (was: "next arm-step, unscheduled"). Both `sql/37` and `sql/39` remain shipped with `PROJECT_REF` / `YOUR_ANON_KEY` / `YOUR_CRON_SECRET_VALUE` placeholders per MIG-031 — placeholder substitution happens once, in the Tuesday Dashboard session, using the byte-match reference values from a wired sibling (e.g., `sql/30` post-apply for overshoot cron).
+
+**Non-events between now and Tuesday:** no code, no migrations, no arm-flips against `overshoot.universe.refresh` or `overshoot.exit_run_catchup`. Both remain DISARMED at seed (`job_registry.enabled=false`).
+
+**Cross-refs.** ACT-538 (charter + this arm ruling); INC-109 (closes Tue 07-21); ACT-510 (Monday deploy — the second-variable constraint driving the ruling); ACT-539 (Monday six-exit round-trip evidence pack — the p6 discriminator); `sql/37` (exit catch-up); `sql/39` (universe refresh); MIG-031 (placeholder-substitution-in-Dashboard discipline).
+
+**Tonight's watch-item unchanged.** 19:50Z exit tick = first verifiable rehearsal + `overshoot.exit.run.completed` heartbeat-row production debut + INC-107/108 quiet-night check + daily ACT-536 dial reading. Full report lands next turn after the tick.
+
 **Status:** ACT-538 build landed atomically per operator ruling — universe weekly-refresh cron + Russell-probe edge fn bundled. Both ship **DISARMED at seed** (job_registry enabled=false); operator flips enabled=true at ACT-538-arm STEP after the six-point attestation catalogued in `sql/39` header. INC-109 remains OPEN as CHARTERED — closes formally at arm-step success (refresh path live + attested).
 
 ### Files added (this landing)
