@@ -248,10 +248,10 @@ Deno.serve(createHandler(async (req: Request) => {
 
   await writeStrategyAuditEvent({
     strategyKey: 'overshoot',
-    operatorId: DEFAULT_OPERATOR_ID,
+    actorId: DEFAULT_OPERATOR_ID,
     action: 'overshoot.universe.refresh.completed',
     targetType: 'overshoot_universe',
-    targetId: null,
+    correlationId,
     metadata: {
       as_of_date: asOfDate,
       roster_count: roster.tickers.length,
@@ -259,7 +259,6 @@ Deno.serve(createHandler(async (req: Request) => {
       deactivated,
       pages_fetched: roster.pages,
       is_cron: isCron,
-      correlation_id: correlationId,
     },
   });
 
