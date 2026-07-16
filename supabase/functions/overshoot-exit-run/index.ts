@@ -1020,6 +1020,40 @@ Deno.serve(createHandler(async (req: Request) => {
     await sql.end({ timeout: 5 });
 
     const exitsSubmitted = submissions.filter((s) => s.order_id !== null || (dryRun && !s.refusal)).length;
+    // INC-108 (2026-07-15): every completed exit run writes a run-summary
+    // audit row so the watchdog artifact mapping (INC-107 -> action-prefix
+    // 'overshoot.exit.') has a heartbeat on clean no-fire ticks. Without
+    // this row a no-fire tick emits ONLY per-refusal audit rows (or none,
+    // when positions_examined=0), and the dispatcher flags cron_overdue
+    // one INC-107 layer deeper. This row is also the bracket-verification
+    // evidence anchor promised by the exit-arm rehearsal plan.
+    try {
+      await writeStrategyAuditEvent({
+        strategyKey: 'overshoot',
+        action: 'overshoot.exit.run.completed',
+        actorId: authCtx.user.id,
+        targetType: 'overshoot_exit_run',
+        targetId: runId,
+        correlationId,
+        metadata: {
+          run_id: runId,
+          intent,
+          dry_run: dryRun,
+          manual: manualConfirm,
+          positions_examined: positionsExamined,
+          matched_count: report.matched.length,
+          exits_submitted: exitsSubmitted,
+          refusals: tally,
+          minutes_to_close: clockSnap.minutesToClose,
+          session_date: clockSnap.sessionDate,
+        },
+      });
+    } catch (auditErr) {
+      console.error(JSON.stringify({
+        event: 'exit_run_completed_audit_write_failed',
+        correlationId, err: auditErr instanceof Error ? auditErr.message : String(auditErr),
+      }));
+    }
     return apiSuccess({
       outcome: 'completed',
       run_id: runId,
