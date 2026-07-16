@@ -70,8 +70,77 @@
 
 import type { OvershootAccountSnapshot } from '../overshoot-broker/alpaca-account-fetcher.ts';
 
+// DEC-504-4 (2026-07-16) — SLEEVE-REALLOCATION SIZING OVERLAY.
+//
+// Single-home import: SI staleness is decided by ../overshoot/si-freshness.ts.
+// The canary test in si-freshness_test.ts fails the build if this module
+// re-inlines the predicate. The overlay is a PURE TRANSFORM over the
+// baseline (long, short) allocation + capacity pair; no wall-clock, no
+// DB, no network — the entry engine passes `siStaleActive` in from the
+// aggregate freshness read.
+//
+// DORMANT-AT-BIRTH: at landing (2026-07-16), SI is FRESH (computed_at
+// 2026-07-15). `siStaleActive` therefore lands FALSE and the baseline
+// (0.90/0.10, 36/4) is preserved unchanged. The reallocation arm
+// exercises only when the next stale window opens (~early August by
+// FINRA's calendar). Zero effect on the live book at landing is
+// CORRECT BEHAVIOR, not a defect.
+import {
+  overshootSleeveAllocation,
+  siStaleActive,
+  type SleeveAllocation,
+} from '../overshoot/si-freshness.ts';
+
 export const OVERSHOOT_SIDE_ALLOCATION_PCT_LONG = 0.90;
 export const OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT = 0.10;
+
+// ─── DEC-504-4 sleeve-reallocation overlay (pure) ───────────────────────
+
+export interface SleeveReallocationInput {
+  /** As-of date for the run, YYYY-MM-DD (UTC). */
+  asOf: string;
+  /** Freshest SI as_of_date across the short universe (max(as_of_date)
+   *  from `overshoot_short_interest`), or null when the corpus is empty.
+   *  Loaded by the entry engine — the overlay is pure. */
+  freshestSiAsOfDate: string | null;
+  /** DEC-504-3 ratified staleness threshold (21). Caller supplies. */
+  stalenessMaxDays: number;
+}
+
+export interface SleeveReallocationDecision extends SleeveAllocation {
+  /** For audit-log emission by the caller (see DEC-504-4 audit contract):
+   *  when this flips, emit `overshoot.sleeve_reallocation.engaged`
+   *  (active=true) or `overshoot.sleeve_reallocation.released`
+   *  (active=false) via the per-strategy audit writer with reason
+   *  `si_stale_active` or `si_freshness_restored` respectively. Every
+   *  lot / target_positions row CREATED during an active window carries
+   *  the `w5_reallocation_ref` uuid (see MIG below). */
+  reason: 'si_stale_active' | 'si_freshness_restored' | 'baseline';
+}
+
+/**
+ * DEC-504-4 overlay entry point. Consumed by the entry engine BEFORE
+ * calling `computeTargetSizing` — the returned {longCapacity, shortCapacity,
+ * long/short allocation pct} are the effective values for the run.
+ *
+ * WITHIN-OVERSHOOT scope only. Cross-strategy reallocation is explicitly
+ * out of scope for this overlay (rejected as allocator-era work).
+ */
+export function decideSleeveReallocation(
+  input: SleeveReallocationInput,
+): SleeveReallocationDecision {
+  const active = siStaleActive(input.asOf, input.freshestSiAsOfDate, input.stalenessMaxDays);
+  const allocation = overshootSleeveAllocation(active, {
+    longAllocationPct: OVERSHOOT_SIDE_ALLOCATION_PCT_LONG,
+    shortAllocationPct: OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
+    longCapacity: OVERSHOOT_CAPACITY_LONG,
+    shortCapacity: OVERSHOOT_CAPACITY_SHORT,
+  });
+  return {
+    ...allocation,
+    reason: active ? 'si_stale_active' : 'baseline',
+  };
+}
 
 /** R-3 capacity constants (ACT-478 / ACT-475 §V.B2). NAMED but not yet
  *  consumed by handlers this tranche — handlers pass their own
