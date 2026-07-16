@@ -1,3 +1,36 @@
+
+---
+
+## INC-109 — Overshoot universe has no refresh path (single seed, 13 days stale as of 2026-07-16)
+
+**Status:** CONFIRMED (promoted from candidate). Filed 2026-07-16.
+
+**Finding.** The `overshoot_universe` table has **no refresh mechanism** — the diagnostic finds neither a scheduled refresh nor a manual-trigger refresh edge function for the overshoot side. Every reference to `overshoot_universe` in `supabase/functions/` is a **SELECT (read)**; there are **zero writers** in the codebase. The table was populated once by an out-of-band seed and has drifted since.
+
+**DB ground truth (queried 2026-07-16):**
+  - Row count: **839** (all `active=true`)
+  - `MIN(created_at) = MAX(created_at) = MAX(updated_at) = 2026-07-03 04:55:10.635714+00`
+  - Single-timestamp fingerprint → **one seed, never refreshed** (13 days ago).
+
+**Refresh-mechanism state:** **NEVER BUILT for overshoot.** Longshort has three universe refresh edge functions (`longshort-universe-quarterly-refresh`, `longshort-universe-manual-quarterly-refresh`, `longshort-universe-hard-exclusion-refresh`); overshoot has **none**. No cron entry in `sql/` references `overshoot_universe`; no manual-trigger fn exists. This is not "scheduled-but-failing" or "exists-but-not-scheduled" — it's a **missing refresh path**.
+
+**What the '14-days-stale' badge measures.** The console `UNIVERSE stale` badge is driven by the UI-001 cron-staleness predicate applied to `job_executions` for the universe job — since **no such job exists**, the badge falls back to `now - MAX(overshoot_universe.updated_at)` clamped, which as of 2026-07-16 reads ~13 days (rounding to "14-days-stale"). The badge is **diagnosing a real gap**, not a false positive.
+
+**Concrete exposure (bounded estimate, not queried against a live reference source in-turn):**
+  - **Delistings carried since 2026-07-03:** any ticker in the 839-row set that has since delisted/M&A'd is still marked `active=true` and eligible for selection. `corporate_actions` table exists but is not consulted at selection time (verified: `overshoot-detection-run/index.ts:385` reads only `WHERE active = true` — no join to CA). Historical base rate ≈ 1–3 delistings per week in a Russell-2000-scale universe → **~2–6 stale-active tickers** expected in a 13-day window.
+  - **New listings missed since 2026-07-03:** IPOs + Russell reconstitution adds not represented at all. Same base rate → **~2–6 missed candidates** in the window. Reconstitution is annual (late June); the July 2026 reconstitution effective date is **just before** the 07-03 seed, so the seed likely captured the current cohort — new-listing miss is primarily IPO-driven, not reconstitution-driven, in this window.
+  - **Total exposure ≈ 0.5–1.5 % of universe** with directional bias: false-positive selections on delisted names (order rejects at broker, no P&L bleed) + silent zeros on new candidates (unmeasurable opportunity cost).
+
+**Does it gate anything before Monday?** No hard gate for the 07-20 Monday session. Practical mitigations already in the stack: (a) broker-side reject on delisted symbols short-circuits before capital commit; (b) `corporate_actions` row for a delisted name causes downstream fetchers to no-op. The exposure is **measurement drift, not capital risk**, on the Monday session. But the missing-new-listings side is a **silent zero** and cannot self-heal.
+
+**Fix path (charter ACT-538 owed next turn):**
+  1. Build `overshoot-universe-refresh` edge fn mirroring `longshort-universe-quarterly-refresh` discipline: reads roster source (Polygon `/v3/reference/tickers?active=true` filtered by market cap + optional Russell 2000 membership per ACT-511 U2 outcome), applies overshoot eligibility rules (T1/T2 tier bounds, CA exclusion), diffs against current `overshoot_universe`, upserts additions + soft-deletes removals (set `active=false`, preserve row for audit).
+  2. Schedule cadence: **weekly** (Sunday 22:00 UTC), separate cron file `sql/38_overshoot_universe_refresh_cron_schedule.sql` — do NOT piggy-back on SI cadence (twice-monthly is too slow for delisting hygiene). Weekly is the longshort-mirror discipline.
+  3. Add T4-compliant audit row (`overshoot_audit_logs`, `action='overshoot.universe.refresh.completed'`, metadata: `{added:[...], removed:[...], run_id, source_snapshot_ts}`).
+  4. Wire UI-001 cron-staleness predicate to the new `job_executions` row (kills the fallback `updated_at` measurement — badge becomes cron-cadence-aware per longshort pattern).
+  5. Class rule (INC-108 family — fourth anchor now confirmed): every strategy that maintains a universe table MUST have a refresh path chartered at the SAME TIME as the universe table itself. Add to catalog: "self-refreshing-artifact invariant — a universe table without a refresh cron is an incomplete artifact." Amends the T2/T6 strategy-module contract implicitly.
+
+**Cross-refs:** UI-001 (cron-staleness predicate); ACT-511 U2 (roster source discussion — Polygon Russell 2000 index filter is the natural upstream); INC-108 (trigger→artifact class rule — universe freshness now the fourth confirmed instance); T2 (per-strategy tables), T6 (per-strategy removability — universe refresh must be strategy-scoped); `longshort-universe-quarterly-refresh` (mirror-source discipline template).
 ### INC-106 (2026-07-15): OVERSHOOT SHORT SI-SQUEEZE GATE **DIRECTION INVERTED vs RATIFIED THESIS** — live money-path gate admits the measured-worst SI slice; currently masked by SI-staleness starvation (Door 1 hiding Door 3). Discovered under ACT-526 gate-direction audit.
 
 ### INC-107 (2026-07-15): `overshoot-alerts-dispatcher` watchdog exit-leg artifact family MISMAPPED to entry-run rows — TWO-SIDED defect (false pages now, MASKED death later); pull-forward of the INC-95 install-time floor refinement bundled in the same fix.
