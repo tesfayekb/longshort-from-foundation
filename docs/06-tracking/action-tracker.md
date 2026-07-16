@@ -6441,3 +6441,27 @@ One table per bucket answering **continue (go long) / revert (go short) / flat (
 
 **Cross-refs:** ACT-526 (natural-experiment charter); INC-106 (flip); INC-108 (fresh-SI tally block); ACT-527 (curve rules on Door 2's threshold).
 
+## ACT-527 (2026-07-16 addendum) — SHORT-SIDE CURVE DELIVERABLE, THREE-PRONGED (precision-note lock)
+
+**Mode:** SCOPE LOCK — operator precision note on the short-side curve's output contract. Recorded before backfill compute completes so the deliverable cannot silently drift into a "loosen the threshold" answer.
+
+**Precision note (recorded verbatim from operator, 2026-07-16):** The short excess floor **0.08 is the STUDIED GEOMETRY BOUNDARY, not a tunable gate.** Candidates below `|excess| < 0.08` on the short side are **outside the evidence base** (the study cells were aggregated at ≥0.08 magnitude bins per `_shared/overshoot/study/cell-aggregation.sql.ts` and `band-label.ts` — the S_03_04..S_06_08 bins exist as label plumbing but the STUDIED short-side geometry begins at S_08_10). Admitting sub-0.08 short candidates **requires a study extension (new cells aggregated over the sub-0.08 magnitude space), NEVER a threshold loosening.** Class rule: studied-geometry boundaries are structural — a curve output that recommends "lower the excess floor" without a co-recommended geometry-extension study is an invalid recommendation.
+
+**Short-side curve deliverable (locked, three-pronged):**
+
+1. **(a) Squeeze threshold VALUE.** The curve rules on the value of `squeezeSiPctFloatMin` (currently 0.20, pending). Direction is now correct per INC-106 (R2 exclusion semantics: `si_pct_float < threshold` admits, `>=` refuses as `si_above_squeeze_threshold`). Deliverable: dominance-floor-supported value + regime-conditional variant if warranted, per ACT-526 pre-committed rules (42.42 bps/slot-day floor, n≥1000, monotone, regime-stratum dispositive).
+
+2. **(b) 0.08 BOUNDARY-BAND ECONOMICS (new).** Report the per-slot-day economics of the S_08_10 band **explicitly and in isolation** — is short-side edge concentrating near the studied-geometry boundary strongly enough to justify **chartering a geometry-extension study** (new sub-0.08 cells aggregated over the corpus)? Deliverable is a **binary charter recommendation** (extend / do-not-extend) with the boundary-band economics as evidence, NOT a threshold-loosening recommendation. If edge is boundary-concentrated: file the extension charter as a separate ACT (owns its own aggregation compute, its own study cells, its own parity fixtures — same discipline as the original study). If edge is not boundary-concentrated: file the null result and 0.08 stands as the structural floor.
+
+3. **(c) SI COVERAGE TAIL ROOT-CAUSE (new).** The 15-ticker `si_unavailable` residual on the 2026-06-30 settlement (per run f2f430ed, ACT-535) needs root-cause: **vendor coverage gap** (FINRA didn't publish for those tickers on that settlement — accept, log, move on) vs **fetch scope defect** (our ingestion missed rows that vendor did publish — fix). Deliverable: list of 15 tickers × vendor-response evidence × classification. If fetch-scope defect: file the fix in the same commit as the coverage-verify report; if vendor coverage: file the class note (settlement-date coverage is not universe-complete) and no code change.
+
+**Explicit non-deliverables (blocked by this precision note):**
+- Any recommendation to "lower the T2.1b short-side excess floor below 0.08" without a co-recommended geometry-extension study charter. Such a recommendation is **invalid on its face** — it admits candidates from a magnitude space with no evidence base.
+- Any silent threshold change to the short-side excess gate. Boundary is structural; changes require new study cells, ratified separately.
+
+**Queue (unchanged):** ACT-527 backfill (in flight) → curve compute (three-pronged deliverable above) + squeeze-ride flip verdict + stop-ladder grid → ACT-531 signal-conditioned continuation map (queued behind curve).
+
+**Backfill coverage verify owed:** on backfill completion, report per-settlement coverage (row count, ticker count, `si_pct_float` non-null count) across the full backfill window — the 15-ticker 2026-06-30 gap surfaces here as either a universal pattern (vendor) or a settlement-specific pattern (fetch).
+
+**Cross-refs:** ACT-526 (curve pre-committed rules, dominance floor); ACT-527 (SI backfill charter); ACT-535 (short-side funnel decomposition, 15-ticker residual origin); INC-106 (direction flip, threshold value pending); `_shared/overshoot/detector/band-label.ts` (studied-geometry band boundaries — SHORT bins begin at S_08_10 for the studied surface); `_shared/overshoot/study/cell-aggregation.sql.ts` (study-cell aggregation SQL — the evidence-base boundary).
+
