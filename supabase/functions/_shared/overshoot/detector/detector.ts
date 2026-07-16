@@ -101,6 +101,11 @@
 // queries key on. Do NOT rename without a `filter_passes` schema
 // migration.
 
+// DEC-504-4 (2026-07-16): SI staleness predicate is single-homed at
+// ../si-freshness.ts. Detector and sizing overlay MUST import from the
+// same file — the canary test in `../si-freshness_test.ts` enforces this.
+import { isSiRowStale } from '../si-freshness.ts';
+
 export type Side = 'LONG' | 'SHORT';
 
 export type RefusalReason =
@@ -700,7 +705,10 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
         });
         setRefusal('si_unavailable');
       } else {
-        const stale = calendarDaysBetween(params.asOf, si.as_of_date) > params.siStalenessMaxDays;
+        // DEC-504-4 single-home: staleness comparison lives in
+        // ../si-freshness.ts (isSiRowStale). Do NOT re-inline the
+        // predicate here — the canary test will fail the build.
+        const stale = isSiRowStale(params.asOf, si.as_of_date, params.siStalenessMaxDays);
         if (stale) {
           passes.push({
             filter: 'si-squeeze-gate',
