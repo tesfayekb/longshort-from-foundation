@@ -7,6 +7,40 @@
 
 ---
 
+## 2026-07-17 (weekend, cont.) — QUEUE ADDITIONS: TRADIER F1-F2 + ACT-540 + ACT-541 + ACT-531 SCOPE-EXT + ACT-515 CONFIG (f)
+
+**Mode:** charter/registration turn — four additions to the standing Weekend Compute Batch, all $0, all queued BEHIND the pending items. **Nothing jumps the ACT-527 curve.** One probe fn lands this turn (Tradier F1-F2 activation surface); all substantive execution is post-batch.
+
+**Updated batch order (registered):**
+
+  527 curve → dispatcher patch (F1.a+F3) → 536 series+audit → **531 map (both directions — see SCOPE-EXT below)** → 537 sizing → **515 engine incl. config (f)** → 509 Stage-2 → **540 insider×dislocation** → **541 excluded-events harvest**.
+
+**Tradier F1-F2 activation (passive, forward-only, $0):**
+- **Charter:** on each new live OVERSHOOT event (entry-run row landed), snapshot the Tradier options chain (ATM put bid/ask/IV, 5-21d expiries) into a diagnostic table `overshoot_tradier_chain_snapshots` (schema lands with wiring PR, post-531). Weekly auto-compare of real premium vs the σ√T proxy. **Zero trades, zero cost** — sandbox token, forward-only observation. **2.4× revival gate stands pre-committed** (put-write sleeve un-shelves only if measured premium ≥ 2.4× σ√T proxy on n≥N floor).
+- **Landing this turn:** `supabase/functions/overshoot-tradier-chain-probe/index.ts` — one-shot POST, `overshoot.manage` gate, DEC-023 envelope. Confirms sandbox reachability + shape (`/v1/markets/options/expirations` → nearest 5-21d expiry → `/v1/markets/options/chains` page-1). No DB writes, no secret material in response.
+- **Operator one-time step (§22.5.3 sandbox-token confirm):** verify `TRADIER_API_KEY` is a **sandbox** token (base `https://sandbox.tradier.com/v1`) — probe asserts sandbox host and refuses to run if the base is not sandbox. Once confirmed, operator POSTs the probe once for the reachability attestation; wiring PR (schema + entry-run hook + weekly comparator) lands after ACT-531.
+- **Governance:** T5 carve-out honored (overshoot-only surface). No new perms, no strategy code drift, no live-book impact. Diagnostic table + wiring PR follows batch completion, chartered here as sub-turn.
+
+**ACT-540 — INSIDER×DISLOCATION STUDY (CHARTER; execute AFTER 531 map):**
+- Join `insider_form4_rows` cluster-buy signatures (≥2 distinct insiders, open-market P-code, within {2,3,5} trading days POST-event) against the full overshoot event corpus. Bounce economics WITH vs WITHOUT insider confirmation, stratified per tier × regime × horizon. **Frozen rules:** dominance floor (WITH-insider Sharpe must dominate WITHOUT by pre-committed margin), n≥1000 per cell, monotone across the {2,3,5}d windows, regime-dispositive (insider effect must survive regime stratification). No adoption without all four passing. Read-only against `insider_form4_rows` + `overshoot_events`; writes to `overshoot_study_*` surfaces per existing charter.
+
+**ACT-541 — EXCLUDED-EVENTS HARVEST (CHARTER; execute AFTER 540):**
+- Detector's earnings-proximate EXCLUSIONS (currently discarded nightly) as their own corpus. Post-earnings-crash bounce economics vs no-news baseline, per tier × regime × horizon. **Same frozen rules as ACT-540** (dominance floor, n≥1000, monotone across horizons, regime-dispositive). Prices a sleeve we currently throw away. If passes: chartering DEC for an earnings-adjacent admission gate follows; if fails: sleeve stays discarded with the measurement as the receipt.
+
+**ACT-531 SCOPE EXTENSION — catalyst map BOTH directions:**
+- Original ACT-531 charter: signals map on fresh SI table (up-move / continuation lens). **Extended:** ALSO run the DOWN-spike direction bucketed by catalyst class {analyst-action, M&A, insider-selling, earnings-adjacent, no-signal} — this is the OVERSHOOT-selection-improvement read (what class of catalysts predicts a bouncable dislocation vs a real re-rating). **Frozen rule:** if buckets separate on the pre-committed inter-class Sharpe-spread floor with n≥1000 per bucket, a catalyst-aware admission gate charters with its own DEC. Descriptive-only if the floor is not met.
+
+**ACT-515 engine — config (f) added to run matrix:**
+- Regime-scaled sizing: {0.8× / 1.0× / 1.2× notional per lot by regime-strength bucket}. Runs alongside configs (a)-(e) after the 2023-Q2 byte-match gate. Drawdown number reports across the {(a)..(f)} × {sector-cap variants} matrix. **Frozen rule unchanged:** portfolio-variance-under-clustering floor governs adoption; (f) does not get a pass just for being additive.
+
+**Governance stance:** every addition honors T5 (overshoot-only), D1-D5 (idempotent, per-strategy scoping), anti-phantom defaults (no wall-clock in kernels, boundary sources are primes — Tradier chain is a boundary source, snapshot is derivative), ROI guardrails (any measurement that would silently reduce ROI flagged in landing evidence). Nothing here changes live-book behavior.
+
+**Files this turn:**
+- created `supabase/functions/overshoot-tradier-chain-probe/index.ts` (Tradier F1-F2 activation probe)
+- edited `docs/06-tracking/action-tracker.md` (queue registration)
+
+---
+
 ## 2026-07-17 (weekend) — WEEKEND COMPUTE BATCH CHARTERED (six items, sequential, evidence-per-turn)
 
 **Mode:** research/compute batch — all items are read-only against production tables OR isolated study-run writes into `overshoot_study_*` / `overshoot_backfill_runs` (already-chartered study surfaces). **No strategy code changes, no threshold/sizing/cap edits, no live-book impact.** Frozen rules stand on every study: numbers report against pre-committed floors; **no adoption without the rules passing**.
