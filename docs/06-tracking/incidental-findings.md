@@ -3,7 +3,17 @@
 
 ## INC-109 — Overshoot universe has no refresh path (single seed, 13 days stale as of 2026-07-16)
 
-**Status:** CONFIRMED (promoted from candidate). Filed 2026-07-16.
+**Status:** CHARTERED — fix path landed 2026-07-16 (ACT-538, disarmed-at-seed). CLOSES at ACT-538-arm success (operator flips `job_registry.enabled=true` for `'overshoot.universe.refresh'` after the six-point attestation in `sql/39` header). Currently DISARMED — the universe remains at the 07-03 seed until arm-step.
+
+**2026-07-16 landing marker (ACT-538):**
+- Handler code: `supabase/functions/overshoot-universe-refresh/index.ts` (weekly refresh — Polygon `/v3/reference/tickers?index=russell2000` paginated fetch → upsert + soft-deactivate diff → T4 audit row).
+- Probe fn: `supabase/functions/overshoot-russell-probe/index.ts` (one-shot Polygon-tier feasibility answer — ACT-511 U2 prerequisite).
+- Cron placeholder: `sql/39_overshoot_universe_refresh_cron_schedule.sql` (schedule `'0 10 * * 1'`, placeholders per MIG-031).
+- Registry seed: **MIG-160** (both rows enabled=false).
+- Arm-step gates (deferred, operator-owned): see `sql/39` header §POST-APPLY VERIFICATION + `docs/06-tracking/action-tracker.md` 2026-07-16-evening entry.
+
+---
+### Original diagnosis (retained verbatim below for audit)
 
 **Finding.** The `overshoot_universe` table has **no refresh mechanism** — the diagnostic finds neither a scheduled refresh nor a manual-trigger refresh edge function for the overshoot side. Every reference to `overshoot_universe` in `supabase/functions/` is a **SELECT (read)**; there are **zero writers** in the codebase. The table was populated once by an out-of-band seed and has drifted since.
 
