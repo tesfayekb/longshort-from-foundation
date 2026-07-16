@@ -5,6 +5,62 @@
 
 ## 2026-07-16 (evening) — ACT-539 STRUCTURAL FINDING FILED + DEC-504-4 BUILD STOP
 
+---
+
+## 2026-07-16 (late) — DEC-504-4 LANDED (ATOMIC, DORMANT-AT-BIRTH)
+
+**Status:** all three disambiguations ratified by operator; build landed one turn as directed. **Dormant-at-birth by design** — SI is FRESH (freshest `overshoot_short_interest.as_of_date` behind computed_at 2026-07-15; `siStaleActive('2026-07-16', ..., 21) === FALSE`), so the overlay is present in code but reallocates nothing until the next stale window (~early August by FINRA's twice-monthly + ~8-biz-day publication cadence). **Zero effect on the live book at landing is CORRECT BEHAVIOR, not a defect** — the canary test pins the dormant-at-birth invariant so nobody can misread it as a wire-through failure.
+
+### Ratified defaults (verbatim from operator)
+1. **(A) WITHIN-OVERSHOOT envelope shift.** Short sleeve's cap reallocates to the overshoot LONG side cap during `si_stale_active`; blast radius = one strategy. Cross-strategy (B) explicitly REJECTED as allocator-era scope.
+2. **Single-home helper** at `_shared/overshoot/si-freshness.ts` — consumed by BOTH the detector's per-row si-squeeze-gate AND the sizing overlay's aggregate reallocation decision. A canary test in `si-freshness_test.ts` asserts both call sites import from that file and fails the build if either re-inlines the predicate.
+3. **`w5_reallocation_ref uuid NULL`** on `overshoot_lots` + `overshoot_target_positions`, FK-shaped, idempotent migration (tier-provenance §22.5.1 pattern applied again).
+
+### Files touched (planned = actual)
+- **Added** `supabase/functions/_shared/overshoot/si-freshness.ts` — pure single-home helper. Exports: `siCalendarDaysBetween`, `isSiRowStale`, `siStaleActive`, `overshootSleeveAllocation`, `OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 21`. No DB, no network, no wall-clock — all inputs injected.
+- **Added** `supabase/functions/_shared/overshoot/si-freshness_test.ts` — 8 unit tests + **2 CANARY tests** (detector import guard, sizing import guard). All 10/10 pass locally.
+- **Edited** `supabase/functions/_shared/overshoot/detector/detector.ts` — replaced the inline `calendarDaysBetween(...) > staleness` staleness comparison at the si-squeeze-gate with `isSiRowStale(...)` imported from `../si-freshness.ts`. Header contract updated to name the single-home file. **Detector byte-behavior unchanged** — same predicate, different home. `detector_test.ts` unchanged and passes.
+- **Edited** `supabase/functions/_shared/overshoot-execution/sizing.ts` — added the **DEC-504-4 sleeve-reallocation overlay** as a pure transform: `decideSleeveReallocation({asOf, freshestSiAsOfDate, stalenessMaxDays}) → {longAllocationPct, shortAllocationPct, longCapacity, shortCapacity, reallocationActive, reason}`. **Existing `computeTargetSizing` and R-γ buying-power guardrail surfaces are BYTE-UNTOUCHED** — 20/20 pre-existing `sizing_test.ts` still pass. Under baseline (`siStaleActive === false`), decision returns `(0.90, 0.10, 36, 4, active=false, reason=baseline)` — identical to pre-DEC-504-4 posture. Under active, returns `(1.00, 0.00, 40, 0, active=true, reason=si_stale_active)` with the slot-concentration invariant (2.5 %) preserved (`1.00 / 40 = 0.025 = 0.90 / 36`).
+- **Added** `sql/38_overshoot_w5_reallocation_ref.sql` — idempotent migration adding `w5_reallocation_ref uuid NULL` to `overshoot_lots` + `overshoot_target_positions` with matching `COMMENT ON COLUMN`, partial indexes on the non-NULL subset (reallocation windows are rare, so partials stay tiny), and a `DO $$` DDL self-check that raises if either column is missing at end-of-migration. **No DROP. No destructive ALTER. RLS untouched.** Ledger entry (MIG-NNN) owed at docs/07-reference/database-migration-ledger.md in the follow-up PR.
+
+### Audit-log contract (owner: entry engine, not the pure overlay)
+On the flip **baseline → active**, the entry engine emits `overshoot.sleeve_reallocation.engaged` with `reason=si_stale_active` and mints a fresh `w5_reallocation_ref` uuid; on **active → baseline** it emits `overshoot.sleeve_reallocation.released` with `reason=si_freshness_restored`. Every lot / target_positions row CREATED while the flip is active carries that uuid in `w5_reallocation_ref`. **T4 audit-writer trap honored** — writer is `_shared/strategy-audit.ts.writeStrategyAuditEvent` targeting `overshoot_audit_logs`, NEVER the platform `logAuditEvent` / `audit_logs`.
+
+### Verification (executed this turn)
+- `deno test _shared/overshoot/si-freshness_test.ts` → **10 passed, 0 failed** (incl. both canaries).
+- `deno test _shared/overshoot-execution/sizing_test.ts` → **20 passed, 0 failed** (pre-existing surface untouched).
+- `deno run --allow-read scripts/check-overshoot-separation.ts` → **OK (0 violations)** — no cross-tree membrane leak; overlay is overshoot-native.
+- INC-90 (no `NULL::` placeholders) and INC-91 (no numeric-literal snapshot-age bounds) gates are orthogonal to this landing; the new helper uses no such patterns.
+- Migration DDL self-check compiles; awaiting operator application via Supabase integration (no auto-apply this turn — schema mutation requires operator ack).
+
+### Dormant-at-birth attestation (nobody-reads-zero-as-defect)
+Freshest `overshoot_short_interest.as_of_date` per E5 computation ≈ 2026-07-14; `computed_at = 2026-07-15`. `calendarDaysBetween('2026-07-16', '2026-07-14') = 2 ≤ 21`. Therefore `siStaleActive === FALSE` at deployment and remains FALSE through the next FINRA cycle. **Every lot created between now and ~2026-08-05 will correctly carry `w5_reallocation_ref IS NULL`.** The overlay only exercises its reallocation arm when the next SI publication is late enough that freshest-known ages past 21 calendar days — projected first opportunity: early August 2026. Reviewers: zero delta in `overshoot_target_positions` shape or in `computeTargetSizing` outputs today is the expected posture, not a wire-through defect.
+
+### ROI impact
+**Neutral at landing (dormant).** When engaged: short sleeve (4 slots / 10 %) is dark during a stale window — but the pre-DEC-504-4 posture at si_stale was **default-deny at the per-row gate**, i.e. short admissions were already zero. The overlay converts wasted capacity (4 slots idle) into 4 additional LONG slots at the same slot-concentration (2.5 % of `sizingBase` each), recycling ~10 % of strategy notional. **Strict ROI improvement over the pre-overlay stale-window posture; no ROI cost when SI is fresh.** No threshold change, no signal weakening, no monitoring removed.
+
+### Constitutional / T-contract compliance
+- **T1** — files placed within `_shared/overshoot/` and `_shared/overshoot-execution/`; no strategy-index façade change (no public re-export needed — helper is intra-tree).
+- **T2** — audit table `overshoot_audit_logs` (not platform `audit_logs`).
+- **T3** — RBAC untouched; no new perms.
+- **T4 audit-writer trap** — writer contract restated in the header of the overlay; the pure module does not write.
+- **T5 carve-out** — overshoot code imports from overshoot code only; no strategy-sibling imports; membrane guard clean.
+- **T7 envelope** — no edge-function change this turn (helper + overlay are pure; entry engine consumes on next tranche).
+- **T8 idempotency** — migration is idempotent (`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`); re-runs are no-ops.
+- **D1/D3/D5** — RLS untouched (nullable column addition, no policy change needed); idempotent; ledger entry owed same PR (MIG-NNN — line item in queue).
+- **Anti-phantom money-path** — no silent sentinels; typed enum reasons (`si_stale_active` / `si_freshness_restored` / `baseline`); no wall-clock in kernel (asOf injected by caller).
+- **STOP was correct procedure** (operator's own note). Ambiguity was surfaced, ratified, then landed atomically — the doctrine as advertised.
+
+### Cross-refs
+DEC-504-4 (charter); DEC-504-3 (21d staleness watchdog); DEC-504-5a / ACT-527 (SI curve backfill — orthogonal but the same data source); §22.5.1 (tier-provenance pattern — replicated here for W5 annotation); INC-91 (single-home precedent for `snapshot-age-bounds.ts` — this landing mirrors that discipline for staleness); T4 audit-writer trap; T5 separation contract.
+
+### Queue after DEC-504-4
+Per operator ruling: **ACT-538** (universe refresh + russell-probe edge fn) → **ACT-527 curve** → **ACT-536 full retroactive series** + daily ticks → **ACT-539 20-lot audit expansion** → **ACT-509 Stage-2** → **ACT-537**.
+
+---
+
+## 2026-07-16 (evening) — ACT-539 STRUCTURAL FINDING FILED + DEC-504-4 BUILD STOP (prior turn)
+
 ### ACT-539 Δ — SECTOR-CLUSTERING as unstudied portfolio dimension (folded, not chartered)
 **Finding.** 6/10 worst-performing lots in tonight's decomposition sat in one sector cluster (semiconductor/networking). ACT-509 measured **per-event edge**, never **portfolio variance under clustering**. Sector-correlated dislocations co-occur by construction; sizing that admits N clustered lots at slot-cap has hidden max-DD tail vs its per-slot-day expectation.
 
