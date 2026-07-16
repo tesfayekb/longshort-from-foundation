@@ -19,6 +19,10 @@
 //                 exclusion_width   = +/-5d.
 //
 //   SI SQUEEZE GATE (SHORTS ONLY, UNCONDITIONAL — DEFAULT-DENY):
+//     STALENESS PREDICATE: single-homed at `../si-freshness.ts`
+//     (DEC-504-4, 2026-07-16). This module imports `isSiRowStale` from
+//     that helper and MUST NOT redeclare the comparison — the canary
+//     test at `../si-freshness_test.ts` fails the build if it does.
 //     Required inputs: `squeezeSiPctFloatMin` (LEGACY NAME — see INC-106
 //     ruling; the parameter now denotes the EXCLUSION THRESHOLD: candidates
 //     with `si_pct_float >= squeezeSiPctFloatMin` are REFUSED as
