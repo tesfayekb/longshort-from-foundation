@@ -19,6 +19,10 @@
 //                 exclusion_width   = +/-5d.
 //
 //   SI SQUEEZE GATE (SHORTS ONLY, UNCONDITIONAL — DEFAULT-DENY):
+//     STALENESS PREDICATE: single-homed at `../si-freshness.ts`
+//     (DEC-504-4, 2026-07-16). This module imports `isSiRowStale` from
+//     that helper and MUST NOT redeclare the comparison — the canary
+//     test at `../si-freshness_test.ts` fails the build if it does.
 //     Required inputs: `squeezeSiPctFloatMin` (LEGACY NAME — see INC-106
 //     ruling; the parameter now denotes the EXCLUSION THRESHOLD: candidates
 //     with `si_pct_float >= squeezeSiPctFloatMin` are REFUSED as
@@ -96,6 +100,11 @@
 // NAMING: filter identifiers are stable strings the W4 console + audit
 // queries key on. Do NOT rename without a `filter_passes` schema
 // migration.
+
+// DEC-504-4 (2026-07-16): SI staleness predicate is single-homed at
+// ../si-freshness.ts. Detector and sizing overlay MUST import from the
+// same file — the canary test in `../si-freshness_test.ts` enforces this.
+import { isSiRowStale } from '../si-freshness.ts';
 
 export type Side = 'LONG' | 'SHORT';
 
@@ -696,7 +705,10 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
         });
         setRefusal('si_unavailable');
       } else {
-        const stale = calendarDaysBetween(params.asOf, si.as_of_date) > params.siStalenessMaxDays;
+        // DEC-504-4 single-home: staleness comparison lives in
+        // ../si-freshness.ts (isSiRowStale). Do NOT re-inline the
+        // predicate here — the canary test will fail the build.
+        const stale = isSiRowStale(params.asOf, si.as_of_date, params.siStalenessMaxDays);
         if (stale) {
           passes.push({
             filter: 'si-squeeze-gate',
