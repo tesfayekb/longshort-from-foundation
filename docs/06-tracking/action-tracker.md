@@ -11,6 +11,22 @@
 
 **Status:** all three disambiguations ratified by operator; build landed one turn as directed. **Dormant-at-birth by design** — SI is FRESH (freshest `overshoot_short_interest.as_of_date` behind computed_at 2026-07-15; `siStaleActive('2026-07-16', ..., 21) === FALSE`), so the overlay is present in code but reallocates nothing until the next stale window (~early August by FINRA's twice-monthly + ~8-biz-day publication cadence). **Zero effect on the live book at landing is CORRECT BEHAVIOR, not a defect** — the canary test pins the dormant-at-birth invariant so nobody can misread it as a wire-through failure.
 
+---
+
+## 2026-07-16 (later) — DEC-504-4 MIGRATION LEDGER GAP CLOSED (MIG-159)
+
+**Trigger.** Operator §22.5.1 audit surfaced that the DEC-504-4 landing turn shipped `sql/38_overshoot_w5_reallocation_ref.sql` as an authored file only — `supabase--migration` was never invoked and no MIG-NNN ledger entry was added. Live-DB read-back on 2026-07-16 confirmed `w5_reallocation_ref` **absent** on both `overshoot_lots` and `overshoot_target_positions` — the sizing overlay's guard-2 write path would have failed on first `si_stale_active` INSERT (~early August). Author-vs-apply gap per ADR-004; dormant-at-birth timing masked the exposure but did not eliminate it.
+
+**Landing.** Applied the migration via `supabase--migration` (SQL byte-identical to `sql/38_*.sql`) and added **MIG-159** to `docs/07-reference/database-migration-ledger.md` with §22.5.1 evidence.
+
+**§22.5.1 live-DB verification (both reads run post-apply):**
+- `information_schema.columns`: both tables carry `w5_reallocation_ref uuid NULL` (data_type=uuid, is_nullable=YES).
+- Dormant-at-birth attest on live data: `overshoot_lots` 50 rows / 0 non-NULL; `overshoot_target_positions` 248 rows / 0 non-NULL. All 298 existing rows carry NULL, as expected under baseline allocation with SI FRESH.
+
+**Cross-refs:** MIG-159 (ledger); DEC-504-4 (charter); ADR-004 (apply-vs-verify separation — this is the class of gap it exists to catch); `sql/38_overshoot_w5_reallocation_ref.sql` (byte-identical companion, retained); MIG-156 (tier-provenance precedent).
+
+**Standing pattern reaffirmed (project memory).** `sql/NN_*.sql` IS the standing pattern for this repo (external Supabase; SQL files in `sql/`, not `supabase/migrations/`). The pattern for money-row schema is: (a) author `sql/NN_*.sql`, (b) apply via `supabase--migration` in the same turn, (c) add MIG-NNN ledger entry with §22.5.1 read-back evidence in the same turn. The DEC-504-4 landing did (a) and skipped (b)+(c). This closure lands (b) and (c); (a) remains byte-identical.
+
 ### Ratified defaults (verbatim from operator)
 1. **(A) WITHIN-OVERSHOOT envelope shift.** Short sleeve's cap reallocates to the overshoot LONG side cap during `si_stale_active`; blast radius = one strategy. Cross-strategy (B) explicitly REJECTED as allocator-era scope.
 2. **Single-home helper** at `_shared/overshoot/si-freshness.ts` — consumed by BOTH the detector's per-row si-squeeze-gate AND the sizing overlay's aggregate reallocation decision. A canary test in `si-freshness_test.ts` asserts both call sites import from that file and fails the build if either re-inlines the predicate.

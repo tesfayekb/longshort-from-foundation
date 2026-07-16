@@ -2018,6 +2018,7 @@ export type Database = {
           tier_source_as_of_date: string | null
           tier_source_event_run_id: string | null
           updated_at: string
+          w5_reallocation_ref: string | null
         }
         Insert: {
           avg_exit_price?: number | null
@@ -2042,6 +2043,7 @@ export type Database = {
           tier_source_as_of_date?: string | null
           tier_source_event_run_id?: string | null
           updated_at?: string
+          w5_reallocation_ref?: string | null
         }
         Update: {
           avg_exit_price?: number | null
@@ -2066,6 +2068,7 @@ export type Database = {
           tier_source_as_of_date?: string | null
           tier_source_event_run_id?: string | null
           updated_at?: string
+          w5_reallocation_ref?: string | null
         }
         Relationships: []
       }
@@ -2367,6 +2370,7 @@ export type Database = {
           target_notional: number
           target_shares: number
           ticker: string
+          w5_reallocation_ref: string | null
         }
         Insert: {
           computed_at: string
@@ -2376,6 +2380,7 @@ export type Database = {
           target_notional: number
           target_shares: number
           ticker: string
+          w5_reallocation_ref?: string | null
         }
         Update: {
           computed_at?: string
@@ -2385,6 +2390,7 @@ export type Database = {
           target_notional?: number
           target_shares?: number
           ticker?: string
+          w5_reallocation_ref?: string | null
         }
         Relationships: [
           {
