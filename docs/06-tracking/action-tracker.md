@@ -6400,3 +6400,44 @@ One table per bucket answering **continue (go long) / revert (go short) / flat (
 **Cross-refs:** INC-97, INC-107, INC-108; ACT-529 (uniformity-deploy rule); the class rule filed alongside INC-107 today.
 **Non-goals:** the guard does NOT validate mapping SEMANTICS for other strategies' watchdogs — scope is overshoot only; longshort has its own dispatcher lineage. Cross-strategy generalisation is a separate charter if/when it becomes concrete.
 
+
+## ACT-534 — 19:50Z Wed rehearsal classified DELIVERED-INFERRED-CLEAN; Thu/Fri = two verifiable rehearsals pre-ACT-510 (script unchanged)
+
+**Classification (Wed 2026-07-15 19:50Z tick).** Cron delivery confirmed via `cron.job_run_details` (jobid=123, runid=389884, start=19:50:00.201+00, end=.210+00, status=succeeded). Handler completion inferred CLEAN from surrounding context: (a) 19:5x fill-sweep A5 telemetry shows `a5_ok=true`, `broker_count=50`, `ledger_count=50` — book intact through and after the exit slot; (b) no error trace in the audit stream; (c) all 50 lots have T+10 maturities ≥ 2026-07-24, so the session-age gate must refuse every lot (`session_age_no_fire=50`, `exits_submitted=0`) — no order-path side-effect was possible. **However**, the pre-INC-108-fix handler emitted ZERO audit rows on a clean no-op (positions_examined=0 after refusals collapse), so the envelope-of-record for the rehearsal (`positions_examined`, `refusals.session_age_no_fire`, `in_flight_guard.branch`, `minutes_to_close`) cannot be cited directly, and `net._http_response` for the 19:50Z POST is already GC'd (retention window opens 21:05:00Z, ~75min after the fire). **Verdict:** DELIVERED-INFERRED-CLEAN — passes on delivery + handler-inferred completion criteria, but does NOT count as a verified rehearsal for ACT-510 deploy gating.
+
+**Verified-rehearsal count going forward.** Under the INC-108 fix (`overshoot.exit.run.completed` heartbeat audit row on every tick, no-op included), the first VERIFIABLE rehearsal is **Thu 2026-07-16 19:50Z**, and the second is **Fri 2026-07-17 19:50Z**. Both produce a citable envelope with the full refusal breakdown. Two verified rehearsals cleared before Saturday's ACT-510 deploy satisfies the pre-deploy evidence bar; the deploy script itself is **UNCHANGED** — the fix is diagnostic-completeness, not behavior-change.
+
+**Bracket verification report owed after Thu 19:50Z fire.** Expected envelope shape (matches ACT-508 pre-Saturday-deploy spec): `status=completed`, `positions_examined=50`, `exits_submitted=0`, `refusals.session_age_no_fire=50`, `refusals.market_closing_soon=0`, `in_flight_guard.branch="primary"`, `minutes_to_close≈10`, `cron_reason` absent, kill_switch=active, zero pages. Any deviation → immediate DISARM (`UPDATE job_registry SET enabled=false WHERE id='overshoot.exit.run'`).
+
+**Cross-refs:** INC-108 (audit-write gap that caused the inferred-not-verified classification); ACT-508 (rehearsal criteria); ACT-510 (Saturday deploy, unchanged).
+
+
+## ACT-535 — ACT-526 item (4): SHORT-side funnel decomposition, run f2f430ed (fresh SI + flipped gate → 0 shorts)
+
+**Purpose.** Complete the natural-experiment record: with Door 1 (`si_unavailable` as universe-wide blocker) closed by the 21:00Z SI heal and Door 3 (gate direction) fixed by the INC-106 flip, attribute the remaining zero-short selection to a NAMED upstream gate with counts, not to an absence.
+
+**Corpus.** `overshoot_events WHERE run_id='f2f430ed-798c-4741-ab03-72b4cd259144'` (485 events, detector `a026dc51`, `as_of=2026-07-15`, detected_at 22:00:02.94Z, `git_sha=0c5ad0d9`).
+
+**Side split.** LONG side 208 events (36 SELECTED + 97 capacity + 67 no_study_cell + 8 earnings_proximity); SHORT side **277 events, 0 SELECTED**.
+
+**SHORT-side funnel (per-gate kill counts, first-refusal-wins ordering):**
+
+| Gate (in evaluation order)                        | Refusals |  Cum survivors |
+|---------------------------------------------------|---------:|---------------:|
+| entry: 277 short candidates emitted by detector   |        — |            277 |
+| `momentum_out_of_set` (geometry: momentum quintile off-set) |       11 |            266 |
+| `drawdown_out_of_set` (geometry: drawdown bucket off-set)   |       13 |            253 |
+| `excess_below_threshold` (T2.1b tier gate: |excess| < v1 threshold in picked window) | **238** |             15 |
+| `si_unavailable` (residual: SI still missing for these 15 tickers post-heal) |       15 |              0 |
+| squeeze gate (`si_above_squeeze_threshold`, flipped) | 0 (never reached) |          0 |
+| study-cell lookup                                 | 0 (never reached) |            0 |
+| capacity-slot                                     | 0 (never reached) |            0 |
+
+**Attribution of the zero.** The residuals that formerly died at `si_unavailable` under the pre-heal universe are now killed **upstream** at `excess_below_threshold` (238/277 = 85.9 %) — geometric-excess/tier gate, not the SI gate. A tail of **15 tickers** (5.4 %) still shows `si_unavailable` because the 2026-06-30 settlement snapshot has coverage gaps for that subset — a per-ticker residual, not a universe-wide door. The flipped squeeze gate is **behaviorally inert on this snapshot** (never reached; fresh SI is entirely sub-threshold at 0.20 float anyway — see INC-108 evidence block). No candidate crossed the tier gate on the short side, so the squeeze gate (Door 3, whichever direction) had nothing to admit or refuse.
+
+**Interpretation.** Door 1 CLOSED (SI landed, `si_unavailable` reduced from universe-wide to a 15-ticker residual). Door 3 CORRECT (flipped to R2 exclusion semantics, but never reached tonight). Door 2 — the T2.1b **short-side tier/excess gate** — is now the binding constraint for short selection. Whether Door 2 SHOULD be binding at this threshold is the ACT-527 curve's job to rule on; a lower threshold or a regime-conditional threshold could route candidates through to the squeeze gate on future snapshots. Tonight's zero is a **named, upstream, geometry-attributable zero** — not a data-availability zero.
+
+**Natural experiment closes.** All three doors accounted for with counts. Behavioral first (a short passing the squeeze gate) will require: (a) an SI snapshot with at least one ticker at `si_pct_float < 0.20` AND (b) that ticker's excess/geometry crossing the T2.1b threshold in the same window. Not this snapshot; watching future 22:00Z tallies.
+
+**Cross-refs:** ACT-526 (natural-experiment charter); INC-106 (flip); INC-108 (fresh-SI tally block); ACT-527 (curve rules on Door 2's threshold).
+
