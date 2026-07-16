@@ -43,7 +43,7 @@ import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpa
  * Version echo — bumped on every dispatcher deploy so `GET /` proves the
  * running build. See INC-95 (cron-aware overdue + slot-based idempotency).
  */
-export const OVERSHOOT_ALERTS_DISPATCHER_VERSION = 'inc107-exit-artifact-fix-and-arm-floor-20260715';
+export const OVERSHOOT_ALERTS_DISPATCHER_VERSION = 'inc108-si-computed-at-mapping-20260715';
 
 const RAW_RECIPIENT =
   (Deno.env.get('ALERT_RECIPIENT_EMAIL') ?? Deno.env.get('EDGAR_CONTACT_EMAIL') ?? '').trim();
