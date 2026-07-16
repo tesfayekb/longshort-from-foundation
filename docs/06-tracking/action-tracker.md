@@ -3,6 +3,77 @@
 
 ---
 
+## 2026-07-17 (weekend, cont.) — DISPATCHER-PATCH SCOPE AMENDMENT: COHORT-TUPLE PROVENANCE ON `overshoot_lots` (F1.a + F3 + COHORT)
+
+**Mode:** scope amendment on the queued dispatcher-patch turn (F1.a market_closed_streak guard + F3 exit_attempts≥3 alert). Sequencing unchanged — patch still lands **after ACT-527 curve compute, before anything else in the batch resumes**. Adds one migration + two INSERT-site edits to the same build. No cron, no schema on any other table, no money-path logic.
+
+### Why (operator directive, verbatim intent)
+
+ACT-536's anxiety-dial per-lot comparator currently **grid-joins** to `overshoot_events` at read time (`lot.tier_source_event_run_id + tier_source_as_of_date + symbol + side` → cell). Two costs: (a) every dial rerun repeats the join for 50 open lots × N daily readings; (b) if `overshoot_events` is retentively archived or a study rerun changes cell membership (ACT-527 refresh, universe-refresh Tuesday), the historical comparator drifts. Persisting the cohort tuple at INSERT forward — **same pattern as tier provenance** (`tier`, `tier_source_event_run_id`, `tier_source_as_of_date` on `overshoot_lots`) — makes the comparator **exact and immutable per lot, permanently**. The dial reads its own lot row, not a join to a mutable events table.
+
+### Cohort tuple (four columns, additive on `overshoot_lots`)
+
+| column | type | source at INSERT | nullable | notes |
+|---|---|---|---|---|
+| `cohort_cell_id` | text | `overshoot_events.study_cell_ref->>'side' \|\| ':' \|\| band \|\| ':w' \|\| window_days \|\| ':m' \|\| momentum_quintile \|\| ':d' \|\| drawdown_bucket` (canonical stringified cell tuple, colon-separated, matches ACT-507/ACT-514 cell-ID convention) | YES (older lots pre-migration) | e.g. `LONG:L_03_04:w5:m2:d5` |
+| `cohort_band` | text | `overshoot_events.study_cell_ref->>'band'` | YES | e.g. `L_03_04` — denormalized for dial GROUP BY without parsing cell_id |
+| `cohort_drawdown_bucket` | int | `overshoot_events.drawdown_bucket` | YES | 1–5 |
+| `cohort_entry_day_offset` | int | `EXTRACT(DAY FROM (entry_ts AT TIME ZONE 'America/New_York')::date - as_of_date)` — days from detection as-of to actual entry (0 = same-session admission, 1 = next-session, etc.) | YES | captures the queue-day offset so dial's day-k reads are per-lot exact |
+
+All four are **derivations** of `overshoot_events` values already present at INSERT (fill-sweep receives `event_run_id` + `as_of_date` in audit metadata; the entry-run row itself carries `study_cell_ref` + `drawdown_bucket`). No new upstream data source; no new API dependency; no new column on any other table.
+
+### Backfill (same migration, one-shot, deterministic)
+
+```sql
+UPDATE public.overshoot_lots l
+   SET cohort_cell_id           = (e.study_cell_ref->>'side') || ':' ||
+                                  (e.study_cell_ref->>'band') || ':w' ||
+                                  (e.argmax_window_days::text) || ':m' ||
+                                  (e.momentum_quintile::text) || ':d' ||
+                                  (e.drawdown_bucket::text),
+       cohort_band              = e.study_cell_ref->>'band',
+       cohort_drawdown_bucket   = e.drawdown_bucket,
+       cohort_entry_day_offset  = ((l.entry_ts AT TIME ZONE 'America/New_York')::date - e.as_of_date)
+  FROM public.overshoot_events e
+ WHERE l.status = 'open'
+   AND l.cohort_cell_id IS NULL
+   AND e.run_id       = l.tier_source_event_run_id
+   AND e.as_of_date   = l.tier_source_as_of_date
+   AND e.ticker       = l.symbol
+   AND e.side         = l.side
+   AND e.selected_for_entry = true;
+```
+
+**Pre-verified join coverage (2026-07-17 §22.5.1 evidence, verbatim `read_query` result):** all 50 open lots match uniquely on the four-key composite `(tier_source_event_run_id, tier_source_as_of_date, symbol, side)` against `overshoot_events WHERE selected_for_entry=true` — `matched=50, unique_lots=50`. Backfill is exact; no partial-population risk, no fallback path.
+
+### INSERT-site edits (two files, forward-only from patch turn onward)
+
+1. **`supabase/functions/overshoot-fill-sweep/index.ts`** — extend `CandidateRow` with `cell_id | band | drawdown_bucket | entry_day_offset` derivations pulled from the same `overshoot.entry.submitted.entry` audit-metadata read (fill-sweep already reads `tier`, `event_run_id`, `as_of_date` from that row); enrich the INSERT column list + VALUES tuple in the exact spot the tier-provenance triplet lives (line 350-356 of current index.ts). Same additive pattern — NULL-safe for legacy audit rows.
+2. **`supabase/functions/overshoot-entry-run/index.ts`** — the entry-run planner writes its own row into `overshoot_lots` on the primary path (line 1120 tier-provenance write); add the four cohort fields sourced directly from the in-memory event object (no re-query — `study_cell_ref` + `drawdown_bucket` + `argmax_window_days` + `momentum_quintile` are already materialized in the planner scope).
+
+**Delta cost:** ~12 lines across two files, no test-fixture invalidation (all cohort fields nullable → existing fixtures pass verbatim); one migration file with the ALTER + backfill in the same transaction.
+
+### §22.5.1 evidence commitments (post-apply, standard bracket)
+
+1. `\d public.overshoot_lots` verbatim, showing four new columns with types + nullability.
+2. `SELECT count(*), count(cohort_cell_id) FROM overshoot_lots WHERE status='open'` → expected `50, 50`.
+3. Sample 5 rows: `SELECT lot_id, symbol, tier, cohort_cell_id, cohort_band, cohort_drawdown_bucket, cohort_entry_day_offset FROM overshoot_lots WHERE status='open' LIMIT 5` — every cohort_cell_id shape-matches `SIDE:BAND:wN:mN:dN`; cohort_band ∈ recognized band vocabulary; drawdown_bucket ∈ [1,5]; entry_day_offset ≥ 0.
+4. Post-turn INSERT proof: on the next fill-sweep adoption OR entry-run primary INSERT, `overshoot.lot.opened` audit metadata OR verify query shows all four cohort fields populated at the write, not backfilled.
+
+### Sequencing (binding, unchanged from prior pin)
+
+**527 curve compute → dispatcher patch (F1.a market_closed_streak + F3 exit_attempts≥3 + COHORT-TUPLE migration + two INSERT-site edits) → 536 series+audit → 531 map (both directions) → 537 → 515 (incl. config f) → 509 Stage-2 → 540 → 541.** The cohort-tuple work is now part of the "small dispatcher patch" bundle — still one turn, still gated on ACT-527 curve landing, still ahead of ACT-536 (which is the exact consumer that becomes exact once cohort_* persists).
+
+### Cross-references
+
+- ACT-493 v1 Turn 3B (M8 tier-provenance carry — cohort-tuple is the same additive pattern, one migration deeper).
+- ACT-507 / ACT-514 (cell-ID canonical string convention — cohort_cell_id matches).
+- ACT-536 (retroactive dial + 20-lot defect audit — direct beneficiary; per-lot comparator becomes exact rather than grid-joined, permanently).
+- ACT-527 (universe refresh Tuesday — cohort_cell_id snapshot on 50 open lots is IMMUTABLE-BY-DESIGN once persisted; Tuesday's cell reshuffle no longer contaminates the historical dial series).
+- INC-109 / INC-110 (dispatcher-patch scope siblings — same build turn).
+
+---
+
 ## 2026-07-16 (evening) — ACT-539 STRUCTURAL FINDING FILED + DEC-504-4 BUILD STOP
 
 ---
