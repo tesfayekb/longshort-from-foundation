@@ -6930,3 +6930,52 @@ ACT-505 (parent waterfall convention); ACT-508 (10-lot mechanical audit charter 
 
 **Queue after ACT-539:** DEC-504-4 [immediately, per operator] → ACT-538 → ACT-527 curve → ACT-536 full series + daily ticks → ACT-539 20-lot audit expansion → ACT-509 Stage-2 → ACT-537.
 
+## FABLE-MAX SWEEP (2026-07-16) — five findings, small-batch, weekend-interleaved
+
+### F1 — DST-TRANSITION DEFECT (certain; dated **2026-11-02**)
+**Class:** silent-entry-death. All overshoot crons are fixed-UTC. On the fall-back Sunday (2026-11-02), 13:35Z = 08:35 ET pre-market → the entry handler's clock-gate refuses with `market_closed`, and that refusal is a *typed no-op*, so the current watchdog treats the day as green. Same defect class fires on any future clock skew.
+
+**Two-part fix:**
+- **F1.a (build, this weekend):** dispatcher watchdog gains a `market_closed_streak` guard — ≥2 consecutive `market_closed` refusals on `overshoot.entry.run` within a rolling 5-business-day window → **HIGH** page (dedup-keyed per streak). Closes the silent class permanently.
+- **F1.b (operator bracket, dated 2026-11-01 pre-market):** re-time all five overshoot crons off their EDT slots to the winter EST slots. Enumerated UTC values below (byte-match the placeholders during Nov-1 apply):
+
+  | Cron file | Slot | EDT UTC (current) | EST UTC (Nov-1 target) |
+  |---|---|---|---|
+  | sql/30 overshoot short_interest | daily | `30 21 * * 1-5` (17:30 ET) | `30 22 * * 1-5` |
+  | sql/31 overshoot detection_run | daily | `30 12 * * 1-5` (08:30 ET) | `30 13 * * 1-5` |
+  | sql/32 overshoot exit_run | daily | `50 19 * * 1-5` (15:50 ET) | `50 20 * * 1-5` |
+  | sql/33 overshoot entry_run | dual-slot | slot-a `35 13`, slot-b `35 14` | slot-b is the fire slot; slot-a idempotent no-ops. **No change needed** (dual-slot handles DST by design). |
+  | sql/34 overshoot fill_sweep | daily | `35 20 * * 1-5` (16:35 ET) | `35 21 * * 1-5` |
+  | sql/36 overshoot equity_snapshot | daily | `05 20 * * 1-5` (16:05 ET) | `05 21 * * 1-5` |
+
+  (Reference: sql/33 already dual-slot per DEC-034 clause 4 — the pattern to extend at a later wave. This bracket does NOT convert the others to dual-slot; it retunes UTC only. Dual-slot conversion is a separate charter, not this sweep.)
+
+### F2 — QUANTIZATION MEASUREMENT (read-only, next turn)
+Per-lot deployed_notional vs $2,500 target across open lots + all lots opened since 07-08. Aggregate under/over-deployment %, worst offenders, distribution. Follow with a feasibility statement on Alpaca paper fractional/notional orders (API support per symbol class; what the entry submitter would change). **Pre-committed rule:** fractional sizing charters only if measured drag >3% of book notional. Below threshold → filed as tolerated design cost; no code motion.
+
+### F3 — EXIT-ATTEMPTS ESCALATION (small build, dispatcher)
+Alerts-dispatcher gains a scanner: `overshoot_lots.status='open' AND exit_attempts >= 3` → **HIGH** severity, dedup-keyed per `lot_id`. Five-line class; ships alongside F1.a in the same dispatcher patch.
+
+### F4 — DIVIDEND-DRIFT DIAGNOSTIC (read-only, one-turn)
+Cross-reference: any held symbol since 2026-07-08 with ex-dividend date during hold (Polygon `/v3/reference/dividends` endpoint). Expected internal-vs-broker equity drift = `qty * cash_dividend` per event. Filed as a **known cosmetic delta** in incidental-findings with per-occurrence magnitude — reconciliation must not page. **Splits playbook note** (added to A5 runbook in overshoot.md): on any `qty_mismatch` reconciliation event, corporate-action check runs FIRST before treating as a substantive divergence.
+
+### F5 — EMERGENCY KILL RUNBOOK (this turn, LANDED)
+File: `docs/04-modules/overshoot/emergency-kill-runbook.md`. Two-tap phone path + three SQL one-liners (hard_pause / manual_liquidate / resume) + cron-level bulk disarm + post-emergency checklist. Linked from the operator console header (link-add is a UI-side follow-up in the console pass).
+
+### Phase-L list additions (filed, not chartered this sweep)
+- **CRON_SECRET rotation** — cadence + procedure (Supabase Edge Function secret; requires re-deploy or Vault ref). Filed under Phase-L; no dated bracket yet.
+- **Cash-yield cap-sizing question** — with sweep interest ~5%, does the unallocated-cash yield change the effective per-strategy cap math? Filed as an open modeling question for Phase-L; not urgent.
+
+### Landing status this turn
+- **F5** landed (runbook doc created).
+- **F1.b** bracket enumerated in this tracker entry (operator-dated 2026-11-01, no code motion this turn).
+- **F1.a + F3** = one small dispatcher patch (queued for a build turn alongside the weekend batch — not this turn to keep the compute queue undisturbed).
+- **F2 + F4** = read-only queries (queued behind ACT-527 curve per stated priority).
+
+### Cross-refs
+F1: sql/30, sql/31, sql/32, sql/33 (dual-slot exemplar), sql/34, sql/36, `overshoot-alerts-dispatcher`, DEC-034 clause 4.  
+F2: overshoot_lots, DEC-504-4 (sizing overlay context).  
+F3: overshoot_lots.exit_attempts, `overshoot-alerts-dispatcher` (WATCHDOG mode extension).  
+F4: Polygon dividends v3, overshoot_reconciliation_state, A5 runbook in overshoot.md.  
+F5: kill_switches, kill_switch_hard_pause RPC, job_registry.
+

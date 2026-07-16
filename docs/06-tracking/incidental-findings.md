@@ -1543,3 +1543,21 @@ INC-20 transitions to **Resolved (full)** at this SHA.
 | **22:00Z detection tally (natural experiment, flipped gate + fresh SI)** | `overshoot_detection_runs` row `f2f430ed-798c-4741-ab03-72b4cd259144`: `outcome=completed`, `event_count=485`, `selected_count=36`, `as_of=2026-07-15`, `git_sha=0c5ad0d9`, `si_read_ms=5`. Detection ran against the flipped `a026dc51` gate with fresh SI (240 rows landed 60min prior, max `as_of_date=2026-06-30`, all sub-threshold at 0.20 float). Selected 36 vs yesterday's 36 (identical count) — **not a behavioral first tonight**: fresh SI is entirely below the 0.20 threshold, so the flipped gate admits everything the old gate admitted (SI-gate is effectively inert on this snapshot). The R2-safe state holds; the "first live short passing the squeeze gate" behavioral first will require an SI snapshot that lands a residual with `si_pct_float < 0.20` AND crosses all other gates — not this snapshot. Detection stamp is on `a026dc51` (the flipped constant). |
 | **Downstream** | ACT-533 filed for the lint-time guard promotion. INC-108 cross-refs INC-97 + INC-107. ACT-527/531 lanes unaffected (read-only compute). E5 filed as banked in the tracker. |
 
+## INC-110 — DST-transition silent entry death (Fable-max F1, filed 2026-07-16)
+
+| Field | Value |
+|---|---|
+| **Class** | silent-failure — a typed refusal (`market_closed`) is a valid no-op, so the current watchdog treats a fixed-UTC/DST-skew miss as a green day. |
+| **Trigger date** | 2026-11-02 (US fall-back) — 13:35Z becomes 08:35 ET pre-market; entry clock-gate refuses; entry engine dies silently for the day and every subsequent EST day until Nov-1 re-time bracket is applied. |
+| **Fix** | Two-part: (a) dispatcher watchdog gains `market_closed_streak ≥ 2` HIGH page (class-closer); (b) operator-dated 2026-11-01 pre-market cron re-time bracket (enumerated in action-tracker Fable-max sweep). |
+| **Cross-refs** | Fable-max F1 (action-tracker); sql/30, 31, 32, 34, 36 (single-slot crons requiring re-time); sql/33 (dual-slot, no change). |
+
+## INC-111 — Dividend-drift cosmetic delta (Fable-max F4, filed 2026-07-16)
+
+| Field | Value |
+|---|---|
+| **Class** | expected cosmetic reconciliation delta — NOT a substantive divergence. |
+| **Mechanism** | Any held symbol crossing its ex-dividend date during hold produces internal-vs-broker equity drift `qty * cash_dividend` until the cash lands on the broker side (settlement lag). Same class for splits (`qty` factor). |
+| **Handling** | A5 runbook (overshoot.md) mandates corporate-action first-check on any `qty_mismatch` outcome. Reconciliation must not page on a matched dividend/split. |
+| **Per-occurrence magnitude** | Populated by the F4 read-only diagnostic (queued behind ACT-527 curve) — per-symbol expected `$ drift` = `qty_held * cash_dividend`. |
+| **Cross-refs** | Fable-max F4; A5 corporate-action first-check clause in overshoot.md; Polygon `/v3/reference/dividends` + `/v3/reference/splits`. |
