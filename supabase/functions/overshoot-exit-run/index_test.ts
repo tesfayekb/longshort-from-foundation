@@ -427,3 +427,15 @@ Deno.test('probe short-circuit taxonomy: alpaca / polygon only; else 400', () =>
   assertStringIncludes(SRC, 'alpaca_probe_failed');
   assertStringIncludes(SRC, 'polygon_probe_failed');
 });
+
+Deno.test('INC-108 completed exit run writes overshoot.exit.run.completed audit row (watchdog heartbeat)', () => {
+  // The watchdog exit.run artifact mapping (INC-107) reads audit rows with
+  // actionPrefix 'overshoot.exit.'. On a clean no-fire tick — the common
+  // steady state — there are no per-refusal rows, so without a run-summary
+  // row the mapping starves and pages cron_overdue one layer deeper. The
+  // completion audit is the heartbeat + evidence anchor.
+  assertStringIncludes(SRC, "action: 'overshoot.exit.run.completed'");
+  assertStringIncludes(SRC, 'positions_examined: positionsExamined');
+  assertStringIncludes(SRC, 'exits_submitted: exitsSubmitted');
+  assertStringIncludes(SRC, 'refusals: tally');
+});
