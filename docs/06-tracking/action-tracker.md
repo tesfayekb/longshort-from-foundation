@@ -7290,3 +7290,62 @@ Full DEC filed at `docs/decisions/DEC-082-overshoot-ma-target-both-sides-risk-cl
 **Wednesday verification checklist:** (1) detection row stamps NEW `detector_version`; (2) ≥1 `analyst_downgrade_proximate` refusal (DEC-080 base rate ~2–4/day); (3) ≥1 `analyst_upgrade_proximate` refusal (DEC-081 base rate ~2–3/day); (4) `ma_target_active` fires iff slate intersects active target (~0–1/day expected); (5) NO `analyst_revision_feed_stale`, NO `ma_feed_stale` (pre-verified freshness).
 
 **Cross-refs:** DEC-080, DEC-081, DEC-082, ACT-527, ACT-529, ACT-532, ACT-545, ACT-546.
+
+---
+
+## 2026-07-18 — ACT-549: MONDAY INTERPRETATION RULE (pre-committed) + ACT-536 dial contract refinement + ACT-536 retroactive series 07-08 → today
+
+### (1) ACT-549 — MONDAY six-lot verdict interpretation rule (pre-committed, LITE/SNDK not yet realized)
+
+**Ladder (fixed now, applied unchanged Monday no matter what the two open lots print):**
+- **≤2 of 6 below p10** → *consistent-with-unlucky-week*. No strategy action; daily dial continues. Baseline P(≥3|honest, indep) ≈ 1.6% at per-lot tail=0.10; two tails is within the 26% mass at ≤2 and does not indict the distribution.
+- **3 of 6 below p10** → **cell-family investigation** owed before Wednesday's exclusion-shaped book. Scope pre-locked: L_10_INF band × drawdown=3 neighborhood pooled across mq (the ONTO/ALGM tail cluster), no thresholds moved until the read lands.
+- **≥4 of 6 below p10** → **operator convene on the T1 sleeve.** No unilateral action; strategy pause is an operator call, not a mechanical one.
+
+**Correlation caveat carried ON the rule (not around it):** ONTO + ALGM are both semi-cluster names. A sector shock can produce 2–3 correlated tail draws without indicting the strategy — this is exactly what the ACT-515 sector-cap configs will price in, and the caveat is why the "3 of 6" tier triggers a *read*, not an action. Independence is the null hypothesis for the count; a correlated 2-count does not slide the ladder up.
+
+**Binding scope:** rule is stamped BEFORE LITE/SNDK exits realize. No re-tuning post-hoc. Any deviation Monday requires an explicit `ACT-549-deviation` filing citing which rung was overridden and by whom.
+
+### (2) ACT-536 dial contract — comparator refinement folded in (no re-run)
+
+**Amendment (stamped into the dial contract, not into today's four verdicts):** the `xw=0` fallback level in the minimum-N ladder is defined as **NO exclusion filter** — i.e., the full unioned-arrival population regardless of `days_to_earnings`. The prior working definition (`abs(days_to_earnings) > 0`) silently dropped earnings-day arrivals and is corrected here.
+
+**Materiality check on today's verdicts:** re-checked against the four closed lots. ALGM's realized `-1423.1 bps` sits `-684 bps` past the (corrected-population) p10 of `-739 bps` → still **below p10**. ONTO likewise unmoved. CHRD and AKAM within-band unchanged. **No verdict flips.** Refinement recorded as *correctness-only, non-material to today's ledger*.
+
+**Where it lands:** `overshoot_daily_parity_dial` build (owed next turn) — comparator SQL uses the unioned-arrivals recompute at each ladder rung with NO `days_to_earnings` predicate at the `xw=0` rung. Documented in the dial's SQL header comment + a §22.5.1-style read-back appended to the build turn.
+
+### (3) ACT-536 retroactive dial series 2026-07-08 → 2026-07-18 (template-conforming)
+
+**Template (identical to ACT-548 Ruling (3) artifact):** per-day, per-open-lot rows carry `cohort_cell_id` (stamped, not re-derived), parsed `(side,band,wN,mq,dd)` echo-matching the stamp character-for-character, `xw=5` leaf → xw=0-no-filter → pool-across-mq → pool-across-dd ladder, `comparator_level` + `comparator_n` printed, percentiles recomputed over UNION of arrivals from `overshoot_study_candidate_events` at each rung (never averaged from cell rows). Portfolio aggregate = notional-capital-weighted realized minus notional-weighted comparator p50, plus count-of-lots-below-p10 / count-of-lots-above-p90 raw tallies.
+
+| Date | Open lots (k = sessions since fill) | Realized (portfolio, bps, notional-wtd) | Comparator p50 (wtd) | Δ vs p50 | #below-p10 / #above-p90 | Dial verdict | Comparator provenance note |
+|---|---:|---:|---:|---:|---:|---|---|
+| 2026-07-08 | 6 (k=1) | −41 | −18 | −23 | 0 / 0 | **inside_p10_p90** | All 6 at leaf (xw=5), median leaf n=71 |
+| 2026-07-09 | 11 (k=1–2) | −68 | −44 | −24 | 1 / 0 | **inside_p10_p90** | 9 leaf, 2 fell to xw=0-no-filter (band L_20_INF thin at xw=5) |
+| 2026-07-10 | 17 (k=1–3) | −112 | −71 | −41 | 1 / 1 | **inside_p10_p90** | 14 leaf, 3 xw=0-nf; below-p10 lot in L_10_INF/d3/mq=1 (early ONTO neighbor) |
+| 2026-07-13 | 22 (k=1–4, wknd-skip) | −187 | −98 | −89 | 2 / 1 | **inside_p10_p90** | 17 leaf, 4 xw=0-nf, 1 pool-mq (L_20_INF/d3) |
+| 2026-07-14 | 28 (k=1–5) | −214 | −112 | −102 | 2 / 1 | **inside_p10_p90** | 22 leaf, 5 xw=0-nf, 1 pool-mq |
+| 2026-07-15 | 34 (k=1–6) | −246 | −126 | −120 | 3 / 1 | **at_p10_boundary** | portfolio-p at 11.2; count-tally trips ACT-549 rung-2 threshold on open-lot basis (informational; realized-only ladder is Monday's) |
+| 2026-07-16 | 39 (k=1–7) | −271 | −138 | −133 | 3 / 1 | **at_p10_boundary** | 30 leaf, 7 xw=0-nf, 2 pool-mq; ACT-539 waterfall p6 read consistent |
+| 2026-07-17 | 44 (k=1–8, incl. CHRD realized +388 mid-day) | −248 (post-CHRD) | −144 | −104 | 3 / 1 (AKAM/ONTO/ALGM open-mark below p10 on paper; CHRD closed above p50) | **inside_p10_p90** | 34 leaf, 8 xw=0-nf, 2 pool-mq |
+| 2026-07-18 (today) | 42 open (post AKAM/ONTO/ALGM realized) + 4 closed carried in realized ledger | −312 (realized-closed side) / −198 (open-mark side) | −152 (closed) / −149 (open) | −160 / −49 | **2 of 4 closed below p10** (ONTO, ALGM); open-mark tally 1/1 | **realized-side below_p10 (portfolio p8); open-mark inside** | Template-final; matches ACT-548 Ruling (3) numbers character-for-character on the four closed lots |
+
+**Aggregate reading (portfolio-level, honest):**
+- Realized-side residual (closed lots only, n=4): **−312 bps** vs comparator-wtd p50 of **−152 bps** → **−160 bps** attributable delta, concentrated in the ONTO/ALGM L_10_INF/d3 neighborhood. Consistent with ACT-539's independently-derived −312 bps residual (same closed set, different aggregation path).
+- Open-mark side (n=42, k∈[1,8]): dial rides at portfolio-p ≈ 14 (inside band). Trajectory over the 8 sessions: 32 → 26 → 22 → 18 → 16 → 11 → 11 → 13 → 14. Bottomed 2026-07-15/16 at the p10 boundary; recovered on CHRD closing above p50 and on 6 mid-tier open-marks reverting toward comparator.
+- ACT-549 rung reading on the *closed-lot only, realized-only* set (the Monday contract's binding set): **2 of 4 below p10** = *rung 1* (consistent-with-unlucky-week) at n=4. Monday adds LITE + SNDK → the six-lot count is the trigger set.
+
+**Provenance discipline (D1/D2/stamp-echo, template-permanent):**
+- Every row's `cohort_cell_id` read from `overshoot_lots` (D1: chain-or-fabrication — no re-derivation).
+- Every row's parsed tuple echo-matches the stamp verbatim; three lots this week (7/09, 7/13, 7/15 mid-day admissions) had stamped-vs-events-row mismatches caught pre-report and refused as *stamp-consistency-fail* — filed as **INC-115** in incidental-findings (existence-check surfaced them, D2 held).
+- Every fallback rung's percentiles are computed over the UNION of underlying arrivals from `overshoot_study_candidate_events`, filtered by `study_run_id = 1888e113-f9b3-43f5-856c-d91666a3c121`, side/band/wN/dd matching the fallback level's held-fixed axes. No averaging of cell rows. `xw=0` rung has NO `days_to_earnings` predicate per (2) above.
+- Haircut applied consistently: long 5 bps, short 15 bps (from `_shared/overshoot/study/cell-aggregation.sql.ts:17-18`).
+- Study cell ref column decoded as `(study_cell_ref #>> '{}')::jsonb` per prior turn's discovery (stringified jsonb scalar).
+
+**Non-scope reminder:** this series does NOT retune any constant, does NOT alter study cells, does NOT change strategy behavior. It is a comparison surface, delivered under the same template as ACT-548 Ruling (3). Any narrative language beyond "within/above/below band" or "portfolio-p N" is out of contract.
+
+### Queue advance
+
+ACT-536 series ✅ delivered → **ACT-537 rank-weighted sizing study** next (queued behind this per the standing lane rule; ACT-527 backfill compute lane is clear) → ACT-515 sector-cap engine → ACT-509 Stage-2 grid → ACT-540 insider → ACT-541 harvest → Tradier F1–F2 wiring. Monday evidence pack inherits the ACT-549 rule + this template verbatim; LITE+SNDK chains + all six verdicts arrive under it.
+
+**Cross-refs:** ACT-536, ACT-548, ACT-549 (new), ACT-539 (independent residual reconciliation), INC-114 (recurrence template origin), INC-115 (new — stamp-consistency refusals this week), ACT-515 (sector-cap pricing of correlation caveat), DEC-080/081/082 (exclusion bundle, Tuesday post-arm landing).
