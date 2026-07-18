@@ -93,6 +93,26 @@ sha256("a026dc51||DEC-082-ma-guard-v1")[:8] = 1f82fa9e
 
 **CORRECTION — plan-assumption error (self-filed):** The earlier feasibility quote assumed the FMP **Basic** tier ($29/mo). Subscription state is operator-side ground truth and should have been asked before the quote was framed as a cost proposal — same provenance discipline as D3 (boundary sources are authoritative; internals are derived). No upgrade occurs; the backfill runs at Premium rate limits already paid for. Void banner N/A (numeric backfill scope unchanged), but this line is the honest correction of the ruling's framing.
 
+---
+
+### ACT-554-a — CODE PATH LANDED (2026-07-18)
+
+**Deployed this turn (build → deploy; run → paste next turn per R-003 dial-as-code pattern):**
+
+1. **Migration:** `analyst_revision_observations` gained `source` column (default `analyst_revision_drift_v1` for the 4,330 live rows), CHECK constraint `analyst_rev_obs_backfill_epoch_block` (backfill-labeled rows MUST have `as_of_date < 2026-06-29`), and view `public.analyst_backfill_coverage` (per-ticker counts + source split + first/last event dates in ACT-527 style).
+2. **Edge function:** `supabase/functions/longshort-analyst-historical-backfill/index.ts` — superadmin-gated one-shot symbol sweep. Pulls `/stable/price-target-news` (paginated, up to 60 pages/ticker) and `/stable/grades-historical` at 10 rps (headroom under Premium's 750 rpm). Same-analyst prior recovery via the existing `findSameAnalystPrior` in `analyst-identity.ts` — no fabricated priors.
+3. **Safety bindings enforced in code + DB:**
+   - **D1 EPOCH BLOCK** — every insert stamped `source='fmp_historical_backfill_v1'`; focal events with `focal_published_at >= 2026-06-29` are refused in-code (`rows_skipped_epoch` counter) AND rejected by the DB CHECK. Belt-and-braces.
+   - **D2 PER-BATCH FETCH-FAILURE LEDGER** — every ticker × endpoint attempt produces a `BatchLedgerRow` (`status`, `pages_fetched`, `rows_fetched`, `rows_inserted`, `rows_skipped_epoch`, `rows_skipped_no_prior`, `error_message`). Rollup persists to `job_executions.metadata.ledger`.
+   - **D3 LIVE-ROW BYTE-INTEGRITY ASSERTION** — handler snapshots live-row count + min/max `as_of_date` pre-run, snapshots again post-run, returns both in the response with `live_integrity_ok` boolean. Mismatch → job flagged `failed`.
+4. **No cron.** Manual invocation only (`POST /longshort-analyst-historical-backfill` with `{ endpoint, tickers?, dry_run?, max_tickers? }`). No `job_registry` entry.
+5. **Blast-radius note (for the record):** `analyst_revision_observations` is **RESEARCH-ONLY**. DEC-080 / DEC-081 were suspended before the detector bundle committed (R-004 gate held), so no consumer of this table exists in the money path. Backfill cannot affect live trading. Impact scope: unblocks ACT-554-b re-runs (ACT-531 analyst buckets, ACT-544-v2 adoption table) and returns DEC-080/081 to the operator for re-ratification or explicit revocation.
+6. **`grades_historical` writes:** OUT OF SCOPE for this handler — the current `analyst_revision_observations` schema is target-delta-shaped and grades are rating-action-shaped. Handler fetches + counts grades rows in-epoch for the ledger only; write path defers to **ACT-554-a.1** (charter: design `analyst_grade_observations` table before ACT-554-b's grade-bucket re-run).
+
+**Registry updated in same turn:** `api_provider_registry` FMP row now records Premium tier ($69/mo, 750 rpm, 30-yr history). Polygon rows remain NULL pending the operator's billing answer — refused to fabricate.
+
+**Deliverable next turn:** operator invokes the function (dry-run first recommended); handler returns the raw ledger + pre/post snapshots + `live_integrity_ok`; then a `SELECT * FROM public.analyst_backfill_coverage ORDER BY ticker` produces the coverage table pasted verbatim per Standing Format Rule. Then ACT-554-b re-runs.
+
 **Execute-on-approval plan (this ruling is the source+cost statement operator required):**
 
 1. Charter **ACT-554-a** — analyst-grade backfill (`grades-historical`, 4 yr, 839 tickers).
