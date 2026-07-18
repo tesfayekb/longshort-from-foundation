@@ -1561,3 +1561,23 @@ INC-20 transitions to **Resolved (full)** at this SHA.
 | **Handling** | A5 runbook (overshoot.md) mandates corporate-action first-check on any `qty_mismatch` outcome. Reconciliation must not page on a matched dividend/split. |
 | **Per-occurrence magnitude** | Populated by the F4 read-only diagnostic (queued behind ACT-527 curve) — per-symbol expected `$ drift` = `qty_held * cash_dividend`. |
 | **Cross-refs** | Fable-max F4; A5 corporate-action first-check clause in overshoot.md; Polygon `/v3/reference/dividends` + `/v3/reference/splits`. |
+
+## INC-112 — deploy-hold-unimplementable-on-auto-deploy-platform (filed 2026-07-18)
+
+| Field | Value |
+|---|---|
+| **Class** | governance / class-rule — a "deploy hold" declared after merge is a null statement under §22.8.4 auto-deploy. |
+| **Trigger** | ACT-510 (exit-run + session-age patch) held "as-scheduled" across five turns while actually LIVE from Thu 2026-07-16 merge onward; Thu 19:50Z tick was the first live fire, not a rehearsal. |
+| **Rule** | Holds MUST be unmerged code (feature branch / unmerged PR). Post-merge "holds" are corrected in-turn. Agent replies claiming a hold on merged code are §22.8.4 violations. |
+| **Damage** | Friday 3-exit envelope misread as deviation against fictional 50/0/50 baseline → ACT-534 disarm ruling on ON-SPEC behavior. Cost: rule-integrity, not money (Monday costless). |
+| **Cross-refs** | action-tracker: INC-112 full entry; ACT-510; ACT-534; INC-113 (sibling attestation-gap same night). |
+
+## INC-113 — heartbeat rows lack git_sha (filed 2026-07-18)
+
+| Field | Value |
+|---|---|
+| **Class** | attestation-completeness — INC-97/107/108-family metadata-echo gap. |
+| **Trigger** | `overshoot-exit-run` read `BUILD_SHA` via `readEnv()` but never persisted it to `overshoot.exit.run.completed` or `overshoot.exit.submitted.<intent>` audit metadata; entry-run's precedent (index.ts line 1170) was not mirrored. Result: Thu/Fri heartbeats carry NULL git_sha. |
+| **Fix (landed 2026-07-18)** | Additive `git_sha: env.gitSha` on both audit metadata payloads in `supabase/functions/overshoot-exit-run/index.ts`. Deployed. Monday's 19:50Z heartbeat MUST carry the stamp. |
+| **Class rule (pending)** | Every audit-of-record row emitted by a strategy function MUST include `git_sha` at write-time. Tracked for the ACT-533 CI-guard sweep. |
+| **Cross-refs** | action-tracker: INC-113 full entry; ACT-529 (version uniformity); ACT-533 (mapping-defect CI guard family); INC-112 (deploy-hold sibling). |
