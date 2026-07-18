@@ -85,18 +85,12 @@ Deno.serve(createHandler(async (req: Request) => {
   // RESEARCH-ONLY (DEC-080/081 never reached the detector). The gate is
   // just to keep the endpoint from being drive-by-callable.
   const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
+  const oneshotSecret = Deno.env.get('BACKFILL_ONESHOT_SECRET') ?? '';
   const providedCronHeader = req.headers.get('X-Cron-Secret') ?? '';
   let correlationId = crypto.randomUUID();
-  const isCronBearer = cronSecret.length > 0 && providedCronHeader === cronSecret;
-  // Temporary diagnostic — non-secret-leaking; returns only lengths.
-  const url = new URL(req.url);
-  if (url.searchParams.get('debug_auth') === '1') {
-    return new Response(JSON.stringify({
-      env_cron_secret_len: cronSecret.length,
-      provided_cron_header_len: providedCronHeader.length,
-      isCronBearer,
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  }
+  const isCronBearer =
+    (cronSecret.length > 0 && providedCronHeader === cronSecret) ||
+    (oneshotSecret.length > 0 && providedCronHeader === oneshotSecret);
   if (!isCronBearer) {
     const authCtx = await authenticateRequest(req);
     correlationId = authCtx.correlationId;
