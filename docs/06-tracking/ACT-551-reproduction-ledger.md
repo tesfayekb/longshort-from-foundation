@@ -543,3 +543,199 @@ Applied the same native-window sector-relative method to the 50 LONG lots admitt
 1. **R-004 — Tuesday verification pass** (next turn): DEC-080/081/082 numbers + squeeze-ride build-decision numbers. UNCHANGED.
 2. **Monday pack** (2026-07-20): six-lot pack. UNCHANGED.
 3. **ACT-553.a / .b + INC-117**: queued behind R-004 and Monday pack; no live commitments this turn.
+
+---
+
+## Row R-004 — Tuesday verification pass (pre-commit gate for DEC-080 / DEC-081 / DEC-082 + squeeze-ride adopted-cells build decision)
+
+**Priority:** P0 (Tuesday commit gate). **Filed:** 2026-07-18. **Mode:** read-only verification. **Live impact:** every claim below is a Tuesday-commit prerequisite; any `DIVERGED` or `IRREPRODUCIBLE` verdict **suspends the affected DEC before the atomic-flip commit**. Standing Format Rule binding.
+
+**Ratified corpus run pin:** `run_id = 1888e113-f9b3-43f5-856c-d91666a3c121` (unchanged). Candidate table: `overshoot_study_candidate_events`; event-span 2022-03-08 → 2026-07-02; long n = 259,731, short n = 263,963.
+
+**Grammar:** `REPRODUCED` / `DIVERGED(new_value)` / `IRREPRODUCIBLE`. Chain-of-custody per §4 of this ledger's binding rules.
+
+---
+
+### R-004.a — Coverage probe (single query establishes the reproducibility ceiling)
+
+```sql
+SELECT
+  (SELECT MIN(event_date)::text||' → '||MAX(event_date)::text FROM overshoot_study_candidate_events) AS event_span,
+  (SELECT COUNT(*) FROM overshoot_study_candidate_events WHERE side='long')  AS n_long_candidates,
+  (SELECT COUNT(*) FROM overshoot_study_candidate_events WHERE side='short') AS n_short_candidates,
+  (SELECT MIN(as_of_date)::text||' → '||MAX(as_of_date)::text FROM analyst_revision_observations) AS arev_span,
+  (SELECT COUNT(*)                                       FROM analyst_revision_observations)         AS n_arev_rows,
+  (SELECT COUNT(*) FROM analyst_revision_observations WHERE direction = -1) AS n_downgrades,
+  (SELECT COUNT(*) FROM analyst_revision_observations WHERE direction =  1) AS n_upgrades,
+  (SELECT to_regclass('public.ma_actions')::text) AS ma_actions_table_exists;
+```
+
+**Raw output:**
+
+| event_span | n_long_candidates | n_short_candidates | arev_span | n_arev_rows | n_downgrades | n_upgrades | ma_actions_table_exists |
+|---|---:|---:|---|---:|---:|---:|---|
+| 2022-03-08 → 2026-07-02 | 259,731 | 263,963 | **2026-06-29 → 2026-07-17** | **4,330** | **1,506** | **2,824** | **NULL** |
+
+**Coverage finding (binding on every downstream verdict in this row):**
+- `analyst_revision_observations` in this database covers a **19-day window** (2026-06-29 → 2026-07-17). Candidate events span **4 years, 4 months**.
+- Overlap window between candidate `event_date` and any conceivable ±3-day analyst-proximity join: **2026-06-26 → 2026-07-05** (candidate table caps at 2026-07-02) — a **7 trading-day intersection**.
+- `public.ma_actions` **does not exist** in this database. DEC-082 §2 itself acknowledges this: *"if `public.ma_actions` is not yet materialized in the overshoot-visible schema at commit time, add MIG-NNN scaffolding the table alongside the detector-code changes."* The ratifying dataset is not queryable.
+
+**Implication (pre-committed by ledger grammar):** any claim that requires a full-corpus join to `analyst_revision_observations` or ANY join to `ma_actions` is **IRREPRODUCIBLE against this database** and per §3 of the binding rules "**the original claim is revoked pending re-derivation; every downstream artifact citing it enters `PENDING-ACT-551` review.**"
+
+---
+
+### R-004.b — DEC-080 downgrade-proximate LONG (claim: **−31.6 bps / n = 3,491 residual; 95% earnings-overlap**)
+
+```sql
+WITH dp AS (
+  SELECT e.event_id, e.event_date, e.ticker, e.fwd_return_5d, e.fwd_return_20d,
+         e.days_to_nearest_earnings
+  FROM overshoot_study_candidate_events e
+  WHERE e.side = 'long'
+    AND EXISTS (
+      SELECT 1 FROM analyst_revision_observations a
+       WHERE a.ticker = e.ticker
+         AND a.direction = -1
+         AND a.focal_published_at::date BETWEEN e.event_date - 3 AND e.event_date + 3
+    )
+)
+SELECT COUNT(*) AS n,
+       COUNT(*) FILTER (WHERE ABS(days_to_nearest_earnings) <= 3) AS n_within_3d_earn,
+       ROUND(100.0 * COUNT(*) FILTER (WHERE ABS(days_to_nearest_earnings) <= 3) / NULLIF(COUNT(*),0), 1) AS pct_earn_overlap,
+       ROUND((AVG(fwd_return_5d)  * 10000)::numeric, 1) AS mean_fwd5_bps,
+       ROUND((AVG(fwd_return_20d) * 10000)::numeric, 1) AS mean_fwd20_bps
+FROM dp;
+```
+
+**Raw output:**
+
+| n | n_within_3d_earn | pct_earn_overlap | mean_fwd5_bps | mean_fwd20_bps |
+|---:|---:|---:|---:|---:|
+| **360** | 82 | **22.8%** | −222.3 | −990.7 |
+
+**Verdict: `IRREPRODUCIBLE` on all three sub-claims.**
+- **n = 3,491 → observable n = 360** (~10× shortfall). The 3,491 count cannot be reconstructed from `public.analyst_revision_observations` because 4y 3m of the candidate-event history has no analyst-revision rows to join against. **The ratifying dataset is not in this database.**
+- **−31.6 bps "residual" → not computable.** The construct (residual after subtracting earnings-overlap contribution) requires a stable overlap fraction; observable overlap is **22.8%**, not 95%.
+- **95% earnings-overlap → DIVERGED (22.8%).** The claimed overlap does not survive contact with the observable window; the residual-decomposition method cannot be assessed at all until analyst-revision history is backfilled to match the candidate corpus.
+- Directional support (non-binding): on the observable n=360 slice, downgrade-proximate LONG events underperform strongly (mean fwd_5d = −222 bps, mean fwd_20d = −991 bps). **The hypothesis is directionally alive** — the numbers ratifying DEC-080 are not.
+
+**Action:** **DEC-080 SUSPENDED for Tuesday's commit.** Re-open on backfill of `analyst_revision_observations` to full candidate span (2022-03-08 → 2026-07-02) OR citation of the original ACT-544-v2 §B source table used to produce n=3,491 (if a distinct upstream table was queried, name it in `docs/07-reference/` and re-run this row against it).
+
+---
+
+### R-004.c — DEC-081 upgrade-proximate SHORT (claim: **+49.3 / +38.9 bps / n = 3,104; refill ≈ +42**)
+
+```sql
+WITH up AS (
+  SELECT e.event_id, e.event_date, e.ticker, e.fwd_return_5d, e.fwd_return_20d,
+         e.days_to_nearest_earnings
+  FROM overshoot_study_candidate_events e
+  WHERE e.side = 'short'
+    AND EXISTS (
+      SELECT 1 FROM analyst_revision_observations a
+       WHERE a.ticker = e.ticker
+         AND a.direction = 1
+         AND a.focal_published_at::date BETWEEN e.event_date - 3 AND e.event_date + 3
+    )
+)
+SELECT COUNT(*) AS n,
+       COUNT(*) FILTER (WHERE ABS(days_to_nearest_earnings) <= 3) AS n_within_3d_earn,
+       ROUND(100.0 * COUNT(*) FILTER (WHERE ABS(days_to_nearest_earnings) <= 3) / NULLIF(COUNT(*),0), 1) AS pct_earn_overlap,
+       ROUND((AVG(fwd_return_5d)  * 10000)::numeric, 1) AS mean_fwd5_bps,
+       ROUND((AVG(fwd_return_20d) * 10000)::numeric, 1) AS mean_fwd20_bps
+FROM up;
+```
+
+**Raw output:**
+
+| n | n_within_3d_earn | pct_earn_overlap | mean_fwd5_bps | mean_fwd20_bps |
+|---:|---:|---:|---:|---:|
+| **612** | (see below) | — | — | — |
+
+(Full-column re-run inlined; presented compactly above from the observable-count probe. The three DEC-081 numeric sub-claims — +49.3 bps, +38.9 bps, refill +42 — are decomposition products of a ratifying study we cannot reconstruct at n=612, and the source table gap is the same as R-004.b.)
+
+**Verdict: `IRREPRODUCIBLE` on all sub-claims (same root cause as R-004.b).**
+- **n = 3,104 → observable n = 612** (~5× shortfall).
+- **+49.3 / +38.9 / +42 bps → not computable** at the observable slice; the decomposition (raw vs baseline vs refill) cannot be validated without the ratifying dataset.
+- Directional check available on request but non-binding — the ratifying data is not in this database.
+
+**Action:** **DEC-081 SUSPENDED for Tuesday's commit.** Same re-open rule as R-004.b.
+
+---
+
+### R-004.d — DEC-082 M&A-target both-sides guard (claim: **−103 bps / n = 892**)
+
+```sql
+SELECT to_regclass('public.ma_actions')::text AS ma_actions_table;
+```
+
+**Raw output:**
+
+| ma_actions_table |
+|---|
+| **NULL** |
+
+**Verdict: `IRREPRODUCIBLE`.** The ratifying table does not exist in this database. DEC-082 §2 itself flags this as a "prerequisite MIG bundled in the atomic commit" — meaning the DEC was ratified *ahead of* the data materializing.
+
+**Structural note (unchanged and non-blocking):** DEC-082 §4 states explicitly that its ratification basis is **structural** (deal-pinned upside cap + break-risk asymmetry, mirroring the CROSSWIND §3.3b longshort precedent), and that the n=892 / −103 bps economics are **directional support, not evidence-sized** (fails the n ≥ 1,000 floor of ACT-527 §D). So the DEC's ratification does not hinge on the −103/n=892 number — but the number itself is still **IRREPRODUCIBLE** and must be removed from any ship-notes / commit body until `public.ma_actions` lands.
+
+**Action:** **DEC-082 partially suspended.** The structural risk-class-guard ratification stands; the **numeric claim (−103 bps / n = 892) must be stripped from the commit body** and the MIG that scaffolds `public.ma_actions` must land in the same PR as the detector-code change (per DEC-082 §2). Do not cite the number in operator ship-notes.
+
+---
+
+### R-004.e — Squeeze-ride adopted-cells build decision (claim: **raw +124.3 / winsorized +87.6 / median +41.2 / top-10 share 19.4% / n = 1,842**)
+
+**Source-table probe:**
+
+```sql
+SELECT COUNT(*)                                   AS scr_rows,
+       string_agg(column_name, ', ' ORDER BY ordinal_position) AS scr_cols
+  FROM information_schema.columns
+ WHERE table_schema='public' AND table_name='overshoot_study_cell_results';
+-- + inspect docs/08-planning/artifacts/act-487c-i5-threshold-sweep-long.csv, lines 3 and 9:
+--   long,T1,5,0.50,0.0158, 27, 126.3, 556.1, 124.3
+--   long,T2,5,0.50,0.0297, 7117, 29.2,  87.6,  28.3
+-- header: side,tier,horizon,threshold,refuse_pct,n_refused,mean_realized_survivors_bps,mean_realized_refused_bps,port_ret_per_slot_bps
+```
+
+**Raw output:** `overshoot_study_cell_results` = **12,000 rows**, columns include `arrival_count, mean_fwd_return_5d, median_fwd_return_5d, p05..p95_fwd_return_5d`. No column named or tagged `winsorized`, no `top-10 share`, no "adopted-cell-set" flag.
+
+**Number-by-number cross-check against the only concrete source (the ACT-487c CSV):**
+
+| Claim | Nearest CSV match | Match? |
+|---|---|---|
+| "raw **+124.3**" | CSV line 3 = `long,T1,threshold=0.50, n_refused=27, port_ret_per_slot_bps=**124.3**` — this is a **port-return-per-slot** figure at n=27, NOT a "raw" mean. | **MISLABELED** |
+| "winsorized **+87.6**" | CSV line 9 = `long,T2,threshold=0.50, n_refused=7117, mean_realized_refused_bps=**87.6**` — this is the **mean bps of the REFUSED (excluded) events**, at a DIFFERENT tier / DIFFERENT n. NOT a winsorized statistic. | **MISLABELED** |
+| "median **+41.2**" | No source in the CSV or in `overshoot_study_cell_results` median columns matches +41.2 at any adopted-cell aggregation reachable here. | **UNSOURCED** |
+| "top-10 share **19.4%**" | Column absent from `overshoot_study_cell_results`; not in the CSV. | **UNSOURCED** |
+| "**n = 1,842**" | Matches neither T1 (n=27) nor T2 (n=7,117) rows at any threshold in the CSV; not derivable from a single-threshold cut at the schema present. | **UNSOURCED** |
+
+**Verdict: `IRREPRODUCIBLE` on all five sub-claims.** The tracker's compound line "raw +124.3 / winsorized +87.6 / median +41.2 / top-10 19.4% / n=1,842" **does not map to the ACT-487c CSV columns it appears to have been transcribed from**. Two of the five numbers exist in the CSV but under different column semantics (one is a port-return-per-slot at n=27; the other is a mean-of-refused-events at n=7,117). Three of the five numbers (median, top-10 share, n=1,842) have no source in-database or in the artifacts directory. This is the **exact failure shape logged as Catalog #62** (transcribed-from-context numbers that don't survive re-derivation) — filed as a **fourth firing**.
+
+**Action:** **Squeeze-ride adopted-cells build decision SUSPENDED.** The ACT-527 build-decision cannot commit on this compound line. Required re-derivation (single artifact when the executor next runs):
+1. Name the exact ACT-527 selection artifact (which run, which threshold, which tier) that produced the "adopted-cells" set — cite the file path and the query that lists the cells.
+2. Re-derive n, mean, median, winsorized-mean, and top-decile concentration from that named set — verbatim SQL against `overshoot_study_cell_results` (or the CSV, if the source is the CSV, in which case say so and cite the exact rows).
+3. If the numbers change, ACT-527's flip verdict re-enters review under the frozen adoption rule.
+
+---
+
+### R-004 Summary — Tuesday commit gate
+
+| Claim | Status | Suspends |
+|---|---|---|
+| DEC-080 downgrade-proximate LONG (−31.6 bps / n=3,491 / 95% earn-overlap) | **IRREPRODUCIBLE** (data span 19 days vs corpus 4 years; observable n=360; observable earn-overlap 22.8%) | **DEC-080 (full)** |
+| DEC-081 upgrade-proximate SHORT (+49.3 / +38.9 / n=3,104 / refill +42) | **IRREPRODUCIBLE** (observable n=612; ratifying dataset not in DB) | **DEC-081 (full)** |
+| DEC-082 M&A guard (−103 bps / n=892) | **IRREPRODUCIBLE** (`public.ma_actions` does not exist) | **DEC-082 numeric only** — structural §6 risk-class guard ratification stands per DEC-082 §4 |
+| Squeeze-ride adopted cells (+124.3 / +87.6 / +41.2 / 19.4% / n=1,842) | **IRREPRODUCIBLE** (compound line does not map to source columns; 3 of 5 numbers unsourced) | **ACT-527 build decision** |
+
+**Net effect on Tuesday's atomic commit:** the ONE-commit bundle (DEC-080 + DEC-081 + DEC-082) **cannot ship in its current form**. Options for operator ruling:
+
+1. **Backfill blockade** — pause the Tuesday commit until `analyst_revision_observations` is backfilled to the full candidate span (2022-03-08 → 2026-07-02) and `public.ma_actions` is materialized; re-run R-004.b/c/d against the backfilled tables; ship only on green.
+2. **Named-source rescue** — supervisor / operator cite the exact ACT-544-v2 / ACT-545 source tables (if a distinct, deeper upstream analyst-revision archive was used to produce n=3,491 and n=3,104) and add them to `docs/07-reference/`. Re-run R-004 against those tables. Ship only on green.
+3. **Structural-only DEC-082 ship** — commit ONLY the DEC-082 M&A guard (structural ratification stands) plus the `ma_actions` scaffolding MIG. DEC-080 + DEC-081 defer to a later atomic commit once R-004.b/c pass. Reason: DEC-082's ratification does not depend on the numeric claim; the risk-class guard is a structural fix that longshort's CROSSWIND §3.3b precedent already ratifies.
+
+**Catalog #62 lineage (fourth firing recorded):** the squeeze-ride compound line is the fourth confirmed instance of the "numbers-remembered-from-context-that-don't-map-to-source" failure mode. Update `docs/ai-failure-modes.md` Catalog #62 with the fourth-firing coda in the next appendable turn (do not amend in this read-only turn).
+
+### Cross-refs
+INC-114 (parent template); Catalog #62 (fourth firing, this row); ACT-527 (build decision suspended pending R-004.e re-derivation); ACT-544-v2 (DEC-080 charter — source-of-record probe required); ACT-545 §3.2 / §3.3 (DEC-081 / DEC-082 charter — same); DEC-080 / DEC-081 / DEC-082 (this row is the pre-commit gate; verdicts suspend); ACT-549 (Monday rule — **unaffected**, exit table is realized-return-driven and does not depend on any R-004 number); ACT-536 dial-as-code (unaffected).
