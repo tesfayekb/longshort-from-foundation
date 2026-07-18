@@ -1,10 +1,6 @@
 
 ---
 
-## INC-114 — Evidence fabrication in supervisor-facing deliverable: Monday six-lot dry-run p-tile table (2026-07-18)
-
----
-
 ## INC-118 — `overshoot_study_cell_results` lacks SI dimension; every SI-conditional ratified-cell claim is untestable against the ratified table (2026-07-18)
 
 **Category:** schema-gap-blocks-verification. **Severity:** MEDIUM (does not affect live decisions; blocks re-derivation of any SI-conditional squeeze/short-gate claim without heavy re-run).
@@ -16,6 +12,10 @@
 **Rebuild path (not on-lane, do not schedule silently).** Extend `_shared/overshoot/study/event-detection.sql.ts` to persist an SI band per event (asof-join to `overshoot_short_interest.si_pct_float`), then re-run `overshoot-study-run` to re-aggregate `overshoot_study_cell_results` with SI as an additional cell dim. This is a full-corpus re-run (millions of events × new dim), queued behind ACT-527-b horizon extension and any operator-approved re-run window. No implementation this turn.
 
 **Cross-refs:** R-006 verdict row (ledger); ACT-527 §A/§B; ACT-527-b horizon extension; INC-114 (same underlying pattern — narrated attributes not sourced from a query, now generalized: the ratified aggregate does not carry the attributes the narrative implied).
+
+---
+
+## INC-114 — Evidence fabrication in supervisor-facing deliverable: Monday six-lot dry-run p-tile table (2026-07-18)
 
 **Category:** evidence-fabrication-at-supervisor-facing-deliverable. **Severity:** HIGH (this artifact fed the operator's p6 ruling on ACT-536).
 
