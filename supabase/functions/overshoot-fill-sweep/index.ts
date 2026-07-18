@@ -135,6 +135,13 @@ interface CandidateRow {
   tier: string | null;
   event_run_id: string | null;
   as_of_date: string | null;
+  // MIG-161 (ACT-536 cohort-tuple provenance) — read verbatim from
+  // entry-run's `overshoot.entry.submitted.entry` audit metadata. NULL
+  // on legacy rows written before MIG-161 landed.
+  cohort_cell_id: string | null;
+  cohort_band: string | null;
+  cohort_drawdown_bucket: number | null;
+  cohort_entry_day_offset: number | null;
 }
 
 // ACT-493 v1 Turn 3B — M7 exit-fill discovery row.
