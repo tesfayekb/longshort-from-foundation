@@ -7589,7 +7589,27 @@ Monday's six-lot exit table inherits ACT-549 and requires ACT-550's echo as step
 
 ---
 
-## DEC-080-v2 / DEC-081-v2 — DRAFT-PENDING-OPERATOR (2026-07-18)
+## DEC-080-v2 / DEC-081-v2 — RATIFIED (2026-07-18 operator ruling; DRAFT preserved verbatim below)
+
+**Status:** **RATIFIED** as §6-class risk guards by operator (2026-07-18, THREE-RULINGS turn, Ruling 1). Joins Tuesday atomic bundle with DEC-082. Honest label preserved: fails the alpha bar (+1.56 bps/slot-day = 3.7 % of 42.42 floor); adopted for tail-protection / informed-move exclusion. Per-event Δ (−83.03 / +71.12 bps) is NOT a sizing input.
+
+**Ratified scope (operator verbatim, for atomic-commit binding):**
+- LONG admission refuses events within ±3 calendar days of a `analyst_revision_observations` row with `direction = -1` for the same ticker.
+- SHORT admission refuses events within ±3 calendar days of a `analyst_revision_observations` row with `direction = +1` for the same ticker.
+- Nothing else changes.
+
+**Version bump (bundle-wide, single commit):**
+`new_ratified_detector_version = sha256('a026dc51' || '||' || 'DEC-080-v2+DEC-081-v2+DEC-082-ma-guard-v1')[:8]`. Compute command MUST be cited verbatim in the commit body. Deploys uniformly via ACT-529 across `overshoot-detection-run`, `-entry-run`, `-exit-run`, `-fill-sweep`. Full ACT-532 atomic-update checklist including the **version-pin `grep -rn "a026dc51" supabase/`** post-bump zero-return assertion (INC-113 / Gate-11 lesson).
+
+**Selection-parity regen:** 20-day fixture regenerated with per-day delta stated in fixture header — expected shape: LONG-admission counts drop on days with in-window downgrades; SHORT-admission counts drop on days with in-window upgrades; BOTH drop on M&A-target days (DEC-082). Fixture header cites the fresh version + composite-tag lineage.
+
+**First shaped book:** Wednesday's 22:00Z detection run (commit lands Tuesday POST-arm, so Tuesday's `overshoot.exit.run` closes cleanly under `a026dc51`).
+
+---
+
+### DRAFT preserved verbatim (Constitution Rule 8) — supersession record
+
+> DEC-080-v2 / DEC-081-v2 — DRAFT-PENDING-OPERATOR (2026-07-18)
 
 **Status:** DRAFT · PENDING-OPERATOR-RATIFICATION · does NOT commit with the Tuesday bundle until operator says the word (per BAR-INTEGRITY RULING of 2026-07-18). If operator declines, both **REVOKE-CLEANLY** with the full honest record from R-ACT-554-b-VERIFY intact — no economics re-adoption path.
 
@@ -7630,3 +7650,73 @@ Monday's six-lot exit table inherits ACT-549 and requires ACT-550's echo as step
 **Charter:** add a health-monitoring watchdog to the longshort alert lane: for any signal registered as ARMED in `signal_registry`, if `signal_queue_skips` shows 100 % typed-skip rate for the same `reason` across ≥3 consecutive daily runs, PAGE the longshort watchdog (not the money-path lane). Rationale filed under INC-117: the current §4.3.5 typed-skip rule is correctly applied at row level (no fabrication) but produces a silent-signal-loss failure mode at the aggregate level for persistent entitlement / config failures — the exact class of "armed producer contributing zero" pathology that today only surfaces when someone reads the compute logs by hand.
 
 **Scope:** health-monitoring only; no money-path change; safe to ship independently of the DEC-080-v2/081-v2/082 bundle. Owner: longshort. Cross-refs: INC-117 (source); ai-failure-modes.md Catalog #63 (proposed — silent-signal-loss on armed producer; supervisor co-filing owed).
+
+---
+
+## ACT-555 — CROSSWIND FREEZE addendum (2026-07-18, Ruling 2)
+
+**Status flip:** the ACT-555 watchdog charter above is RECLASSIFIED to **PENDING-OPERATOR-SIDE-WORKSTREAM**. Operator is routing Tradier / INC-117 to a separate agent. **NO changes to any longshort surface from this lane** — no disarm of `longshort.options_flow.compute`, no secrets action, no watchdog patch, no `signal_registry` edit, no `.env`/`Deno.env` mutation. This lane's authority over the longshort surface is SUSPENDED for INC-117.
+
+### Clean handoff note for the other agent (single-source, consume from here)
+
+- **Finding:** `longshort.options_flow.compute` is `armed=true` in `signal_registry` but every daily fire since arming has produced 100 % `subscription_gated` typed-skips in `signal_queue_skips` (Signal #3 dark since arm date, per INC-117).
+- **Cron ID:** `sql/28_longshort_options_flow_intraday_lift.sql` schedules the intraday-lift job; the compute job proper is scheduled under `sql/22_longshort_signal_decay_cron_schedule.sql` cadence for the daily compute path. Both fire; both no-op emit typed skips.
+- **Fetcher path:** `supabase/functions/_shared/longshort-execution/` (Tradier client) + `supabase/functions/longshort-options-flow-*` handlers. Auth via `TRADIER_ACCESS_TOKEN` (currently a SANDBOX token on the production edge host per INC-117 root-cause).
+- **Typed-skip behavior:** per §4.3.5 the compute job correctly refuses to write a signal row on a 401 upstream and instead writes a typed-skip row with `reason='subscription_gated'`. Row-level integrity holds; the aggregate silent-signal-loss is the surfaced gap.
+- **Operator options (verbatim, unchanged from prior turn):** (a) upgrade Tradier account to Market Data subscription (~$10/mo add-on) and rotate the production token; (b) disarm the producer in `signal_registry` and file the honest "removed for cost" disposition; (c) leave armed, land the watchdog patch (this ACT-555 charter) so the failure surfaces on day 3 instead of by-hand log inspection.
+- **Do-not-touch:** everything in `src/features/longshort/**`, `supabase/functions/longshort-*/**`, `signal_registry`, `signal_queue_*` tables, all Tradier secrets. Cross-agent commit collision protection.
+
+**Cross-refs:** INC-117 (source); ai-failure-modes.md Catalog #63 draft (parked for other-agent to file or supersede); DEC-072 (upstream signal writer; unrelated to Tradier auth).
+
+---
+
+## VOID-SWEEP 2026-07-18 (R-006 pattern) — SI ≥ 0.20 short-admission-gate re-labeling
+
+**Trigger:** THREE-RULINGS turn, Ruling 3 (2026-07-18). R-006 IRREPRODUCIBLE verdict on the "sign-flip at ~20 % SI" and "KEEP-CURRENT clears all regimes" claims from ACT-527 §A and ACT-531-era prose.
+
+**Ruling:** the live `SI >= 0.20` short-admission refusal gate on `overshoot-entry-run` **REMAINS ARMED** (no code change; the gate only REFUSES trades, so directional risk is bounded by construction — conservative-precautionary). The **label** on the gate changes from "evidence-ratified (ACT-527 §A)" to **PRECAUTIONARY-UNPROVEN** pending ACT-527-b. Documentation-only edit; the money path is untouched this turn.
+
+### Retroactive VOID banner (append verbatim atop each cited section, PRESERVING original text per Constitution Rule 8)
+
+> **VOIDED-PENDING-ACT-527-b (2026-07-18 THREE-RULINGS Ruling 3):** the "SI ≥ 0.20 short-admission gate is evidence-ratified" characterization does not reproduce (see ACT-551 Row R-006). The **live gate remains ARMED as PRECAUTIONARY-UNPROVEN**; downstream citations MUST use the new label. Numeric claims about a sign-flip location at ~20 % SI are RETRACTED pending ACT-527-b. §C ratified-cell profitability findings (S-band production cells reproduce profitable-short from `overshoot_study_cell_results`) STAND — the live short core predates ACT-527 §A and survives independently.
+
+| Artifact | Rows / sections stamped VOIDED-PENDING-ACT-527-b | Rows that SURVIVE |
+|---|---|---|
+| `docs/08-planning/artifacts/ACT-527-*.md` (§A short-curve prose: "evidence-ratified 0.20", "KEEP-CURRENT clears all regimes", sign-flip narrative) | §A short-curve headline block + KEEP-CURRENT cells table | §C ratified-cell production numbers (S_03_04 → S_10_INF from `overshoot_study_cell_results`); §B revocation (already voided under R-005) |
+| ACT-531 §A / §B analyst rows | ALREADY VOIDED-PENDING-BACKFILL (unchanged) | earnings/SI/news rows already ruled to stand |
+| ACT-544-v2 | ALREADY VOIDED (full table) — DEC-080-v2/081-v2 economics superseded via R-ACT-554-b-VERIFY | (none) |
+| Prose citing "bear-market engine +58 to +178 bps" (supervisor characterization) | The +58/+178 bps range as characterizing bear-side short-engine performance | (none — the range was §A-family; short-side bear performance is UNKNOWN pending ACT-527-b, filed as supervisor retraction below) |
+
+### Supervisor retraction (co-filed, symmetric-skepticism entry)
+
+The supervisor's prior characterization of the overshoot short-side as a "bear-market engine at +58 to +178 bps" was **§A-family material** and is now **UNPROVEN pending ACT-527-b**. The prediction that "the 20 % gate would ratify a bear-side alpha structure" is recorded as **WRONG** in the ledger. What STANDS: the §C ratified S-band cells reproduce profitable-short at +90 to +130 bps from the actual `overshoot_study_cell_results` table (R-006 Section C). The live short core is independent of the ACT-527 §A/§B revocations; the short strategy predates and survives them.
+
+**Cross-refs:** ACT-551 Row R-006 (the reproduction); ACT-527-b (chartered below — replaces the §A prose); INC-118 (SI dim missing from ratified cells); Catalog #62 fifth firing (supervisor over-characterization of bear-engine numbers on §A-family material).
+
+---
+
+## ACT-527-b — SI-conditional full-corpus study (chartered 2026-07-18)
+
+**Priority note (BINDING):** ACT-527-b MUST complete before any bear-regime arming of expanded short capacity. The short side's season is exactly when this gate's truth matters; shipping expanded short capacity into a bear regime under a PRECAUTIONARY-UNPROVEN gate is exactly the "arm-in-the-dark" pattern the ratified-corpus discipline exists to prevent.
+
+**Charter (verbatim shape):** re-derive the SI-conditional short-side verdict at CELL granularity, honestly:
+
+1. **Feed change** — extend `supabase/functions/_shared/overshoot/study/event-detection.sql.ts` to persist a per-event SI band via LATERAL asof-join against `overshoot_short_interest`, then extend `cell-aggregation.sql.ts` to add SI band as a cell dimension. Backfill migration on `overshoot_study_cell_results` (or a sibling `overshoot_study_cell_results_si` if the row-size / RLS pressure is prohibitive).
+2. **Re-run** — full corpus, run pinned via `overshoot_study_runs`, ratified with `study_full_hash` recomputed. Not a candidate-event query (R-006 already proved that path is high-variance).
+3. **Verdict grammar** — ACT-528 frozen rules unchanged: dominance floor 42.42 bps/slot-day, n ≥ 1,000, monotone-stability, regime-dispositive replication, capacity in events/yr. Verdict is one of ADOPT / KEEP-CURRENT / DO-NOT-EXTEND / REVOKE-ON-EVIDENCE (mechanical).
+4. **Regime tag** — combine with ACT-527-c (regime column on candidate/cell tables) so the joint (SI × regime × band × momentum × drawdown) verdict is testable in one query rather than reconstructed. If ACT-527-c has not landed by ACT-527-b's run, ACT-527-b ships regime-marginal with a caveat and re-runs after ACT-527-c.
+5. **Deliverable** — single artifact in the reproduction ledger under Standing Format Rule (D3 epoch block · verbatim SQL · raw output · pre-committed verdicts applied mechanically). Any characterization language ("evidence-ratified", "clears all regimes", "bear-engine") is FORBIDDEN in the artifact until the mechanical verdict grammar produces it.
+
+**Cross-refs:** R-006 (source of the IRREPRODUCIBLE verdict); INC-118 (SI dim missing — same charter fixes it); ACT-527 §A (voided prose replaced by this study); ACT-527-c (regime tag — sibling charter); ACT-528 (frozen adoption rules — unchanged).
+
+---
+
+## THREE-RULINGS RECAP (2026-07-18 operator turn)
+
+**Ruling 1 — DEC-080-v2 / DEC-081-v2 RATIFIED** as §6 risk guards with honest fails-alpha-bar label; join Tuesday atomic bundle with DEC-082 (one commit, one version bump, sha256 composite over the three-guard amendment tag, full ACT-532 checklist incl. version-pin greps, parity regen with per-day deltas); first shaped book Wednesday 22:00Z.
+
+**Ruling 2 — CROSSWIND FREEZE** on the longshort surface: Tradier / INC-117 routed to separate agent; ACT-555 reclassified PENDING-OPERATOR-SIDE-WORKSTREAM with clean handoff note above.
+
+**Ruling 3 — R-006 SI-gate ruling:** live SI ≥ 0.20 short-admission gate remains ARMED, re-labeled PRECAUTIONARY-UNPROVEN (docs-only); ACT-527/531-era "evidence-ratified" prose stamped VOIDED-PENDING-ACT-527-b; ACT-527-b chartered as the honest replacement study, must complete before bear-regime short-capacity expansion; §C ratified-cell short-side profitability STANDS.
+
+**Next lane step:** ACT-551 Row R-ACT-553.a (tide-class timing grid) — delivered this turn, single artifact.
