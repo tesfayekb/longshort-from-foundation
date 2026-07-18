@@ -43,7 +43,7 @@ import { OvershootAlpacaPositionFetcher } from '../_shared/overshoot-broker/alpa
  * Version echo — bumped on every dispatcher deploy so `GET /` proves the
  * running build. See INC-95 (cron-aware overdue + slot-based idempotency).
  */
-export const OVERSHOOT_ALERTS_DISPATCHER_VERSION = 'inc108-si-computed-at-mapping-20260715';
+export const OVERSHOOT_ALERTS_DISPATCHER_VERSION = 'inc110-f1a-f3-cohort-tuple-20260718';
 
 const RAW_RECIPIENT =
   (Deno.env.get('ALERT_RECIPIENT_EMAIL') ?? Deno.env.get('EDGAR_CONTACT_EMAIL') ?? '').trim();
@@ -334,6 +334,79 @@ async function scanFillSweepShortfall(correlationId: string): Promise<DispatchRe
       subject: `Overshoot fill-sweep alert: ${action}`,
       body_preview: `action=${action} broker_count=${md.broker_count ?? '?'} ledger_count=${md.ledger_count ?? '?'} candidates=${md.candidates_discovered ?? '?'} at=${r.created_at}`,
       correlation_id: String(r.correlation_id ?? correlationId),
+    }));
+  }
+  return results;
+}
+
+// INC-110 (F1.a) — DST-skew silent-death guard. Counts consecutive
+// weekday sessions where overshoot-entry-run wrote `market_closed`
+// audit heartbeats and NOT a single `entry.submitted.entry` row. Cron
+// job_run_details are opaque to the strategy watchdog family; this
+// converts entry-run's own heartbeat into a class-closer. Threshold: 2
+// consecutive weekday sessions (Nov-2 DST defect would have fired on
+// day-2 rather than lingering silently).
+async function scanEntryMarketClosedStreak(correlationId: string): Promise<DispatchResult[]> {
+  const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  const { data } = await supabaseAdmin
+    .from('overshoot_audit_logs')
+    .select('id, action, metadata, created_at')
+    .in('action', ['overshoot.entry.market_closed', 'overshoot.entry.submitted.entry'])
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  // Session-date buckets from metadata.session_date (NY calendar day).
+  const sessions = new Map<string, { closed: boolean; submitted: boolean }>();
+  for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+    const md = (r.metadata ?? {}) as Record<string, unknown>;
+    const sd = String(md.session_date ?? md.as_of_date ?? '');
+    if (!sd) continue;
+    const day = new Date(`${sd}T00:00:00Z`).getUTCDay();
+    if (day === 0 || day === 6) continue; // weekday-only
+    const cur = sessions.get(sd) ?? { closed: false, submitted: false };
+    if (r.action === 'overshoot.entry.market_closed') cur.closed = true;
+    else cur.submitted = true;
+    sessions.set(sd, cur);
+  }
+  const sorted = [...sessions.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  let streak = 0;
+  const streakDays: string[] = [];
+  for (const [sd, s] of sorted) {
+    if (s.closed && !s.submitted) { streak += 1; streakDays.push(sd); }
+    else break;
+  }
+  if (streak < 2) return [];
+  return [await dispatchOne({
+    trigger_kind: 'entry_market_closed_streak',
+    severity: 'HIGH',
+    source_table: 'overshoot_audit_logs',
+    source_row_id: `market_closed_streak:${streakDays[0]}`,
+    subject: `Overshoot entry: ${streak} consecutive weekday sessions market_closed (no submissions)`,
+    body_preview: `streak=${streak} days=${streakDays.join(',')} suspect=DST_skew_or_calendar_defect version=${OVERSHOOT_ALERTS_DISPATCHER_VERSION}`,
+    correlation_id: correlationId,
+  })];
+}
+
+// F3 — exit_attempts >= 3 alert. Any lot whose exit-run has attempted a
+// close 3+ times without settling flags a stuck-close condition
+// (broker rejection, symbol halted, borrow evaporated, etc.).
+async function scanExitAttemptsExhausted(correlationId: string): Promise<DispatchResult[]> {
+  const { data } = await supabaseAdmin
+    .from('overshoot_lots')
+    .select('lot_id, symbol, side, tier, exit_attempts, status, settlement_state, remaining_qty, entry_ts')
+    .gte('exit_attempts', 3)
+    .eq('status', 'open')
+    .limit(50);
+  const results: DispatchResult[] = [];
+  for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+    results.push(await dispatchOne({
+      trigger_kind: 'lot_exit_attempts_exhausted',
+      severity: 'HIGH',
+      source_table: 'overshoot_lots',
+      source_row_id: String(r.lot_id),
+      subject: `Overshoot lot ${r.symbol}: exit_attempts=${r.exit_attempts} (stuck close)`,
+      body_preview: `lot_id=${r.lot_id} symbol=${r.symbol} side=${r.side} tier=${r.tier} exit_attempts=${r.exit_attempts} settlement=${r.settlement_state} remaining=${r.remaining_qty} entry_ts=${r.entry_ts}`,
+      correlation_id: correlationId,
     }));
   }
   return results;
