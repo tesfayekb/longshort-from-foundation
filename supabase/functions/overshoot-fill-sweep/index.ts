@@ -297,7 +297,11 @@ Deno.serve(createHandler(async (req: Request) => {
         metadata->>'run_id'           AS run_id,
         metadata->>'tier'             AS tier,
         metadata->>'event_run_id'     AS event_run_id,
-        metadata->>'as_of_date'       AS as_of_date
+        metadata->>'as_of_date'       AS as_of_date,
+        metadata->>'cohort_cell_id'                     AS cohort_cell_id,
+        metadata->>'cohort_band'                        AS cohort_band,
+        NULLIF(metadata->>'cohort_drawdown_bucket','')::int  AS cohort_drawdown_bucket,
+        NULLIF(metadata->>'cohort_entry_day_offset','')::int AS cohort_entry_day_offset
       FROM overshoot_audit_logs
       WHERE action = 'overshoot.entry.submitted.entry'
         AND created_at >= (${sessionDate}::date - interval '14 days')
@@ -355,12 +359,14 @@ Deno.serve(createHandler(async (req: Request) => {
             INSERT INTO overshoot_lots
               (symbol, entry_ts, qty, cost_basis, side, status, settlement_state, source_order_id,
                tier, tier_source_event_run_id, tier_source_as_of_date,
-               remaining_qty, filled_qty, exit_attempts)
+               remaining_qty, filled_qty, exit_attempts,
+               cohort_cell_id, cohort_band, cohort_drawdown_bucket, cohort_entry_day_offset)
             VALUES
               (${c.ticker}, ${nowTs.toISOString()}::timestamptz, ${qty}, ${costBasis},
                ${c.side}, 'open', 'pending', ${c.order_id},
                ${c.tier}, ${c.event_run_id}, ${c.as_of_date},
-               ${qty}, 0, 0)
+               ${qty}, 0, 0,
+               ${c.cohort_cell_id}, ${c.cohort_band}, ${c.cohort_drawdown_bucket}, ${c.cohort_entry_day_offset})
             ON CONFLICT (source_order_id) WHERE source_order_id IS NOT NULL DO NOTHING
             RETURNING lot_id::text AS lot_id
           `;
