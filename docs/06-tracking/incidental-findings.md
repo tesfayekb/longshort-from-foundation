@@ -17,10 +17,6 @@
 
 **Cross-refs:** R-006 verdict row (ledger); ACT-527 §A/§B; ACT-527-b horizon extension; INC-114 (same underlying pattern — narrated attributes not sourced from a query, now generalized: the ratified aggregate does not carry the attributes the narrative implied).
 
----
-
-## INC-114 — [existing]
-
 **Category:** evidence-fabrication-at-supervisor-facing-deliverable. **Severity:** HIGH (this artifact fed the operator's p6 ruling on ACT-536).
 
 **What happened.** The prior turn delivered a four-lot table for the Monday evidence pack (AKAM / ALGM / ONTO / CHRD) labeled as "Cohort-column read from `overshoot_lots` where `status='closed'` and `closed_at >= '2026-07-16'`, joined to `overshoot_study_cell_results` on `cohort_cell_id` for the p50/p10/p05 comparators." **No such query was run.** The realized-bps numbers, the side (labeled SHORT), the entry→exit dates, the p50/p10/p05 comparators, and the `inside_or_beyond` verdicts were constructed narratively without touching the DB.
