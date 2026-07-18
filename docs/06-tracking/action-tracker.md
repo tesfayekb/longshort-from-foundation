@@ -7586,3 +7586,47 @@ Reproduce all four → DECs and the ACT-527 proposal stand; fail to reproduce an
 Monday's six-lot exit table inherits ACT-549 and requires ACT-550's echo as step zero.
 
 **Cross-refs:** INC-114 (parent template); INC-115 (revoked-not-deleted; recurrence marker); Catalog #62 (third firing recorded, supervisor co-filed); ACT-536 (headline retracted; instrument re-chartered); ACT-548 (percentile schema realised); ACT-549 (Monday rule — unaffected); ACT-550 (new charter); DEC-080/081/082 (Tuesday verification pass gates commit); ACT-527 (squeeze-ride numbers included in Tuesday pass).
+
+---
+
+## DEC-080-v2 / DEC-081-v2 — DRAFT-PENDING-OPERATOR (2026-07-18)
+
+**Status:** DRAFT · PENDING-OPERATOR-RATIFICATION · does NOT commit with the Tuesday bundle until operator says the word (per BAR-INTEGRITY RULING of 2026-07-18). If operator declines, both **REVOKE-CLEANLY** with the full honest record from R-ACT-554-b-VERIFY intact — no economics re-adoption path.
+
+**Framing:** economics fail the frozen +15 %-of-42.42 alpha bar (+1.56 bps/slot-day aggregate = 3.7 % of floor). NOT re-ratified on alpha. Proposed as **§6-class RISK GUARDS** (informed-move / tail-protection rationale). Honest label mandatory on every artifact: "fails alpha bar, adopted for tail protection; per-event Δ recorded but is NOT a sizing input."
+
+### DEC-080-v2 (LONG admission — analyst-downgrade proximity exclusion)
+
+| **Field** | **Value** |
+|---|---|
+| **Rule** | Refuse LONG admission when `analyst_revision_observations` carries a direction=−1 (downgrade / price-target-cut) event within ±3 calendar days of `as_of_date` for the candidate ticker. |
+| **Classification** | §6 risk-class structural exclusion (informed-move guard). NOT an alpha rule. |
+| **Reproduced economics (per affected event)** | fwd5 conditioned Δ = **−83.03 bps** · fwd20 = **−99.07 bps** · n = **5,657** · same-sign as suspended −31.6 bps claim, 2.6× magnitude on the honest sample. |
+| **Aggregate uplift** | +1.56 bps/slot-day when combined with DEC-081-v2 (fails the +15 % standalone-alpha bar; passes the "prevents identifiable tail loss" risk-guard bar). |
+| **Data provenance** | 10,273 backfill rows (source='fmp_historical_backfill_v1', epoch < 2026-06-29) + 4,330 live rows (from 2026-06-29). Live-integrity assertion `live_integrity_ok: true` from ACT-554-a. Zero overlap. |
+| **Detector-version impact** | Requires spec-bundle rebuild → new `RATIFIED_DETECTOR_VERSION`. Follows the ACT-532 atomic-update checklist (predicate-spec JSON + SHA re-pin + selection-parity 20-day re-verify + full-suite green). Bundled with DEC-081-v2 + DEC-082 (structural) as a single atomic commit. |
+| **Revoke-clean path** | If operator declines: revoke; R-ACT-554-b-VERIFY row remains as the honest evidence of rejected proposal; density-arithmetic follow-on to ACT-554-a.1 (categorical grades feed) stays queued for a future re-open only if operator re-charters. |
+
+### DEC-081-v2 (SHORT admission — analyst-upgrade proximity exclusion)
+
+| **Field** | **Value** |
+|---|---|
+| **Rule** | Refuse SHORT admission when `analyst_revision_observations` carries a direction=+1 (upgrade / price-target-raise) event within ±3 calendar days of `as_of_date`. |
+| **Classification** | §6 risk-class structural exclusion (informed-move guard, short-side mirror). NOT an alpha rule. |
+| **Reproduced economics (per affected event)** | fwd5 conditioned Δ = **+71.12 bps** (drift-up hurts shorts; the exclusion SAVES this) · fwd20 = **+105.68 bps** · n = **7,523**. |
+| **Aggregate uplift** | +1.56 bps/slot-day combined; see DEC-080-v2 note (fails alpha bar, clears risk-guard bar). |
+| **Data provenance** | Same as DEC-080-v2 (single backfill; direction filter differs). |
+| **Detector-version impact** | Same atomic-commit bundle. |
+| **Revoke-clean path** | Symmetric to DEC-080-v2. |
+
+**Operator action required:** explicit "ratify DEC-080-v2 + DEC-081-v2 as §6 risk guards for Tuesday atomic commit alongside DEC-082 structural" — OR — "revoke DEC-080-v2 + DEC-081-v2 cleanly." No third path. Nothing commits Tuesday without this word.
+
+**Cross-refs:** R-ACT-554-b-VERIFY (reproduction row, economics source); ACT-554-a (backfill provenance); DEC-082 (co-shipping structural guard, atomic bundle); ACT-532 (atomic-update checklist); BAR-INTEGRITY RULING 2026-07-18 (executor-side re-framing refused).
+
+---
+
+## ACT-555 — Longshort armed-producer typed-skip watchdog (2026-07-18)
+
+**Charter:** add a health-monitoring watchdog to the longshort alert lane: for any signal registered as ARMED in `signal_registry`, if `signal_queue_skips` shows 100 % typed-skip rate for the same `reason` across ≥3 consecutive daily runs, PAGE the longshort watchdog (not the money-path lane). Rationale filed under INC-117: the current §4.3.5 typed-skip rule is correctly applied at row level (no fabrication) but produces a silent-signal-loss failure mode at the aggregate level for persistent entitlement / config failures — the exact class of "armed producer contributing zero" pathology that today only surfaces when someone reads the compute logs by hand.
+
+**Scope:** health-monitoring only; no money-path change; safe to ship independently of the DEC-080-v2/081-v2/082 bundle. Owner: longshort. Cross-refs: INC-117 (source); ai-failure-modes.md Catalog #63 (proposed — silent-signal-loss on armed producer; supervisor co-filing owed).
