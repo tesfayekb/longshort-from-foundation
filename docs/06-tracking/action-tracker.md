@@ -7589,7 +7589,27 @@ Monday's six-lot exit table inherits ACT-549 and requires ACT-550's echo as step
 
 ---
 
-## DEC-080-v2 / DEC-081-v2 — DRAFT-PENDING-OPERATOR (2026-07-18)
+## DEC-080-v2 / DEC-081-v2 — RATIFIED (2026-07-18 operator ruling; DRAFT preserved verbatim below)
+
+**Status:** **RATIFIED** as §6-class risk guards by operator (2026-07-18, THREE-RULINGS turn, Ruling 1). Joins Tuesday atomic bundle with DEC-082. Honest label preserved: fails the alpha bar (+1.56 bps/slot-day = 3.7 % of 42.42 floor); adopted for tail-protection / informed-move exclusion. Per-event Δ (−83.03 / +71.12 bps) is NOT a sizing input.
+
+**Ratified scope (operator verbatim, for atomic-commit binding):**
+- LONG admission refuses events within ±3 calendar days of a `analyst_revision_observations` row with `direction = -1` for the same ticker.
+- SHORT admission refuses events within ±3 calendar days of a `analyst_revision_observations` row with `direction = +1` for the same ticker.
+- Nothing else changes.
+
+**Version bump (bundle-wide, single commit):**
+`new_ratified_detector_version = sha256('a026dc51' || '||' || 'DEC-080-v2+DEC-081-v2+DEC-082-ma-guard-v1')[:8]`. Compute command MUST be cited verbatim in the commit body. Deploys uniformly via ACT-529 across `overshoot-detection-run`, `-entry-run`, `-exit-run`, `-fill-sweep`. Full ACT-532 atomic-update checklist including the **version-pin `grep -rn "a026dc51" supabase/`** post-bump zero-return assertion (INC-113 / Gate-11 lesson).
+
+**Selection-parity regen:** 20-day fixture regenerated with per-day delta stated in fixture header — expected shape: LONG-admission counts drop on days with in-window downgrades; SHORT-admission counts drop on days with in-window upgrades; BOTH drop on M&A-target days (DEC-082). Fixture header cites the fresh version + composite-tag lineage.
+
+**First shaped book:** Wednesday's 22:00Z detection run (commit lands Tuesday POST-arm, so Tuesday's `overshoot.exit.run` closes cleanly under `a026dc51`).
+
+---
+
+### DRAFT preserved verbatim (Constitution Rule 8) — supersession record
+
+> DEC-080-v2 / DEC-081-v2 — DRAFT-PENDING-OPERATOR (2026-07-18)
 
 **Status:** DRAFT · PENDING-OPERATOR-RATIFICATION · does NOT commit with the Tuesday bundle until operator says the word (per BAR-INTEGRITY RULING of 2026-07-18). If operator declines, both **REVOKE-CLEANLY** with the full honest record from R-ACT-554-b-VERIFY intact — no economics re-adoption path.
 
