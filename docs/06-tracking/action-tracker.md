@@ -7217,3 +7217,29 @@ Full DEC filed at `docs/decisions/DEC-080-overshoot-analyst-downgrade-long-admis
 - **Rollback handle:** revert commit → auto-deploy restores `a026dc51` uniformly.
 
 **Cross-refs:** ACT-527, ACT-528, ACT-529, ACT-531 §A, ACT-532, ACT-544-v2, DEC-072, DEC-504-4, INC-106.
+
+---
+
+## ACT-545 — Signal Coverage Matrix (weekend read-only compute)
+
+**Status:** DELIVERED 2026-07-18. Deliverable at `docs/06-tracking/ACT-545-signal-coverage-matrix.md`.
+**Charter:** systematic inventory of every in-house catalyst/data source × admission side (LONG dip-buy / SHORT spike-sell) × three columns (STUDIED / WIRED as live check / VERDICT). WIRED column grepped from `_shared/overshoot/detector/detector.ts` — code citations, not memory.
+
+**Wired refusals in detector (HEAD grep):** `window_out_of_set` (:617), `excess_below_threshold` (:629), `momentum_out_of_set` (:641), `drawdown_out_of_set` (:653), `exclusion_earnings_proximity` (:690 ±5d BOTH sides), `si_unavailable` (:703), `si_stale` (:716), `si_above_squeeze_threshold` (:744 ≥0.20 INC-106), `no_study_cell` (:784/:808/:834), `below_long_uniform_roi_floor_or_arrival_count` (:813), `capacity` (:919).
+
+**Roll-up disposition:**
+- Earnings both sides — covered.
+- SHORT analyst-downgrade — KEEP-ADMIT (helpful drift).
+- SHORT analyst-upgrade (±3d) — **ADOPT-CANDIDATE, operator-DEC.** n=3,104; regime-stable; refill-effect ≈+42 bps/slot-day per swapped slot (marginal-pass at 42.42 floor); floor +3.9 bps/slot-day unfilled. Freshness piggybacks DEC-080's `analystRevisionStaleActive`. Refusal string: `analyst_upgrade_proximate`.
+- LONG analyst-downgrade — covered by DEC-080.
+- LONG analyst-upgrade — gap-underpowered as exclusion; queued as ACT-543 sleeve.
+- LONG earnings-miss residual — SHELVED (n=194).
+- M&A target BOTH sides — **ADOPT AS RISK-CLASS GUARD, operator-DEC.** n=892 fails economics n-floor but §6 corporate-actions structural rationale (deal-pinned upside cap + unbounded break-risk downside) + longshort precedent (`rule-3-3b-ma.ts`, CROSSWIND §3.3b LOCKED). Refusal string: `ma_target_active`. Freshness: piggyback corporate-actions cursor.
+- Insider Form-4 both sides — gap-underpowered, no action.
+- SI SHORT — covered; SI LONG — dormant sleeve (ACT-528).
+- Corporate actions non-M&A — covered by universe carve-out.
+- Halts — deferred (Surface-3 placeholder). News attention — not-in-thesis.
+
+**Bundling directive:** if operator ratifies §3.2 (SHORT-upgrade) AND §3.3 (M&A guard), both fold into DEC-080's Tuesday-post-arm atomic commit — ONE version bump, ONE spec JSON rewrite (both LONG + SHORT blocks), ONE sha recompute, ONE 20-day parity regen, ONE four-function redeploy (ACT-529). Wednesday's 22:00Z is the first book shaped by all three exclusions. Partial ratification: DEC-080 payload lands with the ratified addition; the other becomes its own future atomic commit (ACT-532 discipline).
+
+**Cross-refs:** ACT-527, ACT-529, ACT-531 §A+§B, ACT-532, ACT-543, ACT-544-v2, DEC-072, DEC-080, DEC-504-4, CROSSWIND §3.3b, INC-106.
