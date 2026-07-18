@@ -7786,3 +7786,60 @@ Lane order post-filing (unchanged for 1-5):
 7. **ACT-557** — cell-EV admission floor study (this filing).
 
 **Monday live-script (09:35Z refill · 15:50Z LITE+SNDK exits · 16:05Z six-lot evidence pack under ACT-549 rule) remains supreme and un-interleaved.**
+
+---
+
+## MONDAY 09:35Z EXPECTATION CORRECTION (2026-07-18, FILED)
+
+**Correction to the record:** Monday 2026-07-20 09:35Z paced entry-run is expected to yield **ZERO admissions** — the book currently sits over the long allocation cap post-manual-era construction (~50 open lots vs the K=5-era steady-state target). Expected artifact shape: ~36 candidates evaluated, refusal-class `allocation_cap_reached` dominating; `admissions=0`, `refusals≈36`. This is a **HEALTHY TALLY, NOT A DEFECT** — the cap gate doing its job while the T2 wave matures.
+
+**K=5 era's first live ADMISSIONS window:** Wednesday/Thursday **2026-07-22 / 2026-07-23**, as the T2 wave (44 lots maturing 2026-07-22..24) exits and frees capacity below the long allocation cap. First guard-shaped admissions land under the Tuesday-committed bundle (DEC-080-v2 / DEC-081-v2 / DEC-082).
+
+**Monday exits unchanged:** LITE + SNDK, `exits_submitted=2` expected at 15:50Z under the frozen exit path.
+
+**Cross-refs:** ACT-549 (Monday convene rule — reaffirmed below); INC-96 (over-cap history — structurally impossible under K=5); pacing verification (K=5 gate cited at `overshoot-entry-run/index.ts:1006-1036`, refusal class `daily_budget_reached` — orthogonal to `allocation_cap_reached` gating Monday).
+
+### ACT-549 REAFFIRMATION — Monday is an ANOMALY TRIPWIRE, not a system verdict
+
+ACT-549's ≥4/6-below-p10 convene rule is a **tripwire against silent-tail patterns**, not a verdict on the system. The **system verdict is stamped at ~20 realized round-trips (~mid-August 2026)** on the guard-shaped book — six trips is under-powered by construction. **No strategy decisions on six trips.** Monday convene, if triggered, produces a written finding (chains + waterfall class) and queues an investigation; it does NOT authorize config change.
+
+---
+
+## ACT-558 (2026-07-18, CHARTERED — micro-artifact, chains binding): OVERNIGHT-CASH-DRAG QUANTIFICATION
+
+**Class:** read-only arithmetic from ledger; single deliverable, Standing Format Rule binding, D3 epoch block at top.
+
+**Purpose:** convert the operator's "1/6th" cash-drag intuition into a **measured bps/yr figure** from actual `overshoot_lots` fill timestamps. Compares the current 15:50Z-exit path against a hypothetical morning-exit path on the **idle-window** dimension only (execution-cost + regime effects are ACT-509 Stage-2's job; this is the pure cash-drag input to that framing).
+
+**Method (verbatim shape):**
+
+1. **Per-cycle freed-notional** — from realized closed-lot rows: exit-fill notional per lot, aggregated by cycle (calendar day).
+2. **Idle window per cycle** — `next_entry_fill_ts − prior_exit_fill_ts` from actual lot timestamps (or the nearest realized redeploy where a same-day refill exists; otherwise honestly stamped as `no_same_day_redeploy` and excluded from the numerator).
+3. **Studied edge rate** — ACT-509 Stage-1 per-slot-day figure at the ratified `(T+1 → T+10)` cell (documented as the multiplier basis; no re-derivation).
+4. **Formula:** `annualized_drag_bps = mean(freed_notional × idle_window_days × per_slot_day_edge) × cycles_per_year / deployment_cap`, with the **honest range** (p25 / median / p75 across cycles) reported alongside the point estimate.
+5. **Output:** single table — n cycles, mean/median idle window, mean freed notional, per-cycle drag bps, annualized bps/yr with honest range, `no_same_day_redeploy` share.
+
+**Pre-committed use:** the ACT-558 number is the **redeploy-gain input** to ACT-509 Stage-2's exit-minute adoption arithmetic (see below). ACT-558 alone does NOT authorize an exit-timing change — it prices the upside; Stage-2 subtracts execution cost and overnight effect.
+
+**Cross-refs:** ACT-509 Stage-2 (consumer of this number); ACT-528 (frozen-rule discipline — this is a measured input, not an adoption claim); Part V (deployment-cap arithmetic).
+
+---
+
+## ACT-509 STAGE-2 SCOPE EXTENSION (2026-07-18, RATIFIED)
+
+**Extension:** the 1-min Polygon pull chartered for Stage-2 now prices **BOTH minutes** — the entry-minute grid `{09:35, 10:00, 10:30, 11:00, 14:00}` ET as originally chartered **PLUS** an **EXIT-minute differential study** at `{open, 09:35, 10:00, 15:00, 15:50, close}` ET, per tier, framed as `spread + volatility execution cost` vs `redeploy-gain` (from ACT-558's measured cash-drag figure) vs `extra-overnight effect`.
+
+**Pre-committed adoption rule (BINDING, filed BEFORE compute):** morning-exit adopts **only if**:
+
+```
+(redeploy_gain − open_execution_cost − extra_overnight_effect) > 0
+  AND  net uplift ≥ +15% on the affected component
+  AND  n ≥ 1000 per contributing cell
+  AND  regime-stable (bear-22 / trans-23H1 / bull-23H2→26 monotone same sign)
+```
+
+Otherwise **15:50Z stands**. Verdict grammar mechanical: ADOPT / DO-NOT-ADOPT / SHELVE-WITH-GATE, per R-005/R-006 discipline.
+
+**Lane position unchanged:** ACT-509 Stage-2 runs at its slot (lane position 3), now with the extended scope. ACT-515 remains lane-next.
+
+**Cross-refs:** ACT-509 charter (Stage-2 originally intraday-entry-only; this extension amends in place — see charter file update); ACT-558 (redeploy-gain input); ACT-506 (W5-01 open-drift trigger, still governs Stage-2's entry side); DEC-078 (T+1-open basis discipline applied symmetrically to exit-minute basis).
