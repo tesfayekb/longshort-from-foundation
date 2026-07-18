@@ -7110,3 +7110,78 @@ Saturday ACT-510 deploy interleaves as scheduled (minutes-scale, independent).
 - Zero schema motion; zero migration; zero cron change. Landing = one edge fn deploy + test run.
 
 **Cross-refs:** INC-110 (DST silent-death class, F1.a is its dispatcher-side guard); Fable-max sweep entry above (F1/F3 charters).
+
+## INC-112 — deploy-hold-unimplementable-on-auto-deploy-platform (class rule)
+
+**Filed:** 2026-07-18 (Saturday post-fence review). **Severity:** class-rule (governance).
+
+**Facts.** ACT-510 (exit-run + session-age patch) was held Thu→Sat "as-scheduled" across five turns. Supervisor clone review established that §22.8.4 auto-deploys every merge; the patch went LIVE at **Thu 2026-07-16 merge** — approximately the moment the code review closed — and Thursday's 19:50Z tick was the first live fire of the new predicate. The "deploy hold" existed only in agent chat memory; there was no branch, no unmerged PR, no gate.
+
+**Class rule (RATIFIED).** Deploy holds MUST be implemented as **unmerged code** (feature branch or unmerged PR). A "hold" declared after merge is a null statement on this platform. Any time a hold is discussed:
+1. The code MUST be on an unmerged branch/PR at declaration.
+2. If the code is already on main, there is no hold — only an operator decision on whether to arm/disarm the consuming trigger.
+3. Agent replies claiming a hold on merged code are §22.8.4 violations and MUST be corrected in-turn.
+
+**Downstream damage.** (a) Friday 3-exit envelope was read as "deviation" against a fictional 50/0/50 baseline; ACT-534's disarm rule fired against on-spec behavior. (b) Cost was one weekend of avoided evidence + one operator disarm ruling that turned out costless (Monday tick). No money lost. Loss was rule-integrity: the "any deviation → DISARM" rule ran on a baseline that never existed.
+
+**Cross-refs:** ACT-510 (the patch), ACT-534 (Wed rehearsal classification whose envelope prediction the fictional hold contradicted), §22.8.4 auto-deploy constraint, INC-113 (the attestation-gap sibling exposed the same night).
+
+## INC-113 — heartbeat rows lack git_sha (entry-run stamps it; exit-run does not)
+
+**Filed:** 2026-07-18. **Severity:** medium (attestation completeness).
+
+**Facts.** `overshoot-entry-run` echoes `git_sha` in its success response (line 1170 of `supabase/functions/overshoot-entry-run/index.ts`, precedent). `overshoot-exit-run` reads `BUILD_SHA` via `readEnv()` (line 202) but the value was never persisted to the `overshoot.exit.run.completed` heartbeat row nor the `overshoot.exit.submitted.<intent>` per-order row. Result: Thu and Fri heartbeats carry NULL `git_sha`, blocking direct attestation of "which build produced this row." Behaviorally-inferrable via tally-vs-predicate matching, but not directly stamped — INC-97/107/108-class attestation gap.
+
+**Fix (landed 2026-07-18, this turn).** Additive `git_sha: env.gitSha` on both audit metadata payloads in `supabase/functions/overshoot-exit-run/index.ts`. Deployed. Monday's 19:50Z heartbeat MUST carry the stamp; if not, escalate.
+
+**Class rule already on the books.** ACT-529 (version-uniformity across bundling functions) and ACT-533 (dispatcher artifact-mapping CI guard) cover the constant-side of this class. This is the metadata-echo side of the same class: **every audit-of-record row emitted by a strategy function MUST include `git_sha` at write-time**. Filed as pending CI-lint addition to `scripts/check-audit-writer-trap.ts` or a sibling; not urgent (INC-113 is the only known instance post-fix), tracked for the ACT-533 CI-guard sweep.
+
+**Cross-refs:** INC-112 (deploy-hold class, same night); ACT-529 (version uniformity); ACT-533 (mapping-defect CI guard family).
+
+## ACT-510 DEVIATION LEDGER — Thu/Fri off-schedule exits reclassified ON-SPEC
+
+**Filed:** 2026-07-18. **Correction of prior classification.** Given INC-112's clarification that ACT-510 went live at Thu merge, both nightly heartbeats are ON-SPEC for the ratified predicate — the "deviation from 50/0/50" reading was against a baseline that never existed on-server.
+
+**Thu 2026-07-16 19:50Z (run 18080cbc-…):** `positions_examined=100, matched_count=50, exits_submitted=1, session_age_no_fire=49`. Single exit: **CHRD** (`ovs-18080cbc-CHRD-L-exit_time-0`, qty=20, limit=$123.54, snap_age=2154ms, order=7f341310…). Broker truth: FULL FILL at avg $124.16, closed 19:51:01.223Z, realized_pnl **+$92.80** on cost_basis $2390.40. Sessions_since_event=6, tier=T1, side=long.
+
+**Fri 2026-07-17 19:50Z (run 1e838a0b-…):** `positions_examined=98, matched_count=49, exits_submitted=3, session_age_no_fire=46`. Three exits, all sessions_since_event=6, tier=T1, side=long:
+- **AKAM** (CID `…-AKAM-L-exit_time-0`, qty=19, limit=$119.49, snap_age=360ms, order=4569345a…) → FULL FILL avg $120.091, closed 19:51:01.665Z, realized **−$151.22** on $2432.95.
+- **ONTO** (CID `…-ONTO-L-exit_time-0`, qty=7, limit=$276.70, snap_age=428ms, order=ae6fe591…) → FULL FILL avg $278.140, closed 19:51:01.665Z, realized **−$323.89** on $2270.87.
+- **ALGM** (CID `…-ALGM-L-exit_time-0`, qty=45, limit=$46.73, snap_age=−154ms [ACT-486 skew band], order=d485dedb…) → FULL FILL avg $46.968, closed 19:51:01.665Z, realized **−$350.66** on $2464.20.
+
+**Aggregate 4-lot realized:** **−$732.97** on $9,558.42 deployed; 3 losers, 1 winner. All lots FULL FILLED (`filled_qty=qty`, `remaining_qty=0`, `status=closed`, `exit_attempts=0`); zero partial fills; zero borrow issues; zero snapshot faults; zero reconciliation events. Post-Fri fill-sweep ticks confirm `a5_ok=true, broker_count=46, ledger_count=46` — clean A5.
+
+**Verdict:** Thu 1/50/49 and Fri 3/49/46 are BOTH the ratified predicate's exact prediction for those session dates given the T1-cohort event distribution — no code defect, no envelope drift, no deviation. Classification stands ON-SPEC.
+
+**Cross-refs:** INC-112 (fictional-hold correction that reframed both nights); ACT-534 (Wed rehearsal envelope prediction, now reclassified as pre-live estimate not live-baseline); ACT-536 (Monday's dial reading will include the first realized round-trips in per-lot expected-vs-realized form).
+
+## MONDAY 2026-07-20 19:50Z EXPECTATION SET (on-record, evidence-pack contract)
+
+**Filed:** 2026-07-18 pre-arm.
+
+**Expected tick envelope.** `positions_examined=92, matched_count=46, exits_submitted=2, session_age_no_fire=44, refusals.market_closing_soon=0, in_flight_guard.branch=primary, minutes_to_close≈10, git_sha=<Monday build>`. Two T1-cohort exits: **LITE** (sessions_since_event=6) and **SNDK** (sessions_since_event=6), both side=long, both single-lot residuals (`qty=3` for LITE, `qty=1` for SNDK; cost_basis $2339.94 and $1809.06 respectively). Heartbeat MUST carry `git_sha` per INC-113 fix; if NULL, INC-113 is unfixed and escalate.
+
+**Post-tick evidence pack owed.** All SIX T1 round-trips (Thu CHRD + Fri AKAM/ONTO/ALGM + Mon LITE/SNDK) in per-lot expected-vs-realized table format: manual cell derivation from event rows AUTHORIZED given cohort columns absent — for each lot, derive band+drawdown_bucket+entry_day_offset by hand from the source event row and state the method; then realized_r vs cell (p05/p10/p50); then `inside_or_beyond` verdict per lot. This is the first realized-data test of the study's day-6 conditional expected path.
+
+**Cross-refs:** ACT-509 (day-k grid, source of cell expectations); ACT-536 (parity dial, the aggregate consumer); ACT-539 (waterfall, whose p6 read gets ITS first realized validation Monday).
+
+## ACT-533-A — QUEUE-DISCIPLINE EXHIBIT (cost of dispatcher-patch slippage across the weekend)
+
+**Filed:** 2026-07-18. **Named cascade** (operator-mandated call-out): the sequenced dispatcher patch (F1.a market_closed_streak guard + F3 exit_attempts≥3 alert + cohort-tuple columns on `overshoot_lots`) was chartered Fri 2026-07-17 and slotted "immediately after ACT-527 curve compute lands, before anything else in the weekend batch resumes." ACT-527 curve compute did NOT execute this weekend, so the dispatcher patch did NOT land, so `overshoot_lots.cohort_cell_id / cohort_band / cohort_drawdown_bucket / cohort_entry_day_offset` are STILL ABSENT — and consequently the Monday evidence pack's per-lot cell-attribution table cannot be a mechanical join, it must be derived by hand.
+
+**Cost.** One hand-derived attribution table on Monday instead of a database-joined one. The mechanical automation was ready to land, was gated behind ACT-527 curve, ACT-527 curve was gated behind "next turn" that kept slipping. The queue-discipline exhibit is: **when a small dispatcher-safety patch is gated behind a compute-heavy analytics turn, the compute turn's slippage silently steals the safety patch too**. Rule filed: analytics-compute gates and safety-patch landings do NOT share a queue slot — separate lanes, separate landings.
+
+**Cross-refs:** ACT-527 (the compute gate that slipped), Fable-max sweep F1.a/F3 (the dispatcher patch that piggy-backed on it), Weekend Compute Batch charter (the queue that ordered them together).
+
+## QUEUE-WITH-TEETH (2026-07-18 pin)
+
+**Filed:** 2026-07-18, operator-ratified with teeth.
+
+**The queue, no interleaves:**
+1. **ACT-527 backfill (21 min compute) + curve + squeeze-ride flip verdict + stop-ladder grid — SOLE next work.** No dispatcher patch, no ACT-536 series, no ACT-531, no ACT-537, no sub-items. The 21-minute backfill lane opens before anything else moves.
+2. **Dispatcher patch (F1.a market_closed_streak + F3 exit_attempts≥3 + cohort-tuple columns migration + backfill).** Lands SECOND, singularly, no interleaves.
+3. Everything else in prior queue order (ACT-536 series + 20-lot audit → ACT-531 map → ACT-537 → ACT-515 → ACT-509 Stage-2 → ACT-540 → ACT-541).
+
+**Enforcement:** Any turn that answers "the queue" with more than the single active item is a discipline violation and gets rolled back to item (1) in the next turn.
+
+**Cross-refs:** ACT-533-A (why teeth); all prior queue filings (superseded by this pin for ordering purposes only).
