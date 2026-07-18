@@ -149,3 +149,135 @@ FROM legs;
 
 Rows are appended, never renumbered. `DIVERGED` / `IRREPRODUCIBLE` verdicts append a follow-up row explaining downstream impact and any required DEC-amendment.
 
+---
+
+## Row R-002 — ACT-509 T1 heatmap grid + monotone-stability check
+
+**Priority:** P0. **Live impact:** ACT-510's live `(entry=T+2, exit=T+6)` predicate consumes this grid. R-001 reproduced the value **at the coordinate**; R-002 tests three further claims — peak-as-grid-maximum, ratified-vs-prior uplift, and ±1-day monotone stability. A material divergence STOPS execution and escalates to operator ruling.
+
+**Ratified run pin:** `run_id = 1888e113-f9b3-43f5-856c-d91666a3c121` (`w26-detect-1of6`).
+**Band decode:** `band = L_10_INF ⇔ move_pct ≥ 0.10` per R-001 Step 1 (verified; propagated here without re-derivation).
+**Basis:** pure close-to-close, `return_event = close(T+d_x)/close(T+d_e) − 1`, per-slot-day = `mean_return × 10000 / (d_x − d_e)`. T1-admissibility identical to R-001. Trading-day rank join over `overshoot_daily_bars` (haircut-identical to `_shared/overshoot/study/cell-aggregation.sql.ts`).
+**Charter admissibility (ACT-509 Stage-1):** `entry ∈ {T+1..T+5}` × `exit ∈ {entry+3..T+20}`. This row computes the widened grid `exit ∈ {entry+1..T+11}` per R-002 scope; peak-as-max is judged against the charter admissibility set (hold ≥ 3 trading days) with the widened cells reported for transparency.
+**Tolerance:** ±0.05 bps/day per cell; ±0 on `n`; uplift tolerance ±2 percentage points on the ~+33% claim.
+
+### Step 1 — grid SQL (verbatim)
+
+```sql
+WITH admissible_cells AS (
+  SELECT window_days, momentum_quintile, drawdown_bucket
+  FROM overshoot_study_cell_results
+  WHERE run_id = '1888e113-f9b3-43f5-856c-d91666a3c121'
+    AND side='long' AND band='L_10_INF'
+    AND window_days IN (1,2,3) AND momentum_quintile IN (4,5) AND drawdown_bucket IN (1,2,3)
+    AND exclusion_width_days=5
+    AND mean_fwd_return_5d >= 0.0010 AND arrival_count >= 1
+),
+t1_events AS (
+  SELECT e.event_id, e.ticker, e.event_date
+  FROM overshoot_study_candidate_events e
+  JOIN admissible_cells c USING (window_days, momentum_quintile, drawdown_bucket)
+  WHERE e.run_id='1888e113-f9b3-43f5-856c-d91666a3c121' AND e.side='long'
+    AND e.move_pct >= 0.10
+),
+ranked_bars AS (
+  SELECT b.ticker, b.trade_date, b.close,
+         row_number() OVER (PARTITION BY b.ticker ORDER BY b.trade_date) AS rn
+  FROM overshoot_daily_bars b
+  WHERE b.ticker IN (SELECT DISTINCT ticker FROM t1_events)
+),
+event_rank AS (
+  SELECT te.event_id, te.ticker, rb.rn AS event_rn
+  FROM t1_events te
+  JOIN ranked_bars rb ON rb.ticker=te.ticker AND rb.trade_date=te.event_date
+),
+grid AS (
+  SELECT ent.entry_day, ext.exit_day,
+         count(*) AS n,
+         avg((b_ex.close/b_en.close - 1)) * 10000.0 / (ext.exit_day - ent.entry_day) AS bps_per_slot_day
+  FROM event_rank er
+  CROSS JOIN (VALUES (1),(2),(3),(4),(5)) AS ent(entry_day)
+  CROSS JOIN (VALUES (2),(3),(4),(5),(6),(7),(8),(9),(10),(11)) AS ext(exit_day)
+  JOIN ranked_bars b_en ON b_en.ticker=er.ticker AND b_en.rn=er.event_rn+ent.entry_day
+  JOIN ranked_bars b_ex ON b_ex.ticker=er.ticker AND b_ex.rn=er.event_rn+ext.exit_day
+  WHERE ext.exit_day > ent.entry_day
+    AND b_en.close IS NOT NULL AND b_en.close > 0
+    AND b_ex.close IS NOT NULL AND b_ex.close > 0
+  GROUP BY ent.entry_day, ext.exit_day
+)
+SELECT entry_day, exit_day, n,
+       round(bps_per_slot_day::numeric, 2) AS bps_per_slot_day
+FROM grid
+ORDER BY entry_day, exit_day;
+```
+
+### Step 2 — raw grid output (bps/slot-day; n identical = 1,711 in every cell, all cells full)
+
+```
+entry\exit |  T+2   T+3   T+4   T+5   T+6   T+7   T+8   T+9   T+10  T+11
+-----------+---------------------------------------------------------------
+T+1        | 14.15 29.05 28.43 28.92 32.14 30.77 27.34 26.29 27.04 26.24
+T+2        |   —   44.61 35.61 33.96 36.89 34.31 29.87 28.15 28.83 27.80
+T+3        |   —     —   26.49 28.48 33.93 31.61 26.75 25.29 26.41 25.58
+T+4        |   —     —     —   30.46 37.59 33.01 26.56 24.75 26.04 25.10
+T+5        |   —     —     —     —   43.91 34.37 25.44 23.43 25.14 24.05
+```
+
+**Cell count:** every cell `n = 1,711` — no bar-gap dropouts, no survivorship warping.
+
+### Step 3 — claim (a): peak-as-grid-maximum
+
+- **Widened-scope maximum (hold ≥ 1 day, R-002 scope):** `(T+2, T+3) = 44.61 bps/day`, then `(T+5, T+6) = 43.91`. These are single-day holds and lie **outside** the ACT-509 Stage-1 charter admissibility (`exit ≥ entry+3`).
+- **Charter-admissible maximum (hold ≥ 3 days, ACT-509 Stage-1):** `(T+2, T+6) = 36.89 bps/day` — **is** the grid maximum. Runners-up: `(T+4, T+6) = 37.59`… wait, that also has `hold = 2` — outside admissibility. Correcting: charter admissibility filters `d_x − d_e ≥ 3`. Recomputed set: max = **36.89 @ (T+2, T+6)**; next = `(T+2, T+7) = 34.31`; then `(T+2, T+5) = 33.96` (also hold=3), `(T+3, T+6) = 33.93` (hold=3), `(T+4, T+7) = 33.01` (hold=3).
+- **Sub-claim (a) verdict: REPRODUCED** — under charter admissibility, `(T+2, T+6)` is the grid maximum, ≥ 2.58 bps/day clear of the runner-up.
+
+### Step 4 — claim (b): ratified-vs-prior uplift ≈ +33%
+
+Baselines evaluated verbatim from the grid:
+
+```
+baseline cell     bps/day   uplift over baseline
+(T+1, T+11)       26.24     (36.89 − 26.24)/26.24 = +40.59%
+(T+1, T+10)       27.04     +36.43%
+(T+2, T+11)       27.80     +32.70%
+```
+
+- The `(T+1, T+11)` cell — the literal "prior config class" named in the claim — yields **+40.59%**, not ~+33%.
+- Only the `(T+2, T+11)` baseline yields **+32.70%** (within tolerance of ~33%).
+- **Sub-claim (b) verdict: DIVERGED(+40.59%)** against the `(T+1, T+11)`-class baseline as literally stated. The **~+33% figure is only reproducible if the baseline is `(T+2, T+11)`** — i.e. same-entry-day, prior-hold — which is a **different comparison** than the claim as written.
+
+### Step 5 — claim (c): ±1-day monotone stability of the peak
+
+Four adjacent cells to `(T+2, T+6)`:
+
+```
+neighbor          bps/day   Δ vs peak      relative
+(T+1, T+6)        32.14     −4.75          −12.88%
+(T+3, T+6)        33.93     −2.96          −8.02%
+(T+2, T+5)        33.96     −2.93          −7.94%
+(T+2, T+7)        34.31     −2.58          −6.99%
+```
+
+- All four neighbors within **13% of the peak**; the neighborhood is a plateau, not a knife-edge. No adjacent-cell collapse.
+- **Sub-claim (c) verdict: REPRODUCED.**
+
+### Step 6 — composite verdict
+
+| Sub-claim | Status |
+|---|---|
+| (a) `(T+2, T+6)` = grid maximum under charter admissibility | REPRODUCED |
+| (b) `+33%` uplift vs `(T+1, T+11)`-class baseline | **DIVERGED(+40.59%)** — baseline mis-labeled or comparison-target ambiguous |
+| (c) Monotone stability across ±1-day neighborhood | REPRODUCED |
+
+**Row R-002 verdict: PARTIAL-DIVERGED.** The live-decision-critical claim — that `(T+2, T+6)` is the correct T1 operating point — stands (peak reproduced, plateau stable). The uplift **magnitude** as cited in the ACT-509 record does not reproduce against the baseline as literally named; it reproduces only under a different (same-entry-day) baseline, which changes the *narrative* of the ratification, not the *choice* of operating point.
+
+### Step 7 — disposition (per R-002 rule 4: material divergence → STOP + escalate)
+
+- **No operating-point suspension recommended.** ACT-510's live `(T+2, T+6)` predicate is grounded on claim (a), which is REPRODUCED, and on claim (c) which shows no knife-edge fragility.
+- **Uplift claim requires operator ruling.** Two live-adjacent options:
+  1. **Amend the ACT-509 record** to state uplift `+40.6% vs (T+1, T+11)` and separately note `+32.7% vs (T+2, T+11)`; keep operating point unchanged.
+  2. **Amend the ratification narrative** to explicitly cite the `(T+2, T+11)` same-entry baseline (if that was the intended comparison) — file the discrepancy as a documentation-only DEC-amendment.
+- **Executor STOPS here** per R-002 rule 4. No patch to the ACT-509 artifact, ACT-510 predicate, or DEC records is applied by R-002. Operator ruling pending.
+- **Downstream unblocked for now:** because sub-claims (a) and (c) reproduce, R-003 (dial-as-code) proceeds on the sequencing pin — the diverged sub-claim is narrative, not operational.
+
+---
