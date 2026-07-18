@@ -153,3 +153,32 @@ Either way: Stage-2 remains fully gated on ACT-506's slippage decomposition per 
 - ACT-488 (τ_long = 1.00 ratification — refusal-funnel parameter)
 - Ratified study run `1888e113-f9b3-43f5-856c-d91666a3c121`, detector `b7cdfcd8`, R-1 frontier config
 - VI.I / VI.J / Part V (pre-DEC gates for any adoption)
+
+---
+
+## Amendment — 2026-07-18 (ACT-551 R-002 record correction)
+
+Per operator ruling on R-002 (reproduction-ledger row R-002, verdict PARTIAL-DIVERGED
+on the uplift-magnitude sub-claim), this record is amended to name **both**
+baselines explicitly. Operating point `(T+2, T+6)` and ±1-day monotone
+stability are REPRODUCED and stand; only the uplift *labelling* was
+under-specified. No change to ACT-510, no change to the live predicate,
+no DEC affected.
+
+**Corrected uplift statement** (supersedes the single-baseline `+33.4%`
+figure wherever it appears above — the earlier prose is retained
+for provenance):
+
+> `(T+2, T+6) = 36.89 bps/slot-day` yields:
+>   - **+40.6%** vs the **prior-config-class baseline `(T+1, T+11) = 26.24`**
+>   - **+32.7%** vs the **same-entry baseline `(T+2, T+11) = 27.80`**
+>
+> The original "≈ +33%" figure in §§3, 5, 9, 10 corresponded to the
+> **same-entry baseline** `(T+2, T+11)` and was under-labelled as if it
+> were `(T+1, T+11)`. Both ratios are favourable to the ratified
+> operating point; the divergence is a naming/labelling defect in the
+> ratification narrative, not an operating-point defect.
+
+Reproduction evidence: `docs/06-tracking/ACT-551-reproduction-ledger.md`
+row R-002 (verbatim SQL + full 5×10 grid, `n = 1,711` per cell). GO-rule
+§3(a) still clears under **either** baseline (+40.6% and +32.7% both ≫ +15%).
