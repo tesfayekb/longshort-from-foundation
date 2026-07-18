@@ -1,5 +1,7 @@
 # ACT-545 — Signal Coverage Matrix
 
+> **VOIDED-PENDING-BACKFILL (2026-07-18 R-004 ruling 3):** All analyst-revision rows in this document (Analyst-downgrade + Analyst-upgrade) are RETRACTED pending ACT-554-a/b backfill of `analyst_revision_observations` to the full 4-yr corpus. Numeric claims MUST be re-derived against the backfilled span before any downstream citation. Rows reconciling to `pead_consensus_observations` (earnings), `overshoot_short_interest` (SI), and news-attention sources are UNAFFECTED and remain in force.
+
 **Status:** Delivered 2026-07-18 (weekend read-only compute). Read-only + grep.
 **Charter:** systematic answer to "what causes does the thesis assume excluded
 that the machine never checks?" Inventory every in-house catalyst/data source
