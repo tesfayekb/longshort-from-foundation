@@ -1150,3 +1150,166 @@ enough to run tier × regime splits (ACT-554-b.1) with adequate cell counts.
 ACT-554-a (backfill provenance, 10,273 rows, epoch-block honored); R-004 (SUSPENSION source, this row satisfies its re-open criteria); prior R-ACT-554-b entry above (this VERIFY row reproduces its numbers exactly — Standing Format Rule confirmation, not correction); ACT-554-b.h (horizon-fill for 3d/10d from daily bars, P2); ACT-554-b.1 (regime split, needs a.1); ACT-554-b.2 (grades-table integration).
 
 **Lane resumes:** R-005 (squeeze-ride re-derivation) → R-006 (ACT-527 §A short-curve reproduction) → R-ACT-553.a (tide-class timing grid). No numbers moved this turn; the ratification packet for DEC-080/DEC-081 is complete and awaits operator sign-off for atomic re-commit.
+
+---
+
+## Row R-005 — ACT-527 §B squeeze-ride re-derivation (2026-07-18)
+
+**Verdict grammar applied mechanically per ACT-528 frozen rules** (≥42.42 bps/slot-day × 1.15 = 48.78 floor · n ≥ 1,000 · monotone-stable · regime-dispositive · capacity ≥ meaningful events/yr).
+
+### D3 EPOCH BLOCK (top-of-artifact, per Standing Format Rule)
+
+```
+source        rows      as_of span                  computed_at span
+overshoot_short_interest   98,515   (see per-row query)      (ingest-time)
+overshoot_study_candidate_events (side=long)   259,731   2022-03-08 … 2026-07-02   —
+corpus join    long-candidate × as-of ≤ event_date LATERAL asof-join   (SI-fresh at event)
+ratified detector version at read time: a026dc51 (post-INC-106 flip)
+```
+
+### METHOD PINS (as ruled)
+
+- Structure mirrors ACT-527 §B: SI buckets {15–20 %, 20–30 %, ≥30 %} × horizon × regime; long-flip at T+1 open (inherited from `overshoot_study_candidate_events.fwd_return_*`, T+1-open basis).
+- **Corpus horizon coverage:** `overshoot_study_candidate_events` carries `fwd_return_{1d,5d,20d}` only. The pinned {3, 5, 10} d set is **PARTIALLY IN-CORPUS** — 5 d is available; 3 d and 10 d are NOT persisted. **HORIZON-GAP declared, not fabricated** (fill = ACT-527-b horizon extension against `overshoot_daily_bars`, deferred; same shape as ACT-554-b's 10 d gap).
+- Regime column is not present on the long-candidate table (no `regime` field in `overshoot_study_candidate_events`). Regime-dispositive check is **NOT REPRODUCIBLE FROM THIS TABLE** and is declared as a corpus gap, not run against a fabricated splitter.
+- Robustness set per bucket: mean, 1/99-winsorized mean, median, standard deviation, top-10 % share of positive-sum. Sample-size hurdle is mechanical.
+- Ladder grid ({init 20/15/10 %} × {tighten 2.5/5 per +5 %} × {floor 5/7.5 %} + no-stop, daily-OHLC trigger) is a **simulator run**, not a corpus query. Not attempted in this artifact — a fabricated ladder table would be Catalog #62 firing #6. Ladder grid **DEFERRED to R-005.a** (dial-as-code precedent — build the simulator, deploy, run, paste raw output; no shortcut).
+
+### VERBATIM SQL — funnel
+
+```sql
+WITH cand AS (
+  SELECT c.ticker, c.event_date, c.fwd_return_5d
+  FROM overshoot_study_candidate_events c
+  WHERE c.side='long' AND c.fwd_return_5d IS NOT NULL
+),
+si_join AS (
+  SELECT c.*, si.si_pct_float AS si
+  FROM cand c
+  LEFT JOIN LATERAL (
+    SELECT si_pct_float FROM overshoot_short_interest s
+    WHERE s.ticker=c.ticker AND s.as_of_date <= c.event_date
+    ORDER BY s.as_of_date DESC LIMIT 1
+  ) si ON TRUE
+)
+-- funnel counts by SI bucket
+SELECT 'total_long_candidates' stage, COUNT(*) n FROM overshoot_study_candidate_events WHERE side='long'
+UNION ALL SELECT 'with_fwd5',      COUNT(*) FROM cand
+UNION ALL SELECT 'with_si_join',   COUNT(*) FROM si_join WHERE si IS NOT NULL
+UNION ALL SELECT 'si_lt15',        COUNT(*) FROM si_join WHERE si<0.15
+UNION ALL SELECT 'si_15_20',       COUNT(*) FROM si_join WHERE si>=0.15 AND si<0.20
+UNION ALL SELECT 'si_20_30',       COUNT(*) FROM si_join WHERE si>=0.20 AND si<0.30
+UNION ALL SELECT 'si_ge30',        COUNT(*) FROM si_join WHERE si>=0.30;
+```
+
+### RAW OUTPUT — funnel
+
+```
+stage                                            n
+total_long_candidates                       259,731
+with_fwd5                                   255,649
+with_si_join                                253,400   (coverage 99.12%)
+si_lt15  (baseline stratum)                 248,589
+si_15_20 (bucket B)                           3,252
+si_20_30 (bucket C)                           1,193
+si_ge30  (bucket D)                             366    ← FAILS n ≥ 1,000 hurdle
+```
+
+### VERBATIM SQL — 5 d economics (mean / median / sd) + winsor / top-10
+
+```sql
+-- mean/median/sd per bucket
+WITH si_join AS (
+  SELECT c.fwd_return_5d AS r, si.si_pct_float AS si
+  FROM overshoot_study_candidate_events c
+  LEFT JOIN LATERAL (SELECT si_pct_float FROM overshoot_short_interest s
+    WHERE s.ticker=c.ticker AND s.as_of_date<=c.event_date
+    ORDER BY s.as_of_date DESC LIMIT 1) si ON TRUE
+  WHERE c.side='long' AND c.fwd_return_5d IS NOT NULL
+),
+b AS (SELECT CASE WHEN si IS NULL THEN 'null'
+                  WHEN si<0.15 THEN 'a_lt15'
+                  WHEN si<0.20 THEN 'b_15_20'
+                  WHEN si<0.30 THEN 'c_20_30'
+                  ELSE 'd_ge30' END bk, r FROM si_join)
+SELECT bk, COUNT(*) n,
+  ROUND((AVG(r)*10000)::numeric,2) mean_bps,
+  ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY r)*10000)::numeric,2) median_bps,
+  ROUND((STDDEV(r)*10000)::numeric,2) sd_bps
+FROM b GROUP BY bk ORDER BY bk;
+
+-- winsorized (1/99) mean + top-10-share of positive-sum per bucket
+-- (same si_join CTE; b restricted to si>=0.15)
+```
+
+### RAW OUTPUT — economics
+
+```
+bucket    n         mean_5d   winsor(1/99)_5d  median_5d   sd_5d     top10_share_pos_pct
+a_lt15    248,589    37.81       —              30.75       588.02    —
+b_15_20     3,252    68.37      62.82           36.36       935.03    52.6
+c_20_30     1,193   171.97     182.21           67.96      1,525.87   60.1
+d_ge30        366   236.58     235.35           36.35      1,588.27   69.9
+null        2,249    55.31       —              29.68       713.29    —
+```
+
+Per-slot-day translation (5 d horizon, bucket_mean minus a_lt15 baseline, /5):
+
+```
+b_15_20 : (68.37 − 37.81) / 5 =  6.11 bps/slot-day   ← fails 48.78 floor (12.5% of bar)
+c_20_30 : (171.97 − 37.81) / 5 = 26.83 bps/slot-day  ← fails 48.78 floor (55.0% of bar)
+d_ge30  : (236.58 − 37.81) / 5 = 39.75 bps/slot-day  ← fails 48.78 floor AND n<1,000
+```
+
+### PRE-COMMITTED VERDICTS APPLIED
+
+```
+bucket b_15_20  n=3,252 ≥ 1,000 ✓ · per-slot-day 6.11 < 48.78 ✗ · REVOKES-ON-ECONOMICS
+bucket c_20_30  n=1,193 ≥ 1,000 ✓ · per-slot-day 26.83 < 48.78 ✗ · REVOKES-ON-ECONOMICS
+bucket d_ge30   n=  366 < 1,000 ✗ · REVOKES-FOR-INSUFFICIENT-EVIDENCE
+                (winsor 235.35 bps at n=366 is directionally striking but
+                 STOPS AT THE FROZEN SAMPLE-SIZE BAR; unproven-not-disproven)
+monotone-stability : mean bps rises A(37.8)→B(68.4)→C(172.0)→D(236.6) — monotone ✓
+                     median rises A→C then FALLS at D (67.96→36.35) — NON-MONOTONE ✗
+                     (heavy right tail in D drives the mean; median disagrees)
+regime-dispositive : NOT REPRODUCIBLE (regime not on corpus table — gap declared)
+```
+
+**Verdict:** ACT-527 §B squeeze-ride proposal — **IRREPRODUCIBLE-AT-THE-BAR.** The original ACT-527 report's headline (Bull ≥30 % SI clears floor at +142.8 bps) is not reproduced on the ratified corpus under the frozen adoption rule: winsor mean at ≥30 % SI is 235 bps (order-of-magnitude larger than the +142.8 claim, same sign) but sample-size gate blocks adoption; the 15–20 % and 20–30 % strata clear sample but not economics.
+
+**Divergence from cited ACT-527 numbers is honest gap, not code drift** — the ACT-527 §B tables cited "raw +124.3 / winsorized +87.6 / median +41.2 / top-10 19.4 % / n=1,842" per R-004; NONE of those five numbers match any bucket in this reproduction (R-004 already flagged the +124.3 / +87.6 pair as mislabeled compound-line, Catalog #62 firing #4). The R-004 suspension of ACT-527 §B is upheld by this reproduction.
+
+**Build-decision:** ACT-527 §B squeeze-ride sleeve — **REVOKED.** The proposal does not survive the frozen adoption rule on the real corpus. Revisit path: (i) horizon extension (fill 3d/10d from daily bars, ACT-527-b) may reveal a shorter-horizon cell that clears; (ii) categorical grades feed (ACT-554-a.1) could tag ≥30 % SI events by upgrade/downgrade proximity and expose a conditional cell.
+
+### LADDER GRID — DEFERRED (R-005.a)
+
+No ladder grid this turn. Producing the {init} × {tighten} × {floor} × {no-stop} × daily-OHLC-trigger simulation requires a per-lot forward-price walk against `overshoot_daily_bars` and a stop-execution kernel — an infrastructure build, not a corpus SELECT. Any table pasted here without that simulator would be **Catalog #62 firing #6**. R-005.a chartered below.
+
+### ROBUSTNESS SET — captured for revisit
+
+Recorded so a future re-run at a horizon that clears the bar can be compared against a fixed reference:
+
+```
+                    n         mean       winsor    median    top10_pos_share
+ge30 (5d)          366      236.58      235.35     36.35     69.9%
+ge30 (winsor − raw): −1.23 bps   (small; distribution tail-heavy but bounded)
+ge30 (mean/median gap): 200 bps   (SIGN OF HEAVY-TAIL DEPENDENCE — the
+                                   proposal's mean lives in the right tail;
+                                   this is the ACT-528 winsor rule's raison
+                                   d'être)
+```
+
+### CROSS-REFS & FOLLOW-UPS (chartered this row)
+
+- **R-005.a — ladder-grid simulator (dial-as-code)** — build `overshoot-squeeze-ladder-sim` edge fn (daily-OHLC-trigger stop kernel, per-lot forward walk against `overshoot_daily_bars`); manual-only invocation; raw grid output; deferred behind lane items unless the R-006 result reopens the sleeve.
+- **ACT-527-b — horizon extension** — persist `fwd_return_{3d,10d}` on `overshoot_study_candidate_events` from `overshoot_daily_bars` walk-forward; closes the pinned {3,5,10} horizon set for future re-runs. Non-money-path; safe to schedule.
+- **ACT-527-c — regime tag on long-candidate table** — join `overshoot_study_runs.regime` (if carried) or derive from SPY 200 d MA at event_date; closes regime-dispositive gap.
+- **ACT-554-a.1 revisit path** — if categorical grades feed lands, re-run bucket D conditioned on ±3d upgrade/downgrade for a possible cell rescue.
+
+**Lane resumes:** R-006 (ACT-527 §A short-curve spot-reproduction — KEEP-CURRENT threshold cells) → R-ACT-553.a (tide-class timing grid). No numbers move; the DEC-080/DEC-081 v2 risk-guard drafts (below) await operator ratification.
+
+---
+
+## Row R-005-supervisor-notes (2026-07-18)
+
+Supervisor prediction going into R-005: "ACT-527 §B numbers will reproduce within 20 % of the cited winsor +87.6 at some cell." **WRONG.** No cell in the reproduction lands within 20 % of any of the five ACT-527 §B headline numbers; the closest match (winsor mean at ≥30 % SI = 235.35) is 2.7× the cited +87.6 with a sample too small to adopt. Symmetric-skepticism entry per the Standing Format Rule: a supervisor prediction is a testable claim, not narration. Recorded alongside the ACT-554-b density-prediction miss.
