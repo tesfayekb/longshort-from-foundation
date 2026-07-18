@@ -113,6 +113,7 @@ export type Database = {
           prior_published_at: string
           prior_target: number
           signal_id: string
+          source: string
           target_delta: number
           ticker: string
         }
@@ -134,6 +135,7 @@ export type Database = {
           prior_published_at: string
           prior_target: number
           signal_id: string
+          source?: string
           target_delta: number
           ticker: string
         }
@@ -155,6 +157,7 @@ export type Database = {
           prior_published_at?: string
           prior_target?: number
           signal_id?: string
+          source?: string
           target_delta?: number
           ticker?: string
         }
@@ -3623,6 +3626,21 @@ export type Database = {
       }
     }
     Views: {
+      analyst_backfill_coverage: {
+        Row: {
+          backfill_first_event: string | null
+          backfill_last_event: string | null
+          backfill_max_date: string | null
+          backfill_min_date: string | null
+          live_max_date: string | null
+          live_min_date: string | null
+          n_backfill: number | null
+          n_live: number | null
+          n_total: number | null
+          ticker: string | null
+        }
+        Relationships: []
+      }
       overshoot_dial_daily: {
         Row: {
           as_of_date: string | null
