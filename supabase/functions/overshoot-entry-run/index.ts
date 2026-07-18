@@ -497,6 +497,35 @@ Deno.serve(createHandler(async (req: Request) => {
     }
     if (!isMarketOpen) {
       await sql.end({ timeout: 5 });
+      // INC-110 (F1.a): write a heartbeat audit row so the dispatcher
+      // watchdog can count consecutive market_closed weekday sessions
+      // (DST-skew silent-death class-closer). No cron_overdue evidence
+      // otherwise exists — cron.job_run_details is opaque to the
+      // strategy watchdog family. Failure to write must not block the
+      // no-op response.
+      try {
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.entry.market_closed',
+          actorId: authCtx.user.id,
+          targetType: 'overshoot_entry_runs',
+          targetId: sessionDate,
+          correlationId,
+          metadata: {
+            session_date: sessionDate,
+            minutes_to_close: minutesToClose,
+            slot,
+            dry_run: dryRun,
+            manual: manualConfirm,
+            git_sha: env.gitSha,
+          },
+        });
+      } catch (auditErr) {
+        console.error('[overshoot-entry-run] market_closed audit write failed', {
+          correlationId,
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+        });
+      }
       return apiSuccess({
         outcome: 'no_op', reason: 'market_closed',
         minutes_to_close: minutesToClose, session_date: sessionDate,
