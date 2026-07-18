@@ -1998,6 +1998,10 @@ export type Database = {
         Row: {
           avg_exit_price: number | null
           closed_at: string | null
+          cohort_band: string | null
+          cohort_cell_id: string | null
+          cohort_drawdown_bucket: number | null
+          cohort_entry_day_offset: number | null
           cost_basis: number
           created_at: string
           entry_ts: string
@@ -2023,6 +2027,10 @@ export type Database = {
         Insert: {
           avg_exit_price?: number | null
           closed_at?: string | null
+          cohort_band?: string | null
+          cohort_cell_id?: string | null
+          cohort_drawdown_bucket?: number | null
+          cohort_entry_day_offset?: number | null
           cost_basis: number
           created_at?: string
           entry_ts: string
@@ -2048,6 +2056,10 @@ export type Database = {
         Update: {
           avg_exit_price?: number | null
           closed_at?: string | null
+          cohort_band?: string | null
+          cohort_cell_id?: string | null
+          cohort_drawdown_bucket?: number | null
+          cohort_entry_day_offset?: number | null
           cost_basis?: number
           created_at?: string
           entry_ts?: string
