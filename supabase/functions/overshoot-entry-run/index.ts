@@ -1130,6 +1130,18 @@ Deno.serve(createHandler(async (req: Request) => {
         }, nowTs);
         ordersSubmitted += 1;
 
+        // MIG-161: derive the cohort tuple ONCE per selection. Fed into
+        // both the audit metadata (fill-sweep adoption path reads it) and
+        // the primary INSERT below (this handler's own lot write).
+        // `cohort_entry_day_offset` is 0 on same-session adoption (typical
+        // slot-a fill inside the same NY session) — kept as a scalar
+        // rather than recomputed at read time so a T+N adoption never
+        // ambiguates.
+        const cohortEntryDayOffset = 0; // entry_ts == nowTs; sessionDate == NY(now) date
+        const cohortCellId = (sel.study_cell_side && sel.study_cell_band && sel.momentum_quintile !== null && sel.drawdown_bucket !== null)
+          ? `${sel.study_cell_side}:${sel.study_cell_band}:w${sel.argmax_window_days}:m${sel.momentum_quintile}:d${sel.drawdown_bucket}`
+          : null;
+
         await writeStrategyAuditEvent({
           strategyKey: 'overshoot',
           action: `overshoot.entry.submitted.${intent}`,
@@ -1149,6 +1161,13 @@ Deno.serve(createHandler(async (req: Request) => {
             as_of_date: sessionDate,
             sizingBase, strategy_allocation_pct: strategyAllocationPct, margin_multiplier: marginMultiplier,
             i5_reversion_pct: i5.reversionPct, orderSide_semantic: priced.orderSide,
+            // MIG-161: cohort tuple. fill-sweep re-reads these verbatim
+            // when adopting a fill it did not itself submit. All four
+            // are NULL-safe (older audit rows without them write NULL).
+            cohort_cell_id: cohortCellId,
+            cohort_band: sel.study_cell_band,
+            cohort_drawdown_bucket: sel.drawdown_bucket,
+            cohort_entry_day_offset: cohortEntryDayOffset,
           },
         });
 
@@ -1162,13 +1181,15 @@ Deno.serve(createHandler(async (req: Request) => {
             INSERT INTO overshoot_lots
               (symbol, entry_ts, qty, cost_basis, side, status, settlement_state, source_order_id,
                tier, tier_source_event_run_id, tier_source_as_of_date,
-               remaining_qty, filled_qty, exit_attempts)
+               remaining_qty, filled_qty, exit_attempts,
+               cohort_cell_id, cohort_band, cohort_drawdown_bucket, cohort_entry_day_offset)
             VALUES (
               ${sel.ticker}, ${nowTs.toISOString()}::timestamptz,
               ${fill.filled_qty}, ${fill.avg_fill_price * fill.filled_qty},
               ${sel.side}, 'open', 'pending', ${acc.order_id},
               ${sel.tier}, ${linkage.runId}, ${sessionDate}::date,
-              ${fill.filled_qty}, 0, 0
+              ${fill.filled_qty}, 0, 0,
+              ${cohortCellId}, ${sel.study_cell_band}, ${sel.drawdown_bucket}, ${cohortEntryDayOffset}
             )
             RETURNING lot_id::text AS lot_id
           `;
