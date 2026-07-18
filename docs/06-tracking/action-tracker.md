@@ -7201,3 +7201,19 @@ Saturday ACT-510 deploy interleaves as scheduled (minutes-scale, independent).
 **Expectations (unchanged from ruled Sunday-PM arm).** Monday 2026-07-20 19:50Z tick per the Monday Expectation Set filing above: `exits_submitted=2` (LITE + SNDK), `session_age_no_fire=44`, `git_sha` stamped (INC-113 verification).
 
 **Cross-refs:** ACT-493 (precedent — early-arm arithmetic-safe deviation, entry-leg equivalent); INC-112 (deploy-hold correction, same weekend); INC-113 (git_sha stamp verification owed at first Monday tick); Monday Expectation Set (same section above).
+
+## DEC-080 (2026-07-18): ANALYST-DOWNGRADE LONG-ADMISSION EXCLUSION — **ADOPTED**.
+
+Full DEC filed at `docs/decisions/DEC-080-overshoot-analyst-downgrade-long-admission-exclusion.md`. Summary:
+
+- **Rule:** LONG-admission refuses events with any `analyst_revision_observations` row where `ticker` matches, `direction = -1`, and `focal_published_at::date` within ±3 calendar days of `as_of_date`. Refusal reason: `analyst_downgrade_proximate`.
+- **Source:** `public.analyst_revision_observations` (upstream writer DEC-072). Raw observation, not credibility-weighted signal (weight-drift-immune).
+- **Freshness:** New sibling `analystRevisionStaleActive` in `_shared/overshoot/si-freshness.ts` (single-home). `maxDays = 3`. Stale feed → run-level refuse-all `analyst_revision_feed_stale` (fail-closed, symmetric to SI-freshness).
+- **Capacity model (BOTH numbers on record):** floor **+7.4 bps/slot-day** (unfilled), realistic **≈+90 bps/slot-day per swapped slot** (rank-refill; supply > slots is the live regime). Both clear the 42.42 dominance floor.
+- **Earnings-miss residual:** SHELVED (n=194 < 1,000).
+- **Sequencing:** Land Tuesday POST-arm, after `overshoot.exit.run` Tuesday tick closes under `a026dc51`. First effective book: Wednesday 22:00Z detection. NO changes pre-Monday-open, none during Tuesday arming.
+- **Atomic commit checklist (ACT-532 pattern):** predicate + spec JSON + spec sha + `RATIFIED_DETECTOR_VERSION` bump + parity fixtures (20 days regenerated with per-day delta) + `detector_test.ts:704` re-pin + canary import guard extended. ACT-529 uniformity: auto-deploy = commit is deploy across `overshoot-detection-run`, `-entry-run`, `-exit-run`, `-fill-sweep`.
+- **Verification (Wed 22:00Z):** detection row stamps new version; ≥1 `analyst_downgrade_proximate` refusal expected (base rate ~2–4/day).
+- **Rollback handle:** revert commit → auto-deploy restores `a026dc51` uniformly.
+
+**Cross-refs:** ACT-527, ACT-528, ACT-529, ACT-531 §A, ACT-532, ACT-544-v2, DEC-072, DEC-504-4, INC-106.
