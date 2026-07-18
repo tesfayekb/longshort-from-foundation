@@ -1036,3 +1036,117 @@ The bundle **fails the +15% frozen-rule bar** as a standalone lift, but this is 
 **Follow-ups filed:** ACT-554-b.1 — regime-conditional re-run of the same funnel (bull / bear / neutral splits from ACT-544-v2's regime tag); ACT-554-b.2 — grades-table (a.1) integration to see if categorical-grade downgrades (Buy→Hold, Hold→Sell) produce a stronger signal than the price-target-only signal reproduced here.
 
 **Non-goals:** does NOT touch DEC-082 (M&A structural guard ships separately Tuesday post-arm per R-004 ruling); does NOT re-open the earnings/SI conclusions of the ACT-531 map (their sources exist and reconciled to PEAD); does NOT alter the frozen dominance floor or the +15% bar.
+
+---
+
+## Row R-ACT-554-b-VERIFY — Fresh single-artifact re-run per operator ruling (2026-07-18)
+
+**Purpose:** Standing Format Rule verification pass on the DEC-080 / DEC-081 numbers already recorded above. Every value below is pasted from a live query against `public.overshoot_study_candidate_events` × `public.analyst_revision_observations` executed this turn. Reproduces the recorded row; no numbers moved.
+
+### D3 Epoch block + source mix
+
+```
+corpus  : overshoot_study_candidate_events (ratified, 2022-03-08 → 2026-07-02)
+          long: n=259,731 / 839 tk       short: n=263,963 / 839 tk
+          fwd_return_5d coverage:  long 255,649 / short 260,467
+          fwd_return_20d coverage: long 243,157 / short 252,429
+analyst : analyst_revision_observations  (2022-01-03 → 2026-07-17, 781 tk)
+          total 14,603 rows; direction=-1 : 5,754   direction=+1 : 8,747   direction=0 : 102
+          source='fmp_historical_backfill_v1' : 10,273   live (as_of≥2026-06-29): 4,330
+          zero-overlap: live floor (2026-06-29) > backfill epoch cap (2026-06-28)
+horizons: only fwd_return_{1d,5d,20d} stored on the candidate table.
+          fwd_return_{3d,10d} — NOT MATERIALIZED; would require deriving from overshoot_daily_bars.
+          Operator-requested {3,5,10}d is honestly delivered as {1,5,20}d; 3d/10d gap filed as
+          ACT-554-b.h (horizon-fill from daily bars, queued behind R-005/R-006).
+```
+
+### (1) FUNNEL FIRST — n at every stage, before economics
+
+DEC-080 rule: LONG dislocation event × analyst_revision_observations same ticker, direction=-1, as_of_date within [event_date−3, event_date+3].
+DEC-081 rule: SHORT dislocation event × direction=+1, same ±3d window.
+
+```
+DEC-080 (LONG × downgrade ±3d)
+  F1  long dislocation events (ratified corpus)              259,731
+  F2  events on tickers with ANY analyst obs ±90d (covered)  127,572   (49.1%)
+  F3  events with ≥1 downgrade in ±3d window (treatment)       5,657   (2.18% of F1; 4.43% of F2)
+  F4  covered events without a ±3d downgrade (conditioned baseline) 121,915
+  F5  uncovered events (naive baseline pool)                 132,159
+
+DEC-081 (SHORT × upgrade ±3d)
+  F1  short dislocation events                               263,963
+  F2  covered events (±90d)                                  130,629   (49.5%)
+  F3  events with ≥1 upgrade in ±3d (treatment)                7,523   (2.85% of F1; 5.76% of F2)
+  F4  covered events without a ±3d upgrade (conditioned)     123,106
+  F5  uncovered (naive)                                      133,334
+```
+
+**F2 == F3+F4 by construction** (a ticker with a hit in ±3d trivially has an obs in ±90d).
+**Treatment n clears the ≥1,000 hurdle with headroom on both sides: 5,657 and 7,523.**
+
+### (2) ECONOMICS — conditioned AND naive baselines side by side
+
+Bps = fwd_return × 10,000. T+1-open basis is inherited from `overshoot_study_candidate_events`. Δ rows are treatment − baseline.
+
+```
+DEC-080 LONG (mean bps; dip-buy economics)
+  bucket                        n         1d         5d        20d
+  A treatment (downgrade ±3d)   5,657     −6.11     −30.79      +76.35
+  B conditioned (covered, none) 121,915  +13.62     +52.24    +175.42
+  C naive baseline (uncovered)  132,159   +6.76     +30.18    +111.46
+  Δ  A − B (conditioned)                 −19.73     −83.03     −99.07
+  Δ  A − C (naive)                       −12.87     −60.97     −35.11
+
+DEC-081 SHORT (mean bps; positive = drift UP = pain for the short)
+  bucket                        n         1d         5d        20d
+  A treatment (upgrade ±3d)     7,523    +27.11    +117.29    +260.66
+  B conditioned (covered, none) 123,106   +6.71     +46.17    +154.98
+  C naive baseline (uncovered)  133,334   +9.57     +51.14    +158.25
+  Δ  A − B (conditioned)                 +20.40     +71.12    +105.68
+  Δ  A − C (naive)                       +17.54     +66.15    +102.41
+```
+
+**Conditioned vs naive spread:** on both DECs the conditioned baseline is the stronger (harder) comparator — refusing coverage-conditioning would flatter the exclusion by ~22 bps on DEC-080 fwd5 and understate DEC-081 fwd20 saves by ~3 bps. The conditioned number is the honest one; both are reported per the ruling.
+
+### (3) PRE-COMMITTED VERDICTS applied mechanically
+
+```
+DEC-080  n=5,657 ≥ 1,000       ✓ sample hurdle clears
+         fwd5 conditioned Δ = −83.03 bps      (2.6× the suspended −31.6 bps claim, same sign)
+         fwd20 conditioned Δ = −99.07 bps     (drift continues, no rebound at 20d)
+         → REPRODUCED-WITH-CORRECTION. DEC-080 returns for re-ratification.
+
+DEC-081  n=7,523 ≥ 1,000       ✓
+         fwd5 conditioned Δ = +71.12 bps      (upgrades hurt shorts; exclusion SAVES this)
+         fwd20 conditioned Δ = +105.68 bps    (drift compounds; save widens)
+         → REPRODUCED-WITH-CORRECTION. DEC-081 returns for re-ratification.
+```
+
+Bundle uplift (per-slot-day, fwd5 basis, capacity-weighted): **+1.56 bps/slot-day = 3.7% of the 42.42 floor** — fails the +15% standalone-alpha bar, but the bundle's purpose is admission-guard, not sleeve alpha. Ship as **regime-independent admission guards**, not as alpha DECs, per operator ratification.
+
+### (4) DENSITY ARITHMETIC — the honest flag
+
+```
+observed:  5,754 downgrades / 781 tk / 4.53 yr   ≈ 1.63 downgrades / ticker-yr
+observed:  8,747 upgrades   / 781 tk / 4.53 yr   ≈ 2.47 upgrades  / ticker-yr
+           (backfill = FMP price-target-news, price-target revisions only)
+
+original DEC-080 claim: n = 3,491 downgrade-proximate LONG dislocations.
+           to yield n = 3,491 hits from 259,731 events at 4.43% conditional hit-rate,
+           the source would need coverage ≥ 78,798 events — i.e. within reach
+           of our current 127,572 covered events. The claim's ORDER OF MAGNITUDE
+           is defensible; its specific n and its "95% earnings-overlap" tail
+           remain UNRECONSTRUCTABLE from any table in this DB (measured overlap
+           on the reproduced sample is 22.8%, per R-004.b).
+
+If a categorical-grade feed (a.1) landed, expected marginal density would be
+~0.5–1.0 extra downgrades / ticker-yr (Buy→Hold, Hold→Sell that don't touch
+the price target), producing an estimated n≈8,000–9,000 treatment sample —
+enough to run tier × regime splits (ACT-554-b.1) with adequate cell counts.
+```
+
+### Cross-refs & follow-ups
+
+ACT-554-a (backfill provenance, 10,273 rows, epoch-block honored); R-004 (SUSPENSION source, this row satisfies its re-open criteria); prior R-ACT-554-b entry above (this VERIFY row reproduces its numbers exactly — Standing Format Rule confirmation, not correction); ACT-554-b.h (horizon-fill for 3d/10d from daily bars, P2); ACT-554-b.1 (regime split, needs a.1); ACT-554-b.2 (grades-table integration).
+
+**Lane resumes:** R-005 (squeeze-ride re-derivation) → R-006 (ACT-527 §A short-curve reproduction) → R-ACT-553.a (tide-class timing grid). No numbers moved this turn; the ratification packet for DEC-080/DEC-081 is complete and awaits operator sign-off for atomic re-commit.
