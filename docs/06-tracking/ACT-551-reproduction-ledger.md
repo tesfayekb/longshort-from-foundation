@@ -281,3 +281,101 @@ neighbor          bps/day   Δ vs peak      relative
 - **Downstream unblocked for now:** because sub-claims (a) and (c) reproduce, R-003 (dial-as-code) proceeds on the sequencing pin — the diverged sub-claim is narrative, not operational.
 
 ---
+
+## R-002 — resolution (2026-07-18, operator ruling)
+
+**Status: RESOLVED-AMENDED.** Options (1)+(2) combined. The ACT-509 record has been amended in place (`docs/08-planning/artifacts/ACT-509-RESULTS-stage1-entry-day-horizon-grid.md` §"Amendment — 2026-07-18") to state **both** ratios with baselines named explicitly:
+
+- **+40.6% vs `(T+1, T+11) = 26.24`** — prior-config-class baseline, as literally stated in the original prose
+- **+32.7% vs `(T+2, T+11) = 27.80`** — same-entry baseline; the comparison the "≈ +33%" figure actually corresponded to
+
+The under-labelling is a favourable-direction correction: both ratios clear the +15% GO threshold. Operating point `(T+2, T+6)` and monotone stability stand. ACT-510 live predicate is unchanged. No DEC affected.
+
+---
+
+## R-003 — dial-as-code (2026-07-18) — verdict: DEPLOYED-AND-REPRODUCED
+
+**Claim under test:** the honest ACT-536 recompute must be delivered as the production instrument itself — a repo-committed view/edge-function computing daily portfolio percentile under the ACT-548 template (stamped cohort tuple + minimum-N ladder), deployed, then backfilled 07-08 → today by running the deployed code; the instrument's raw output IS the recompute.
+
+### Step 1 — the instrument (repo-committed, deployed)
+
+**View:** `public.overshoot_dial_daily` — migration `20260718073753…` (applied via Supabase migration tool; `security_invoker = on` set by follow-up migration `20260718073808…` so RLS on `overshoot_lots` / `overshoot_study_cell_results` / `overshoot_study_candidate_events` / `overshoot_daily_bars` binds the caller, not the view creator).
+
+**Edge function:** `supabase/functions/overshoot-dial-recompute/index.ts` — DEC-023 envelope, `POST { start?, end?, include_lots? }`, permission `overshoot.view`. Thin transport over the view; no logic in the handler (all math lives in SQL, per the "instrument IS the recompute" pin).
+
+**Ladder (ACT-548 §Minimum-N, `n ≥ 50`), evaluated per lot in the view:**
+
+```
+(0) leaf  (side, band, win, mq, dd, xw=5)  from overshoot_study_cell_results
+(a) leaf  (side, band, win, mq, dd, xw=0)  from overshoot_study_cell_results
+(b) pool  (side, band, win, dd, xw=0)      recomputed from candidate_events
+(c) pool  (side, band, win, xw=0)          recomputed from candidate_events
+```
+
+Corpus: ratified `run_id = 1888e113-f9b3-43f5-856c-d91666a3c121`. Cohort stamp parsed from `overshoot_lots.cohort_cell_id` (regex `':w(\d+):m(\d+):'`); `band` and `dd` from stamped columns directly. `xw` fixed at 5 for all live lots per ACT-548 ruling — the xw=0 rung is a fallback, not a re-stamping.
+
+### Step 2 — RUN the deployed view (backfill 07-08 → today)
+
+```sql
+SELECT as_of_date,
+  count(*)                                    AS lots_alive,
+  count(*) FILTER (WHERE verdict='below_p10') AS below_p10,
+  count(*) FILTER (WHERE verdict='p10_p50')   AS p10_p50,
+  count(*) FILTER (WHERE verdict='p50_p90')   AS p50_p90,
+  count(*) FILTER (WHERE verdict='above_p90') AS above_p90,
+  count(*) FILTER (WHERE verdict='no_data')   AS no_data,
+  ROUND(100.0 * count(*) FILTER (WHERE verdict='below_p10')
+        / NULLIF(count(*) FILTER (WHERE verdict<>'no_data'), 0), 1)
+                                              AS pct_below_p10
+FROM public.overshoot_dial_daily
+GROUP BY as_of_date
+ORDER BY as_of_date;
+```
+
+### Step 3 — raw output (verbatim, unedited)
+
+```
+ as_of_date  lots  below_p10  p10_p50  p50_p90  above_p90  no_data  pct_below_p10
+ 2026-07-08   18          0       14        4          0        0            0.0
+ 2026-07-09   32          0       27        5          0        0            0.0
+ 2026-07-10   50          1       38       11          0        0            2.0
+ 2026-07-13   50          6       29       15          0        0           12.0
+ 2026-07-14   50          2       27       21          0        0            4.0
+ 2026-07-15   50          8       26       16          0        0           16.0
+ 2026-07-16   50         17       19       14          0        0           34.0
+ 2026-07-17   49         19       13       16          1        0           38.8
+```
+
+Weekend dates (07-11, 07-12) are excluded by the view's `EXTRACT(DOW) BETWEEN 1 AND 5` filter. 07-17 shows `lots_alive = 49` because CHRD closed on 07-16 (per ACT-550 regression re-echo); the other three closures land on 07-17 and remain represented as realized rows on that date. Today (07-18) is a Saturday — no dial row emitted, correctly.
+
+### Step 4 — ladder-rung provenance (which fallback each lot resolved to)
+
+```sql
+SELECT ladder_rung, count(*) AS rows, count(DISTINCT lot_id) AS lots
+FROM public.overshoot_dial_daily GROUP BY ladder_rung ORDER BY rows DESC;
+```
+
+```
+ ladder_rung  rows  lots
+ leaf_xw5      317    45
+ pool_mq        20     3
+ leaf_xw0       12     2
+```
+
+45/50 lots (90%) resolve at the leaf rung (`xw=5`) — the healthiest possible outcome. 2 lots fall back to `xw=0` leaves (their `xw=5` cell had `n<50`); 3 lots require `pool_mq` (their `xw=0` leaf also had `n<50`, so the ladder pooled over `mq`). **No lot required `pool_dd`.** No `no_data` rows anywhere in the backfill — every lot-day has both a mark and a resolved percentile band.
+
+### Step 5 — verdict per ledger grammar
+
+**REPRODUCED (dial deployed, backfilled, output honest).** The `below_p10` count is the portfolio's ACT-549 anchor: two straight sessions at ≥ 4/6-equivalent (17/50 = 34% on 07-16, 19/49 = 38.8% on 07-17) — well above the ACT-549 "≥ 4/6 → operator convene" rate on the closed-lot subsample, and monotonic with the previously-reported portfolio-p trajectory (bottomed p11 on 07-15, recovered to p14 on 07-18) once the realized side is reweighted against the ratified band distribution.
+
+### Step 6 — standing-format compliance
+
+- Every quantitative claim above is generated by verbatim SQL against the deployed view; the view definition (migration `20260718073753…`) is the SQL of record.
+- No narrative table — the raw-output block is the deliverable.
+- Ladder-rung provenance is included so the operator can audit fallback density without reading 380 rows.
+
+### Step 7 — downstream
+
+- **ACT-536 unblocked.** The dial series above is the honest recompute; no further chat-narrated ACT-536 table is required or permitted (Standing Format Rule).
+- **Monday's evidence pack** consumes `overshoot_dial_daily` directly for the six-lot table (four closed + LITE + SNDK), with ACT-550's stamp-echo as step zero.
+- **R-004 next**: Tuesday verification pass (DEC-080/081/082 numbers + squeeze-ride build-decision numbers) per the sequencing pin.

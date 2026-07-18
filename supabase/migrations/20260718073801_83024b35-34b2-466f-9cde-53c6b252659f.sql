@@ -1,0 +1,1 @@
+ALTER VIEW public.overshoot_dial_daily SET (security_invoker = on);

@@ -3623,6 +3623,29 @@ export type Database = {
       }
     }
     Views: {
+      overshoot_dial_daily: {
+        Row: {
+          as_of_date: string | null
+          band: string | null
+          dd: number | null
+          entry_date: string | null
+          is_realized: boolean | null
+          ladder_n: number | null
+          ladder_rung: string | null
+          lot_id: string | null
+          mark: number | null
+          mq: number | null
+          p10_bps: number | null
+          p50_bps: number | null
+          p90_bps: number | null
+          return_bps: number | null
+          side: string | null
+          symbol: string | null
+          verdict: string | null
+          win: number | null
+        }
+        Relationships: []
+      }
       reconciliation_events_daily_agg: {
         Row: {
           bucket_day: string | null
