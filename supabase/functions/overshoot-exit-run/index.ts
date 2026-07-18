@@ -960,7 +960,7 @@ Deno.serve(createHandler(async (req: Request) => {
             order_id: acc.order_id, client_order_id: acc.client_order_id,
             limit_price: priced.limitPrice, slippage_bps: priced.slippageBps,
             snapshot_age_ms: priced.snapshotAgeMs, minutes_to_close: clockSnap.minutesToClose,
-            intent, attempt: 0, run_id: runId,
+            intent, attempt: 0, run_id: runId, git_sha: env.gitSha,
           },
         });
       } catch (err) {
@@ -1046,6 +1046,7 @@ Deno.serve(createHandler(async (req: Request) => {
           refusals: tally,
           minutes_to_close: clockSnap.minutesToClose,
           session_date: clockSnap.sessionDate,
+          git_sha: env.gitSha,
         },
       });
     } catch (auditErr) {
