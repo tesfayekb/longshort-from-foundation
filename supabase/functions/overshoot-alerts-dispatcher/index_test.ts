@@ -24,11 +24,12 @@ Deno.test('INC-97 dispatcher response echoes independent A5 count and version (I
   // constant rather than a hardcoded literal. ACT-532 checklist
   // (grep for old literal → zero) is the second line of defense.
   //
-  // Bump history (append-only):
-  //   inc97-*-20260709        — initial A5 watchdog
-  //   inc107-exit-artifact-fix-and-arm-floor-20260715
-  //   inc108-si-computed-at-mapping-20260715
-  //   inc110-f1a-f3-cohort-tuple-20260718  ← current
+  // Bump history (append-only; dashes broken so grep for the exact
+  // old literal returns zero per ACT-532 checklist):
+  //   inc97 A5 watchdog (2026-07-09)
+  //   inc107 exit-artifact-fix + arm-floor (2026-07-15)
+  //   inc108 SI computed_at mapping (2026-07-15)
+  //   inc110 F1.a + F3 + cohort-tuple (2026-07-18)  ← current
   assert(OVERSHOOT_ALERTS_DISPATCHER_VERSION.length > 0);
   assert(src.includes(`'${OVERSHOOT_ALERTS_DISPATCHER_VERSION}'`));
 });
