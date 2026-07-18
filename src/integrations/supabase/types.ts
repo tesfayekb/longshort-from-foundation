@@ -2265,6 +2265,13 @@ export type Database = {
           median_fwd_return_5d: number | null
           momentum_quintile: number
           notes: Json | null
+          p05_fwd_return_5d: number | null
+          p10_fwd_return_5d: number | null
+          p25_fwd_return_5d: number | null
+          p50_fwd_return_5d: number | null
+          p75_fwd_return_5d: number | null
+          p90_fwd_return_5d: number | null
+          p95_fwd_return_5d: number | null
           run_id: string
           side: string
           window_days: number
@@ -2282,6 +2289,13 @@ export type Database = {
           median_fwd_return_5d?: number | null
           momentum_quintile: number
           notes?: Json | null
+          p05_fwd_return_5d?: number | null
+          p10_fwd_return_5d?: number | null
+          p25_fwd_return_5d?: number | null
+          p50_fwd_return_5d?: number | null
+          p75_fwd_return_5d?: number | null
+          p90_fwd_return_5d?: number | null
+          p95_fwd_return_5d?: number | null
           run_id: string
           side: string
           window_days: number
@@ -2299,6 +2313,13 @@ export type Database = {
           median_fwd_return_5d?: number | null
           momentum_quintile?: number
           notes?: Json | null
+          p05_fwd_return_5d?: number | null
+          p10_fwd_return_5d?: number | null
+          p25_fwd_return_5d?: number | null
+          p50_fwd_return_5d?: number | null
+          p75_fwd_return_5d?: number | null
+          p90_fwd_return_5d?: number | null
+          p95_fwd_return_5d?: number | null
           run_id?: string
           side?: string
           window_days?: number
