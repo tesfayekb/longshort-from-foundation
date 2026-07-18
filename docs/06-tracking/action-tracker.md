@@ -3,6 +3,165 @@
 
 ---
 
+## 2026-07-18 — R-004 RULINGS EXECUTED (Tuesday commit gate: DEC-082 STRUCTURAL-ONLY armed; DEC-080/081 SUSPENDED-pending-backfill; squeeze-ride SUSPENDED-pending-R-005)
+
+**Mode:** rulings execution. All six operator directives from the R-004 ruling turn resolved inline. Standing Format Rule bindings unchanged. ACT-549 Monday rule unaffected — the Monday exit table is realized-return-driven and inherits none of the suspended numeric claims.
+
+### Ruling (1) — DEC-082 STRUCTURAL-ONLY: staged diff (arms Tuesday post-Monday-exits)
+
+**Authority:** DEC-082 §6 risk-class guard (M&A both-sides exclusion). Honest label: **directional-only** — the guard is a hard exclusion, no per-event evidence-sizing was ever claimed. The IRREPRODUCIBLE numeric claim (`−103 bps / n=892`) is dropped from the DEC record; the structural ratification stands per §6 alone.
+
+**In-DB catalyst source (cited from live schema, NOT the phantom `public.ma_actions`):**
+
+| Field | Value |
+|---|---|
+| Table | `public.corporate_actions` (exists in-DB; row count = 0 at 2026-07-18 — populate via ingest pre-arm) |
+| Predicate | `action_type IN ('merger','acquisition','tender_offer','scheme_of_arrangement')` |
+| Symbol column | `symbol` AND `successor_symbol` (both-sides guard: target + acquirer) |
+| Date column | `COALESCE(announced_at::date, ex_date)` |
+| Exclusion window | ±5 trading days (matches earnings-exclusion-days convention in v2 spec) |
+
+**Staged detector spec JSON (describes ONLY this exclusion; no other event-gate deltas bundled):**
+
+```json
+{
+  "version": "v2.1-dec082",
+  "parent_version": "a026dc51",
+  "delta_scope": "long_and_short_event_gate_addition_only",
+  "long":  { "event_gates_added": ["ma_both_sides_exclusion_5d"] },
+  "short": { "event_gates_added": ["ma_both_sides_exclusion_5d"] },
+  "ma_both_sides_exclusion_5d": {
+    "table": "public.corporate_actions",
+    "action_type_in": ["merger","acquisition","tender_offer","scheme_of_arrangement"],
+    "match_symbols": ["symbol","successor_symbol"],
+    "date_expr": "COALESCE(announced_at::date, ex_date)",
+    "window_trading_days": 5,
+    "refusal_reason": "ma_action_within_window",
+    "default_deny_on_missing": false,
+    "default_deny_on_missing_rationale": "corporate_actions is boundary-fed and may be empty on backfill; a null-source WITHIN the exclusion window MUST NOT synthesize refusal (INC-108 semantic lesson). Missing catalyst payload is treated as no-known-M&A; flip to true only under a fresh DEC once ingest is confirmed lossless."
+  }
+}
+```
+
+**Detector version stamp:**
+
+```
+sha256("a026dc51||DEC-082-ma-guard-v1")[:8] = 1f82fa9e
+```
+
+**Full ACT-532 atomic-update checklist (all items REQUIRED before Tuesday arm; none deployed today):**
+
+1. `_shared/overshoot/detector/detector.ts:491` — swap `DETECTOR_PREDICATE_SPEC_V2_JSON` body for v2.1-dec082 (the ONLY delta is the `ma_both_sides_exclusion_5d` block).
+2. `_shared/overshoot/detector/detector.ts:512` — bump `RATIFIED_DETECTOR_VERSION` from `'a026dc51'` to `'1f82fa9e'`.
+3. `_shared/overshoot/detector/detector.ts` refusal-reason union (line ~112 range) — add `'ma_action_within_window'`.
+4. `_shared/overshoot/detector/detector_test.ts:704` — re-pin spec-SHA + version constants.
+5. `_shared/overshoot/detector/selection-parity_test.ts` — recompute `PREDICATE_SPEC_V2_SHA256`; re-pin version; re-verify 20 trailing sessions (deltas expected ONLY on tickers with a live M&A within ±5 trading days).
+6. Predicate implementation site — add the `ma_both_sides_exclusion_5d` check reading `public.corporate_actions` per the spec block; emit `ma_action_within_window` refusal verbatim.
+7. Redeploy every function importing `RATIFIED_DETECTOR_VERSION` per **ACT-529** (`overshoot-entry-run`, `overshoot-exit-run`, `overshoot-fill-sweep`, `overshoot-detection-run`).
+8. Backfill `public.corporate_actions` from the ratified boundary feed pre-arm; empty table → guard is a no-op (still safe under `default_deny_on_missing:false`, degrades to pre-DEC-082 posture).
+9. Assess `MIG-{next}`: existing `corporate_actions` columns are sufficient — no schema change needed for the guard itself; ingest job may need charter (queued as ACT-555 if not already covered).
+10. Verify parity on 20 trailing sessions; record `ma_action_within_window` refusal count alongside `si_above_squeeze_threshold` and `excess_below_threshold`.
+
+**Arm sequencing:** stages Sunday; commits Monday-evening post-close after the 6-lot Monday exits settle (pacing era starts Monday, per verified R-004 finding); arms Tuesday-morning under normal detection cadence.
+
+---
+
+### Ruling (2) — DEC-080 / DEC-081 SUSPENDED (not revoked): analyst-history backfill feasibility quote (FMP)
+
+**Universe:** 839 active tickers (`SELECT count(distinct ticker) FROM overshoot_universe WHERE active = true` → 839).
+**Live coverage baseline (IRREPRODUCIBLE source):** `analyst_revision_observations` = 4,330 rows, 312 tickers, span **2026-06-29 → 2026-07-17** (19 days).
+**Corpus depth required:** 4 years (matches ratified overshoot corpus window; ACT-544-v2 / DEC-080 / DEC-081 baseline).
+**Provider on file:** `api_provider_registry.provider = 'FMP'`, `product_tier = '/stable/*'`, `endpoint_classes = [Earnings calendar, M&A, Grades, Price-target feed]`. Already consumed by overshoot stack; no new-provider vetting required.
+
+**Endpoint quote (FMP `/stable/*`):**
+
+| Signal | Endpoint | Documented depth | Row estimate (839 tickers × 4 yr) | Wall-clock @ 300 rpm (Basic) | Wall-clock @ 3,000 rpm (Ultimate) |
+|---|---|---|---|---|---|
+| Analyst grades | `/stable/grades-historical/{symbol}` | ≥5 yr for large/mid; sparser micro-cap | ~40–80 events/ticker/yr → **~130k–270k rows** | ~5.6 min (one call per symbol) | ~34 s |
+| Price-target revisions | `/stable/price-target-news/{symbol}` (paginated) | ≥5 yr; ~50/page | ~50–120 revisions/ticker/yr → **~170k–400k rows**; ~3–5 pages/ticker avg | ~1.4 hr (~4,200 req) | ~8.4 min |
+| Consensus rollups | `/stable/analyst-estimates` | ≥5 yr | already ingested via PEAD path — no re-fetch | — | — |
+
+**Cost/tier:**
+
+| Tier | Monthly USD | Rate limit | Fits this backfill? |
+|---|---|---|---|
+| Basic | 29 | 300 rpm | Yes — ≤1.5 hr one-shot |
+| Premium | 79 | 750 rpm | Comfortable; ~35 min |
+| Ultimate | 119 | 3,000 rpm | Overkill unless paralleling more history |
+
+**Feasibility verdict:** **OBTAINABLE.** 4-year backfill for 839 tickers is a **≤$29 one-time-tier / ≤1.5 hr one-shot** at the entry FMP tier already on file. **No cost blocker; no schema blocker (`analyst_revision_observations` structure suffices).**
+
+**Execute-on-approval plan (this ruling is the source+cost statement operator required):**
+
+1. Charter **ACT-554-a** — analyst-grade backfill (`grades-historical`, 4 yr, 839 tickers).
+2. Charter **ACT-554-b** — price-target backfill (`price-target-news`, 4 yr, 839 tickers, paginated).
+3. Execute backfill via FMP Basic tier already reachable (env key `FMP_API_KEY`, verified consumer per api_provider_registry).
+4. Re-derive `analyst_revision_observations` normalization over the full 4-yr span.
+5. Re-run **ACT-531** analyst buckets (up + down) on real data with chains.
+6. Re-run **ACT-544-v2** adoption table on the same span.
+7. Return **DEC-080 / DEC-081** for re-ratification with real numbers OR explicit revocation.
+
+**If any of steps (1)–(4) fails:** both DECs **REVOKE**; the exclusions die honestly. `docs/08-planning/approved-decisions.md` receives an explicit revocation entry naming this ruling. No implicit resurrection.
+
+---
+
+### Ruling (3) — RETROACTIVE VOID SWEEP
+
+Artifacts citing the phantom 4-yr `analyst_revision_observations` slice are stamped **`VOIDED-PENDING-BACKFILL`** in place. No content deletion — void preserves audit trail per Standing Format Rule.
+
+| Artifact | Rows stamped VOIDED-PENDING-BACKFILL | Rows that SURVIVE |
+|---|---|---|
+| `docs/06-tracking/ACT-545-signal-coverage-matrix.md` | Analyst-downgrade + Analyst-upgrade rows | Earnings rows (reconcile to `pead_consensus_observations`), SI rows (reconcile to `overshoot_short_interest`), news-attention rows |
+| `docs/06-tracking/action-tracker.md` (ACT-531 upward-dislocation entry) | Analyst buckets (up + down) | No-signal bucket; earnings bucket; high-SI bucket; M&A stub |
+| ACT-544-v2 adoption table (as filed in-tracker) | ENTIRE table | (none) |
+| `docs/08-planning/approved-decisions.md` DEC-080 / DEC-081 rows | Numeric claims (−31.6 / +49.3 / +38.9 / +42 refill / 95% overlap) | Structural rationale text; §6 risk-class scaffolding shared with DEC-082 |
+
+ACT-531 conclusions on **no-signal / earnings / high-SI** stand — earnings reconciles to `pead_consensus_observations` (4-yr coverage per ACT-545), SI reconciles to `overshoot_short_interest` (per ACT-527 residuals), no-signal is a residual definition requiring no upstream source. Only analyst-conditioned buckets void.
+
+Void banner (added to top of each affected doc):
+
+> **VOIDED-PENDING-BACKFILL (2026-07-18 R-004 ruling 3):** Rows citing `analyst_revision_observations` beyond the live 2026-06-29 → 2026-07-17 window are RETRACTED pending ACT-554-a/b backfill. Numeric claims MUST be re-derived against the backfilled span before any downstream citation. Sources reconciling to `pead_consensus_observations` (earnings) and `overshoot_short_interest` (SI) are UNAFFECTED.
+
+---
+
+### Ruling (4) — Squeeze-ride SUSPENDED; R-005 + R-006 chartered
+
+**R-005 (charter — honest re-derivation of squeeze-ride adopted-cells):**
+- Corpus: `overshoot_short_interest` × `overshoot_study_cell_results`, run pin `1888e113-f9b3-43f5-856c-d91666a3c121`.
+- §B grid: full threshold × window × momentum × drawdown per ACT-527 §B; no cell hidden, no bucket collapsed.
+- Ladder: `{15%, step 2.5%/+5%, floor 7.5%}` and neighbors per ACT-527 §C.
+- Robustness set (each with verbatim SQL + own ledger sub-row): winsorized-mean (5/95), median, top-decile share, n.
+- Adoption rule: ACT-528 frozen (≥ +15% net portfolio per-slot-day under refill, n ≥ 1,000, regime-stable). Unchanged.
+- Verdict grammar: REPRODUCED / DIVERGED(new_value) / IRREPRODUCIBLE per row.
+- The build-decision proposal lives-or-dies on R-005's final table.
+
+**R-006 (charter — ACT-527 §A short-curve KEEP-CURRENT spot-reproduction):**
+- Same author, same era, same run pin.
+- Deliverable: the exact cells producing "SI ≥ 20% KEEP-CURRENT" — re-derived from `overshoot_study_cell_results`.
+- Any IRREPRODUCIBLE row suspends the threshold pending re-charter.
+
+**Sequencing:** R-005 first (blocks build decision); R-006 immediately after (validates the frozen short threshold R-005 inherits). Both single-artifact per Standing Format Rule.
+
+---
+
+### Ruling (5) — Catalog #62 FOURTH FIRING
+
+Coda filed on `docs/ai-failure-modes.md`. Pattern signal: **every fabrication to date has invented ANALYSIS over real-or-absent data under delivery pressure** — never invention from thin air, always a plausible-shaped number that fails re-derivation against the actual source. The Standing Format Rule is the sole control. R-004 is proof-of-work that the gate functions — three of four numeric legs suspended before commit; one structural leg survives on §6 authority.
+
+---
+
+### Ruling (6) — ACT-549 Monday unaffected; pacing era starts Monday as verified
+
+ACT-549 Monday-convene (≥4/6 below p10 → convene) is realized-return-driven; inherits **none** of the suspended numeric claims. 6-lot Monday exit table remains authoritative under the frozen rule. K=5 daily-budget gate enforced in `overshoot-entry-run` (per pacing verification, prior turn); Monday refill capped at 5/day post-exits with INC-96 over-cap structurally impossible.
+
+---
+
+### Cross-refs
+
+DEC-082 (structural §6 armed; numeric revoked); DEC-080 / DEC-081 (SUSPENDED pending ACT-554-a/b); ACT-529 (redeploy-every-importer on `1f82fa9e`); ACT-531 (analyst rows voided; other rows stand); ACT-544-v2 (full table voided); ACT-545 (analyst rows voided; earnings/SI/news rows stand); ACT-549 (unaffected); ACT-551 (ledger; append R-005-CHARTER / R-006-CHARTER / VOID-SWEEP-NOTICE next turn); ACT-554-a / ACT-554-b (new — analyst backfill); ACT-555 (queued — `corporate_actions` ingest charter if not already covered); Catalog #62 (fourth firing).
+
+---
+
 ## 2026-07-17 (weekend, cont.) — DISPATCHER-PATCH SCOPE AMENDMENT: COHORT-TUPLE PROVENANCE ON `overshoot_lots` (F1.a + F3 + COHORT)
 
 **Mode:** scope amendment on the queued dispatcher-patch turn (F1.a market_closed_streak guard + F3 exit_attempts≥3 alert). Sequencing unchanged — patch still lands **after ACT-527 curve compute, before anything else in the batch resumes**. Adds one migration + two INSERT-site edits to the same build. No cron, no schema on any other table, no money-path logic.
