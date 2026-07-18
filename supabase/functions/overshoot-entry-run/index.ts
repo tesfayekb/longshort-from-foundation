@@ -220,6 +220,15 @@ interface SelectionRow {
   // Metadata for reference_bar_missing audit rows (never-silent-drop).
   as_of: string;                // detection_runs.as_of (YYYY-MM-DD)
   argmax_window_days: number;   // events row window used for pre_event bar offset
+  // MIG-161 (ACT-536 cohort-tuple provenance) — parsed at SQL level from
+  // overshoot_events.study_cell_ref (jsonb-string; see `#>>` re-parse
+  // trick below) plus scalar columns. Feed the cohort_* INSERT + audit
+  // metadata so fill-sweep can single-home the same fields on its
+  // adoption path without re-querying overshoot_events.
+  study_cell_side: string | null;
+  study_cell_band: string | null;
+  drawdown_bucket: number | null;
+  momentum_quintile: number | null;
 }
 
 interface RefusalTally {
@@ -488,6 +497,35 @@ Deno.serve(createHandler(async (req: Request) => {
     }
     if (!isMarketOpen) {
       await sql.end({ timeout: 5 });
+      // INC-110 (F1.a): write a heartbeat audit row so the dispatcher
+      // watchdog can count consecutive market_closed weekday sessions
+      // (DST-skew silent-death class-closer). No cron_overdue evidence
+      // otherwise exists — cron.job_run_details is opaque to the
+      // strategy watchdog family. Failure to write must not block the
+      // no-op response.
+      try {
+        await writeStrategyAuditEvent({
+          strategyKey: 'overshoot',
+          action: 'overshoot.entry.market_closed',
+          actorId: authCtx.user.id,
+          targetType: 'overshoot_entry_runs',
+          targetId: sessionDate,
+          correlationId,
+          metadata: {
+            session_date: sessionDate,
+            minutes_to_close: minutesToClose,
+            slot,
+            dry_run: dryRun,
+            manual: manualConfirm,
+            git_sha: env.gitSha,
+          },
+        });
+      } catch (auditErr) {
+        console.error('[overshoot-entry-run] market_closed audit write failed', {
+          correlationId,
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+        });
+      }
       return apiSuccess({
         outcome: 'no_op', reason: 'market_closed',
         minutes_to_close: minutesToClose, session_date: sessionDate,
@@ -674,7 +712,11 @@ Deno.serve(createHandler(async (req: Request) => {
         e.argmax_window_days,
         dr.as_of::text AS as_of,
         tclose.close  AS t_close_ref,
-        preref.close  AS pre_event_ref
+        preref.close  AS pre_event_ref,
+        ((e.study_cell_ref #>> '{}')::jsonb)->>'side' AS study_cell_side,
+        ((e.study_cell_ref #>> '{}')::jsonb)->>'band' AS study_cell_band,
+        e.drawdown_bucket,
+        e.momentum_quintile
       FROM overshoot_events e
       JOIN overshoot_detection_runs dr
         ON dr.run_id = e.run_id
@@ -1086,6 +1128,18 @@ Deno.serve(createHandler(async (req: Request) => {
         }, nowTs);
         ordersSubmitted += 1;
 
+        // MIG-161: derive the cohort tuple ONCE per selection. Fed into
+        // both the audit metadata (fill-sweep adoption path reads it) and
+        // the primary INSERT below (this handler's own lot write).
+        // `cohort_entry_day_offset` is 0 on same-session adoption (typical
+        // slot-a fill inside the same NY session) — kept as a scalar
+        // rather than recomputed at read time so a T+N adoption never
+        // ambiguates.
+        const cohortEntryDayOffset = 0; // entry_ts == nowTs; sessionDate == NY(now) date
+        const cohortCellId = (sel.study_cell_side && sel.study_cell_band && sel.momentum_quintile !== null && sel.drawdown_bucket !== null)
+          ? `${sel.study_cell_side}:${sel.study_cell_band}:w${sel.argmax_window_days}:m${sel.momentum_quintile}:d${sel.drawdown_bucket}`
+          : null;
+
         await writeStrategyAuditEvent({
           strategyKey: 'overshoot',
           action: `overshoot.entry.submitted.${intent}`,
@@ -1105,6 +1159,13 @@ Deno.serve(createHandler(async (req: Request) => {
             as_of_date: sessionDate,
             sizingBase, strategy_allocation_pct: strategyAllocationPct, margin_multiplier: marginMultiplier,
             i5_reversion_pct: i5.reversionPct, orderSide_semantic: priced.orderSide,
+            // MIG-161: cohort tuple. fill-sweep re-reads these verbatim
+            // when adopting a fill it did not itself submit. All four
+            // are NULL-safe (older audit rows without them write NULL).
+            cohort_cell_id: cohortCellId,
+            cohort_band: sel.study_cell_band,
+            cohort_drawdown_bucket: sel.drawdown_bucket,
+            cohort_entry_day_offset: cohortEntryDayOffset,
           },
         });
 
@@ -1118,13 +1179,15 @@ Deno.serve(createHandler(async (req: Request) => {
             INSERT INTO overshoot_lots
               (symbol, entry_ts, qty, cost_basis, side, status, settlement_state, source_order_id,
                tier, tier_source_event_run_id, tier_source_as_of_date,
-               remaining_qty, filled_qty, exit_attempts)
+               remaining_qty, filled_qty, exit_attempts,
+               cohort_cell_id, cohort_band, cohort_drawdown_bucket, cohort_entry_day_offset)
             VALUES (
               ${sel.ticker}, ${nowTs.toISOString()}::timestamptz,
               ${fill.filled_qty}, ${fill.avg_fill_price * fill.filled_qty},
               ${sel.side}, 'open', 'pending', ${acc.order_id},
               ${sel.tier}, ${linkage.runId}, ${sessionDate}::date,
-              ${fill.filled_qty}, 0, 0
+              ${fill.filled_qty}, 0, 0,
+              ${cohortCellId}, ${sel.study_cell_band}, ${sel.drawdown_bucket}, ${cohortEntryDayOffset}
             )
             RETURNING lot_id::text AS lot_id
           `;
