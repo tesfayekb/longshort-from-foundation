@@ -88,6 +88,15 @@ Deno.serve(createHandler(async (req: Request) => {
   const providedCronHeader = req.headers.get('X-Cron-Secret') ?? '';
   let correlationId = crypto.randomUUID();
   const isCronBearer = cronSecret.length > 0 && providedCronHeader === cronSecret;
+  // Temporary diagnostic — non-secret-leaking; returns only lengths.
+  const url = new URL(req.url);
+  if (url.searchParams.get('debug_auth') === '1') {
+    return new Response(JSON.stringify({
+      env_cron_secret_len: cronSecret.length,
+      provided_cron_header_len: providedCronHeader.length,
+      isCronBearer,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
   if (!isCronBearer) {
     const authCtx = await authenticateRequest(req);
     correlationId = authCtx.correlationId;
