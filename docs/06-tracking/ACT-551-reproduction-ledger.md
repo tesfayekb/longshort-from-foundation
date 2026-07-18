@@ -795,3 +795,46 @@ Unstamping requires ACT-554-a/b backfill green + re-derivation posted as new led
 ## Row R-004-CODA — Catalog #62 fourth firing filed on `docs/ai-failure-modes.md`
 
 Fourth-firing coda appended to `docs/ai-failure-modes.md` (dated 2026-07-18). Pattern signal: every fabrication to date invented ANALYSIS over real-or-absent data under delivery pressure — the Standing Format Rule remains the sole effective control, and R-004 is proof-of-work that the gate functions (3 of 4 numeric legs suspended before commit).
+
+---
+
+## Row R-ACT-553.a-CHARTER — TIDE-CLASS TIMING GRID (expanded ACT-553.a)
+
+**Priority:** P1. **Sequencing:** executes AFTER R-005 and R-006 land (fabrication-recovery reads own the lane first). Standing Format Rule binding.
+
+**Origin:** operator hypothesis extending ACT-553 fwd20 sign-flip (sector-tide bucket rebounded hardest at 167.2 bps at fwd20 vs bucket-A 127.8 bps). The flat-window ACT-553 test filtered on move-character alone; this expansion tests whether tide-class events want a **different clock** (later entry, longer hold) rather than exclusion.
+
+**Corpus:** ratified long-side event corpus (n=259,344 per ACT-553), restricted to buckets C (25–50% idio) + D (<25% idio, mostly sector-tide). Sector source: `universe_membership.gics_sector` (99.86% coverage; INC-117 unchanged).
+
+**Method (single artifact when executed):**
+
+1. **Timing grid** — full cartesian:
+   - entry_day ∈ {T+1, T+2, T+3, T+4, T+5} (T+1-open basis unchanged as anchor definition)
+   - exit_day ∈ {entry+5, entry+10, entry+15, entry+20} (calendar days from entry, not from T0)
+2. **Cut** by regime × tier (regime from ratified regime classifier; tier from ratified admission tier).
+3. **Per-cell metrics:** per-slot-day bps, n, events/yr, winsorized mean (5/95), median. Standing Format Rule: verbatim SQL + raw output per claim.
+4. **Bucket split:** C-only, D-only, C+D pooled — reported separately (the fwd20 sign-flip lived in D; C is the intermediate case and must earn its own stamp).
+5. **Capacity split:** tide events/yr (C+D) vs idiosyncratic events/yr (A+B) under charter admissibility, for sleeve-sizing.
+6. **ACT-515(e) interaction note:** whether the best tide-class cell's realized concentration profile (sector-clustering by construction — D is mostly-sector-tide by definition) is compatible with the sector-cap variant that emerges from the engine run, or whether the sleeve needs its own cap discipline. Not a gate; a design note.
+
+**Pre-committed adoption gate (charter-binding):**
+
+A tide-class sleeve charters **only if** the best cell clears **ALL** of:
+- per-slot-day ≥ **48.78 bps/slot-day** (42.42 × 1.15 — the frozen dominance floor + 15% uplift, per ACT-528 rule),
+- **n ≥ 1,000** in the best cell,
+- **monotone-stable neighborhood** — all 8 (or 5 on grid edge) adjacent cells within **±15%** of the peak, per ACT-528 R-002 convention,
+- **regime-robust** — best cell holds ≥ +25% over frozen dominance floor in at least 2 of {bull, chop, bear} regimes with n ≥ 300 per regime.
+
+Any failure = **HOLD**, filed honestly, no sleeve chartered. Operator's day-3-in / day-20-out instinct becomes the third measured clock in the machine **only if** the numbers earn it.
+
+**Sleeve form (pre-committed, chartered only on adoption):**
+
+Two mutually-exclusive forms will be presented for operator ruling if the gate clears:
+- **(α) Overshoot Tier-3:** tide-class events admitted into overshoot corpus under their own entry/exit clock, ranked in the same K=5 daily budget, own tier tag for audit.
+- **(β) Admission-tagged timing override:** tide-class flag stamps an alternate `entry_day_offset` + `exit_day_offset` on the admitted lot; lot flows through the standard overshoot rail with per-lot clock. No new sleeve, no new budget line.
+
+Form choice is operator's; the math is form-agnostic.
+
+**Cross-refs:** ACT-553 (parent HOLD verdict — flat-window filter did not clear; this expansion tests the timing-conditional version); ACT-528 (frozen adoption rule — unchanged); ACT-515(e) (sector-cap engine run — interaction note only, not gate); ACT-544-v2 (analyst exclusion — orthogonal, downgrade windows unrelated to sector-tide); INC-117 (sector coverage gap, unchanged); R-005/R-006 (block this row).
+
+**Non-goals:** does NOT re-open ACT-553's flat-window verdict (HOLD stands); does NOT alter the frozen dominance floor (42.42 bps/slot-day) or the +15% uplift bar; does NOT interact with the Monday ACT-549 rule (realized-return governed).
