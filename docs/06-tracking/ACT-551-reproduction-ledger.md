@@ -379,3 +379,30 @@ FROM public.overshoot_dial_daily GROUP BY ladder_rung ORDER BY rows DESC;
 - **ACT-536 unblocked.** The dial series above is the honest recompute; no further chat-narrated ACT-536 table is required or permitted (Standing Format Rule).
 - **Monday's evidence pack** consumes `overshoot_dial_daily` directly for the six-lot table (four closed + LITE + SNDK), with ACT-550's stamp-echo as step zero.
 - **R-004 next**: Tuesday verification pass (DEC-080/081/082 numbers + squeeze-ride build-decision numbers) per the sequencing pin.
+
+## R-003 — operator acceptance + coda (2026-07-18)
+
+**Status: ACCEPTED.** The dial-as-code output supersedes any prior chat-narrated ACT-536 series in full.
+
+### Coda on Catalog #62 (fabrication ledger)
+The retracted narrative claimed the portfolio-p floor was "never breached." The deployed dial shows below-p10 breadth reaching **34.0% on 07-16 and 38.8% on 07-17** — the invention had flattered the book. Filed as the closing coda on `docs/ai-failure-modes.md` Catalog #62 (INC-114 lineage; RECURRENCE #1/#2 already logged). Divergence direction: fabrication was optimistic — exactly the failure mode Catalog #62 predicts, now with a numeric fingerprint on the record.
+
+### Dial interpretation (pre-committed, binding)
+- **Breadth is an OPEN-MARK signal — correlation-naive.** `below_p10` counts lots independently against their stamped cohort's percentile band. It does NOT collapse correlated moves, does NOT adjust for beta, does NOT price shared factor exposure. A 30%+ breadth reading is a **screen**, not a verdict.
+- **The realized ACT-549 rule governs Monday's exits unchanged** — six lots (four closed + LITE + SNDK), ≥ 4/6 below-p10 on realized returns → operator convene. The dial does not override, replace, or pre-empt ACT-549.
+
+### NEW STANDING TRIGGER (charter-binding)
+> If `overshoot_dial_daily.pct_below_p10 > 30.0` for **3 consecutive trading sessions AFTER Monday's exits settle (T+1 from 2026-07-20)**, an **ACT-539-class waterfall auto-charters** (Market / Selection / Slip / Residual decomposition, with cohort/ladder chains per the Standing Format Rule, verbatim SQL).
+
+- Clock starts: first eligible session = 2026-07-21 (Tuesday, post-exit-settle).
+- Counter resets on any session with `pct_below_p10 ≤ 30.0`.
+- Auto-charter action: file `ACT-552-breadth-waterfall` shell under `docs/06-tracking/` and page the operator; do not wait for prompting.
+
+### Digest integration
+`overshoot_dial_daily` joins the nightly operator digest tonight (2026-07-18 21:00Z run). Line format:
+`Dial: N lots | below_p10 X (Y.Y%) | ladder {leaf_xw5:a, leaf_xw0:b, pool_mq:c, pool_dd:d} | trigger_streak k/3`
+
+### Sequence (pinned, unchanged)
+1. **R-004 — Tuesday verification pass** (next turn): DEC-080/081/082 numbers + squeeze-ride build-decision numbers, verbatim SQL against ratified corpus, gate BEFORE any bundle commits. Standing Format Rule binding.
+2. **Monday pack** (2026-07-20): six-lot pack owns the day; ACT-550 stamp-echo is step zero.
+3. Auto-triggered waterfall (ACT-552, conditional) — earliest fire date 2026-07-23 if streak completes.
