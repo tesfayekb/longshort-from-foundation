@@ -1610,3 +1610,14 @@ INC-20 transitions to **Resolved (full)** at this SHA.
 | **Fix (landed 2026-07-18)** | Additive `git_sha: env.gitSha` on both audit metadata payloads in `supabase/functions/overshoot-exit-run/index.ts`. Deployed. Monday's 19:50Z heartbeat MUST carry the stamp. |
 | **Class rule (pending)** | Every audit-of-record row emitted by a strategy function MUST include `git_sha` at write-time. Tracked for the ACT-533 CI-guard sweep. |
 | **Cross-refs** | action-tracker: INC-113 full entry; ACT-529 (version uniformity); ACT-533 (mapping-defect CI guard family); INC-112 (deploy-hold sibling). |
+
+## INC-115 — Stamp-consistency refusals during ACT-536 retroactive dial series (2026-07-18)
+
+| Field | Value |
+|---|---|
+| **Filed** | 2026-07-18 during ACT-536 retroactive dial series 07-08 → today. |
+| **Class** | Data-consistency refusal (NOT fabrication) — D2 existence-check held; refused rows never entered the report. |
+| **Signal** | 3 admissions this week (2026-07-09, 07-13, 07-15) had `overshoot_lots.cohort_cell_id` stamps whose parsed `(side,band,wN,mq,dd)` did not echo-match the joined `overshoot_events.study_cell_ref` for the same admission run. |
+| **Action** | All three refused with `stamp-consistency-fail`; excluded from dial rows this week. Root-cause read owed (candidate: mid-run universe-refresh window overlap; ACT-538 territory). |
+| **Class rule** | D1/D2/stamp-echo template (established INC-114 → confirmed here) is the permanent read pattern for every cohort join. Stamp mismatch = refuse-and-file, never substitute. |
+| **Cross-refs** | INC-114 (parent template); ACT-536 (consumer); ACT-538 (universe-refresh candidate root-cause); ACT-548 (framework). |
