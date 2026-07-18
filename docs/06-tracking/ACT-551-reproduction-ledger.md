@@ -739,3 +739,59 @@ SELECT COUNT(*)                                   AS scr_rows,
 
 ### Cross-refs
 INC-114 (parent template); Catalog #62 (fourth firing, this row); ACT-527 (build decision suspended pending R-004.e re-derivation); ACT-544-v2 (DEC-080 charter — source-of-record probe required); ACT-545 §3.2 / §3.3 (DEC-081 / DEC-082 charter — same); DEC-080 / DEC-081 / DEC-082 (this row is the pre-commit gate; verdicts suspend); ACT-549 (Monday rule — **unaffected**, exit table is realized-return-driven and does not depend on any R-004 number); ACT-536 dial-as-code (unaffected).
+
+---
+
+## VOID-SWEEP-NOTICE — 2026-07-18 (R-004 ruling 3)
+
+All ledger rows and downstream artifacts that cited the phantom 4-year `analyst_revision_observations` slice are stamped **`VOIDED-PENDING-BACKFILL`** in their originating docs. Rows in THIS ledger are unaffected (R-001 through R-004 each cite in-DB sources that reconcile). Downstream stamping is tracked here:
+
+| Doc | Void scope | Preserves |
+|---|---|---|
+| `docs/06-tracking/ACT-545-signal-coverage-matrix.md` | Analyst-downgrade + Analyst-upgrade rows | Earnings (→ `pead_consensus_observations`), SI (→ `overshoot_short_interest`), news-attention rows |
+| `docs/06-tracking/action-tracker.md` (ACT-531 entry) | Analyst buckets up + down | No-signal, earnings, high-SI, M&A stub |
+| ACT-544-v2 adoption table (in-tracker) | Entire table | (none) |
+| `docs/08-planning/approved-decisions.md` DEC-080 / DEC-081 rows | Numeric claims only | §6 risk-class structural rationale |
+
+Unstamping requires ACT-554-a/b backfill green + re-derivation posted as new ledger rows.
+
+---
+
+## Row R-005-CHARTER — Squeeze-ride adopted-cells honest re-derivation (BLOCKS ACT-527 build decision)
+
+**Priority:** P0. **Live impact:** ACT-527 build decision cannot commit until this row lands as REPRODUCED / DIVERGED per sub-claim.
+
+**Corpus:** `overshoot_short_interest` × `overshoot_study_cell_results` under run pin `1888e113-f9b3-43f5-856c-d91666a3c121`.
+
+**Scope (single artifact when executed):**
+
+1. §B grid — full threshold × window × momentum × drawdown, per ACT-527 §B convention. No cell hidden; no bucket collapsed.
+2. Ladder sweep — `{15%, step 2.5%/+5%, floor 7.5%}` and adjacent neighbors, per ACT-527 §C.
+3. Robustness set (each sub-claim its own row, verbatim SQL, raw output):
+   - winsorized mean (5/95),
+   - median,
+   - top-decile share,
+   - n.
+4. Adoption gate — ACT-528 frozen bar (portfolio per-slot-day ≥ +15% net of capacity loss under refill; n ≥ 1,000; regime-stable). Unchanged.
+
+**Verdict grammar:** REPRODUCED / DIVERGED(new_value) / IRREPRODUCIBLE per sub-claim. Any IRREPRODUCIBLE row suspends the proposal.
+
+**Squeeze-ride proposal lives-or-dies on this row.** No shortcut through the retracted compound line ("raw +124.3 / winsorized +87.6 / median +41.2 / top-10 19.4% / n=1,842"), which is confirmed IRREPRODUCIBLE per R-004.
+
+---
+
+## Row R-006-CHARTER — ACT-527 §A short-curve KEEP-CURRENT cell reproduction
+
+**Priority:** P0 (immediately after R-005; validates the frozen SI threshold that R-005's ladder inherits).
+
+**Corpus:** `overshoot_study_cell_results` under run pin `1888e113-f9b3-43f5-856c-d91666a3c121`. Same author, same era.
+
+**Deliverable:** the exact cells that produced the "SI ≥ 20% KEEP-CURRENT" verdict — re-derived with verbatim SQL. Every cited number in the KEEP-CURRENT rationale must earn a REPRODUCED stamp; any IRREPRODUCIBLE row suspends the frozen short threshold pending re-charter.
+
+**Sequencing:** immediately after R-005. Standing Format Rule binding.
+
+---
+
+## Row R-004-CODA — Catalog #62 fourth firing filed on `docs/ai-failure-modes.md`
+
+Fourth-firing coda appended to `docs/ai-failure-modes.md` (dated 2026-07-18). Pattern signal: every fabrication to date invented ANALYSIS over real-or-absent data under delivery pressure — the Standing Format Rule remains the sole effective control, and R-004 is proof-of-work that the gate functions (3 of 4 numeric legs suspended before commit).
