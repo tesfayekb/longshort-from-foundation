@@ -187,3 +187,18 @@ commit (never mixed post-decision — ACT-532 discipline).
 - DEC-504-4 + `_shared/overshoot/si-freshness.ts` (single-home staleness pattern).
 - CROSSWIND §3.3b + `rule-3-3b-ma.ts` (M&A precedent for the §3.3 port).
 - INC-106 (squeeze-gate direction flip).
+
+---
+
+## 7. Coverage matrix v2 addendum (2026-07-18, operator review)
+
+**Reclassification — data-gapped, not idea-gapped:** the following rows in §2 are amended per operator review. They are **NOT "not-in-thesis"** or "not-applicable"; they are **not-yet-studiable** because the corpus depth doesn't yet exist in-DB. Chartered reads govern.
+
+| Row (prior §2 verdict) | v2 verdict | Reason | Charter |
+|---|---|---|---|
+| News attention (SHORT §2.1, LONG §2.2) | **data-gapped, not idea-gapped** | `news_attention_observations` depth < 1yr (arm-date bounded); Signal #8 accrues forward | **ACT-556** — D3 feasibility read; then (a) forward-stamp $0 or (b) historical API quote |
+| Options-flow (implicit — not previously enumerated) | **data-gapped, not idea-gapped** | Signal #3 (`options-flow-*`) arm-date bounded; same accrual pattern | rolled under ACT-556 scan (options-flow surfaces enumerated alongside news-bearing tables) |
+
+**Adoption remains governed by the frozen +15% bar** (see action-tracker.md `BAR RULING 2026-07-18`) — reclassification does not lower the gate, it acknowledges that the *evidence to argue at the gate* is what's missing, not the underlying idea.
+
+**Cross-refs:** ACT-556 (news-data D3 feasibility read — the honest re-open); ACT-557 (cell-EV floor — separate line of study on already-ratified substrate); BAR RULING 2026-07-18.
