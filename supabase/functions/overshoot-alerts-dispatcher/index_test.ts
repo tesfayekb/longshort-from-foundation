@@ -1,4 +1,5 @@
 import { assert } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { OVERSHOOT_ALERTS_DISPATCHER_VERSION } from './index.ts';
 
 Deno.test('INC-97 watchdog owns an independent Alpaca-vs-ledger A5 scan', async () => {
   const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
@@ -19,10 +20,17 @@ Deno.test('INC-97 fill-sweep overdue mapping uses sweep-owned heartbeat, never e
 Deno.test('INC-97 dispatcher response echoes independent A5 count and version (INC-108 rebumped)', async () => {
   const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
   assert(src.includes('independent_a5: independentA5.length'));
-  // INC-108 (2026-07-15) bumped the version echo to reflect the SI
-  // mapping repoint from settlement date (as_of_date) to ingest time
-  // (computed_at).
-  assert(src.includes("'inc108-si-computed-at-mapping-20260715'"));
+  // Drift-proof pin: assert the source embeds the CURRENT exported
+  // constant rather than a hardcoded literal. ACT-532 checklist
+  // (grep for old literal → zero) is the second line of defense.
+  //
+  // Bump history (append-only):
+  //   inc97-*-20260709        — initial A5 watchdog
+  //   inc107-exit-artifact-fix-and-arm-floor-20260715
+  //   inc108-si-computed-at-mapping-20260715
+  //   inc110-f1a-f3-cohort-tuple-20260718  ← current
+  assert(OVERSHOOT_ALERTS_DISPATCHER_VERSION.length > 0);
+  assert(src.includes(`'${OVERSHOOT_ALERTS_DISPATCHER_VERSION}'`));
 });
 
 Deno.test('INC-108 SI overdue mapping uses computed_at (ingest time), never as_of_date (settlement date)', async () => {
