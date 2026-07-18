@@ -86,10 +86,12 @@ sha256("a026dc51||DEC-082-ma-guard-v1")[:8] = 1f82fa9e
 | Tier | Monthly USD | Rate limit | Fits this backfill? |
 |---|---|---|---|
 | Basic | 29 | 300 rpm | Yes — ≤1.5 hr one-shot |
-| Premium | 79 | 750 rpm | Comfortable; ~35 min |
+| **Premium (operator's active plan)** | **69** | **750 rpm** | **Comfortable; ~35 min. 30-yr history depth available.** |
 | Ultimate | 119 | 3,000 rpm | Overkill unless paralleling more history |
 
-**Feasibility verdict:** **OBTAINABLE.** 4-year backfill for 839 tickers is a **≤$29 one-time-tier / ≤1.5 hr one-shot** at the entry FMP tier already on file. **No cost blocker; no schema blocker (`analyst_revision_observations` structure suffices).**
+**Feasibility verdict:** **OBTAINABLE — NO UPGRADE REQUIRED.** Operator's active FMP plan is **Premium ($69/mo, 750 rpm, 30-yr history depth)**. 4-year backfill for 839 tickers executes in **~35 min wall-clock** at 750 rpm. **No cost blocker; no schema blocker (`analyst_revision_observations` structure suffices).**
+
+**CORRECTION — plan-assumption error (self-filed):** The earlier feasibility quote assumed the FMP **Basic** tier ($29/mo). Subscription state is operator-side ground truth and should have been asked before the quote was framed as a cost proposal — same provenance discipline as D3 (boundary sources are authoritative; internals are derived). No upgrade occurs; the backfill runs at Premium rate limits already paid for. Void banner N/A (numeric backfill scope unchanged), but this line is the honest correction of the ruling's framing.
 
 **Execute-on-approval plan (this ruling is the source+cost statement operator required):**
 
