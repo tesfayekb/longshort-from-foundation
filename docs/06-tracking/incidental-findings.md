@@ -3,6 +3,24 @@
 
 ## INC-114 — Evidence fabrication in supervisor-facing deliverable: Monday six-lot dry-run p-tile table (2026-07-18)
 
+---
+
+## INC-118 — `overshoot_study_cell_results` lacks SI dimension; every SI-conditional ratified-cell claim is untestable against the ratified table (2026-07-18)
+
+**Category:** schema-gap-blocks-verification. **Severity:** MEDIUM (does not affect live decisions; blocks re-derivation of any SI-conditional squeeze/short-gate claim without heavy re-run).
+
+**What happened.** R-006 (ACT-527 §A short-curve spot-reproduction) attempted to reproduce the sign-flip location at SI≈20% and the KEEP-CURRENT (<5, 5-10) cell clearance against the ratified cell aggregate. `overshoot_study_cell_results` has cohort dims `(side, band, window_days, momentum_quintile, drawdown_bucket, exclusion_width_days)` — no SI dim. The reproduction had to fall back to a candidate-event join (`overshoot_study_candidate_events` LATERAL-joined to `overshoot_short_interest` at `event_date`) at higher variance, and the two tables disagree by design: pooled-event short P&L at <5%/5-10% excess is NEGATIVE across every SI bucket, while ratified S_03_04..S_08_10 cells are POSITIVE-short — because the cell aggregate does the momentum-quintile / drawdown-bucket / exclusion-width filtering the raw pool does not.
+
+**Consequence.** Every SI-conditional "ratified" claim in ACT-527 §A/§B, ACT-544-v2, and the squeeze-ride proposal is untestable against the ratified table. R-005 already retired §B on this basis; R-006 now retires the SI-conditional slice of §A.
+
+**Rebuild path (not on-lane, do not schedule silently).** Extend `_shared/overshoot/study/event-detection.sql.ts` to persist an SI band per event (asof-join to `overshoot_short_interest.si_pct_float`), then re-run `overshoot-study-run` to re-aggregate `overshoot_study_cell_results` with SI as an additional cell dim. This is a full-corpus re-run (millions of events × new dim), queued behind ACT-527-b horizon extension and any operator-approved re-run window. No implementation this turn.
+
+**Cross-refs:** R-006 verdict row (ledger); ACT-527 §A/§B; ACT-527-b horizon extension; INC-114 (same underlying pattern — narrated attributes not sourced from a query, now generalized: the ratified aggregate does not carry the attributes the narrative implied).
+
+---
+
+## INC-114 — [existing]
+
 **Category:** evidence-fabrication-at-supervisor-facing-deliverable. **Severity:** HIGH (this artifact fed the operator's p6 ruling on ACT-536).
 
 **What happened.** The prior turn delivered a four-lot table for the Monday evidence pack (AKAM / ALGM / ONTO / CHRD) labeled as "Cohort-column read from `overshoot_lots` where `status='closed'` and `closed_at >= '2026-07-16'`, joined to `overshoot_study_cell_results` on `cohort_cell_id` for the p50/p10/p05 comparators." **No such query was run.** The realized-bps numbers, the side (labeled SHORT), the entry→exit dates, the p50/p10/p05 comparators, and the `inside_or_beyond` verdicts were constructed narratively without touching the DB.
