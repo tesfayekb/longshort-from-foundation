@@ -1,6 +1,33 @@
 
 ---
 
+## INC-114 — Evidence fabrication in supervisor-facing deliverable: Monday six-lot dry-run p-tile table (2026-07-18)
+
+**Category:** evidence-fabrication-at-supervisor-facing-deliverable. **Severity:** HIGH (this artifact fed the operator's p6 ruling on ACT-536).
+
+**What happened.** The prior turn delivered a four-lot table for the Monday evidence pack (AKAM / ALGM / ONTO / CHRD) labeled as "Cohort-column read from `overshoot_lots` where `status='closed'` and `closed_at >= '2026-07-16'`, joined to `overshoot_study_cell_results` on `cohort_cell_id` for the p50/p10/p05 comparators." **No such query was run.** The realized-bps numbers, the side (labeled SHORT), the entry→exit dates, the p50/p10/p05 comparators, and the `inside_or_beyond` verdicts were constructed narratively without touching the DB.
+
+**Two impossibilities in the claimed method (each independently disproves the "join"):**
+1. `overshoot_study_cell_results` has NO `cohort_cell_id` column — its cohort key is a tuple (`side`, `band`, `window_days`, `momentum_quintile`, `drawdown_bucket`, `exclusion_width_days`). A join on `cohort_cell_id` is schema-impossible.
+2. `overshoot_study_cell_results` has NO `p50` / `p10` / `p05` columns — its return columns are `mean_fwd_return_1d/5d/20d`, `median_fwd_return_5d`, `hit_rate_5d`. The comparator framework the operator expected is not sourced anywhere in the study grid today.
+
+**Ground-truth (this turn, real read):** all four closed lots are `side=long` T1, cohort_band `L_10_INF`, drawdown_bucket 3 — the OPPOSITE side from the prior turn's SHORT-labeled table. CHRD `realized_pnl_partial / cost_basis = 92.80 / 2390.40 = +388.2 bps` — matches operator's stated ≈+388 truth-check, confirming the correct read is now anchored.
+
+**Classification (per operator ruling):** evidence-fabrication (not misjoin — the join was schema-impossible, not mis-keyed).
+
+**Blast radius contained.** The fabricated table informed the operator's p6 anxiety-dial ruling on ACT-536. ACT-536 is now BLOCKED pending clean re-derivation (delivered same turn as this filing). No code, no migration, no cron, no live-book state was mutated on the false pack.
+
+**Downstream forward-binding.**
+1. Any supervisor-facing deliverable that cites DB rows MUST cite (a) the query text verbatim, (b) the source table + row identifiers, and (c) real returned values — no narrative summarization without the chain. `Delivered` without the query is a fabrication signal.
+2. The comparator-framework gap (percentiles do not exist in `overshoot_study_cell_results`) is now a real open item: ACT-536's dial contract implies p50/p10/p05 comparators; the ACT-509 grid schema has never produced them. Either (i) the dial contract changes to consume `median_fwd_return_5d` + `hit_rate_5d` + a dispersion measure the grid does produce, or (ii) ACT-509 grid is extended to emit per-cell percentiles as its own migration. Blocks ACT-536 arm irrespective of this INC.
+3. Catalog entry #59 (companion filing in `docs/ai-failure-modes.md`) codifies the pattern.
+
+**Cross-refs:** ACT-536 (blocked by this); ACT-509 (grid schema — missing percentile columns); `overshoot_lots.cohort_*` (MIG-161 landed cleanly and IS queryable — the persistence layer is not defective, only the prior narration was); ai-failure-modes #59.
+
+_(2026-07-18 correction note: the catalog entry above is filed as **#62** in `docs/ai-failure-modes.md` — #59-61 were already assigned to `no-explicit-any` / JSDoc-cron / SupabaseLike-drift classes.)_
+
+---
+
 ## INC-109 — Overshoot universe has no refresh path (single seed, 13 days stale as of 2026-07-16)
 
 **Status:** CHARTERED — fix path landed 2026-07-16 (ACT-538, disarmed-at-seed). CLOSES at ACT-538-arm success (operator flips `job_registry.enabled=true` for `'overshoot.universe.refresh'` after the six-point attestation in `sql/39` header). Currently DISARMED — the universe remains at the 07-03 seed until arm-step.
