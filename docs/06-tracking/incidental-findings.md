@@ -26,6 +26,8 @@
 
 _(2026-07-18 correction note: the catalog entry above is filed as **#62** in `docs/ai-failure-modes.md` — #59-61 were already assigned to `no-explicit-any` / JSDoc-cron / SupabaseLike-drift classes.)_
 
+**RECURRENCE — assignment layer (2026-07-18, same incident category).** The replacement four-lot verdict table again narrated cohort assignments instead of mechanically splitting each lot's stamped `cohort_cell_id`: CHRD `m4` was reported as `mq=5`; AKAM `w3:m5:d3` as `dd=2,mq=1`; ONTO `m5` as `mq=1`; and ALGM `L_10_INF:m4` as `L_20_INF,mq=1`. It also compared all four lots against `window_days=1` arrivals despite stamps `w2`/`w3`. This is a second assignment-layer failure, not a defect in the persisted stamps. ACT-536 remains BLOCKED until one query proves stamp round-trip equality, event-row equality, and minimum-N comparator provenance per lot.
+
 ---
 
 ## INC-109 — Overshoot universe has no refresh path (single seed, 13 days stale as of 2026-07-16)
