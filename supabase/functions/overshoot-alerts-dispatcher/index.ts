@@ -671,15 +671,17 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   // watchdog (default)
-  const [ks, fr, fs, rd, independentA5, co] = await Promise.all([
+  const [ks, fr, fs, rd, independentA5, co, mcs, ea] = await Promise.all([
     scanKillSwitchChanges(correlationId),
     scanFailedRuns(correlationId),
     scanFillSweepShortfall(correlationId),
     scanReconciliationDivergence(correlationId),
     scanBrokerLedgerDivergence(correlationId),
     scanCronOverdue(correlationId),
+    scanEntryMarketClosedStreak(correlationId),
+    scanExitAttemptsExhausted(correlationId),
   ]);
-  const all = [...ks, ...fr, ...fs, ...rd, ...independentA5, ...co];
+  const all = [...ks, ...fr, ...fs, ...rd, ...independentA5, ...co, ...mcs, ...ea];
   const summary = {
     kill_switch: ks.length,
     failed_runs: fr.length,
@@ -687,6 +689,8 @@ Deno.serve(createHandler(async (req: Request) => {
     a5_diverge: rd.length + independentA5.length,
     independent_a5: independentA5.length,
     cron_overdue: co.length,
+    market_closed_streak: mcs.length,
+    exit_attempts_exhausted: ea.length,
     total: all.length,
     dispatched: all.filter(x => x.outcome === 'dispatched').length,
     skipped: all.filter(x => x.outcome === 'skipped_idempotent').length,
