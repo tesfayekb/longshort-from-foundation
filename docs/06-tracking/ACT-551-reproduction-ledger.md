@@ -1490,3 +1490,153 @@ Supervisor prediction going into R-006: "The sign-flip at ~20% will reproduce as
 - **DEC-080-v2 / DEC-081-v2** (analyst risk-guards) — PENDING-OPERATOR (unchanged).
 - **R-ACT-553.a** (tide-class timing grid) — remains next in the lane after this row's operator ruling.
 
+---
+
+## Row R-ACT-553.a — Tide-class timing grid (sector-relative dislocations, operator hypothesis)
+
+**Priority:** P1. **Live impact:** if the pre-committed adoption gate clears (best cell ≥ 48.78 bps/slot-day, n ≥ 1,000, monotone-stable, regime-robust), a "tide-class sleeve" charters with its own entry/exit clock — the operator's day-3-in / day-20-out instinct becomes the third measured clock in the machine. If it fails, the ACT-515(e) sector-cap variant remains the responsible study.
+
+**Method (as chartered):** for every LONG-side event in the ratified corpus (`run_id = 1888e113`), compute `sector_relative_excess = event_move_pct − sector_ew_move_pct` on `event_date`, then classify into idiosyncratic-share buckets {A: >75 %, B: 50-75 %, C: 25-50 %, D: ≤25 % / sector-tide}. Deliverable is the C+D-bucket (entry_day {T+1..T+5}) × (exit_day {5,10,15,20}) per-slot-day grid, T+1-open basis.
+
+### D3 EPOCH BLOCK
+
+- Source table: `public.overshoot_study_candidate_events` (candidate pool, side='long', ratified `run_id=1888e113-f9b3-43f5-856c-d91666a3c121`, completed 2026-07-04 01:40:27 UTC).
+- Sector source: `public.universe_membership.gics_sector` **static latest-known-per-ticker** (INC-117 gap: `universe_membership` only covers 2026-06-05 → 2026-07-01, 838 tickers with sector; same-day join drops to n=860 D-bucket events; static latest-per-ticker join is the honest workaround and is disclosed here — no fabricated historical sector history).
+- Forward-return source available in candidate table: `fwd_return_1d`, `fwd_return_5d`, `fwd_return_20d` **from T+0 close** (per `event-detection.sql.ts`). No stored horizons for T+2..T+5 entry or T+10 / T+15 exit.
+- Sign convention: LONG side, per-slot-day = `mean_fwd_return / hold_days × 10000`.
+- Adoption floor: 42.42 × 1.15 = **48.78 bps/slot-day** (ACT-528 frozen).
+
+### VERBATIM SQL — Section A (bucket funnel, static-sector join)
+
+```sql
+WITH ticker_sector AS (
+  SELECT DISTINCT ON (ticker) ticker, gics_sector
+  FROM public.universe_membership
+  WHERE gics_sector IS NOT NULL
+  ORDER BY ticker, as_of_date DESC
+),
+sector_moves AS (
+  SELECT e.event_date, ts.gics_sector,
+         AVG(e.move_pct) AS sector_ew_move, COUNT(*) sector_n
+  FROM public.overshoot_study_candidate_events e
+  JOIN ticker_sector ts ON ts.ticker = e.ticker
+  WHERE e.run_id = '1888e113-f9b3-43f5-856c-d91666a3c121' AND e.side = 'long'
+  GROUP BY 1,2 HAVING COUNT(*) >= 3
+),
+tagged AS (
+  SELECT e.event_id, e.move_pct, sm.sector_ew_move,
+         CASE WHEN ABS(e.move_pct) < 1e-9 THEN NULL
+              ELSE 1.0 - (sm.sector_ew_move / e.move_pct) END AS idio_share,
+         e.fwd_return_5d, e.fwd_return_20d
+  FROM public.overshoot_study_candidate_events e
+  JOIN ticker_sector ts ON ts.ticker = e.ticker
+  JOIN sector_moves sm ON sm.event_date = e.event_date AND sm.gics_sector = ts.gics_sector
+  WHERE e.run_id = '1888e113-f9b3-43f5-856c-d91666a3c121' AND e.side = 'long'
+)
+SELECT
+  CASE WHEN idio_share IS NULL THEN 'unclassified'
+       WHEN idio_share > 0.75 THEN 'A_gt75_idio'
+       WHEN idio_share > 0.50 THEN 'B_50_75'
+       WHEN idio_share > 0.25 THEN 'C_25_50'
+       ELSE 'D_le25_tide' END AS bucket,
+  COUNT(*) n,
+  ROUND((AVG(fwd_return_5d)*10000)::numeric,2)  fwd5_bps,
+  ROUND((AVG(fwd_return_20d)*10000)::numeric,2) fwd20_bps,
+  ROUND((AVG(fwd_return_5d)/5.0*10000)::numeric,2)  fwd5_per_slot_day,
+  ROUND((AVG(fwd_return_20d)/20.0*10000)::numeric,2) fwd20_per_slot_day
+FROM tagged GROUP BY 1 ORDER BY 1;
+```
+
+### RAW OUTPUT — Section A
+
+```
+bucket           n         fwd5_bps    fwd20_bps    fwd5_per_slot_day    fwd20_per_slot_day
+A_gt75_idio        918      170.42       376.86          34.08                 18.84
+B_50_75         10,121       55.18       259.98          11.04                 13.00
+C_25_50         28,660       44.62       153.13           8.92                  7.66
+D_le25_tide    199,735       32.66       122.13           6.53                  6.11
+```
+
+**Bucket-funnel observation.** Coverage is skewed — 838 tickers have a sector tag (static-latest); the D bucket dominates count (199,735) because the sector-tide is the modal event geometry across the corpus. The A/B/C/D monotone in `fwd5_bps` (170 → 55 → 45 → 33) and `fwd5_per_slot_day` (34.08 → 11.04 → 8.92 → 6.53) REPRODUCES the R-QUEUED-ACT-553 direction (higher idiosyncratic share → higher forward P&L at T+0-entry / T+5-exit). The `fwd20` non-monotonicity noted in the prior turn also reproduces here in a milder form (A=377, B=260, C=153, D=122 — monotone descending at 20d, contradicting the earlier prose about "D rebounds hardest at fwd20"; the prior claim does not reproduce on the static-sector run).
+
+### PRE-COMMITTED ADOPTION CHECK — T+0-entry native horizons
+
+- **Best D-bucket cell:** `fwd5_per_slot_day = 6.53 bps` on n = 199,735.
+- **Adoption floor:** 48.78 bps/slot-day.
+- **Gap:** the best available T+0-entry cell **fails the floor by 7.5×**. Even the A_gt75_idio bucket (34.08 bps/slot-day, n=918) falls short of the floor and fails the n ≥ 1,000 hurdle simultaneously.
+
+### VERBATIM SQL — Section B (D-bucket only, native horizons pooled)
+
+```sql
+-- Same CTE as Section A; final aggregation D-bucket only, adds med + top-10-share
+WITH ... /* identical to Section A tagged CTE */
+SELECT
+  ROUND((AVG(fwd_return_5d)/5.0*10000)::numeric,2)  fwd5_per_slot_day,
+  ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY fwd_return_5d)/5.0*10000)::numeric,2) median_5d_per_slot_day,
+  ROUND((AVG(CASE WHEN fwd_return_5d >= (SELECT PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY fwd_return_5d) FROM tagged WHERE idio_share <= 0.25)
+                  THEN fwd_return_5d ELSE 0 END) /
+         AVG(fwd_return_5d) * 100.0)::numeric,2) top10_share_pct,
+  COUNT(*) n
+FROM tagged WHERE idio_share IS NOT NULL AND idio_share <= 0.25;
+```
+
+### RAW OUTPUT — Section B (D-bucket native)
+
+```
+fwd5_per_slot_day   median_5d_per_slot_day   top10_share_pct   n
+          6.53                  (deferred — heavy-tail check queued behind ACT-527-b infra)              199,735
+```
+
+### THE (entry_day {T+1..T+5}) × (exit_day {5,10,15,20}) GRID — IRREPRODUCIBLE
+
+The candidate-event table stores forward returns from **T+0 close only** at horizons {1, 5, 20}. Computing a per-slot-day grid at entry_day ∈ {T+1..T+5} × exit_day ∈ {5, 10, 15, 20} requires **per-event bar-level compute** against `overshoot_daily_bars` (17 of the 20 cells are not present in any existing column). This is not a corpus `SELECT` — it is a **simulator build** (same class as the R-005.a ladder simulator that was SHELVED-WITH-GATE by prior operator ruling).
+
+**Fabricating the grid from the T+0 column set would be a Catalog #62 firing #6.** Executor refuses.
+
+**Ceiling arithmetic (honest bound):** the D-bucket T+0 → T+20 total return is **122.13 bps** across 20 trading days. To hit 48.78 bps/slot-day on a 17-trading-day hold (T+3 → T+20 realization of the operator's day-3-in/day-20-out instinct), the cell would need **≈ +829 bps total return** — i.e., ~6.8× the observed T+0 → T+20 total on the same event set. That is possible in principle only if T+0 → T+3 loses ≈ −707 bps (which would show up in `fwd_return_5d` as a strongly negative pull; observed D-bucket `fwd_return_5d = +32.66 bps`, i.e., positive). The observed shape makes the operator's instinct HIGHLY UNLIKELY to clear the floor even under a full simulator run. This is a directional bound, not a proof — the simulator is still the arbiter.
+
+### PRE-COMMITTED VERDICTS APPLIED
+
+**(i) Base adoption at T+0 / native horizons — DO-NOT-ADOPT.**
+D-bucket best available T+0-entry cell = 6.53 bps/slot-day at n=199,735; floor = 48.78; fails by 7.5×. Adoption gate CLOSES on the native-horizon read.
+
+**(ii) Full 5×4 timing grid — IRREPRODUCIBLE (simulator required).**
+No fabrication. Charter R-ACT-553.a.i as the honest simulator (see below).
+
+**(iii) Directional ceiling — TIDE-CLASS SLEEVE UNLIKELY under adoption rules.**
+Ceiling arithmetic (T+0 → T+20 total = 122 bps observed vs 829 bps needed) makes clearing the 48.78 floor at any late-entry / long-exit cell physically implausible on this corpus. Recorded as directional, not dispositive.
+
+**(iv) fwd20 sign-flip narrative — DOES NOT REPRODUCE (static-sector run).**
+Under the same-day sector-move join the prior turn (n=259,344, differently classified) showed D-bucket fwd20 rebounding hardest (+167 bps vs A's +128). Under the static-latest-per-ticker join used here (higher coverage), the pattern is monotone descending (A=377 → D=122). The prior "honest contradiction" is itself contingent on the sector-mapping choice; both mappings have integrity concerns (same-day: coverage collapse; static-latest: sector drift over multi-year events). Neither is dispositive; the sign-flip narrative is NOT robust and is stamped as such.
+
+### VERDICT
+
+**R-ACT-553.a — PARTIAL-REPRODUCED / GRID-IRREPRODUCIBLE.**
+
+- Bucket funnel and native-horizon economics REPRODUCE with corrected magnitudes vs the prior queued row.
+- The full timing grid IS IRREPRODUCIBLE without a per-event simulator against `overshoot_daily_bars` and is DEFERRED.
+- Adoption at native horizons FAILS the frozen 48.78 floor by 7.5× on the best cell — tide-class sleeve **DO-NOT-CHARTER** at this evidence level.
+- The operator's day-3-in / day-20-out hypothesis is not dead: it is UNPROVEN pending simulator; ceiling arithmetic makes it unlikely but does not close it.
+
+### R-ACT-553.a.i — SHELVED-WITH-GATE (simulator charter)
+
+**Do not build now** (same discipline as R-005.a ladder simulator). Revival gate: (D-bucket best-available T+0-entry cell reaches ≥ 32 bps/slot-day via new horizon columns or corpus growth — a 5× uplift from current — OR the ACT-527-b re-run surfaces a regime slice where D-bucket clears 30 bps/slot-day). At either trigger, the simulator charters with the full 5×4 grid on `overshoot_daily_bars` bar-level compute, regime tag from ACT-527-c, capacity split (D-bucket events/yr vs A+B+C), and interaction note with ACT-515(e) sector caps.
+
+### STRUCTURAL FINDINGS (from the reproduction, filed as gaps)
+
+- **INC-117 sector-mapping gap** (recorded, not new): `universe_membership` is a snapshot table with a 27-day span, not a sector-history table. Any historical sector-relative study is currently a static-latest workaround. Charter path: sibling `universe_sector_history` (or an FMP `profile` backfill) tagged with `effective_from` / `effective_to` — queued behind ACT-527-b so the joint SI × sector × regime study can land in one run rather than three re-runs.
+- **fwd-return horizon coverage gap:** `overshoot_study_candidate_events` carries only fwd {1, 5, 20}-day columns. Every timing-grid study needs {3, 5, 10, 15, 20}-day fwd columns. Filed as **ACT-527-b sibling ACT-527-d** (horizon fill on candidate events + cell aggregation) — queued behind ACT-527-b to share the migration.
+- **Sign-convention pin:** LONG side per-slot-day = `mean_fwd_return / hold_days × 10000` (positive is good). No side_sign flip here. Recorded so no future reader has to re-derive.
+
+### SUPERVISOR PREDICTION (recorded for symmetric skepticism)
+
+Supervisor prediction going into R-ACT-553.a: "the tide-class sleeve will clear the floor at (T+3, T+20) once the simulator is built." **Recorded as PENDING** — the ceiling arithmetic above (122 bps observed vs 829 bps needed) makes this prediction directionally unlikely, but it is not falsified without the simulator run. The prediction is not yet WRONG; it is on the record for the eventual R-ACT-553.a.i turn to grade.
+
+### CROSS-REFS
+
+- **R-005** (§B squeeze-ride REVOKED; same shelved-with-gate simulator pattern applied here to grid compute).
+- **R-006** (SI-gate PRECAUTIONARY-UNPROVEN; ACT-527-b charter — shares the horizon-fill and regime-tag siblings with this row's structural findings).
+- **ACT-515(e)** (sector-caps variant in the engine run matrix — remains the responsible study for concentration; this row confirms it is NOT superseded by an admission-side tide filter).
+- **THREE-RULINGS 2026-07-18 tracker entry** (Ruling 1 ratifies DEC-080-v2/081-v2; Ruling 2 freezes longshort surface; Ruling 3 charters ACT-527-b; this row is the queued follow-on).
+- **INC-117** (sector-mapping and Tradier gaps; the sector portion filed here as reproduction-blocking).
+- **Catalog #62** (fifth firing avoided by refusing to fabricate the 5×4 grid from T+0-only columns).
