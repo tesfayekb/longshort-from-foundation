@@ -400,6 +400,15 @@ Deno.serve(createHandler(async (req: Request) => {
   const runId = crypto.randomUUID();
   const computedAtIso = as_of.toISOString();
 
+  // ACT-527 historical backfill: optional `limit` overrides the default
+  // fetcher window (6 reports ≈ 3 months bi-monthly). limit=120 covers
+  // ~5 years of settlement dates in one call/ticker. Bounded [1, 200] for
+  // safety. Same wire cost per ticker regardless (single Polygon call).
+  const rawLimit = typeof body.limit === 'number' ? Math.floor(body.limit) : NaN;
+  const siLimit: number = Number.isFinite(rawLimit) && rawLimit >= 1 && rawLimit <= 200
+    ? rawLimit
+    : DEFAULT_SHORT_INTEREST_LIMIT;
+
   await writeStrategyAuditEvent({
     strategyKey: 'overshoot',
     action: 'overshoot.short_interest.compute.started',
@@ -410,6 +419,7 @@ Deno.serve(createHandler(async (req: Request) => {
       as_of: computedAtIso,
       ticker_count: tickers.length,
       done,
+      si_limit: siLimit,
       trigger: 'manual',
     },
   });
@@ -431,7 +441,7 @@ Deno.serve(createHandler(async (req: Request) => {
       siResult = await siFetcher.fetchShortInterest(
         ticker,
         as_of,
-        DEFAULT_SHORT_INTEREST_LIMIT,
+        siLimit,
       );
     } catch (e) {
       failures.push({ ticker, error: `si_fetch: ${e instanceof Error ? e.message : String(e)}` });
