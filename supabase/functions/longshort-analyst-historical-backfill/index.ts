@@ -131,8 +131,8 @@ Deno.serve(createHandler(async (req: Request) => {
   const preSnap = await snapshotLiveRows();
 
   // Start job_executions row for the ledger (D2).
-  // allow-now-in-business-logic: ADR-003 — ingest-time provenance stamp for job_executions.started_at on a one-shot RESEARCH-ONLY backfill (ACT-554-a); this timestamp IS ingest wall-clock by definition (when the operator invoked the job), not a derived value fed into any strategy/reconciliation kernel. Event epoch is carried by as_of_date; DEC-034 clause (4) preserved.
-  const jobStart = new Date().toISOString();
+  // ACT-554-a: ingest-time provenance stamp for job_executions.started_at on a one-shot RESEARCH-ONLY backfill; this timestamp IS ingest wall-clock by definition (when the operator invoked the job), not a derived value fed into any strategy/reconciliation kernel. Event epoch is carried by as_of_date; DEC-034 clause (4) preserved.
+  const jobStart = new Date().toISOString(); // allow-now-in-business-logic: ADR-003
   const { data: jobRow } = await supabaseAdmin
     .from('job_executions')
     .insert({
@@ -189,8 +189,8 @@ Deno.serve(createHandler(async (req: Request) => {
       .from('job_executions')
       .update({
         status: liveIntegrityOk ? 'succeeded' : 'failed',
-        // allow-now-in-business-logic: ADR-003 — ingest-time provenance stamp for job_executions.completed_at on the same RESEARCH-ONLY backfill; measures when the ingest finished, no money-path consumer reads it.
-        completed_at: new Date().toISOString(),
+        // ACT-554-a: ingest-time provenance stamp for job_executions.completed_at on the same RESEARCH-ONLY backfill; measures when the ingest finished, no money-path consumer reads it.
+        completed_at: new Date().toISOString(), // allow-now-in-business-logic: ADR-003
         metadata: {
           act: 'ACT-554-a',
           source_label: SOURCE_LABEL,
@@ -326,8 +326,8 @@ Deno.serve(createHandler(async (req: Request) => {
         contribution: 0, // backfill: computed downstream in ACT-554-b re-runs
         age_days: Math.round(prior.ageDays),
         pair_basis: 'same_analyst_365d',
-        // allow-now-in-business-logic: ADR-003 — computed_at IS ingest time per INC-108 semantics (settlement/publish epoch is carried by as_of_date + focal_published_at + prior_published_at); analyst_revision_observations is RESEARCH-ONLY (DEC-080/081 gated, never reached detector), no financial computation reads this clock.
-        computed_at: new Date().toISOString(),
+        // ACT-554-a / INC-108: computed_at IS ingest time per INC-108 semantics (settlement/publish epoch carried by as_of_date + focal_published_at + prior_published_at); analyst_revision_observations is RESEARCH-ONLY (DEC-080/081 gated, never reached detector), no financial computation reads this clock.
+        computed_at: new Date().toISOString(), // allow-now-in-business-logic: ADR-003
         source: SOURCE_LABEL,
       });
     }
