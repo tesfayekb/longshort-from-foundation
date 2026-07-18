@@ -1,8 +1,6 @@
 
 ---
 
-## INC-109 — Overshoot universe has no refresh path (single seed, 13 days stale as of 2026-07-16)
-
 ## INC-114 — Evidence fabrication in supervisor-facing deliverable: Monday six-lot dry-run p-tile table (2026-07-18)
 
 **Category:** evidence-fabrication-at-supervisor-facing-deliverable. **Severity:** HIGH (this artifact fed the operator's p6 ruling on ACT-536).
@@ -28,7 +26,7 @@
 
 ---
 
-## INC-109 (original) — Overshoot universe has no refresh path (single seed, 13 days stale as of 2026-07-16)
+## INC-109 — Overshoot universe has no refresh path (single seed, 13 days stale as of 2026-07-16)
 
 **Status:** CHARTERED — fix path landed 2026-07-16 (ACT-538, disarmed-at-seed). CLOSES at ACT-538-arm success (operator flips `job_registry.enabled=true` for `'overshoot.universe.refresh'` after the six-point attestation in `sql/39` header). Currently DISARMED — the universe remains at the 07-03 seed until arm-step.
 
