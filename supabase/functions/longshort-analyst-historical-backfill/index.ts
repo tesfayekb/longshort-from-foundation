@@ -77,16 +77,17 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(405, 'method_not_allowed', { correlationId: crypto.randomUUID() });
   }
 
-  // R-003 precedent: accept `Authorization: Bearer $CRON_SECRET` as an
-  // alternate gate for this manual one-shot. Write-safety does NOT rest on
-  // this gate — it rests on (i) the DB CHECK constraint blocking any row
-  // with as_of_date >= 2026-06-29, and (ii) the target table being
+  // R-003 precedent: accept `X-Cron-Secret: $CRON_SECRET` header as an
+  // alternate gate for this manual one-shot (matches the project-wide
+  // cron-auth convention). Write-safety does NOT rest on this gate — it
+  // rests on (i) the DB CHECK constraint blocking any row with
+  // as_of_date >= 2026-06-29, and (ii) the target table being
   // RESEARCH-ONLY (DEC-080/081 never reached the detector). The gate is
   // just to keep the endpoint from being drive-by-callable.
-  const authHeader = req.headers.get('Authorization') ?? '';
   const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
+  const providedCronHeader = req.headers.get('X-Cron-Secret') ?? '';
   let correlationId = crypto.randomUUID();
-  const isCronBearer = cronSecret.length > 0 && authHeader === `Bearer ${cronSecret}`;
+  const isCronBearer = cronSecret.length > 0 && providedCronHeader === cronSecret;
   if (!isCronBearer) {
     const authCtx = await authenticateRequest(req);
     correlationId = authCtx.correlationId;
