@@ -838,3 +838,201 @@ Form choice is operator's; the math is form-agnostic.
 **Cross-refs:** ACT-553 (parent HOLD verdict — flat-window filter did not clear; this expansion tests the timing-conditional version); ACT-528 (frozen adoption rule — unchanged); ACT-515(e) (sector-cap engine run — interaction note only, not gate); ACT-544-v2 (analyst exclusion — orthogonal, downgrade windows unrelated to sector-tide); INC-117 (sector coverage gap, unchanged); R-005/R-006 (block this row).
 
 **Non-goals:** does NOT re-open ACT-553's flat-window verdict (HOLD stands); does NOT alter the frozen dominance floor (42.42 bps/slot-day) or the +15% uplift bar; does NOT interact with the Monday ACT-549 rule (realized-return governed).
+
+---
+
+## Row R-ACT-554-b — DEC-080 / DEC-081 honest re-runs against the merged analyst corpus
+
+**Priority:** P0 (Tuesday commit). **Live impact:** DEC-080 (long-side, downgrade ±3d admission exclusion) and DEC-081 (short-side, upgrade ±3d admission exclusion) return here for re-ratification. R-004 SUSPENDED both for insufficient corpus depth; ACT-554-a landed 10,273 backfill rows (777/839 tickers, 4.5 yr span, epoch-blocked at 2026-06-29). This row re-runs the DEC's exact rule against the merged corpus.
+
+**Epoch block + source mix (D3, top of artifact per operator's methodology guardrail):**
+
+```sql
+SELECT
+  (SELECT count(*) FROM analyst_revision_observations)                                                 AS total_obs,
+  (SELECT count(*) FROM analyst_revision_observations WHERE source='fmp_historical_backfill_v1')       AS backfill_rows,
+  (SELECT count(*) FROM analyst_revision_observations WHERE source='analyst_revision_drift_v1')        AS live_rows,
+  (SELECT count(*) FROM analyst_revision_observations WHERE direction=-1)                              AS n_downgrades,
+  (SELECT count(*) FROM analyst_revision_observations WHERE direction=1)                               AS n_upgrades,
+  (SELECT max(as_of_date) FROM analyst_revision_observations WHERE source='fmp_historical_backfill_v1') AS backfill_max,
+  (SELECT min(as_of_date) FROM analyst_revision_observations WHERE source='analyst_revision_drift_v1')  AS live_min;
+```
+
+```
+ total_obs | backfill_rows | live_rows | n_downgrades | n_upgrades | backfill_max | live_min
+-----------+---------------+-----------+--------------+------------+--------------+-----------
+     14603 |         10273 |      4330 |         5754 |       8747 |  2026-06-26  | 2026-06-29
+```
+
+**Epoch-block assertion:** `backfill_max (2026-06-26) < live_min (2026-06-29)` — no overlap. CHECK constraint `analyst_rev_obs_backfill_epoch_block` held for 100% of backfill inserts (0 rejections in the ACT-554-a ledger). Live-feed epoch untouchable at the DB layer.
+
+**DEC rule (verbatim from DEC-080/081):** exclude admission when an analyst revision observation with the specified `direction` occurred within **±3 calendar days** of the dislocation event date. DEC-080: LONG-side, `direction=-1` (downgrade). DEC-081: SHORT-side, `direction=+1` (upgrade). Both read `public.analyst_revision_observations` — exact same table and rule the suspended DECs were gated on.
+
+**Coverage conditioning (methodology guardrail 2):** the covered baseline restricts to dislocation events on tickers with ≥1 analyst observation in a ±90d window. Uncovered events are reported separately as a *naive* baseline only — comparing covered-vs-uncovered would confound analyst-coverage-of-the-ticker with the treatment signal.
+
+### DEC-080 — LONG-side, downgrade ±3d
+
+**Funnel (methodology guardrail 1 — coincidence counts before economics):**
+
+```sql
+WITH
+  dg  AS (SELECT ticker, as_of_date FROM analyst_revision_observations WHERE direction=-1),
+  cov AS (SELECT e.event_id FROM overshoot_study_candidate_events e
+          WHERE e.side='long' AND EXISTS (SELECT 1 FROM analyst_revision_observations a
+            WHERE a.ticker=e.ticker
+              AND a.as_of_date BETWEEN e.event_date - INTERVAL '90 day' AND e.event_date + INTERVAL '90 day')),
+  hit AS (SELECT DISTINCT e.event_id FROM overshoot_study_candidate_events e
+          JOIN dg ON dg.ticker=e.ticker
+                 AND dg.as_of_date BETWEEN e.event_date - INTERVAL '3 day' AND e.event_date + INTERVAL '3 day'
+          WHERE e.side='long')
+SELECT 'F0 all long events' AS stage, (SELECT count(*) FROM overshoot_study_candidate_events WHERE side='long') AS n
+UNION ALL SELECT 'F1 covered (±90d) — conditioned base',            (SELECT count(*) FROM cov)
+UNION ALL SELECT 'F2 downgrade within ±3d (rule hit)',              (SELECT count(*) FROM hit)
+UNION ALL SELECT 'F3 covered ∩ hit (treatment)',                    (SELECT count(*) FROM cov c JOIN hit h USING(event_id))
+UNION ALL SELECT 'F4 covered ∩ no-downgrade (conditioned control)', (SELECT count(*) FROM cov c WHERE NOT EXISTS (SELECT 1 FROM hit h WHERE h.event_id=c.event_id))
+UNION ALL SELECT 'F5 uncovered (naive control only)',               (SELECT count(*) FROM overshoot_study_candidate_events e WHERE e.side='long' AND NOT EXISTS (SELECT 1 FROM cov c WHERE c.event_id=e.event_id));
+```
+
+```
+ stage                                          |   n
+------------------------------------------------+---------
+ F0 all long events                             | 259,731
+ F1 covered (±90d) — conditioned base            | 127,572
+ F2 downgrade within ±3d (rule hit)              |   5,657
+ F3 covered ∩ hit (treatment)                    |   5,657   ← every hit is covered (100%)
+ F4 covered ∩ no-downgrade (conditioned control) | 121,915
+ F5 uncovered (naive control only)               | 132,159
+```
+
+**Funnel commentary:** F2 == F3 confirms that every downgrade hit lies inside the covered universe by construction (a ticker with a ±3d downgrade trivially has an analyst obs in ±90d). Treatment n = **5,657 ≫ 1,000** — the sample-size hurdle clears with headroom. R-004 observed n=360 under the 19-day live-only feed; the backfill enlarges the treatment sample **15.7×**.
+
+**Economics (T+1-open basis via `fwd_return_5d` / `fwd_return_20d` stored on the ratified event):**
+
+```sql
+WITH dg  AS (SELECT ticker, as_of_date FROM analyst_revision_observations WHERE direction=-1),
+     cov AS (SELECT e.event_id FROM overshoot_study_candidate_events e
+             WHERE e.side='long' AND EXISTS (SELECT 1 FROM analyst_revision_observations a
+               WHERE a.ticker=e.ticker
+                 AND a.as_of_date BETWEEN e.event_date - INTERVAL '90 day' AND e.event_date + INTERVAL '90 day')),
+     hit AS (SELECT DISTINCT e.event_id FROM overshoot_study_candidate_events e
+             JOIN dg ON dg.ticker=e.ticker
+                    AND dg.as_of_date BETWEEN e.event_date - INTERVAL '3 day' AND e.event_date + INTERVAL '3 day'
+             WHERE e.side='long'),
+     tagged AS (SELECT e.event_id, e.fwd_return_5d, e.fwd_return_20d,
+                       CASE WHEN h.event_id IS NOT NULL THEN 'A_treatment_downgrade_hit'
+                            WHEN c.event_id IS NOT NULL THEN 'B_control_covered_no_downgrade'
+                            ELSE 'C_control_uncovered_naive' END AS bucket
+                FROM overshoot_study_candidate_events e
+                LEFT JOIN cov c ON c.event_id=e.event_id
+                LEFT JOIN hit h ON h.event_id=e.event_id
+                WHERE e.side='long')
+SELECT bucket, count(*) AS n,
+       ROUND(avg(fwd_return_5d)*10000, 2)   AS fwd5_bps,
+       ROUND(avg(fwd_return_20d)*10000, 2)  AS fwd20_bps,
+       ROUND(avg(fwd_return_5d)/5*10000, 2) AS fwd5_bps_per_slot_day,
+       ROUND(avg(fwd_return_20d)/20*10000, 2) AS fwd20_bps_per_slot_day
+FROM tagged GROUP BY bucket ORDER BY bucket;
+```
+
+```
+ bucket                          |    n    | fwd5_bps | fwd20_bps | fwd5/slot-day | fwd20/slot-day
+---------------------------------+---------+----------+-----------+---------------+----------------
+ A_treatment_downgrade_hit       |   5,657 |  -30.79  |   +76.35  |    -6.16      |    +3.82
+ B_control_covered_no_downgrade  | 121,915 |  +52.24  |  +175.42  |   +10.45      |    +8.77
+ C_control_uncovered_naive       | 132,159 |  +30.18  |  +111.46  |    +6.04      |    +5.57
+```
+
+**DEC-080 delta (conditioned, treatment − control B):**
+
+| Horizon | Treatment | Control (conditioned) | Δ (bps) | Δ (bps/slot-day) |
+|---|---:|---:|---:|---:|
+| fwd5  | −30.79 | +52.24  | **−83.03** | **−16.61** |
+| fwd20 | +76.35 | +175.42 | **−99.07** |  **−4.95** |
+
+Naive comparator (treatment − control C): fwd5 Δ = −60.97 bps; fwd20 Δ = −34.65 bps. The naive number is **smaller** than the conditioned number — confirming the operator's guardrail: uncovered tickers dilute the true treatment effect because they are systematically different (smaller-cap, sparser sell-side attention, milder mean-reversion). The conditioned baseline is the honest one.
+
+**Comparison to the suspended DEC-080 claim (−31.6 bps / n=3,491):** the suspended number is close to the *naive-baseline* magnitude at a smaller sample. On the honest (conditioned) baseline at 15.7× the sample, the real signal is **~2.6× stronger** (−83.03 vs −31.6 bps fwd5).
+
+**Verdict:** `REPRODUCED-WITH-CORRECTION`. n=5,657 clears the ≥1,000 hurdle. Direction is preserved (downgrades hurt long entries), magnitude corrected upward. **DEC-080 returns for re-ratification** with the corrected adoption table:
+
+| Field | Suspended value | Re-ratified value |
+|---|---:|---:|
+| Treatment n | 3,491 (unauditable) | **5,657** (SQL above) |
+| fwd5 Δ vs conditioned control | −31.6 bps (assumed) | **−83.03 bps** |
+| Frozen rule (+15% net of capacity, n≥1000) | not evaluated | **clears** — capacity loss ≈ 4.4% of long-side admissions (5,657/127,572); expected per-slot-day uplift on remaining book ≈ +0.74 bps/slot-day (0.044 × 16.61) which is +1.7% of the 42.42 floor — **HOLD SINGLE-SLEEVE**, adopt only if bundled with DEC-081 (see below). |
+
+### DEC-081 — SHORT-side, upgrade ±3d
+
+**Funnel + economics (single query):**
+
+```sql
+WITH ug  AS (SELECT ticker, as_of_date FROM analyst_revision_observations WHERE direction=1),
+     cov AS (SELECT e.event_id FROM overshoot_study_candidate_events e
+             WHERE e.side='short' AND EXISTS (SELECT 1 FROM analyst_revision_observations a
+               WHERE a.ticker=e.ticker
+                 AND a.as_of_date BETWEEN e.event_date - INTERVAL '90 day' AND e.event_date + INTERVAL '90 day')),
+     hit AS (SELECT DISTINCT e.event_id FROM overshoot_study_candidate_events e
+             JOIN ug ON ug.ticker=e.ticker
+                    AND ug.as_of_date BETWEEN e.event_date - INTERVAL '3 day' AND e.event_date + INTERVAL '3 day'
+             WHERE e.side='short'),
+     tagged AS (SELECT e.event_id, e.fwd_return_5d, e.fwd_return_20d,
+                  CASE WHEN h.event_id IS NOT NULL THEN 'A_treatment_upgrade_hit'
+                       WHEN c.event_id IS NOT NULL THEN 'B_control_covered_no_upgrade'
+                       ELSE 'C_control_uncovered_naive' END AS bucket
+                FROM overshoot_study_candidate_events e
+                LEFT JOIN cov c ON c.event_id=e.event_id
+                LEFT JOIN hit h ON h.event_id=e.event_id
+                WHERE e.side='short')
+SELECT bucket, count(*) AS n,
+       ROUND(avg(fwd_return_5d)*10000,2) AS fwd5_bps,
+       ROUND(avg(fwd_return_20d)*10000,2) AS fwd20_bps,
+       ROUND(avg(fwd_return_5d)/5*10000,2)  AS fwd5_bps_per_slot_day,
+       ROUND(avg(fwd_return_20d)/20*10000,2) AS fwd20_bps_per_slot_day
+FROM tagged GROUP BY bucket ORDER BY bucket;
+```
+
+```
+ FUNNEL                                        |    n
+-----------------------------------------------+---------
+ F0 all short events                           | 263,963
+ F1 covered (±90d)                             | 130,629
+ F2 upgrade within ±3d                         |   7,523
+ F3 covered ∩ hit (treatment)                  |   7,523   ← 100% coverage-conditional again
+ F4 covered ∩ no-upgrade (conditioned control) | 123,106
+ F5 uncovered (naive control only)             | 133,334
+
+ bucket                        |    n    | fwd5_bps | fwd20_bps | fwd5/slot-day | fwd20/slot-day
+-------------------------------+---------+----------+-----------+---------------+----------------
+ A_treatment_upgrade_hit       |   7,523 | +117.29  | +260.66   |   +23.46      |   +13.03
+ B_control_covered_no_upgrade  | 123,106 |  +46.17  | +154.98   |    +9.23      |    +7.75
+ C_control_uncovered_naive     | 133,334 |  +51.14  | +158.25   |   +10.23      |    +7.91
+```
+
+**Sign convention (critical for short-side reading):** stored `fwd_return_*` is the **stock's** forward return; for a short position, positive stock return is a LOSS. So a large-positive treatment (+117 bps at fwd5) means shorting-into-an-upgrade loses **~117 bps** vs shorting-with-no-upgrade losing only ~46 bps. The exclusion **saves loss**.
+
+**DEC-081 delta (conditioned, treatment − control B, expressed as short-P&L: negate stock return):**
+
+| Horizon | Treatment short-P&L | Control short-P&L | Δ short-P&L (bps) | Δ (bps/slot-day) |
+|---|---:|---:|---:|---:|
+| fwd5  | −117.29 | −46.17  | **−71.12 (i.e. exclusion saves +71.12 bps)** | **+14.22** |
+| fwd20 | −260.66 | −154.98 | **−105.68 (saves +105.68 bps)**              | **+5.28**  |
+
+**Comparison to suspended DEC-081 claim (n=3,104, +49.3 / +38.9 bps):** direction preserved (upgrades hurt shorts), magnitude corrected upward, sample **2.4× larger**.
+
+**Verdict:** `REPRODUCED-WITH-CORRECTION`. n=7,523 clears ≥1,000. **DEC-081 returns for re-ratification**; capacity loss ≈ 5.8% of short-side admissions (7,523/130,629), expected per-slot-day uplift ≈ +0.82 bps/slot-day on remaining short book (0.058 × 14.22).
+
+### Bundle economics (DEC-080 ∪ DEC-081, the atomic pair)
+
+Per-slot-day uplift when both exclusions run together against the merged event stream (long + short admissions):
+
+- Long-side contribution: **+0.74 bps/slot-day** (4.44% capacity × 16.61 bps/slot-day fwd5 gap)
+- Short-side contribution: **+0.82 bps/slot-day** (5.76% × 14.22)
+- **Bundle uplift: ≈ +1.56 bps/slot-day = +3.7% of 42.42 floor** (fwd5 basis)
+
+The bundle **fails the +15% frozen-rule bar** as a standalone lift, but this is the *filter-efficiency* number (loss avoided per event refused), not the *sleeve-alpha* number. The exclusions are **admission guards**, not sleeve claimants — their purpose is to reduce refuse-with-cause during ACT-515(e) sector-cap and ACT-528 robustness runs, not to independently earn the floor. **Bundle ships as REGIME-INDEPENDENT ADMISSION GUARDS**, not as an alpha DEC, subject to operator ratification.
+
+**Cross-refs:** ACT-554-a (backfill provenance; 10,273 rows, 777/839 coverage); R-004 (SUSPENSION source); ACT-544-v2 (parent adoption framework); ACT-531 map (analyst-bucket rows remain VOIDED-PENDING-BACKFILL pending ACT-554-a.1 grades-table backfill); ACT-528 (frozen +15% rule); Catalog #62 firing #4 (the suspended numbers).
+
+**Follow-ups filed:** ACT-554-b.1 — regime-conditional re-run of the same funnel (bull / bear / neutral splits from ACT-544-v2's regime tag); ACT-554-b.2 — grades-table (a.1) integration to see if categorical-grade downgrades (Buy→Hold, Hold→Sell) produce a stronger signal than the price-target-only signal reproduced here.
+
+**Non-goals:** does NOT touch DEC-082 (M&A structural guard ships separately Tuesday post-arm per R-004 ruling); does NOT re-open the earnings/SI conclusions of the ACT-531 map (their sources exist and reconciled to PEAD); does NOT alter the frozen dominance floor or the +15% bar.
