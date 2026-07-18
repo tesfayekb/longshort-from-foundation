@@ -220,6 +220,15 @@ interface SelectionRow {
   // Metadata for reference_bar_missing audit rows (never-silent-drop).
   as_of: string;                // detection_runs.as_of (YYYY-MM-DD)
   argmax_window_days: number;   // events row window used for pre_event bar offset
+  // MIG-161 (ACT-536 cohort-tuple provenance) — parsed at SQL level from
+  // overshoot_events.study_cell_ref (jsonb-string; see `#>>` re-parse
+  // trick below) plus scalar columns. Feed the cohort_* INSERT + audit
+  // metadata so fill-sweep can single-home the same fields on its
+  // adoption path without re-querying overshoot_events.
+  study_cell_side: string | null;
+  study_cell_band: string | null;
+  drawdown_bucket: number | null;
+  momentum_quintile: number | null;
 }
 
 interface RefusalTally {
