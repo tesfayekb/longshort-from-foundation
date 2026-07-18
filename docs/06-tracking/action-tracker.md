@@ -7185,3 +7185,19 @@ Saturday ACT-510 deploy interleaves as scheduled (minutes-scale, independent).
 **Enforcement:** Any turn that answers "the queue" with more than the single active item is a discipline violation and gets rolled back to item (1) in the next turn.
 
 **Cross-refs:** ACT-533-A (why teeth); all prior queue filings (superseded by this pin for ordering purposes only).
+
+## ACT-542 (2026-07-18, 03:31Z): EXIT-RUN RE-ARM — **SAFE DEVIATION FILED, arithmetic-identical.**
+
+**Filed:** 2026-07-18. **Class:** same as ACT-493 (early-arm deviation, arithmetic-safe).
+
+**Deviation:** `overshoot.exit.run` re-armed **Fri 2026-07-17 23:31:23Z** (Sat 03:31:23Z UTC, operator "RE-ARM APPROVED" turn) rather than the ratified Sunday-PM window. `overshoot.exit.run.catchup` remains disarmed as specced.
+
+**Rationale (operator, verbatim):** *"Zero ticks between arm and Monday 19:50Z; arithmetic-identical, same class as the ACT-493 early-arm entry."*
+
+**Arithmetic safety proof.** Schedule is `50 19 * * 1-5` — weekdays only. Between arm timestamp (Fri 23:31Z) and next scheduled fire (Mon 2026-07-20 19:50Z) the cron produces **exactly zero ticks**: Sat and Sun are excluded by the DOW clause, Fri 19:50Z had already passed at arm time. Net behavior between early-Fri-night arm and ruled Sunday-PM arm is byte-identical: same first fire (Mon 19:50Z), same first predicate evaluation, same first `overshoot.exit.run.completed` heartbeat row.
+
+**Fence state at ARM (evidence).** Pre-flip `SELECT`: `enabled=false, schedule='50 19 * * 1-5'`. Post-flip `SELECT`: `enabled=true, schedule='50 19 * * 1-5', updated_at=2026-07-18 03:31:23.374917+00`. A5 attested at fill-sweep 2026-07-17 21:59:01.921Z: `a5_ok=true, broker_count=46, ledger_count=46`. Catchup registry untouched.
+
+**Expectations (unchanged from ruled Sunday-PM arm).** Monday 2026-07-20 19:50Z tick per the Monday Expectation Set filing above: `exits_submitted=2` (LITE + SNDK), `session_age_no_fire=44`, `git_sha` stamped (INC-113 verification).
+
+**Cross-refs:** ACT-493 (precedent — early-arm arithmetic-safe deviation, entry-leg equivalent); INC-112 (deploy-hold correction, same weekend); INC-113 (git_sha stamp verification owed at first Monday tick); Monday Expectation Set (same section above).
