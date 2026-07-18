@@ -38,6 +38,8 @@ A config change (entry-day and/or hold-horizon) is **GO** only if it beats curre
 
 ## Stage 2 — Intraday timing (CONDITIONAL — scope only, do NOT build)
 
+> **SCOPE EXTENSION (2026-07-18, ratified in `docs/06-tracking/action-tracker.md`).** Stage-2's 1-min Polygon pull now prices **BOTH minutes**: entry grid `{09:35, 10:00, 10:30, 11:00, 14:00}` ET as chartered PLUS an **EXIT-minute differential** at `{open, 09:35, 10:00, 15:00, 15:50, close}` ET per tier, framed `spread+volatility cost` vs `redeploy-gain` (ACT-558 measured input) vs `extra-overnight effect`. Adoption of morning-exit is pre-committed: `(redeploy_gain − open_exec_cost − extra_overnight) > 0` AND `net ≥ +15%` on affected component AND `n ≥ 1000` per cell AND regime-stable; otherwise 15:50Z stands. Verdict grammar mechanical per R-005/R-006.
+
 Trigger: **only if Stage-1 keeps T+1 as the winning entry day AND ACT-506 (W5-01) finds the open-drift component of the close→fill slippage decomposition materially large** (charter threshold: open-drift ≥ 25% of the total close→fill gap on a bps-weighted basis).
 
 If triggered, SCOPE (spec only, no engine changes) an intraday-time grid `{09:35, 10:00, 10:30, 11:00, 14:00}` ET using Polygon intraday aggregates over the corpus event set, with the same per-slot-day metric AND the qualification-drift measurement (how many names drift out of I5 / τ qualification as intraday time advances — original Stage-2 scoping note). Deliverable: charter for a follow-up ACT with pre-committed decision rule; **STOP** before implementation.
