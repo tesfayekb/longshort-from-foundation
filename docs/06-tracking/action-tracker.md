@@ -7720,3 +7720,69 @@ The supervisor's prior characterization of the overshoot short-side as a "bear-m
 **Ruling 3 — R-006 SI-gate ruling:** live SI ≥ 0.20 short-admission gate remains ARMED, re-labeled PRECAUTIONARY-UNPROVEN (docs-only); ACT-527/531-era "evidence-ratified" prose stamped VOIDED-PENDING-ACT-527-b; ACT-527-b chartered as the honest replacement study, must complete before bear-regime short-capacity expansion; §C ratified-cell short-side profitability STANDS.
 
 **Next lane step:** ACT-551 Row R-ACT-553.a (tide-class timing grid) — delivered this turn, single artifact.
+
+---
+
+## ACT-556 (2026-07-18, CHARTERED — lane position 6): NEWS-DATA D3 FEASIBILITY READ
+
+**Class:** micro-artifact, read-only. **Sequencing:** lane position 6, after ACT-541 (Monday live-script supreme; ACT-515 remains lane-next).
+
+**Deliverable (single artifact under Standing Format Rule, D3 epoch block mandatory):**
+
+1. `information_schema.columns` + row-count + `min(as_of_date|event_at|published_at)` / `max(...)` over every news-bearing table in-DB. Known candidates: `public.news_attention_observations`, `signal_queue_feed_items` (news mode), `signal_queue_staging` (news mode). Any additional news-bearing surfaces surfaced by the scan land in the same table.
+2. If observed depth `< 1 year` (expected under Signal #8 arm date), deliver **two priced paths side by side**:
+   - **(a) Forward-stamping** — add a `news_present_at_event` capture into the overshoot detector's per-event write path going forward. Cost: **$0**. Verdict accrues in months (n≥1,000 gate on the frozen +15% bar governs).
+   - **(b) Historical news API quote** — FMP and Finnhub tiers priced concretely: coverage-years, endpoint, per-ticker/day row estimate over the 839-ticker universe, monthly cost, wall-clock. Backtestable-study feasibility called honestly.
+3. Operator picks (a), (b), (both), or **park**. No study ships from this charter — the D3 epoch block clearing IS the whole point of the read.
+
+**Pre-committed prohibition:** no news-conditioned admission/exclusion study ships until (a) the D3 epoch block clears on real depth (whether that depth is historical or forward-accrued). This is the direct application of the R-004 lesson (Catalog #62 pattern: analysis over absent data under delivery pressure).
+
+**Cross-refs:** ACT-545 §2 (news-attention row currently `not-applicable` — this charter is the honest re-open); Catalog #62 (docs/ai-failure-modes.md — 4-firing coda); DEC-057 (news-sentiment consumer origin); FP-048 / FP-049 Phase 1 (Signal #8 arm).
+
+---
+
+## ACT-557 (2026-07-18, CHARTERED — lane position 7): CELL-EV ADMISSION FLOOR STUDY
+
+**Class:** read-only corpus study on ratified substrate. **Sequencing:** lane position 7, after ACT-556. Adopts via the normal DEC path — **no special doors**.
+
+**Hypothesis:** current admission is rank-only (top-K by combined score). A **cell-EV floor** — "refuse events whose cohort cell (with the minimum-N ladder applied, per ACT-548 template) has studied `median_fwd_return_5d < 0`" — should reduce tail exposure without materially compressing rank supply, given the observed rank-supply > slots reality (ACT-544-v2 refill assumption).
+
+**Method (verbatim shape, Standing Format Rule binding on the deliverable):**
+
+1. **Substrate** — `public.overshoot_study_cell_results` (ACT-548 percentile columns backfilled; 11,511 cells) joined to the ratified candidate-arrival stream. Minimum-N ladder from ACT-548 applied identically to the live admission path (no ladder drift between sim and prod).
+2. **Simulation** — for each historical candidate: (i) compute the admitting cell under the ladder; (ii) refuse iff `median_fwd_return_5d(cell) < 0`; (iii) re-run portfolio under refill (rank supply > slots → next-ranked survivor fills). Compare vs current rank-only baseline over the same days.
+3. **Report** — per-slot-day delta under refill; events/yr refused; refusal-class distribution (which cells drive the refusals); **regime stability** (bear-22 / trans-23H1 / bull-23H2→26 — must be monotone in the same direction); chains attached (per-event lineage on a spot-check subsample, per Standing Format Rule).
+4. **Adoption gate — MECHANICAL, no re-framing:** clears iff net portfolio per-slot-day uplift **≥ +15% net of capacity loss under refill** (the frozen bar, see ruling below), n ≥ 1,000 affected events, regime-stable, monotone. Verdict grammar: ADOPT / DO-NOT-ADOPT / SHELVE-WITH-GATE.
+
+**Cross-refs:** ACT-548 (percentile substrate + ladder — the whole reason this study is possible); ACT-544-v2 (refill assumption + +15% bar precedent); ACT-528 (frozen adoption rules — unchanged); R-005 / R-006 (verdict-grammar mechanical discipline).
+
+---
+
+## BAR RULING (2026-07-18, FILED): +15% ADOPTION MARGIN STANDS
+
+**Ruling:** the **+15% net-of-refill portfolio-per-slot-day** margin on all frozen-rule adoption gates STANDS. This is compression insurance — the empirical basis on record:
+
+- **PEAD compression** (Signal #2): studied edge 48 bps → measured live 14 bps (≈ 71% degradation). Not an outlier; the modal fate of studied edges post-arm.
+- **Entry-basis slip**: `-8 bps` measured T+1-open vs studied T-close basis (DEC-078 origin), applied to every long-side economics claim as a standing haircut.
+
+**Interpretation:** the +15% bar is the compression cushion between "reproduces at study bar" and "survives to live at any measurable positive". Compressing it further would strip the cushion exactly where the machine has already been shown to need it.
+
+**Pre-committed revisit condition (BINDING):** the +15% bar may be re-argued **only** when we have measured **live-vs-studied compression at ≥ 20 realized round-trips** on the guard-shaped book (first shaped book: Wednesday 22:00Z post-Tuesday commit). Below that n, any bar-lowering argument is refused as under-evidenced regardless of merit.
+
+**Cross-refs:** ACT-544-v2 (bar origin — PEAD + entry-basis citations); DEC-078 (T-1 close vs T+1 open basis); ACT-528 (frozen rules corpus).
+
+---
+
+## LANE POSITIONS 6-7 CONFIRMED
+
+Lane order post-filing (unchanged for 1-5):
+
+1. **ACT-515 engine** (lane-next; 2023-Q2 byte-match fixture first, then configs (a)-(f); operator's two standing answers — realized DD 1×/2× and sector-cap verdict).
+2. **ACT-537** rank-weighted sizing.
+3. **ACT-509 Stage-2** grid.
+4. **ACT-540** insider.
+5. **ACT-541** harvest.
+6. **ACT-556** — news-data D3 feasibility read (this filing).
+7. **ACT-557** — cell-EV admission floor study (this filing).
+
+**Monday live-script (09:35Z refill · 15:50Z LITE+SNDK exits · 16:05Z six-lot evidence pack under ACT-549 rule) remains supreme and un-interleaved.**
