@@ -6656,6 +6656,7 @@ One table per bucket answering **continue (go long) / revert (go short) / flat (
 > 4. `RATIFIED_DETECTOR_VERSION` value + the reproducibility test's derivation formula (whether composite of study+spec or incident-anchor).
 > 5. Every parity fixture whose selection sha256 the flip changes — regenerated honestly, with the per-day delta stated (zero-delta days are reportable too when SI availability makes the flip invisible).
 > 6. Every function bundling the constant — redeployed same landing (ACT-529 uniformity rule).
+> 7. Every test that pins the bumped literal — re-pinned in the SAME commit; prefer importing the exported constant over hardcoded literals so future bumps can't reopen this class. **Mandatory grep step:** `grep -rn "<old-version-literal>" supabase/` MUST return zero after the bump (historical bump-history comments must break the exact literal, e.g. replace `-` with spaces, so grep stays clean). Filed 2026-07-18 after the third instance of this defect class (INC-106 spec-JSON pin, INC-113 git_sha pin, dispatcher `inc108-*` test pin left stale by the `inc110-*` bump).
 >
 > **Rationale:** self-describing artifacts (spec JSON strings, sha pins, version constants, parity fixtures) are one system with the code they describe. Updating any subset silently splits truth from description and turns the audit trail into a lie. The 2026-07-15 gate-11 red on `detector_test.ts:704` + `selection-parity_test.ts:280` + the T2.1b reproducibility test was CI catching exactly this class of miss — the tests worked, the earlier flip landing did not.
 
