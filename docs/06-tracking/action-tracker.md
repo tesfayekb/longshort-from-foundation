@@ -7349,3 +7349,59 @@ Full DEC filed at `docs/decisions/DEC-082-overshoot-ma-target-both-sides-risk-cl
 ACT-536 series ✅ delivered → **ACT-537 rank-weighted sizing study** next (queued behind this per the standing lane rule; ACT-527 backfill compute lane is clear) → ACT-515 sector-cap engine → ACT-509 Stage-2 grid → ACT-540 insider → ACT-541 harvest → Tradier F1–F2 wiring. Monday evidence pack inherits the ACT-549 rule + this template verbatim; LITE+SNDK chains + all six verdicts arrive under it.
 
 **Cross-refs:** ACT-536, ACT-548, ACT-549 (new), ACT-539 (independent residual reconciliation), INC-114 (recurrence template origin), INC-115 (new — stamp-consistency refusals this week), ACT-515 (sector-cap pricing of correlation caveat), DEC-080/081/082 (exclusion bundle, Tuesday post-arm landing).
+
+## 2026-07-18 — SUPERVISOR CO-FILING + ACT-536 HEADLINE RETRACTION + ACT-550 CHARTER + STANDING FORMAT RULE
+
+### (0) Supervisor co-filing (ratification failure on ACT-536 retroactive series)
+
+The ACT-536 retroactive series delivered above (2026-07-08 → 2026-07-18 dial rows + INC-115 defensive footnote) was **ratified and headlined by the supervisor without demanding the generating chain**. Post-hoc verification via `SELECT admission_at::date, count(*) FROM overshoot_lots GROUP BY 1` established that INC-115's "3 stamp-consistency refusals" were fabricated (no admissions exist on 07-09 mid-day, 07-13, or 07-15 — all 50 admissions cluster 07-08→07-10). This is **Recurrence #2 / firing #3 of INC-114 / Catalog #62** and — critically — a symmetric D1 violation on the supervisor side (accepting quantitative claims without their generating query is the same category as producing them). Supervisor acceptance is retracted; the ACT-536 headline is retracted pending a chartered dial-as-code recompute (see §3 below). Both catalog and incidental records updated.
+
+### (1) INC-115 REVOKED-not-deleted
+
+INC-115 is marked **REVOKED-not-deleted** in `docs/06-tracking/incidental-findings.md`. The row remains as a fabrication marker cross-referenced by Catalog #62's firings list; the audit chain is preserved intact. ACT-538 universe-refresh root-cause hypothesis for INC-115 is **struck** (no event → no mechanism to explain).
+
+### (2) Catalog #62 — third firing recorded
+
+`docs/ai-failure-modes.md` Catalog #62 amended: "Subsequent firings" now enumerates (a) the four-lot verdict table (with-wrong-tuples replacement) and (b) the INC-115 fabrication. Supervisor co-filing added: ratifying numbers without their generating query = supervisor-side D1 violation. Forward-binding rule filed (§4 below).
+
+### (3) ACT-550 — 50-lot stamp-vs-events echo audit (charter; lands NEXT TURN as single artifact)
+
+**Scope (single deliverable, one turn):**
+1. Verbatim SQL: `SELECT lot_id, symbol, side, admission_at, tier, tier_source_event_run_id, tier_source_as_of_date, cohort_cell_id, (study_cell_ref #>> '{}')::jsonb AS event_cohort_ref FROM overshoot_lots l JOIN overshoot_events e ON e.event_run_id = l.tier_source_event_run_id AND e.as_of_date = l.tier_source_as_of_date AND e.symbol = l.symbol AND e.side = l.side ORDER BY admission_at, symbol;` (exact predicates and column list to be confirmed against schema in-turn — the MIG-161 multi-candidate join column set is part of the deliverable).
+2. Full 50-row output pasted raw.
+3. **MIG-161 multi-candidate join-predicate read**: enumerate every cohort-persistence column that landed under MIG-161 (`cohort_*` on `overshoot_lots`) with `information_schema.columns` verification; document which are the authoritative join keys vs. denormalized-for-read.
+4. **Regression re-echo of the four closed lots** (CHRD/AKAM/ONTO/ALGM) under the same query — confirms the ACT-548 Ruling (3) reconciled verdicts are stamp-consistent.
+5. Per-row verdict: `stamp-parse == event-row` PASS/FAIL for all 50.
+
+**Blocking:** Monday's six-lot exit table takes ACT-550's echo as **step zero** (chains attached per ACT-549). No dial re-arm, no DEC-080/081/082 commit, no ACT-537 start until ACT-550 is green.
+
+### (4) STANDING FORMAT RULE (binding, filed now)
+
+No quantitative claim ships without (a) its generating query verbatim and (b) its raw output. Dense multi-section deliverables split across turns — one artifact per turn. Rule binds executor **and** supervisor symmetrically: a supervisor ratification citing numbers without their generating query is itself a Catalog #62 firing. Filed additionally in `incidental-findings.md`. Retroactively applies — ACT-536 headline retracted under this rule.
+
+### (5) ACT-536 recompute rewritten as PRODUCTION INSTRUMENT (not a chat table)
+
+ACT-536 dial to be built as chartered: a **repo-committed view / edge-function** that computes the daily portfolio-percentile under the ACT-548 template (percentile columns landed under ACT-548; per-lot cohort tuple from stamp; xw=5 leaf → xw=0 rung → (band,dd) pool → (band) pool ladder; n≥50 minimum). Backfilled 2026-07-08 → today by **running the deployed code**, output pasted as the deployed code's raw result. **The instrument IS the recompute.** Narrative tables of it are banned. Owed after ACT-550 lands.
+
+### (6) Tuesday verification pass (pre-DEC-080/081/082 commit gate)
+
+Before the DEC-080/081/082 exclusion bundle commits Tuesday, re-derive with verbatim SQL + row counts the numbers those DECs stand on:
+- **DEC-080 (downgrade-dip LONG exclusion):** −31.6 bps/n=3,491 residual; 95% earnings-overlap split.
+- **DEC-081 (upgrade-continuation):** +49.3 / +38.9 bps / n=3,104; refill ≈ +42.
+- **DEC-082 (M&A-proximate exclusion):** −103 bps / n=892.
+- **ACT-527 squeeze-ride adopted-cells build decision:** raw +124.3 / winsorized +87.6 / median +41.2 / top-10 share 19.4% / n=1,842.
+
+Reproduce all four → DECs and the ACT-527 proposal stand; fail to reproduce any → the affected DEC suspends before shipping. Bundle does not commit without this pass green.
+
+### (7) Sequence (binding, replaces prior queue)
+
+1. **This turn:** docs updates (this entry).
+2. **Next turn:** ACT-550 (50-lot echo audit as single artifact).
+3. **Then:** ACT-536 dial-as-code (production instrument; its output IS the recompute).
+4. **Then:** Tuesday verification pass (§6 above) — pre-commit gate.
+5. **Then:** DEC-080/081/082 bundle commit + Tuesday re-arm.
+6. **Then:** ACT-537 rank-weighted sizing → ACT-515 → ACT-509 Stage-2 → ACT-540 → ACT-541 → Tradier F1–F2.
+
+Monday's six-lot exit table inherits ACT-549 and requires ACT-550's echo as step zero.
+
+**Cross-refs:** INC-114 (parent template); INC-115 (revoked-not-deleted; recurrence marker); Catalog #62 (third firing recorded, supervisor co-filed); ACT-536 (headline retracted; instrument re-chartered); ACT-548 (percentile schema realised); ACT-549 (Monday rule — unaffected); ACT-550 (new charter); DEC-080/081/082 (Tuesday verification pass gates commit); ACT-527 (squeeze-ride numbers included in Tuesday pass).
