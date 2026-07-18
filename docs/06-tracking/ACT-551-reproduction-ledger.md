@@ -1313,3 +1313,180 @@ ge30 (mean/median gap): 200 bps   (SIGN OF HEAVY-TAIL DEPENDENCE — the
 ## Row R-005-supervisor-notes (2026-07-18)
 
 Supervisor prediction going into R-005: "ACT-527 §B numbers will reproduce within 20 % of the cited winsor +87.6 at some cell." **WRONG.** No cell in the reproduction lands within 20 % of any of the five ACT-527 §B headline numbers; the closest match (winsor mean at ≥30 % SI = 235.35) is 2.7× the cited +87.6 with a sample too small to adopt. Symmetric-skepticism entry per the Standing Format Rule: a supervisor prediction is a testable claim, not narration. Recorded alongside the ACT-554-b density-prediction miss.
+
+---
+
+## Row R-006 — ACT-527 §A short-curve spot-reproduction (LIVE squeeze threshold)
+
+**Priority:** P1. **Live impact:** the 0.20 SI squeeze-refusal gate is currently ARMED on `overshoot.entry.run` (short-admission). If the sign-flip at ~20% does not reproduce, the gate config becomes an OPERATOR RULING (per R-006 charter, "STOP branch"), not a patch.
+
+**Claim under test** (from ACT-527 §A, "KEEP-CURRENT" short-curve narrative):
+> (i) squeeze threshold SI ≥ 20% is the sign-flip location — short economics turn negative above this SI band;
+> (ii) KEEP-CURRENT cells `<5%` and `5–10%` excess clear all regimes as profitable-short;
+> (iii) short-excess floor 0.08 is the STUDIED GEOMETRY BOUNDARY, DO-NOT-EXTEND (widening below 0.08 admits loss-making shorts).
+
+### D3 EPOCH BLOCK
+
+```
+source table         rows         span                       distinct tickers
+overshoot_short_interest    98,515       2017-12-29 .. 2026-06-30      839
+overshoot_study_candidate_events  263,963 (side='short')  run_id 1888e113 (w26-detect-1of6)  —
+  windows w1..w5 counts:  12,286 / 25,983 / 39,704 / 59,925 / 126,065
+overshoot_study_cell_results  6,000 short cells (1,000 per band × 6 bands)  arrival_count 2,002,793 short events
+  short bands present: S_03_04, S_04_05, S_05_06, S_06_08, S_08_10, S_10_INF
+```
+
+**Sign convention pinned from source** (`_shared/overshoot/study/cell-aggregation.sql.ts`, line ratified via ACT-457-ADD-04):
+```
+pnl_5d = (side_sign * n_5d) - haircut          -- side_sign(short) = -1
+```
+So on `overshoot_study_candidate_events` the raw `fwd_return_5d` is the PRICE return (not side-signed); short-trade P&L = `-fwd_return_5d`. On `overshoot_study_cell_results` the `mean_fwd_return_5d` is ALSO stored as raw price return (short bands show negative values = short profits).
+
+### VERBATIM SQL — Section A (SI-bucket sign-flip on the ratified event pool)
+
+```sql
+-- Section A. Short curve on candidate events, LATERAL asof-join on
+-- overshoot_short_interest at event_date, window_days=5, |excess_w5| >= 0.08.
+WITH sj AS (
+  SELECT s.event_id, s.fwd_return_5d, s.fwd_return_20d, s.excess_w5,
+    (SELECT si_pct_float FROM public.overshoot_short_interest si2
+     WHERE si2.ticker = s.ticker AND si2.as_of_date <= s.event_date
+     ORDER BY si2.as_of_date DESC LIMIT 1) AS si
+  FROM public.overshoot_study_candidate_events s
+  WHERE s.side='short' AND s.window_days=5 AND s.fwd_return_5d IS NOT NULL
+    AND ABS(s.excess_w5) >= 0.08
+)
+SELECT CASE
+  WHEN si IS NULL THEN 'null'
+  WHEN si < 0.05 THEN 'a_lt5'
+  WHEN si < 0.10 THEN 'b_5_10'
+  WHEN si < 0.15 THEN 'c_10_15'
+  WHEN si < 0.20 THEN 'd_15_20'
+  WHEN si < 0.30 THEN 'e_20_30'
+  ELSE 'f_ge30' END AS bk,
+  COUNT(*) n,
+  ROUND((AVG(-fwd_return_5d)*10000)::numeric,2)  short_5d_bps,
+  ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY -fwd_return_5d)*10000)::numeric,2) short_med5,
+  ROUND((AVG(-fwd_return_20d)*10000)::numeric,2) short_20d_bps
+FROM sj GROUP BY bk ORDER BY bk;
+```
+
+### RAW OUTPUT — Section A
+
+```
+bucket    n         short_5d_bps   short_med5    short_20d_bps
+a_lt5     14,350        -79.30        -65.97       -199.65
+b_5_10     6,252        -94.94        -72.56       -234.21
+c_10_15    1,858       -111.62        -67.97       -381.90
+d_15_20      561       -158.71       -117.91       -528.82
+e_20_30      180         -9.23        -13.65        -49.34
+f_ge30        72       -155.94         53.47     -2,001.23
+null         187         17.48         40.35       -370.83
+```
+
+### VERBATIM SQL — Section B (0.08 boundary DO-NOT-EXTEND arithmetic)
+
+```sql
+WITH sj AS (
+  SELECT s.excess_w5, s.fwd_return_5d,
+    (SELECT si_pct_float FROM public.overshoot_short_interest si2
+     WHERE si2.ticker=s.ticker AND si2.as_of_date<=s.event_date
+     ORDER BY si2.as_of_date DESC LIMIT 1) si
+  FROM public.overshoot_study_candidate_events s
+  WHERE s.side='short' AND s.window_days=5
+    AND s.fwd_return_5d IS NOT NULL AND s.excess_w5 IS NOT NULL
+)
+SELECT
+  CASE WHEN ABS(excess_w5)<0.05 THEN 'x_lt05'
+       WHEN ABS(excess_w5)<0.08 THEN 'y_05_08'
+       WHEN ABS(excess_w5)<0.12 THEN 'z_08_12'
+       ELSE 'w_ge12' END AS band,
+  CASE WHEN si IS NULL THEN 'null'
+       WHEN si<0.05 THEN 'a_lt5'
+       WHEN si<0.10 THEN 'b_5_10'
+       ELSE 'c_ge10' END AS bk,
+  COUNT(*) n,
+  ROUND((AVG(-fwd_return_5d)*10000)::numeric,2) short_5d_bps
+FROM sj GROUP BY band, bk ORDER BY band, bk;
+```
+
+### RAW OUTPUT — Section B (short P&L 5d bps by excess-band × SI bucket)
+
+```
+band     bk        n         short_5d_bps
+x_lt05   a_lt5    48,263        -34.95
+x_lt05   b_5_10    9,625        -55.04
+x_lt05   c_ge10    2,700       -106.75
+x_lt05   null        515        -70.36
+y_05_08  a_lt5    29,223        -42.45
+y_05_08  b_5_10    8,355        -66.95
+y_05_08  c_ge10    2,688       -100.00
+y_05_08  null        352        -64.27
+z_08_12  a_lt5    10,181        -62.47
+z_08_12  b_5_10    4,184        -73.86
+z_08_12  c_ge10    1,537       -142.24
+z_08_12  null        134        106.47
+w_ge12   a_lt5     4,169       -120.40
+w_ge12   b_5_10    2,068       -137.60
+w_ge12   c_ge10    1,134        -79.97
+w_ge12   null         53       -207.51
+```
+
+### VERBATIM SQL — Section C (ratified short-cell aggregate by band, no SI dim)
+
+```sql
+SELECT side, band, COUNT(*) cells, SUM(arrival_count) events,
+       ROUND((AVG(mean_fwd_return_5d)*10000)::numeric,2) mean_fwd5_bps
+FROM public.overshoot_study_cell_results
+WHERE side='short' GROUP BY side, band ORDER BY band;
+```
+
+### RAW OUTPUT — Section C
+
+```
+band       cells   events       mean_fwd_return_5d_bps   short_pnl_bps (=-mean_fwd5)
+S_03_04    1,000   755,467       -106.26                  +106.26
+S_04_05    1,000   451,823       -130.03                  +130.03
+S_05_06    1,000   274,732        -98.98                  +98.98
+S_06_08    1,000   281,100        -90.00                  +90.00
+S_08_10    1,000   119,543       -115.58                  +115.58
+S_10_INF   1,000   120,128       -126.50                  +126.50
+```
+
+### PRE-COMMITTED VERDICTS APPLIED
+
+**(i) Sign-flip at SI≈20% — NOT REPRODUCED.**
+On the ratified event pool with the geometry filter |excess_w5|≥0.08 (Section A), short P&L is NEGATIVE across every SI bucket a_lt5→d_15_20 (−79 → −95 → −112 → −159 bps), then jumps toward 0 at e_20_30 (−9.23 bps, n=180) and back to strongly negative at f_ge30 (−156 bps, n=72). There is no monotone sign-flip at 20%; the ~20% band is a local *magnitude* dip driven by n=180, not a sign transition. Cross-window replication (w=1..5) confirms non-monotonicity: median at e_20_30 is +162.72 bps at w=1 (n=19) but −234.80 bps at w=3 (n=66). **The "0.20 evidence-ratified" claim does not reproduce in the shape it was framed.**
+
+**(ii) KEEP-CURRENT cells (<5, 5-10) clearing all regimes — NOT REPRODUCED.**
+On the event pool (Section A), a_lt5 and b_5_10 short P&L are NEGATIVE at 5d (−79.30, −94.94) and at 20d (−199.65, −234.21) — i.e., losses, not profits. On the ratified cell aggregate (Section C, SI-agnostic), the same excess ranges (S_03_04, S_04_05 ≈ "<5"; S_05_06, S_06_08, S_08_10 ≈ "5-10") ARE profitable-short (+106 to +130 bps), which is the underlying strategy edge — but this is achieved AT CELL LEVEL by momentum/drawdown/exclusion filtering, NOT by SI bucketing. The SI-conditional "KEEP-CURRENT clears all regimes" narrative does not survive the SI join.
+
+**(iii) 0.08 boundary DO-NOT-EXTEND arithmetic — DIRECTIONALLY REPRODUCED.**
+Section B shows short P&L monotone-worsening as excess grows (x_lt05→w_ge12: −35 → −42 → −62 → −120 bps at a_lt5; similar pattern at b_5_10). Widening admission below 0.08 admits bands (x_lt05, y_05_08) whose short P&L is also negative at every SI level — no rescue by extension. The DO-NOT-EXTEND directional call stands; the *magnitude* argument (extension makes things worse) also stands. **Note the inconsistency with Section C:** ratified S_03_04 cells (excess 3-4%) are +106 bps on average despite Section B showing x_lt05 pooled at −35 bps. This is the same event-pool-vs-ratified-cell gap as (ii): the cell dims (momentum quintile, drawdown bucket, exclusion width) do most of the selection work; the raw excess-band pool is not the object the strategy actually trades.
+
+**(iv) Regime-dispositive replication — NOT TESTABLE HERE.**
+`overshoot_study_candidate_events` carries no regime column and `overshoot_study_cell_results` has no SI dimension, so a joint (SI × regime × band) verdict is out of reach without new material (ACT-527-c regime tag).
+
+### VERDICT
+
+**R-006 — IRREPRODUCIBLE.** Two of three named claims (sign-flip at 20%, KEEP-CURRENT clearing) do not reproduce in the shape framed. The third (0.08 DO-NOT-EXTEND) reproduces directionally. Per operator ruling ("if the sign-flip does NOT reproduce at ~20%, STOP — the live short-gate config becomes an operator ruling, not a patch"), executor STOPS.
+
+**Consequence:** the live SI≥0.20 short-admission refusal gate on `overshoot-entry-run` is now flagged as **OPERATOR-RULING-PENDING**, not evidence-ratified in the ACT-527 §A shape. It remains ARMED (no unilateral disarm) — the gate is *precautionary-conservative* (it excludes shorts, i.e., refuses trades, so directional risk is bounded), but the "evidence-ratified" language must not be cited downstream until the operator rules.
+
+### STRUCTURAL FINDINGS (from the reproduction, filed as gaps)
+
+- **INC-118 (filed):** `overshoot_study_cell_results` has no SI dimension. Every SI-conditional claim about ratified cells is untestable against the ratified table and must be re-derived via candidate-event joins at higher variance. Rebuild path: extend `event-detection.sql.ts` to persist an SI band per event (asof-join to `overshoot_short_interest`), then re-aggregate cells with SI as a dim — heavy re-run, queue behind ACT-527-b horizon extension.
+- **ACT-527-c (chartered above):** regime tag on candidate/cell tables — same shape as previously chartered.
+- **Sign-convention pin recorded:** `pnl_5d = side_sign * n_5d - haircut` documented in-row so no future ledger reader has to re-derive from `_shared/overshoot/study/cell-aggregation.sql.ts`.
+
+### SUPERVISOR PREDICTION (recorded for symmetric skepticism)
+
+Supervisor prediction going into R-006: "The sign-flip at ~20% will reproduce as a magnitude cliff even if not a strict sign change." **PARTIAL-WRONG.** Section A shows a magnitude *dip* at 20-30% (−9.23 bps) that superficially looks like a cliff, but the w=1..5 replication shows the dip is a small-n artifact (n=19 to n=180 across windows) and does not survive as a stable location. There is no cliff, sign-flip, or stable inflection at ~20% in this reproduction.
+
+### CROSS-REFS
+
+- **R-005** (§B squeeze-ride REVOKED) — same corpus, same author/era; §A now joins §B in the "does-not-reproduce-in-framed-shape" column.
+- **INC-117** (Tradier options 401s) — PENDING-OPERATOR (unchanged).
+- **DEC-080-v2 / DEC-081-v2** (analyst risk-guards) — PENDING-OPERATOR (unchanged).
+- **R-ACT-553.a** (tide-class timing grid) — remains next in the lane after this row's operator ruling.
+
