@@ -1633,3 +1633,15 @@ INC-20 transitions to **Resolved (full)** at this SHA.
 | **Filed under** | Operator ruling 2026-07-18 following INC-114 firing #3 (INC-115 revocation). |
 | **Enforcement** | Any deliverable that ships a bare table / bare number is refused pre-commit and re-scoped. Applies retroactively to the ACT-536 headline (retracted; recompute owed as production instrument, not chat table). |
 | **Cross-refs** | INC-114, Catalog #62, ACT-550, ACT-536 (recompute-as-code owed). |
+
+## INC-116 — Construction-era pacing handicap (2026-07-18)
+
+| Field | Value |
+| --- | --- |
+| **Class** | Context-of-record (not a defect; interpretive lens for the first cohort). |
+| **Finding** | The 07-08..07-10 book (50 lots, first cohort) was built at ~17 admissions/day under the **manual/attended-entry era**, BEFORE the ACT-501 K=5 daily-budget gate was in the money path. The gate is enforced (see below) but had no bindings on the construction window because admissions were operator-driven, not run-loop-driven. |
+| **Evidence — enforcement (post-construction)** | `supabase/functions/overshoot-entry-run/index.ts:1006-1036` — `evaluateDailyBudget({ budget: OVERSHOOT_DAILY_ENTRY_BUDGET, admittedThisRun: admittedByDailyBudget })` positioned AFTER `allocation_cap_reached` and BEFORE the BP guard. Constant `OVERSHOOT_DAILY_ENTRY_BUDGET = 5` single-homed in `supabase/functions/_shared/overshoot-execution/daily-budget.ts`. Refusal class emitted: `daily_budget_reached` (RefusalTally counter + `overshoot.entry.daily_budget_reached` audit row). Handler version echo: `act501-daily-budget-k5-v1-20260711`. |
+| **Consequence** | Rank-depth handicap: the manual era admitted names deep into the rank tail that the steady-state gate would have truncated. Concentration handicap: without an admissions cap, INC-96 aggregate over-cap was reachable. Both are **construction-era artifacts** that the steady-state design eliminates; realized economics of the first cohort should be read with this handicap in mind — NOT as evidence about the K=5 regime. |
+| **Refill-era expectation** | Post-Monday exits, `slot-a` admits ≤ 5 top-ranked survivors/day, `allocation_cap_reached` gates first (INC-96 recurrence structurally impossible under the enforced pipeline). Book trajectory as the 44 open T2 lots exit through 07-24: freed slots per day cap the refill at 5/day; net book size monotone toward the ratified per-side cap by 07-24. |
+| **Cross-refs** | ACT-501, ACT-500 Part 1 DEC (K=5), INC-96 (over-cap carry), ACT-515 §(e) sector-cap variants (frozen −20%DD/<5%-cost rule confirmed in run matrix), R-004 (Tuesday verification — pinned next). |
+| **Filed under** | Operator ruling 2026-07-18, PACING VERIFICATION pre-Monday. |
