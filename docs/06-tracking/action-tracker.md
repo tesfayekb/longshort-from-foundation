@@ -7244,3 +7244,49 @@ Full DEC filed at `docs/decisions/DEC-080-overshoot-analyst-downgrade-long-admis
 **Bundling directive:** if operator ratifies §3.2 (SHORT-upgrade) AND §3.3 (M&A guard), both fold into DEC-080's Tuesday-post-arm atomic commit — ONE version bump, ONE spec JSON rewrite (both LONG + SHORT blocks), ONE sha recompute, ONE 20-day parity regen, ONE four-function redeploy (ACT-529). Wednesday's 22:00Z is the first book shaped by all three exclusions. Partial ratification: DEC-080 payload lands with the ratified addition; the other becomes its own future atomic commit (ACT-532 discipline).
 
 **Cross-refs:** ACT-527, ACT-529, ACT-531 §A+§B, ACT-532, ACT-543, ACT-544-v2, DEC-072, DEC-080, DEC-504-4, CROSSWIND §3.3b, INC-106.
+
+---
+
+## DEC-081 (2026-07-18): SHORT-ADMISSION ANALYST-UPGRADE EXCLUSION — **ADOPTED**.
+
+Full DEC filed at `docs/decisions/DEC-081-overshoot-analyst-upgrade-short-admission-exclusion.md`. Summary:
+
+- **Rule:** SHORT-admission refuses events where `analyst_revision_observations.direction = +1` for the ticker within ±3 calendar days of `as_of_date`. Refusal reason: `analyst_upgrade_proximate`. Symmetric to DEC-080's LONG-side `analyst_downgrade_proximate`.
+- **Source:** `public.analyst_revision_observations` (DEC-072 upstream; raw observation, weight-drift-immune).
+- **Freshness:** piggybacks DEC-080's `analystRevisionStaleActive` sibling (`maxDays=3`) — single-home in `_shared/overshoot/si-freshness.ts`. Run-level fail-closed `analyst_revision_feed_stale` inherited from DEC-080.
+- **Capacity (BOTH numbers):** floor **+3.9 bps/slot-day** (unfilled); realistic **≈+42 bps/slot-day per swapped slot** (rank-refill) — marginal-pass at 42.42 floor, operator-ratified per ACT-527 §D regime-stable-evidence rule (n=3,104).
+- **Sequencing:** ONE commit with DEC-080 + DEC-081 + DEC-082 (below). Tuesday post-arm land; Wednesday 22:00Z first effective book.
+
+**Cross-refs:** ACT-527, ACT-529, ACT-531 §A, ACT-532, ACT-545 §3.2, DEC-072, DEC-080, DEC-082, DEC-504-4, INC-91, INC-106.
+
+---
+
+## DEC-082 (2026-07-18): M&A-TARGET BOTH-SIDES RISK-CLASS GUARD (§6) — **ADOPTED**.
+
+Full DEC filed at `docs/decisions/DEC-082-overshoot-ma-target-both-sides-risk-class-guard.md`. Summary:
+
+- **Rule:** BOTH admission legs refuse the event iff the candidate ticker is the TARGET of an ACTIVE M&A row (`status='announced'`, not superseded). Refusal reason: `ma_target_active`. Hard refusal, book-symmetric (`applies_to: 'both'` — CROSSWIND §3.3b LOCKED parity).
+- **Source:** `public.ma_actions` (schema per longshort `MAAction` interface). Fields: `target_ticker`, `acquirer_ticker`, `status`, `announcement_date`, `updated_at`. Upstream writers: FMP `/stable/mergers-acquisitions-latest` (DEC-057 §(b), `fmp-ma-fetcher.ts`) + Tradier `merger_acquisition` (`tradier-corporate-actions-fetcher.ts`), superset ingestion. Precedent cited: `_shared/longshort-universe/hard-exclusions/rule-3-3b-ma.ts`. **Overshoot reads the same TABLE, does NOT import the longshort module (T5 sibling-isolation).**
+- **Freshness (own statement):** new sibling `maStaleActive(asOf, cursorUpdatedAt, maxBusinessDays=2)` in `_shared/overshoot/si-freshness.ts` (single-home, INC-91 pattern). Stale (or NULL cursor) → run-level fail-closed `ma_feed_stale`. Tighter than the 3d analyst threshold because M&A is event-driven and target-tag risk is any-day.
+- **Basis:** **structural §6 risk-class guard**, NOT evidence-sized economics. n=892 fails ACT-527 §D n≥1,000 rule — **rule NOT INVOKED** (this is not an economics adoption). Structural rationale (deal-pinned upside cap + unbounded break-risk downside) on the record. Sub-n-floor -103 bps/slot-day noted as directionally supporting only.
+- **Scope:** TARGET arm only. Acquirer >25% ratio guard (CROSSWIND §3.3b acquirer arm) DEFERRED to ACT-546.
+- **Prerequisite MIG:** if `public.ma_actions` + `public.ma_ingestion_cursor` are not yet visible to the overshoot schema at commit time, MIG-NNN scaffolds them (IF NOT EXISTS, RLS + GRANTs per public-schema policy, D5 ledger entry) inside the same atomic PR.
+- **Sequencing:** ONE commit with DEC-080 + DEC-081. Tuesday post-arm land; Wednesday 22:00Z first effective book.
+
+**Cross-refs:** ACT-527 §D, ACT-529, ACT-531 §A, ACT-532, ACT-545 §3.3, ACT-546 (deferred acquirer arm), CROSSWIND §3.3b LOCKED, DEC-057 §(b), DEC-080, DEC-081, DEC-504-4, INC-91, INC-106, `rule-3-3b-ma.ts`.
+
+---
+
+## Atomic Landing Envelope — DEC-080 + DEC-081 + DEC-082 (Tuesday post-arm)
+
+**ONE commit, ONE `RATIFIED_DETECTOR_VERSION` bump from `a026dc51`, ONE `PREDICATE_SPEC_V2_SHA256` recompute, ONE 20-day parity regen (per-day delta stated in fixture header: LONG drops on downgrade days, SHORT drops on upgrade days, BOTH drop on M&A-target days), ONE four-function auto-deploy (ACT-529: `overshoot-detection-run`, `-entry-run`, `-exit-run`, `-fill-sweep`).**
+
+**ACT-532 extended checklist (INC-113 / Gate-11 dispatcher-pin lesson):** after the version bump, `grep -rn "a026dc51" supabase/` MUST return zero; same grep for any test-pinned prior literal MUST return zero.
+
+**Single-home extensions to `_shared/overshoot/si-freshness.ts`:** `analystRevisionStaleActive` (DEC-080; reused by DEC-081) + `maStaleActive` (DEC-082). Canary import guard in `si-freshness_test.ts` extended to assert both new symbols are imported by `detector.ts` from the single-home module.
+
+**Timing:** commit lands AFTER Tuesday's `overshoot.exit.run` fires and closes — Tuesday stamps under OLD `a026dc51` cleanly. Wednesday 22:00Z detection run is the first book shaped by all three exclusions.
+
+**Wednesday verification checklist:** (1) detection row stamps NEW `detector_version`; (2) ≥1 `analyst_downgrade_proximate` refusal (DEC-080 base rate ~2–4/day); (3) ≥1 `analyst_upgrade_proximate` refusal (DEC-081 base rate ~2–3/day); (4) `ma_target_active` fires iff slate intersects active target (~0–1/day expected); (5) NO `analyst_revision_feed_stale`, NO `ma_feed_stale` (pre-verified freshness).
+
+**Cross-refs:** DEC-080, DEC-081, DEC-082, ACT-527, ACT-529, ACT-532, ACT-545, ACT-546.
