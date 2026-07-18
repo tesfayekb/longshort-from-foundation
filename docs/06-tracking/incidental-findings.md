@@ -24,6 +24,8 @@
 
 **Cross-refs:** ACT-536 (blocked by this); ACT-509 (grid schema — missing percentile columns); `overshoot_lots.cohort_*` (MIG-161 landed cleanly and IS queryable — the persistence layer is not defective, only the prior narration was); ai-failure-modes #59.
 
+_(2026-07-18 correction note: the catalog entry above is filed as **#62** in `docs/ai-failure-modes.md` — #59-61 were already assigned to `no-explicit-any` / JSDoc-cron / SupabaseLike-drift classes.)_
+
 ---
 
 ## INC-109 — Overshoot universe has no refresh path (single seed, 13 days stale as of 2026-07-16)
