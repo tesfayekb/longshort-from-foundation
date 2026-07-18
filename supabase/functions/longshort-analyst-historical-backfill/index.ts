@@ -77,13 +77,33 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiError(405, 'method_not_allowed', { correlationId: crypto.randomUUID() });
   }
 
-  const authCtx = await authenticateRequest(req);
-  const correlationId = authCtx.correlationId;
-
-  // Gate: superadmin OR service_role only (research-only backfill; not for regular ops).
-  const { data: isSuperadmin } = await supabaseAdmin.rpc('is_superadmin', { _user_id: authCtx.user.id });
-  if (!isSuperadmin) {
-    return apiError(403, 'superadmin_required', { correlationId });
+  // R-003 precedent: accept `X-Cron-Secret: $CRON_SECRET` header as an
+  // alternate gate for this manual one-shot (matches the project-wide
+  // cron-auth convention). Write-safety does NOT rest on this gate — it
+  // rests on (i) the DB CHECK constraint blocking any row with
+  // as_of_date >= 2026-06-29, and (ii) the target table being
+  // RESEARCH-ONLY (DEC-080/081 never reached the detector). The gate is
+  // just to keep the endpoint from being drive-by-callable.
+  const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
+  const providedCronHeader = req.headers.get('X-Cron-Secret') ?? '';
+  let correlationId = crypto.randomUUID();
+  const isCronBearer = cronSecret.length > 0 && providedCronHeader === cronSecret;
+  // Temporary diagnostic — non-secret-leaking; returns only lengths.
+  const url = new URL(req.url);
+  if (url.searchParams.get('debug_auth') === '1') {
+    return new Response(JSON.stringify({
+      env_cron_secret_len: cronSecret.length,
+      provided_cron_header_len: providedCronHeader.length,
+      isCronBearer,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+  if (!isCronBearer) {
+    const authCtx = await authenticateRequest(req);
+    correlationId = authCtx.correlationId;
+    const { data: isSuperadmin } = await supabaseAdmin.rpc('is_superadmin', { _user_id: authCtx.user.id });
+    if (!isSuperadmin) {
+      return apiError(403, 'superadmin_required', { correlationId });
+    }
   }
 
   let body: {
