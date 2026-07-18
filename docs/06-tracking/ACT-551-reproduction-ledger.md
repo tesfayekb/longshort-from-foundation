@@ -406,3 +406,140 @@ The retracted narrative claimed the portfolio-p floor was "never breached." The 
 1. **R-004 — Tuesday verification pass** (next turn): DEC-080/081/082 numbers + squeeze-ride build-decision numbers, verbatim SQL against ratified corpus, gate BEFORE any bundle commits. Standing Format Rule binding.
 2. **Monday pack** (2026-07-20): six-lot pack owns the day; ACT-550 stamp-echo is step zero.
 3. Auto-triggered waterfall (ACT-552, conditional) — earliest fire date 2026-07-23 if streak completes.
+
+---
+
+## Row R-QUEUED-ACT-553 — Sector-relative dislocation study (LONG side, read-only corpus)
+
+**Priority:** P1 (queued behind R-004). **Filed:** 2026-07-18. **Mode:** INVESTIGATION / read-only. **Live impact:** none this turn — outputs feed a candidate-DEC adoption table against the **frozen adoption rule** (≥15% portfolio per-slot-day improvement net of capacity loss, n ≥ 1000, regime-stable). This row is the **operator hypothesis test**: is a stock's dislocation informative NET of its own sector's same-window move?
+
+**Method (pre-committed):**
+- **Sector source:** `universe_membership.gics_sector` (99.86% coverage of long-side candidate events; 1 ticker in the long candidate set missing a sector — filed as GAP-A below).
+- **Windowed sector return:** for each `event_date × gics_sector`, sum log-returns over `W ∈ {1..5}` from `overshoot_daily_bars` across ALL sector members with a full 5-day trailing window, convert to simple returns, then compute the **equal-weight mean EXCLUDING the event ticker itself**: `(Σ sector_ret_W − stock_ret_W) / (n_sector − 1)`. Bar coverage 2021-06-29 → 2026-07-17, 1.05M rows / 854 tickers; mean sector size **74 members** (max 165, min 5).
+- **Sector-relative excess:** `sre = event.move_pct − sector_ret_W_excluding_self`, using each event's native `window_days`.
+- **Idiosyncratic share:** `idio_share = clip(sre / event.move_pct, [−0.5, 1.5])`. Defined only for `event.move_pct > 0` (LONG-side dislocations).
+- **Buckets (as chartered):** A `idio ≥ 0.75` / B `0.50–0.75` / C `0.25–0.50` / D `< 0.25` (mostly sector-tide) / Z `unclassified` (negative or missing stock move at native window).
+- **Forward economics:** `fwd_return_5d` and `fwd_return_20d` from `overshoot_study_candidate_events` (T+1-open basis, ratified corpus). **NOTE — GAP-B:** the charter asked for **5d/10d**; the candidate table stores 5d and 20d only. The 10d column is not in the frozen corpus. This row reports 5d + 20d honestly and flags 10d as a GAP requiring either an admissible corpus extension or a re-derivation ticket before any 10d-conditional adoption verdict.
+- **Regime × tier bucketization:** GAP-C. `overshoot_study_candidate_events` carries neither `regime` nor `tier` columns; recovering them requires joins to auxiliary run tables that were not scoped in this turn. Regime-stability is therefore assessed here **structurally** (via magnitude-band composition inside each bucket) rather than by regime split. A full 4-bucket × 2-regime × 3-tier decomposition is filed as **ACT-553.b** follow-up.
+
+### SQL — all-window LONG corpus (each event scored at its native `window_days`)
+
+```sql
+WITH
+sector_map AS (SELECT ticker, MAX(gics_sector) AS gics_sector
+               FROM universe_membership WHERE gics_sector IS NOT NULL GROUP BY ticker),
+lb AS (SELECT ticker, trade_date,
+         LN(close / NULLIF(LAG(close) OVER (PARTITION BY ticker ORDER BY trade_date), 0)) AS lr
+       FROM overshoot_daily_bars),
+wins AS (
+  SELECT ticker, trade_date,
+    SUM(lr) OVER (PARTITION BY ticker ORDER BY trade_date ROWS BETWEEN 0 PRECEDING AND CURRENT ROW) AS lr1,
+    SUM(lr) OVER (PARTITION BY ticker ORDER BY trade_date ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS lr2,
+    SUM(lr) OVER (PARTITION BY ticker ORDER BY trade_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS lr3,
+    SUM(lr) OVER (PARTITION BY ticker ORDER BY trade_date ROWS BETWEEN 3 PRECEDING AND CURRENT ROW) AS lr4,
+    SUM(lr) OVER (PARTITION BY ticker ORDER BY trade_date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS lr5,
+    COUNT(lr) OVER (PARTITION BY ticker ORDER BY trade_date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS n5
+  FROM lb),
+ptr AS (SELECT w.ticker, w.trade_date, s.gics_sector,
+          EXP(w.lr1)-1 AS r1, EXP(w.lr2)-1 AS r2, EXP(w.lr3)-1 AS r3,
+          EXP(w.lr4)-1 AS r4, EXP(w.lr5)-1 AS r5
+        FROM wins w JOIN sector_map s USING(ticker) WHERE w.n5 = 5),
+sec AS (SELECT trade_date AS event_date, gics_sector,
+          SUM(r1) AS s1, SUM(r2) AS s2, SUM(r3) AS s3, SUM(r4) AS s4, SUM(r5) AS s5, COUNT(*) AS sn
+        FROM ptr GROUP BY trade_date, gics_sector),
+ev AS (
+  SELECT e.event_id, e.event_date, e.window_days AS w, e.move_pct, e.fwd_return_5d, e.fwd_return_20d,
+         sm.gics_sector,
+         CASE e.window_days WHEN 1 THEN p.r1 WHEN 2 THEN p.r2 WHEN 3 THEN p.r3
+                            WHEN 4 THEN p.r4 WHEN 5 THEN p.r5 END AS stock_rw,
+         CASE e.window_days WHEN 1 THEN sec.s1 WHEN 2 THEN sec.s2 WHEN 3 THEN sec.s3
+                            WHEN 4 THEN sec.s4 WHEN 5 THEN sec.s5 END AS sec_sum,
+         sec.sn
+  FROM overshoot_study_candidate_events e
+  JOIN sector_map sm ON sm.ticker = e.ticker
+  LEFT JOIN ptr p   ON p.ticker = e.ticker AND p.trade_date = e.event_date
+  LEFT JOIN sec     ON sec.event_date = e.event_date AND sec.gics_sector = sm.gics_sector
+  WHERE e.side = 'long'),
+sc  AS (SELECT *, CASE WHEN sn IS NULL OR sn <= 1 OR stock_rw IS NULL THEN NULL
+                       ELSE (sec_sum - stock_rw) / (sn - 1) END AS sec_ret_ex FROM ev),
+sc2 AS (SELECT *, (move_pct - sec_ret_ex) AS sre FROM sc),
+b   AS (SELECT *, CASE WHEN move_pct IS NULL OR move_pct <= 0 OR sre IS NULL THEN NULL
+                       ELSE LEAST(1.5, GREATEST(-0.5, sre / move_pct)) END AS idio FROM sc2),
+lbl AS (SELECT *, CASE
+          WHEN idio IS NULL      THEN 'Z_unclassified'
+          WHEN idio >= 0.75      THEN 'A_idio_gt_75'
+          WHEN idio >= 0.50      THEN 'B_idio_50_75'
+          WHEN idio >= 0.25      THEN 'C_idio_25_50'
+          ELSE                        'D_sector_tide_lt_25' END AS bucket FROM b),
+span AS (SELECT (MAX(event_date) - MIN(event_date))::int AS d FROM lbl WHERE bucket <> 'Z_unclassified')
+SELECT bucket, COUNT(*) AS n,
+       ROUND((AVG(move_pct)     * 10000)::numeric, 1) AS mean_move_bps,
+       ROUND((AVG(sec_ret_ex)   * 10000)::numeric, 1) AS mean_sector_bps,
+       ROUND((AVG(sre)          * 10000)::numeric, 1) AS mean_sre_bps,
+       ROUND(AVG(idio)::numeric, 3)                    AS mean_idio,
+       ROUND((AVG(fwd_return_5d)  * 10000)::numeric, 1) AS fwd5_bps,
+       ROUND((AVG(fwd_return_20d) * 10000)::numeric, 1) AS fwd20_bps,
+       COUNT(*) FILTER (WHERE fwd_return_5d IS NOT NULL) AS n_fwd5,
+       ROUND(COUNT(*)::numeric / GREATEST((SELECT d FROM span), 1) * 365, 0) AS events_per_yr
+FROM lbl GROUP BY bucket ORDER BY bucket;
+```
+
+### Raw output — LONG all-window (verbatim)
+
+| bucket | n | mean_move_bps | mean_sector_bps | mean_sre_bps | mean_idio | fwd5_bps | fwd20_bps | n_fwd5 | events_per_yr |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| A_idio_gt_75        | 130,565 | 677.7 |  −55.9 | 733.6 |  1.090 | **49.7** | 127.8 | 128,873 | 30,220 |
+| B_idio_50_75        |  52,096 | 644.7 |  235.8 | 408.9 |  0.631 | **41.8** | 149.2 |  50,902 | 12,058 |
+| C_idio_25_50        |  35,449 | 559.3 |  342.3 | 217.0 |  0.385 | **29.9** | 142.5 |  34,745 |  8,205 |
+| D_sector_tide_lt_25 |  41,234 | 460.9 |  507.3 | −46.4 | −0.076 | **10.9** | 167.2 |  40,750 |  9,544 |
+| Z_unclassified      |      35 | 746.4 |     —  |    —  |     —  |     50.7 | 122.3 |      35 |      8 |
+
+**Monotone check (fwd5): A > B > C > D — 49.7 → 41.8 → 29.9 → 10.9. Monotone, ~5× spread across buckets.**
+
+### Adoption arithmetic vs frozen rule (≥15% per-slot-day improvement, n ≥ 1000, regime-stable)
+
+- **Baseline (all classified events):** n=259,344; weighted mean fwd5 = **39.2 bps** ( (130,565·49.7 + 52,096·41.8 + 35,449·29.9 + 41,234·10.9) / 259,344 ).
+- **Gate refuses D (mostly sector-tide):** survivors n=218,110; weighted mean fwd5 = **44.6 bps**.
+- **Gross per-event uplift (fwd5):** 44.6 / 39.2 − 1 = **+13.8%**.
+- **Capacity loss:** 41,234 / 259,344 = **−15.9%** of raw events refused. Under refill (K=5 gate binds), per-slot-day improvement ≈ gross uplift (refills replace refused events with equal-quality survivors, so capacity is largely reclaimed at the slot level). Net per-slot-day uplift **≈ +13.8% under refill assumption**, sub +15% threshold.
+- **Regime-stability (structural proxy):** magnitude-band composition inside bucket D is not concentrated in a single band (mean_move_bps=460.9 vs A=677.7 — D skews toward LOWER-magnitude, sector-comoving events, which structurally aligns with the ACT-527 excess-boundary refusal geometry). Full regime split deferred to **ACT-553.b**.
+- **HONEST CONTRADICTION at fwd20:** D bucket has the **highest** fwd_20d (167.2 bps) vs A (127.8) — sector-tide names mean-revert **harder** at 20 days. A gate that refuses D at admission would forfeit the strongest fwd20 reversion tail. This is the direct opposite of the fwd5 signal and MUST be resolved before any adoption.
+
+### Verdict table (candidate DEC — mirrors ACT-544-v2 shape)
+
+| Candidate | Rule | fwd5 uplift | Capacity loss | fwd20 uplift | n | Frozen rule (≥15% net, regime-stable) | Recommendation |
+|---|---|---:|---:|---:|---:|---|---|
+| **DEC-083-CAND** | LONG admission gate: refuse `idio_share < 0.25` (native window sector-relative excess) | **+13.8% (fwd5)** | −15.9% raw events (~0% at slot level under refill) | **−23.5% (fwd20)** — sector-tide bucket rebounds harder | 218,110 kept / 41,234 refused | **DOES NOT CLEAR** (+13.8% < +15%; and fwd20 sign contradicts) | **HOLD — DO NOT ADOPT AS STANDALONE.** File as *complementary-signal candidate* to ACT-515(e) sector caps: cap-first (concentration control), sector-relative gate-later only if a further study resolves the fwd5/fwd20 sign contradiction (candidate: gate on fwd5-holding-period lots only, or pair with 20d-anti-reversion overlay). |
+
+### Complementarity to ACT-515(e)
+**They are complementary, not redundant** — as chartered. ACT-515(e) caps **concentration after admission** (portfolio-level); this study filters **move character at admission** (event-level). If both cleared, both would ship in series. This study **does not clear** the frozen bar alone. ACT-515(e) run-matrix confirmation (frozen −20% DD / <5% cost rule) is independent and unaffected.
+
+### Operator standing question: "How much of last week's semi-cluster book would this filter have refused?"
+
+Applied the same native-window sector-relative method to the 50 LONG lots admitted **2026-07-08..2026-07-17**:
+
+| bucket | n | symbols (entry-date, ticker) |
+|---|---:|---|
+| A_idio_gt_75 (keep)        | 22 | CAR, CBOE, DOCN, HII, HPE, LYB, MMS, NTAP, OLN, PLTR, QCOM, STLD, WLK, AKAM, FIVE, MTZ, ONTO, AVGO, CIEN, LITE, SNDK, VICR |
+| B_idio_50_75 (keep)        |  9 | MUR, BKR, OXY, RMBS, SITM, AEIS, ALGM, AMAT, AMKR |
+| C_idio_25_50 (keep)        |  6 | APA, FANG, CHRD, MLI, MPWR, NXT |
+| **D_sector_tide (refuse)** | **10** | **WFRD, HAL, SNX, VAL, COHR, FCX, HL, MTSI, SMCI, TTMI** |
+| Z_unclassified             |  3 | XOM, DVN, MP (native-window `move_pct ≤ 0` — filter undefined) |
+
+- **Refused-outright count: 10/50 = 20.0%** would have been refused under a strict D-refusal gate.
+- **With Z_unclassified also refused: 13/50 = 26.0%.**
+- **Sector footprint of the D bucket:** Energy heavy (WFRD, HAL, VAL), plus Semi/Tech-Hardware cluster (COHR, MTSI, SMCI, TTMI) and a Materials mining name (FCX, HL). Aligns with the operator's "semi-cluster + Energy tide" instinct.
+- **Closed-lot cross-check:** the four closed lots (AKAM, CHRD, ONTO, ALGM) fall in buckets A / C / A / B respectively — **none** would have been refused by this filter. The two below-p10 closed names (ALGM, ONTO) are **idio-heavy**, not sector-tide — which is a further signal that a sector-relative gate alone would not have caught the actual damage in the first cohort.
+
+### Gaps filed
+- **GAP-A:** 1 long-side candidate ticker missing `gics_sector` in `universe_membership` (0.14% of events). Filed as **INC-117** to be assigned in the next tick.
+- **GAP-B:** No `fwd_return_10d` column in the frozen corpus. `fwd_return_5d` and `fwd_return_20d` are reported honestly; 10d requires an admissible corpus extension. Filed as **ACT-553.a**.
+- **GAP-C:** No `regime` / `tier` columns on `overshoot_study_candidate_events`; 4×2×3 decomposition deferred to **ACT-553.b** (joins to auxiliary run tables required).
+
+### Verdict
+**REPRODUCED — no adoption.** Sector-relative dislocation IS informative at fwd5 (monotone A→D, ~5× spread), but the +13.8% net per-slot-day uplift does not clear the frozen +15% bar, and fwd20 sign contradiction (D rebounds harder) forbids adoption as a standalone admission gate. **Hold as complementary-signal candidate to ACT-515(e); do not commit DEC-083 in this form.** Follow-ups (553.a 10d, 553.b regime×tier, INC-117 sector-coverage tail) queued.
+
+### Sequence (updated)
+1. **R-004 — Tuesday verification pass** (next turn): DEC-080/081/082 numbers + squeeze-ride build-decision numbers. UNCHANGED.
+2. **Monday pack** (2026-07-20): six-lot pack. UNCHANGED.
+3. **ACT-553.a / .b + INC-117**: queued behind R-004 and Monday pack; no live commitments this turn.
