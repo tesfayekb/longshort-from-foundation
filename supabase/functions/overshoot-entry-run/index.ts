@@ -713,8 +713,6 @@ Deno.serve(createHandler(async (req: Request) => {
         dr.as_of::text AS as_of,
         tclose.close  AS t_close_ref,
         preref.close  AS pre_event_ref,
-        -- MIG-161: cohort provenance. study_cell_ref is stored as a
-        -- double-encoded jsonb string; re-parse via `#>>` before key-lookup.
         ((e.study_cell_ref #>> '{}')::jsonb)->>'side' AS study_cell_side,
         ((e.study_cell_ref #>> '{}')::jsonb)->>'band' AS study_cell_band,
         e.drawdown_bucket,
