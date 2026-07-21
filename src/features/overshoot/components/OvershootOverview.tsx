@@ -102,30 +102,11 @@ function fmtMoney(n: number | null | undefined): string {
   return `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-function PendingCandidateIII({ title }: { title: string }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground truncate">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* ACT-525 R2 (b) — short status label + info hint. Full governance
-            prose lives in the tooltip and in FP-069-CANDIDATE-iii detail. */}
-        <div className="flex items-baseline gap-2">
-          <p className="text-2xl font-semibold text-muted-foreground">—</p>
-          <InfoHint label="Windowed gain — pending">
-            No equity snapshots yet. Arm <span className="font-mono">overshoot_equity_snapshot</span> via
-            the INC-82 bracket to populate this window. No synthetic numbers are rendered — this is a
-            typed-absence per FP-069-CANDIDATE-iii.
-          </InfoHint>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground/80">
-          Pending — equity snapshots not armed
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
+// PendingCandidateIII (ACT-525 R2 (b)) removed 2026-07-21 (Option-A render
+// fix): windowed-gain cards now compute from the live
+// `overshoot_equity_snapshots` series via WindowedGainCard. Typed-absence
+// still honored — it now names the specific series-length shortfall per
+// card rather than a blanket "not armed" claim.
 
 /**
  * WindowedGainCard — computes a broker-equity delta over a fixed session
