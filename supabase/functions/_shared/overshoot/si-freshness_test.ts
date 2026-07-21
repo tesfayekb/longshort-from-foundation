@@ -12,6 +12,10 @@ import {
   siStaleActive,
   overshootSleeveAllocation,
   OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
+  OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT,
+  OVERSHOOT_ANALYST_REVISION_STALENESS_WARN_AT_DAYS_DEFAULT,
+  analystRevisionStaleActive,
+  analystRevisionStaleWarnActive,
 } from './si-freshness.ts';
 
 Deno.test('siCalendarDaysBetween — UTC-midnight integer days', () => {
@@ -72,6 +76,54 @@ Deno.test('overshootSleeveAllocation — ACTIVE folds short into long (1.00/0.00
 
 Deno.test('DEC-504-3 default is 21 days', () => {
   assertEquals(OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT, 21);
+});
+
+// ─── DEC-080-v2 / DEC-081-v2 (2026-07-21 amendment) ─────────────────────
+// Weekday-cadence rationale for the 3d→4d bump. The analyst-revision feed
+// publishes on U.S. equity-market weekdays only, so:
+//   • Fri→Mon (ordinary weekend)          = 3 calendar days — MUST be FRESH
+//   • Fri→Tue (holiday-observed Monday)   = 4 calendar days — MUST be FRESH
+//   • Wed→Mon (dead feed, ≥ 5 days idle)  = 5 calendar days — MUST be STALE
+// Warn-band (>3 && ≤4) fires ONLY on the Tuesday-after-holiday edge and on
+// a genuinely-dying feed one day before fail-closed engages — the intended
+// early-warning signal per operator ruling.
+
+Deno.test('DEC-080-v2 amendment: staleness default is 4 days, warn at 3', () => {
+  assertEquals(OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT, 4);
+  assertEquals(OVERSHOOT_ANALYST_REVISION_STALENESS_WARN_AT_DAYS_DEFAULT, 3);
+});
+
+Deno.test('analystRevisionStaleActive — Fri→Mon ordinary weekend is FRESH at 4d', () => {
+  // 2026-07-17 (Fri) → 2026-07-20 (Mon) = 3 days.
+  assertFalse(analystRevisionStaleActive('2026-07-20', '2026-07-17T20:00:00Z', 4));
+});
+
+Deno.test('analystRevisionStaleActive — Fri→Tue holiday-observed weekend is FRESH at 4d', () => {
+  // 2026-07-17 (Fri) → 2026-07-21 (Tue after a Monday-observed holiday) = 4 days.
+  // At the 3d cap this would have refused the book (regression class).
+  assertFalse(analystRevisionStaleActive('2026-07-21', '2026-07-17T20:00:00Z', 4));
+  assert(analystRevisionStaleActive('2026-07-21', '2026-07-17T20:00:00Z', 3));
+});
+
+Deno.test('analystRevisionStaleActive — Wed→Mon dead feed (5d) is STALE at 4d', () => {
+  // 2026-07-15 (Wed) → 2026-07-20 (Mon) = 5 days: genuinely dying feed.
+  assert(analystRevisionStaleActive('2026-07-20', '2026-07-15T20:00:00Z', 4));
+});
+
+Deno.test('analystRevisionStaleActive — null corpus is FRESH (symmetric to siStaleActive)', () => {
+  assertFalse(analystRevisionStaleActive('2026-07-21', null, 4));
+});
+
+Deno.test('analystRevisionStaleWarnActive — fires ONLY in the (warn, max] band', () => {
+  // 0-3 days: healthy → no warn.
+  assertFalse(analystRevisionStaleWarnActive('2026-07-20', '2026-07-17T20:00:00Z', 3, 4)); // 3d
+  assertFalse(analystRevisionStaleWarnActive('2026-07-20', '2026-07-20T20:00:00Z', 3, 4)); // 0d
+  // 4 days (holiday-observed Tuesday OR one-day-pre-fail-closed): WARN.
+  assert(analystRevisionStaleWarnActive('2026-07-21', '2026-07-17T20:00:00Z', 3, 4));
+  // 5+ days: fail-closed territory — warn stops firing so it doesn't double-signal.
+  assertFalse(analystRevisionStaleWarnActive('2026-07-20', '2026-07-15T20:00:00Z', 3, 4));
+  // null corpus: no warn.
+  assertFalse(analystRevisionStaleWarnActive('2026-07-21', null, 3, 4));
 });
 
 // ─── CANARY — SINGLE-HOME IMPORT GUARD ─────────────────────────────────

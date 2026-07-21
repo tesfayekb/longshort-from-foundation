@@ -688,7 +688,9 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
   // together per DEC-081 §3 inheriting DEC-080's run-level guard; M&A
   // covers BOTH by design). Silent when the lookups are omitted.
   // ═══════════════════════════════════════════════════════════════════
-  const analystStalenessMaxDays = params.analystStalenessMaxDays ?? 3;
+  // Default aligned with OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT
+  // (2026-07-21 amendment: 3 → 4, weekday-cadence rationale in si-freshness.ts).
+  const analystStalenessMaxDays = params.analystStalenessMaxDays ?? 4;
   const maStalenessMaxDays = params.maStalenessMaxDays ?? 14;
   const analystFeedStale =
     params.analystRevisionLookup !== undefined &&
