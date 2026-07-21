@@ -16,6 +16,7 @@
  * destructive / secondary (deferred/muted) / info / outline.
  */
 import { formatDistanceToNow } from 'date-fns';
+import { useLocation } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { classifyFireSource } from '@/features/longshort/hooks/useSignalComputeRuns';
@@ -23,6 +24,7 @@ import {
   useTradingStatus,
   type KillSwitchState,
   type TradingStatusSnapshot,
+  type TradingStatusScope,
 } from '@/features/longshort/hooks/useTradingStatus';
 
 function relative(ts: string | null | undefined): string {
@@ -194,14 +196,27 @@ function ReconciliationIndicator({
       }
     >
       <Badge variant={variant} className="text-[10px]">
-        {n === 0 ? 'none' : `${n} open`}
+        {n === 0 ? 'none' : `${n} events open`}
       </Badge>
     </Indicator>
   );
 }
 
+/**
+ * Route → status scope. The strip is mounted on every trading route via
+ * `TradingLayout` (T5 carve-out); on `/trading/overshoot*` routes the
+ * universe chip must read overshoot-true data and the OPEN chip must
+ * NOT display longshort reconciliation state (operator ruling
+ * 2026-07-21). Any future strategy tree gets its own branch here.
+ */
+function scopeForPath(pathname: string): TradingStatusScope {
+  return pathname.startsWith('/trading/overshoot') ? 'overshoot' : 'longshort';
+}
+
 export function TradingStatusStrip() {
-  const { data, isLoading } = useTradingStatus();
+  const { pathname } = useLocation();
+  const scope = scopeForPath(pathname);
+  const { data, isLoading } = useTradingStatus(scope);
   const snapshot: TradingStatusSnapshot =
     data ?? { lastFire: null, universe: null, breaker: null, reconciliation: null };
 
@@ -210,13 +225,20 @@ export function TradingStatusStrip() {
       role="status"
       aria-label="Trading console status"
       data-testid="trading-status-strip"
+      data-scope={scope}
       aria-busy={isLoading}
       className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 border-b border-border bg-muted/30 px-4 py-1.5"
     >
       <LastFireIndicator lastFire={snapshot.lastFire} />
       <UniverseIndicator universe={snapshot.universe} />
       <BreakerIndicator breaker={snapshot.breaker} />
-      <ReconciliationIndicator reconciliation={snapshot.reconciliation} />
+      {/* Cross-scope leakage guard: on overshoot routes the OPEN chip is
+          hidden entirely rather than showing longshort reconciliation
+          state. When overshoot's own A5/reconciliation surface lands
+          this branch is where it wires in. */}
+      {scope === 'overshoot' ? null : (
+        <ReconciliationIndicator reconciliation={snapshot.reconciliation} />
+      )}
     </div>
   );
 }
