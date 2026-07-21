@@ -138,7 +138,7 @@ function WindowedGainCard({
 }: {
   title: string;
   sessionsBack: number | null;
-  snapshots: Array<{ snapshot_date: string; broker_equity: number }>;
+  snapshots: Array<{ snapshot_date: string; broker_equity: number; spy_close: number | null }>;
   loading: boolean;
 }) {
   const n = snapshots.length;
@@ -154,6 +154,14 @@ function WindowedGainCard({
   const pct = latest && anchor && anchor.broker_equity > 0 && delta !== null
     ? (delta / anchor.broker_equity) * 100
     : null;
+  // ACT-562 — SPY same-window benchmark. Sub-line reads
+  // (spy_latest - spy_anchor) / spy_anchor * 100 from the stored series
+  // (no external fetch at render). Typed-absence label when either
+  // endpoint has spy_close=null (SPY bar not landed yet at write time).
+  const spyPct = latest && anchor && anchor.spy_close !== null && latest.spy_close !== null && anchor.spy_close > 0
+    ? ((latest.spy_close - anchor.spy_close) / anchor.spy_close) * 100
+    : null;
+  const relPct = pct !== null && spyPct !== null ? pct - spyPct : null;
   const variant: 'good' | 'bad' | 'muted' =
     delta === null ? 'muted' : delta > 0 ? 'good' : delta < 0 ? 'bad' : 'muted';
   const valueClass =
@@ -177,6 +185,8 @@ function WindowedGainCard({
               ? <> anchored at the first available snapshot (2026-07-09 inception — 2026-07-08 was construction-era pre-arming and is not day-0).</>
               : <> over the last {sessionsBack} trading session{sessionsBack === 1 ? '' : 's'} in the loaded series. Row-indexed, so weekends / holidays collapse out.</>}
             {' '}Post-close settled state; no mid-session synthesis.
+            {' '}<em>vs SPY</em> reads the stored <span className="font-mono">spy_close</span> column
+            (source: <span className="font-mono">overshoot_daily_bars</span>) — book % minus SPY % over the same window; no external fetch at render.
           </InfoHint>
         </CardTitle>
       </CardHeader>
@@ -202,6 +212,19 @@ function WindowedGainCard({
             <p className={`mt-1 text-xs font-mono ${valueClass}`}>
               {pct === null ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}
               {subLabel ? <span className="text-muted-foreground/80"> · {subLabel}</span> : null}
+            </p>
+            <p className="mt-1 text-xs font-mono text-muted-foreground/90">
+              {spyPct === null ? (
+                <span className="text-muted-foreground/70">vs SPY same window: — (spy_close missing)</span>
+              ) : (
+                <>
+                  vs SPY same window:{' '}
+                  <span className={relPct !== null && relPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}>
+                    {relPct !== null && relPct >= 0 ? '+' : ''}{relPct !== null ? relPct.toFixed(2) : '—'}%
+                  </span>
+                  <span className="text-muted-foreground/70"> (SPY {spyPct >= 0 ? '+' : ''}{spyPct.toFixed(2)}%)</span>
+                </>
+              )}
             </p>
           </>
         )}
