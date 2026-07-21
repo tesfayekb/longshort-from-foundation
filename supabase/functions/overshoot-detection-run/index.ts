@@ -799,7 +799,7 @@ Deno.serve(createHandler(async (req: Request) => {
     durations.total_ms = Math.round(performance.now() - t0);
     await finalizeRun(sql, runId, 'completed', undefined, events.length, selected.length, durations, {
       bars: barsBackfillRunId, earnings: earningsBackfillRunId,
-    }, dryRun);
+    }, dryRun, tallyRefusalCounts(events));
     await sql.end({ timeout: 5 });
     // FP-069 W3.8 T2.4 (ACT-479) — dry-run response envelope enrichment
     // (INC-84 §5 bundle-content proof + Proposal A tier snapshot).
