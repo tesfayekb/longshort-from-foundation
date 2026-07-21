@@ -1047,7 +1047,7 @@ Deno.serve(createHandler(async (req: Request) => {
       return apiSuccess({ ok: true, probe: 'seed_apply', skipped: 'kill_switch_active', correlationId });
     }
     const nowIso = productionClock.getWallClockTs();
-    const asOfDate = nowIso.slice(0, 10);
+    const asOfDate = nowIso.toISOString().slice(0, 10);
     const fresh = new Set(tickers);
     const { data: current, error: readErr } = await supabaseAdmin
       .from('overshoot_universe')
@@ -1132,7 +1132,7 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   const nowIso = productionClock.getWallClockTs();
-  const asOfDate = (body.as_of ?? nowIso.slice(0, 10));
+  const asOfDate = (body.as_of ?? nowIso.toISOString().slice(0, 10));
 
   const roster = await fetchRussellRoster(apiKey);
   if (roster.kind !== 'ok') {
