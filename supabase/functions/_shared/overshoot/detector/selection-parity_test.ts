@@ -1,11 +1,14 @@
 // @ts-nocheck — Deno offline parity harness.
 //
 // FP-069 W3.8 T2.2 (ACT-479) — SELECTION-SURFACE parity gate.
-// Re-pinned 2026-07-15 to RATIFIED_DETECTOR_VERSION a026dc51 under the
-// INC-106 direction-flip landing (SHORT squeeze gate flipped to
-// exclusion semantics per approved-decisions.md:852 R2; refusal reason
-// renamed to `si_above_squeeze_threshold`; V2 spec JSON updated to
-// describe the flipped gate truthfully → new PREDICATE_SPEC_V2_SHA256).
+// Re-pinned 2026-07-21 to RATIFIED_DETECTOR_VERSION aff20a13 under the
+// DEC-080-v2 / DEC-081-v2 / DEC-082 three-guard bundle. Retired pin (do
+// not restore): a026dc51 (INC-106 direction-flip; superseded by bundle).
+// The bundle wires §6 risk guards (analyst-downgrade proximity for LONG,
+// analyst-upgrade proximity for SHORT, M&A target proximity for BOTH)
+// with typed refusal reasons and fail-closed feed-freshness siblings.
+// V2 spec JSON gains a top-level `"amendments":{...}` block → new
+// PREDICATE_SPEC_V2_SHA256.
 //
 // FULLY OFFLINE by construction (per operator T2.2 STOP adjudication):
 //   * runDetector() is pure (W3.4 ratified design).
@@ -220,12 +223,15 @@ async function readCaptureHeadSha(): Promise<string> {
 }
 
 // Predicate v2 sha256 — captured constant (recomputed at boot in T2.4).
-// Re-pinned 2026-07-15 (INC-106 direction-flip). Prior value:
-//   766c996d88e439f370f5ff34356505818f6b6671d590e2f99d32418ebca7a573
-// (pre-flip spec asserting SHORT byte_unchanged_from_v1:true — falsified
-// by the flip). New value corresponds to the post-flip spec JSON with the
-// inc_106_direction_flip block + byte_unchanged_from_v1:false.
-const PREDICATE_SPEC_V2_SHA256 = 'df339497e747cb2cd76b5ac34a34ffcf0007f8d50a048fab3d875d21d93b288b';
+// Re-pinned 2026-07-15 (INC-106 direction-flip). Historic values (RETIRED,
+// listed so any stray occurrence greps as stale during ACT-532 lint):
+//   766c996d88e439f370f5ff34356505818f6b6671d590e2f99d32418ebca7a573  (pre-flip v2, superseded)
+//   df339497e747cb2cd76b5ac34a34ffcf0007f8d50a048fab3d875d21d93b288b  (post-flip v2, superseded by three-guard bundle)
+// Re-pinned 2026-07-21 (DEC-080-v2 / DEC-081-v2 / DEC-082 three-guard bundle).
+// Current value corresponds to the post-bundle spec JSON with the
+// top-level `"amendments":{...}` block enumerating the three §6 guards
+// and the two freshness siblings (analyst / M&A).
+const PREDICATE_SPEC_V2_SHA256 = '56b1ee631101c256f595dc750f5178511bab16f34972af7492aed3d33fac8dbd';
 
 for (const day of DATES) {
   Deno.test(`selection-parity — ${day} (OFFLINE, byte-exact, no tolerance)`, async () => {
@@ -291,6 +297,6 @@ for (const day of DATES) {
   });
 }
 
-Deno.test('selection-parity — RATIFIED_DETECTOR_VERSION re-pinned at a026dc51 (INC-106 direction-flip)', () => {
-  assertEquals(RATIFIED_DETECTOR_VERSION, 'a026dc51');
+Deno.test('selection-parity — RATIFIED_DETECTOR_VERSION re-pinned at aff20a13 (DEC-080-v2 / DEC-081-v2 / DEC-082 three-guard bundle)', () => {
+  assertEquals(RATIFIED_DETECTOR_VERSION, 'aff20a13');
 });

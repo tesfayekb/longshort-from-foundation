@@ -104,7 +104,17 @@
 // DEC-504-4 (2026-07-16): SI staleness predicate is single-homed at
 // ../si-freshness.ts. Detector and sizing overlay MUST import from the
 // same file — the canary test in `../si-freshness_test.ts` enforces this.
-import { isSiRowStale } from '../si-freshness.ts';
+//
+// DEC-080-v2 / DEC-081-v2 / DEC-082 (2026-07-21) — three-guard bundle
+// (composite version aff20a13) imports the analyst-revision + M&A
+// staleness siblings from the same file. Any second implementation of
+// those comparisons anywhere in the overshoot tree is forbidden.
+import {
+  isSiRowStale,
+  analystRevisionStaleActive,
+  maStaleActive,
+  withinCalendarDayWindow,
+} from '../si-freshness.ts';
 
 export type Side = 'LONG' | 'SHORT';
 
@@ -118,7 +128,13 @@ export type RefusalReason =
   | 'si_stale'
   | 'si_above_squeeze_threshold'
   | 'no_study_cell'
-  | 'capacity';
+  | 'capacity'
+  // ── DEC-080-v2 / DEC-081-v2 / DEC-082 (three-guard bundle, aff20a13):
+  | 'analyst_downgrade_proximate'    // LONG only  (DEC-080-v2 §6.a)
+  | 'analyst_upgrade_proximate'      // SHORT only (DEC-081-v2 §6.b)
+  | 'ma_target_proximate'            // BOTH sides (DEC-082 §6.c)
+  | 'analyst_revision_feed_stale'    // BOTH sides — run-level fail-closed
+  | 'ma_feed_stale';                 // BOTH sides — run-level fail-closed
 
 export interface KernelCandidateRow {
   run_id: string;
@@ -164,6 +180,35 @@ export interface ShortabilityRecord {
   shortable: boolean | null;
   easy_to_borrow: boolean | null;
 }
+
+// ── DEC-080-v2 / DEC-081-v2 — analyst-revision proximity guard input.
+// Rows are joined by ticker; the guard only reads `direction` +
+// `focal_published_at` (date component). `computed_at` (freshest across
+// the CORPUS, not per row) is passed separately as the run-level
+// feed-freshness signal.
+export interface AnalystRevisionRow {
+  direction: number;                 // +1 upgrade, -1 downgrade (smallint sign convention)
+  focal_published_at: string;        // ISO8601 timestamptz — date component only used
+}
+
+// ── DEC-082 — corporate-actions proximity guard input. Rows keyed by
+// EITHER `symbol` OR `successor_symbol` matching the candidate ticker
+// (so a target ticker is refused whether the announcement identifies it
+// as the acquiree or the survivor). The caller is responsible for the
+// symbol/successor union; the detector consumes an already-unioned list.
+export interface MAActionRow {
+  action_type: string;               // one of the DEC-082 M&A subset
+  announced_at: string | null;       // timestamptz | null
+  ex_date: string | null;            // date | null
+}
+
+/** DEC-082 ratified M&A action subset. Callers pre-filter to this set. */
+export const MA_ACTION_TYPES = new Set<string>([
+  'merger',
+  'acquisition',
+  'tender_offer',
+  'scheme_of_arrangement',
+]);
 
 export interface FilterPassRecord {
   filter: string;
@@ -239,6 +284,35 @@ export interface DetectorParams {
   bandLabelFor: (side: Side, windowDays: number, excessAtArgmax: number) => string;
   studyCellLookup: (key: StudyCellKey) => StudyCellStats | null;
   shortabilityLookup?: (ticker: string) => ShortabilityRecord | null;
+  // ── DEC-080-v2 / DEC-081-v2 / DEC-082 (2026-07-21) — three-guard bundle.
+  // All four fields are OPTIONAL: when omitted the guards are inert (no
+  // refusal, no run-level fail-close). The parity fixtures deliberately
+  // omit them so the byte-body of prior selection captures is preserved
+  // across the version bump; live callers (entry / detection functions)
+  // supply them from real reads of `analyst_revision_observations` +
+  // `corporate_actions`. Symmetric to `shortabilityLookup?` — a lookup
+  // absence is a typed no-op, not a silent-pass of dangerous data.
+  analystRevisionLookup?: (ticker: string) => readonly AnalystRevisionRow[];
+  maActionLookup?: (ticker: string) => readonly MAActionRow[];
+  /** Freshest `analyst_revision_observations.computed_at` across the
+   *  entire corpus for this run — null iff the corpus is empty (not
+   *  the same as "stale"; see analystRevisionStaleActive rationale). */
+  analystRevisionFeedFreshestComputedAt?: string | null;
+  /** Freshest `corporate_actions.updated_at` across the corpus — same
+   *  semantics as above. */
+  maFeedFreshestUpdatedAt?: string | null;
+  /** DEC-080-v2 §6.a — analyst-revision proximity window (calendar days).
+   *  Default 3 per ratification; caller may override for probes. */
+  analystProximityCalendarDays?: number;
+  /** DEC-080-v2 §6.a — analyst-revision feed-freshness cap (calendar
+   *  days). Default 3. Fail-closed: exceeding it refuses ALL rows. */
+  analystStalenessMaxDays?: number;
+  /** DEC-082 §6.c — M&A exclusion window (calendar days ≈ ±5 trading
+   *  days). Default 7. See `_shared/overshoot/si-freshness.ts` for the
+   *  approximation rationale. */
+  maExclusionCalendarDays?: number;
+  /** DEC-082 §6.c — M&A feed-freshness cap (calendar days). Default 14. */
+  maStalenessMaxDays?: number;
 }
 
 export interface DetectorInput {
@@ -484,12 +558,25 @@ export function LONG_ADMISSIBLE(cell: CellForTierEval): boolean {
 // Self-describing-artifact discipline (catalog-class): a detector
 // byte-change updates code + spec JSON + spec sha + version pin + parity
 // fixtures in ONE commit.
+//
+// ── DEC-080-v2 / DEC-081-v2 / DEC-082 THREE-GUARD BUNDLE (2026-07-21) ───
+// The V2 spec JSON below carries a top-level `"amendments":{...}` block
+// enumerating the three §6 risk guards + the two feed-freshness
+// siblings. Composite version bumps to `aff20a13` = first-8-hex of
+// sha256('a026dc51||DEC-080-v2+DEC-081-v2+DEC-082-ma-guard-v1').
+// A supervisor recompute tag-drift produced `8612b5d1` during
+// restatement — that value is RETIRED (never bound in code, no
+// artifact carries it). Both hashes were honest computations; the
+// canonical amendment tag is 'DEC-080-v2+DEC-081-v2+DEC-082-ma-guard-v1'
+// and RATIFIED_DETECTOR_VERSION = 'aff20a13'. Any stray `8612b5d1` in
+// the tree greps as stale and must be scrubbed by the extended ACT-532
+// old-literal check.
 
 export const DETECTOR_PREDICATE_SPEC_V1_JSON =
   '{"version":"v1","long":{"excess_min":0.10,"windows":[1,2,3],"momentum":[4,5],"drawdown":[1,2,3],"earnings_exclusion_days":5,"tiers":{"T1":{"mean_fwd_return_5d_min":0.0020,"arrival_count_min":1}}},"selection":{"ordering":["rank_score_desc","abs_excess_desc"],"capacity_per_side_default":20},"short":{"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
 
 export const DETECTOR_PREDICATE_SPEC_V2_JSON =
-  '{"version":"v2","long":{"universe":"kernel_move_pct_min_3pct","event_gates":["earnings_exclusion_5d"],"admission":"study_cell_membership","tiers":{"T1":{"geometry":{"bands":["L_10_INF"],"windows":[1,2,3],"momentum_quintiles":[4,5],"drawdown_buckets":[1,2,3]},"cell_gate":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1}},"T2":{"geometry":"complement_of_T1_within_long_study_grid","cell_gate":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1},"disjoint_from":"T1"}},"uniform_roi_floor":{"mean_fwd_return_5d_min":0.0010,"scope":"all_long_tiers","behavior_delta_vs_v1":"v1_admitted_any_non_null_mean; v2b_refuses_below_floor_including_t1_geometry"}},"selection":{"ordering":["rank_score_desc","abs_excess_desc","tier_asc"],"capacity_per_side_default":20,"tier_role":"w5_attribution_tag_not_priority_class"},"short":{"byte_unchanged_from_v1":false,"inc_106_direction_flip":{"act_ref":"INC-106","ratification":"approved-decisions.md:852 (R2)","comparison":"si_pct_float < squeezeSiPctFloatMin admits; si_pct_float >= squeezeSiPctFloatMin refuses as si_above_squeeze_threshold","refusal_reason":"si_above_squeeze_threshold","threshold_value":0.20,"threshold_status":"pending_ACT-527_curve"},"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}}}' as const;
+  '{"version":"v2","long":{"universe":"kernel_move_pct_min_3pct","event_gates":["earnings_exclusion_5d"],"admission":"study_cell_membership","tiers":{"T1":{"geometry":{"bands":["L_10_INF"],"windows":[1,2,3],"momentum_quintiles":[4,5],"drawdown_buckets":[1,2,3]},"cell_gate":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1}},"T2":{"geometry":"complement_of_T1_within_long_study_grid","cell_gate":{"mean_fwd_return_5d_min":0.0010,"arrival_count_min":1},"disjoint_from":"T1"}},"uniform_roi_floor":{"mean_fwd_return_5d_min":0.0010,"scope":"all_long_tiers","behavior_delta_vs_v1":"v1_admitted_any_non_null_mean; v2b_refuses_below_floor_including_t1_geometry"}},"selection":{"ordering":["rank_score_desc","abs_excess_desc","tier_asc"],"capacity_per_side_default":20,"tier_role":"w5_attribution_tag_not_priority_class"},"short":{"byte_unchanged_from_v1":false,"inc_106_direction_flip":{"act_ref":"INC-106","ratification":"approved-decisions.md:852 (R2)","comparison":"si_pct_float < squeezeSiPctFloatMin admits; si_pct_float >= squeezeSiPctFloatMin refuses as si_above_squeeze_threshold","refusal_reason":"si_above_squeeze_threshold","threshold_value":0.20,"threshold_status":"pending_ACT-527_curve"},"excess_min":0.08,"windows":[1,2,3,4,5],"momentum":[1,5],"drawdown":[4,5],"earnings_exclusion_days":5,"si_squeeze":{"si_pct_float_min":"param","si_staleness_max_days":"param","default_deny_on_missing":true}},"amendments":{"tag":"DEC-080-v2+DEC-081-v2+DEC-082-ma-guard-v1","ratified":"2026-07-21","composite_version":"aff20a13","retired_tag":"8612b5d1","guards":{"6a":{"dec":"DEC-080-v2","scope":"LONG_admission","predicate":"analyst_revision_observations row exists with same ticker AND direction=-1 AND focal_published_at::date within +/-3 calendar days of as_of_date","refusal_reason":"analyst_downgrade_proximate","feed_source":"analyst_revision_observations.computed_at","feed_staleness_max_days":3,"feed_staleness_refusal":"analyst_revision_feed_stale","proximity_calendar_days":3,"fail_closed":true},"6b":{"dec":"DEC-081-v2","scope":"SHORT_admission","predicate":"analyst_revision_observations row exists with same ticker AND direction=+1 AND focal_published_at::date within +/-3 calendar days of as_of_date","refusal_reason":"analyst_upgrade_proximate","feed_source":"analyst_revision_observations.computed_at","feed_staleness_max_days":3,"feed_staleness_refusal":"analyst_revision_feed_stale","proximity_calendar_days":3,"fail_closed":true},"6c":{"dec":"DEC-082","scope":"BOTH_sides_admission","predicate":"corporate_actions row exists with action_type IN {merger,acquisition,tender_offer,scheme_of_arrangement} AND (symbol=ticker OR successor_symbol=ticker) AND COALESCE(announced_at::date, ex_date) within +/-5 trading days (approximated +/-7 calendar days) of as_of_date","refusal_reason":"ma_target_proximate","feed_source":"corporate_actions.updated_at","feed_staleness_max_days":14,"feed_staleness_refusal":"ma_feed_stale","exclusion_calendar_days":7,"fail_closed":true}}}}' as const;
 
 /**
  * Currently-ratified detector version prefix (sha256(study_full_hash ‖
@@ -497,19 +584,28 @@ export const DETECTOR_PREDICATE_SPEC_V2_JSON =
  * Frozen; not recomputed at runtime this tranche. Consumers begin
  * asserting this in T2.4 (additive; no v1 removal, no boot-broken window).
  */
-// INC-106 (2026-07-15): direction fix bump. Prefix derived from
+// INC-106 (2026-07-15): direction-fix bump — derivation was
 //   sha256('b7cdfcd8||INC-106-direction-flip-v2b')[0:8] = a026dc51.
-// This derivation intentionally does NOT re-hash the composite
-// (study_full_hash || DETECTOR_PREDICATE_SPEC_V2_JSON): the V2 spec
-// JSON itself was updated in the same commit to describe the flipped
-// gate truthfully (byte_unchanged_from_v1:false + inc_106_direction_flip
-// block), so the T2.1b composite-derivation invariant is retired in
-// favor of the INC-106 anchor above. Predicate semantics changed
-// structurally (squeeze gate flipped to exclusion direction, refusal
-// reason renamed) — recomputed prefix makes the change surface via
-// the boot-assertion + dry-run envelope echo (INC-84 §5). ACT-527
-// curve verdict may re-bump when the threshold VALUE is re-derived.
-export const RATIFIED_DETECTOR_VERSION = 'a026dc51' as const;
+// DEC-080-v2 / DEC-081-v2 / DEC-082 (2026-07-21) three-guard bump:
+//   sha256('a026dc51||DEC-080-v2+DEC-081-v2+DEC-082-ma-guard-v1')[0:8]
+//   = aff20a13. Anchor chain: composite version bumps forward off the
+// previous ratified value, keeping the audit trail single-line and
+// deterministic. Supervisor recompute tag-drift produced '8612b5d1'
+// during restatement (both computations honest; drift root-caused as
+// tag-transcription); '8612b5d1' is RETIRED — no code, no artifact
+// carries it, and the extended ACT-532 old-literal grep MUST show
+// zero occurrences of both 'a026dc51' AND '8612b5d1' outside this
+// history preamble after the four-function redeploy.
+export const RATIFIED_DETECTOR_VERSION = 'aff20a13' as const;
+
+/** Retired literals that any post-bundle grep MUST return zero hits
+ *  on outside the preamble/version-history block below. Exported so
+ *  the ACT-532 lint script can consume the canonical list rather than
+ *  hard-code strings. */
+export const RETIRED_DETECTOR_VERSION_LITERALS: readonly string[] = [
+  'a026dc51',   // INC-106 flip, superseded by three-guard bundle
+  '8612b5d1',   // supervisor tag-drift during restatement; never bound
+] as const;
 
 export interface DetectorVersionHistoryEntry {
   version: 'v1' | 'v2';
@@ -566,14 +662,50 @@ export const DETECTOR_VERSION_HISTORY: readonly DetectorVersionHistoryEntry[] = 
       '|excess| DESC, tier ASC final-tie-break-only (W5 attribution tag, NOT priority class). ' +
       'SHORT path BYTE-UNCHANGED from v1 (all filter stages executed identically; tier=null on ' +
       'every SHORT event). Study run + kernel + param_grid_hash UNTOUCHED; ' +
-      'RATIFIED_STUDY_RUN_ID and RATIFIED_PARAM_GRID_HASH_PREFIX remain boot-asserted.',
-    act_ref: 'ACT-479',
-    ratification_date: '2026-07-07',
+      'RATIFIED_STUDY_RUN_ID and RATIFIED_PARAM_GRID_HASH_PREFIX remain boot-asserted. ' +
+      'DEC-080-v2 / DEC-081-v2 / DEC-082 (2026-07-21) three-guard bundle — composite version ' +
+      'aff20a13 = sha256(\'a026dc51||DEC-080-v2+DEC-081-v2+DEC-082-ma-guard-v1\')[0:8]. ' +
+      'Adds LONG analyst-downgrade proximity refusal (analyst_downgrade_proximate, +/-3d), ' +
+      'SHORT analyst-upgrade proximity refusal (analyst_upgrade_proximate, +/-3d), and ' +
+      'BOTH-sides M&A target proximity refusal (ma_target_proximate, +/-5 trading days ~ ' +
+      '+/-7 calendar days). Both freshness siblings fail-closed at the run level ' +
+      '(analyst_revision_feed_stale @ 3d, ma_feed_stale @ 14d). Retired literal: 8612b5d1 ' +
+      '(supervisor tag-drift during restatement; never bound in code).',
+    act_ref: 'ACT-479 + DEC-080-v2/DEC-081-v2/DEC-082',
+    ratification_date: '2026-07-21',
   },
 ] as const;
 
 export function runDetector(input: DetectorInput): DetectedEvent[] {
   const { candidates, shortInterest, params } = input;
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Run-level fail-closed freshness gates (DEC-080-v2 / DEC-081-v2 /
+  // DEC-082 three-guard bundle). Evaluated ONCE, before any per-row
+  // work. When engaged, every candidate refuses with the corresponding
+  // reason and no rank / selection is emitted for the affected leg.
+  // Both gates are BOTH-SIDES (analyst covers LONG+SHORT admission
+  // together per DEC-081 §3 inheriting DEC-080's run-level guard; M&A
+  // covers BOTH by design). Silent when the lookups are omitted.
+  // ═══════════════════════════════════════════════════════════════════
+  const analystStalenessMaxDays = params.analystStalenessMaxDays ?? 3;
+  const maStalenessMaxDays = params.maStalenessMaxDays ?? 14;
+  const analystFeedStale =
+    params.analystRevisionLookup !== undefined &&
+    analystRevisionStaleActive(
+      params.asOf,
+      params.analystRevisionFeedFreshestComputedAt ?? null,
+      analystStalenessMaxDays,
+    );
+  const maFeedStale =
+    params.maActionLookup !== undefined &&
+    maStaleActive(
+      params.asOf,
+      params.maFeedFreshestUpdatedAt ?? null,
+      maStalenessMaxDays,
+    );
+  const analystProximityDays = params.analystProximityCalendarDays ?? 3;
+  const maExclusionCalendarDays = params.maExclusionCalendarDays ?? 7;
 
   // ─── Group by (ticker, side) ──────────────────────────────────────
   const groups = new Map<string, KernelCandidateRow[]>();
@@ -692,6 +824,111 @@ export function runDetector(input: DetectorInput): DetectedEvent[] {
       }),
     });
     if (!exclOk) setRefusal('exclusion_earnings_proximity');
+
+    // ─── DEC-080-v2 / DEC-081-v2 §6.a/b — analyst-revision proximity.
+    //     Feed-stale short-circuits per-row check with a typed refusal;
+    //     otherwise scan the joined revisions for a same-direction row
+    //     within +/-N calendar days of as_of.
+    if (params.analystRevisionLookup !== undefined) {
+      if (analystFeedStale) {
+        passes.push({
+          filter: 'analyst-revision-feed-freshness',
+          passed: false,
+          reason: 'analyst_revision_feed_stale',
+          detail: {
+            freshest_computed_at: params.analystRevisionFeedFreshestComputedAt ?? null,
+            max_days: analystStalenessMaxDays,
+            asOf: params.asOf,
+          },
+        });
+        setRefusal('analyst_revision_feed_stale');
+      } else {
+        // DEC-080-v2 refuses LONG on direction=-1; DEC-081-v2 refuses
+        // SHORT on direction=+1. Same ticker; +/- analystProximityDays.
+        const targetDirection = side === 'LONG' ? -1 : 1;
+        const revisions = params.analystRevisionLookup(row.ticker);
+        let hit: AnalystRevisionRow | null = null;
+        for (const r of revisions) {
+          if (r.direction !== targetDirection) continue;
+          if (r.focal_published_at.length < 10) continue;
+          if (withinCalendarDayWindow(params.asOf, r.focal_published_at.slice(0, 10), analystProximityDays)) {
+            hit = r;
+            break;
+          }
+        }
+        const analystOk = hit === null;
+        const refusalKey: RefusalReason =
+          side === 'LONG' ? 'analyst_downgrade_proximate' : 'analyst_upgrade_proximate';
+        passes.push({
+          filter: 'analyst-revision-proximity',
+          passed: analystOk,
+          ...(analystOk ? {} : {
+            reason: refusalKey,
+            detail: {
+              ticker: row.ticker,
+              side,
+              direction: targetDirection,
+              window_days: analystProximityDays,
+              focal_published_at: hit!.focal_published_at,
+              asOf: params.asOf,
+            },
+          }),
+        });
+        if (!analystOk) setRefusal(refusalKey);
+      }
+    }
+
+    // ─── DEC-082 §6.c — M&A target proximity (BOTH sides). Same
+    //     shape as the analyst guard: feed-stale short-circuits; else
+    //     scan the joined actions for a row whose (announced_at || ex_date)
+    //     is within +/-maExclusionCalendarDays of as_of.
+    if (params.maActionLookup !== undefined) {
+      if (maFeedStale) {
+        passes.push({
+          filter: 'ma-feed-freshness',
+          passed: false,
+          reason: 'ma_feed_stale',
+          detail: {
+            freshest_updated_at: params.maFeedFreshestUpdatedAt ?? null,
+            max_days: maStalenessMaxDays,
+            asOf: params.asOf,
+          },
+        });
+        setRefusal('ma_feed_stale');
+      } else {
+        const actions = params.maActionLookup(row.ticker);
+        let hit: MAActionRow | null = null;
+        for (const a of actions) {
+          if (!MA_ACTION_TYPES.has(a.action_type)) continue;
+          const rawDate = a.announced_at ?? a.ex_date;
+          if (rawDate === null) continue;
+          const dateIso = rawDate.slice(0, 10);
+          if (dateIso.length < 10) continue;
+          if (withinCalendarDayWindow(params.asOf, dateIso, maExclusionCalendarDays)) {
+            hit = a;
+            break;
+          }
+        }
+        const maOk = hit === null;
+        passes.push({
+          filter: 'ma-target-proximity',
+          passed: maOk,
+          ...(maOk ? {} : {
+            reason: 'ma_target_proximate' as const,
+            detail: {
+              ticker: row.ticker,
+              side,
+              action_type: hit!.action_type,
+              announced_at: hit!.announced_at,
+              ex_date: hit!.ex_date,
+              window_calendar_days: maExclusionCalendarDays,
+              asOf: params.asOf,
+            },
+          }),
+        });
+        if (!maOk) setRefusal('ma_target_proximate');
+      }
+    }
 
     // 5. si-squeeze-gate — SHORTS ONLY. DEFAULT-DENY on missing/stale.
     if (side === 'SHORT') {
