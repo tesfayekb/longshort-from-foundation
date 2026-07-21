@@ -128,6 +128,102 @@ function PendingCandidateIII({ title }: { title: string }) {
 }
 
 /**
+ * WindowedGainCard — computes a broker-equity delta over a fixed session
+ * offset from the loaded `overshoot_equity_snapshots` series. Never
+ * fabricates numbers: if the series is too short to span the window,
+ * the card falls through to a typed-absence label naming the shortfall.
+ *
+ * Contract:
+ *   - `snapshots` MUST arrive ordered ASCENDING by `snapshot_date`
+ *     (the hook enforces this).
+ *   - `sessionsBack` is a session offset against the loaded series
+ *     (row-indexed; weekends / holidays collapse out).
+ *   - `sessionsBack === null` means Inception (anchor = first row).
+ *   - Inception labels the anchor date verbatim ("since 2026-07-09")
+ *     to disclose the pre-arming construction gap (2026-07-08 has no
+ *     snapshot; that day is not day-0).
+ */
+function WindowedGainCard({
+  title,
+  sessionsBack,
+  snapshots,
+  loading,
+}: {
+  title: string;
+  sessionsBack: number | null;
+  snapshots: Array<{ snapshot_date: string; broker_equity: number }>;
+  loading: boolean;
+}) {
+  const n = snapshots.length;
+  const latest = n > 0 ? snapshots[n - 1] : null;
+  const anchor = latest
+    ? sessionsBack === null
+      ? snapshots[0]
+      : n > sessionsBack
+        ? snapshots[n - 1 - sessionsBack]
+        : null
+    : null;
+  const delta = latest && anchor ? latest.broker_equity - anchor.broker_equity : null;
+  const pct = latest && anchor && anchor.broker_equity > 0 && delta !== null
+    ? (delta / anchor.broker_equity) * 100
+    : null;
+  const variant: 'good' | 'bad' | 'muted' =
+    delta === null ? 'muted' : delta > 0 ? 'good' : delta < 0 ? 'bad' : 'muted';
+  const valueClass =
+    variant === 'good' ? 'text-emerald-600 dark:text-emerald-400'
+    : variant === 'bad' ? 'text-destructive'
+    : 'text-muted-foreground';
+  const subLabel = sessionsBack === null && anchor
+    ? `since ${fmtDateOnly(anchor.snapshot_date)}`
+    : anchor && latest
+      ? `${fmtDateOnly(anchor.snapshot_date)} → ${fmtDateOnly(latest.snapshot_date)}`
+      : null;
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground truncate flex items-center gap-1.5">
+          <span className="truncate">{title}</span>
+          <InfoHint label={`${title} — windowed gain`}>
+            Broker-equity delta from{' '}
+            <span className="font-mono">overshoot_equity_snapshots</span>
+            {sessionsBack === null
+              ? <> anchored at the first available snapshot (2026-07-09 inception — 2026-07-08 was construction-era pre-arming and is not day-0).</>
+              : <> over the last {sessionsBack} trading session{sessionsBack === 1 ? '' : 's'} in the loaded series. Row-indexed, so weekends / holidays collapse out.</>}
+            {' '}Post-close settled state; no mid-session synthesis.
+          </InfoHint>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <p className="text-2xl font-semibold text-muted-foreground">…</p>
+        ) : delta === null ? (
+          <>
+            <p className="text-2xl font-semibold text-muted-foreground">—</p>
+            <p className="mt-2 text-xs text-muted-foreground/80">
+              {n === 0
+                ? 'No snapshots loaded yet'
+                : sessionsBack !== null && n <= sessionsBack
+                  ? `Need ${sessionsBack + 1}+ snapshots · have ${n}`
+                  : 'Anchor unavailable'}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className={`text-2xl font-semibold font-mono ${valueClass}`}>
+              {delta >= 0 ? '+' : ''}{fmtMoney(delta)}
+            </p>
+            <p className={`mt-1 text-xs font-mono ${valueClass}`}>
+              {pct === null ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}
+              {subLabel ? <span className="text-muted-foreground/80"> · {subLabel}</span> : null}
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * ACT-494b — front-door HEALTH KPI STRIP.
  *
  * One-glance answer to "is the overshoot system healthy right now?" —
