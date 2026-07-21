@@ -345,6 +345,8 @@ Deno.serve(createHandler(async (req: Request) => {
       const runRow = await insertRunRow(sql, {
         asOfDay, outcome: 'no_op', reason: `kill_switch_${ks.state}`, dryRun,
         gitSha: env.gitSha, correlationId, appendRunIds: { bars: null, earnings: null },
+        detectorVersion: RATIFIED_DETECTOR_VERSION,
+        refusalCounts: emptyRefusalCounts(),
       });
       await sql.end({ timeout: 5 });
       return apiSuccess({
@@ -361,6 +363,8 @@ Deno.serve(createHandler(async (req: Request) => {
       const runRow = await insertRunRow(sql, {
         asOfDay, outcome: 'no_op', reason: 'job_disarmed', dryRun,
         gitSha: env.gitSha, correlationId, appendRunIds: { bars: null, earnings: null },
+        detectorVersion: RATIFIED_DETECTOR_VERSION,
+        refusalCounts: emptyRefusalCounts(),
       });
       await sql.end({ timeout: 5 });
       return apiSuccess({
@@ -381,6 +385,8 @@ Deno.serve(createHandler(async (req: Request) => {
     const runRow = await insertRunRow(sql, {
       asOfDay, outcome: 'running', dryRun,
       gitSha: env.gitSha, correlationId, appendRunIds: { bars: null, earnings: null },
+      detectorVersion: RATIFIED_DETECTOR_VERSION,
+      refusalCounts: emptyRefusalCounts(),
     });
     const runId = runRow.run_id;
 
