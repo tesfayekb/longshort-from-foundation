@@ -7844,3 +7844,62 @@ Otherwise **15:50Z stands**. Verdict grammar mechanical: ADOPT / DO-NOT-ADOPT / 
 **Lane position unchanged:** ACT-509 Stage-2 runs at its slot (lane position 3), now with the extended scope. ACT-515 remains lane-next.
 
 **Cross-refs:** ACT-509 charter (Stage-2 originally intraday-entry-only; this extension amends in place — see charter file update); ACT-558 (redeploy-gain input); ACT-506 (W5-01 open-drift trigger, still governs Stage-2's entry side); DEC-078 (T+1-open basis discipline applied symmetrically to exit-minute basis).
+
+---
+
+## INC-120 (2026-07-21): EMPIRICAL CLOSE — Polygon `/v3/reference/tickers` has NO Russell-2000 tagging on the currently-scoped plan.
+
+**Evidence (operator round-2 attestation, JWT-authenticated, correlationIds preserved):**
+
+- (a) `overshoot-russell-probe` with `index=russell2000` (natural-language string): `page1_result_count=1000`, `polygon_reported_count=1000`, `sample_first_10=["A","AA","AAA","AAAA","AAAC","AAAD","AAAIF","AAAP","AAAU","AABB"]`, `next_url_seen=true`. Alphabetical whole-market listing → filter silently ignored.
+- (b) `overshoot-universe-refresh` boot-probe with the ticker-set code `I:RUT` (Polygon canonical taxonomy per longshort `PolygonConstituentFetcher`): `roster_count=8000`, `pages_fetched=8` (MAX_PAGES cap), same alphabetical sample. Filter ALSO silently ignored.
+
+**Ruling:** Polygon reference-tickers taxonomy on this plan supports S&P codes (`I:SPX`, `I:MID`) but NOT Russell-2000 (`I:RUT` / `russell2000` both fall through to unfiltered market). The roster CANNOT come from Polygon, period. First live catch of the ingestion-time roster-sanity gate `[1500, 2600]` performed exactly as designed — typed refusal `roster_sanity_failed`, zero writes to `overshoot_universe`. Gate certified.
+
+**Consequence:** ACT-538 fix path re-scoped to a NEW source (see INC-122 forward and follow-on ACT). sql/39 stays paused; sql/37 untouched.
+
+**Status:** CLOSED-EMPIRICAL. Gate: CERTIFIED-BY-LIVE-CATCH.
+
+---
+
+## INC-121 (2026-07-21): `overshoot-universe-refresh` returns HTTP 500 `INTERNAL_ERROR` on the `dry_run` path when roster-sanity fails, instead of the typed refusal `roster_sanity_failed` (502) that the `probe:'polygon'` branch returns cleanly.
+
+**Evidence:** operator round-2 attestation (c) — `{"error":"Internal server error","code":"INTERNAL_ERROR","correlation_id":"77da1376-4b37-4af9-8a08-660eb232b650"}` at HTTP 500. Companion probe (b) on the same input returned typed `roster_sanity_failed` at HTTP 200 — the two branches disagree on how they surface the same underlying refusal condition.
+
+**Root cause (source-cited, `supabase/functions/overshoot-universe-refresh/index.ts:227-237`):** the sanity gate on the real/dry-run path calls `apiError(502, 'roster_sanity_failed', { correlationId, roster_count, sanity_band, sample_first_10, index_code, pages_fetched })`. The `apiError` helper (`supabase/functions/_shared/api-error.ts:18-35`) only reads `code | field | correlationId | _cors` from `opts`; the extra keys are ignored, and the resulting envelope has `code:'INTERNAL_ERROR'` because `httpStatusToCode(502)` falls into the `default` branch. Combined with the surrounding `createHandler` catch-shape, the final surfaced response reads HTTP 500 with `INTERNAL_ERROR` — semantically identical to a thrown/uncaught path from the operator's seat.
+
+**Rule violated:** DEC-023 envelope discipline — every refusal branch (probe / dry / real) must return a typed refusal shape. The refusal-carrying metadata (`roster_count`, `sample_first_10`, `pages_fetched`, `index_code`, `sanity_band`) must survive into the response body so the operator can diagnose without a second attestation round.
+
+**Fix pattern (deferred to the source-repoint charter; do not land as a spot patch):** teach `apiError` to accept and echo arbitrary structured detail fields (or introduce a `apiRefusal(status, code, detail)` sibling), then flip both the sanity-fail and the earlier `roster_${roster.kind}` branch to use it. Contract: same envelope shape as `probe:'polygon'` refusals (`{ok:false, status:'roster_sanity_failed', roster_count, sanity_band, sample_first_10, pages_fetched, index_code, correlationId}`), just with an HTTP status the operator-tooling can key on.
+
+**Status:** OPEN. Ships bundled with the source-repoint work (below) so the third attestation round exercises the fixed refusal shape.
+
+---
+
+## INC-122 (2026-07-21): PRE-VERIFICATION FAILURE — I cannot fetch the iShares IWM (Russell 2000 ETF) holdings CSV from this sandbox; source cannot be presumed live until pre-verified.
+
+**Operator instruction (this turn, step 4):** "PRE-VERIFY the iShares source YOURSELF — the holdings file is public (no JWT needed); fetch it in a local test/script, paste the real count + first-10 sample + as-of date from YOUR fetch. Only after your own fetch shows a sane roster do you hand the operator the third (final) snippet."
+
+**What I tried (five distinct fetch shapes against the canonical IWM URL `https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/1467271812596.ajax?fileType=csv&fileName=IWM_holdings&dataType=fund`):**
+
+1. Plain `curl` no UA — HTTP 200, `content-type: text/csv;charset=UTF-8`, body = HTML landing page (`<!DOCTYPE html>…`), 1.4 MB, 1561 lines.
+2. `curl -A "Mozilla/5.0"` — identical HTML-body response.
+3. `curl -A "Mozilla/5.0" -b siteEntryPassthrough=true` — identical.
+4. `curl -A "Mozilla/5.0" -H "Referer: https://www.ishares.com/us/products/239710/ishares-russell-2000-etf"` — identical.
+5. Two-hop cookie-jar prime (fetch product page first, replay cookies + Referer on ajax hit) — identical.
+
+Cross-check: IVV (SP500, product 239726) via the same shapes ALSO returns HTML landing (2.1 MB), NOT the CSV shipped in the sandboxed test fixtures. Response `Content-Disposition: attachment; filename=IWM_holdings.csv` and `Content-Type: text/csv` are set by the upstream, but the served body is HTML — the anti-bot layer is rewriting the body while preserving the headers.
+
+**Codebase reality (source-cited):** `iSharesConstituentFetcher` (`supabase/functions/_shared/longshort-universe/constituent-ingestion/ishares-constituent-fetcher.ts`) exists and is unit-tested (`_test.ts` — nine test cases, all against injected `HttpFetch` mocks, no live-fetch assertion). `rg -l 'iSharesConstituentFetcher'` finds ZERO edge-function consumers in `supabase/functions/`. The operator's premise — "the longshort quarterly-refresh already uses iShares holdings as its cross-check (universe_refresh_log precedent)" — reflects the code-level scaffold that landed with FP-008 sub-step 8.1, but I cannot find a deployed handler that has ever exercised the live iShares path. If such a run exists, it is not visible in the tree I searched, and I decline to presume it from a scaffold alone.
+
+**Verdict:** IRREPRODUCIBLE from this sandbox. Uncertainty surfaced per §5 rather than proceeding to code against an unverified source.
+
+**What I need from the operator (one of these three, operator-choice):**
+
+1. **Confirm the ingress works from Supabase edge-runtime egress.** If `universe_refresh_log` has a real iShares row (any product) from a scheduled/manual run, cite `run_id` + `as_of_date` + `roster_count` and I'll trust the source-of-truth signal and stage the repoint. My local sandbox is under anti-bot shaping that Supabase edge egress may not share.
+2. **Alternate source repoint.** Wikipedia constituent scraping (`WikipediaConstituentFetcher` exists in the same tree, already used for SP500/SP400 in longshort) has no Russell-2000 page of comparable canonicality; the FTSE Russell reconstitution list is only published quarterly on their own site. Named candidates I can pre-verify next turn if operator selects: (a) `https://en.wikipedia.org/wiki/Russell_2000_Index` (unlikely to be fully-listed — verify), (b) the FTSE Russell reconstitution CSV (annual, June — freshness-inadequate for a weekly refresh), (c) an operator-provided authoritative CSV committed to the repo.
+3. **Repoint to a paid provider that DOES tag Russell membership** (Polygon Business plan and above expose `type=CS&market=stocks&index=I:RUT` correctly; Refinitiv / Bloomberg equivalents). Cost/procurement gate; not a today-decision.
+
+**Blocking:** the third operator attestation round. sql/39 stays paused. sql/37 untouched. Pack-2 arming resumes only on a GREEN built from a pre-verified source.
+
+**Status:** OPEN — blocks ACT-538 completion / INC-109 closure.
