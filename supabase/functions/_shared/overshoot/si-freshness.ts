@@ -74,6 +74,93 @@ export function siStaleActive(
   return isSiRowStale(asOfIso, freshestSiAsOfDateIso, stalenessMaxDays);
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// DEC-080-v2 / DEC-081-v2 / DEC-082 (2026-07-21) — analyst-revision + M&A
+// feed-freshness siblings. Co-located with SI freshness per single-home
+// discipline (see file-header rationale; INC-91 class). The three-guard
+// atomic bundle stamps composite version `aff20a13` on the detector.
+// ═══════════════════════════════════════════════════════════════════════
+
+/** DEC-080-v2 / DEC-081-v2 ratified default — analyst feed considered
+ *  stale if the freshest `analyst_revision_observations.computed_at` is
+ *  older than this many calendar days relative to `asOf`. */
+export const OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT = 3;
+
+/** DEC-082 ratified default — corporate-actions feed considered stale
+ *  if the freshest `corporate_actions.updated_at` is older than this
+ *  many calendar days relative to `asOf`. 14d ≈ two operational weeks;
+ *  M&A announcements are event-driven so the fail-closed bar is tighter
+ *  than the FINRA short-interest cadence but looser than the ±3-day
+ *  analyst-revision window. */
+export const OVERSHOOT_MA_STALENESS_MAX_DAYS_DEFAULT = 14;
+
+/**
+ * DEC-082 ±5 trading-day exclusion window, approximated as ±7 calendar
+ * days. A 5-trading-day span crosses a weekend ~always and (rarely) a
+ * federal holiday, so 7 calendar days is a slightly-conservative
+ * upper-bound that keeps the guard fail-safe (over-refuse before
+ * under-refuse). This constant is the SINGLE source of truth for the
+ * approximation — callers pass `maExclusionCalendarDays` on
+ * DetectorParams which is initialized from here at the entry function
+ * boot.
+ */
+export const OVERSHOOT_MA_EXCLUSION_CALENDAR_DAYS_DEFAULT = 7;
+
+/**
+ * DEC-080-v2 / DEC-081-v2 — is the analyst-revision feed itself stale
+ * relative to `asOf`? True iff the freshest observation is older than
+ * `maxDays`. Fail-closed: when TRUE, the detector refuses ALL rows
+ * with `analyst_revision_feed_stale` (both legs — DEC-081 §3 inherits
+ * DEC-080's run-level guard rather than doubling it).
+ *
+ * Returning FALSE for a NULL / empty corpus is deliberate for symmetry
+ * with `siStaleActive` (see rationale there). Absence of any analyst
+ * revisions is NOT the same class of failure as a feed that stopped
+ * publishing 30 days ago; the caller signals empty-vs-stopped by
+ * passing null-vs-old-timestamp.
+ */
+export function analystRevisionStaleActive(
+  asOfIso: string,
+  freshestComputedAtIso: string | null,
+  maxDays: number,
+): boolean {
+  if (freshestComputedAtIso === null) return false;
+  // computed_at is a timestamptz — take the date component only.
+  const dateIso = freshestComputedAtIso.slice(0, 10);
+  return siCalendarDaysBetween(asOfIso, dateIso) > maxDays;
+}
+
+/**
+ * DEC-082 — is the corporate-actions feed itself stale relative to
+ * `asOf`? True iff the freshest `updated_at` is older than `maxDays`.
+ * Fail-closed: when TRUE, the detector refuses ALL rows (both legs)
+ * with `ma_feed_stale` — we cannot trust the "no M&A on this ticker"
+ * negative result when the feed hasn't updated recently.
+ */
+export function maStaleActive(
+  asOfIso: string,
+  freshestUpdatedAtIso: string | null,
+  maxDays: number,
+): boolean {
+  if (freshestUpdatedAtIso === null) return false;
+  const dateIso = freshestUpdatedAtIso.slice(0, 10);
+  return siCalendarDaysBetween(asOfIso, dateIso) > maxDays;
+}
+
+/**
+ * Per-row proximity predicate — is `eventDateIso` within ±`windowDays`
+ * calendar days of `asOfIso` (inclusive)? Shared by DEC-080-v2 (analyst
+ * downgrade), DEC-081-v2 (analyst upgrade), and DEC-082 (M&A announced/ex).
+ * Pure integer arithmetic — no timezone, no wall-clock.
+ */
+export function withinCalendarDayWindow(
+  asOfIso: string,
+  eventDateIso: string,
+  windowDays: number,
+): boolean {
+  return Math.abs(siCalendarDaysBetween(asOfIso, eventDateIso)) <= windowDays;
+}
+
 /**
  * DEC-504-4 reallocation transform. Under si_stale_active, the SHORT
  * sleeve's capacity + allocation-pct are folded into LONG within the
