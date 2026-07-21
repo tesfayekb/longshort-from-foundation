@@ -335,7 +335,16 @@ function HealthKpiStrip(k: KpiStripInputs) {
           ? `${k.latest.selected_count} sel / ${k.latest.event_count} cand · ${fmtDateOnly(k.latest.as_of)}`
           : 'No runs yet'}
         hint={k.latest
-          ? <>Selected / candidate counts from the most-recent <span className="font-mono">overshoot_detection_runs</span> row, ordered by <span className="font-mono">as_of</span> then <span className="font-mono">detected_at</span>.</>
+          ? <>
+              <span className="font-mono">sel</span> = detector-selected candidates that cleared all §6 gates
+              (post-guard bundle: analyst-revision-proximate, <span className="font-mono">ma_target_proximate</span>,
+              SI/staleness). <span className="font-mono">cand</span> = raw pre-refusal candidate set.
+              Downstream, only the top <span className="font-mono">OVERSHOOT_DAILY_ENTRY_BUDGET</span> = K=5
+              per day are admitted by <span className="font-mono">overshoot-entry-run</span> (refusal class{' '}
+              <span className="font-mono">daily_budget_reached</span>). Row source: latest{' '}
+              <span className="font-mono">overshoot_detection_runs</span> ordered by{' '}
+              <span className="font-mono">as_of</span> then <span className="font-mono">detected_at</span>.
+            </>
           : <>Detector cron is pending arm. Once armed (<span className="font-mono">sql/31</span>), the latest run's outcome and selection counts render here.</>}
         variant={detVariant}
       />
@@ -343,7 +352,15 @@ function HealthKpiStrip(k: KpiStripInputs) {
         label="Deployed slots"
         value={`${openTotal} / ${capacityTotal}`}
         sub={`L ${k.openLongs}/${LONG_CAPACITY} · S ${k.openShorts}/${SHORT_CAPACITY} · ${deployedPct.toFixed(0)}%`}
-        hint={<>Open lots vs the INC-92 ratified deployment capacity (long 36 / short 4). Percentage is <span className="font-mono">open / capacity</span>, not a $-cap measure — see the cap-compliance strip below for $ allocation posture.</>}
+        hint={<>
+          Open lots vs the INC-92 ratified deployment capacity (long 36 / short 4). Percentage is{' '}
+          <span className="font-mono">open / capacity</span>, not a $-cap measure — see the cap-compliance
+          strip below for $ allocation posture. <strong>INC-96 carry:</strong> the construction-era book
+          (~17/day pre-pacing) can transiently exceed target deployed count; steady-state pacing caps
+          entries at K=5/day (<span className="font-mono">OVERSHOOT_DAILY_ENTRY_BUDGET</span>, refusal
+          class <span className="font-mono">daily_budget_reached</span>), so deployed count converges
+          to target as T2 lots exit through the natural ladder.
+        </>}
         variant={openTotal > 0 ? 'default' : 'muted'}
       />
       <KpiCell
@@ -357,12 +374,23 @@ function HealthKpiStrip(k: KpiStripInputs) {
       />
       <KpiCell
         label="Day P&L"
-        value="—"
-        sub={k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Derivation pending'}
+        value={k.dayPnlUsd === null
+          ? '—'
+          : `${k.dayPnlUsd >= 0 ? '+' : ''}${fmtMoney(k.dayPnlUsd)}`}
+        sub={k.dayPnlUsd === null
+          ? (k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Need 2+ snapshots')
+          : k.dayPnlPct === null
+            ? 'post-close'
+            : `${k.dayPnlPct >= 0 ? '+' : ''}${k.dayPnlPct.toFixed(2)}% · post-close`}
         hint={k.equitySnapshotsCount === 0
-          ? <>No equity snapshots exist. Arm <span className="font-mono">overshoot_equity_snapshot</span> via the INC-82 bracket to begin populating this cell. No synthetic P&L is fabricated.</>
-          : <>Day-P&L derivation lands with FP-069-CANDIDATE-iii once at least two snapshots span the trading day.</>}
-        variant="muted"
+          ? <>No equity snapshots exist. Arm <span className="font-mono">overshoot_equity_snapshot</span> via the INC-82 bracket. No synthetic P&L is fabricated.</>
+          : <>Delta between the two latest post-close <span className="font-mono">broker_equity</span> rows in <span className="font-mono">overshoot_equity_snapshots</span> (source <span className="font-mono">alpaca_paper_overshoot</span>). Post-close settled state; no mid-session refresh.</>}
+        variant={
+          k.dayPnlUsd === null ? 'muted'
+          : k.dayPnlUsd > 0 ? 'good'
+          : k.dayPnlUsd < 0 ? 'bad'
+          : 'muted'
+        }
       />
       <KpiCell
         label="Reconciliation"
