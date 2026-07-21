@@ -827,6 +827,8 @@ async function insertRunRow(sql: Sql, args: {
   asOfDay: string; outcome: Outcome; reason?: string; dryRun: boolean;
   gitSha: string; correlationId: string;
   appendRunIds: { bars: string | null; earnings: string | null };
+  detectorVersion: string;
+  refusalCounts: Record<string, number>;
 }): Promise<{ run_id: string }> {
   // FP-069 W3.8 T2.4 corrective A′ — driver-binding fix. postgresjs v3.4.4
   // JSON.stringify()'s any parameter it serializes for jsonb; pre-stringifying
@@ -839,11 +841,13 @@ async function insertRunRow(sql: Sql, args: {
   const [row] = await sql<{ run_id: string }[]>`
     INSERT INTO overshoot_detection_runs
       (as_of, detected_at, outcome, event_count, selected_count, durations_ms,
-       correlation_id, git_sha, append_run_ids)
+       correlation_id, git_sha, append_run_ids, detector_version, refusal_class_counts)
     VALUES (${args.asOfDay}::date, ${new Date().toISOString()}::timestamptz,
             ${args.outcome}, 0, 0, ${sql.json(durations)}::jsonb,
             ${args.correlationId}, ${args.gitSha},
-            ${sql.json(args.appendRunIds)}::jsonb)
+            ${sql.json(args.appendRunIds)}::jsonb,
+            ${args.detectorVersion},
+            ${sql.json(args.refusalCounts)}::jsonb)
     RETURNING run_id
   `;
   return { run_id: row.run_id };
@@ -855,6 +859,7 @@ async function finalizeRun(
   durations: Record<string, number>,
   appendRunIds: { bars: string | null; earnings: string | null },
   dryRun: boolean,
+  refusalCounts?: Record<string, number>,
 ): Promise<void> {
   // FP-069 W3.8 T2.4 corrective (Option A) — carry the dry_run marker on
   // BOTH paths (true/false) so every completed run row is explicitly marked.
@@ -871,7 +876,8 @@ async function finalizeRun(
            event_count = ${eventCount},
            selected_count = ${selectedCount},
            durations_ms = ${sql.json(payload)}::jsonb,
-           append_run_ids = ${sql.json(appendRunIds)}::jsonb
+           append_run_ids = ${sql.json(appendRunIds)}::jsonb,
+           refusal_class_counts = COALESCE(${refusalCounts ? sql.json(refusalCounts) : null}::jsonb, refusal_class_counts)
      WHERE run_id = ${runId}::uuid
   `;
 }
