@@ -86,6 +86,11 @@ import {
   type StudyCellStats,
 } from '../_shared/overshoot/detector/detector.ts';
 import { bandLabelFor } from '../_shared/overshoot/detector/band-label.ts';
+import {
+  analystRevisionStaleWarnActive,
+  OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT,
+  OVERSHOOT_ANALYST_REVISION_STALENESS_WARN_AT_DAYS_DEFAULT,
+} from '../_shared/overshoot/si-freshness.ts';
 
 // ── Live-detection defaults. Named parameters, provenance in comments. ────────
 // Ratified priors (FP-069 W3): exclusion_width=5, capacity LONG=36 / SHORT=4
@@ -689,11 +694,37 @@ Deno.serve(createHandler(async (req: Request) => {
         analystRevisionFeedFreshestComputedAt: analystFreshestComputedAt,
         maFeedFreshestUpdatedAt: maFreshestUpdatedAt,
         analystProximityCalendarDays: 3,
-        analystStalenessMaxDays: 3,
+        // 2026-07-21 amendment: 3d→4d (holiday-observed Tuesday robustness;
+        // rationale in _shared/overshoot/si-freshness.ts file header).
+        analystStalenessMaxDays: OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT,
         maExclusionCalendarDays: 7,
         maStalenessMaxDays: 14,
       },
     };
+    // WARN-level companion (non-refusing): if the freshest analyst
+    // observation is in the (3d, 4d] band we surface the early-warning
+    // signal so a genuinely-dying feed is visible one operational day
+    // before the fail-closed edge engages. NOT a refusal — the run
+    // proceeds normally.
+    if (
+      analystRevisionStaleWarnActive(
+        asOfDay,
+        analystFreshestComputedAt,
+        OVERSHOOT_ANALYST_REVISION_STALENESS_WARN_AT_DAYS_DEFAULT,
+        OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT,
+      )
+    ) {
+      console.warn(JSON.stringify({
+        level: 'warn',
+        event: 'overshoot.detection.analyst_revision_feed_warn',
+        run_id: runId,
+        as_of: asOfDay,
+        freshest_computed_at: analystFreshestComputedAt,
+        warn_at_days: OVERSHOOT_ANALYST_REVISION_STALENESS_WARN_AT_DAYS_DEFAULT,
+        fail_closed_at_days: OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT,
+        rationale: 'analyst feed in warn-band (>3d, ≤4d) — dying feed early-warning; not a refusal',
+      }));
+    }
     const tD = performance.now();
     const events: DetectedEvent[] = runDetector(detectorInput);
     durations.detector_ms = Math.round(performance.now() - tD);
