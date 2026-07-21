@@ -822,6 +822,7 @@ Deno.serve(createHandler(async (req: Request) => {
       as_of?: unknown;
       csv_sha256_provenance?: unknown;
       csv_bytes?: unknown;
+      csv_sha256_provenances?: unknown; // multi-file union: e.g. IVV + IJH
     };
     const hasTickers = Array.isArray(b.tickers);
 
@@ -830,6 +831,7 @@ Deno.serve(createHandler(async (req: Request) => {
     let provenance_mode: 'server_hashed' | 'client_attested';
     let csv_sha256: string | null;
     let csv_sha256_provenance: string | null = null;
+    let csv_sha256_provenances: string[] = [];
     let csv_bytes_attested: number | null = null;
     let dropped = 0;
 
@@ -846,6 +848,11 @@ Deno.serve(createHandler(async (req: Request) => {
       csv_sha256_provenance = typeof b.csv_sha256_provenance === 'string'
         ? b.csv_sha256_provenance.toLowerCase()
         : null;
+      if (Array.isArray(b.csv_sha256_provenances)) {
+        csv_sha256_provenances = (b.csv_sha256_provenances as unknown[])
+          .filter((x): x is string => typeof x === 'string')
+          .map((x) => x.toLowerCase());
+      }
       csv_bytes_attested = typeof b.csv_bytes === 'number' && Number.isFinite(b.csv_bytes)
         ? Math.trunc(b.csv_bytes)
         : null;
