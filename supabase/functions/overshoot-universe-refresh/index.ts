@@ -914,6 +914,7 @@ Deno.serve(createHandler(async (req: Request) => {
       tickers_sha256,
       csv_sha256,
       csv_sha256_provenance,
+      csv_sha256_provenances,
       csv_bytes_attested,
       dropped_nonconforming: dropped,
       correlationId,
