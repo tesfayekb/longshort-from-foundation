@@ -33,6 +33,17 @@ export interface TradingStatusSnapshot {
 
 export const TRADING_STATUS_QUERY_KEY = ['longshort', 'trading-status'] as const;
 
+/**
+ * Display scope for the persistent trading-console status strip. The strip
+ * itself is longshort-authored (T5 carve-out) but is mounted on EVERY
+ * trading route via `TradingLayout`; on overshoot routes we swap in
+ * overshoot-true data sources for the universe chip and hide the
+ * cross-strategy OPEN-reconciliation badge (which reads longshort
+ * reconciliation state and would leak that scope into overshoot). Crosswind
+ * is frozen — no new permissions, no read into overshoot's A5 surface.
+ */
+export type TradingStatusScope = 'longshort' | 'overshoot';
+
 async function fetchLastFire(): Promise<TradingStatusSnapshot['lastFire']> {
   const { data, error } = await sb
     .from('signal_compute_log')
@@ -45,7 +56,7 @@ async function fetchLastFire(): Promise<TradingStatusSnapshot['lastFire']> {
   return { completed_at: row.completed_at };
 }
 
-async function fetchUniverse(): Promise<TradingStatusSnapshot['universe']> {
+async function fetchUniverseLongshort(): Promise<TradingStatusSnapshot['universe']> {
   const { data, error } = await sb
     .from('universe_refresh_log')
     .select('refresh_completed_at, outcome')
@@ -55,6 +66,25 @@ async function fetchUniverse(): Promise<TradingStatusSnapshot['universe']> {
   if (error || !data) return null;
   const row = data as { refresh_completed_at: string | null; outcome: string | null };
   return { completed_at: row.refresh_completed_at, outcome: row.outcome };
+}
+
+/**
+ * Overshoot universe freshness — `MAX(updated_at)` over the active roster
+ * seeded by `overshoot-universe-refresh` (ACT-547 / INC-109 pipeline).
+ * Read-only, no new permissions; existing RLS on `overshoot_universe`
+ * governs visibility.
+ */
+async function fetchUniverseOvershoot(): Promise<TradingStatusSnapshot['universe']> {
+  const { data, error } = await sb
+    .from('overshoot_universe')
+    .select('updated_at')
+    .eq('active', true)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as { updated_at: string | null };
+  return { completed_at: row.updated_at, outcome: null };
 }
 
 async function fetchBreaker(): Promise<TradingStatusSnapshot['breaker']> {
@@ -80,15 +110,27 @@ async function fetchOpenReconciliation(): Promise<TradingStatusSnapshot['reconci
   return { openCount: count ?? 0 };
 }
 
-export function useTradingStatus() {
+export function useTradingStatus(scope: TradingStatusScope = 'longshort') {
   return useQuery<TradingStatusSnapshot>({
-    queryKey: TRADING_STATUS_QUERY_KEY,
+    // Cache-key includes scope so overshoot and longshort chips do not
+    // cross-contaminate each other's cached snapshot.
+    queryKey: [...TRADING_STATUS_QUERY_KEY, scope],
     queryFn: async () => {
+      const universeFetcher =
+        scope === 'overshoot' ? fetchUniverseOvershoot : fetchUniverseLongshort;
+      // On overshoot routes we deliberately do NOT read longshort
+      // reconciliation state (that is what the operator flagged as
+      // cross-scope leakage). The strip's Open indicator hides itself
+      // when this returns null AND scope is 'overshoot'.
+      const reconciliationFetcher =
+        scope === 'overshoot'
+          ? async (): Promise<TradingStatusSnapshot['reconciliation']> => null
+          : fetchOpenReconciliation;
       const [lastFire, universe, breaker, reconciliation] = await Promise.all([
         fetchLastFire().catch(() => null),
-        fetchUniverse().catch(() => null),
+        universeFetcher().catch(() => null),
         fetchBreaker().catch(() => null),
-        fetchOpenReconciliation().catch(() => null),
+        reconciliationFetcher().catch(() => null),
       ]);
       return { lastFire, universe, breaker, reconciliation };
     },
