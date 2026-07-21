@@ -7951,3 +7951,29 @@ Only ONE operator touch on this leg: run snippet #3 (chat below). No SQL editor 
 - INC-124 (FMP Premium 403 on IWM — CLOSED-EMPIRICAL 2026-07-21; kept wired quiet per (B)).
 - ACT-538 (universe weekly refresh path — landing).
 - Rule Constitution §22.5.1 evidence: `csv_sha256` + T4 audit row on seed_apply is the sanctioned §22.5.1 chain for this leg.
+
+## ACT-559 — Long-only mode: operator flag + orchestrator consumption (S3 build turn)
+
+**Status:** LANDED 2026-07-21 (HEAD 1955f4c). **Tier:** A (money path). **Cross-ref:** DW-213 (register entry with reversal criterion), F9/F11 (universe short-eligibility gap this mitigates), DEC-068(n) / DW-154 (broker-capability derivation, preserved unchanged).
+
+**Change (5-file atomic commit).**
+  1. `sql/40_longshort_book_long_only_flag.sql` — idempotent seed of `feature_flags(operator='00000000-…-0001', flag_key='longshort.book.long_only', enabled=true)`. ON CONFLICT (operator_id, flag_key) DO UPDATE keeps re-runs safe. Reason column embeds S3-ruling citation.
+  2. `supabase/functions/_shared/longshort-execution/long-only-flag-reader.ts` — new. `LongOnlyFlagReader` interface + `createSupabaseLongOnlyFlagReader()`. Fail-safe: read errors → `enabled=false` (documented — MISSING suppression, not fabricated one; F11 protects money path in interregnum). No wall-clock.
+  3. `supabase/functions/_shared/longshort-execution/rebalance-submit-orchestrator.ts` — reader read BEFORE candidate loop; SHORT-OPEN candidates filtered at line 407-409 seam (only place OPEN/GROW is distinguishable from COVER); `RebalanceSubmitResponse` gains `long_only_source` + `shorts_suppressed_long_only`; `SubmissionResultSlim.kind` union adds `'suppressed_long_only'`; `RebalanceSubmitDeps.longOnlyFlagReader` injectable for tests. `long_only_mode` preserved byte-for-byte.
+  4. `supabase/functions/longshort-rebalance-submit/index.ts` — audit metadata on `longshort.rebalance.completed` gains `long_only_source` + `shorts_suppressed_long_only`. Additive only.
+  5. `supabase/functions/_shared/longshort-execution/long-only-flag_test.ts` — new. Four cases: reader ON/OFF, candidate-seam filter, cover-exempt invariant (predicate reproduction), long_only_source derivation.
+
+**Seam analysis (executed pre-build, STEP A.5).** The candidate-construction loop is the sole place SHORT-OPEN intents are distinguishable from SHORT-COVER intents: short candidates enter preflight ONLY via `short_rank ∈ [1..cap]` (an OPEN/GROW-only surface). Suppressing here empties the short-side preflight map → planner's `isPassing` at `rebalance-planner.ts:498-503` treats those tickers as failed → `selected_short` is empty for them → no OPEN deltas emitted. Covers flow through the planner's `currentPositions` → target-diff path (target_notional=0 → `close` intent), which never consults the candidate list. This is why suppression at 407-409 is complete for OPENs and total-passthrough for COVERs.
+
+**Reversal criterion (verbatim, binding).** Flag reverses to `enabled=false` ONLY when: (1) a REAL universe refresh lands with `short_eligible=true` count > 0 across money-path membership, AND (2) operator ratifies the reversal in a subsequent action-tracker turn citing DW-213. No implicit auto-reversal on universe refresh alone.
+
+**Response shape (additive; existing consumers unchanged).**
+  - `long_only_source: 'operator_flag' | 'broker_capability' | 'off'` — provenance. `operator_flag` wins when both fire.
+  - `shorts_suppressed_long_only: number` — count matches `submissions[].kind='suppressed_long_only'` entries.
+  - `long_only_mode: boolean` — UNCHANGED (broker-capability derived per DEC-068(n) / DW-154).
+
+**Evidence.** `sql/40_…` staged for `supabase--insert` this turn (§22.5.1 read-back paired). Test file exercises 5 assertions across 5 `Deno.test` blocks — none run in the sandbox this turn (Deno test surface is edge-function-only; runs on next CI fire). Suite of prior orchestrator tests (`index_test.ts`) preserved byte-for-byte on the pre-existing surface — the injected `longOnlyFlagReader` is optional with a production default, so no existing call site breaks.
+
+**First-fire expectation (Wed 2026-07-22 14:35Z rebalance).** `long_only_source='operator_flag'`, `shorts_suppressed_long_only=<count of short_rank ∈ [1..cap] on that fire's rankings>` (empirically ~0-30 depending on rankings coverage), `submission_counts.accepted` for shorts = 0, any pre-existing short position becomes a `close` intent (`kind='accepted'`, `intent='close'`, `side='short'`) — cover-exempt path holds. `long_only_mode` remains whatever the broker capabilities produce (independent).
+
+**What this turn did NOT touch.** OVERSHOOT strategy (binding prohibition). Reconciliation channel. Universe refresh path. Broker credentials. Cron schedules. `long_only_mode` boolean semantics. `RebalanceSubmitResponse` field ordering for pre-existing fields.
