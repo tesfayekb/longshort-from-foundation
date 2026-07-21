@@ -26,14 +26,20 @@ import { useOvershootEquitySnapshots } from '../hooks/useOvershootEquitySnapshot
 import { InfoHint } from '@/components/dashboard/InfoHint';
 
 /**
- * SI staleness display window — MUST mirror the engine's named parameter:
- *   supabase/functions/overshoot-detection-run/index.ts:97
- *     const DETECTOR_SI_STALENESS_MAX_DAYS = 20;
+ * SI staleness display window — MUST mirror the LIVE gate constant
+ * (single source of truth, DEC-504-4):
+ *   supabase/functions/_shared/overshoot/si-freshness.ts
+ *     export const OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 21;
+ * The gate predicate is strict `age > max` (see `isSiRowStale`), so age
+ * == 21 is FRESH; age == 22 flips si_stale_active TRUE.
  *
  * Console-displayed thresholds cite their engine constant, never restate
  * values independently (FP-069 W4.g display-truth rule, ACT-465.g).
+ *
+ * 2026-07-21: repointed from stale 20d display to the live 21d gate
+ * constant. UI-vs-gate divergence (INC-class: display-truth) resolved.
  */
-const DETECTOR_SI_STALENESS_MAX_DAYS = 20;
+const DETECTOR_SI_STALENESS_MAX_DAYS = 21;
 
 interface DetectionRow {
   run_id: string;
