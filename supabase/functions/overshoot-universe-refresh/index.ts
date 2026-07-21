@@ -91,10 +91,12 @@ const ISHARES_IWM_HOLDINGS_URL =
   'https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/1467271812596.ajax?fileType=csv&fileName=IWM_holdings&dataType=fund';
 const ISHARES_FETCH_TIMEOUT_MS = 30_000;
 
-// FMP ETF-holder endpoint — keyed vendor fallback if iShares egress fails.
-// Response shape: array of { asset: string, sharesNumber, weightPercentage,
-// name, marketValue, updated }.
-const FMP_ETF_HOLDER_URL = 'https://financialmodelingprep.com/api/v3/etf-holder/IWM';
+// FMP ETF-holdings endpoint — keyed vendor fallback if iShares egress fails.
+// Premium-era path: /stable/etf-holdings?symbol=IWM (v3 /etf-holder is legacy
+// and returned 403 on the operator's Premium key per INC-124). Response
+// shape: array of { symbol|asset, sharesNumber, weightPercentage, name,
+// marketValue, updated }.
+const FMP_ETF_HOLDINGS_URL = 'https://financialmodelingprep.com/stable/etf-holdings';
 const FMP_FETCH_TIMEOUT_MS = 20_000;
 
 async function isRowDisarmed(id: string): Promise<boolean> {
@@ -170,13 +172,44 @@ async function probeIsharesIwm(): Promise<
   | { ok: true; roster_count: number; sample_first_10: string[]; as_of: string; source_shape: string }
   | { ok: false; status: string; http_status?: number; detail?: string; source_shape: string }
 > {
-  const source_shape = 'ishares_iwm_holdings_csv';
+  return probeIsharesIwmWithHeaders({ 'Accept': 'text/csv, */*;q=0.1' }, 'ishares_iwm_holdings_csv');
+}
+
+/**
+ * Browser-headers variant — same URL/parser, but sends a Mozilla User-Agent,
+ * Accept-Language, and Referer to defeat CDN anti-bot fingerprinting. Held
+ * as a separate probe so the raw baseline and the browser-shaped attempt
+ * are directly comparable (INC-123 diagnostic).
+ */
+async function probeIsharesIwmBrowser(): Promise<
+  | { ok: true; roster_count: number; sample_first_10: string[]; as_of: string; source_shape: string }
+  | { ok: false; status: string; http_status?: number; detail?: string; source_shape: string }
+> {
+  return probeIsharesIwmWithHeaders(
+    {
+      'Accept': 'text/csv,application/csv,*/*;q=0.1',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://www.ishares.com/us/products/239710/ishares-russell-2000-etf',
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
+    'ishares_iwm_holdings_csv_browser_headers',
+  );
+}
+
+async function probeIsharesIwmWithHeaders(
+  headers: Record<string, string>,
+  source_shape: string,
+): Promise<
+  | { ok: true; roster_count: number; sample_first_10: string[]; as_of: string; source_shape: string }
+  | { ok: false; status: string; http_status?: number; detail?: string; source_shape: string }
+> {
   let resp;
   try {
     resp = await fetchWithTimeoutAndRetry(
       fetch as never,
       ISHARES_IWM_HOLDINGS_URL,
-      { method: 'GET', headers: { 'Accept': 'text/csv, */*;q=0.1' } },
+      { method: 'GET', headers },
       { timeoutMs: ISHARES_FETCH_TIMEOUT_MS },
     );
   } catch (e) {
@@ -246,8 +279,8 @@ async function probeFmpEtfIwm(fmpKey: string): Promise<
   | { ok: true; roster_count: number; sample_first_10: string[]; as_of: string; source_shape: string }
   | { ok: false; status: string; http_status?: number; detail?: string; source_shape: string }
 > {
-  const source_shape = 'fmp_etf_holder_iwm';
-  const url = `${FMP_ETF_HOLDER_URL}?apikey=${encodeURIComponent(fmpKey)}`;
+  const source_shape = 'fmp_stable_etf_holdings_iwm';
+  const url = `${FMP_ETF_HOLDINGS_URL}?symbol=IWM&apikey=${encodeURIComponent(fmpKey)}`;
   let resp: Response;
   try {
     const ctl = new AbortController();
@@ -283,8 +316,9 @@ async function probeFmpEtfIwm(fmpKey: string): Promise<
   }
   const tickers: string[] = [];
   let latestUpdated = '';
-  for (const h of body as Array<{ asset?: unknown; updated?: unknown }>) {
-    const a = h?.asset;
+  for (const h of body as Array<{ asset?: unknown; symbol?: unknown; updated?: unknown }>) {
+    // /stable/etf-holdings uses `symbol`; /v3/etf-holder used `asset`. Accept both.
+    const a = (typeof h?.symbol === 'string' && h.symbol.length > 0) ? h.symbol : h?.asset;
     if (typeof a === 'string' && a.length > 0) {
       tickers.push(a.toUpperCase());
     }
@@ -374,6 +408,13 @@ Deno.serve(createHandler(async (req: Request) => {
     }
     const r = await probeIsharesIwm();
     return apiSuccess({ probe: 'ishares', correlationId, ...r });
+  }
+  if (body.probe === 'ishares_bh') {
+    if (!isCron) {
+      return apiSuccess({ ok: false, probe: 'ishares_bh', status: 'cron_secret_required', correlationId });
+    }
+    const r = await probeIsharesIwmBrowser();
+    return apiSuccess({ probe: 'ishares_bh', correlationId, ...r });
   }
   if (body.probe === 'fmp_etf') {
     if (!isCron) {
