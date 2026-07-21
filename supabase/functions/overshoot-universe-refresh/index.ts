@@ -51,11 +51,11 @@ import { apiError } from '../_shared/api-error.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
-import { fetchWithTimeoutAndRetry } from '../_shared/longshort-universe/shared/fetch-with-timeout.ts';
 import {
+  fetchWithTimeoutAndRetry,
   parseCsvLine,
   findHeaderRowIndex,
-} from '../_shared/longshort-universe/constituent-ingestion/ishares-constituent-fetcher.ts';
+} from '../_shared/overshoot/csv-fetch-primitives.ts';
 
 const POLYGON_BASE_URL = 'https://api.polygon.io';
 const JOB_REGISTRY_ID = 'overshoot.universe.refresh';
@@ -383,7 +383,7 @@ async function probeEdgarNport(contactEmail: string): Promise<
       source_shape,
     };
   }
-  const tickerRe = /<ticker>([A-Z0-9.\-]{1,10})<\/ticker>/g;
+  const tickerRe = /<ticker>([A-Z0-9.-]{1,10})<\/ticker>/g;
   const tickers: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = tickerRe.exec(xml)) !== null) {
