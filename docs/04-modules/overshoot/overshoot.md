@@ -6,6 +6,11 @@
 
 Overshoot is a separate event-driven trading strategy that captures short-horizon mean reversion after acute idiosyncratic dislocations. It runs on a dedicated Alpaca paper account (broker-first from day one), with a parallel code tree, its own `overshoot_`-prefixed tables and `overshoot.*` crons, and its own operator console. This document is the module home; the strategy charter and full authority chain live at FP-069 (`docs/08-planning/feature-proposals.md`).
 
+## Universe Identity (RATIFIED — Option C, INC-126 closure)
+
+`overshoot_universe` identity is the composite **S&P 500 (IVV) ∪ S&P MidCap 400 (IJH)** — approximately **900 names**. This ratifies the identity of the 2026-07-03 seed (drawn from `universe_membership` = IVV ∪ IJH) and closes INC-126 / INC-109. The prior Russell-2000 wiring in `overshoot-universe-refresh` was a mis-inherited identity; the roster sanity band is **[850, 950]** and the operator-seed provenance tag is **`ishares:ivv_ijh:manual_seed`**. Both study corpus (`event-detection.sql.ts`) and live detection (`detection-run`) continue to scan this table verbatim — no code paths change, only the refresh source-of-truth. ACT-511-U2 (Russell expansion) remains ADDITIVE, gated on its own corpus backfill. A retroactive provenance audit row for the original 2026-07-03 seed is written under `overshoot.universe.refresh.completed` with `via='retroactive_provenance_audit'`.
+
+
 ## Scope
 
 Applies to everything under `src/features/overshoot/`, `src/pages/trading/overshoot/`, `supabase/functions/_shared/overshoot/`, `supabase/functions/overshoot-*`, `overshoot_*` database tables, `overshoot.*` cron jobs, `overshoot.*` RBAC permissions, and this documentation subtree. Does NOT apply to any `longshort_` / `combiner_` surface — see the separation contract below.
