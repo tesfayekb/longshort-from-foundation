@@ -7903,3 +7903,51 @@ Cross-check: IVV (SP500, product 239726) via the same shapes ALSO returns HTML l
 **Blocking:** the third operator attestation round. sql/39 stays paused. sql/37 untouched. Pack-2 arming resumes only on a GREEN built from a pre-verified source.
 
 **Status:** OPEN — blocks ACT-538 completion / INC-109 closure.
+
+---
+
+## 2026-07-21 — ACT-559 CHARTERED + Option-4 seed flow STAGED (edge function overhauled; alerts redesign filed; operator snippet #3 dispatched)
+
+**Mode:** execution (staging-only; no cron changes, no arm, no writes until operator invokes seed_apply).
+
+**Ruling context.** Operator ratified Option 4 with five amendments: (A) alerting redesign — state-change + staleness-budget only, no "known-closed vendor" pages; (B) keep three vendor lanes wired quiet; (C) charter EDGAR N-PORT as automated successor (lane 4); (D) DevTools file-picker seed snippet with sha256 provenance; (E) registry freshness row + runbook. All INC-123 / INC-124 diagnoses upheld.
+
+### Deliverables landed this turn
+
+1. **`supabase/functions/overshoot-universe-refresh/index.ts`** extended with FIVE new probe branches (cron-gated, zero writes except `seed_apply`):
+   - `probe:"edgar_nport"` — SEC EDGAR N-PORT-P feed for CIK 0001100663 / series S000004310 (IWM); UA-with-contact per SEC policy; parses first N-PORT filing XML for `<ticker>` under matching series id. Returns typed shape identical to ishares / fmp_etf so the decision rule remains substitutable.
+   - `probe:"staleness"` — reports `days_since_last_seed` for `overshoot_universe` most-recent active-row `updated_at`; `breach:true` when `> 35 days`. Consumed by the alerts dispatcher's Option-4 staleness watchdog. Absent-data = breach (typed-absence, no zero-sentinel).
+   - `probe:"seed"` — parses operator-uploaded iShares IWM CSV (dry-run); computes `csv_sha256`; runs the same `[1500, 2600]` sanity band; returns `would_upsert` / `would_deactivate` for operator inspection.
+   - `probe:"seed_apply"` — same parse + sanity gate; requires `csv_sha256_expect` (browser-side hash) matching server-side hash before any write; source-tag `'ishares:iwm:manual_seed'`; writes T4 audit row `overshoot.universe.refresh.completed` with `via:'operator_seed_apply'` provenance. Kill-switch supreme.
+   - Shared helper `parseIsharesCsv()` — one parser used by the `ishares` probe AND both seed branches so live-egress and operator-upload paths are behaviour-identical.
+
+2. **ACT-559 CHARTERED — SEC EDGAR N-PORT holdings ingestion for IWM.** Non-blocking, queued behind the current arm. **Adoption rule:** if `probe:"edgar_nport"` lands `roster_count ∈ [1500, 2600]` with Russell-plausible sample on two consecutive attempts (weekly), it becomes the automated primary source and manual re-seed cadence retires. Until then, staleness watchdog + weekly retry loop stands on last-good.
+
+3. **Option-4 alert redesign — SPEC filed (implementation follow-on before arm).** Dispatcher condition changes:
+   - REMOVED: page-on-every-weekly-vendor-failure (alert fatigue).
+   - ADDED (i) **state-change pages** — any lane newly returns `ok:true` (source-adoption decision) OR any lane fails in a NEW mode (status code not previously seen). Diff surface: `overshoot_alert_dispatch` keyed on `(probe, status)` idempotency; only unseen tuples page.
+   - ADDED (ii) **staleness-budget breach page** — dispatcher calls `probe:"staleness"` on every scan tick; pages once when `breach:true` (idempotency: single active dispatch row until age falls back inside budget).
+   - RETAINED: TYPED AUDIT ROWS on every weekly vendor attempt (quiet path — `audit_logs` only, no Resend).
+
+4. **INC-109 closure sequence documented.** Post-`seed_apply` success → operator runs `sql/39` Steps A-E (already inline in prior pack) → `job_registry.enabled=true` for `'overshoot.universe.refresh'` → INC-109 closes. Weekly cron's ongoing job = vendor retries (quiet) + staleness watchdog.
+
+5. **api_provider_registry freshness row — deferred to arm turn.** Row `('ishares', 'iwm_manual_seed', 'overshoot_universe.updated_at')` will land in the same migration that adds the dispatcher's staleness-page dispatch class. Not this turn (would migrate DB state before the seed writes prove the path).
+
+### What did NOT land this turn (queued, not silent)
+
+- Dispatcher code changes for Option-4 alert redesign (state-change diff + staleness scan). Filed as ACT-559.a follow-on; runs before sql/39 arm.
+- Runbook `docs/04-modules/overshoot/universe-refresh-runbook.md` with the >10%-delta ratchet — filed as ACT-559.b follow-on. The download click-path (iShares product page → "Detailed Holdings and Analytics" → CSV) will be documented there.
+- `api_provider_registry` freshness row — ACT-559.c, bundled with the dispatcher migration.
+
+### Operator return path
+
+Only ONE operator touch on this leg: run snippet #3 (chat below). No SQL editor visit until seed_apply success.
+
+### Cross-refs
+
+- INC-109 (universe refresh missing — closes at post-seed sql/39 arm).
+- INC-120 (Polygon Russell filter ignored — CLOSED-EMPIRICAL 2026-07-21).
+- INC-123 (iShares HTML egress from Supabase — CLOSED-EMPIRICAL 2026-07-21; kept wired quiet per (B)).
+- INC-124 (FMP Premium 403 on IWM — CLOSED-EMPIRICAL 2026-07-21; kept wired quiet per (B)).
+- ACT-538 (universe weekly refresh path — landing).
+- Rule Constitution §22.5.1 evidence: `csv_sha256` + T4 audit row on seed_apply is the sanctioned §22.5.1 chain for this leg.
