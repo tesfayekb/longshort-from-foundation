@@ -136,6 +136,55 @@ async function sha256Hex(input: string): Promise<string> {
 }
 
 /**
+ * Ticker-array normalization for the client-attested seed path.
+ *
+ * Contract (operator ruling):
+ *   - array of 1-6-char uppercase symbols (/^[A-Z]{1,6}$/)
+ *   - deduped
+ *   - non-conforming rows (cash placeholders, futures, blanks, dashes)
+ *     are dropped silently — the client-side extractor strips them, but
+ *     we re-enforce server-side so the audit truth matches the accepted
+ *     shape.
+ *
+ * Returns the sorted unique array. Sorting is required for the
+ * `tickers_sha256` integrity hash to be reproducible across client and
+ * server (join order matters).
+ */
+function normalizeTickers(input: unknown):
+  | { ok: true; tickers: string[]; dropped: number }
+  | { ok: false; status: string; detail?: string } {
+  if (!Array.isArray(input)) {
+    return { ok: false, status: 'tickers_not_array' };
+  }
+  if (input.length === 0) {
+    return { ok: false, status: 'tickers_empty' };
+  }
+  const re = /^[A-Z]{1,6}$/;
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  let dropped = 0;
+  for (const raw of input) {
+    if (typeof raw !== 'string') { dropped += 1; continue; }
+    const t = raw.trim().toUpperCase();
+    if (!re.test(t)) { dropped += 1; continue; }
+    if (seen.has(t)) { dropped += 1; continue; }
+    seen.add(t);
+    kept.push(t);
+  }
+  kept.sort();
+  return { ok: true, tickers: kept, dropped };
+}
+
+/**
+ * Deterministic ticker-set hash. Sorted + newline-joined so client and
+ * server compute identical digests. Used as the integrity guard on the
+ * client-attested seed path (server refuses on mismatch).
+ */
+async function tickersSha256Hex(sortedTickers: string[]): Promise<string> {
+  return sha256Hex(sortedTickers.join('\n'));
+}
+
+/**
  * Parse an iShares-shaped holdings CSV (multi-line preamble + header row +
  * one row per holding). Returns the equity tickers plus the "Fund Holdings
  * as of" date if present. Shared between the ishares probe and seed modes
@@ -747,31 +796,82 @@ Deno.serve(createHandler(async (req: Request) => {
     if (!isCron) {
       return apiSuccess({ ok: false, probe: 'seed', status: 'cron_secret_required', correlationId });
     }
-    const csv = typeof (body as { csv?: unknown }).csv === 'string'
-      ? ((body as { csv: string }).csv)
-      : '';
-    if (csv.length === 0) {
-      return apiSuccess({ ok: false, probe: 'seed', status: 'csv_body_missing', correlationId });
+    // Two accepted shapes:
+    //   (A) server_hashed:   { csv: string }                     — ≤64KB path
+    //   (B) client_attested: { tickers: string[],
+    //                          as_of?: string,
+    //                          csv_sha256_provenance?: string,
+    //                          csv_bytes?: number }              — ~15-20KB path
+    // The dispatcher chooses by presence of `tickers` (array). The
+    // audit row records `provenance_mode` honestly so downstream
+    // readers cannot mistake a client-attested seed for a server-
+    // hashed one.
+    const b = body as {
+      csv?: unknown;
+      tickers?: unknown;
+      as_of?: unknown;
+      csv_sha256_provenance?: unknown;
+      csv_bytes?: unknown;
+    };
+    const hasTickers = Array.isArray(b.tickers);
+
+    let tickers: string[];
+    let as_of_from_source: string;
+    let provenance_mode: 'server_hashed' | 'client_attested';
+    let csv_sha256: string | null;
+    let csv_sha256_provenance: string | null = null;
+    let csv_bytes_attested: number | null = null;
+    let dropped = 0;
+
+    if (hasTickers) {
+      const norm = normalizeTickers(b.tickers);
+      if (!norm.ok) {
+        return apiSuccess({ ok: false, probe: 'seed', status: norm.status, detail: norm.detail, correlationId });
+      }
+      tickers = norm.tickers;
+      dropped = norm.dropped;
+      as_of_from_source = typeof b.as_of === 'string' ? b.as_of : '';
+      provenance_mode = 'client_attested';
+      csv_sha256 = null;
+      csv_sha256_provenance = typeof b.csv_sha256_provenance === 'string'
+        ? b.csv_sha256_provenance.toLowerCase()
+        : null;
+      csv_bytes_attested = typeof b.csv_bytes === 'number' && Number.isFinite(b.csv_bytes)
+        ? Math.trunc(b.csv_bytes)
+        : null;
+    } else {
+      const csv = typeof b.csv === 'string' ? b.csv : '';
+      if (csv.length === 0) {
+        return apiSuccess({ ok: false, probe: 'seed', status: 'csv_body_missing', correlationId });
+      }
+      const parsed = parseIsharesCsv(csv);
+      if (!parsed.ok) {
+        return apiSuccess({ ok: false, probe: 'seed', status: parsed.status, detail: parsed.detail, correlationId });
+      }
+      tickers = parsed.tickers;
+      as_of_from_source = parsed.as_of;
+      csv_sha256 = await sha256Hex(csv);
+      provenance_mode = 'server_hashed';
     }
-    const parsed = parseIsharesCsv(csv);
-    if (!parsed.ok) {
-      return apiSuccess({ ok: false, probe: 'seed', status: parsed.status, detail: parsed.detail, correlationId });
-    }
-    const sanity = checkRosterSanity(parsed.tickers.length);
-    const csv_sha256 = await sha256Hex(csv);
+
+    const tickers_sha256 = await tickersSha256Hex(tickers);
+    const sanity = checkRosterSanity(tickers.length);
     if (sanity !== null) {
       return apiSuccess({
         ok: false,
         probe: 'seed',
         status: 'roster_sanity_failed',
-        roster_count: parsed.tickers.length,
+        roster_count: tickers.length,
         sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
-        sample_first_10: parsed.tickers.slice(0, 10),
+        sample_first_10: tickers.slice(0, 10),
+        provenance_mode,
+        tickers_sha256,
         csv_sha256,
+        csv_sha256_provenance,
         correlationId,
       });
     }
-    const fresh = new Set(parsed.tickers);
+    const fresh = new Set(tickers);
     const { data: current, error: readErr } = await supabaseAdmin
       .from('overshoot_universe')
       .select('ticker')
@@ -786,14 +886,19 @@ Deno.serve(createHandler(async (req: Request) => {
       ok: true,
       probe: 'seed',
       dry_run: true,
-      roster_count: parsed.tickers.length,
+      roster_count: tickers.length,
       sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
-      sample_first_10: parsed.tickers.slice(0, 10),
-      as_of_from_csv: parsed.as_of,
-      would_upsert: parsed.tickers.length,
+      sample_first_10: tickers.slice(0, 10),
+      as_of_from_source,
+      would_upsert: tickers.length,
       would_deactivate: would_deactivate.length,
       would_deactivate_sample: would_deactivate.slice(0, 10),
+      provenance_mode,
+      tickers_sha256,
       csv_sha256,
+      csv_sha256_provenance,
+      csv_bytes_attested,
+      dropped_nonconforming: dropped,
       correlationId,
     });
   }
@@ -806,40 +911,109 @@ Deno.serve(createHandler(async (req: Request) => {
     if (!isCron) {
       return apiSuccess({ ok: false, probe: 'seed_apply', status: 'cron_secret_required', correlationId });
     }
-    const csv = typeof (body as { csv?: unknown }).csv === 'string'
-      ? ((body as { csv: string }).csv)
-      : '';
-    const expect = typeof (body as { csv_sha256_expect?: unknown }).csv_sha256_expect === 'string'
-      ? ((body as { csv_sha256_expect: string }).csv_sha256_expect).toLowerCase()
-      : '';
-    if (csv.length === 0) {
-      return apiSuccess({ ok: false, probe: 'seed_apply', status: 'csv_body_missing', correlationId });
+    const b = body as {
+      csv?: unknown;
+      csv_sha256_expect?: unknown;
+      tickers?: unknown;
+      tickers_sha256_expect?: unknown;
+      as_of?: unknown;
+      csv_sha256_provenance?: unknown;
+      csv_bytes?: unknown;
+    };
+    const hasTickers = Array.isArray(b.tickers);
+
+    let tickers: string[];
+    let as_of_from_source: string;
+    let provenance_mode: 'server_hashed' | 'client_attested';
+    let csv_sha256: string | null;
+    let csv_sha256_provenance: string | null = null;
+    let csv_bytes_attested: number | null = null;
+    let dropped = 0;
+
+    if (hasTickers) {
+      const norm = normalizeTickers(b.tickers);
+      if (!norm.ok) {
+        return apiSuccess({ ok: false, probe: 'seed_apply', status: norm.status, detail: norm.detail, correlationId });
+      }
+      tickers = norm.tickers;
+      dropped = norm.dropped;
+      as_of_from_source = typeof b.as_of === 'string' ? b.as_of : '';
+      provenance_mode = 'client_attested';
+      csv_sha256 = null;
+      csv_sha256_provenance = typeof b.csv_sha256_provenance === 'string'
+        ? b.csv_sha256_provenance.toLowerCase()
+        : null;
+      csv_bytes_attested = typeof b.csv_bytes === 'number' && Number.isFinite(b.csv_bytes)
+        ? Math.trunc(b.csv_bytes)
+        : null;
+
+      // Integrity guard: server re-hashes normalized (sorted+joined) tickers
+      // and refuses on mismatch with the client-computed expectation.
+      const tickers_sha256 = await tickersSha256Hex(tickers);
+      const expectT = typeof b.tickers_sha256_expect === 'string'
+        ? (b.tickers_sha256_expect as string).toLowerCase()
+        : '';
+      if (expectT.length === 0) {
+        return apiSuccess({
+          ok: false,
+          probe: 'seed_apply',
+          status: 'tickers_sha256_expect_missing',
+          tickers_sha256,
+          correlationId,
+        });
+      }
+      if (expectT !== tickers_sha256) {
+        return apiSuccess({
+          ok: false,
+          probe: 'seed_apply',
+          status: 'tickers_sha256_mismatch',
+          tickers_sha256,
+          expected: expectT,
+          correlationId,
+        });
+      }
+    } else {
+      const csv = typeof b.csv === 'string' ? b.csv : '';
+      const expect = typeof b.csv_sha256_expect === 'string'
+        ? (b.csv_sha256_expect as string).toLowerCase()
+        : '';
+      if (csv.length === 0) {
+        return apiSuccess({ ok: false, probe: 'seed_apply', status: 'csv_body_missing', correlationId });
+      }
+      csv_sha256 = await sha256Hex(csv);
+      if (expect.length > 0 && expect !== csv_sha256) {
+        return apiSuccess({
+          ok: false,
+          probe: 'seed_apply',
+          status: 'csv_sha256_mismatch',
+          csv_sha256,
+          expected: expect,
+          correlationId,
+        });
+      }
+      const parsed = parseIsharesCsv(csv);
+      if (!parsed.ok) {
+        return apiSuccess({ ok: false, probe: 'seed_apply', status: parsed.status, detail: parsed.detail, correlationId });
+      }
+      tickers = parsed.tickers;
+      as_of_from_source = parsed.as_of;
+      provenance_mode = 'server_hashed';
     }
-    const csv_sha256 = await sha256Hex(csv);
-    if (expect.length > 0 && expect !== csv_sha256) {
-      return apiSuccess({
-        ok: false,
-        probe: 'seed_apply',
-        status: 'csv_sha256_mismatch',
-        csv_sha256,
-        expected: expect,
-        correlationId,
-      });
-    }
-    const parsed = parseIsharesCsv(csv);
-    if (!parsed.ok) {
-      return apiSuccess({ ok: false, probe: 'seed_apply', status: parsed.status, detail: parsed.detail, correlationId });
-    }
-    const sanity = checkRosterSanity(parsed.tickers.length);
+
+    const tickers_sha256 = await tickersSha256Hex(tickers);
+    const sanity = checkRosterSanity(tickers.length);
     if (sanity !== null) {
       return apiSuccess({
         ok: false,
         probe: 'seed_apply',
         status: 'roster_sanity_failed',
-        roster_count: parsed.tickers.length,
+        roster_count: tickers.length,
         sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
-        sample_first_10: parsed.tickers.slice(0, 10),
+        sample_first_10: tickers.slice(0, 10),
+        provenance_mode,
+        tickers_sha256,
         csv_sha256,
+        csv_sha256_provenance,
         correlationId,
       });
     }
@@ -849,7 +1023,7 @@ Deno.serve(createHandler(async (req: Request) => {
     }
     const nowIso = productionClock.getWallClockTs();
     const asOfDate = nowIso.slice(0, 10);
-    const fresh = new Set(parsed.tickers);
+    const fresh = new Set(tickers);
     const { data: current, error: readErr } = await supabaseAdmin
       .from('overshoot_universe')
       .select('ticker')
@@ -860,7 +1034,7 @@ Deno.serve(createHandler(async (req: Request) => {
     const currentSet = new Set((current ?? []).map((r) => r.ticker as string));
     const toDeactivate: string[] = [];
     for (const t of currentSet) if (!fresh.has(t)) toDeactivate.push(t);
-    const upsertRows = parsed.tickers.map((t) => ({
+    const upsertRows = tickers.map((t) => ({
       ticker: t,
       source: SEED_SOURCE_TAG,
       added_as_of: asOfDate,
@@ -892,11 +1066,16 @@ Deno.serve(createHandler(async (req: Request) => {
       metadata: {
         source: SEED_SOURCE_TAG,
         as_of_date: asOfDate,
-        as_of_from_csv: parsed.as_of,
-        roster_count: parsed.tickers.length,
+        as_of_from_source,
+        roster_count: tickers.length,
         upserted: upsertRows.length,
         deactivated,
+        provenance_mode,
+        tickers_sha256,
         csv_sha256,
+        csv_sha256_provenance,
+        csv_bytes_attested,
+        dropped_nonconforming: dropped,
         via: 'operator_seed_apply',
       },
     });
@@ -904,10 +1083,13 @@ Deno.serve(createHandler(async (req: Request) => {
       ok: true,
       probe: 'seed_apply',
       as_of_date: asOfDate,
-      roster_count: parsed.tickers.length,
+      roster_count: tickers.length,
       upserted: upsertRows.length,
       deactivated,
+      provenance_mode,
+      tickers_sha256,
       csv_sha256,
+      csv_sha256_provenance,
       correlationId,
     });
   }
