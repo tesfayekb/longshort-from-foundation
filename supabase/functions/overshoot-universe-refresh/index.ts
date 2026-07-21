@@ -58,6 +58,22 @@ const KILL_SWITCH_ID = '__kill_switch__';
 const MAX_PAGES = 8; // 8 * 1000 tickers/page = 8000 headroom vs ~2000 R2000.
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
+// Polygon ticker-set code for Russell 2000 index membership. Matches the
+// longshort PolygonConstituentFetcher taxonomy (I:SPX / I:MID). The prior
+// `?index=russell2000` string was silently ignored — Polygon's reference
+// endpoint only honors ticker-set codes, and unknown values fall through
+// to an unfiltered market listing (INC-120 diagnostic evidence:
+// page1_result_count=1000, sample_first_10 alphabetical A/AA/AAA…,
+// pages_fetched=8 at MAX_PAGES cap).
+const POLYGON_RUSSELL2000_CODE = 'I:RUT';
+
+// Hard sanity gate on roster size. The Russell 2000 nominal membership is
+// ~2000; realistic drift after corporate actions is a few dozen. Anything
+// outside [1500, 2600] indicates the filter was silently dropped and we are
+// looking at the unfiltered market again — refuse rather than write.
+const ROSTER_SANITY_MIN = 1500;
+const ROSTER_SANITY_MAX = 2600;
+
 async function isRowDisarmed(id: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from('job_registry')
@@ -75,7 +91,7 @@ async function fetchRussellRoster(apiKey: string): Promise<
   const tickers: string[] = [];
   let url: string | null =
     `${POLYGON_BASE_URL}/v3/reference/tickers` +
-    `?index=russell2000&active=true&limit=1000` +
+    `?index=${encodeURIComponent(POLYGON_RUSSELL2000_CODE)}&active=true&limit=1000` +
     `&apiKey=${encodeURIComponent(apiKey)}`;
   let pages = 0;
 
@@ -121,6 +137,17 @@ async function fetchRussellRoster(apiKey: string): Promise<
   return { kind: 'ok', tickers, pages };
 }
 
+/** Returns null when roster size is inside the sanity band; otherwise a
+ *  typed refusal payload. Caller must abort ALL writes on non-null return. */
+function checkRosterSanity(count: number):
+  | null
+  | { failed: true; reason: 'roster_sanity_failed'; count: number; band: [number, number] } {
+  if (count < ROSTER_SANITY_MIN || count > ROSTER_SANITY_MAX) {
+    return { failed: true, reason: 'roster_sanity_failed', count, band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX] };
+  }
+  return null;
+}
+
 Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
   if (req.method !== 'POST') {
@@ -148,7 +175,7 @@ Deno.serve(createHandler(async (req: Request) => {
 
   const apiKey = Deno.env.get('POLYGON_API_KEY') ?? '';
 
-  // Probe short-circuits BEFORE the disarm gates — a paused system must
+  // Probe short-circuits BEFORE any disarm gates — a paused system must
   // remain probeable (matches overshoot-short-interest-compute convention).
   if (body.probe === 'polygon') {
     if (!apiKey) {
@@ -161,23 +188,25 @@ Deno.serve(createHandler(async (req: Request) => {
     if (roster.kind === 'unavailable') {
       return apiSuccess({ ok: false, probe: 'polygon', status: 'data_unavailable', http_status: roster.http_status, correlationId });
     }
+    const sanity = checkRosterSanity(roster.tickers.length);
     return apiSuccess({
-      ok: true,
+      ok: sanity === null,
       probe: 'polygon',
-      status: 'reports',
+      status: sanity === null ? 'reports' : 'roster_sanity_failed',
       roster_count: roster.tickers.length,
+      sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
       sample_first_10: roster.tickers.slice(0, 10),
       pages_fetched: roster.pages,
+      index_code: POLYGON_RUSSELL2000_CODE,
       correlationId,
     });
   }
 
-  // Disarm gates.
+  // Kill-switch is supreme over EVERYTHING including dry-runs and probes-below.
+  // Row-level disarm is a scheduled-tick gate; it does NOT block operator
+  // attestations (dry_run) — per operator ruling on the ordering defect.
   if (await isRowDisarmed(KILL_SWITCH_ID)) {
     return apiSuccess({ ok: true, skipped: 'kill_switch_active', correlationId });
-  }
-  if (await isRowDisarmed(JOB_REGISTRY_ID)) {
-    return apiSuccess({ ok: true, skipped: 'job_disarmed', correlationId });
   }
 
   if (!apiKey) {
@@ -191,6 +220,22 @@ Deno.serve(createHandler(async (req: Request) => {
   if (roster.kind !== 'ok') {
     return apiError(502, `roster_${roster.kind}`, { correlationId, roster });
   }
+
+  // Hard sanity gate — refuse ALL writes when count is outside the band.
+  // This defends against silent filter-ignore regressions (INC-120 root
+  // cause) and any future taxonomy drift on Polygon's side.
+  const sanity = checkRosterSanity(roster.tickers.length);
+  if (sanity !== null) {
+    return apiError(502, 'roster_sanity_failed', {
+      correlationId,
+      roster_count: roster.tickers.length,
+      sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
+      sample_first_10: roster.tickers.slice(0, 10),
+      index_code: POLYGON_RUSSELL2000_CODE,
+      pages_fetched: roster.pages,
+    });
+  }
+
   const freshSet = new Set(roster.tickers);
 
   // Load current active universe for delta computation.
@@ -218,13 +263,21 @@ Deno.serve(createHandler(async (req: Request) => {
       ok: true,
       dry_run: true,
       roster_count: roster.tickers.length,
+      sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
       would_upsert: upsertRows.length,
       would_deactivate: toDeactivate.length,
       would_deactivate_sample: toDeactivate.slice(0, 10),
       pages_fetched: roster.pages,
+      index_code: POLYGON_RUSSELL2000_CODE,
       as_of_date: asOfDate,
       correlationId,
     });
+  }
+
+  // Real-write path: row-level disarm gate applies HERE (scheduled/manual
+  // real fires). Probes + dry-runs already returned above.
+  if (await isRowDisarmed(JOB_REGISTRY_ID)) {
+    return apiSuccess({ ok: true, skipped: 'job_disarmed', correlationId });
   }
 
   const { error: upsertErr } = await supabaseAdmin
