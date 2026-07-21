@@ -51,11 +51,11 @@ import { apiError } from '../_shared/api-error.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
-import { fetchWithTimeoutAndRetry } from '../_shared/longshort-universe/shared/fetch-with-timeout.ts';
 import {
+  fetchWithTimeoutAndRetry,
   parseCsvLine,
   findHeaderRowIndex,
-} from '../_shared/longshort-universe/constituent-ingestion/ishares-constituent-fetcher.ts';
+} from '../_shared/overshoot/csv-fetch-primitives.ts';
 
 const POLYGON_BASE_URL = 'https://api.polygon.io';
 const JOB_REGISTRY_ID = 'overshoot.universe.refresh';
@@ -383,7 +383,7 @@ async function probeEdgarNport(contactEmail: string): Promise<
       source_shape,
     };
   }
-  const tickerRe = /<ticker>([A-Z0-9.\-]{1,10})<\/ticker>/g;
+  const tickerRe = /<ticker>([A-Z0-9.-]{1,10})<\/ticker>/g;
   const tickers: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = tickerRe.exec(xml)) !== null) {
@@ -1047,7 +1047,7 @@ Deno.serve(createHandler(async (req: Request) => {
       return apiSuccess({ ok: true, probe: 'seed_apply', skipped: 'kill_switch_active', correlationId });
     }
     const nowIso = productionClock.getWallClockTs();
-    const asOfDate = nowIso.slice(0, 10);
+    const asOfDate = nowIso.toISOString().slice(0, 10);
     const fresh = new Set(tickers);
     const { data: current, error: readErr } = await supabaseAdmin
       .from('overshoot_universe')
@@ -1132,7 +1132,7 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   const nowIso = productionClock.getWallClockTs();
-  const asOfDate = (body.as_of ?? nowIso.slice(0, 10));
+  const asOfDate = (body.as_of ?? nowIso.toISOString().slice(0, 10));
 
   const roster = await fetchRussellRoster(apiKey);
   if (roster.kind !== 'ok') {
