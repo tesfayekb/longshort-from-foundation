@@ -220,12 +220,15 @@ async function readCaptureHeadSha(): Promise<string> {
 }
 
 // Predicate v2 sha256 — captured constant (recomputed at boot in T2.4).
-// Re-pinned 2026-07-15 (INC-106 direction-flip). Prior value:
-//   766c996d88e439f370f5ff34356505818f6b6671d590e2f99d32418ebca7a573
-// (pre-flip spec asserting SHORT byte_unchanged_from_v1:true — falsified
-// by the flip). New value corresponds to the post-flip spec JSON with the
-// inc_106_direction_flip block + byte_unchanged_from_v1:false.
-const PREDICATE_SPEC_V2_SHA256 = 'df339497e747cb2cd76b5ac34a34ffcf0007f8d50a048fab3d875d21d93b288b';
+// Re-pinned 2026-07-15 (INC-106 direction-flip). Historic values (RETIRED,
+// listed so any stray occurrence greps as stale during ACT-532 lint):
+//   766c996d88e439f370f5ff34356505818f6b6671d590e2f99d32418ebca7a573  (pre-flip v2, superseded)
+//   df339497e747cb2cd76b5ac34a34ffcf0007f8d50a048fab3d875d21d93b288b  (post-flip v2, superseded by three-guard bundle)
+// Re-pinned 2026-07-21 (DEC-080-v2 / DEC-081-v2 / DEC-082 three-guard bundle).
+// Current value corresponds to the post-bundle spec JSON with the
+// top-level `"amendments":{...}` block enumerating the three §6 guards
+// and the two freshness siblings (analyst / M&A).
+const PREDICATE_SPEC_V2_SHA256 = '56b1ee631101c256f595dc750f5178511bab16f34972af7492aed3d33fac8dbd';
 
 for (const day of DATES) {
   Deno.test(`selection-parity — ${day} (OFFLINE, byte-exact, no tolerance)`, async () => {

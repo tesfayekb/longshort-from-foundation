@@ -663,21 +663,30 @@ Deno.test('LONG shortability recorded when lookup provided; null when absent; ne
 });
 
 // ─── Version-hash reproducibility ────────────────────────────────────
-Deno.test('RATIFIED_DETECTOR_VERSION — reproducible from INC-106 anchor (post-flip); v1 T2.1b composite still holds', async () => {
-  // INC-106 direction-flip (2026-07-15): the RATIFIED_DETECTOR_VERSION
-  // derivation was rebased off the composite (study_full_hash ‖
-  // DETECTOR_PREDICATE_SPEC_V2_JSON) onto the INC-106 anchor string
-  // 'b7cdfcd8||INC-106-direction-flip-v2b' so the version bump is a
-  // deterministic function of the incident id (not of the spec bytes,
-  // which were also edited in the same commit to describe the flipped
-  // gate truthfully). See detector.ts note above RATIFIED_DETECTOR_VERSION.
-  const INC_106_ANCHOR = 'b7cdfcd8||INC-106-direction-flip-v2b';
-  const input = new TextEncoder().encode(INC_106_ANCHOR);
+Deno.test('RATIFIED_DETECTOR_VERSION — reproducible from three-guard bundle anchor (aff20a13); INC-106 anchor still holds; v1 T2.1b composite still holds', async () => {
+  // DEC-080-v2 / DEC-081-v2 / DEC-082 three-guard bundle (2026-07-21):
+  // composite bumps forward off the INC-106 anchor `a026dc51`:
+  //   sha256('a026dc51||DEC-080-v2+DEC-081-v2+DEC-082-ma-guard-v1')[:8] = aff20a13
+  // Anchor chain kept single-line and deterministic. Supervisor recompute
+  // tag-drift produced `8612b5d1` during restatement — that literal is
+  // RETIRED and MUST NOT appear anywhere outside preamble/history notes.
+  const BUNDLE_ANCHOR = 'a026dc51||DEC-080-v2+DEC-081-v2+DEC-082-ma-guard-v1';
+  const input = new TextEncoder().encode(BUNDLE_ANCHOR);
   const digest = await crypto.subtle.digest('SHA-256', input);
   const hex = Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
   assertEquals(hex.slice(0, 8), RATIFIED_DETECTOR_VERSION);
+  assertEquals(RATIFIED_DETECTOR_VERSION, 'aff20a13');
+  // Prior INC-106 anchor invariant preserved verbatim so the audit chain
+  // stays reproducible from the original incident id.
+  const INC_106_ANCHOR = 'b7cdfcd8||INC-106-direction-flip-v2b';
+  const inputInc106 = new TextEncoder().encode(INC_106_ANCHOR);
+  const digestInc106 = await crypto.subtle.digest('SHA-256', inputInc106);
+  const hexInc106 = Array.from(new Uint8Array(digestInc106))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  assertEquals(hexInc106.slice(0, 8), 'a026dc51');
   // v1 composite invariant preserved verbatim (v1 spec is byte-frozen).
   const STUDY_FULL = 'a37e4b963c0ff13f0962e231b6322d11f1210df44812cdd24dcf06e66f354e80';
   const inputV1 = new TextEncoder().encode(STUDY_FULL + '||' + DETECTOR_PREDICATE_SPEC_V1_JSON);
@@ -694,7 +703,8 @@ Deno.test('DETECTOR_VERSION_HISTORY — v1 + v2 entries with ACT-479 provenance;
   const v2 = DETECTOR_VERSION_HISTORY[1];
   assertEquals(v2.version, 'v2');
   assertEquals(v2.prefix, RATIFIED_DETECTOR_VERSION);
-  assertEquals(v2.act_ref, 'ACT-479');
+  assert(v2.act_ref.includes('ACT-479'), 'v2 act_ref must reference ACT-479');
+  assert(v2.act_ref.includes('DEC-080-v2'), 'v2 act_ref must reference DEC-080-v2 bundle');
   assertEquals(v2.predicate_spec_json, DETECTOR_PREDICATE_SPEC_V2_JSON);
   // Rationale MUST document the T2.1b DRIFT correction + uniform-floor delta.
   assert(v2.rationale.includes('T2.1b'), 'v2 rationale must reference T2.1b');
@@ -702,6 +712,10 @@ Deno.test('DETECTOR_VERSION_HISTORY — v1 + v2 entries with ACT-479 provenance;
   assert(v2.rationale.includes('491'), 'v2 rationale must cite 491 cells frontier');
   assert(v2.rationale.includes('uniform ROI floor') || v2.rationale.includes('uniform_roi_floor') || v2.rationale.includes('BEHAVIOR DELTA'), 'v2 rationale must document uniform-floor behavior delta');
   assert(v2.rationale.includes('BYTE-UNCHANGED'), 'v2 rationale must attest SHORT byte-unchanged');
+  assert(v2.rationale.includes('aff20a13'), 'v2 rationale must cite three-guard composite version');
+  assert(v2.rationale.includes('analyst_downgrade_proximate'), 'v2 rationale must document DEC-080-v2 refusal reason');
+  assert(v2.rationale.includes('analyst_upgrade_proximate'), 'v2 rationale must document DEC-081-v2 refusal reason');
+  assert(v2.rationale.includes('ma_target_proximate'), 'v2 rationale must document DEC-082 refusal reason');
 });
 
 Deno.test('Predicate-spec constants — v2 JSON floors match code constants', () => {
