@@ -19,7 +19,7 @@ INSERT INTO public.feature_flags (
   '00000000-0000-0000-0000-000000000001',
   'longshort.book.long_only',
   true,
-  'A',
+  'strong',
   'S3 ruling 2026-07-21 — long-only until a real universe refresh lands with short_eligible true-count > 0 AND operator ratifies reversal. See DW-213.',
   NULL,
   now()
