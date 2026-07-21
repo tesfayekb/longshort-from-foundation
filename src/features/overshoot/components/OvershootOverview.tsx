@@ -102,26 +102,103 @@ function fmtMoney(n: number | null | undefined): string {
   return `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-function PendingCandidateIII({ title }: { title: string }) {
+// PendingCandidateIII (ACT-525 R2 (b)) removed 2026-07-21 (Option-A render
+// fix): windowed-gain cards now compute from the live
+// `overshoot_equity_snapshots` series via WindowedGainCard. Typed-absence
+// still honored — it now names the specific series-length shortfall per
+// card rather than a blanket "not armed" claim.
+
+/**
+ * WindowedGainCard — computes a broker-equity delta over a fixed session
+ * offset from the loaded `overshoot_equity_snapshots` series. Never
+ * fabricates numbers: if the series is too short to span the window,
+ * the card falls through to a typed-absence label naming the shortfall.
+ *
+ * Contract:
+ *   - `snapshots` MUST arrive ordered ASCENDING by `snapshot_date`
+ *     (the hook enforces this).
+ *   - `sessionsBack` is a session offset against the loaded series
+ *     (row-indexed; weekends / holidays collapse out).
+ *   - `sessionsBack === null` means Inception (anchor = first row).
+ *   - Inception labels the anchor date verbatim ("since 2026-07-09")
+ *     to disclose the pre-arming construction gap (2026-07-08 has no
+ *     snapshot; that day is not day-0).
+ */
+function WindowedGainCard({
+  title,
+  sessionsBack,
+  snapshots,
+  loading,
+}: {
+  title: string;
+  sessionsBack: number | null;
+  snapshots: Array<{ snapshot_date: string; broker_equity: number }>;
+  loading: boolean;
+}) {
+  const n = snapshots.length;
+  const latest = n > 0 ? snapshots[n - 1] : null;
+  const anchor = latest
+    ? sessionsBack === null
+      ? snapshots[0]
+      : n > sessionsBack
+        ? snapshots[n - 1 - sessionsBack]
+        : null
+    : null;
+  const delta = latest && anchor ? latest.broker_equity - anchor.broker_equity : null;
+  const pct = latest && anchor && anchor.broker_equity > 0 && delta !== null
+    ? (delta / anchor.broker_equity) * 100
+    : null;
+  const variant: 'good' | 'bad' | 'muted' =
+    delta === null ? 'muted' : delta > 0 ? 'good' : delta < 0 ? 'bad' : 'muted';
+  const valueClass =
+    variant === 'good' ? 'text-emerald-600 dark:text-emerald-400'
+    : variant === 'bad' ? 'text-destructive'
+    : 'text-muted-foreground';
+  const subLabel = sessionsBack === null && anchor
+    ? `since ${fmtDateOnly(anchor.snapshot_date)}`
+    : anchor && latest
+      ? `${fmtDateOnly(anchor.snapshot_date)} → ${fmtDateOnly(latest.snapshot_date)}`
+      : null;
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground truncate">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium text-muted-foreground truncate flex items-center gap-1.5">
+          <span className="truncate">{title}</span>
+          <InfoHint label={`${title} — windowed gain`}>
+            Broker-equity delta from{' '}
+            <span className="font-mono">overshoot_equity_snapshots</span>
+            {sessionsBack === null
+              ? <> anchored at the first available snapshot (2026-07-09 inception — 2026-07-08 was construction-era pre-arming and is not day-0).</>
+              : <> over the last {sessionsBack} trading session{sessionsBack === 1 ? '' : 's'} in the loaded series. Row-indexed, so weekends / holidays collapse out.</>}
+            {' '}Post-close settled state; no mid-session synthesis.
+          </InfoHint>
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        {/* ACT-525 R2 (b) — short status label + info hint. Full governance
-            prose lives in the tooltip and in FP-069-CANDIDATE-iii detail. */}
-        <div className="flex items-baseline gap-2">
-          <p className="text-2xl font-semibold text-muted-foreground">—</p>
-          <InfoHint label="Windowed gain — pending">
-            No equity snapshots yet. Arm <span className="font-mono">overshoot_equity_snapshot</span> via
-            the INC-82 bracket to populate this window. No synthetic numbers are rendered — this is a
-            typed-absence per FP-069-CANDIDATE-iii.
-          </InfoHint>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground/80">
-          Pending — equity snapshots not armed
-        </p>
+        {loading ? (
+          <p className="text-2xl font-semibold text-muted-foreground">…</p>
+        ) : delta === null ? (
+          <>
+            <p className="text-2xl font-semibold text-muted-foreground">—</p>
+            <p className="mt-2 text-xs text-muted-foreground/80">
+              {n === 0
+                ? 'No snapshots loaded yet'
+                : sessionsBack !== null && n <= sessionsBack
+                  ? `Need ${sessionsBack + 1}+ snapshots · have ${n}`
+                  : 'Anchor unavailable'}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className={`text-2xl font-semibold font-mono ${valueClass}`}>
+              {delta >= 0 ? '+' : ''}{fmtMoney(delta)}
+            </p>
+            <p className={`mt-1 text-xs font-mono ${valueClass}`}>
+              {pct === null ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}
+              {subLabel ? <span className="text-muted-foreground/80"> · {subLabel}</span> : null}
+            </p>
+          </>
+        )}
       </CardContent>
     </Card>
   );
@@ -161,6 +238,10 @@ interface KpiStripInputs {
   longMvUsd: number | null;
   /** Aggregate SHORT book MV — cost-basis fallback on the Overview cell. */
   shortMvUsd: number | null;
+  /** Broker-equity delta between the two most-recent snapshots. Null when <2 snapshots. */
+  dayPnlUsd: number | null;
+  /** Broker-equity pct delta between the two most-recent snapshots. */
+  dayPnlPct: number | null;
 }
 
 function KpiCell({
@@ -239,7 +320,16 @@ function HealthKpiStrip(k: KpiStripInputs) {
           ? `${k.latest.selected_count} sel / ${k.latest.event_count} cand · ${fmtDateOnly(k.latest.as_of)}`
           : 'No runs yet'}
         hint={k.latest
-          ? <>Selected / candidate counts from the most-recent <span className="font-mono">overshoot_detection_runs</span> row, ordered by <span className="font-mono">as_of</span> then <span className="font-mono">detected_at</span>.</>
+          ? <>
+              <span className="font-mono">sel</span> = detector-selected candidates that cleared all §6 gates
+              (post-guard bundle: analyst-revision-proximate, <span className="font-mono">ma_target_proximate</span>,
+              SI/staleness). <span className="font-mono">cand</span> = raw pre-refusal candidate set.
+              Downstream, only the top <span className="font-mono">OVERSHOOT_DAILY_ENTRY_BUDGET</span> = K=5
+              per day are admitted by <span className="font-mono">overshoot-entry-run</span> (refusal class{' '}
+              <span className="font-mono">daily_budget_reached</span>). Row source: latest{' '}
+              <span className="font-mono">overshoot_detection_runs</span> ordered by{' '}
+              <span className="font-mono">as_of</span> then <span className="font-mono">detected_at</span>.
+            </>
           : <>Detector cron is pending arm. Once armed (<span className="font-mono">sql/31</span>), the latest run's outcome and selection counts render here.</>}
         variant={detVariant}
       />
@@ -247,7 +337,15 @@ function HealthKpiStrip(k: KpiStripInputs) {
         label="Deployed slots"
         value={`${openTotal} / ${capacityTotal}`}
         sub={`L ${k.openLongs}/${LONG_CAPACITY} · S ${k.openShorts}/${SHORT_CAPACITY} · ${deployedPct.toFixed(0)}%`}
-        hint={<>Open lots vs the INC-92 ratified deployment capacity (long 36 / short 4). Percentage is <span className="font-mono">open / capacity</span>, not a $-cap measure — see the cap-compliance strip below for $ allocation posture.</>}
+        hint={<>
+          Open lots vs the INC-92 ratified deployment capacity (long 36 / short 4). Percentage is{' '}
+          <span className="font-mono">open / capacity</span>, not a $-cap measure — see the cap-compliance
+          strip below for $ allocation posture. <strong>INC-96 carry:</strong> the construction-era book
+          (~17/day pre-pacing) can transiently exceed target deployed count; steady-state pacing caps
+          entries at K=5/day (<span className="font-mono">OVERSHOOT_DAILY_ENTRY_BUDGET</span>, refusal
+          class <span className="font-mono">daily_budget_reached</span>), so deployed count converges
+          to target as T2 lots exit through the natural ladder.
+        </>}
         variant={openTotal > 0 ? 'default' : 'muted'}
       />
       <KpiCell
@@ -261,12 +359,23 @@ function HealthKpiStrip(k: KpiStripInputs) {
       />
       <KpiCell
         label="Day P&L"
-        value="—"
-        sub={k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Derivation pending'}
+        value={k.dayPnlUsd === null
+          ? '—'
+          : `${k.dayPnlUsd >= 0 ? '+' : ''}${fmtMoney(k.dayPnlUsd)}`}
+        sub={k.dayPnlUsd === null
+          ? (k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Need 2+ snapshots')
+          : k.dayPnlPct === null
+            ? 'post-close'
+            : `${k.dayPnlPct >= 0 ? '+' : ''}${k.dayPnlPct.toFixed(2)}% · post-close`}
         hint={k.equitySnapshotsCount === 0
-          ? <>No equity snapshots exist. Arm <span className="font-mono">overshoot_equity_snapshot</span> via the INC-82 bracket to begin populating this cell. No synthetic P&L is fabricated.</>
-          : <>Day-P&L derivation lands with FP-069-CANDIDATE-iii once at least two snapshots span the trading day.</>}
-        variant="muted"
+          ? <>No equity snapshots exist. Arm <span className="font-mono">overshoot_equity_snapshot</span> via the INC-82 bracket. No synthetic P&L is fabricated.</>
+          : <>Delta between the two latest post-close <span className="font-mono">broker_equity</span> rows in <span className="font-mono">overshoot_equity_snapshots</span> (source <span className="font-mono">alpaca_paper_overshoot</span>). Post-close settled state; no mid-session refresh.</>}
+        variant={
+          k.dayPnlUsd === null ? 'muted'
+          : k.dayPnlUsd > 0 ? 'good'
+          : k.dayPnlUsd < 0 ? 'bad'
+          : 'muted'
+        }
       />
       <KpiCell
         label="Reconciliation"
@@ -494,6 +603,19 @@ export function OvershootOverview() {
     ? latestEquityQuery.data[latestEquityQuery.data.length - 1]
     : null;
   const sizingBaseUsd = latestEquity ? latestEquity.broker_equity : null;
+
+  // Full snapshot series for windowed-gain cards (hook returns ASC by
+  // snapshot_date, capped at 365 rows — a year of trading sessions).
+  const equitySeriesQuery = useOvershootEquitySnapshots(365);
+  const snapshots = equitySeriesQuery.data ?? [];
+  const snapN = snapshots.length;
+  const dayPnlUsd = snapN >= 2
+    ? snapshots[snapN - 1].broker_equity - snapshots[snapN - 2].broker_equity
+    : null;
+  const dayPnlPct = snapN >= 2 && snapshots[snapN - 2].broker_equity > 0
+    ? (dayPnlUsd! / snapshots[snapN - 2].broker_equity) * 100
+    : null;
+
   const longMvUsd = openLotsQuery.isLoading
     ? null
     : longs.reduce((acc, l) => acc + Math.abs(Number(l.cost_basis) || 0), 0);
@@ -526,6 +648,8 @@ export function OvershootOverview() {
         sizingBaseUsd={sizingBaseUsd}
         longMvUsd={longMvUsd}
         shortMvUsd={shortMvUsd}
+        dayPnlUsd={dayPnlUsd}
+        dayPnlPct={dayPnlPct}
       />
 
       {/* INC-96 cap-compliance affordance — ratified vs actual per side. */}
@@ -535,13 +659,17 @@ export function OvershootOverview() {
         shortMvUsd={shortMvUsd}
       />
 
-      {/* Windowed gain cards — all pending CANDIDATE-iii */}
+      {/* Windowed gain cards — computed from overshoot_equity_snapshots
+          (source alpaca_paper_overshoot). Row-indexed session offsets:
+          Today=1, 5-day=5, 1-month=21, 1-year=252, Inception=all. When
+          series is too short for a given window, that card renders a
+          typed-absence naming the shortfall (never fabricates). */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <PendingCandidateIII title="Today" />
-        <PendingCandidateIII title="5-day" />
-        <PendingCandidateIII title="1-month" />
-        <PendingCandidateIII title="1-year" />
-        <PendingCandidateIII title="Inception" />
+        <WindowedGainCard title="Today"     sessionsBack={1}   snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
+        <WindowedGainCard title="5-day"     sessionsBack={5}   snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
+        <WindowedGainCard title="1-month"   sessionsBack={21}  snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
+        <WindowedGainCard title="1-year"    sessionsBack={252} snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
+        <WindowedGainCard title="Inception" sessionsBack={null} snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
