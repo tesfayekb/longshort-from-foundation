@@ -1,6 +1,63 @@
 
 ---
 
+## INC-126 — `overshoot_universe` identity is IVV+IJH composite (S&P 500 + S&P MidCap 400), not Russell 2000; refresh implementation inherited "IWM / Russell 2000" as the identity string (2026-07-21)
+
+**Category:** universe-refresh-identity-drift. **Severity:** HIGH (any IWM seed_apply is a strategy-set change — detaches live detection & study corpus from the ratified detector-fixture pair). **Filed by:** ACT-560 identity investigation. **Blocks:** any `seed_apply` against `overshoot-universe-refresh`; sql/39 arm remains paused; INC-109 (staleness) cannot close via IWM path.
+
+**Trigger.** Snippet-#4 seed dry-run against operator-attested IWM CSV (n=1,967) returned `would_deactivate=765` of 839 active — including live-book names (AKAM) and S&P-500 constituents (DIS, PNC, NTRS). Operator identified this as identity mismatch, not a data-vendor problem.
+
+**(1) Archaeology (this turn — real reads, no fabrication).**
+
+- **Current state:** `overshoot_universe` = **839 active** rows, ALL with `source='universe_membership_seed'` and `added_as_of='2026-07-03'` (single seed event, no incremental refresh history). No `overshoot_universe`-targeted rows in `audit_logs` (verified: `SELECT ... WHERE target_type='overshoot_universe' LIMIT 10` → 0 rows). No SQL migration under `sql/` performs the INSERT (verified: `rg overshoot_universe sql/` returns only sql/39 cron scheduling, no seed DML). The seed was performed via a one-off script or edge-function invocation whose row-writer identity is captured only in `source='universe_membership_seed'`. **Governance gap:** no ART/MIG/audit trail for the origin event — only the source-string breadcrumb.
+- **Original selection criteria (verbatim from `source='universe_membership_seed'` + longshort docs + ACT-511 charter §1):** the 839 rows are the (then-latest) `universe_membership` set — i.e. the ratified **longshort universe** = **IVV (S&P 500) ∪ IJH (S&P MidCap 400)** per longshort constituent-ingestion (`_shared/longshort-universe/constituent-ingestion/ishares-constituent-fetcher.ts`) and ACT-511 charter §1: "Current ratified universe: 839 names".
+
+**(2) Composition (this turn — real reads).**
+
+- Active count: **839** (single source `universe_membership_seed`).
+- Overlap with latest-quarter `universe_membership`: **837 / 839** (99.76%); 2 residual names not in latest `universe_membership` quarter → consistent with a 2026-07-03 snapshot pre-dating a mid-cycle reconstitution.
+- Overlap with IWM CSV (n=1,967, operator-attested): tiny — dry-run's `would_deactivate=765` implies overlap ≈ 74 of 839, i.e. IWM ∩ overshoot ≈ 8.8%. Consistent with the two sets being **disjoint index families**, not "same universe, drift".
+- Large-cap marker sample (17 names — AAPL, MSFT, NVDA, META, AMZN, GOOGL, TSLA, JPM, V, WMT, XOM, JNJ, PG, DIS, PNC, NTRS, AKAM): **17 / 17 present with `active=true`**. A Russell-2000 universe would exclude all 17 by definition.
+- **Verdict:** the universe IS **IVV ∪ IJH = S&P 500 + S&P MidCap 400 large/mid-cap composite** (~900 nominal, 839 after ratified liquidity floors). **NOT Russell-2000, NOT Russell-3000, NOT a liquidity-filtered broad market — a specific SPDJI-index composite.**
+
+**(3) Book-safety impact of a would-be IWM apply (this turn — real reads).**
+
+- Open lots: **44** (all `side=long`, all `status=open`), **44 distinct symbols**.
+- Symbols in current `overshoot_universe` active set: **44 / 44** (100%).
+- Symbols that would have been deactivated by the IWM seed dry-run: part of the 765-count deactivation slate — verified cohort includes AKAM (S&P-500) which is a live open lot.
+- Code path if deactivation had proceeded:
+  - `overshoot-exit-run` and `overshoot-fill-sweep` **do NOT filter by `overshoot_universe.active`** (verified: `rg overshoot_universe supabase/functions/overshoot-exit-run/ supabase/functions/overshoot-fill-sweep/` returns 0 matches). They operate on `overshoot_lots` directly → open lots would continue to exit cleanly.
+  - `overshoot-detection-run` (`index.ts:385`) and the study corpus (`_shared/overshoot/study/event-detection.sql.ts:71`, `cell-aggregation.sql.ts:89`) DO gate on `overshoot_universe WHERE active` → **no further entries on deactivated names, no post-exit refills on any name outside IWM**. That is precisely the strategy-set change the operator flagged.
+- **Ratified-corpus binding:** detector fixture `b7cdfcd8` and cell-aggregate anchor `1888e113` were computed on this 839-name IVV+IJH set (per ACT-509/510/548 stamps). Swapping in IWM = swapping in a disjoint strategy set the ratified economics do not describe. Live economics (ACT-510 anchor 36.89 bps/slot-day, ACT-509 T1 +33.4%/deployed-$/day, DEC-080-v2/081-v2 exclusions, ACT-548 cell-family stamps) all assume U0=IVV+IJH.
+
+**Refresh-implementation drift.** `overshoot-universe-refresh` header, roster-sanity band `[1500, 2600]`, `probe:"ishares"` (IWM), `probe:"fmp_etf"` (IWM), `probe:"edgar_nport"` (IWM's N-PORT, ACT-559) — ALL inherited "Russell-2000 / IWM" as the universe IDENTITY. Correct read of ACT-511 charter §1–§2: Russell was chartered as an **EXPANSION INPUT** (U1/U2/U3 increments **added to** the U0=IVV+IJH baseline, pending re-ratification study) — **NEVER** as a replacement identity. The refresh module took the expansion-target ticker (`IWM`) as the source-of-truth ticker.
+
+**(4) Decision frame for operator — no auto-selection, seed_apply and sql/39 stay paused until ruled.**
+
+- **Option A — Ratify current identity as-is.** Universe stays IVV+IJH composite. Refresh source must MATCH:
+  - Operator seed flow (Snippet-#4-style) with **IVV holdings CSV** and **IJH holdings CSV** concatenated (same client-side extract, same `tickers` payload, per-file `csv_sha256_provenance` recorded).
+  - Refresh module retargets: header identity string, roster-sanity band widens to `[850, 950]`, vendor lanes rewired (`ishares_ivv`, `ishares_ijh`, `fmp_etf(IVV)`, `fmp_etf(IJH)`, `edgar_nport(IVV+IJH)`). ACT-559 retargets accordingly.
+  - Zero re-ratification cost — ratified corpus (b7cdfcd8 / 1888e113) stays valid; ACT-510 economics anchor stays valid; DEC-080-v2/081-v2 exclusions stay valid; ACT-548 cell-family stamps stay valid.
+  - Closes INC-109 via IVV+IJH seed. Cleanest ruling with the fewest downstream re-hashes.
+- **Option B — Migrate to R2000-only as a deliberate strategy DEC.** Requires:
+  - New DEC-NNN with honest note: ACT-509 T1 economics, ACT-510 economics anchor, ACT-548 cell-family stamps, DEC-080-v2/081-v2 exclusions — ALL computed on IVV+IJH and require **re-stratification on R2000** before re-ratification.
+  - Corpus regen: 5-yr point-in-time R2000 membership × liquidity floors × new fixture SHA × machine-form gates. Calendar cost ≥ several weeks per ACT-511 charter §3.
+  - Live book runoff on the old identity (44 open lots) while the new corpus lands.
+  - INC-109 stays open until the R2000 corpus is ratified; the IWM CSV cannot seed the current live table without violating fixture parity.
+- **Option C — Hybrid (not this turn):** Ratify current identity (Option A) NOW to close INC-109; queue ACT-511 U2 (IVV+IJH ∪ R2000-top-half by ADV) as the expansion study it was originally chartered as. R2000 comes in as **additive**, not replacement.
+
+**Governance actions filed alongside this INC:**
+
+- **ACT-560** — Universe-identity investigation artifact (this document). READ-ONLY, no code changes this turn.
+- **ACT-561 (blocked on operator ruling)** — Refresh-module retarget to whichever identity the operator ratifies. Includes: header comment fix, roster-sanity band, vendor-probe retargeting, `overshoot-universe-refresh` header identity-string audit.
+- **Origin-event governance gap** — file a follow-up ART to reconstruct the 2026-07-03 seed as a first-class migration/artifact retroactively (so future refresh sources have an auditable anchor). Non-blocking; queue behind identity ruling.
+
+**What did NOT happen this turn.** No `seed_apply`. No `sql/39` arm. No code writes. No cron changes. No corpus regen. No fixture rehash. Today's live script (14:00Z catch-up debut, 19:50Z exit tick, build `0c5ad0d9`) is unaffected — this INC is upstream of the refresh module only; detection/exit read the current 839-name table unchanged.
+
+**Cross-refs:** ACT-511 charter (U0=839 IVV+IJH; U1–U3 as EXPANSION); ACT-509 (T1 economics on U0); ACT-510 (economics anchor on U0); ACT-548 (cell-family stamps on U0); INC-109 (universe freshness — remains OPEN, cannot close via IWM); INC-120 (Polygon Russell filter ignored — its premise was already suspect, now known-wrong under Option A); INC-121 (typed refusals — the correct posture holds regardless of identity); INC-122/123/124 (vendor egress — moot until identity ruled); ACT-559 (EDGAR N-PORT — target index must retarget with identity ruling); DEC-080-v2/DEC-081-v2 (analyst exclusions — stratification stays valid under Option A, needs re-derivation under Option B).
+
+---
+
 ## INC-118 — `overshoot_study_cell_results` lacks SI dimension; every SI-conditional ratified-cell claim is untestable against the ratified table (2026-07-18)
 
 **Category:** schema-gap-blocks-verification. **Severity:** MEDIUM (does not affect live decisions; blocks re-derivation of any SI-conditional squeeze/short-gate claim without heavy re-run).
