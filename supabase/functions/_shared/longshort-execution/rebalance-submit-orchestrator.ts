@@ -56,6 +56,10 @@ import {
 import type { SameTickContradictoryPass } from './cache-propagator.ts';
 import { preflightKey } from './rebalance-planner.ts';
 import { pickLatestRankingsGeneration } from './rankings-generation-picker.ts';
+import {
+  createSupabaseLongOnlyFlagReader,
+  type LongOnlyFlagReader,
+} from './long-only-flag-reader.ts';
 
 export const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -76,7 +80,7 @@ export interface RebalanceSubmitRequest {
 }
 
 export interface SubmissionResultSlim {
-  kind: SubmissionResult['kind'];
+  kind: SubmissionResult['kind'] | 'suppressed_long_only';
   symbol: string;
   side: 'long' | 'short';
   intent?: ExecutionDelta['intent'];
@@ -102,6 +106,24 @@ export interface RebalanceSubmitResponse {
   long_only_mode: boolean;
   shorts_skipped_locate_unavailable: string[];
   htb_marks_persisted: string[];
+  /**
+   * ACT-559 / DW-213 — Provenance of any long-only posture applied on this fire.
+   *   - 'operator_flag'      : `feature_flags.longshort.book.long_only.enabled=true` for this operator.
+   *   - 'broker_capability'  : `locate_unavailable && shortability_unavailable` derived-mode fired
+   *                             (unchanged from DEC-068(n)/DW-154 posture).
+   *   - 'off'                : neither active.
+   * Both sources can be present; `operator_flag` wins for reporting when both
+   * fire on the same tick. `long_only_mode` (capability-derived) remains
+   * populated exactly as before — this new field is ADDITIVE provenance.
+   */
+  long_only_source: 'operator_flag' | 'broker_capability' | 'off';
+  /** ACT-559 / DW-213 — Count of SHORT-OPEN candidacies suppressed by the
+   *  operator flag on this fire (0 when the flag is off). Corresponds to
+   *  the tickers emitted in `submissions[]` with `kind='suppressed_long_only'`.
+   *  Covers/closes of existing shorts are EXEMPT and NOT counted here — they
+   *  flow through the planner's currentPositions → close-intent path
+   *  unaffected. */
+  shorts_suppressed_long_only: number;
   /** DEC-070 clause (c) — populated iff the planner refused to act because
    *  the latest `combiner_rankings.computed_at` was older than the tolerance
    *  vs the injected `ts`. When set, `submissions` is empty + counts zero. */
@@ -126,6 +148,12 @@ export interface RebalanceSubmitDeps {
   htbCacheReader?: HtbCacheReader;
   htbCacheClearer?: HtbCacheClearer;
   rejectionPropagator?: RejectionPropagator;
+  /**
+   * ACT-559 / DW-213 — Injected long-only flag reader. Production wires
+   * `createSupabaseLongOnlyFlagReader()` unconditionally; tests inject
+   * a fixed-state reader.
+   */
+  longOnlyFlagReader?: LongOnlyFlagReader;
   /**
    * Optional injection of the short-side days-to-cover reader (DW-165).
    * Defaults to the Supabase-backed reader in production; tests inject
@@ -400,11 +428,27 @@ export async function runRebalanceSubmit(
   const allocationPct = req.allocationPct ?? 1.0;
   const expectedBookSize = 40;
   const perNameEstimate = capitalBase * allocationPct / expectedBookSize;
+  // ── ACT-559 / DW-213 — OPERATOR LONG-ONLY FLAG (candidate-seam) ──────
+  // Read BEFORE candidate construction so the flag suppresses SHORT-OPEN
+  // candidacy at its origin (line-of-birth). Absent/failed read → enabled
+  // false (fail SAFE per long-only-flag-reader.ts docs). Covers/closes of
+  // existing shorts flow through `planRebalance` reading `currentPositions`
+  // vs the (now short-empty) `preflightResults` map → planner emits `close`
+  // intents for existing shorts regardless of the flag. See DW-213 for the
+  // full seam-analysis.
+  const longOnlyFlagReader = deps.longOnlyFlagReader ?? createSupabaseLongOnlyFlagReader();
+  const longOnlyFlag = await longOnlyFlagReader.read(operator_id);
+  const shorts_suppressed_by_operator_flag: string[] = [];
   for (const r of rankings) {
     if (r.long_rank >= 1 && r.long_rank <= cap) {
       candidates.push({ symbol: r.ticker, side: 'long', requested_position_size: perNameEstimate });
     }
     if (r.short_rank >= 1 && r.short_rank <= cap) {
+      if (longOnlyFlag.enabled) {
+        // SHORT-OPEN suppressed — record for audit + response.
+        shorts_suppressed_by_operator_flag.push(r.ticker);
+        continue;
+      }
       candidates.push({ symbol: r.ticker, side: 'short', requested_position_size: perNameEstimate });
     }
   }
@@ -531,6 +575,8 @@ export async function runRebalanceSubmit(
     candidates,
     htb_marks_persisted,
     working_orders_observed: workingOrders.length,
+    long_only_flag_enabled: longOnlyFlag.enabled,
+    shorts_suppressed_by_operator_flag,
   });
 }
 
@@ -660,6 +706,10 @@ function buildResponse(args: {
   candidates: readonly PreflightCandidate[];
   htb_marks_persisted: string[];
   working_orders_observed?: number;
+  /** ACT-559 / DW-213 — Operator-imposed long-only flag state at fire-time. */
+  long_only_flag_enabled?: boolean;
+  /** ACT-559 / DW-213 — Short-OPEN candidacies suppressed by the operator flag. */
+  shorts_suppressed_by_operator_flag?: readonly string[];
 }): RebalanceSubmitResponse {
   const counts: Record<SubmissionResult['kind'], number> = {
     accepted: 0, rejected: 0, pending_timeout: 0,
@@ -683,6 +733,28 @@ function buildResponse(args: {
     ? args.candidates.filter((c) => c.side === 'short').map((c) => c.symbol)
     : [];
 
+  // ACT-559 / DW-213 — synthesize suppressed-long-only slim entries into
+  // submissions[]. These carry `kind='suppressed_long_only'` and NO broker
+  // fields (never submitted). Order: appended after real submissions so
+  // downstream diagnostic readers can slice by-kind.
+  const suppressed_syms = args.shorts_suppressed_by_operator_flag ?? [];
+  const shorts_suppressed_long_only = suppressed_syms.length;
+  const operator_flag_enabled = args.long_only_flag_enabled === true;
+  const long_only_source: 'operator_flag' | 'broker_capability' | 'off' =
+    operator_flag_enabled
+      ? 'operator_flag'
+      : (long_only_mode ? 'broker_capability' : 'off');
+
+  const submissionsSlim: SubmissionResultSlim[] = args.submissions.map(slimResult);
+  for (const sym of suppressed_syms) {
+    submissionsSlim.push({
+      kind: 'suppressed_long_only',
+      symbol: sym,
+      side: 'short',
+      reason: 'operator_flag_longshort_book_long_only',
+    });
+  }
+
   const resp: RebalanceSubmitResponse = {
     status: 'ok',
     mode: args.mode,
@@ -691,12 +763,14 @@ function buildResponse(args: {
     correlation_id: args.correlationId,
     preflight_summary: args.preflight_summary,
     submission_counts: counts,
-    submissions: args.submissions.map(slimResult),
+    submissions: submissionsSlim,
     ssr_unavailable,
     shorts_placed_without_ssr_check,
     long_only_mode,
     shorts_skipped_locate_unavailable,
     htb_marks_persisted: args.htb_marks_persisted,
+    long_only_source,
+    shorts_suppressed_long_only,
   };
   if (args.working_orders_observed !== undefined) {
     resp.working_orders_observed = args.working_orders_observed;

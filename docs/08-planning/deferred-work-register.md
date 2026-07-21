@@ -4851,4 +4851,26 @@ Baseline crit-both-present pool = 827 names; the 11-name gate loss is entirely f
 
 **Cross-ref:** ACT-451 (the reservation this DW consumes); ACT-454 (this landing); FP-069 (the strategy chartered off this evidence); FP-058 (squeeze-protection sibling, never merged); DW-109 (the 2026-07-22 gate-ablation read that converges any live-side decision); DW-207-ADD-01 (broker-sourced close path); the 2026-07-02 short-book forensic turn (evidence source).
 
+## DW-213 — Operator-imposed long-only pending universe short-eligibility truth (S3)
+
+**Status:** REGISTERED 2026-07-21 at ACT-559. **Disposition:** LIVE operator control — flag row seeded, orchestrator consumes at the candidate-construction seam.
+
+**Ruling.** Operator ruling 2026-07-21, fork S3 = (b): the LONG-SHORT book runs long-only until the universe short-eligibility signal is truthful. A `feature_flags` row keyed `(operator, 'longshort.book.long_only')` is the operator-owned switch; the orchestrator reads it BEFORE preflight and filters SHORT-OPEN candidacies at their line of birth. Short-COVERs are EXEMPT.
+
+**Seam (`rebalance-submit-orchestrator.ts` :403-410).** The candidate-construction loop is the one place SHORT-OPEN intents are distinguishable from SHORT-COVER intents: short candidates enter preflight ONLY via `short_rank ∈ [1..cap]` (an OPEN/GROW-only surface). Suppressing here empties the `(symbol,'short')` preflight map for those names → the planner (`isPassing` predicate at rebalance-planner.ts:498-503) treats them as failed → they never enter `selected_short` → no OPEN deltas. Covers are unaffected: existing shorts in `currentPositions` with no `selected_short` target produce `close` deltas from the planner's currentPositions→target diff, entirely orthogonal to the candidate list. This is the seam analysis executed pre-build (STEP A.5); tests `long-only-flag_test.ts::cover-exempt` and `::candidate-seam` pin the invariant.
+
+**Provenance.** The response gains two fields:
+  - `long_only_source: 'operator_flag' | 'broker_capability' | 'off'` — additive to the pre-existing `long_only_mode` boolean (which continues to reflect DEC-068(n)/DW-154 broker-capability derivation, UNCHANGED).
+  - `shorts_suppressed_long_only: number` — count of SHORT-OPEN symbols filtered by the operator flag on this fire, matching `submissions[]` entries with `kind='suppressed_long_only'`.
+`operator_flag` wins over `broker_capability` for reporting when both fire. `long_only_mode` is preserved byte-for-byte for downstream consumers.
+
+**Reversal criterion (verbatim, binding).** The flag is reversed to `enabled=false` ONLY when BOTH of the following are true, in a subsequent action-tracker entry citing DW-213:
+  1. A REAL universe refresh has landed with `short_eligible=true` count > 0 across the money-path membership (`universe_membership` as-of the fire's ranking).
+  2. Operator ratifies the reversal in an explicit action-tracker turn (no implicit auto-reversal on universe refresh alone — the ratification gate is intentional).
+
+**Fail-safe direction.** Read failure → `enabled=false` (documented in `long-only-flag-reader.ts`): an operator-imposed suppression that cannot be read is a MISSING suppression, not a fabricated one. The paired F11 universe short_eligible=false condition already protects the money path during the truthful-universe interregnum, so this fail-safe direction cannot silently re-enable shorts against operator intent.
+
+**Contract discipline.** No wall-clock in this path (`long-only-flag-reader.ts` reads no time); no schedule changes; no other behaviour change to preflight, planner, submitter, or reconciliation. Additive audit metadata only on `longshort.rebalance.completed`.
+
+**Cross-ref:** F9 (universe short-eligibility truth gap — the condition this DW mitigates until F9 lands); F11 (paired universe posture); DEC-068(n) / DW-154 (broker-capability long-only derivation, preserved); ACT-559 (this build turn); sql/40_longshort_book_long_only_flag.sql (row seed); `long-only-flag-reader.ts` + `rebalance-submit-orchestrator.ts` (consumption).
 

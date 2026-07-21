@@ -154,6 +154,9 @@ Deno.serve(createHandler(async (req: Request) => {
         long_only_mode: result.long_only_mode,
         shorts_skipped_locate_unavailable: result.shorts_skipped_locate_unavailable,
         htb_marks_persisted: result.htb_marks_persisted,
+        // ACT-559 / DW-213 — Operator-imposed long-only posture provenance.
+        long_only_source: result.long_only_source,
+        shorts_suppressed_long_only: result.shorts_suppressed_long_only,
         // DW-208 Fix 2 (DW-208-ADD-03) — surface the refusal envelope + classify
         // the outcome so a refused rebalance is never indistinguishable from a
         // healthy no-op (§9 phantom-success elimination). Additive only.
