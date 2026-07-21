@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { TradingStatusSnapshot } from '@/features/longshort/hooks/useTradingStatus';
 
@@ -30,12 +31,14 @@ vi.mock('@/features/longshort/hooks/useTradingStatus', async () => {
   };
 });
 
-async function renderStrip() {
+async function renderStrip(pathname: string = '/trading') {
   const { TradingStatusStrip } = await import('../TradingStatusStrip');
   return render(
-    <TooltipProvider>
-      <TradingStatusStrip />
-    </TooltipProvider>,
+    <MemoryRouter initialEntries={[pathname]}>
+      <TooltipProvider>
+        <TradingStatusStrip />
+      </TooltipProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -84,7 +87,9 @@ describe('TradingStatusStrip (FP-033)', () => {
     expect(within(screen.getByTestId('status-last-fire')).getByText('manual')).toBeInTheDocument();
     expect(within(screen.getByTestId('status-universe')).getByText('stale')).toBeInTheDocument();
     expect(within(screen.getByTestId('status-breaker')).getByText('tripped')).toBeInTheDocument();
-    expect(within(screen.getByTestId('status-open-reconciliation')).getByText('7 open')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('status-open-reconciliation')).getByText('7 events open'),
+    ).toBeInTheDocument();
   });
 
   it('exposes accessible tooltip triggers on every indicator (FP-035)', async () => {
@@ -106,5 +111,20 @@ describe('TradingStatusStrip (FP-033)', () => {
       expect(el).toHaveAttribute('data-state');
       expect(el.className).toContain('cursor-help');
     }
+  });
+
+  it('hides the OPEN reconciliation chip on overshoot routes (scope carve-out)', async () => {
+    mockSnapshot = {
+      lastFire: { completed_at: '2026-06-08T20:05:13Z' },
+      universe: { completed_at: new Date().toISOString(), outcome: null },
+      breaker: { state: 'active' },
+      reconciliation: null,
+    };
+    await renderStrip('/trading/overshoot');
+    // Universe / fire / breaker still render, OPEN chip is scope-hidden
+    // so longshort reconciliation state cannot leak into overshoot.
+    expect(screen.getByTestId('status-universe')).toBeInTheDocument();
+    expect(screen.queryByTestId('status-open-reconciliation')).toBeNull();
+    expect(screen.getByTestId('trading-status-strip')).toHaveAttribute('data-scope', 'overshoot');
   });
 });
