@@ -51,6 +51,11 @@ import { apiError } from '../_shared/api-error.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
+import { fetchWithTimeoutAndRetry } from '../_shared/longshort-universe/shared/fetch-with-timeout.ts';
+import {
+  parseCsvLine,
+  findHeaderRowIndex,
+} from '../_shared/longshort-universe/constituent-ingestion/ishares-constituent-fetcher.ts';
 
 const POLYGON_BASE_URL = 'https://api.polygon.io';
 const JOB_REGISTRY_ID = 'overshoot.universe.refresh';
@@ -73,6 +78,24 @@ const POLYGON_RUSSELL2000_CODE = 'I:RUT';
 // looking at the unfiltered market again — refuse rather than write.
 const ROSTER_SANITY_MIN = 1500;
 const ROSTER_SANITY_MAX = 2600;
+
+// iShares Russell 2000 ETF (IWM) — public holdings CSV. Same URL shape as
+// IVV/IJH used by the existing iSharesConstituentFetcher (product-page ajax
+// endpoint). The `1467271812596.ajax` suffix is the shared parameter route
+// for the entire iShares US fund catalog; only the product-id and
+// fileName differ per fund. Verbatim request-shape parity with the
+// deployed longshort fetcher is the point of the probe: we reuse
+// fetchWithTimeoutAndRetry + the same Accept header + the same CSV parser
+// entries so egress behaviour matches what quarterly-refresh proved works.
+const ISHARES_IWM_HOLDINGS_URL =
+  'https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/1467271812596.ajax?fileType=csv&fileName=IWM_holdings&dataType=fund';
+const ISHARES_FETCH_TIMEOUT_MS = 30_000;
+
+// FMP ETF-holder endpoint — keyed vendor fallback if iShares egress fails.
+// Response shape: array of { asset: string, sharesNumber, weightPercentage,
+// name, marketValue, updated }.
+const FMP_ETF_HOLDER_URL = 'https://financialmodelingprep.com/api/v3/etf-holder/IWM';
+const FMP_FETCH_TIMEOUT_MS = 20_000;
 
 async function isRowDisarmed(id: string): Promise<boolean> {
   const { data } = await supabaseAdmin
@@ -135,6 +158,146 @@ async function fetchRussellRoster(apiKey: string): Promise<
     }
   }
   return { kind: 'ok', tickers, pages };
+}
+
+/**
+ * iShares IWM probe — reuses the exact request shape of the deployed
+ * iSharesConstituentFetcher (fetchWithTimeoutAndRetry, Accept: text/csv,
+ * 30s timeout, RFC-4180 CSV parser). Returns a normalized probe payload
+ * or a typed failure — never throws through the handler seam.
+ */
+async function probeIsharesIwm(): Promise<
+  | { ok: true; roster_count: number; sample_first_10: string[]; as_of: string; source_shape: string }
+  | { ok: false; status: string; http_status?: number; detail?: string; source_shape: string }
+> {
+  const source_shape = 'ishares_iwm_holdings_csv';
+  let resp;
+  try {
+    resp = await fetchWithTimeoutAndRetry(
+      fetch as never,
+      ISHARES_IWM_HOLDINGS_URL,
+      { method: 'GET', headers: { 'Accept': 'text/csv, */*;q=0.1' } },
+      { timeoutMs: ISHARES_FETCH_TIMEOUT_MS },
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, status: 'network_error', detail: msg, source_shape };
+  }
+  if (!resp.ok) {
+    return { ok: false, status: 'http_error', http_status: resp.status, detail: resp.statusText, source_shape };
+  }
+  let csv: string;
+  try {
+    csv = await resp.text();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, status: 'body_read_failed', detail: msg, source_shape };
+  }
+  // If the CDN handed us HTML (anti-bot landing page), reject explicitly.
+  const head = csv.slice(0, 512).toLowerCase();
+  if (head.includes('<!doctype html') || head.includes('<html')) {
+    return { ok: false, status: 'html_body_received', detail: `first_bytes=${csv.length}`, source_shape };
+  }
+  const lines = csv.split(/\r?\n/).map((l) => l.trimEnd()).filter((l) => l.length > 0);
+  const headerIdx = findHeaderRowIndex(lines);
+  if (headerIdx === null) {
+    return { ok: false, status: 'header_row_not_found', detail: `lines=${lines.length}`, source_shape };
+  }
+  const header = parseCsvLine(lines[headerIdx]).map((h) => h.toLowerCase());
+  const tickerCol = header.indexOf('ticker');
+  const assetClassCol = header.indexOf('asset class');
+  // Best-effort "Fund Holdings as of" — first line of the preamble on
+  // iShares CSVs. Not required for the probe to succeed.
+  let as_of = '';
+  for (const l of lines.slice(0, Math.min(15, headerIdx))) {
+    if (l.toLowerCase().includes('fund holdings as of')) {
+      const fields = parseCsvLine(l);
+      as_of = fields.slice(-1)[0] ?? '';
+      break;
+    }
+  }
+  const tickers: string[] = [];
+  for (let i = headerIdx + 1; i < lines.length; i += 1) {
+    const row = parseCsvLine(lines[i]);
+    if (row.length <= tickerCol) continue;
+    const t = (row[tickerCol] ?? '').trim().toUpperCase();
+    if (t.length === 0 || t === '-') continue;
+    if (assetClassCol >= 0 && row.length > assetClassCol) {
+      const ac = (row[assetClassCol] ?? '').toLowerCase();
+      if (ac.length > 0 && ac !== 'equity') continue;
+    }
+    tickers.push(t);
+  }
+  return {
+    ok: true,
+    roster_count: tickers.length,
+    sample_first_10: tickers.slice(0, 10),
+    as_of,
+    source_shape,
+  };
+}
+
+/**
+ * FMP ETF-holder probe — IWM holdings via the operator's Premium key.
+ * Same normalized return shape as the iShares probe so the two are
+ * substitutable in the decision rule.
+ */
+async function probeFmpEtfIwm(fmpKey: string): Promise<
+  | { ok: true; roster_count: number; sample_first_10: string[]; as_of: string; source_shape: string }
+  | { ok: false; status: string; http_status?: number; detail?: string; source_shape: string }
+> {
+  const source_shape = 'fmp_etf_holder_iwm';
+  const url = `${FMP_ETF_HOLDER_URL}?apikey=${encodeURIComponent(fmpKey)}`;
+  let resp: Response;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), FMP_FETCH_TIMEOUT_MS);
+    try {
+      resp = await fetch(url, { method: 'GET', signal: ctl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, status: 'network_error', detail: msg, source_shape };
+  }
+  if (resp.status === 401 || resp.status === 403) {
+    return { ok: false, status: 'auth_gated', http_status: resp.status, source_shape };
+  }
+  if (resp.status !== 200) {
+    return { ok: false, status: 'http_error', http_status: resp.status, detail: resp.statusText, source_shape };
+  }
+  let body: unknown;
+  try {
+    body = await resp.json();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, status: 'json_parse_failed', detail: msg, source_shape };
+  }
+  if (!Array.isArray(body)) {
+    // FMP sometimes returns { "Error Message": "..." } instead of an array.
+    const msg = typeof body === 'object' && body !== null
+      ? JSON.stringify(body).slice(0, 200)
+      : String(body).slice(0, 200);
+    return { ok: false, status: 'unexpected_body_shape', detail: msg, source_shape };
+  }
+  const tickers: string[] = [];
+  let latestUpdated = '';
+  for (const h of body as Array<{ asset?: unknown; updated?: unknown }>) {
+    const a = h?.asset;
+    if (typeof a === 'string' && a.length > 0) {
+      tickers.push(a.toUpperCase());
+    }
+    const u = h?.updated;
+    if (typeof u === 'string' && u > latestUpdated) latestUpdated = u;
+  }
+  return {
+    ok: true,
+    roster_count: tickers.length,
+    sample_first_10: tickers.slice(0, 10),
+    as_of: latestUpdated,
+    source_shape,
+  };
 }
 
 /** Returns null when roster size is inside the sanity band; otherwise a
@@ -202,6 +365,28 @@ Deno.serve(createHandler(async (req: Request) => {
     });
   }
 
+  // iShares + FMP probes are cron-only (self-invoke pattern via
+  // CRON_SECRET, matching R-003 / ACT-554-a). Zero writes. Zero disarm-
+  // gate coupling — a paused system stays probeable.
+  if (body.probe === 'ishares') {
+    if (!isCron) {
+      return apiSuccess({ ok: false, probe: 'ishares', status: 'cron_secret_required', correlationId });
+    }
+    const r = await probeIsharesIwm();
+    return apiSuccess({ probe: 'ishares', correlationId, ...r });
+  }
+  if (body.probe === 'fmp_etf') {
+    if (!isCron) {
+      return apiSuccess({ ok: false, probe: 'fmp_etf', status: 'cron_secret_required', correlationId });
+    }
+    const fmpKey = Deno.env.get('FMP_API_KEY') ?? '';
+    if (!fmpKey) {
+      return apiSuccess({ ok: false, probe: 'fmp_etf', status: 'fmp_api_key_missing', correlationId });
+    }
+    const r = await probeFmpEtfIwm(fmpKey);
+    return apiSuccess({ probe: 'fmp_etf', correlationId, ...r });
+  }
+
   // Kill-switch is supreme over EVERYTHING including dry-runs and probes-below.
   // Row-level disarm is a scheduled-tick gate; it does NOT block operator
   // attestations (dry_run) — per operator ruling on the ordering defect.
@@ -210,7 +395,7 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   if (!apiKey) {
-    return apiError(500, 'polygon_api_key_missing', { correlationId });
+    return apiSuccess({ ok: false, status: 'polygon_api_key_missing', correlationId });
   }
 
   const nowIso = productionClock.getWallClockTs();
@@ -218,7 +403,13 @@ Deno.serve(createHandler(async (req: Request) => {
 
   const roster = await fetchRussellRoster(apiKey);
   if (roster.kind !== 'ok') {
-    return apiError(502, `roster_${roster.kind}`, { correlationId, roster });
+    return apiSuccess({
+      ok: false,
+      status: `roster_${roster.kind}`,
+      correlationId,
+      http_status: 'http_status' in roster ? roster.http_status : undefined,
+      reason: 'reason' in roster ? roster.reason : undefined,
+    });
   }
 
   // Hard sanity gate — refuse ALL writes when count is outside the band.
@@ -226,13 +417,15 @@ Deno.serve(createHandler(async (req: Request) => {
   // cause) and any future taxonomy drift on Polygon's side.
   const sanity = checkRosterSanity(roster.tickers.length);
   if (sanity !== null) {
-    return apiError(502, 'roster_sanity_failed', {
-      correlationId,
+    return apiSuccess({
+      ok: false,
+      status: 'roster_sanity_failed',
       roster_count: roster.tickers.length,
       sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
       sample_first_10: roster.tickers.slice(0, 10),
       index_code: POLYGON_RUSSELL2000_CODE,
       pages_fetched: roster.pages,
+      correlationId,
     });
   }
 
@@ -244,7 +437,7 @@ Deno.serve(createHandler(async (req: Request) => {
     .select('ticker, active')
     .eq('active', true);
   if (readErr) {
-    return apiError(500, 'universe_read_failed', { correlationId, detail: readErr.message });
+    return apiSuccess({ ok: false, status: 'universe_read_failed', detail: readErr.message, correlationId });
   }
   const currentActive = new Set((current ?? []).map((r) => r.ticker as string));
   const toDeactivate: string[] = [];
@@ -284,7 +477,7 @@ Deno.serve(createHandler(async (req: Request) => {
     .from('overshoot_universe')
     .upsert(upsertRows, { onConflict: 'ticker', ignoreDuplicates: false });
   if (upsertErr) {
-    return apiError(500, 'universe_upsert_failed', { correlationId, detail: upsertErr.message });
+    return apiSuccess({ ok: false, status: 'universe_upsert_failed', detail: upsertErr.message, correlationId });
   }
 
   let deactivated = 0;
@@ -294,7 +487,7 @@ Deno.serve(createHandler(async (req: Request) => {
       .update({ active: false }, { count: 'exact' })
       .in('ticker', toDeactivate);
     if (deactErr) {
-      return apiError(500, 'universe_deactivate_failed', { correlationId, detail: deactErr.message });
+      return apiSuccess({ ok: false, status: 'universe_deactivate_failed', detail: deactErr.message, correlationId });
     }
     deactivated = count ?? toDeactivate.length;
   }
