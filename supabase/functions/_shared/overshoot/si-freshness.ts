@@ -83,8 +83,31 @@ export function siStaleActive(
 
 /** DEC-080-v2 / DEC-081-v2 ratified default — analyst feed considered
  *  stale if the freshest `analyst_revision_observations.computed_at` is
- *  older than this many calendar days relative to `asOf`. */
-export const OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT = 3;
+ *  older than this many calendar days relative to `asOf`.
+ *
+ *  WEEKDAY-CADENCE RATIONALE (2026-07-21 operator amendment):
+ *  The upstream analyst-revision feed publishes on U.S. equity-market
+ *  weekdays; ordinary weekends inject a 3-calendar-day gap
+ *  (Fri 20:00Z → Mon 20:00Z re-fire) and a Friday-before-Monday-holiday
+ *  inserts a 4-calendar-day gap (Fri → Tue, e.g. Memorial / Labor /
+ *  MLK / Presidents' Day / Independence-day observed shifts). A 3-day
+ *  fail-closed cap therefore blanks the book on every ordinary Tuesday
+ *  after a long weekend — a false-positive class the operator ruled
+ *  unacceptable. The ratified cap is 4d, which admits the 4-day holiday
+ *  gap while still catching a genuinely dying feed (Wed→Mon = 5d > 4
+ *  → stale). A WARN-level companion at 3d
+ *  (see `OVERSHOOT_ANALYST_REVISION_STALENESS_WARN_AT_DAYS_DEFAULT`
+ *  + `analystRevisionStaleWarnActive`) surfaces the early-warning
+ *  signal without refusing the book, so a real feed degradation is
+ *  observable one operational day before the fail-closed edge fires. */
+export const OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT = 4;
+
+/** WARN-band threshold — engaged when the freshest analyst observation
+ *  is > this-many calendar days old but ≤ the fail-closed max. Non-
+ *  refusing signal: emit a structured warn event so a dying feed
+ *  surfaces on the ordinary-weekend edge, without blanking the book on
+ *  legitimate Tuesday-after-holiday runs. */
+export const OVERSHOOT_ANALYST_REVISION_STALENESS_WARN_AT_DAYS_DEFAULT = 3;
 
 /** DEC-082 ratified default — corporate-actions feed considered stale
  *  if the freshest `corporate_actions.updated_at` is older than this
@@ -128,6 +151,31 @@ export function analystRevisionStaleActive(
   // computed_at is a timestamptz — take the date component only.
   const dateIso = freshestComputedAtIso.slice(0, 10);
   return siCalendarDaysBetween(asOfIso, dateIso) > maxDays;
+}
+
+/**
+ * DEC-080-v2 / DEC-081-v2 (2026-07-21 amendment) — WARN-band predicate.
+ * True iff the freshest analyst observation is strictly older than
+ * `warnAtDays` AND NOT older than `maxDays` (i.e., in the observation
+ * band between "healthy" and "fail-closed-stale"). Callers should emit
+ * a structured warn event (NOT a refusal) so a dying feed surfaces on
+ * the ordinary-weekend edge one operational day before the fail-closed
+ * cap fires. See the file-header rationale for the weekday-cadence
+ * ruling.
+ *
+ * Returns FALSE for null / empty corpus — same symmetry as
+ * `analystRevisionStaleActive`.
+ */
+export function analystRevisionStaleWarnActive(
+  asOfIso: string,
+  freshestComputedAtIso: string | null,
+  warnAtDays: number,
+  maxDays: number,
+): boolean {
+  if (freshestComputedAtIso === null) return false;
+  const dateIso = freshestComputedAtIso.slice(0, 10);
+  const age = siCalendarDaysBetween(asOfIso, dateIso);
+  return age > warnAtDays && age <= maxDays;
 }
 
 /**
