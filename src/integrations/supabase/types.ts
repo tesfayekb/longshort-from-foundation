@@ -1878,6 +1878,8 @@ export type Database = {
           short_market_value: number | null
           snapshot_date: string
           source: string
+          spy_close: number | null
+          spy_source: string | null
           updated_at: string
         }
         Insert: {
@@ -1894,6 +1896,8 @@ export type Database = {
           short_market_value?: number | null
           snapshot_date: string
           source?: string
+          spy_close?: number | null
+          spy_source?: string | null
           updated_at?: string
         }
         Update: {
@@ -1910,6 +1914,8 @@ export type Database = {
           short_market_value?: number | null
           snapshot_date?: string
           source?: string
+          spy_close?: number | null
+          spy_source?: string | null
           updated_at?: string
         }
         Relationships: []

@@ -18,6 +18,11 @@ export interface OvershootEquitySnapshotRow {
   positions_priced: number;
   positions_total: number;
   fetched_at: string;
+  // ACT-562 — benchmark-relative sub-line. `spy_close` is the SPY session
+  // close on `snapshot_date`; null when the bar hadn't landed at write
+  // time. UI renders typed-absence, never a synthesised value.
+  spy_close: number | null;
+  spy_source: string | null;
 }
 
 export function useOvershootEquitySnapshots(limit = 365) {
@@ -26,7 +31,7 @@ export function useOvershootEquitySnapshots(limit = 365) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('overshoot_equity_snapshots')
-        .select('snapshot_date,broker_equity,position_mark_total,cash,long_market_value,short_market_value,positions_priced,positions_total,fetched_at')
+        .select('snapshot_date,broker_equity,position_mark_total,cash,long_market_value,short_market_value,positions_priced,positions_total,fetched_at,spy_close,spy_source')
         .order('snapshot_date', { ascending: true })
         .limit(limit);
       if (error) throw error;
@@ -40,6 +45,10 @@ export function useOvershootEquitySnapshots(limit = 365) {
         positions_priced: Number(r.positions_priced),
         positions_total: Number(r.positions_total),
         fetched_at: r.fetched_at as string,
+        spy_close: (r as { spy_close?: unknown }).spy_close === null || (r as { spy_close?: unknown }).spy_close === undefined
+          ? null
+          : Number((r as { spy_close: number | string }).spy_close),
+        spy_source: (r as { spy_source?: string | null }).spy_source ?? null,
       }));
     },
   });

@@ -89,6 +89,28 @@ Deno.serve(createHandler(async (req: Request) => {
   }
   const cash = brokerEquity - positionMarkTotal;
 
+  // ACT-562 — benchmark-relative equity curve. Read SPY close for the
+  // same session date from `overshoot_daily_bars` (in-house, D3-clean;
+  // no external fetch at write-time). Typed-Optional discipline: null
+  // when the SPY bar has not landed for `asOf` yet — never a sentinel.
+  let spyClose: number | null = null;
+  let spySource: string | null = null;
+  try {
+    const { data: spyRow, error: spyErr } = await supabaseAdmin
+      .from('overshoot_daily_bars')
+      .select('close')
+      .eq('ticker', 'SPY')
+      .eq('trade_date', asOf)
+      .maybeSingle();
+    if (!spyErr && spyRow && typeof spyRow.close === 'number' && Number.isFinite(spyRow.close)) {
+      spyClose = spyRow.close;
+      spySource = 'overshoot_daily_bars';
+    }
+  } catch (_e) {
+    // Non-fatal — snapshot writes proceed with spy_close=null; the UI
+    // renders a typed-absence on that row.
+  }
+
   if (!dryRun) {
     const { error } = await supabaseAdmin
       .from('overshoot_equity_snapshots')
@@ -105,6 +127,8 @@ Deno.serve(createHandler(async (req: Request) => {
         source: 'alpaca_paper_overshoot',
         fetched_at: nowTs.toISOString(),
         correlation_id: correlationId,
+        spy_close: spyClose,
+        spy_source: spySource,
       }, { onConflict: 'operator_id,snapshot_date' });
     if (error) {
       return apiError(500, 'snapshot_write_failed', {
@@ -126,5 +150,7 @@ Deno.serve(createHandler(async (req: Request) => {
     positions_total: positions.length,
     fetched_at: nowTs.toISOString(),
     correlation_id: correlationId,
+    spy_close: spyClose,
+    spy_source: spySource,
   });
 }));
