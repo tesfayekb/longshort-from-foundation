@@ -1,11 +1,14 @@
 // @ts-nocheck — Deno offline parity harness.
 //
 // FP-069 W3.8 T2.2 (ACT-479) — SELECTION-SURFACE parity gate.
-// Re-pinned 2026-07-15 to RATIFIED_DETECTOR_VERSION a026dc51 under the
-// INC-106 direction-flip landing (SHORT squeeze gate flipped to
-// exclusion semantics per approved-decisions.md:852 R2; refusal reason
-// renamed to `si_above_squeeze_threshold`; V2 spec JSON updated to
-// describe the flipped gate truthfully → new PREDICATE_SPEC_V2_SHA256).
+// Re-pinned 2026-07-21 to RATIFIED_DETECTOR_VERSION aff20a13 under the
+// DEC-080-v2 / DEC-081-v2 / DEC-082 three-guard bundle. Retired pin (do
+// not restore): a026dc51 (INC-106 direction-flip; superseded by bundle).
+// The bundle wires §6 risk guards (analyst-downgrade proximity for LONG,
+// analyst-upgrade proximity for SHORT, M&A target proximity for BOTH)
+// with typed refusal reasons and fail-closed feed-freshness siblings.
+// V2 spec JSON gains a top-level `"amendments":{...}` block → new
+// PREDICATE_SPEC_V2_SHA256.
 //
 // FULLY OFFLINE by construction (per operator T2.2 STOP adjudication):
 //   * runDetector() is pure (W3.4 ratified design).
@@ -294,6 +297,6 @@ for (const day of DATES) {
   });
 }
 
-Deno.test('selection-parity — RATIFIED_DETECTOR_VERSION re-pinned at a026dc51 (INC-106 direction-flip)', () => {
-  assertEquals(RATIFIED_DETECTOR_VERSION, 'a026dc51');
+Deno.test('selection-parity — RATIFIED_DETECTOR_VERSION re-pinned at aff20a13 (DEC-080-v2 / DEC-081-v2 / DEC-082 three-guard bundle)', () => {
+  assertEquals(RATIFIED_DETECTOR_VERSION, 'aff20a13');
 });
