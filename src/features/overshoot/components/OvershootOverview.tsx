@@ -257,6 +257,10 @@ interface KpiStripInputs {
   longMvUsd: number | null;
   /** Aggregate SHORT book MV — cost-basis fallback on the Overview cell. */
   shortMvUsd: number | null;
+  /** Broker-equity delta between the two most-recent snapshots. Null when <2 snapshots. */
+  dayPnlUsd: number | null;
+  /** Broker-equity pct delta between the two most-recent snapshots. */
+  dayPnlPct: number | null;
 }
 
 function KpiCell({
@@ -618,6 +622,19 @@ export function OvershootOverview() {
     ? latestEquityQuery.data[latestEquityQuery.data.length - 1]
     : null;
   const sizingBaseUsd = latestEquity ? latestEquity.broker_equity : null;
+
+  // Full snapshot series for windowed-gain cards (hook returns ASC by
+  // snapshot_date, capped at 365 rows — a year of trading sessions).
+  const equitySeriesQuery = useOvershootEquitySnapshots(365);
+  const snapshots = equitySeriesQuery.data ?? [];
+  const snapN = snapshots.length;
+  const dayPnlUsd = snapN >= 2
+    ? snapshots[snapN - 1].broker_equity - snapshots[snapN - 2].broker_equity
+    : null;
+  const dayPnlPct = snapN >= 2 && snapshots[snapN - 2].broker_equity > 0
+    ? (dayPnlUsd! / snapshots[snapN - 2].broker_equity) * 100
+    : null;
+
   const longMvUsd = openLotsQuery.isLoading
     ? null
     : longs.reduce((acc, l) => acc + Math.abs(Number(l.cost_basis) || 0), 0);
@@ -650,6 +667,8 @@ export function OvershootOverview() {
         sizingBaseUsd={sizingBaseUsd}
         longMvUsd={longMvUsd}
         shortMvUsd={shortMvUsd}
+        dayPnlUsd={dayPnlUsd}
+        dayPnlPct={dayPnlPct}
       />
 
       {/* INC-96 cap-compliance affordance — ratified vs actual per side. */}
@@ -659,13 +678,17 @@ export function OvershootOverview() {
         shortMvUsd={shortMvUsd}
       />
 
-      {/* Windowed gain cards — all pending CANDIDATE-iii */}
+      {/* Windowed gain cards — computed from overshoot_equity_snapshots
+          (source alpaca_paper_overshoot). Row-indexed session offsets:
+          Today=1, 5-day=5, 1-month=21, 1-year=252, Inception=all. When
+          series is too short for a given window, that card renders a
+          typed-absence naming the shortfall (never fabricates). */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <PendingCandidateIII title="Today" />
-        <PendingCandidateIII title="5-day" />
-        <PendingCandidateIII title="1-month" />
-        <PendingCandidateIII title="1-year" />
-        <PendingCandidateIII title="Inception" />
+        <WindowedGainCard title="Today"     sessionsBack={1}   snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
+        <WindowedGainCard title="5-day"     sessionsBack={5}   snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
+        <WindowedGainCard title="1-month"   sessionsBack={21}  snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
+        <WindowedGainCard title="1-year"    sessionsBack={252} snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
+        <WindowedGainCard title="Inception" sessionsBack={null} snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
