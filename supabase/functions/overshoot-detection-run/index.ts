@@ -574,6 +574,89 @@ Deno.serve(createHandler(async (req: Request) => {
       }), { arrival_count: c.arrival_count, mean_fwd_return_5d: c.mean_fwd_return_5d === null ? null : Number(c.mean_fwd_return_5d) });
     }
 
+    // ─── DEC-080-v2 / DEC-081-v2 / DEC-082 three-guard bundle (aff20a13):
+    //     analyst-revision + corporate-actions joins. Window widened by
+    //     max(analystProximity, maExclusionCalendar) so the per-row scan
+    //     never has to touch anything outside the pulled slice.
+    //     Both queries are keyed to a bounded date window; NULLs preserved
+    //     so the freshness siblings can distinguish empty-corpus from
+    //     stale-feed. Uses postgres.js typed rows for byte-typing safety.
+    const analystRows = await sql<{
+      ticker: string;
+      direction: number;
+      focal_published_at: string;
+      computed_at: string;
+    }[]>`
+      SELECT ticker, direction, focal_published_at::text AS focal_published_at,
+             computed_at::text AS computed_at
+      FROM analyst_revision_observations
+      WHERE focal_published_at::date BETWEEN (${asOfDay}::date - INTERVAL '10 days')
+                                          AND (${asOfDay}::date + INTERVAL '10 days')
+    `;
+    const analystByTicker = new Map<string, { direction: number; focal_published_at: string }[]>();
+    let analystFreshestComputedAt: string | null = null;
+    for (const r of analystRows) {
+      const arr = analystByTicker.get(r.ticker) ?? [];
+      arr.push({ direction: Number(r.direction), focal_published_at: r.focal_published_at });
+      analystByTicker.set(r.ticker, arr);
+      if (analystFreshestComputedAt === null || r.computed_at > analystFreshestComputedAt) {
+        analystFreshestComputedAt = r.computed_at;
+      }
+    }
+    // Fallback: if the windowed pull happens to be empty on this date but
+    // the feed itself has newer/older rows, read a corpus-level MAX so
+    // fail-closed staleness reflects the actual pipeline heartbeat rather
+    // than local absence of proximate revisions.
+    if (analystFreshestComputedAt === null) {
+      const [row] = await sql<{ max_ts: string | null }[]>`
+        SELECT MAX(computed_at)::text AS max_ts FROM analyst_revision_observations
+      `;
+      analystFreshestComputedAt = row?.max_ts ?? null;
+    }
+
+    const maRows = await sql<{
+      symbol: string;
+      successor_symbol: string | null;
+      action_type: string;
+      announced_at: string | null;
+      ex_date: string | null;
+      updated_at: string;
+    }[]>`
+      SELECT symbol, successor_symbol, action_type,
+             announced_at::text AS announced_at,
+             ex_date::text AS ex_date,
+             updated_at::text AS updated_at
+      FROM corporate_actions
+      WHERE action_type IN ('merger','acquisition','tender_offer','scheme_of_arrangement')
+        AND COALESCE(announced_at::date, ex_date)
+              BETWEEN (${asOfDay}::date - INTERVAL '14 days')
+                  AND (${asOfDay}::date + INTERVAL '14 days')
+    `;
+    const maByTicker = new Map<string, { action_type: string; announced_at: string | null; ex_date: string | null }[]>();
+    let maFreshestUpdatedAt: string | null = null;
+    const pushMa = (
+      key: string,
+      row: { action_type: string; announced_at: string | null; ex_date: string | null },
+    ) => {
+      const arr = maByTicker.get(key) ?? [];
+      arr.push(row);
+      maByTicker.set(key, arr);
+    };
+    for (const r of maRows) {
+      const payload = { action_type: r.action_type, announced_at: r.announced_at, ex_date: r.ex_date };
+      if (r.symbol) pushMa(r.symbol, payload);
+      if (r.successor_symbol && r.successor_symbol !== r.symbol) pushMa(r.successor_symbol, payload);
+      if (maFreshestUpdatedAt === null || r.updated_at > maFreshestUpdatedAt) {
+        maFreshestUpdatedAt = r.updated_at;
+      }
+    }
+    if (maFreshestUpdatedAt === null) {
+      const [row] = await sql<{ max_ts: string | null }[]>`
+        SELECT MAX(updated_at)::text AS max_ts FROM corporate_actions
+      `;
+      maFreshestUpdatedAt = row?.max_ts ?? null;
+    }
+
     // ── Stage 6: detector (pure, unmodified) ────────────────────────────
     const detectorInput: DetectorInput = {
       candidates,
@@ -596,6 +679,19 @@ Deno.serve(createHandler(async (req: Request) => {
         shortDrawdownSet: DETECTOR_SHORT_DRAWDOWN,
         bandLabelFor,
         studyCellLookup: (k) => cellMap.get(cellKey(k)) ?? null,
+        // DEC-080-v2 / DEC-081-v2 / DEC-082 three-guard bundle wired to
+        // real DB reads (composite version aff20a13). Defaults for windows
+        // / staleness caps live in _shared/overshoot/si-freshness.ts; we
+        // pass explicit values here so the detector envelope echoes the
+        // ratified constants without depending on function-time defaults.
+        analystRevisionLookup: (t) => analystByTicker.get(t) ?? [],
+        maActionLookup: (t) => maByTicker.get(t) ?? [],
+        analystRevisionFeedFreshestComputedAt: analystFreshestComputedAt,
+        maFeedFreshestUpdatedAt: maFreshestUpdatedAt,
+        analystProximityCalendarDays: 3,
+        analystStalenessMaxDays: 3,
+        maExclusionCalendarDays: 7,
+        maStalenessMaxDays: 14,
       },
     };
     const tD = performance.now();
