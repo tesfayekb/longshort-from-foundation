@@ -136,6 +136,49 @@ export type RefusalReason =
   | 'analyst_revision_feed_stale'    // BOTH sides — run-level fail-closed
   | 'ma_feed_stale';                 // BOTH sides — run-level fail-closed
 
+/**
+ * INC-129 (ACT-563 co-landed) — enumerable RefusalReason list. Single source
+ * of truth for the union above; used by the detection-run persist path to
+ * initialize `overshoot_detection_runs.refusal_class_counts` with explicit
+ * zeros for every class (so zero-firing classes stay visible in metadata
+ * instead of vanishing). The `_test` file drift-guards the two shapes.
+ */
+export const REFUSAL_REASONS: readonly RefusalReason[] = [
+  'excess_below_threshold',
+  'window_out_of_set',
+  'momentum_out_of_set',
+  'drawdown_out_of_set',
+  'exclusion_earnings_proximity',
+  'si_unavailable',
+  'si_stale',
+  'si_above_squeeze_threshold',
+  'no_study_cell',
+  'capacity',
+  'analyst_downgrade_proximate',
+  'analyst_upgrade_proximate',
+  'ma_target_proximate',
+  'analyst_revision_feed_stale',
+  'ma_feed_stale',
+] as const;
+
+/** Zero-initialized refusal-class map (all keys present, all zero). */
+export function emptyRefusalCounts(): Record<RefusalReason, number> {
+  const out = {} as Record<RefusalReason, number>;
+  for (const r of REFUSAL_REASONS) out[r] = 0;
+  return out;
+}
+
+/** Tally refusals from a set of DetectedEvent-shaped rows (null reasons skipped). */
+export function tallyRefusalCounts(
+  events: ReadonlyArray<{ filter_refusal_reason: RefusalReason | null }>,
+): Record<RefusalReason, number> {
+  const counts = emptyRefusalCounts();
+  for (const e of events) {
+    if (e.filter_refusal_reason !== null) counts[e.filter_refusal_reason] += 1;
+  }
+  return counts;
+}
+
 export interface KernelCandidateRow {
   run_id: string;
   ticker: string;
