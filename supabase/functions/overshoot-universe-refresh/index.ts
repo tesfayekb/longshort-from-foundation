@@ -72,12 +72,18 @@ const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 // pages_fetched=8 at MAX_PAGES cap).
 const POLYGON_RUSSELL2000_CODE = 'I:RUT';
 
-// Hard sanity gate on roster size. The Russell 2000 nominal membership is
+// Hard sanity gate on roster size. Per operator ruling (DEC / Option C,
+// INC-126 closure): `overshoot_universe` identity is the S&P 500 (IVV) ∪
+// S&P MidCap 400 (IJH) composite (~900 names). The prior [1500,2600] band
+// was inherited from a Russell-2000 misconception and is retired.
+// ACT-559 / vendor lanes retarget to IVV+IJH sources is deferred — the
+// operator-seed multi-file union path is the reliable channel until
+// EDGAR N-PORT for IVV/IJH proves out from this environment.
 // ~2000; realistic drift after corporate actions is a few dozen. Anything
 // outside [1500, 2600] indicates the filter was silently dropped and we are
 // looking at the unfiltered market again — refuse rather than write.
-const ROSTER_SANITY_MIN = 1500;
-const ROSTER_SANITY_MAX = 2600;
+const ROSTER_SANITY_MIN = 850;
+const ROSTER_SANITY_MAX = 950;
 
 // iShares Russell 2000 ETF (IWM) — public holdings CSV. Same URL shape as
 // IVV/IJH used by the existing iSharesConstituentFetcher (product-page ajax
@@ -120,7 +126,11 @@ const EDGAR_IWM_SERIES_ID = 'S000004310';
 // Manual-seed provenance tag — distinct from the polygon:russell2000 tag so
 // downstream readers can tell operator-CSV seeds apart from cron refresh
 // rows. §22.5.1 evidence lands in the T4 audit row.
-const SEED_SOURCE_TAG = 'ishares:iwm:manual_seed';
+// Provenance tag for the operator-seed path. Identity ratified as
+// IVV ∪ IJH per Option C ruling; the multi-file union is written under
+// this single tag with the per-file sha256 hashes carried in the audit
+// row's `csv_sha256_provenances` array.
+const SEED_SOURCE_TAG = 'ishares:ivv_ijh:manual_seed';
 
 // Staleness watchdog budget (days). Weekly refresh is the target cadence;
 // 35 days = 5 missed weeks and the actionable page threshold per Option-4
@@ -812,6 +822,7 @@ Deno.serve(createHandler(async (req: Request) => {
       as_of?: unknown;
       csv_sha256_provenance?: unknown;
       csv_bytes?: unknown;
+      csv_sha256_provenances?: unknown; // multi-file union: e.g. IVV + IJH
     };
     const hasTickers = Array.isArray(b.tickers);
 
@@ -820,6 +831,7 @@ Deno.serve(createHandler(async (req: Request) => {
     let provenance_mode: 'server_hashed' | 'client_attested';
     let csv_sha256: string | null;
     let csv_sha256_provenance: string | null = null;
+    let csv_sha256_provenances: string[] = [];
     let csv_bytes_attested: number | null = null;
     let dropped = 0;
 
@@ -836,6 +848,11 @@ Deno.serve(createHandler(async (req: Request) => {
       csv_sha256_provenance = typeof b.csv_sha256_provenance === 'string'
         ? b.csv_sha256_provenance.toLowerCase()
         : null;
+      if (Array.isArray(b.csv_sha256_provenances)) {
+        csv_sha256_provenances = (b.csv_sha256_provenances as unknown[])
+          .filter((x): x is string => typeof x === 'string')
+          .map((x) => x.toLowerCase());
+      }
       csv_bytes_attested = typeof b.csv_bytes === 'number' && Number.isFinite(b.csv_bytes)
         ? Math.trunc(b.csv_bytes)
         : null;
@@ -897,6 +914,7 @@ Deno.serve(createHandler(async (req: Request) => {
       tickers_sha256,
       csv_sha256,
       csv_sha256_provenance,
+      csv_sha256_provenances,
       csv_bytes_attested,
       dropped_nonconforming: dropped,
       correlationId,
@@ -919,6 +937,7 @@ Deno.serve(createHandler(async (req: Request) => {
       as_of?: unknown;
       csv_sha256_provenance?: unknown;
       csv_bytes?: unknown;
+      csv_sha256_provenances?: unknown; // multi-file union (IVV + IJH)
     };
     const hasTickers = Array.isArray(b.tickers);
 
@@ -927,6 +946,7 @@ Deno.serve(createHandler(async (req: Request) => {
     let provenance_mode: 'server_hashed' | 'client_attested';
     let csv_sha256: string | null;
     let csv_sha256_provenance: string | null = null;
+    let csv_sha256_provenances: string[] = [];
     let csv_bytes_attested: number | null = null;
     let dropped = 0;
 
@@ -943,6 +963,11 @@ Deno.serve(createHandler(async (req: Request) => {
       csv_sha256_provenance = typeof b.csv_sha256_provenance === 'string'
         ? b.csv_sha256_provenance.toLowerCase()
         : null;
+      if (Array.isArray(b.csv_sha256_provenances)) {
+        csv_sha256_provenances = (b.csv_sha256_provenances as unknown[])
+          .filter((x): x is string => typeof x === 'string')
+          .map((x) => x.toLowerCase());
+      }
       csv_bytes_attested = typeof b.csv_bytes === 'number' && Number.isFinite(b.csv_bytes)
         ? Math.trunc(b.csv_bytes)
         : null;
@@ -1074,6 +1099,7 @@ Deno.serve(createHandler(async (req: Request) => {
         tickers_sha256,
         csv_sha256,
         csv_sha256_provenance,
+        csv_sha256_provenances,
         csv_bytes_attested,
         dropped_nonconforming: dropped,
         via: 'operator_seed_apply',
