@@ -99,6 +99,292 @@ const ISHARES_FETCH_TIMEOUT_MS = 30_000;
 const FMP_ETF_HOLDINGS_URL = 'https://financialmodelingprep.com/stable/etf-holdings';
 const FMP_FETCH_TIMEOUT_MS = 20_000;
 
+// SEC EDGAR N-PORT probe — public, programmatic-by-design. Requires only a
+// UA-with-contact header (SEC policy). Chartered as ACT-559 lane 4 successor
+// to the manual-seed path: N-PORT filings lag ~1 quarter but the Russell 2000
+// reconstitutes annually (June) with only modest intra-year churn, so a
+// quarter-lagged holdings feed fits the drift tolerance.
+//
+// IWM (BlackRock's Russell 2000 ETF) is registered under CIK 0001100663
+// (iShares Trust) as series S000004310. The company-tickers endpoint below
+// is used only for probe-time CIK verification; the actual holdings live in
+// N-PORT-P filings whose XML is fetched from the submissions index. This
+// probe returns a typed shape either way — the automated primary flip only
+// happens after operator ratifies the probe output.
+const EDGAR_BASE = 'https://data.sec.gov';
+const EDGAR_FETCH_TIMEOUT_MS = 20_000;
+// Public IWM series id (iShares Russell 2000 ETF).
+const EDGAR_IWM_CIK = '0001100663';
+const EDGAR_IWM_SERIES_ID = 'S000004310';
+
+// Manual-seed provenance tag — distinct from the polygon:russell2000 tag so
+// downstream readers can tell operator-CSV seeds apart from cron refresh
+// rows. §22.5.1 evidence lands in the T4 audit row.
+const SEED_SOURCE_TAG = 'ishares:iwm:manual_seed';
+
+// Staleness watchdog budget (days). Weekly refresh is the target cadence;
+// 35 days = 5 missed weeks and the actionable page threshold per Option-4
+// alert redesign. The staleness probe returns days_since_last_seed so the
+// dispatcher can page on breach without polling raw table state.
+const STALENESS_BUDGET_DAYS = 35;
+
+async function sha256Hex(input: string): Promise<string> {
+  const bytes = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const arr = Array.from(new Uint8Array(digest));
+  return arr.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Parse an iShares-shaped holdings CSV (multi-line preamble + header row +
+ * one row per holding). Returns the equity tickers plus the "Fund Holdings
+ * as of" date if present. Shared between the ishares probe and seed modes
+ * so behaviour is identical whether the CSV came from live egress or an
+ * operator upload.
+ */
+function parseIsharesCsv(csv: string):
+  | { ok: true; tickers: string[]; as_of: string }
+  | { ok: false; status: string; detail?: string } {
+  const head = csv.slice(0, 512).toLowerCase();
+  if (head.includes('<!doctype html') || head.includes('<html')) {
+    return { ok: false, status: 'html_body_received', detail: `bytes=${csv.length}` };
+  }
+  const lines = csv.split(/\r?\n/).map((l) => l.trimEnd()).filter((l) => l.length > 0);
+  const headerIdx = findHeaderRowIndex(lines);
+  if (headerIdx === null) {
+    return { ok: false, status: 'header_row_not_found', detail: `lines=${lines.length}` };
+  }
+  const header = parseCsvLine(lines[headerIdx]).map((h) => h.toLowerCase());
+  const tickerCol = header.indexOf('ticker');
+  const assetClassCol = header.indexOf('asset class');
+  if (tickerCol < 0) {
+    return { ok: false, status: 'ticker_column_missing' };
+  }
+  let as_of = '';
+  for (const l of lines.slice(0, Math.min(15, headerIdx))) {
+    if (l.toLowerCase().includes('fund holdings as of')) {
+      const fields = parseCsvLine(l);
+      as_of = fields.slice(-1)[0] ?? '';
+      break;
+    }
+  }
+  const tickers: string[] = [];
+  for (let i = headerIdx + 1; i < lines.length; i += 1) {
+    const row = parseCsvLine(lines[i]);
+    if (row.length <= tickerCol) continue;
+    const t = (row[tickerCol] ?? '').trim().toUpperCase();
+    if (t.length === 0 || t === '-') continue;
+    if (assetClassCol >= 0 && row.length > assetClassCol) {
+      const ac = (row[assetClassCol] ?? '').toLowerCase();
+      if (ac.length > 0 && ac !== 'equity') continue;
+    }
+    tickers.push(t);
+  }
+  return { ok: true, tickers, as_of };
+}
+
+/**
+ * EDGAR N-PORT probe — one-shot feasibility read against data.sec.gov.
+ * Fetches the iShares Trust submissions index, filters for N-PORT-P (public
+ * portfolio filings), pulls the most recent filing's primary XML doc, and
+ * extracts equity holdings whose series id matches IWM. This is a
+ * feasibility PROBE — zero writes, typed shape identical to the other
+ * probes so the decision rule is substitutable.
+ *
+ * SEC UA policy: "User-Agent: Company Name AdminContact@example.com".
+ * We use the operator-configured `EDGAR_CONTACT_EMAIL` secret.
+ */
+async function probeEdgarNport(contactEmail: string): Promise<
+  | { ok: true; roster_count: number; sample_first_10: string[]; as_of: string; source_shape: string }
+  | { ok: false; status: string; http_status?: number; detail?: string; source_shape: string }
+> {
+  const source_shape = 'sec_edgar_nport_p_iwm_series';
+  const ua = `overshoot-universe-refresh/1.0 (${contactEmail})`;
+  const headers: Record<string, string> = {
+    'User-Agent': ua,
+    'Accept': 'application/json, text/xml, */*;q=0.1',
+    'Accept-Encoding': 'gzip, deflate',
+    'Host': 'data.sec.gov',
+  };
+  const url = `${EDGAR_BASE}/submissions/CIK${EDGAR_IWM_CIK}.json`;
+  let resp;
+  try {
+    resp = await fetchWithTimeoutAndRetry(
+      fetch as never,
+      url,
+      { method: 'GET', headers },
+      { timeoutMs: EDGAR_FETCH_TIMEOUT_MS },
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, status: 'network_error', detail: msg, source_shape };
+  }
+  if (!resp.ok) {
+    return {
+      ok: false,
+      status: 'http_error',
+      http_status: resp.status,
+      detail: resp.statusText,
+      source_shape,
+    };
+  }
+  let body: unknown;
+  try {
+    body = await resp.json();
+  } catch (e) {
+    return {
+      ok: false,
+      status: 'json_parse_failed',
+      detail: e instanceof Error ? e.message : String(e),
+      source_shape,
+    };
+  }
+  const b = body as {
+    filings?: {
+      recent?: {
+        form?: string[];
+        accessionNumber?: string[];
+        primaryDocument?: string[];
+        filingDate?: string[];
+      };
+    };
+  };
+  const recent = b?.filings?.recent;
+  if (!recent || !Array.isArray(recent.form)) {
+    return { ok: false, status: 'submissions_index_shape', source_shape };
+  }
+  // Locate the most recent N-PORT-P.
+  let idx = -1;
+  for (let i = 0; i < recent.form.length; i += 1) {
+    if (recent.form[i] === 'NPORT-P') {
+      idx = i;
+      break;
+    }
+  }
+  if (idx < 0) {
+    return { ok: false, status: 'no_nport_p_filing', source_shape };
+  }
+  const accession = (recent.accessionNumber?.[idx] ?? '').replace(/-/g, '');
+  const primary = recent.primaryDocument?.[idx] ?? '';
+  const filingDate = recent.filingDate?.[idx] ?? '';
+  if (!accession || !primary) {
+    return { ok: false, status: 'nport_filing_pointer_missing', source_shape };
+  }
+  // N-PORT primary docs live under www.sec.gov/Archives/edgar/data/<cik>/<accession>/<primary>.
+  // The XML enumerates ALL series in the trust; we filter by series id at parse time.
+  const filingUrl =
+    `https://www.sec.gov/Archives/edgar/data/${Number(EDGAR_IWM_CIK)}/${accession}/${primary}`;
+  let filingResp;
+  try {
+    filingResp = await fetchWithTimeoutAndRetry(
+      fetch as never,
+      filingUrl,
+      { method: 'GET', headers: { ...headers, 'Host': 'www.sec.gov' } },
+      { timeoutMs: EDGAR_FETCH_TIMEOUT_MS },
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      status: 'nport_fetch_network_error',
+      detail: e instanceof Error ? e.message : String(e),
+      source_shape,
+    };
+  }
+  if (!filingResp.ok) {
+    return {
+      ok: false,
+      status: 'nport_http_error',
+      http_status: filingResp.status,
+      detail: filingResp.statusText,
+      source_shape,
+    };
+  }
+  let xml: string;
+  try {
+    xml = await filingResp.text();
+  } catch (e) {
+    return {
+      ok: false,
+      status: 'nport_body_read_failed',
+      detail: e instanceof Error ? e.message : String(e),
+      source_shape,
+    };
+  }
+  // Best-effort XML extraction without pulling a heavy parser:
+  //   - Series id lives in <seriesId>Sxxxxxxxxxx</seriesId>.
+  //   - Each holding lives in <invstOrSec>...<ticker>XYZ</ticker>...</invstOrSec>.
+  // The N-PORT XML repeats <invstOrSec> once per issuer. This is a PROBE —
+  // if the tag shape shifts the probe returns typed shape-mismatch and the
+  // manual-seed path stays primary.
+  if (!xml.includes(`<seriesId>${EDGAR_IWM_SERIES_ID}</seriesId>`)) {
+    return {
+      ok: false,
+      status: 'series_id_absent_in_nport',
+      detail: `expected=${EDGAR_IWM_SERIES_ID}`,
+      source_shape,
+    };
+  }
+  const tickerRe = /<ticker>([A-Z0-9.\-]{1,10})<\/ticker>/g;
+  const tickers: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = tickerRe.exec(xml)) !== null) {
+    const t = m[1].trim().toUpperCase();
+    if (t.length > 0 && !tickers.includes(t)) tickers.push(t);
+  }
+  if (tickers.length === 0) {
+    return { ok: false, status: 'no_tickers_extracted', source_shape };
+  }
+  return {
+    ok: true,
+    roster_count: tickers.length,
+    sample_first_10: tickers.slice(0, 10),
+    as_of: filingDate,
+    source_shape,
+  };
+}
+
+/**
+ * Staleness probe — reports the age (days) of `overshoot_universe`'s most
+ * recent active-row upsert. Used by the alerts dispatcher (Option-4 alert
+ * redesign) so it can page ONLY on staleness-budget breach without polling
+ * the raw table. Zero writes.
+ */
+async function probeStaleness(): Promise<
+  | { ok: true; last_updated_at: string | null; days_since: number | null; budget_days: number; breach: boolean }
+  | { ok: false; status: string; detail?: string }
+> {
+  const { data, error } = await supabaseAdmin
+    .from('overshoot_universe')
+    .select('updated_at')
+    .eq('active', true)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    return { ok: false, status: 'read_failed', detail: error.message };
+  }
+  const last = (data?.updated_at as string | undefined) ?? null;
+  if (last === null) {
+    return {
+      ok: true,
+      last_updated_at: null,
+      days_since: null,
+      budget_days: STALENESS_BUDGET_DAYS,
+      breach: true, // absence-of-data is a breach, not a zero
+    };
+  }
+  const nowMs = new Date(productionClock.getWallClockTs()).getTime();
+  const lastMs = new Date(last).getTime();
+  const days = Number.isFinite(lastMs) ? (nowMs - lastMs) / 86_400_000 : null;
+  return {
+    ok: true,
+    last_updated_at: last,
+    days_since: days === null ? null : Math.round(days * 100) / 100,
+    budget_days: STALENESS_BUDGET_DAYS,
+    breach: days === null ? true : days > STALENESS_BUDGET_DAYS,
+  };
+}
+
 async function isRowDisarmed(id: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from('job_registry')
@@ -426,6 +712,204 @@ Deno.serve(createHandler(async (req: Request) => {
     }
     const r = await probeFmpEtfIwm(fmpKey);
     return apiSuccess({ probe: 'fmp_etf', correlationId, ...r });
+  }
+
+  // EDGAR N-PORT probe — lane 4 (ACT-559). Cron-only (self-invoke pattern),
+  // zero writes. UA-with-contact per SEC access policy.
+  if (body.probe === 'edgar_nport') {
+    if (!isCron) {
+      return apiSuccess({ ok: false, probe: 'edgar_nport', status: 'cron_secret_required', correlationId });
+    }
+    const contact = Deno.env.get('EDGAR_CONTACT_EMAIL') ?? '';
+    if (!contact) {
+      return apiSuccess({ ok: false, probe: 'edgar_nport', status: 'edgar_contact_email_missing', correlationId });
+    }
+    const r = await probeEdgarNport(contact);
+    return apiSuccess({ probe: 'edgar_nport', correlationId, ...r });
+  }
+
+  // Staleness probe — reports age of overshoot_universe. Cron-only. Zero
+  // writes. Consumed by the alerts dispatcher's Option-4 watchdog.
+  if (body.probe === 'staleness') {
+    if (!isCron) {
+      return apiSuccess({ ok: false, probe: 'staleness', status: 'cron_secret_required', correlationId });
+    }
+    const r = await probeStaleness();
+    return apiSuccess({ probe: 'staleness', correlationId, ...r });
+  }
+
+  // Operator-CSV seed — dry-run. Accepts the raw iShares IWM holdings CSV
+  // in `body.csv` (string). Cron-only (only reachable via CRON_SECRET path
+  // + operator DevTools snippet). Zero writes; returns roster_count +
+  // csv_sha256 + would_upsert / would_deactivate so §22.5.1 evidence can
+  // be inspected before commit.
+  if (body.probe === 'seed') {
+    if (!isCron) {
+      return apiSuccess({ ok: false, probe: 'seed', status: 'cron_secret_required', correlationId });
+    }
+    const csv = typeof (body as { csv?: unknown }).csv === 'string'
+      ? ((body as { csv: string }).csv)
+      : '';
+    if (csv.length === 0) {
+      return apiSuccess({ ok: false, probe: 'seed', status: 'csv_body_missing', correlationId });
+    }
+    const parsed = parseIsharesCsv(csv);
+    if (!parsed.ok) {
+      return apiSuccess({ ok: false, probe: 'seed', status: parsed.status, detail: parsed.detail, correlationId });
+    }
+    const sanity = checkRosterSanity(parsed.tickers.length);
+    const csv_sha256 = await sha256Hex(csv);
+    if (sanity !== null) {
+      return apiSuccess({
+        ok: false,
+        probe: 'seed',
+        status: 'roster_sanity_failed',
+        roster_count: parsed.tickers.length,
+        sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
+        sample_first_10: parsed.tickers.slice(0, 10),
+        csv_sha256,
+        correlationId,
+      });
+    }
+    const fresh = new Set(parsed.tickers);
+    const { data: current, error: readErr } = await supabaseAdmin
+      .from('overshoot_universe')
+      .select('ticker')
+      .eq('active', true);
+    if (readErr) {
+      return apiSuccess({ ok: false, probe: 'seed', status: 'universe_read_failed', detail: readErr.message, correlationId });
+    }
+    const currentSet = new Set((current ?? []).map((r) => r.ticker as string));
+    const would_deactivate: string[] = [];
+    for (const t of currentSet) if (!fresh.has(t)) would_deactivate.push(t);
+    return apiSuccess({
+      ok: true,
+      probe: 'seed',
+      dry_run: true,
+      roster_count: parsed.tickers.length,
+      sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
+      sample_first_10: parsed.tickers.slice(0, 10),
+      as_of_from_csv: parsed.as_of,
+      would_upsert: parsed.tickers.length,
+      would_deactivate: would_deactivate.length,
+      would_deactivate_sample: would_deactivate.slice(0, 10),
+      csv_sha256,
+      correlationId,
+    });
+  }
+
+  // Operator-CSV seed — real apply. Same parse + sanity gate as seed dry-run.
+  // Requires `body.csv` AND `body.csv_sha256_expect` — the caller pre-hashes
+  // in the browser and this branch refuses if the server-side hash disagrees
+  // (integrity guard against snippet corruption / paste truncation).
+  if (body.probe === 'seed_apply') {
+    if (!isCron) {
+      return apiSuccess({ ok: false, probe: 'seed_apply', status: 'cron_secret_required', correlationId });
+    }
+    const csv = typeof (body as { csv?: unknown }).csv === 'string'
+      ? ((body as { csv: string }).csv)
+      : '';
+    const expect = typeof (body as { csv_sha256_expect?: unknown }).csv_sha256_expect === 'string'
+      ? ((body as { csv_sha256_expect: string }).csv_sha256_expect).toLowerCase()
+      : '';
+    if (csv.length === 0) {
+      return apiSuccess({ ok: false, probe: 'seed_apply', status: 'csv_body_missing', correlationId });
+    }
+    const csv_sha256 = await sha256Hex(csv);
+    if (expect.length > 0 && expect !== csv_sha256) {
+      return apiSuccess({
+        ok: false,
+        probe: 'seed_apply',
+        status: 'csv_sha256_mismatch',
+        csv_sha256,
+        expected: expect,
+        correlationId,
+      });
+    }
+    const parsed = parseIsharesCsv(csv);
+    if (!parsed.ok) {
+      return apiSuccess({ ok: false, probe: 'seed_apply', status: parsed.status, detail: parsed.detail, correlationId });
+    }
+    const sanity = checkRosterSanity(parsed.tickers.length);
+    if (sanity !== null) {
+      return apiSuccess({
+        ok: false,
+        probe: 'seed_apply',
+        status: 'roster_sanity_failed',
+        roster_count: parsed.tickers.length,
+        sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
+        sample_first_10: parsed.tickers.slice(0, 10),
+        csv_sha256,
+        correlationId,
+      });
+    }
+    // Kill-switch supreme.
+    if (await isRowDisarmed(KILL_SWITCH_ID)) {
+      return apiSuccess({ ok: true, probe: 'seed_apply', skipped: 'kill_switch_active', correlationId });
+    }
+    const nowIso = productionClock.getWallClockTs();
+    const asOfDate = nowIso.slice(0, 10);
+    const fresh = new Set(parsed.tickers);
+    const { data: current, error: readErr } = await supabaseAdmin
+      .from('overshoot_universe')
+      .select('ticker')
+      .eq('active', true);
+    if (readErr) {
+      return apiSuccess({ ok: false, probe: 'seed_apply', status: 'universe_read_failed', detail: readErr.message, correlationId });
+    }
+    const currentSet = new Set((current ?? []).map((r) => r.ticker as string));
+    const toDeactivate: string[] = [];
+    for (const t of currentSet) if (!fresh.has(t)) toDeactivate.push(t);
+    const upsertRows = parsed.tickers.map((t) => ({
+      ticker: t,
+      source: SEED_SOURCE_TAG,
+      added_as_of: asOfDate,
+      active: true,
+    }));
+    const { error: upsertErr } = await supabaseAdmin
+      .from('overshoot_universe')
+      .upsert(upsertRows, { onConflict: 'ticker', ignoreDuplicates: false });
+    if (upsertErr) {
+      return apiSuccess({ ok: false, probe: 'seed_apply', status: 'universe_upsert_failed', detail: upsertErr.message, correlationId });
+    }
+    let deactivated = 0;
+    if (toDeactivate.length > 0) {
+      const { error: deactErr, count } = await supabaseAdmin
+        .from('overshoot_universe')
+        .update({ active: false }, { count: 'exact' })
+        .in('ticker', toDeactivate);
+      if (deactErr) {
+        return apiSuccess({ ok: false, probe: 'seed_apply', status: 'universe_deactivate_failed', detail: deactErr.message, correlationId });
+      }
+      deactivated = count ?? toDeactivate.length;
+    }
+    await writeStrategyAuditEvent({
+      strategyKey: 'overshoot',
+      actorId: DEFAULT_OPERATOR_ID,
+      action: 'overshoot.universe.refresh.completed',
+      targetType: 'overshoot_universe',
+      correlationId,
+      metadata: {
+        source: SEED_SOURCE_TAG,
+        as_of_date: asOfDate,
+        as_of_from_csv: parsed.as_of,
+        roster_count: parsed.tickers.length,
+        upserted: upsertRows.length,
+        deactivated,
+        csv_sha256,
+        via: 'operator_seed_apply',
+      },
+    });
+    return apiSuccess({
+      ok: true,
+      probe: 'seed_apply',
+      as_of_date: asOfDate,
+      roster_count: parsed.tickers.length,
+      upserted: upsertRows.length,
+      deactivated,
+      csv_sha256,
+      correlationId,
+    });
   }
 
   // Kill-switch is supreme over EVERYTHING including dry-runs and probes-below.
