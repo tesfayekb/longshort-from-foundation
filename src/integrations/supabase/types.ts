@@ -1727,10 +1727,12 @@ export type Database = {
           correlation_id: string | null
           created_at: string
           detected_at: string
+          detector_version: string | null
           durations_ms: Json
           event_count: number
           git_sha: string | null
           outcome: string
+          refusal_class_counts: Json | null
           run_id: string
           selected_count: number
         }
@@ -1740,10 +1742,12 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           detected_at: string
+          detector_version?: string | null
           durations_ms?: Json
           event_count?: number
           git_sha?: string | null
           outcome: string
+          refusal_class_counts?: Json | null
           run_id?: string
           selected_count?: number
         }
@@ -1753,10 +1757,12 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           detected_at?: string
+          detector_version?: string | null
           durations_ms?: Json
           event_count?: number
           git_sha?: string | null
           outcome?: string
+          refusal_class_counts?: Json | null
           run_id?: string
           selected_count?: number
         }
