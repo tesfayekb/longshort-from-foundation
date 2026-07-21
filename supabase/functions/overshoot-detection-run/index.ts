@@ -77,6 +77,8 @@ import {
   RATIFIED_STUDY_RUN_ID,
   RATIFIED_PARAM_GRID_HASH_PREFIX,
   RATIFIED_DETECTOR_VERSION,
+  emptyRefusalCounts,
+  tallyRefusalCounts,
   type DetectedEvent,
   type DetectorInput,
   type KernelCandidateRow,
