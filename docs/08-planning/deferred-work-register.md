@@ -136,9 +136,9 @@ Original wording: "consider at first W5 read-out". Reconciled against `docs/08-p
 | A (DONE-with-receipt)   | 14 |
 | B (DONE-BUT-UNDOCUMENTED)| 0 (none surfaced this sweep — all landed items had trackers) |
 | C (OPEN-DOCUMENTED)     | 56 (+DW-212-CONF legacy cross-check) |
-| D (OPEN-UNDOCUMENTED → row created this turn) | 8 (+DW-225) |
+| D (OPEN-UNDOCUMENTED → row created this turn) | 9 (+DW-225, +HK-001) |
 | E (DEAD / superseded)   | 8 (+curl-tool-401) |
-| **total surface**       | **86** |
+| **total surface**       | **87** |
 
 ### §0.4 NOW-WORKABLE CANDIDATES (gate satisfied, no held sequence, ranked by operator-value ÷ effort)
 
