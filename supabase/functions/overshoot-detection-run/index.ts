@@ -794,7 +794,9 @@ Deno.serve(createHandler(async (req: Request) => {
         freshestSiAsOfDateIso: freshestSiAsOfDate,
         sleeveDecision,
         stalenessMaxDays: OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
-        reason: sleeveDecision.reallocationActive ? 'si_stale_active' : 'si_freshness_restored',
+        reason: sleeveDecision.reallocationActive
+          ? (freshestSiAsOfDate === null ? 'si_corpus_absent' : 'si_stale_active')
+          : 'si_freshness_restored',
       });
     }
     const w5ReallocationRef = resolveW5ReallocationRef(

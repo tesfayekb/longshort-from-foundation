@@ -30,8 +30,8 @@ Deno.test('isSiRowStale — boundary at exactly stalenessMaxDays is FRESH', () =
   assert(isSiRowStale('2026-07-16', '2026-06-24', 21));      // 22d — stale
 });
 
-Deno.test('siStaleActive — null (empty corpus) returns FALSE, not stale', () => {
-  assertFalse(siStaleActive('2026-07-16', null, 21));
+Deno.test('siStaleActive — null (empty corpus) returns TRUE (fail-closed; sibling to analyst/M&A guards)', () => {
+  assert(siStaleActive('2026-07-16', null, 21));
 });
 
 Deno.test('siStaleActive — dormant-at-birth: SI computed 07-15, asOf 07-16 → FALSE', () => {
@@ -110,7 +110,7 @@ Deno.test('analystRevisionStaleActive — Wed→Mon dead feed (5d) is STALE at 4
   assert(analystRevisionStaleActive('2026-07-20', '2026-07-15T20:00:00Z', 4));
 });
 
-Deno.test('analystRevisionStaleActive — null corpus is FRESH (symmetric to siStaleActive)', () => {
+Deno.test('analystRevisionStaleActive — null corpus is FRESH (analyst-guard pre-existing semantics; siStaleActive now fail-closed on NULL — see drift note 2026-07-22)', () => {
   assertFalse(analystRevisionStaleActive('2026-07-21', null, 4));
 });
 

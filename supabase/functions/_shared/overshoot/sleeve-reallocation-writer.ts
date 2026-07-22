@@ -88,7 +88,7 @@ export interface MaybeWriteTransitionParams {
   freshestSiAsOfDateIso: string | null;
   sleeveDecision: SleeveAllocation;
   stalenessMaxDays: number;
-  reason: 'si_stale_active' | 'si_freshness_restored';
+  reason: 'si_stale_active' | 'si_corpus_absent' | 'si_freshness_restored';
 }
 
 /**

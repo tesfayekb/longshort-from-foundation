@@ -60,17 +60,22 @@ export function isSiRowStale(
  * (WITHIN-OVERSHOOT scope; cross-strategy reallocation was explicitly
  * REJECTED as allocator-era scope).
  *
- * Returning FALSE for an EMPTY corpus is deliberate: no data ≠ stale,
- * and the detector's per-row `si_unavailable` refusal already carries
- * the missing-data semantics. The overlay must not fabricate a stale
- * verdict from absence.
+ * NULL / EMPTY CORPUS → TRUE (fail-closed). Symmetric with the sibling
+ * analyst/M&A freshness guards (DEC-080-v2 / DEC-081-v2 / DEC-082):
+ * absence of any freshest datapoint is treated as degraded feed state,
+ * not "safely fresh". The book-level belt fires first (sleeves 40/0);
+ * the per-ticker `si_unavailable` refusal remains the second belt.
+ * Callers that need to distinguish "no corpus at all" from "corpus but
+ * stale" should inspect `freshestSiAsOfDateIso === null` themselves —
+ * the transition writer stamps `reason='si_corpus_absent'` in that
+ * case so the audit row names WHICH degradation fired.
  */
 export function siStaleActive(
   asOfIso: string,
   freshestSiAsOfDateIso: string | null,
   stalenessMaxDays: number,
 ): boolean {
-  if (freshestSiAsOfDateIso === null) return false;
+  if (freshestSiAsOfDateIso === null) return true;
   return isSiRowStale(asOfIso, freshestSiAsOfDateIso, stalenessMaxDays);
 }
 
