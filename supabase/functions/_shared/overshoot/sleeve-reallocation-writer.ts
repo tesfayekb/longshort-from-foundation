@@ -26,11 +26,40 @@
 //
 // Pure `decideTransition` is exported for unit testing without a DB.
 
-import { writeStrategyAuditEvent } from '../strategy-audit.ts';
 import type { SleeveAllocation } from './si-freshness.ts';
 
-// deno-lint-ignore no-explicit-any
-type Sql = any;
+// ─── Locally-declared minimal query interface ────────────────────────────
+// Type-only shape sufficient for `resolveSleeveContext`. Declared here so
+// this module does NOT import postgres.js (or any DB driver) and does NOT
+// transitively drag `_shared/supabase-admin.ts` (and thus @supabase/supabase-js)
+// into unrelated function test graphs. The real client (postgres.js tagged
+// template) satisfies this shape structurally at the call site.
+export interface SleeveSqlClient {
+  <T = Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): Promise<T[]>;
+}
+
+// ─── Locally-declared injected audit-writer shape ────────────────────────
+// Mirrors the public contract of `writeStrategyAuditEvent` from
+// `_shared/strategy-audit.ts` without importing it. The call site injects
+// the real writer; unit tests can inject a fake. This closes the T4 seam
+// while keeping this module DB-decoupled.
+export interface SleeveAuditWriterParams {
+  strategyKey: string;
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  metadata?: Record<string, unknown>;
+  correlationId: string;
+}
+export type SleeveAuditWriterResult =
+  | { success: true; auditId: string; correlationId: string }
+  | { success: false; code: string; reason: string; correlationId: string };
+export type SleeveAuditWriter = (
+  params: SleeveAuditWriterParams,
+) => Promise<SleeveAuditWriterResult>;
 
 export type SleeveTransition = 'engage' | 'disengage' | 'noop';
 
@@ -59,10 +88,10 @@ export interface SleeveContext {
  * default.
  */
 export async function resolveSleeveContext(
-  sql: Sql,
+  sql: SleeveSqlClient,
   currentRunId: string,
 ): Promise<SleeveContext> {
-  const rows = await sql<{ sleeves: Record<string, unknown> | null }[]>`
+  const rows = await sql<{ sleeves: Record<string, unknown> | null }>`
     SELECT sleeves
     FROM overshoot_detection_runs
     WHERE outcome = 'completed'
@@ -89,6 +118,12 @@ export interface MaybeWriteTransitionParams {
   sleeveDecision: SleeveAllocation;
   stalenessMaxDays: number;
   reason: 'si_stale_active' | 'si_corpus_absent' | 'si_freshness_restored';
+  /**
+   * Injected audit writer — the call site passes the real
+   * `writeStrategyAuditEvent` from `_shared/strategy-audit.ts`; tests inject
+   * a fake. Keeps this module free of any supabase-admin transitive import.
+   */
+  writeAudit: SleeveAuditWriter;
 }
 
 /**
@@ -108,10 +143,9 @@ export async function maybeWriteSleeveTransition(
   const action = params.transition === 'engage'
     ? 'overshoot.sleeve.reallocation_engaged'
     : 'overshoot.sleeve.reallocation_disengaged';
-  const result = await writeStrategyAuditEvent({
+  const result = await params.writeAudit({
     strategyKey: 'overshoot',
     action,
-    // System-originated: no operator identity; default operator uuid applies.
     targetType: 'overshoot_detection_runs',
     targetId: params.runId,
     correlationId: params.correlationId,
