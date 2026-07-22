@@ -722,10 +722,17 @@ Deno.serve(createHandler(async (req: Request) => {
         ((e.study_cell_ref #>> '{}')::jsonb)->>'side' AS study_cell_side,
         ((e.study_cell_ref #>> '{}')::jsonb)->>'band' AS study_cell_band,
         e.drawdown_bucket,
-        e.momentum_quintile
+        e.momentum_quintile,
+        -- DEC-504-4 WIRE: inherit W5 reallocation provenance from the
+        -- detection-time target row (NULL on fresh-book runs; a uuid when
+        -- the sleeve was reallocated to LONG-only). Left-joined to survive
+        -- historical rows that never wrote target_positions.
+        tp.w5_reallocation_ref::text AS w5_reallocation_ref
       FROM overshoot_events e
       JOIN overshoot_detection_runs dr
         ON dr.run_id = e.run_id
+      LEFT JOIN overshoot_target_positions tp
+        ON tp.run_id = e.run_id AND tp.ticker = e.ticker AND tp.side = e.side
       LEFT JOIN LATERAL (
         SELECT close
         FROM overshoot_daily_bars
