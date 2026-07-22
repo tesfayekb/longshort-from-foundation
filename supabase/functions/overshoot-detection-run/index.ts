@@ -578,6 +578,27 @@ Deno.serve(createHandler(async (req: Request) => {
     }
     durations.si_read_ms = Math.round(performance.now() - tS);
 
+    // ── DEC-504-4 WIRE — book-level sleeve reallocation decision ─────────
+    // Freshest SI as_of_date across the loaded corpus. `shortInterest` is
+    // already deduped to the freshest row per ticker, so a single scan
+    // yields the book-level max. Uses the SAME arithmetic the UI staleness
+    // chip and the per-row detector gate use (siStaleActive; strict >).
+    let freshestSiAsOfDate: string | null = null;
+    for (const [, r] of shortInterest) {
+      if (freshestSiAsOfDate === null || r.as_of_date > freshestSiAsOfDate) {
+        freshestSiAsOfDate = r.as_of_date;
+      }
+    }
+    const bookSiStaleActive = siStaleActive(
+      asOfDay, freshestSiAsOfDate, OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
+    );
+    const sleeveDecision = overshootSleeveAllocation(bookSiStaleActive, {
+      longAllocationPct: 0.90,
+      shortAllocationPct: 0.10,
+      longCapacity: DETECTOR_CAPACITY_LONG,
+      shortCapacity: DETECTOR_CAPACITY_SHORT,
+    });
+
     // Study-cell lookup — bound to ratified priors run_id.
     const cellRows = await sql<{ side: string; band: string; window_days: number; momentum_quintile: number; drawdown_bucket: number; exclusion_width_days: number; arrival_count: number; mean_fwd_return_5d: number | null }[]>`
       SELECT side, band, window_days, momentum_quintile, drawdown_bucket, exclusion_width_days, arrival_count, mean_fwd_return_5d
