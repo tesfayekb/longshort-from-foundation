@@ -855,8 +855,12 @@ Deno.serve(createHandler(async (req: Request) => {
         target_notional: 0,
         rank_score: e.rank_score,
         computed_at: nowIso,
+        // DEC-504-4 W5 provenance: only stamped when the sleeve is
+        // currently reallocated (LONG-only 40/0). Fresh-book runs write
+        // NULL, preserving the pre-wire fixture-byte semantics.
+        w5_reallocation_ref: sleeveDecision.reallocationActive ? w5ReallocationRef : null,
       }));
-      const cols = ['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at'] as const;
+      const cols = ['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at','w5_reallocation_ref'] as const;
       await sql`INSERT INTO overshoot_target_positions ${sql(targetRows, ...cols)}
         ON CONFLICT (run_id, ticker, side) DO NOTHING`;
     }
@@ -865,6 +869,28 @@ Deno.serve(createHandler(async (req: Request) => {
     await finalizeRun(sql, runId, 'completed', undefined, events.length, selected.length, durations, {
       bars: barsBackfillRunId, earnings: earningsBackfillRunId,
     }, dryRun, tallyRefusalCounts(events));
+    // DEC-504-4 WIRE — record sleeve posture on the run row (§22.5.1).
+    // Written AFTER finalizeRun so a partial failure earlier leaves the
+    // default '{}' sleeves value untouched (truthful posture on failed
+    // runs = "sleeve decision never reached").
+    if (!dryRun) {
+      await sql`
+        UPDATE overshoot_detection_runs
+           SET sleeves = ${sql.json({
+             reallocation_active: sleeveDecision.reallocationActive,
+             long_capacity: sleeveDecision.longCapacity,
+             short_capacity: sleeveDecision.shortCapacity,
+             long_allocation_pct: sleeveDecision.longAllocationPct,
+             short_allocation_pct: sleeveDecision.shortAllocationPct,
+             si_stale_active: bookSiStaleActive,
+             freshest_si_as_of_date: freshestSiAsOfDate,
+             si_staleness_max_days: OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
+             w5_reallocation_ref: w5ReallocationRef,
+             transition: sleeveTransition,
+           })}::jsonb
+         WHERE run_id = ${runId}::uuid
+      `;
+    }
     await sql.end({ timeout: 5 });
     // FP-069 W3.8 T2.4 (ACT-479) — dry-run response envelope enrichment
     // (INC-84 §5 bundle-content proof + Proposal A tier snapshot).
