@@ -92,7 +92,16 @@ import {
   analystRevisionStaleWarnActive,
   OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT,
   OVERSHOOT_ANALYST_REVISION_STALENESS_WARN_AT_DAYS_DEFAULT,
+  siStaleActive,
+  overshootSleeveAllocation,
+  OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
 } from '../_shared/overshoot/si-freshness.ts';
+import {
+  resolveSleeveContext,
+  maybeWriteSleeveTransition,
+  decideTransition,
+  resolveW5ReallocationRef,
+} from '../_shared/overshoot/sleeve-reallocation-writer.ts';
 
 // ── Live-detection defaults. Named parameters, provenance in comments. ────────
 // Ratified priors (FP-069 W3): exclusion_width=5, capacity LONG=36 / SHORT=4
