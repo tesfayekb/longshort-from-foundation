@@ -110,7 +110,7 @@ Deno.test('analystRevisionStaleActive — Wed→Mon dead feed (5d) is STALE at 4
   assert(analystRevisionStaleActive('2026-07-20', '2026-07-15T20:00:00Z', 4));
 });
 
-Deno.test('analystRevisionStaleActive — null corpus is FRESH (symmetric to siStaleActive)', () => {
+Deno.test('analystRevisionStaleActive — null corpus is FRESH (analyst-guard pre-existing semantics; siStaleActive now fail-closed on NULL — see drift note 2026-07-22)', () => {
   assertFalse(analystRevisionStaleActive('2026-07-21', null, 4));
 });
 
