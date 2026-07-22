@@ -328,18 +328,27 @@ Deno.test('FP-069 W3.8 T2.4 corrective: finalizeRun carries dry_run marker on BO
   // absence of the key means pre-T2.4 legacy only.
   //
   // (a) writer signature accepts dryRun and merges it into the UPDATE
-  //     payload for both the reason-carrying and reason-less branches:
-  assertStringIncludes(SRC, 'appendRunIds: { bars: string | null; earnings: string | null },\n  dryRun: boolean,\n)');
+  //     payload for both the reason-carrying and reason-less branches.
+  //     Signature grew an optional refusalCounts tail (INC-129, MIG-165)
+  //     — the corrective's dry_run-on-both-paths semantic is unchanged;
+  //     re-pin the exact shape so a future rename/removal of dryRun in
+  //     the signature fails loudly.
+  assertStringIncludes(
+    SRC,
+    'appendRunIds: { bars: string | null; earnings: string | null },\n  dryRun: boolean,\n  refusalCounts?: Record<string, number>,\n): Promise<void>',
+  );
   assertStringIncludes(SRC, 'skip_reason: reason, dry_run: dryRun');
   assertStringIncludes(SRC, '{ ...durations, dry_run: dryRun }');
-  // (b) every finalizeRun call site forwards dryRun as the trailing arg —
-  //     grep for absence of the pre-corrective shape (8-arg call without
-  //     dryRun trailing). The old signature ended `{ bars: ..., earnings: ... });`
-  //     with no dryRun; the corrective ends `}, dryRun);` for the success
-  //     path and `..., dryRun);` for the three catch paths.
+  // (b) every finalizeRun call site forwards dryRun — the success path
+  //     now trails with `dryRun, tallyRefusalCounts(events)` (INC-129
+  //     refusal-class-count pass-through); the three catch paths still
+  //     trail with a bare `dryRun`. Grep for absence of the pre-corrective
+  //     8-arg shape (no dryRun at all).
   // 4 call sites + 1 definition ('async function finalizeRun('). Total 5.
   const callSites = SRC.match(/finalizeRun\(/g) ?? [];
   assertEquals(callSites.length, 5, '4 finalizeRun call sites + 1 definition');
+  // Success-path signature ratchet — dryRun then refusal tally.
+  assertStringIncludes(SRC, '}, dryRun, tallyRefusalCounts(events));');
   // None of the four may end without dryRun forwarded:
   assertEquals(SRC.includes('earnings: null });'), false, 'bars-catch site must forward dryRun');
   assertEquals(SRC.includes('earnings: earningsBackfillRunId });'), false,
