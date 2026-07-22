@@ -187,12 +187,25 @@ Deno.test('A4 persistence targets: overshoot_events + overshoot_target_positions
   // overshoot_events columns list (per MIG-149 + MIG-156 tier verbatim).
   const eventCols = "['run_id','as_of_date','ticker','side','excess_w1','excess_w2','excess_w3','excess_w4','excess_w5','argmax_window_days','momentum_quintile','drawdown_bucket','days_to_nearest_earnings','earnings_alias_used','filter_passes','filter_refusal_reason','selected_for_entry','rank_score','study_cell_ref','tier']";
   assertStringIncludes(SRC, eventCols);
-  // overshoot_target_positions columns list.
-  const targetCols = "['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at']";
+  // overshoot_target_positions columns list — DEC-504-4 WIRE (MIG-166)
+  // added w5_reallocation_ref as the additive tail. The tail is ratified
+  // truth: guard the exact column list so a silent drop (or reorder that
+  // breaks the positional sql(...cols) helper) fails loudly.
+  const targetCols = "['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at','w5_reallocation_ref']";
   assertStringIncludes(SRC, targetCols);
-  // overshoot_detection_runs INSERT column list (append_run_ids MIG-152 present).
+  // overshoot_detection_runs INSERT column list — append_run_ids (MIG-152)
+  // + detector_version + refusal_class_counts (MIG-165 / ACT-563 + INC-129).
+  // All three are now ratified truth on the run row; assert the full
+  // INSERT column tail as a single byte-scan so a silent drop of any one
+  // fails the guard (nullable columns would otherwise defeat the point).
   assertStringIncludes(SRC, 'INSERT INTO overshoot_detection_runs');
-  assertStringIncludes(SRC, 'append_run_ids');
+  assertStringIncludes(SRC, 'append_run_ids, detector_version, refusal_class_counts');
+  // DEC-504-4 WIRE — sleeves jsonb write on the run row (§22.5.1).
+  // The UPDATE stamps posture AFTER finalizeRun so a partial failure
+  // earlier leaves the default '{}' sleeves value truthful. Ratchet:
+  assertStringIncludes(SRC, 'SET sleeves = ${sql.json({');
+  assertStringIncludes(SRC, 'reallocation_active: sleeveDecision.reallocationActive');
+  assertStringIncludes(SRC, 'w5_reallocation_ref: w5ReallocationRef');
 });
 
 Deno.test('FP-069 W3.8 T2.3 (MIG-156): tier round-trip — T1/T2/null persist verbatim via e.tier', () => {
@@ -235,20 +248,67 @@ Deno.test('SI read within staleness window (DETECTOR_SI_STALENESS_MAX_DAYS bound
   assertStringIncludes(SRC, '(${asOfDay}::date - ${DETECTOR_SI_STALENESS_MAX_DAYS}::int)');
 });
 
-Deno.test('ACT-490: handler wires ratified asymmetric caps LONG=36 / SHORT=4 via per-side named params', () => {
-  // Positive sentinels: both constants declared with the ratified values.
+Deno.test('DEC-504-4 WIRE: handler consumes overshootSleeveAllocation; BOTH branches byte-present (fresh 36/4, stale 40/0); no hardcoded post-decision caps', async () => {
+  // Supersedes the original ACT-490 static-caps invariant. DEC-504-4 makes
+  // the effective per-side capacity a FUNCTION of book-level SI staleness:
+  //   fresh (si_stale_active=false) → LONG=36 / SHORT=4 (ratified baseline)
+  //   stale (si_stale_active=true)  → LONG=40 / SHORT=0 (long-only reallocation)
+  // A blind re-pin that only matched the current fresh-branch strings would
+  // gut the guard the moment someone hardcoded either branch back in. So:
+  //
+  //   (a) ratified baseline constants still declared with the fresh values;
+  //   (b) baseline flows into the sleeve decision via the per-side named
+  //       params (longCapacity / shortCapacity), NOT as post-decision literals;
+  //   (c) all downstream persistence + audit fields read sleeveDecision.*
+  //       (dynamic) — the handler never restamps 36/4 or 40/0 as literals;
+  //   (d) BOTH branches are byte-present in the shared allocator source
+  //       (cross-file scan of si-freshness.ts) so a silent removal of the
+  //       stale-branch reallocation fails the guard here, not silently in
+  //       production.
+  //
+  // (a) baseline constants declared with the ratified fresh values.
   assertStringIncludes(SRC, 'DETECTOR_CAPACITY_LONG = 36');
   assertStringIncludes(SRC, 'DETECTOR_CAPACITY_SHORT = 4');
-  // Positive sentinels: DetectorInput assembly passes them via the
-  // per-side named-param API (capacityLong / capacityShort).
-  assertStringIncludes(SRC, 'capacityLong: DETECTOR_CAPACITY_LONG');
-  assertStringIncludes(SRC, 'capacityShort: DETECTOR_CAPACITY_SHORT');
-  // Negative sentinel: the pre-ACT-490 scalar constant + call-site MUST
-  // NOT return. This is the exact regression class INC-92 recorded.
+  // (b) sleeve decision fed by book-level staleness + per-side baseline.
+  assertStringIncludes(SRC, "import {\n  analystRevisionStaleWarnActive,");
+  assertStringIncludes(SRC, 'overshootSleeveAllocation,');
+  assertStringIncludes(SRC, 'siStaleActive,');
+  assertStringIncludes(SRC, 'const bookSiStaleActive = siStaleActive(');
+  assertStringIncludes(SRC, 'const sleeveDecision = overshootSleeveAllocation(bookSiStaleActive, {');
+  assertStringIncludes(SRC, 'longCapacity: DETECTOR_CAPACITY_LONG,');
+  assertStringIncludes(SRC, 'shortCapacity: DETECTOR_CAPACITY_SHORT,');
+  // (c) downstream reads the DECISION, never a fresh-branch literal.
+  assertStringIncludes(SRC, 'sleeveDecision.reallocationActive');
+  assertStringIncludes(SRC, 'sleeveDecision.longCapacity');
+  assertStringIncludes(SRC, 'sleeveDecision.shortCapacity');
+  // Negative sentinels — no post-decision hardcoded caps of either branch
+  // (would silently gut the wire). Pre-ACT-490 scalar shape also stays retired.
   assertEquals(SRC.includes('DETECTOR_CAPACITY_PER_SIDE'), false,
     'ACT-490: scalar capacity constant retired');
   assertEquals(SRC.includes('capacityPerSide:'), false,
     'ACT-490: scalar capacityPerSide named param retired at handler call site');
+  assertEquals(SRC.includes('long_capacity: 40'), false,
+    'DEC-504-4: stale-branch caps must come from sleeveDecision, not a literal');
+  assertEquals(SRC.includes('short_capacity: 0,'), false,
+    'DEC-504-4: stale-branch caps must come from sleeveDecision, not a literal');
+  assertEquals(SRC.includes('long_capacity: 36'), false,
+    'DEC-504-4: fresh-branch caps must come from sleeveDecision, not a literal');
+  assertEquals(SRC.includes('short_capacity: 4,'), false,
+    'DEC-504-4: fresh-branch caps must come from sleeveDecision, not a literal');
+  // (d) BOTH branches byte-present in the shared allocator (cross-file
+  // scan). Guards against "collapse to fresh-only" or "collapse to stale-
+  // only" edits sneaking past the handler-scoped grep.
+  const ALLOC = await Deno.readTextFile(
+    new URL('../_shared/overshoot/si-freshness.ts', import.meta.url),
+  );
+  assertStringIncludes(ALLOC, 'export function overshootSleeveAllocation(');
+  // Fresh branch — passthrough of the baseline with reallocationActive=false.
+  assertStringIncludes(ALLOC, 'if (!active) {');
+  assertStringIncludes(ALLOC, 'return { ...baseline, reallocationActive: false };');
+  // Stale branch — long absorbs short: capacities sum onto long, short → 0.
+  assertStringIncludes(ALLOC, 'longCapacity: baseline.longCapacity + baseline.shortCapacity,');
+  assertStringIncludes(ALLOC, 'shortCapacity: 0,');
+  assertStringIncludes(ALLOC, 'reallocationActive: true,');
 });
 
 Deno.test('POLYGON_API_KEY_PROD_PROBE binding (D2 ratification)', () => {
@@ -268,18 +328,27 @@ Deno.test('FP-069 W3.8 T2.4 corrective: finalizeRun carries dry_run marker on BO
   // absence of the key means pre-T2.4 legacy only.
   //
   // (a) writer signature accepts dryRun and merges it into the UPDATE
-  //     payload for both the reason-carrying and reason-less branches:
-  assertStringIncludes(SRC, 'appendRunIds: { bars: string | null; earnings: string | null },\n  dryRun: boolean,\n)');
+  //     payload for both the reason-carrying and reason-less branches.
+  //     Signature grew an optional refusalCounts tail (INC-129, MIG-165)
+  //     — the corrective's dry_run-on-both-paths semantic is unchanged;
+  //     re-pin the exact shape so a future rename/removal of dryRun in
+  //     the signature fails loudly.
+  assertStringIncludes(
+    SRC,
+    'appendRunIds: { bars: string | null; earnings: string | null },\n  dryRun: boolean,\n  refusalCounts?: Record<string, number>,\n): Promise<void>',
+  );
   assertStringIncludes(SRC, 'skip_reason: reason, dry_run: dryRun');
   assertStringIncludes(SRC, '{ ...durations, dry_run: dryRun }');
-  // (b) every finalizeRun call site forwards dryRun as the trailing arg —
-  //     grep for absence of the pre-corrective shape (8-arg call without
-  //     dryRun trailing). The old signature ended `{ bars: ..., earnings: ... });`
-  //     with no dryRun; the corrective ends `}, dryRun);` for the success
-  //     path and `..., dryRun);` for the three catch paths.
+  // (b) every finalizeRun call site forwards dryRun — the success path
+  //     now trails with `dryRun, tallyRefusalCounts(events)` (INC-129
+  //     refusal-class-count pass-through); the three catch paths still
+  //     trail with a bare `dryRun`. Grep for absence of the pre-corrective
+  //     8-arg shape (no dryRun at all).
   // 4 call sites + 1 definition ('async function finalizeRun('). Total 5.
   const callSites = SRC.match(/finalizeRun\(/g) ?? [];
   assertEquals(callSites.length, 5, '4 finalizeRun call sites + 1 definition');
+  // Success-path signature ratchet — dryRun then refusal tally.
+  assertStringIncludes(SRC, '}, dryRun, tallyRefusalCounts(events));');
   // None of the four may end without dryRun forwarded:
   assertEquals(SRC.includes('earnings: null });'), false, 'bars-catch site must forward dryRun');
   assertEquals(SRC.includes('earnings: earningsBackfillRunId });'), false,
