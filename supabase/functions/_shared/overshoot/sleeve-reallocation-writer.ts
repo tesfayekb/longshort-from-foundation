@@ -28,18 +28,16 @@
 
 import type { SleeveAllocation } from './si-freshness.ts';
 
-// ─── Locally-declared minimal query interface ────────────────────────────
+// ─── Locally-declared minimal query surface ──────────────────────────────
 // Type-only shape sufficient for `resolveSleeveContext`. Declared here so
 // this module does NOT import postgres.js (or any DB driver) and does NOT
 // transitively drag `_shared/supabase-admin.ts` (and thus @supabase/supabase-js)
-// into unrelated function test graphs. The real client (postgres.js tagged
-// template) satisfies this shape structurally at the call site.
-export interface SleeveSqlClient {
-  <T = Record<string, unknown>>(
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ): PromiseLike<T[]>;
-}
+// into unrelated function test graphs. The call site adapts the concrete
+// driver (postgres.js tagged template) to this callback shape in one
+// line — the shared module stays DB-agnostic.
+export type FetchPriorSleeves = (
+  currentRunId: string,
+) => Promise<Record<string, unknown> | null>;
 
 // ─── Locally-declared injected audit-writer shape ────────────────────────
 // Mirrors the public contract of `writeStrategyAuditEvent` from
@@ -88,18 +86,10 @@ export interface SleeveContext {
  * default.
  */
 export async function resolveSleeveContext(
-  sql: SleeveSqlClient,
+  fetchPriorSleeves: FetchPriorSleeves,
   currentRunId: string,
 ): Promise<SleeveContext> {
-  const rows = await sql<{ sleeves: Record<string, unknown> | null }>`
-    SELECT sleeves
-    FROM overshoot_detection_runs
-    WHERE outcome = 'completed'
-      AND run_id <> ${currentRunId}::uuid
-    ORDER BY detected_at DESC
-    LIMIT 1
-  `;
-  const s = rows[0]?.sleeves ?? null;
+  const s = await fetchPriorSleeves(currentRunId);
   if (!s || typeof s !== 'object') {
     return { priorActive: false, priorEngageAuditId: null };
   }
