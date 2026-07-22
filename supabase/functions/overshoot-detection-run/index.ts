@@ -102,6 +102,11 @@ import {
   decideTransition,
   resolveW5ReallocationRef,
 } from '../_shared/overshoot/sleeve-reallocation-writer.ts';
+// DEC-504-4 WIRE decoupling: the sleeve-reallocation writer no longer
+// imports the real audit writer directly (which drags supabase-admin +
+// @supabase/supabase-js into unrelated function test graphs). We inject
+// the concrete `writeStrategyAuditEvent` here at the sole call site.
+import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 
 // ── Live-detection defaults. Named parameters, provenance in comments. ────────
 // Ratified priors (FP-069 W3): exclusion_width=5, capacity LONG=36 / SHORT=4
