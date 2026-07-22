@@ -775,6 +775,35 @@ Deno.serve(createHandler(async (req: Request) => {
 
     const selected = events.filter((e) => e.selected_for_entry);
 
+    // ── DEC-504-4 WIRE — transition-edge audit + W5 provenance ──────────
+    // Read the prior completed run's sleeve posture, decide engage /
+    // disengage / noop, write ONE audit row on state edges only, and
+    // resolve the W5 reallocation ref that stamps target rows (and
+    // downstream lots via entry-run inheritance).
+    const sleeveCtx = await resolveSleeveContext(sql, runId);
+    const sleeveTransition = decideTransition(
+      sleeveCtx.priorActive, sleeveDecision.reallocationActive,
+    );
+    let newSleeveAuditId: string | null = null;
+    if (!dryRun) {
+      newSleeveAuditId = await maybeWriteSleeveTransition({
+        transition: sleeveTransition,
+        correlationId,
+        runId,
+        asOfIso: asOfDay,
+        freshestSiAsOfDateIso: freshestSiAsOfDate,
+        sleeveDecision,
+        stalenessMaxDays: OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
+        reason: sleeveDecision.reallocationActive ? 'si_stale_active' : 'si_freshness_restored',
+      });
+    }
+    const w5ReallocationRef = resolveW5ReallocationRef(
+      sleeveDecision.reallocationActive,
+      sleeveTransition,
+      newSleeveAuditId,
+      sleeveCtx.priorEngageAuditId,
+    );
+
     // ── Stage 7: persist ────────────────────────────────────────────────
     // A4 column-alignment attestation (verbatim vs W3.1 migration):
     //   overshoot_events: event_id (default), run_id, as_of_date, ticker, side,
