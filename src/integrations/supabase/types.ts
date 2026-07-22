@@ -1735,6 +1735,7 @@ export type Database = {
           refusal_class_counts: Json | null
           run_id: string
           selected_count: number
+          sleeves: Json
         }
         Insert: {
           append_run_ids?: Json | null
@@ -1750,6 +1751,7 @@ export type Database = {
           refusal_class_counts?: Json | null
           run_id?: string
           selected_count?: number
+          sleeves?: Json
         }
         Update: {
           append_run_ids?: Json | null
@@ -1765,6 +1767,7 @@ export type Database = {
           refusal_class_counts?: Json | null
           run_id?: string
           selected_count?: number
+          sleeves?: Json
         }
         Relationships: []
       }
