@@ -229,6 +229,12 @@ interface SelectionRow {
   study_cell_band: string | null;
   drawdown_bucket: number | null;
   momentum_quintile: number | null;
+  // DEC-504-4 WIRE — W5 reallocation provenance. Populated on target rows
+  // by overshoot-detection-run when the sleeve was reallocated to LONG-only
+  // (si_stale_active=TRUE); NULL on fresh-book runs. Entry-run inherits it
+  // onto overshoot_lots so every lot admitted under a stale-SI window
+  // carries the engagement audit uuid (MIG-158 column earns its keep here).
+  w5_reallocation_ref: string | null;
 }
 
 interface RefusalTally {
@@ -716,10 +722,17 @@ Deno.serve(createHandler(async (req: Request) => {
         ((e.study_cell_ref #>> '{}')::jsonb)->>'side' AS study_cell_side,
         ((e.study_cell_ref #>> '{}')::jsonb)->>'band' AS study_cell_band,
         e.drawdown_bucket,
-        e.momentum_quintile
+        e.momentum_quintile,
+        -- DEC-504-4 WIRE: inherit W5 reallocation provenance from the
+        -- detection-time target row (NULL on fresh-book runs; a uuid when
+        -- the sleeve was reallocated to LONG-only). Left-joined to survive
+        -- historical rows that never wrote target_positions.
+        tp.w5_reallocation_ref::text AS w5_reallocation_ref
       FROM overshoot_events e
       JOIN overshoot_detection_runs dr
         ON dr.run_id = e.run_id
+      LEFT JOIN overshoot_target_positions tp
+        ON tp.run_id = e.run_id AND tp.ticker = e.ticker AND tp.side = e.side
       LEFT JOIN LATERAL (
         SELECT close
         FROM overshoot_daily_bars
@@ -1180,14 +1193,16 @@ Deno.serve(createHandler(async (req: Request) => {
               (symbol, entry_ts, qty, cost_basis, side, status, settlement_state, source_order_id,
                tier, tier_source_event_run_id, tier_source_as_of_date,
                remaining_qty, filled_qty, exit_attempts,
-               cohort_cell_id, cohort_band, cohort_drawdown_bucket, cohort_entry_day_offset)
+               cohort_cell_id, cohort_band, cohort_drawdown_bucket, cohort_entry_day_offset,
+               w5_reallocation_ref)
             VALUES (
               ${sel.ticker}, ${nowTs.toISOString()}::timestamptz,
               ${fill.filled_qty}, ${fill.avg_fill_price * fill.filled_qty},
               ${sel.side}, 'open', 'pending', ${acc.order_id},
               ${sel.tier}, ${linkage.runId}, ${sessionDate}::date,
               ${fill.filled_qty}, 0, 0,
-              ${cohortCellId}, ${sel.study_cell_band}, ${sel.drawdown_bucket}, ${cohortEntryDayOffset}
+              ${cohortCellId}, ${sel.study_cell_band}, ${sel.drawdown_bucket}, ${cohortEntryDayOffset},
+              ${sel.w5_reallocation_ref}
             )
             RETURNING lot_id::text AS lot_id
           `;

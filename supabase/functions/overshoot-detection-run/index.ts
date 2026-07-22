@@ -92,7 +92,16 @@ import {
   analystRevisionStaleWarnActive,
   OVERSHOOT_ANALYST_REVISION_STALENESS_MAX_DAYS_DEFAULT,
   OVERSHOOT_ANALYST_REVISION_STALENESS_WARN_AT_DAYS_DEFAULT,
+  siStaleActive,
+  overshootSleeveAllocation,
+  OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
 } from '../_shared/overshoot/si-freshness.ts';
+import {
+  resolveSleeveContext,
+  maybeWriteSleeveTransition,
+  decideTransition,
+  resolveW5ReallocationRef,
+} from '../_shared/overshoot/sleeve-reallocation-writer.ts';
 
 // ── Live-detection defaults. Named parameters, provenance in comments. ────────
 // Ratified priors (FP-069 W3): exclusion_width=5, capacity LONG=36 / SHORT=4
@@ -569,6 +578,27 @@ Deno.serve(createHandler(async (req: Request) => {
     }
     durations.si_read_ms = Math.round(performance.now() - tS);
 
+    // ── DEC-504-4 WIRE — book-level sleeve reallocation decision ─────────
+    // Freshest SI as_of_date across the loaded corpus. `shortInterest` is
+    // already deduped to the freshest row per ticker, so a single scan
+    // yields the book-level max. Uses the SAME arithmetic the UI staleness
+    // chip and the per-row detector gate use (siStaleActive; strict >).
+    let freshestSiAsOfDate: string | null = null;
+    for (const [, r] of shortInterest) {
+      if (freshestSiAsOfDate === null || r.as_of_date > freshestSiAsOfDate) {
+        freshestSiAsOfDate = r.as_of_date;
+      }
+    }
+    const bookSiStaleActive = siStaleActive(
+      asOfDay, freshestSiAsOfDate, OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
+    );
+    const sleeveDecision = overshootSleeveAllocation(bookSiStaleActive, {
+      longAllocationPct: 0.90,
+      shortAllocationPct: 0.10,
+      longCapacity: DETECTOR_CAPACITY_LONG,
+      shortCapacity: DETECTOR_CAPACITY_SHORT,
+    });
+
     // Study-cell lookup — bound to ratified priors run_id.
     const cellRows = await sql<{ side: string; band: string; window_days: number; momentum_quintile: number; drawdown_bucket: number; exclusion_width_days: number; arrival_count: number; mean_fwd_return_5d: number | null }[]>`
       SELECT side, band, window_days, momentum_quintile, drawdown_bucket, exclusion_width_days, arrival_count, mean_fwd_return_5d
@@ -677,8 +707,14 @@ Deno.serve(createHandler(async (req: Request) => {
       params: {
         runId,
         asOf: asOfDay,
-        capacityLong: DETECTOR_CAPACITY_LONG,
-        capacityShort: DETECTOR_CAPACITY_SHORT,
+        // DEC-504-4 WIRE: capacities are the sleeve decision's, not the
+        // ratified constants directly. FRESH: 36 LONG / 4 SHORT (unchanged).
+        // STALE: 40 LONG / 0 SHORT — SHORT admissions cannot survive the
+        // detector's capacity gate; per-ticker si-squeeze-stale refusal
+        // remains the second belt for any SHORT candidate that reaches
+        // admission through a future code path.
+        capacityLong: sleeveDecision.longCapacity,
+        capacityShort: sleeveDecision.shortCapacity,
         squeezeSiPctFloatMin: DETECTOR_SQUEEZE_SI_PCT_FLOAT_MIN,
         siStalenessMaxDays: DETECTOR_SI_STALENESS_MAX_DAYS,
         exclusionWidthDays: DETECTOR_EXCLUSION_WIDTH_DAYS,
@@ -739,6 +775,35 @@ Deno.serve(createHandler(async (req: Request) => {
 
     const selected = events.filter((e) => e.selected_for_entry);
 
+    // ── DEC-504-4 WIRE — transition-edge audit + W5 provenance ──────────
+    // Read the prior completed run's sleeve posture, decide engage /
+    // disengage / noop, write ONE audit row on state edges only, and
+    // resolve the W5 reallocation ref that stamps target rows (and
+    // downstream lots via entry-run inheritance).
+    const sleeveCtx = await resolveSleeveContext(sql, runId);
+    const sleeveTransition = decideTransition(
+      sleeveCtx.priorActive, sleeveDecision.reallocationActive,
+    );
+    let newSleeveAuditId: string | null = null;
+    if (!dryRun) {
+      newSleeveAuditId = await maybeWriteSleeveTransition({
+        transition: sleeveTransition,
+        correlationId,
+        runId,
+        asOfIso: asOfDay,
+        freshestSiAsOfDateIso: freshestSiAsOfDate,
+        sleeveDecision,
+        stalenessMaxDays: OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
+        reason: sleeveDecision.reallocationActive ? 'si_stale_active' : 'si_freshness_restored',
+      });
+    }
+    const w5ReallocationRef = resolveW5ReallocationRef(
+      sleeveDecision.reallocationActive,
+      sleeveTransition,
+      newSleeveAuditId,
+      sleeveCtx.priorEngageAuditId,
+    );
+
     // ── Stage 7: persist ────────────────────────────────────────────────
     // A4 column-alignment attestation (verbatim vs W3.1 migration):
     //   overshoot_events: event_id (default), run_id, as_of_date, ticker, side,
@@ -790,8 +855,12 @@ Deno.serve(createHandler(async (req: Request) => {
         target_notional: 0,
         rank_score: e.rank_score,
         computed_at: nowIso,
+        // DEC-504-4 W5 provenance: only stamped when the sleeve is
+        // currently reallocated (LONG-only 40/0). Fresh-book runs write
+        // NULL, preserving the pre-wire fixture-byte semantics.
+        w5_reallocation_ref: sleeveDecision.reallocationActive ? w5ReallocationRef : null,
       }));
-      const cols = ['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at'] as const;
+      const cols = ['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at','w5_reallocation_ref'] as const;
       await sql`INSERT INTO overshoot_target_positions ${sql(targetRows, ...cols)}
         ON CONFLICT (run_id, ticker, side) DO NOTHING`;
     }
@@ -800,6 +869,28 @@ Deno.serve(createHandler(async (req: Request) => {
     await finalizeRun(sql, runId, 'completed', undefined, events.length, selected.length, durations, {
       bars: barsBackfillRunId, earnings: earningsBackfillRunId,
     }, dryRun, tallyRefusalCounts(events));
+    // DEC-504-4 WIRE — record sleeve posture on the run row (§22.5.1).
+    // Written AFTER finalizeRun so a partial failure earlier leaves the
+    // default '{}' sleeves value untouched (truthful posture on failed
+    // runs = "sleeve decision never reached").
+    if (!dryRun) {
+      await sql`
+        UPDATE overshoot_detection_runs
+           SET sleeves = ${sql.json({
+             reallocation_active: sleeveDecision.reallocationActive,
+             long_capacity: sleeveDecision.longCapacity,
+             short_capacity: sleeveDecision.shortCapacity,
+             long_allocation_pct: sleeveDecision.longAllocationPct,
+             short_allocation_pct: sleeveDecision.shortAllocationPct,
+             si_stale_active: bookSiStaleActive,
+             freshest_si_as_of_date: freshestSiAsOfDate,
+             si_staleness_max_days: OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
+             w5_reallocation_ref: w5ReallocationRef,
+             transition: sleeveTransition,
+           })}::jsonb
+         WHERE run_id = ${runId}::uuid
+      `;
+    }
     await sql.end({ timeout: 5 });
     // FP-069 W3.8 T2.4 (ACT-479) — dry-run response envelope enrichment
     // (INC-84 §5 bundle-content proof + Proposal A tier snapshot).
