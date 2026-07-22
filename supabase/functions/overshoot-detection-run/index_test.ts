@@ -187,12 +187,25 @@ Deno.test('A4 persistence targets: overshoot_events + overshoot_target_positions
   // overshoot_events columns list (per MIG-149 + MIG-156 tier verbatim).
   const eventCols = "['run_id','as_of_date','ticker','side','excess_w1','excess_w2','excess_w3','excess_w4','excess_w5','argmax_window_days','momentum_quintile','drawdown_bucket','days_to_nearest_earnings','earnings_alias_used','filter_passes','filter_refusal_reason','selected_for_entry','rank_score','study_cell_ref','tier']";
   assertStringIncludes(SRC, eventCols);
-  // overshoot_target_positions columns list.
-  const targetCols = "['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at']";
+  // overshoot_target_positions columns list — DEC-504-4 WIRE (MIG-166)
+  // added w5_reallocation_ref as the additive tail. The tail is ratified
+  // truth: guard the exact column list so a silent drop (or reorder that
+  // breaks the positional sql(...cols) helper) fails loudly.
+  const targetCols = "['run_id','ticker','side','target_shares','target_notional','rank_score','computed_at','w5_reallocation_ref']";
   assertStringIncludes(SRC, targetCols);
-  // overshoot_detection_runs INSERT column list (append_run_ids MIG-152 present).
+  // overshoot_detection_runs INSERT column list — append_run_ids (MIG-152)
+  // + detector_version + refusal_class_counts (MIG-165 / ACT-563 + INC-129).
+  // All three are now ratified truth on the run row; assert the full
+  // INSERT column tail as a single byte-scan so a silent drop of any one
+  // fails the guard (nullable columns would otherwise defeat the point).
   assertStringIncludes(SRC, 'INSERT INTO overshoot_detection_runs');
-  assertStringIncludes(SRC, 'append_run_ids');
+  assertStringIncludes(SRC, 'append_run_ids, detector_version, refusal_class_counts');
+  // DEC-504-4 WIRE — sleeves jsonb write on the run row (§22.5.1).
+  // The UPDATE stamps posture AFTER finalizeRun so a partial failure
+  // earlier leaves the default '{}' sleeves value truthful. Ratchet:
+  assertStringIncludes(SRC, 'SET sleeves = ${sql.json({');
+  assertStringIncludes(SRC, 'reallocation_active: sleeveDecision.reallocationActive');
+  assertStringIncludes(SRC, 'w5_reallocation_ref: w5ReallocationRef');
 });
 
 Deno.test('FP-069 W3.8 T2.3 (MIG-156): tier round-trip — T1/T2/null persist verbatim via e.tier', () => {
