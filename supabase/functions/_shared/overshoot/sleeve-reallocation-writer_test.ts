@@ -1,6 +1,7 @@
 // DEC-504-4 WIRE — pure unit tests for the transition-edge writer helpers.
-// Covers: flag arithmetic (age 21 fresh / 22 stale via siStaleActive),
-// sleeve construction (fresh 36/4, stale 40/0, NULL corpus fresh 36/4),
+// Covers: flag arithmetic (age 21 fresh / 22 stale / NULL fail-closed
+// via siStaleActive), sleeve construction (fresh 36/4, stale 40/0,
+// NULL corpus 40/0 fail-closed),
 // transition decision (engage / disengage / noop / noop-when-still-stale),
 // W5 ref resolution (engage → new uuid, noop-active → prior uuid, inactive → null).
 //
@@ -31,8 +32,8 @@ Deno.test('siStaleActive: age 22 is STALE', () => {
   assertEquals(siStaleActive('2026-07-22', '2026-06-30', OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT), true);
 });
 
-Deno.test('siStaleActive: NULL corpus returns FALSE (safe fresh default; T1 fail-open)', () => {
-  assertEquals(siStaleActive('2026-07-22', null, OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT), false);
+Deno.test('siStaleActive: NULL corpus returns TRUE (fail-closed; sibling to analyst/M&A guards)', () => {
+  assertEquals(siStaleActive('2026-07-22', null, OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT), true);
 });
 
 // ─── Sleeve construction ─────────────────────────────────────────────────
@@ -61,14 +62,16 @@ Deno.test('sleeve construction: STALE → 40 LONG / 0 SHORT (short arm dark)', (
   assertEquals(s.reallocationActive, true);
 });
 
-Deno.test('sleeve construction: NULL corpus → FRESH-path 36/4 (via siStaleActive=FALSE)', () => {
+Deno.test('sleeve construction: NULL corpus → STALE-path 40/0 (fail-closed)', () => {
   const stale = siStaleActive('2026-07-22', null, OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT);
+  assertEquals(stale, true);
   const s = overshootSleeveAllocation(stale, {
     longAllocationPct: 0.90, shortAllocationPct: 0.10,
     longCapacity: 36, shortCapacity: 4,
   });
-  assertEquals(s.reallocationActive, false);
-  assertEquals(s.longCapacity, 36);
+  assertEquals(s.reallocationActive, true);
+  assertEquals(s.longCapacity, 40);
+  assertEquals(s.shortCapacity, 0);
 });
 
 // ─── Transition decision (state-machine idempotence) ─────────────────────
