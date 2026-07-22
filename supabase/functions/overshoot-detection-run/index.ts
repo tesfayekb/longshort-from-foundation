@@ -785,7 +785,19 @@ Deno.serve(createHandler(async (req: Request) => {
     // disengage / noop, write ONE audit row on state edges only, and
     // resolve the W5 reallocation ref that stamps target rows (and
     // downstream lots via entry-run inheritance).
-    const sleeveCtx = await resolveSleeveContext(sql, runId);
+    // Adapter: keep the DB query at the call site so the shared writer
+    // stays free of driver imports (DEC-504-4 decoupling — see writer).
+    const sleeveCtx = await resolveSleeveContext(async (currentRunId) => {
+      const rows = await sql<{ sleeves: Record<string, unknown> | null }[]>`
+        SELECT sleeves
+        FROM overshoot_detection_runs
+        WHERE outcome = 'completed'
+          AND run_id <> ${currentRunId}::uuid
+        ORDER BY detected_at DESC
+        LIMIT 1
+      `;
+      return rows[0]?.sleeves ?? null;
+    }, runId);
     const sleeveTransition = decideTransition(
       sleeveCtx.priorActive, sleeveDecision.reallocationActive,
     );
