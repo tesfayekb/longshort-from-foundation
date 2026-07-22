@@ -707,8 +707,14 @@ Deno.serve(createHandler(async (req: Request) => {
       params: {
         runId,
         asOf: asOfDay,
-        capacityLong: DETECTOR_CAPACITY_LONG,
-        capacityShort: DETECTOR_CAPACITY_SHORT,
+        // DEC-504-4 WIRE: capacities are the sleeve decision's, not the
+        // ratified constants directly. FRESH: 36 LONG / 4 SHORT (unchanged).
+        // STALE: 40 LONG / 0 SHORT — SHORT admissions cannot survive the
+        // detector's capacity gate; per-ticker si-squeeze-stale refusal
+        // remains the second belt for any SHORT candidate that reaches
+        // admission through a future code path.
+        capacityLong: sleeveDecision.longCapacity,
+        capacityShort: sleeveDecision.shortCapacity,
         squeezeSiPctFloatMin: DETECTOR_SQUEEZE_SI_PCT_FLOAT_MIN,
         siStalenessMaxDays: DETECTOR_SI_STALENESS_MAX_DAYS,
         exclusionWidthDays: DETECTOR_EXCLUSION_WIDTH_DAYS,
