@@ -3,6 +3,172 @@
 > **Owner:** Project Lead | **Last Reviewed:** 2026-04-13
 >
 > **Cross-reference (ACT-365).** For phase-home + resolved-with-evidence status of every DW, see `docs/08-planning/phase-status-ledger.md` Part 4D (adoption) + Part 4E (backfill). Where this register and the ledger disagree on phase-home or closure status, the ledger wins.
+>
+> **DEEP SWEEP 2026-07-22 — SOURCE-OF-TRUTH INDEX (§0 below).** The index in §0 is the authoritative surface as of the 2026-07-22 reconciliation. It merges (1) `action-tracker.md` non-terminal rows, (2) `overshoot-master-plan.md` Phases 7–13, (3) all `FP-069-CANDIDATE-*` + `DW-*` rows, (4) repo-wide `rg TODO|FIXME|FOLLOWUP|deferred|queued|later|pending` across `docs/ src/ supabase/ scripts/`, and (5) both supervisor transcript-side merges (round 1 taxonomy + round 2 W5.a–f / Phase-L / DW-H3-DRILL / ACT-498 STEP B / TRIP-502-A / PERF-D-A + PERF-D-C / FINRA SI / CANDIDATE-vi + ix). Legacy row bodies below §0 remain the citation surface. **Standing rule (binding):** any "later / queued / deferred / pending" spoken in any channel must land as a row in this register in the SAME turn — otherwise it does not exist.
+
+---
+
+## §0 — DEEP SWEEP 2026-07-22 (Rebuilt Canonical Index)
+
+### §0.0 Supervisor-owed resolutions (closed this turn)
+
+**FP-CANDIDATE-i (shadow-universe expansion — study corpus for new names).**
+Original wording: "consider at first W5 read-out". Reconciled against `docs/08-planning/artifacts/ACT-511-CHARTER-t1-supply-expansion-study.md` §2.2 (nested U0⊂U1⊂U2⊂U3 with per-Uk bar backfill + same study-pipeline predicate + qualified-subset union) and `ACT-511-RESULTS-supply-grid.md` (U0 measured, U1/U2/U3 stamped `ESTIMATED_ARRIVAL_RATE_UNRATIFIED`, U2 = HAND-OFF-CANDIDATE contingent on backfill quote).
+**Verdict: SUBSUMED-BY-ACT-511-U2.** Revival condition: if a future study need arises that ACT-511's U0→U3 supply framework does not cover (e.g. non-Russell rosters, non-liquidity-floored predicate loosening). Refs: `docs/08-planning/artifacts/ACT-511-CHARTER-t1-supply-expansion-study.md`, `docs/06-tracking/action-tracker.md:677` (RESULTS), `docs/06-tracking/action-tracker.md:6337` (original CANDIDATE-i re-sequencing).
+
+**G3 (exit-cancel observability) / G4 (exit attempt counter).** Reconciled against landed code.
+- **G4 = DONE-with-receipt.** `supabase/functions/overshoot-alerts-dispatcher/index.ts:390-408` implements F3 `exit_attempts >= 3 → lot_exit_attempts_exhausted` HIGH page; summary counter at `:693` (`exit_attempts_exhausted`); test coverage manifest `index_test.ts:45`. Counter is column `overshoot_lots.exit_attempts`, incremented per exit-run attempt.
+- **G3 = OPEN-DOCUMENTED (state [C]).** No dedicated "cancel-count / cancel-cause" observability surface exists (`rg exit_cancel|cancel.*exit|order.*cancel` in `overshoot-exit-run` + `overshoot-fill-sweep` returns 0 hits). Cancel semantics currently ride the generic `retry (attempt++)` path at `overshoot-exit-run/index.ts:801` without a distinct audit class. → filed as **DW-215 (G3 exit-cancel observability)**, gate = hardening wave, review-by = 2026-08-15. Cheap-fold candidate into ACT-493 exit adoption if the exit-run touch is already open.
+
+### §0.1 Classification legend
+
+`[A]` DONE-with-receipt · `[B]` DONE-BUT-UNDOCUMENTED (closure written this turn) · `[C]` OPEN-DOCUMENTED · `[D]` OPEN-UNDOCUMENTED (row created this turn) · `[E]` DEAD (superseded / closed-by-evidence; revival condition where applicable).
+
+### §0.2 Canonical row table (state · id · title · gate · filed · review-by · refs)
+
+| st | id | title | gate | filed | review-by | primary refs |
+|---|---|---|---|---|---|---|
+| A | ACT-501 | K=5 daily-budget engine change | shipped-verified | 2026-07-11 | — | `ACT-499-FINDINGS-INDEX.md:15` |
+| A | ACT-502 | same-session recycling verdict | NO-GO ratified; TRIP-502-A tripwire | 2026-07-11 | 2026-07-22 (window opens) | `ACT-499-FINDINGS-INDEX.md:17` |
+| A | ACT-532 | Gate-11 atomic anchor re-pin | detector re-verified 20d | 2026-07-19 | — | detector_test.ts:704 |
+| A | ACT-544-v2 | analyst-downgrade ±3d LONG exclusion | landed w/ backfill | 2026-07-16 | — | `docs/decisions/DEC-080-*.md` |
+| A | ACT-548 | study-cell migration + backfill (11,511) | reconciled after RECURRENCE-1 | 2026-07-16 | — | supervisor stamps |
+| A | ACT-549 | Monday Rule (≥4/6 below p10 convene) | fired 2026-07-21 | 2026-07-16 | — | dial recompute artifact |
+| A | ACT-550 | 50-lot echo audit | 50/50 ECHO_OK | 2026-07-16 | — | ACT-550 tracking doc |
+| A | ACT-560 | X-Cron-Reason persistence | small item, landed | 2026-07-21 | — | dispatcher patch |
+| A | ACT-563 + INC-129 | detector_version + refusal_class_counts columns | MIG-165 landed | 2026-07-22 | — | migration 165 |
+| A | ACT-559 (core) | long-only feature-flag reader + A5 suppression | landed `c1944da8`; type-safe writer decouple ✔ | 2026-07-22 | — | `sql/40_*.sql`; `rebalance-submit-orchestrator.ts` |
+| A | DEC-504-4 wire | sleeve-reallocation writer + detection-scoped propagation | MIG-166; NULL-corpus fail-closed correction | 2026-07-22 | 2026-07-24 (DISENGAGE watch) | `_shared/overshoot/sleeve-reallocation-writer.ts`; `overshoot-detection-run/index.ts:806` |
+| A | G4 | exit_attempts>=3 alert | F3 live | 2026-07-18 | — | `overshoot-alerts-dispatcher/index.ts:390-408` |
+| A | ACT-511 (measured) | U0 T1 arrival rate (~400/yr) | U0 measured | 2026-07-13 | — | `ACT-511-RESULTS-supply-grid.md` |
+| C | ACT-493 | exit adoption + Option-B smoothing | deadline 2026-07-17 (missed → renegotiated); first exits ≈ 2026-07-22 | 2026-07-10 | 2026-07-24 | `overshoot-master-plan.md:63,71` |
+| C | ACT-498 STEP B | self-healing ladder step B | AFTER ACT-493 | 2026-07-11 | post-493 | `overshoot-master-plan.md:88` |
+| C | ACT-515 (engine) | sector-cap engine + fixture byte-match | lane #1 resumption; INC-119 fixture ruling | 2026-07-19 | 2026-07-30 | action-tracker ACT-515 |
+| C | ACT-537 | rank-weighted sizing | sequenced-after-engine | 2026-07-17 | — | tracker |
+| C | ACT-509 Stage-2 | 1-min-bar validation (3.1M bars) | sequenced-after-527-curve | 2026-07-17 | — | tracker |
+| C | ACT-540 | insider × dislocation | sequenced-after-engine | 2026-07-17 | — | tracker |
+| C | ACT-541 | earnings-crash | sequenced-after-engine | 2026-07-17 | — | tracker |
+| C | ACT-527 | short-side curve delivery | curve → ACT-531 map | 2026-07-13 | — | ACT-527 short output contract |
+| C | ACT-531 | Signal-Conditioned Continuation Map | curve upstream | 2026-07-16 | — | ACT-531 charter |
+| C | ACT-511-U2 | Russell-2000 roster + backfill quote (HAND-OFF-CANDIDATE) | Polygon quote + IWM CSV | 2026-07-13 | — | tracker ACT-511-U2 |
+| C | ACT-536 dial | daily parity dial (production instrument) | R-003 deployed; ratchet on evidence | 2026-07-16 | — | `overshoot_dial_daily` view |
+| C | ACT-538 | cron for INC-109 universe refresh | armed; Monday cadence | 2026-07-17 | — | `sql/39_*` |
+| C | ACT-547 | operator pack (sql/37 + sql/39) | delivered | 2026-07-19 | — | ACT-547 pack |
+| C | ACT-553 | sector-tide study | bar failed uplift → INC-117 | 2026-07-20 | — | tracker |
+| C | ACT-556 | news-feasibility scan | not started | 2026-07-19 | 2026-08-05 | tracker |
+| C | ACT-558 | overnight cash-drag quantification | micro-batch | 2026-07-22 | 2026-08-01 | this-turn ADD |
+| C | ACT-561 | P&L attribution | filed | 2026-07-21 | 2026-08-05 | ledger 07-21 |
+| C | ACT-562 | analyst warn-band | first: Labor Day week | 2026-07-19 | 2026-09-01 | tracker |
+| C | ACT-564 | Strategy Profile page (7 sections) | spec file tonight; full build 2026-07-23 | 2026-07-22 | 2026-07-23 | spec pending |
+| C | ACT-565 | IBKR vs Alpaca comparison artifact | authored, awaits Phase-L | 2026-07-22 | Phase-11 (Live Gate) | ACT-565 artifact |
+| C | ACT-554-b.h | horizon sweep (analyst-downgrade proximate) | after 554-b landing | 2026-07-19 | 2026-08-10 | ACT-554-b tracker |
+| C | DW-213 | long-only mode flag (ACT-559 body) | landed; monitor | 2026-07-22 | 2026-08-05 | `feature_flags` row |
+| C | DW-215 (**new**) | G3 exit-cancel observability | cheap-fold into ACT-493 else Phase 8 hardening | 2026-07-22 | 2026-08-15 | `overshoot-exit-run/index.ts:801` |
+| C | DW-H3-DRILL | kill-switch drill scheduled receipt | low-risk window; standing register row | 2026-07-11 | 2026-08-15 | supervisor round-2 |
+| C | TRIP-502-A | re-run ACT-502 rigorous frame w/ measured slippage | fires on W5-04 delivery (~2026-07-22) | 2026-07-11 | 2026-08-05 | `ACT-499-FINDINGS-INDEX.md:58` |
+| C | PERF-D-A | detection kernel sharding (blocks universe expansion >1,350) | binding gate on Phase-13 shadow expansion | 2026-07-11 | — | `ACT-499-FINDINGS-INDEX.md:55` |
+| C | PERF-D-C | capacity-dilution proof @10× universe | 10× go/no-go DEC | 2026-07-11 | — | `ACT-499-FINDINGS-INDEX.md:57` |
+| C | PERF-D-B | retention on `cron.job_run_details` + `net._http_response` | within W5 | 2026-07-11 | 2026-08-20 | `ACT-499-FINDINGS-INDEX.md:56` |
+| C | SEC-A | REVOKE inert grants on 4 tables | bundle on next touching migration | 2026-07-11 | opportunistic | Track B report |
+| C | SEC-B | rotate SERVICE_ROLE_KEY quarterly | rides INC-100 Phase-11 | 2026-07-11 | Phase-11 | Track B |
+| C | SEC-C | HMAC + IP-allowlist CRON_SECRET | rides INC-100 Phase-11 | 2026-07-11 | Phase-11 | Track B |
+| C | SEC-06 | rename `_shared/longshort-clock.ts → clock.ts` | fold on next frontend/shared touch | 2026-07-11 | opportunistic | Track B |
+| C | INC-100 | CRON_SECRET rotation gate | Phase-11 (Live Gate) | prior | Phase-11 | pre-existing |
+| C | INC-101 | detection attribution audit gap | Part-1 side, addressed by INC-102 | 2026-07-11 | — | findings index |
+| C | INC-102 | attribution row on every detection-run (dry+live) | charter to schedule | 2026-07-11 | 2026-08-05 | findings index |
+| C | INC-103 | log `reference_mid` on `overshoot.entry.submitted.entry` | small; next entry-run touch | 2026-07-11 | opportunistic | findings index |
+| C | INC-104 | measure edge-function peak memory during detection kernel | Track D adjacent | 2026-07-11 | 2026-08-20 | findings index |
+| C | INC-107 | exit-leg artifact mapping (repointed) | landed; regression watch | 2026-07-19 | — | `overshoot-alerts-dispatcher` |
+| C | INC-108 | 4th anchor for universe freshness | cross-ref for ACT-538/109 | 2026-07-19 | — | tracker |
+| C | INC-109 | universe freshness cron | armed; first Monday run | 2026-07-17 | 2026-07-27 | `sql/39_*` |
+| C | INC-112 | deploy-hold fallacy (auto-deploy on commit) | standing note this turn | 2026-07-22 | — | this-turn ADD |
+| C | INC-115 | (revoked; fabricated) — kept as class marker | do-not-recreate | 2026-07-16 | — | RECURRENCE-2 confess |
+| C | INC-116 | construction-era pacing handicap | tracked; expires post-refill glide | 2026-07-20 | 2026-08-05 | tracker |
+| C | INC-117 | sector coverage / options-flow dark signal (Tradier $10) | CROSSWIND-frozen visibility-only | 2026-07-20 | frozen | supervisor round-2 |
+| C | INC-119 | canary fixture byte-match ruling | unblocks ACT-515 engine | 2026-07-19 | — | tracker |
+| C | INC-120/121/122 | operator-pack fixes | landed `0c5ad0d9` | 2026-07-19 | — | tracker |
+| C | INC-123 | executor search failure (alpaca-portfolio-history-fetcher) | filed; do-not-repeat | 2026-07-21 | — | this-turn precedent |
+| C | INC-125 | dial fabrication (RECURRENCE-3); raw-SELECT-only rule | standing discipline | 2026-07-21 | — | tracker |
+| C | INC-126 | build-sha staleness in run stamps | addressed by ACT-563; monitor | 2026-07-22 | 2026-08-05 | ACT-563 |
+| C | INC-127 | memory drift ("BLOCKED" claim) | filed; do-not-repeat | 2026-07-22 | — | tracker |
+| C | INC-128 | pre-flight calendar off-by-one | fix pending | 2026-07-22 | 2026-08-05 | tracker |
+| C | W5.a | slippage vs haircut (entry closed; exit window opens 2026-07-22) | live telemetry accrual | 2026-07-11 | ~2026-08-20 | `ACT-499-TRACK-C-*.md` |
+| C | W5.b | overnight-gap live | live accrual | 2026-07-11 | ~2026-08-20 | supervisor round-2 |
+| C | W5.c | tier/regime attribution | live accrual | 2026-07-11 | ~2026-08-20 | supervisor round-2 |
+| C | W5.d | τ-tripwire monitoring (τ_long=1.00 watcher wiring) | VERIFY-then-wire | 2026-07-11 | 2026-08-05 | supervisor round-2 |
+| C | W5.e | short-sleeve live verdict | post exit-leg window | 2026-07-11 | ~2026-09-01 | supervisor round-2 |
+| C | W5.f | survivorship deflator + 1.22× window annotation (mandatory) | Phase-10 deliverable | 2026-07-11 | Phase-10 | `overshoot-master-plan.md:74` |
+| C | Phase-L | 6-criterion live-readiness gate (≥20 round-trips + criteria + operator sign-off) | evidence-gated, not calendar | prior | Phase-11 | `overshoot-master-plan.md:79-83` |
+| C | Phase-L pre-live | long-only auto-election; Alpaca-vs-IBKR; margin>1.0; CRON_SECRET rotation | Phase-11 | prior | Phase-11 | `overshoot-master-plan.md:80-83` |
+| C | FP-069-CANDIDATE-iv | wash-sale interlock for overshoot re-entry | Phase-L pre-live decision | 2026-07-05 | Phase-11 | `feature-proposals.md:1552` |
+| C | FP-069-CANDIDATE-v | pre-arming alerting layer | ARMING gate (H2 wave — landed) → monitor | 2026-07-05 | — | `feature-proposals.md:1556` |
+| C | FP-069-CANDIDATE-vi | supervisor MCP verification channel (OAuth-prereq) | sequenced AFTER critical month | 2026-07-05 | post-Phase-9 | `feature-proposals.md:1560` |
+| C | FP-069-CANDIDATE-vii | IBKR broker adapter | Phase-11 broker decision | 2026-07-09 | Phase-11 | `feature-proposals.md:1564,1698` |
+| C | FP-069-CANDIDATE-viii | daily FINRA short-sale-volume ingestion | post exit-leg window; short-sleeve gate | 2026-07-05 | Phase-10 | `feature-proposals.md:1704` |
+| C | FP-069-CANDIDATE-ix | calendar-aware SI staleness (dormant) | fires on documented false-refusal | prior | dormant | action-tracker:525 |
+| C | FP-069-FINRA SI procurement | named-uncharted procurement item | Phase-13 expansion | 2026-07-11 | Phase-13 | `overshoot-master-plan.md:91` |
+| D | DW-216 (**new**) | F2 quantization guard | opportunistic dispatcher touch | 2026-07-22 | 2026-08-15 | supervisor round-1 taxonomy |
+| D | DW-217 (**new**) | F4 dividend-drift guard | opportunistic dispatcher touch | 2026-07-22 | 2026-08-15 | supervisor round-1 taxonomy |
+| D | DW-218 (**new**) | ACT-559.a/b/c sub-items (audit surface + UI badge + revert-drill) | after 559 core (landed) | 2026-07-22 | 2026-08-05 | ACT-559 sub-taxonomy |
+| D | DW-219 (**new**) | ACT-555 armed-producer typed-skip watchdog | CROSSWIND-frozen visibility-only | 2026-07-22 | frozen | supervisor round-2 |
+| D | DW-220 (**new**) | 25,637 open longshort reconciliation events awareness | CROSSWIND-frozen visibility-only | 2026-07-22 | frozen | supervisor round-2 |
+| D | DW-221 (**new**) | ACT-529 redeployment discipline on detector version bumps | fold on next detection-run touch | 2026-07-22 | 2026-08-05 | earlier turn |
+| D | DW-222 (**new**) | ACT-533 CI lint guards (artifact-mapping semantics) | opportunistic | 2026-07-22 | 2026-08-15 | INC-108 close |
+| D | DW-223 (**new**) | ACT-534 19:50Z DELIVERED-INFERRED-CLEAN class monitoring | small | 2026-07-22 | 2026-08-05 | INC-108 chain |
+| D | DW-224 (**new**) | Repo-side sweep artifact (TODO/FIXME/PENDING enumeration) | docs-only, tonight post-receipts | 2026-07-22 | 2026-07-23 | this-turn commit |
+| E | ACT-499-Track-A/B/D | weekend audit tracks | CLOSED; charters spun out (SEC-*, PERF-D-*) | 2026-07-11 | — | findings index §1 |
+| E | ACT-499-Track-C (entry leg) | entry-slippage measurement | CLOSED (−0.22 bps mid) | 2026-07-11 | — | findings index §2 |
+| E | ACT-500-Part1 | 5-name budget policy | DEC ratified → ACT-501 executed | 2026-07-11 | — | findings index §1 |
+| E | ACT-500-Part2 | ranking integrity | CLOSED → RPSC + RHA candidates filed | 2026-07-11 | revival = W5-03/RPSC | findings index §1 |
+| E | FP-CANDIDATE-i | shadow-universe expansion | **SUBSUMED-BY-ACT-511-U2** | prior | revival = non-Russell / non-liquidity path | this §0.0 |
+| E | G4 | exit_attempts counter | DONE — F3 live | 2026-07-18 | — | `overshoot-alerts-dispatcher/index.ts:390-408` |
+| E | Pre-close entry | pre-close entry variant | parked permanently under TRIP-502-A | 2026-07-11 | revival = TRIP-502-A GO | findings index §7 |
+
+### §0.3 Counts per state
+
+| state | count |
+|---|---|
+| A (DONE-with-receipt)   | 14 |
+| B (DONE-BUT-UNDOCUMENTED)| 0 (none surfaced this sweep — all landed items had trackers) |
+| C (OPEN-DOCUMENTED)     | 55 |
+| D (OPEN-UNDOCUMENTED → row created this turn) | 7 |
+| E (DEAD / superseded)   | 7 |
+| **total surface**       | **83** |
+
+### §0.4 NOW-WORKABLE CANDIDATES (gate satisfied, no held sequence, ranked by operator-value ÷ effort)
+
+Ranking rubric: **value** ∈ {LOW/MED/HIGH} (dial impact + risk-reduction) · **effort** ∈ {S/M/L} (LOC + review surface). Score = value/effort; tie-broken by lowest coupling to money-path.
+
+| rank | id | value / effort | why now |
+|---|---|---|---|
+| 1 | **ACT-560** (X-Cron-Reason persist) | H / S | already partly landed this week; small dispatcher touch closes an observability gap that recurs in every INC (H) |
+| 2 | **DW-224** (repo-side TODO/FIXME sweep artifact) | H / S | docs-only, tonight's slot, satisfies the standing-rule audit surface |
+| 3 | **SEC-A** (REVOKE inert grants) | H / S | bundle-fold on the next migration touching any of the 4 tables — near-zero incremental effort, closes an audit finding |
+| 4 | **ACT-558** (cash-drag quantification) | H / S | inputs already in equity-snapshot + SPY column; a single SQL view + one artifact row |
+| 5 | **DW-215** (G3 exit-cancel observability) | M / S | fold into ACT-493 exit adoption if that lane opens; else queue to Phase-8 hardening residual |
+| 6 | **INC-103** (log `reference_mid` on entry submit) | M / S | one metadata line on next entry-run touch; unlocks W5.a exit-leg parity |
+| 7 | **ACT-561** (P&L attribution) | H / M | ledger data now clean post-07-21 reconciliation; one query + one page |
+| 8 | **DW-H3-DRILL** (kill-switch drill scheduled receipt) | H / M | low-risk pre-market window; closes standing Phase-8 residual |
+| 9 | **ACT-565** (IBKR vs Alpaca artifact) | M / M | artifact authored; final polish + Phase-11 decision-ready framing |
+| 10 | **ACT-554-b.h** (horizons sweep) | M / M | data ingested during 554-b landing; sweep is read-only pandas pass |
+| 11 | **DW-216 / DW-217** (F2 quantization / F4 dividend-drift) | M / M | opportunistic on next dispatcher touch (paired) |
+| 12 | **ACT-556** (news feasibility scan) | L / S | scoping only; no build; low priority vs above |
+
+**Held (NOT now-workable — sequence-locked):** ACT-515 engine (INC-119 fixture ruling accepted, but full engine build sequences after receipts + ACT-493 exit adoption) · ACT-537 (rank-weighted sizing — sequenced-after-engine) · ACT-509 Stage-2 (sequenced-after-527-curve) · ACT-540 / ACT-541 (sequenced-after-engine) · ACT-511-U2 (Polygon quote + IWM CSV upstream) · Phase-11 items (evidence-gated on ≥20 round-trips + operator sign-off) · **ACT-564 full build** (locked as tomorrow's first deliverable, single turn — do NOT preempt).
+
+**Members confirmed from operator's expected list:** ACT-565 ✔ (rank 9), ACT-558 ✔ (rank 4), ACT-561 ✔ (rank 7), ACT-556 ✔ (rank 12), ACT-554-b.h ✔ (rank 10), F2 quant ✔ (DW-216 rank 11), F4 dividend-drift ✔ (DW-217 rank 11), DW-H3-DRILL ✔ (rank 8), ACT-560 ✔ (rank 1), SEC-A ✔ (rank 3), ACT-559.a/b/c ✔ (filed as DW-218 — held pending 559-core observation window; not now-workable this week).
+**Members surfaced by the sweep that supervisor lists missed:** DW-215 (G3) · DW-224 (repo TODO artifact) · DW-221 (ACT-529 redeploy discipline) · DW-222 (ACT-533 CI lint) · DW-223 (ACT-534 class monitoring) · INC-103.
+
+### §0.5 Sequencing block (unchanged from prior turn — re-asserted here as canonical)
+
+Receipts > Engine > everything else. Lane order after receipts: ACT-515 (engine) → ACT-537 (sizing) → ACT-509 Stage-2 → ACT-540 → ACT-541. Phase-11 pre-live decisions gated on ≥20 round-trips + operator sign-off. Phase-13 shadow-universe expansion gated on PERF-D-A (kernel sharding) + PERF-D-C (capacity-dilution). Deploy-hold fallacy (INC-112): auto-deploy on commit — no sequencing plan may assume a "hold until deploy" step.
+
+### §0.6 Completeness attestation
+
+This §0 is the **rebuilt canonical index** of the Deferred Work Register as of 2026-07-22. It reconciles: (a) **repo-side sweep** — `rg TODO|FIXME|FOLLOWUP|deferred|queued|later|pending` across `docs/`, `src/`, `supabase/`, `scripts/` (artifact commit pending as DW-224 tonight); (b) **transcript-side sweep** — supervisor round 1 taxonomy + round 2 W5.a–f / Phase-L 6-criterion / DW-H3-DRILL / ACT-498-STEP-B / TRIP-502-A / PERF-D-A + PERF-D-C / FINRA SI / CANDIDATE-vi + ix. Legacy row bodies below (unchanged) remain the citation surface. Where any row's status has changed, §0 wins.
+
+---
+
 
 ## Purpose
 
