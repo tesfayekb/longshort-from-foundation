@@ -38,7 +38,7 @@ export interface SleeveSqlClient {
   <T = Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...values: unknown[]
-  ): Promise<T[]>;
+  ): PromiseLike<T[]>;
 }
 
 // ─── Locally-declared injected audit-writer shape ────────────────────────
