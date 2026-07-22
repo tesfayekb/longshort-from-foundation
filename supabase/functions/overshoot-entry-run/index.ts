@@ -1193,14 +1193,16 @@ Deno.serve(createHandler(async (req: Request) => {
               (symbol, entry_ts, qty, cost_basis, side, status, settlement_state, source_order_id,
                tier, tier_source_event_run_id, tier_source_as_of_date,
                remaining_qty, filled_qty, exit_attempts,
-               cohort_cell_id, cohort_band, cohort_drawdown_bucket, cohort_entry_day_offset)
+               cohort_cell_id, cohort_band, cohort_drawdown_bucket, cohort_entry_day_offset,
+               w5_reallocation_ref)
             VALUES (
               ${sel.ticker}, ${nowTs.toISOString()}::timestamptz,
               ${fill.filled_qty}, ${fill.avg_fill_price * fill.filled_qty},
               ${sel.side}, 'open', 'pending', ${acc.order_id},
               ${sel.tier}, ${linkage.runId}, ${sessionDate}::date,
               ${fill.filled_qty}, 0, 0,
-              ${cohortCellId}, ${sel.study_cell_band}, ${sel.drawdown_bucket}, ${cohortEntryDayOffset}
+              ${cohortCellId}, ${sel.study_cell_band}, ${sel.drawdown_bucket}, ${cohortEntryDayOffset},
+              ${sel.w5_reallocation_ref}
             )
             RETURNING lot_id::text AS lot_id
           `;
