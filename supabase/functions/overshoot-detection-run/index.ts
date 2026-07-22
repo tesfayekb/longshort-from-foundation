@@ -102,6 +102,11 @@ import {
   decideTransition,
   resolveW5ReallocationRef,
 } from '../_shared/overshoot/sleeve-reallocation-writer.ts';
+// DEC-504-4 WIRE decoupling: the sleeve-reallocation writer no longer
+// imports the real audit writer directly (which drags supabase-admin +
+// @supabase/supabase-js into unrelated function test graphs). We inject
+// the concrete `writeStrategyAuditEvent` here at the sole call site.
+import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 
 // ── Live-detection defaults. Named parameters, provenance in comments. ────────
 // Ratified priors (FP-069 W3): exclusion_width=5, capacity LONG=36 / SHORT=4
@@ -780,7 +785,19 @@ Deno.serve(createHandler(async (req: Request) => {
     // disengage / noop, write ONE audit row on state edges only, and
     // resolve the W5 reallocation ref that stamps target rows (and
     // downstream lots via entry-run inheritance).
-    const sleeveCtx = await resolveSleeveContext(sql, runId);
+    // Adapter: keep the DB query at the call site so the shared writer
+    // stays free of driver imports (DEC-504-4 decoupling — see writer).
+    const sleeveCtx = await resolveSleeveContext(async (currentRunId) => {
+      const rows = await sql<{ sleeves: Record<string, unknown> | null }[]>`
+        SELECT sleeves
+        FROM overshoot_detection_runs
+        WHERE outcome = 'completed'
+          AND run_id <> ${currentRunId}::uuid
+        ORDER BY detected_at DESC
+        LIMIT 1
+      `;
+      return rows[0]?.sleeves ?? null;
+    }, runId);
     const sleeveTransition = decideTransition(
       sleeveCtx.priorActive, sleeveDecision.reallocationActive,
     );
@@ -797,6 +814,7 @@ Deno.serve(createHandler(async (req: Request) => {
         reason: sleeveDecision.reallocationActive
           ? (freshestSiAsOfDate === null ? 'si_corpus_absent' : 'si_stale_active')
           : 'si_freshness_restored',
+        writeAudit: writeStrategyAuditEvent,
       });
     }
     const w5ReallocationRef = resolveW5ReallocationRef(
