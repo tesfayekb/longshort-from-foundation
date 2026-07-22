@@ -248,20 +248,67 @@ Deno.test('SI read within staleness window (DETECTOR_SI_STALENESS_MAX_DAYS bound
   assertStringIncludes(SRC, '(${asOfDay}::date - ${DETECTOR_SI_STALENESS_MAX_DAYS}::int)');
 });
 
-Deno.test('ACT-490: handler wires ratified asymmetric caps LONG=36 / SHORT=4 via per-side named params', () => {
-  // Positive sentinels: both constants declared with the ratified values.
+Deno.test('DEC-504-4 WIRE: handler consumes overshootSleeveAllocation; BOTH branches byte-present (fresh 36/4, stale 40/0); no hardcoded post-decision caps', async () => {
+  // Supersedes the original ACT-490 static-caps invariant. DEC-504-4 makes
+  // the effective per-side capacity a FUNCTION of book-level SI staleness:
+  //   fresh (si_stale_active=false) → LONG=36 / SHORT=4 (ratified baseline)
+  //   stale (si_stale_active=true)  → LONG=40 / SHORT=0 (long-only reallocation)
+  // A blind re-pin that only matched the current fresh-branch strings would
+  // gut the guard the moment someone hardcoded either branch back in. So:
+  //
+  //   (a) ratified baseline constants still declared with the fresh values;
+  //   (b) baseline flows into the sleeve decision via the per-side named
+  //       params (longCapacity / shortCapacity), NOT as post-decision literals;
+  //   (c) all downstream persistence + audit fields read sleeveDecision.*
+  //       (dynamic) — the handler never restamps 36/4 or 40/0 as literals;
+  //   (d) BOTH branches are byte-present in the shared allocator source
+  //       (cross-file scan of si-freshness.ts) so a silent removal of the
+  //       stale-branch reallocation fails the guard here, not silently in
+  //       production.
+  //
+  // (a) baseline constants declared with the ratified fresh values.
   assertStringIncludes(SRC, 'DETECTOR_CAPACITY_LONG = 36');
   assertStringIncludes(SRC, 'DETECTOR_CAPACITY_SHORT = 4');
-  // Positive sentinels: DetectorInput assembly passes them via the
-  // per-side named-param API (capacityLong / capacityShort).
-  assertStringIncludes(SRC, 'capacityLong: DETECTOR_CAPACITY_LONG');
-  assertStringIncludes(SRC, 'capacityShort: DETECTOR_CAPACITY_SHORT');
-  // Negative sentinel: the pre-ACT-490 scalar constant + call-site MUST
-  // NOT return. This is the exact regression class INC-92 recorded.
+  // (b) sleeve decision fed by book-level staleness + per-side baseline.
+  assertStringIncludes(SRC, "import {\n  analystRevisionStaleWarnActive,");
+  assertStringIncludes(SRC, 'overshootSleeveAllocation,');
+  assertStringIncludes(SRC, 'siStaleActive,');
+  assertStringIncludes(SRC, 'const bookSiStaleActive = siStaleActive(');
+  assertStringIncludes(SRC, 'const sleeveDecision = overshootSleeveAllocation(bookSiStaleActive, {');
+  assertStringIncludes(SRC, 'longCapacity: DETECTOR_CAPACITY_LONG,');
+  assertStringIncludes(SRC, 'shortCapacity: DETECTOR_CAPACITY_SHORT,');
+  // (c) downstream reads the DECISION, never a fresh-branch literal.
+  assertStringIncludes(SRC, 'sleeveDecision.reallocationActive');
+  assertStringIncludes(SRC, 'sleeveDecision.longCapacity');
+  assertStringIncludes(SRC, 'sleeveDecision.shortCapacity');
+  // Negative sentinels — no post-decision hardcoded caps of either branch
+  // (would silently gut the wire). Pre-ACT-490 scalar shape also stays retired.
   assertEquals(SRC.includes('DETECTOR_CAPACITY_PER_SIDE'), false,
     'ACT-490: scalar capacity constant retired');
   assertEquals(SRC.includes('capacityPerSide:'), false,
     'ACT-490: scalar capacityPerSide named param retired at handler call site');
+  assertEquals(SRC.includes('long_capacity: 40'), false,
+    'DEC-504-4: stale-branch caps must come from sleeveDecision, not a literal');
+  assertEquals(SRC.includes('short_capacity: 0,'), false,
+    'DEC-504-4: stale-branch caps must come from sleeveDecision, not a literal');
+  assertEquals(SRC.includes('long_capacity: 36'), false,
+    'DEC-504-4: fresh-branch caps must come from sleeveDecision, not a literal');
+  assertEquals(SRC.includes('short_capacity: 4,'), false,
+    'DEC-504-4: fresh-branch caps must come from sleeveDecision, not a literal');
+  // (d) BOTH branches byte-present in the shared allocator (cross-file
+  // scan). Guards against "collapse to fresh-only" or "collapse to stale-
+  // only" edits sneaking past the handler-scoped grep.
+  const ALLOC = await Deno.readTextFile(
+    new URL('../_shared/overshoot/si-freshness.ts', import.meta.url),
+  );
+  assertStringIncludes(ALLOC, 'export function overshootSleeveAllocation(');
+  // Fresh branch — passthrough of the baseline with reallocationActive=false.
+  assertStringIncludes(ALLOC, 'if (!active) {');
+  assertStringIncludes(ALLOC, 'return { ...baseline, reallocationActive: false };');
+  // Stale branch — long absorbs short: capacities sum onto long, short → 0.
+  assertStringIncludes(ALLOC, 'longCapacity: baseline.longCapacity + baseline.shortCapacity,');
+  assertStringIncludes(ALLOC, 'shortCapacity: 0,');
+  assertStringIncludes(ALLOC, 'reallocationActive: true,');
 });
 
 Deno.test('POLYGON_API_KEY_PROD_PROBE binding (D2 ratification)', () => {
