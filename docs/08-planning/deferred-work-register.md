@@ -39,6 +39,8 @@ Original wording: "consider at first W5 read-out". Reconciled against `docs/08-p
 | A | ACT-563 + INC-129 | detector_version + refusal_class_counts columns | MIG-165 landed | 2026-07-22 | — | migration 165 |
 | A | ACT-559 (core) | long-only feature-flag reader + A5 suppression | landed `c1944da8`; type-safe writer decouple ✔ | 2026-07-22 | — | `sql/40_*.sql`; `rebalance-submit-orchestrator.ts` |
 | A | DEC-504-4 wire | sleeve-reallocation writer + detection-scoped propagation | MIG-166; NULL-corpus fail-closed correction | 2026-07-22 | 2026-07-24 (DISENGAGE watch) | `_shared/overshoot/sleeve-reallocation-writer.ts`; `overshoot-detection-run/index.ts:806` |
+| D | HK-001 | delete superseded pure export `decideSleeveReallocation` | after DEC-504-4 disengage watch closes | 2026-07-22 | 2026-07-25 | superseded by deployed `overshootSleeveAllocation` at `_shared/overshoot/si-freshness.ts:243`; consumed at `overshoot-detection-run/index.ts:96,600` and by `_shared/overshoot-execution/sizing.ts:89,133`. Deletion target = `_shared/overshoot-execution/sizing.ts:129-141` (`decideSleeveReallocation` — verified 0 external consumers via `rg -n decideSleeveReallocation --type ts`) |
+| D | DW-225 | wall-clock scanner overshoot-scope extension | after step (a) annotations land | 2026-07-22 | 2026-07-29 | step (a) SCAN-ONLY report: `docs/06-tracking/artifacts/DW-225-wall-clock-overshoot-scan.md` (29 hits, 0 Tier-A defects). Steps (b) annotate + (c) arm queued behind receipts. |
 | A | G4 | exit_attempts>=3 alert | F3 live | 2026-07-18 | — | `overshoot-alerts-dispatcher/index.ts:390-408` |
 | A | ACT-511 (measured) | U0 T1 arrival rate (~400/yr) | U0 measured | 2026-07-13 | — | `ACT-511-RESULTS-supply-grid.md` |
 | C | ACT-493 | exit adoption + Option-B smoothing | deadline 2026-07-17 (missed → renegotiated); first exits ≈ 2026-07-22 | 2026-07-10 | 2026-07-24 | `overshoot-master-plan.md:63,71` |
@@ -134,9 +136,9 @@ Original wording: "consider at first W5 read-out". Reconciled against `docs/08-p
 | A (DONE-with-receipt)   | 14 |
 | B (DONE-BUT-UNDOCUMENTED)| 0 (none surfaced this sweep — all landed items had trackers) |
 | C (OPEN-DOCUMENTED)     | 56 (+DW-212-CONF legacy cross-check) |
-| D (OPEN-UNDOCUMENTED → row created this turn) | 8 (+DW-225) |
+| D (OPEN-UNDOCUMENTED → row created this turn) | 9 (+DW-225, +HK-001) |
 | E (DEAD / superseded)   | 8 (+curl-tool-401) |
-| **total surface**       | **86** |
+| **total surface**       | **87** |
 
 ### §0.4 NOW-WORKABLE CANDIDATES (gate satisfied, no held sequence, ranked by operator-value ÷ effort)
 
