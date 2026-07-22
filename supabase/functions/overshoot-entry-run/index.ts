@@ -229,6 +229,12 @@ interface SelectionRow {
   study_cell_band: string | null;
   drawdown_bucket: number | null;
   momentum_quintile: number | null;
+  // DEC-504-4 WIRE — W5 reallocation provenance. Populated on target rows
+  // by overshoot-detection-run when the sleeve was reallocated to LONG-only
+  // (si_stale_active=TRUE); NULL on fresh-book runs. Entry-run inherits it
+  // onto overshoot_lots so every lot admitted under a stale-SI window
+  // carries the engagement audit uuid (MIG-158 column earns its keep here).
+  w5_reallocation_ref: string | null;
 }
 
 interface RefusalTally {
