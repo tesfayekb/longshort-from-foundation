@@ -802,6 +802,7 @@ Deno.serve(createHandler(async (req: Request) => {
         reason: sleeveDecision.reallocationActive
           ? (freshestSiAsOfDate === null ? 'si_corpus_absent' : 'si_stale_active')
           : 'si_freshness_restored',
+        writeAudit: writeStrategyAuditEvent,
       });
     }
     const w5ReallocationRef = resolveW5ReallocationRef(
