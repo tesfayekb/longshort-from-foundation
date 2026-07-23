@@ -386,6 +386,15 @@ Deno.serve(createHandler(async (req: Request) => {
   }
   const slot = typeof body.slot === 'string' ? body.slot : null;
 
+  // ── FIX-8 (DEC-083 §c) pass param ────────────────────────────────────────
+  // Absent → 'primary' (backward-compatible). Any other value → 400.
+  // Extended into probe-taxonomy tests.
+  const passRaw = body.pass;
+  let passLabel: 'primary' | 'completion';
+  if (passRaw === undefined) passLabel = 'primary';
+  else if (passRaw === 'primary' || passRaw === 'completion') passLabel = passRaw;
+  else return apiError(400, 'pass_invalid_expected_primary_or_completion', { correlationId });
+
   const env = readEnv();
   if (!env.supabaseDbUrl) return apiError(500, 'db_url_unset', { correlationId });
 
