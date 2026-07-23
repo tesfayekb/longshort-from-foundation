@@ -23,17 +23,17 @@ import {
 
 // ─── Flag arithmetic (siStaleActive re-verification through this seam) ───
 
-Deno.test('siStaleActive: age 21 (exactly at cap) is FRESH', () => {
-  // 2026-07-22 minus 21 days = 2026-07-01. cap=21, strict >, so 21 = fresh.
-  assertEquals(siStaleActive('2026-07-22', '2026-07-01', OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT), false);
+Deno.test('siStaleActive: age 26 (exactly at cap) is FRESH (DEC-504-4 AMENDMENT)', () => {
+  // 2026-07-27 minus 26 days = 2026-07-01. cap=26, strict >, so 26 = fresh.
+  assertEquals(siStaleActive('2026-07-27', '2026-07-01', OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT), false);
 });
 
-Deno.test('siStaleActive: age 22 is STALE', () => {
-  assertEquals(siStaleActive('2026-07-22', '2026-06-30', OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT), true);
+Deno.test('siStaleActive: age 27 is STALE (alert-tier — missed publication)', () => {
+  assertEquals(siStaleActive('2026-07-27', '2026-06-30', OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT), true);
 });
 
 Deno.test('siStaleActive: NULL corpus returns TRUE (fail-closed; sibling to analyst/M&A guards)', () => {
-  assertEquals(siStaleActive('2026-07-22', null, OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT), true);
+  assertEquals(siStaleActive('2026-07-27', null, OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT), true);
 });
 
 // ─── Sleeve construction ─────────────────────────────────────────────────
@@ -63,7 +63,7 @@ Deno.test('sleeve construction: STALE → 40 LONG / 0 SHORT (short arm dark)', (
 });
 
 Deno.test('sleeve construction: NULL corpus → STALE-path 40/0 (fail-closed)', () => {
-  const stale = siStaleActive('2026-07-22', null, OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT);
+  const stale = siStaleActive('2026-07-27', null, OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT);
   assertEquals(stale, true);
   const s = overshootSleeveAllocation(stale, {
     longAllocationPct: 0.90, shortAllocationPct: 0.10,
