@@ -26,6 +26,36 @@
 // INC-106 (short-squeeze direction fix — orthogonal but co-located);
 // _shared/overshoot-execution/snapshot-age-bounds.ts (INC-91 precedent
 // for single-homing).
+//
+// ═══ TWO-CONSTANT DESIGN (DO NOT COLLAPSE) — INC-125.b (2026-07-22) ═══
+// Two distinct SI-staleness constants coexist ON PURPOSE, at two different
+// call sites. They measure two different things and must not be merged:
+//
+//   (1) DETECTOR_SI_STALENESS_MAX_DAYS = 20
+//       Location: `overshoot-detection-run/index.ts` (near line 126).
+//       Role: PER-ROW USABLE-DATA ENVELOPE. The windowed SQL clause
+//       `as_of_date >= (asOf - 20)` bounds which short-interest rows are
+//       admissible into the per-ticker detector map. A row outside the
+//       envelope is unusable for THAT ticker's admission decision even
+//       if the row exists — its price/float context is too old to gate
+//       an entry.
+//
+//   (2) OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 21 (strict `>`)
+//       Location: this file (below), consumed via `siStaleActive`.
+//       Role: BOOK-LEVEL STALENESS FLAG. Decides whether the ENTIRE
+//       short sleeve is in a stale-feed window and must reallocate to
+//       LONG under DEC-504-4. Compared against the CORPUS-MAX
+//       `as_of_date` from `overshoot_short_interest` (no window filter
+//       — see MIG note in overshoot-detection-run for the decoupled
+//       read). Strict `>` so a fresh-cycle-day-of doesn't misfire.
+//
+// TELL FOR NEXT READER — the pathology INC-125.b closed was the reverse:
+// deriving the book-level freshest from the ALREADY-WINDOWED per-row map,
+// which returns NULL whenever corpus-MAX > 20d, silently triggering the
+// `si_corpus_absent` fail-closed branch when the true state is "corpus
+// exists, just past the per-row envelope." The durable diagnostic is
+// CORPUS-MAX-vs-FRESHEST divergence — if the two diverge, someone
+// re-coupled the reads. Do NOT re-diagnose from scratch.
 
 /** Days between two YYYY-MM-DD dates, UTC midnight, integer. */
 export function siCalendarDaysBetween(aIso: string, bIso: string): number {
