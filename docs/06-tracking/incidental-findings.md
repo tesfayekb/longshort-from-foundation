@@ -24,7 +24,7 @@
 
 ---
 
-## INC-126 — `overshoot_universe` identity is IVV+IJH composite (S&P 500 + S&P MidCap 400), not Russell 2000; refresh implementation inherited "IWM / Russell 2000" as the identity string (2026-07-21) — REPEATED-HEADER FOR STABLE ANCHOR
+<!-- INC-126 body below (original entry, unchanged) -->
 
 **Category:** universe-refresh-identity-drift. **Severity:** HIGH (any IWM seed_apply is a strategy-set change — detaches live detection & study corpus from the ratified detector-fixture pair). **Filed by:** ACT-560 identity investigation. **Blocks:** any `seed_apply` against `overshoot-universe-refresh`; sql/39 arm remains paused; INC-109 (staleness) cannot close via IWM path.
 
