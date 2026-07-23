@@ -2,6 +2,7 @@
 
 > **Owner:** Overshoot strategy | **Filed:** 2026-07-23 (operator priority elevation)
 > **Amended:** 2026-07-23 (operator variant correctly encoded — v1 supervisor mis-framing corrected: primary = SAME-DAY-EARLIER exit on ordinal-10, NOT next-morning exit)
+> **Amended:** 2026-07-23 (pre-screen v2 ACCEPTED — final_day_forfeit measured on 259,721/259,715-event corpus, ALIVE-STRONG pooled with T1·2023 ALIVE-CONDITIONAL. One remaining term = morning_exec_cost. Adoption inequality pre-printed below.)
 > **Mode:** INVESTIGATION only — read-only (1-min bars + `overshoot_lots` closed-lot ledger + ratified corpus). NO engine changes.
 > **Sequencing:** Runs IMMEDIATELY AFTER Monday engine verdict. Ahead of ACT-537 (sizing), ACT-540 (insider×dislocation), ACT-541 (earnings-crash). Register reordered same PR.
 > **Supersedes scope of:** ACT-509 Stage-2 original charter §"Intraday timing (CONDITIONAL — scope only)" — elevated to first-class execution leg.
@@ -36,6 +37,26 @@ net(m) = redeploy_gain − morning_exec_cost(m) − final_day_forfeit
 - **(a) redeploy_gain** = one recovered slot-night at the measured blended edge. ACT-558 scalars unchanged: floor $10.60/sd, blend $4.05/sd.
 - **(b) morning_exec_cost(m)** = `(spread + impact @ minute m) − (spread + impact @ 15:50)` from actual 1-min bars.
 - **(c) final_day_forfeit** = `(close − open)/open` on the ordinal-10 session, measured across corpus. Signed: positive value = leaving-at-open surrenders a gain = SUBTRACTS from net. Negative value = leaving-at-open avoids a loss = ADDS to net.
+
+### Pre-committed adoption inequality (per cell {tier × regime × minute m})
+
+With `final_day_forfeit` now measured (pre-screen v2, ACCEPTED), Stage-2's minute grid carries **exactly one remaining unknown** — `morning_exec_cost(m)`. Adoption rule, mechanical, pre-printed:
+
+```text
+ADOPT minute m for {tier × regime}  iff  exec_cost_delta(m) < slot_night_gain − final_day_forfeit
+                                                             (per that cell)
+```
+
+Where `exec_cost_delta(m) = (spread + impact @ m) − (spread + impact @ 15:50)`. Per-cell measured values from pre-screen v2 (bps, corpus):
+
+| pop / regime | final_day_forfeit (mean / median) | slot_night_gain − forfeit @ BLEND (10.5) | @ FLOOR (42.42) | Verdict class |
+|--------------|-----------------------------------|-------------------------------------------|-----------------|---------------|
+| T1 ALL       | 4.30 / 3.16                        | ≈ 6.2 – 7.3 bps budget for exec_cost      | ≈ 38 – 39 bps   | ALIVE-STRONG  |
+| T1 2023      | 13.43 / 9.39                       | mean: negative budget; median: 1.1 bps     | ≈ 29 – 33 bps   | ALIVE-CONDITIONAL |
+| T1 2024      | −4.78 / −2.43                      | ≈ 12.9 – 15.3 bps budget                   | ≈ 44.8 – 47.2   | ALIVE-STRONG  |
+| T2 ALL       | 5.36 / 4.19                        | ≈ 5.1 – 6.3 bps budget                     | ≈ 37 – 38 bps   | ALIVE-STRONG  |
+
+The minute grid measures `exec_cost_delta(m)` and adopts cell-by-cell against this budget. Regime-stability check retained: adopted cell must hold under both BLEND and FLOOR scalar overlays unless operator pre-commits to a scalar choice.
 
 ### Comparison cell (non-primary) — mis-framed variant retained
 
