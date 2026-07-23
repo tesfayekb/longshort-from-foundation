@@ -3,6 +3,29 @@
 
 ## INC-126 — `overshoot_universe` identity is IVV+IJH composite (S&P 500 + S&P MidCap 400), not Russell 2000; refresh implementation inherited "IWM / Russell 2000" as the identity string (2026-07-21)
 
+---
+
+## INC-126.b — env-pinned `BUILD_SHA` staleness (second confirmed harm) (2026-07-23)
+
+**Category:** deploy-truth-header-drift. **Severity:** MEDIUM (no money-path harm; observability-only, but silently misleading). **Filed by:** FIX-3 source-version rail rollout. **Related:** INC-126 (first harm — build-sha staleness in run stamps).
+
+**Symptom.** After the FIX-1 / FIX-3 redeploys on 2026-07-23, `OPTIONS` probes to all four money edge functions (`overshoot-entry-run`, `overshoot-exit-run`, `overshoot-detection-run`, `overshoot-fill-sweep`) returned `x-build-sha: 0c5ad0d9` unchanged — the pre-FIX-1 value — while the newly-added `x-source-version: fb5fdf13+fix1` header correctly reflected the live code. Version probes (`POST {"probe":"version"}`) confirmed the same split: `SOURCE_VERSION` correct, `BUILD_SHA` stale.
+
+**Root cause (working hypothesis, not yet fully instrumented).** `BUILD_SHA` is sourced from an env var pinned at platform-deploy time rather than from a code-level literal export. The current deploy pipeline evidently does not re-inject that env var on every function redeploy (only on full-project rebuilds), so any function-scoped redeploy inherits the stale value from its previous slot. `SOURCE_VERSION` avoids the problem by being a code-level constant.
+
+**Fix path.** Two options — operator ruling required:
+
+1. **Repair the env-pin path.** Ensure `BUILD_SHA` is re-injected on every function-scoped redeploy (matches the header's stated intent). Cheapest if the deploy tooling supports it.
+2. **Drop `x-build-sha` and canonicalise `x-source-version`.** Remove the stale header entirely, document `x-source-version` as the sole deploy-truth discriminator, update the deploy-truth rail memo. Cheapest if (1) is not tractable within the platform surface Lovable exposes.
+
+**Standing rule until fixed.** Do not attest deploy-truth from `x-build-sha`. `x-source-version` is the sole live discriminator. Any doc / receipt that cites `x-build-sha` must also cite `x-source-version` alongside, and if they disagree the source-version wins.
+
+**Cross-refs.** INC-126 (first harm — same header, run-stamp path), DW-228 (rail extension to non-money functions), FIX-3 landing (receipts-2026-07-23), ACT-563 (detector_version + refusal_class_counts — separate stamp path, not affected).
+
+---
+
+## INC-126 — `overshoot_universe` identity is IVV+IJH composite (S&P 500 + S&P MidCap 400), not Russell 2000; refresh implementation inherited "IWM / Russell 2000" as the identity string (2026-07-21) — REPEATED-HEADER FOR STABLE ANCHOR
+
 **Category:** universe-refresh-identity-drift. **Severity:** HIGH (any IWM seed_apply is a strategy-set change — detaches live detection & study corpus from the ratified detector-fixture pair). **Filed by:** ACT-560 identity investigation. **Blocks:** any `seed_apply` against `overshoot-universe-refresh`; sql/39 arm remains paused; INC-109 (staleness) cannot close via IWM path.
 
 **Trigger.** Snippet-#4 seed dry-run against operator-attested IWM CSV (n=1,967) returned `would_deactivate=765` of 839 active — including live-book names (AKAM) and S&P-500 constituents (DIS, PNC, NTRS). Operator identified this as identity mismatch, not a data-vendor problem.
