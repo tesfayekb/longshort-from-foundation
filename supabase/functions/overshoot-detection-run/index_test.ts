@@ -375,3 +375,55 @@ Deno.test('FP-069 W3.8 T2.4 corrective A′: jsonb binding uses sql.json(), neve
   assertEquals(SRC.includes('${JSON.stringify(appendRunIds)}::jsonb'), false,
     'finalizeRun appendRunIds must bind via sql.json(), not JSON.stringify');
 });
+
+// ═══ INC-125.b (2026-07-22) — decoupled book-level SI corpus-MAX read ═══
+// Pathology closed: the pre-fix code derived `freshestSiAsOfDate` from
+// the per-row `shortInterest` map, which is pre-filtered by the 20-day
+// per-row envelope. Whenever the true corpus-MAX exceeded that envelope
+// the map was empty → freshest=null → the sleeve writer stamped a
+// fabricated `si_corpus_absent` reason instead of the real
+// `si_stale_active`. Three source-sentinel ratchets so a future
+// re-coupling fails at CI, not at maiden fire.
+
+Deno.test('INC-125.b (a): book-level freshest comes from UNWINDOWED corpus-MAX SELECT', () => {
+  // The decoupled SELECT — no window predicate, no ticker filter, just
+  // `MAX(as_of_date)` off `overshoot_short_interest`. Enforce the exact
+  // shape so a "small refactor" that re-adds a WHERE clause fails here.
+  assertStringIncludes(SRC, 'SELECT MAX(as_of_date)::text AS freshest');
+  assertStringIncludes(SRC, 'FROM overshoot_short_interest');
+  // The variable name + source-of-truth binding.
+  assertStringIncludes(SRC, 'const corpusMaxRows = await sql<{ freshest: string | null }[]>`');
+  assertStringIncludes(SRC, 'const freshestSiAsOfDate: string | null = corpusMaxRows[0]?.freshest ?? null;');
+});
+
+Deno.test('INC-125.b (b): pre-fix derivation from per-row map is retired', () => {
+  // Negative sentinel — the old loop over `shortInterest` that produced
+  // the phantom-null must not reappear. Any of these substrings would
+  // signal a regression to the coupled read.
+  assertEquals(
+    SRC.includes('for (const [, r] of shortInterest) {'),
+    false,
+    'INC-125.b: freshestSiAsOfDate must NOT be derived from the windowed shortInterest map',
+  );
+  assertEquals(
+    SRC.includes('if (freshestSiAsOfDate === null || r.as_of_date > freshestSiAsOfDate) {'),
+    false,
+    'INC-125.b: per-row-derived freshest loop must stay retired',
+  );
+  // Corpus-MAX SELECT must appear BEFORE `bookSiStaleActive` so the
+  // decoupled read is what feeds the staleness call, not a stale local.
+  const idxSelect = SRC.indexOf('SELECT MAX(as_of_date)::text AS freshest');
+  const idxBook = SRC.indexOf('const bookSiStaleActive = siStaleActive(');
+  assert(idxSelect > 0 && idxBook > 0 && idxSelect < idxBook,
+    'corpus-MAX SELECT must precede bookSiStaleActive');
+});
+
+Deno.test('INC-125.b (c): sleeves.prior echoed on transition edges only', () => {
+  // Rule-8 audit reconstructability — engage/disengage rows must carry
+  // the prior posture inline so operators do not need a second query to
+  // pair the state edges. Noop stays null (current-posture fields
+  // already carry the unchanged state).
+  assertStringIncludes(SRC, "prior: sleeveTransition === 'noop' ? null : {");
+  assertStringIncludes(SRC, 'reallocation_active: sleeveCtx.priorActive,');
+  assertStringIncludes(SRC, 'engage_audit_id: sleeveCtx.priorEngageAuditId,');
+});

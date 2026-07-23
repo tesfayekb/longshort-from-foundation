@@ -117,6 +117,20 @@ import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 // hazard). Thresholds L=0.10 S=0.08, window sets L={1,2,3} S={1..5},
 // momentum L={4,5} S={1,5}, drawdown L={1,2,3} S={4,5}, squeeze SI% min =
 // 0.20 (20% of float), SI staleness = 20 calendar days.
+//
+// ═══ TWO-CONSTANT DESIGN — INC-125.b (2026-07-22) ══════════════════════
+// `DETECTOR_SI_STALENESS_MAX_DAYS` (below, 20) is the PER-ROW USABLE-DATA
+// ENVELOPE — bounds which SI rows are admissible into the per-ticker
+// detector map. It is DISTINCT from `OVERSHOOT_SI_STALENESS_MAX_DAYS_
+// DEFAULT` (21, strict `>`) in `_shared/overshoot/si-freshness.ts`, which
+// is the BOOK-LEVEL STALENESS FLAG feeding the DEC-504-4 sleeve
+// reallocation decision. The BOOK-LEVEL flag is compared against the
+// CORPUS-MAX `as_of_date` from an UNWINDOWED SELECT — never against the
+// per-row windowed map, or a corpus older than the envelope collapses
+// silently into a fabricated `si_corpus_absent` refusal (the pathology
+// INC-125.b closed). See file-header block in `si-freshness.ts` for the
+// full rationale — do NOT re-diagnose from scratch.
+// ══════════════════════════════════════════════════════════════════════
 const DETECTOR_EXCLUSION_WIDTH_DAYS = 5;
 const DETECTOR_CAPACITY_LONG = 36;
 const DETECTOR_CAPACITY_SHORT = 4;
@@ -584,16 +598,21 @@ Deno.serve(createHandler(async (req: Request) => {
     durations.si_read_ms = Math.round(performance.now() - tS);
 
     // ── DEC-504-4 WIRE — book-level sleeve reallocation decision ─────────
-    // Freshest SI as_of_date across the loaded corpus. `shortInterest` is
-    // already deduped to the freshest row per ticker, so a single scan
-    // yields the book-level max. Uses the SAME arithmetic the UI staleness
-    // chip and the per-row detector gate use (siStaleActive; strict >).
-    let freshestSiAsOfDate: string | null = null;
-    for (const [, r] of shortInterest) {
-      if (freshestSiAsOfDate === null || r.as_of_date > freshestSiAsOfDate) {
-        freshestSiAsOfDate = r.as_of_date;
-      }
-    }
+    // INC-125.b (2026-07-22) — DECOUPLED CORPUS-MAX READ.
+    // The book-level freshest MUST be read from the UNWINDOWED corpus,
+    // not derived from the per-row `shortInterest` map above. The map is
+    // pre-filtered by the 20-calendar-day per-row envelope
+    // (`DETECTOR_SI_STALENESS_MAX_DAYS`); deriving the book-level
+    // freshest from it silently returns NULL whenever corpus-MAX is
+    // older than the envelope, misfiring the `si_corpus_absent`
+    // fail-closed branch when the real state is `si_stale_active`. See
+    // the TWO-CONSTANT DESIGN block above (near line 126) and the
+    // matching block in `_shared/overshoot/si-freshness.ts`.
+    const corpusMaxRows = await sql<{ freshest: string | null }[]>`
+      SELECT MAX(as_of_date)::text AS freshest
+      FROM overshoot_short_interest
+    `;
+    const freshestSiAsOfDate: string | null = corpusMaxRows[0]?.freshest ?? null;
     const bookSiStaleActive = siStaleActive(
       asOfDay, freshestSiAsOfDate, OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
     );
@@ -907,6 +926,16 @@ Deno.serve(createHandler(async (req: Request) => {
              si_staleness_max_days: OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT,
              w5_reallocation_ref: w5ReallocationRef,
              transition: sleeveTransition,
+             // INC-125.b (2026-07-22) — prior-posture echo on transition
+             // edges. Written on engage/disengage ONLY (noop leaves it
+             // null) so the audit reader can reconstruct the state
+             // pair without a second query. On noop this is null by
+             // convention — the current-posture fields above already
+             // capture the (unchanged) state.
+             prior: sleeveTransition === 'noop' ? null : {
+               reallocation_active: sleeveCtx.priorActive,
+               engage_audit_id: sleeveCtx.priorEngageAuditId,
+             },
            })}::jsonb
          WHERE run_id = ${runId}::uuid
       `;

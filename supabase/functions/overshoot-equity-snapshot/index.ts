@@ -137,6 +137,50 @@ Deno.serve(createHandler(async (req: Request) => {
     }
   }
 
+  // ── ACT-562 tail — idempotent SPY backfill for prior-day snapshots ──
+  // INC-125.b sibling (2026-07-22): a snapshot writer that runs BEFORE
+  // the daily-bar upsert lands (~50m gap on the 21:10Z snapshot vs the
+  // 22:00Z detection-run bar upsert) leaves that session's `spy_close`
+  // NULL. Repair it here on the next snapshot fire, in bounded scope:
+  // scan the last 14 snapshot rows for this operator with `spy_close IS
+  // NULL`, look up the matching `overshoot_daily_bars.SPY.close`, and
+  // UPDATE in place. Idempotent — a row that still has no bar stays
+  // NULL; a row that already has a value is never overwritten (we only
+  // touch NULL rows). Non-fatal on error.
+  let spyBackfillPatched = 0;
+  if (!dryRun) {
+    try {
+      const { data: gaps } = await supabaseAdmin
+        .from('overshoot_equity_snapshots')
+        .select('snapshot_date')
+        .eq('operator_id', OPERATOR_ID)
+        .is('spy_close', null)
+        .neq('snapshot_date', asOf)
+        .order('snapshot_date', { ascending: false })
+        .limit(14);
+      for (const row of gaps ?? []) {
+        const gapDate = row.snapshot_date as string;
+        const { data: barRow } = await supabaseAdmin
+          .from('overshoot_daily_bars')
+          .select('close')
+          .eq('ticker', 'SPY')
+          .eq('trade_date', gapDate)
+          .maybeSingle();
+        if (barRow && typeof barRow.close === 'number' && Number.isFinite(barRow.close)) {
+          const { error: patchErr } = await supabaseAdmin
+            .from('overshoot_equity_snapshots')
+            .update({ spy_close: barRow.close, spy_source: 'overshoot_daily_bars' })
+            .eq('operator_id', OPERATOR_ID)
+            .eq('snapshot_date', gapDate)
+            .is('spy_close', null);          // guard: never overwrite a set value
+          if (!patchErr) spyBackfillPatched += 1;
+        }
+      }
+    } catch (_e) {
+      // Non-fatal — the primary snapshot write already succeeded.
+    }
+  }
+
   return apiSuccess({
     outcome: 'completed',
     dry_run: dryRun,
@@ -152,5 +196,6 @@ Deno.serve(createHandler(async (req: Request) => {
     correlation_id: correlationId,
     spy_close: spyClose,
     spy_source: spySource,
+    spy_backfill_patched: spyBackfillPatched,
   });
 }));
