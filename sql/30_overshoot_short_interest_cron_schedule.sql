@@ -1,6 +1,34 @@
 -- =============================================================================
 -- Overshoot Short-Interest Compute Cron Schedule -- FP-069 W3.3.b (ACT-460)
 --
+-- ═══ 2026-07-23 AMENDMENT (DEC-504-4 AMENDMENT, INC-129 root cause) ═══
+-- SCHEDULE CHANGED: '0 21 1,15 * *' → '0 21 * * 1-5' (DAILY Mon–Fri 21:00Z).
+-- Rationale: the twice-monthly (1st/15th) cadence has TWO defects filed
+-- as INC-129:
+--   (a) PICKUP LAG — publications land ~T+9–11 biz days post-settlement,
+--       so the 1st and 15th fires miss the publication window by
+--       construction; every file was ingested 5–7 days late.
+--   (b) THRESHOLD-BELOW-CADENCE — the book-level 21d staleness cap was
+--       below the cadence's natural max age (~24–26d), causing
+--       si_stale_active to fire ON SCHEDULE each cycle for non-failures
+--       and ritually engaging DEC-504-4 sleeve reallocation. The
+--       companion code fix bumps that cap to 26d (see si-freshness.ts).
+-- New cadence: daily Mon–Fri 21:00Z. Function is idempotent (D3) — every
+-- FINRA publication is captured the day it appears; no-op fires cost
+-- ~= zero. Age > 26d now genuinely indicates FINRA/API publication
+-- failure (alert-tier).
+--
+-- ONE-SHOT COMPANION: operator invokes overshoot-short-interest-compute
+-- once tomorrow ~14:00Z to catch the 07-15 publication same-day if
+-- landed; retry Friday if not.
+--
+-- DRIFT NOTE: the job_registry seed migration (20260704043127) stamped
+-- '0 21 1,15 * *' byte-identically to this file's pre-amendment schedule.
+-- The amendment lands a companion data-update migration that UPDATEs
+-- job_registry.schedule to '0 21 * * 1-5' so cron.job ↔ job_registry
+-- byte-identity is preserved post-apply.
+-- =============================================================================
+--
 -- STATUS AT AUTHORING (b.i): AUTHORED ONLY. This file is NOT executed by
 -- the ACT-460.b.i sub-turn. It ships alongside the DISARMED job_registry
 -- seed migration (mirroring the MIG-102 / sql/20 disarm-fire-enable
@@ -86,7 +114,7 @@
 
 SELECT cron.schedule(
   'overshoot-short-interest-compute',
-  '0 21 1,15 * *',
+  '0 21 * * 1-5',
   $$
   SELECT net.http_post(
     url := 'https://PROJECT_REF.supabase.co/functions/v1/overshoot-short-interest-compute',
