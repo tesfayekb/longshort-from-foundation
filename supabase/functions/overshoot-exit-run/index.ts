@@ -337,9 +337,19 @@ Deno.serve(createHandler(async (req: Request) => {
   const dryRun = body.dry_run === true;
   const manualConfirm = body.manual_confirm === true;
   const secondConfirmToken = typeof body.second_confirm_token === 'string' ? body.second_confirm_token : null;
-  const probeMode = body.probe as ('alpaca' | 'polygon' | undefined);
-  if (probeMode !== undefined && probeMode !== 'alpaca' && probeMode !== 'polygon') {
-    return apiError(400, 'probe_invalid_expected_alpaca_or_polygon', { correlationId });
+  const probeMode = body.probe as ('alpaca' | 'polygon' | 'version' | undefined);
+  if (probeMode !== undefined && probeMode !== 'alpaca' && probeMode !== 'polygon' && probeMode !== 'version') {
+    return apiError(400, 'probe_invalid_expected_alpaca_polygon_or_version', { correlationId });
+  }
+  // FIX-3 (ACT-565) — VERSION PROBE. See overshoot-entry-run for rationale.
+  if (probeMode === 'version') {
+    return apiSuccess({
+      ok: true, probe: 'version',
+      function: 'overshoot-exit-run',
+      RATIFIED_DETECTOR_VERSION,
+      BUILD_SHA: Deno.env.get('BUILD_SHA') ?? null,
+      correlation_id: correlationId,
+    });
   }
 
   const env = readEnv();
