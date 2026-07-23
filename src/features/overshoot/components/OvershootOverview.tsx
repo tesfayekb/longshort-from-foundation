@@ -143,7 +143,7 @@ function addDays(iso: string, n: number): string {
  * so the two surfaces agree at any single clock tick.
  */
 function TodayCard({ day }: { day: OvershootDayNumber }) {
-  if (day.mode === 'live') {
+  if (day.mode === 'live' || day.mode === 'closing_unsettled') {
     const total = day.valueUsd;
     const loading = day.loading;
     const variant: 'good' | 'bad' | 'muted' =
@@ -205,6 +205,11 @@ function TodayCard({ day }: { day: OvershootDayNumber }) {
                   </span>
                 ) : null}
               </p>
+              {day.prevSettled ? (
+                <p className="mt-1 text-xs font-mono text-muted-foreground/60">
+                  {`prev settled: ${day.prevSettled.valueUsd >= 0 ? '+' : ''}${fmtMoney(day.prevSettled.valueUsd)} (${fmtDateOnly(day.prevSettled.prevDate)}→${fmtDateOnly(day.prevSettled.latestDate)})`}
+                </p>
+              ) : null}
             </>
           )}
         </CardContent>
@@ -257,6 +262,11 @@ function TodayCard({ day }: { day: OvershootDayNumber }) {
                 {' · '}{fmtDateOnly(day.prevDate)} → {fmtDateOnly(day.latestDate)}
               </span>
             </p>
+            {day.prevSettled ? (
+              <p className="mt-1 text-xs font-mono text-muted-foreground/60">
+                {`prev settled: ${day.prevSettled.valueUsd >= 0 ? '+' : ''}${fmtMoney(day.prevSettled.valueUsd)} (${fmtDateOnly(day.prevSettled.prevDate)}→${fmtDateOnly(day.prevSettled.latestDate)})`}
+              </p>
+            ) : null}
           </>
         )}
       </CardContent>
@@ -545,30 +555,44 @@ function HealthKpiStrip(k: KpiStripInputs) {
         variant={openTotal > 0 ? 'default' : 'muted'}
       />
       <KpiCell
-        label={k.day.mode === 'live' ? 'Today (live)' : k.day.label}
+        label={k.day.label}
         value={k.day.loading
           ? '…'
           : k.day.valueUsd === null
             ? '—'
             : `${k.day.valueUsd >= 0 ? '+' : ''}${fmtMoney(k.day.valueUsd)}`}
-        sub={k.day.mode === 'live'
-          ? (k.day.valueUsd === null
-              ? 'live · pending broker read'
-              : `${k.day.pct !== null ? `${k.day.pct >= 0 ? '+' : ''}${k.day.pct.toFixed(2)}% · ` : ''}realized ${(k.day.realizedToday ?? 0) >= 0 ? '+' : ''}${fmtMoney(k.day.realizedToday ?? 0)} · ${k.day.realizedCount ?? 0} lot${k.day.realizedCount === 1 ? '' : 's'}`)
-          : (k.day.valueUsd === null
-              ? (k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Need 2+ snapshots')
-              : `${k.day.pct !== null ? `${k.day.pct >= 0 ? '+' : ''}${k.day.pct.toFixed(2)}% · ` : ''}${k.day.prevDate ? fmtDateOnly(k.day.prevDate) + ' → ' : ''}${k.day.latestDate ? fmtDateOnly(k.day.latestDate) : ''}`)}
+        sub={
+          <>
+            <div className="truncate">
+              {k.day.mode === 'settled'
+                ? (k.day.valueUsd === null
+                    ? (k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Need 2+ snapshots')
+                    : `${k.day.pct !== null ? `${k.day.pct >= 0 ? '+' : ''}${k.day.pct.toFixed(2)}% · ` : ''}${k.day.prevDate ? fmtDateOnly(k.day.prevDate) + ' → ' : ''}${k.day.latestDate ? fmtDateOnly(k.day.latestDate) : ''}`)
+                : (k.day.valueUsd === null
+                    ? (k.day.mode === 'live' ? 'live · pending broker read' : 'closing · pending broker read')
+                    : `${k.day.pct !== null ? `${k.day.pct >= 0 ? '+' : ''}${k.day.pct.toFixed(2)}% · ` : ''}realized ${(k.day.realizedToday ?? 0) >= 0 ? '+' : ''}${fmtMoney(k.day.realizedToday ?? 0)} · ${k.day.realizedCount ?? 0} lot${k.day.realizedCount === 1 ? '' : 's'}`)}
+            </div>
+            {k.day.prevSettled ? (
+              <div className="truncate text-muted-foreground/60">
+                {`prev settled: ${k.day.prevSettled.valueUsd >= 0 ? '+' : ''}${fmtMoney(k.day.prevSettled.valueUsd)} (${fmtDateOnly(k.day.prevSettled.prevDate)}→${fmtDateOnly(k.day.prevSettled.latestDate)})`}
+              </div>
+            ) : null}
+          </>
+        }
         hint={<>
           <strong>UI invariant (2026-07-23):</strong> this tile binds to the
           SAME <span className="font-mono">useOvershootDayNumber</span> hook as
-          the "Today" card below — one Day number per page. Live during RTH
-          (Σ broker <span className="font-mono">unrealized_intraday_pl</span> +
-          realized closures today from{' '}
-          <span className="font-mono">overshoot_lots</span>); Settled outside
-          RTH (delta between the two most recent{' '}
-          <span className="font-mono">overshoot_equity_snapshots.broker_equity</span>
-          {' '}rows, source <span className="font-mono">alpaca_paper_overshoot</span>).
-          The label follows the branch — "Today" never sits on a prior-day range.
+          the "Today" card below — one Day number per page. Three states:
+          <em> Today (live)</em> during RTH,
+          <em> Today (closing, unsettled)</em> post-close until today's snapshot
+          writes (same live computation — realized today + open Σ vs settled
+          anchor — so the day number never disappears in the 20:00→21:10Z
+          window), and <em>Settled prev→today</em> once the current-session
+          snapshot row exists. A muted <span className="font-mono">prev
+          settled</span> subline keeps the previously settled window visible
+          under states (a)/(b), and shows the PRIOR settled pair under (c).
+          Yesterday's figure never occupies the day tile after a newer session
+          has traded.
         </>}
         variant={
           k.day.valueUsd === null ? 'muted'
