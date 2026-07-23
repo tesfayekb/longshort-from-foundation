@@ -53,7 +53,11 @@ Below the DEC-085 whole-book headline threshold; adopted on structural microstru
 
 ## §(b) 19:50Z tick RETAINED as residual/retry sweep
 
-The 19:50Z cron is NOT deleted. It is repurposed as the **residual/retry sweep**, catching:
+The 19:50Z cron is retained as the **residual/retry sweep**, catching:
+
+**Amendment (2026-07-23 GO turn discovery).** The pre-DEC-083 world had ONE row at 19:50Z (`overshoot.exit.run`, jobid 123). The GO transaction preserved jobid continuity on the primary by moving jobid 123 to `45 13 * * 1-5` and creating a NEW row `overshoot.exit.run.residual` (jobid 134) at `50 19 * * 1-5` with a byte-identical command body (md5 `3b2be524cd7f807e1a5eb89522945da5`). Framing correction: **the residual is a newly-created row; the original 19:50Z row became the moved primary.** The two-row post-state is the invariant §(b) guarantees; the identity mapping is the implementation detail this amendment nails down. DST watch-row (1) points at `overshoot.exit.run.residual` accordingly.
+
+Catching:
 
 - Cohort members that were refused at 13:45Z (stale-refusal survivors) — e.g., `si_stale_active` transient blocks, `daily_budget_reached` overflow, borrow-locate misses.
 - Late-eligibility admissions that only became eligible after 13:45Z (edge cases where cohort assignment updates mid-session).
