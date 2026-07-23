@@ -151,7 +151,7 @@ Deno.serve(createHandler(async (req: Request) => {
   const seed = typeof bodyRaw?.seed === 'number' ? Math.trunc(bodyRaw.seed as number) : null;
 
   // Insert ingest-run row (status=running).
-  const admin = supabaseAdmin();
+  const admin = supabaseAdmin;
   const runIns = await admin
     .from('overshoot_minute_ingest_runs')
     .insert({
