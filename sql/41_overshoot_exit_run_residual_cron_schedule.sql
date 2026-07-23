@@ -1,0 +1,57 @@
+-- =============================================================================
+-- Overshoot Exit-Run RESIDUAL Cron Schedule -- DEC-083 §(b)
+--
+-- STATUS: APPLIED 2026-07-23 via the DEC-083 GO transaction (§22.5.1
+--   read-back pasted into R-008 slot / action-tracker). New cron.job row
+--   'overshoot-exit-run-residual' (jobid 134) + new job_registry row
+--   id='overshoot.exit.run.residual' were created in the same
+--   transaction as the primary move (sql/32 amend, primary jobid 123
+--   rescheduled 19:50Z -> 13:45Z).
+--
+-- PURPOSE: Retain the late-day 19:50 UTC tick as a RESIDUAL SWEEP after
+--   DEC-083 §(a) moves the primary time-exit to 13:45 UTC. Catches:
+--     - Lots refused at 13:45Z (stale-refusal survivors,
+--       daily_budget_reached overflow, borrow-locate misses).
+--     - Late-eligibility admissions that only qualified post-13:45Z.
+--     - Any 13:45Z network/provider hiccup that stranded eligible lots.
+--   Same handler, same idempotency triple, guaranteed no-op for lots
+--   already closed at 13:45Z (status='closed' dedupe).
+--
+-- COMMAND BODY: MUST be byte-identical to the primary cron.job row
+--   (jobid 123, 'overshoot-exit-run'). The DEC-083 GO transaction
+--   copied the primary's stored command verbatim via
+--     DO $$ ... v_cmd := (SELECT command FROM cron.job WHERE jobid=123);
+--            cron.schedule('overshoot-exit-run-residual', '50 19 * * 1-5', v_cmd); ...
+--   Post-transaction md5(command) match: '3b2be524cd7f807e1a5eb89522945da5'
+--   (len 607) for BOTH jobid 123 and jobid 134. See R-008 read-back.
+--
+-- DST OBLIGATION: Watch-row entry (1) in
+--   docs/06-tracking/dst-retiming-watch-2026-11-01.md points at this
+--   RESIDUAL identity (overshoot.exit.run.residual) after DEC-083 §(b)
+--   amendment. 19:50Z -> 20:50Z on 2026-11-01 (fall-back) preserves the
+--   15:50 ET operational meaning.
+--
+-- AUTHORITY:
+--   - DEC-083 §(a)(b)(g) (Morning-Exit Adoption, ratified 2026-07-23)
+--   - DEC-023 (edge-function handler envelope)
+--   - DEC-040 (scheduled-execution attestations)
+--   - PIN-2 (pg_cron UTC-fixed)
+--
+-- MANUAL RE-APPLY (only if the residual row is ever lost -- byte-match
+--   the primary's live command first, do NOT hand-edit the placeholders):
+--
+--   DO $$
+--   DECLARE v_cmd text;
+--   BEGIN
+--     SELECT command INTO v_cmd FROM cron.job WHERE jobname='overshoot-exit-run';
+--     IF v_cmd IS NULL THEN RAISE EXCEPTION 'primary row missing'; END IF;
+--     PERFORM cron.schedule('overshoot-exit-run-residual', '50 19 * * 1-5', v_cmd);
+--   END $$;
+--
+-- POST-APPLY VERIFICATION (§22.5.1 pattern):
+--   SELECT jobid, jobname, schedule, active, md5(command)
+--   FROM cron.job WHERE jobname IN
+--     ('overshoot-exit-run','overshoot-exit-run-residual');
+--   Expected: two rows, IDENTICAL md5(command), schedules
+--     ('45 13 * * 1-5', '50 19 * * 1-5') respectively.
+-- =============================================================================
