@@ -78,8 +78,13 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
  * ran newer bundles. This literal is baked into the deployed module and
  * stamped as `x-source-version` on every response by createHandler.
  * Bump the suffix whenever money-path behavior changes.
+ *
+ * 2026-07-23 — FIX-2 bump: fb5fdf13+fix1 → fb5fdf13+fix2. In-run snapshot
+ * retry wired into the per-lot Polygon fetch at the shared seam. Freshness
+ * predicate untouched; retry_recovered surfaced in tally. See
+ * `docs/08-planning/FIX-2-spec.md`.
  */
-export const SOURCE_VERSION = 'fb5fdf13+fix1';
+export const SOURCE_VERSION = 'fb5fdf13+fix2';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
