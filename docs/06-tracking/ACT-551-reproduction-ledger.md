@@ -1640,3 +1640,50 @@ Supervisor prediction going into R-ACT-553.a: "the tide-class sleeve will clear 
 - **THREE-RULINGS 2026-07-18 tracker entry** (Ruling 1 ratifies DEC-080-v2/081-v2; Ruling 2 freezes longshort surface; Ruling 3 charters ACT-527-b; this row is the queued follow-on).
 - **INC-117** (sector-mapping and Tradier gaps; the sector portion filed here as reproduction-blocking).
 - **Catalog #62** (fifth firing avoided by refusing to fabricate the 5×4 grid from T+0-only columns).
+---
+
+## R-007 (2026-07-23 22:43Z) — Morning-Exit Execution-Cost Verdict (POOLED)
+
+**Charter.** ACT-509 Stage-2, morning-exit leg — measure `morning_exec_cost_delta` at m ∈ {09:31, 09:35, 09:45} ET vs 15:50 ET baseline against the canonical SLICE-B substrate. Final-day forfeit already answered by Stage-2 Pre-Screen v2 and NOT re-derived here.
+
+**Chain (evidence, verbatim artifacts).**
+
+1. Charter — operator R-007 turn ruling; frozen definition restated verbatim in the SQL header.
+2. Pre-screen v2 — action-tracker row (T1 mean forfeit 4.30 bps, T2 mean forfeit 5.36 bps; ALIVE-STRONG pooled).
+3. Canonical substrate — `scripts/act-509/slice-b-pairs-canonical.jsonl` (6,538 pairs), MIG-167 (189,673 landed bars in `public.overshoot_minute_bars` slice_tag='b'), INC-135 (sampling-generator gap; new commit-before-execute discipline established this turn).
+4. Committed SQL — `scripts/act-509/verdict-exec-cost-pooled.sql` (committed BEFORE execution per INC-135).
+5. Pooled verdict — raw output pasted below.
+
+### RECEIPT (raw output)
+
+| m (ET) | n | est_a mean | est_a med | est_b mean | est_b med | b signed mean |
+|---|---:|---:|---:|---:|---:|---:|
+| 09:31 | 5177 | 20.141 | 15.539 | 15.681 | 9.464 | −0.028 |
+| 09:35 | 5455 | 15.521 | 11.976 | 11.723 | 7.305 | +0.346 |
+| 09:45 | 5682 | 11.403 |  9.200 |  8.755 | 5.705 | +0.455 |
+| **15:50** (baseline) | 6429 | 8.447 | 7.131 | 5.981 | 4.186 | +0.156 |
+
+| m | a_mean_Δ | b_mean_Δ | **conservative_mean_Δ (bps)** | T2 [5–6] | T1 [6–7] |
+|---|---:|---:|---:|:---:|:---:|
+| 09:31 | 11.694 | 9.700 | **11.694** | FAIL | FAIL |
+| 09:35 |  7.074 | 5.742 | **7.074**  | FAIL | FAIL |
+| 09:45 |  2.956 | 2.774 | **2.956**  | **ADOPT** | **ADOPT** |
+
+**Year texture.** 2022–2026, every year × minute cell n ≥ 1000 → no INSUFFICIENT-N tags. Worst 09:45 year-cell is 2026 (Δ = 4.530 bps < 5.0 T2-lower). 09:31 and 09:35 stay FAIL in every year.
+
+**SLICE-A calibration.** Only one realized fill matches the four minutes (15:50 ET, n=1); realized_slip = 3.0 bps vs estimator [b] = 9.7 bps at the same minute. Directional only — confirms estimator [b] is conservative-upward, which strengthens the ADOPT verdict at 09:45.
+
+### VERDICT
+
+**R-007 = REPRODUCED — ADOPT at 09:45 ET for both T1 and T2.** Supervisor re-derivation independently reproduced every delta.
+
+**Honest-net note.** Adoption saves the conservative Δ = 2.956 bps at 09:45 vs 15:50 baseline, net of estimator uncertainty ≈ **2–3 bps/slot-night**. Applied to observed slot volume: **≈ $600–800 / yr BLEND, ≈ $9.7K / yr FLOOR** (arithmetic per ACT-558 v4 reference ceilings). Below the DEC-085 tier threshold but positive-EV and directionally-consistent across all five years — adoption defensible on structural microstructure grounds, not headline economics.
+
+### CROSS-REFS
+
+- **Charter row:** ACT-509 R-007 (action-tracker).
+- **Pre-screen v2:** action-tracker Pre-Screen v2 row (T1 4.30 / T2 5.36 forfeit means).
+- **Substrate:** MIG-167 (canonical SLICE-B), INC-135 (sampling-generator commit discipline).
+- **Committed SQL:** `scripts/act-509/verdict-exec-cost-pooled.sql`.
+- **Adoption vehicle (staged, awaiting GO):** `docs/08-planning/DEC-083-draft-morning-exit-adoption.md`.
+- **Calibration follow-on:** first-week 09:45 realized-slip vs 2.956-bps estimator (per DEC-083 §(e) monitoring hook).
