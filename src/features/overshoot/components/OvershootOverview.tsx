@@ -23,7 +23,6 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { OvershootCapCompliance } from './portfolio/OvershootCapCompliance';
 import { useOvershootEquitySnapshots } from '../hooks/useOvershootEquitySnapshots';
-import { useOvershootPortfolioPositions } from '../hooks/useOvershootPortfolioPositions';
 import { useOvershootDayNumber, type OvershootDayNumber } from '../hooks/useOvershootDayNumber';
 import { InfoHint } from '@/components/dashboard/InfoHint';
 
@@ -158,59 +157,12 @@ function addDays(iso: string, n: number): string {
  * Same source as the Portfolio tab (`useOvershootPortfolioPositions`)
  * so the two surfaces agree at any single clock tick.
  */
-function TodayCard({
-  snapshots,
-  snapshotsLoading,
-  now,
-}: {
-  snapshots: Array<{ snapshot_date: string; broker_equity: number }>;
-  snapshotsLoading: boolean;
-  now: Date;
-}) {
-  const live = isUsEquityMarketHours(now);
-  const positions = useOvershootPortfolioPositions();
-  const todayIso = utcDateStr(now);
-  const realizedTodayQuery = useQuery({
-    queryKey: ['overshoot', 'overview', 'realized-today', todayIso],
-    enabled: live,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('overshoot_lots')
-        .select('realized_pnl_partial, closed_at')
-        .eq('status', 'closed')
-        .gte('closed_at', `${todayIso}T00:00:00Z`);
-      if (error) throw error;
-      const rows = data ?? [];
-      let sum = 0;
-      for (const r of rows as Array<{ realized_pnl_partial: number | string | null }>) {
-        if (r.realized_pnl_partial === null) continue;
-        sum += Number(r.realized_pnl_partial);
-      }
-      return { sum, count: rows.length };
-    },
-    refetchInterval: 25_000,
-    staleTime: 20_000,
-  });
-
-  const n = snapshots.length;
-  const latestSnap = n > 0 ? snapshots[n - 1] : null;
-  const prevSnap = n >= 2 ? snapshots[n - 2] : null;
-
-  if (live) {
-    const openPnl = (positions.data?.broker_positions ?? []).reduce(
-      (acc, p) => acc + (p.unrealized_intraday_pl ?? 0),
-      0,
-    );
-    const realizedToday = realizedTodayQuery.data?.sum ?? 0;
-    const realizedCount = realizedTodayQuery.data?.count ?? 0;
-    const loading = positions.isLoading || snapshotsLoading || realizedTodayQuery.isLoading;
-    const anchorMissing = latestSnap === null;
-    const total = openPnl + realizedToday;
-    const pct = latestSnap && latestSnap.broker_equity > 0
-      ? (total / latestSnap.broker_equity) * 100
-      : null;
+function TodayCard({ day }: { day: OvershootDayNumber }) {
+  if (day.mode === 'live') {
+    const total = day.valueUsd;
+    const loading = day.loading;
     const variant: 'good' | 'bad' | 'muted' =
-      loading ? 'muted' : total > 0 ? 'good' : total < 0 ? 'bad' : 'muted';
+      loading || total === null ? 'muted' : total > 0 ? 'good' : total < 0 ? 'bad' : 'muted';
     const valueClass =
       variant === 'good' ? 'text-emerald-600 dark:text-emerald-400'
       : variant === 'bad' ? 'text-destructive'
@@ -219,10 +171,13 @@ function TodayCard({
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground truncate flex items-center gap-1.5">
-            <span className="truncate">Today (live)</span>
+            <span className="truncate">{day.label}</span>
             <InfoHint label="Today (live) — broker-truth intraday">
-              During RTH (Mon-Fri 13:30Z–21:00Z) this card renders live from the
-              same Alpaca paper source as the Portfolio tab
+              Single source of the day number (UI invariant 2026-07-23) — the
+              same hook feeds the KPI-strip "Today" tile so the two surfaces can
+              never disagree at the same tick. During RTH (Mon-Fri 13:30Z–21:00Z)
+              this card renders live from the same Alpaca paper source as the
+              Portfolio tab
               (<span className="font-mono">overshoot-portfolio-positions-readonly</span>) —
               <span className="font-mono"> Σ unrealized_intraday_pl</span> across open
               positions plus realized closures today
@@ -238,30 +193,32 @@ function TodayCard({
         <CardContent>
           {loading ? (
             <p className="text-2xl font-semibold text-muted-foreground">…</p>
-          ) : positions.error ? (
+          ) : day.error ? (
             <>
               <p className="text-2xl font-semibold text-muted-foreground">—</p>
               <p className="mt-2 text-xs text-destructive">Broker read failed.</p>
             </>
+          ) : total === null ? (
+            <p className="text-2xl font-semibold text-muted-foreground">—</p>
           ) : (
             <>
               <p className={`text-2xl font-semibold font-mono ${valueClass}`}>
                 {total >= 0 ? '+' : ''}{fmtMoney(total)}
               </p>
               <p className={`mt-1 text-xs font-mono ${valueClass}`}>
-                {pct === null ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}
+                {day.pct === null ? '' : `${day.pct >= 0 ? '+' : ''}${day.pct.toFixed(2)}%`}
                 <span className="text-muted-foreground/80">
                   {' · live · '}Alpaca paper
                 </span>
               </p>
               <p className="mt-1 text-xs font-mono text-muted-foreground/90">
-                realized {realizedToday >= 0 ? '+' : ''}{fmtMoney(realizedToday)} across {realizedCount} lot{realizedCount === 1 ? '' : 's'}
-                {' · '}open {openPnl >= 0 ? '+' : ''}{fmtMoney(openPnl)}
-                {anchorMissing ? null : (
+                realized {(day.realizedToday ?? 0) >= 0 ? '+' : ''}{fmtMoney(day.realizedToday ?? 0)} across {day.realizedCount ?? 0} lot{day.realizedCount === 1 ? '' : 's'}
+                {' · '}open {(day.openPnl ?? 0) >= 0 ? '+' : ''}{fmtMoney(day.openPnl ?? 0)}
+                {day.anchorDate ? (
                   <span className="text-muted-foreground/70">
-                    {' · vs settled '}{fmtDateOnly(latestSnap!.snapshot_date)}
+                    {' · vs settled '}{fmtDateOnly(day.anchorDate)}
                   </span>
-                )}
+                ) : null}
               </p>
             </>
           )}
@@ -271,10 +228,8 @@ function TodayCard({
   }
 
   // Settled mode — no live word.
-  const delta = latestSnap && prevSnap ? latestSnap.broker_equity - prevSnap.broker_equity : null;
-  const pct = latestSnap && prevSnap && prevSnap.broker_equity > 0 && delta !== null
-    ? (delta / prevSnap.broker_equity) * 100
-    : null;
+  const delta = day.valueUsd;
+  const pct = day.pct;
   const variant: 'good' | 'bad' | 'muted' =
     delta === null ? 'muted' : delta > 0 ? 'good' : delta < 0 ? 'bad' : 'muted';
   const valueClass =
@@ -285,9 +240,7 @@ function TodayCard({
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground truncate flex items-center gap-1.5">
-          <span className="truncate">
-            Settled {latestSnap ? fmtDateOnly(latestSnap.snapshot_date) : '—'}
-          </span>
+          <span className="truncate">{day.label}</span>
           <InfoHint label="Settled — post-close broker equity delta">
             Outside RTH (before 13:30Z or after 21:00Z, and on weekends) the card
             renders the settled delta between the two most recent
@@ -299,13 +252,13 @@ function TodayCard({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {snapshotsLoading ? (
+        {day.loading ? (
           <p className="text-2xl font-semibold text-muted-foreground">…</p>
         ) : delta === null ? (
           <>
             <p className="text-2xl font-semibold text-muted-foreground">—</p>
             <p className="mt-2 text-xs text-muted-foreground/80">
-              {n === 0 ? 'No snapshots loaded yet' : 'Need 2+ snapshots'}
+              {day.latestDate === null ? 'No snapshots loaded yet' : 'Need 2+ snapshots'}
             </p>
           </>
         ) : (
@@ -316,7 +269,7 @@ function TodayCard({
             <p className={`mt-1 text-xs font-mono ${valueClass}`}>
               {pct === null ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}
               <span className="text-muted-foreground/80">
-                {' · '}{fmtDateOnly(prevSnap!.snapshot_date)} → {fmtDateOnly(latestSnap!.snapshot_date)}
+                {' · '}{fmtDateOnly(day.prevDate)} → {fmtDateOnly(day.latestDate)}
               </span>
             </p>
           </>
