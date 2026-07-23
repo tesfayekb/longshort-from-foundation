@@ -1347,4 +1347,4 @@ Deno.serve(createHandler(async (req: Request) => {
     console.error(JSON.stringify({ event: 'entry_run_unhandled', correlationId, err: String(err) }));
     return apiError(500, 'entry_run_unhandled_error', { correlationId });
   }
-}));
+}, { sourceVersion: SOURCE_VERSION }));
