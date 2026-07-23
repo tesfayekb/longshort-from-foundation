@@ -23,23 +23,27 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { OvershootCapCompliance } from './portfolio/OvershootCapCompliance';
 import { useOvershootEquitySnapshots } from '../hooks/useOvershootEquitySnapshots';
+import { useOvershootPortfolioPositions } from '../hooks/useOvershootPortfolioPositions';
 import { InfoHint } from '@/components/dashboard/InfoHint';
 
 /**
  * SI staleness display window — MUST mirror the LIVE gate constant
- * (single source of truth, DEC-504-4):
+ * (single source of truth, DEC-504-4 AMENDMENT 2026-07-23, INC-129):
  *   supabase/functions/_shared/overshoot/si-freshness.ts
- *     export const OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 21;
+ *     export const OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 26;
  * The gate predicate is strict `age > max` (see `isSiRowStale`), so age
- * == 21 is FRESH; age == 22 flips si_stale_active TRUE.
+ * ≤ 26 is FRESH (cadence breathing); age ≥ 27 is STALE
+ * (= publication cycle missed — alert-tier, not breathing).
  *
- * Console-displayed thresholds cite their engine constant, never restate
- * values independently (FP-069 W4.g display-truth rule, ACT-465.g).
- *
- * 2026-07-21: repointed from stale 20d display to the live 21d gate
- * constant. UI-vs-gate divergence (INC-class: display-truth) resolved.
+ * Console-displayed thresholds cite the deployed constant, never a
+ * stored snapshot of it (FP-069 W4.g display-truth rule).
+ * 2026-07-23: 21 → 26 per DEC-504-4 AMENDMENT (cadence-aware).
  */
-const DETECTOR_SI_STALENESS_MAX_DAYS = 21;
+const SI_STALENESS_MAX_DAYS = 26;
+
+/** FINRA short-interest settlement interval (mid-month + last-of-month).
+ *  Next expected `as_of_date` ≈ latest as_of + 15 calendar days. */
+const SI_SETTLEMENT_INTERVAL_DAYS = 15;
 
 interface DetectionRow {
   run_id: string;
@@ -106,6 +110,216 @@ function daysSinceDate(dateOnly: string): number | null {
 function fmtMoney(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
   return `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * US equity RTH gate — Mon-Fri 13:30Z–20:00Z (14:30Z–21:00Z during
+ * standard time; we use the summer window as the widest RTH surface
+ * to avoid falsely-collapsing to "settled" in the last hour DST-side).
+ * Display-only; DEC-034 wall-clock ban does not scope src/.
+ */
+function isUsEquityMarketHours(now: Date): boolean {
+  const dow = now.getUTCDay();
+  if (dow === 0 || dow === 6) return false;
+  const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
+  // 13:30Z (810) .. 21:00Z (1260) — covers both DST regimes conservatively.
+  return mins >= 810 && mins < 1260;
+}
+
+/** UTC calendar-date string YYYY-MM-DD for `d`. */
+function utcDateStr(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/** Add N calendar days to a YYYY-MM-DD string, returning YYYY-MM-DD. */
+function addDays(iso: string, n: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) + n * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/**
+ * TodayCard — LIVE during market hours, SETTLED after close.
+ *
+ * Live mode (Mon-Fri 13:30Z–21:00Z):
+ *   value = sum(broker.unrealized_intraday_pl) + realized_today
+ *   sub   = "realized +$X · open ±$Y · vs settled YYYY-MM-DD"
+ *   label = "Today (live)"
+ *
+ * Settled mode (outside RTH):
+ *   value = last_snapshot.broker_equity − prev_snapshot.broker_equity
+ *   label = "Settled YYYY-MM-DD"
+ *
+ * The word TODAY may never sit on a prior-day range: outside RTH the
+ * card auto-relabels to "Settled <date>" so the range is explicit.
+ *
+ * Same source as the Portfolio tab (`useOvershootPortfolioPositions`)
+ * so the two surfaces agree at any single clock tick.
+ */
+function TodayCard({
+  snapshots,
+  snapshotsLoading,
+  now,
+}: {
+  snapshots: Array<{ snapshot_date: string; broker_equity: number }>;
+  snapshotsLoading: boolean;
+  now: Date;
+}) {
+  const live = isUsEquityMarketHours(now);
+  const positions = useOvershootPortfolioPositions();
+  const todayIso = utcDateStr(now);
+  const realizedTodayQuery = useQuery({
+    queryKey: ['overshoot', 'overview', 'realized-today', todayIso],
+    enabled: live,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('overshoot_lots')
+        .select('realized_pnl_partial, closed_at')
+        .eq('status', 'closed')
+        .gte('closed_at', `${todayIso}T00:00:00Z`);
+      if (error) throw error;
+      return (data ?? []).reduce(
+        (acc, r: { realized_pnl_partial: number | string | null }) =>
+          acc + (r.realized_pnl_partial === null ? 0 : Number(r.realized_pnl_partial)),
+        0,
+      );
+    },
+    refetchInterval: 25_000,
+    staleTime: 20_000,
+  });
+
+  const n = snapshots.length;
+  const latestSnap = n > 0 ? snapshots[n - 1] : null;
+  const prevSnap = n >= 2 ? snapshots[n - 2] : null;
+
+  if (live) {
+    const openPnl = (positions.data?.broker_positions ?? []).reduce(
+      (acc, p) => acc + (p.unrealized_intraday_pl ?? 0),
+      0,
+    );
+    const realizedToday = realizedTodayQuery.data ?? 0;
+    const loading = positions.isLoading || snapshotsLoading || realizedTodayQuery.isLoading;
+    const anchorMissing = latestSnap === null;
+    const total = openPnl + realizedToday;
+    const pct = latestSnap && latestSnap.broker_equity > 0
+      ? (total / latestSnap.broker_equity) * 100
+      : null;
+    const variant: 'good' | 'bad' | 'muted' =
+      loading ? 'muted' : total > 0 ? 'good' : total < 0 ? 'bad' : 'muted';
+    const valueClass =
+      variant === 'good' ? 'text-emerald-600 dark:text-emerald-400'
+      : variant === 'bad' ? 'text-destructive'
+      : 'text-muted-foreground';
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground truncate flex items-center gap-1.5">
+            <span className="truncate">Today (live)</span>
+            <InfoHint label="Today (live) — broker-truth intraday">
+              During RTH (Mon-Fri 13:30Z–21:00Z) this card renders live from the
+              same Alpaca paper source as the Portfolio tab
+              (<span className="font-mono">overshoot-portfolio-positions-readonly</span>) —
+              <span className="font-mono"> Σ unrealized_intraday_pl</span> across open
+              positions plus realized closures today
+              (<span className="font-mono">overshoot_lots.realized_pnl_partial</span> WHERE
+              <span className="font-mono"> closed_at ≥ today 00:00Z</span>).
+              Anchor for the % denominator is the last settled snapshot's
+              <span className="font-mono"> broker_equity</span>. After close the card
+              auto-fallbacks to "Settled <em>YYYY-MM-DD</em>" so the word "Today"
+              never sits on a prior-day range.
+            </InfoHint>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-2xl font-semibold text-muted-foreground">…</p>
+          ) : positions.error ? (
+            <>
+              <p className="text-2xl font-semibold text-muted-foreground">—</p>
+              <p className="mt-2 text-xs text-destructive">Broker read failed.</p>
+            </>
+          ) : (
+            <>
+              <p className={`text-2xl font-semibold font-mono ${valueClass}`}>
+                {total >= 0 ? '+' : ''}{fmtMoney(total)}
+              </p>
+              <p className={`mt-1 text-xs font-mono ${valueClass}`}>
+                {pct === null ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}
+                <span className="text-muted-foreground/80">
+                  {' · live · '}Alpaca paper
+                </span>
+              </p>
+              <p className="mt-1 text-xs font-mono text-muted-foreground/90">
+                realized {realizedToday >= 0 ? '+' : ''}{fmtMoney(realizedToday)}
+                {' · '}open {openPnl >= 0 ? '+' : ''}{fmtMoney(openPnl)}
+                {anchorMissing ? null : (
+                  <span className="text-muted-foreground/70">
+                    {' · vs settled '}{fmtDateOnly(latestSnap!.snapshot_date)}
+                  </span>
+                )}
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Settled mode — no live word.
+  const delta = latestSnap && prevSnap ? latestSnap.broker_equity - prevSnap.broker_equity : null;
+  const pct = latestSnap && prevSnap && prevSnap.broker_equity > 0 && delta !== null
+    ? (delta / prevSnap.broker_equity) * 100
+    : null;
+  const variant: 'good' | 'bad' | 'muted' =
+    delta === null ? 'muted' : delta > 0 ? 'good' : delta < 0 ? 'bad' : 'muted';
+  const valueClass =
+    variant === 'good' ? 'text-emerald-600 dark:text-emerald-400'
+    : variant === 'bad' ? 'text-destructive'
+    : 'text-muted-foreground';
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground truncate flex items-center gap-1.5">
+          <span className="truncate">
+            Settled {latestSnap ? fmtDateOnly(latestSnap.snapshot_date) : '—'}
+          </span>
+          <InfoHint label="Settled — post-close broker equity delta">
+            Outside RTH (before 13:30Z or after 21:00Z, and on weekends) the card
+            renders the settled delta between the two most recent
+            <span className="font-mono"> overshoot_equity_snapshots</span> rows
+            (source <span className="font-mono">alpaca_paper_overshoot</span>).
+            The word "Today" is deliberately not used here — that label is
+            reserved for the live RTH branch.
+          </InfoHint>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {snapshotsLoading ? (
+          <p className="text-2xl font-semibold text-muted-foreground">…</p>
+        ) : delta === null ? (
+          <>
+            <p className="text-2xl font-semibold text-muted-foreground">—</p>
+            <p className="mt-2 text-xs text-muted-foreground/80">
+              {n === 0 ? 'No snapshots loaded yet' : 'Need 2+ snapshots'}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className={`text-2xl font-semibold font-mono ${valueClass}`}>
+              {delta >= 0 ? '+' : ''}{fmtMoney(delta)}
+            </p>
+            <p className={`mt-1 text-xs font-mono ${valueClass}`}>
+              {pct === null ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}
+              <span className="text-muted-foreground/80">
+                {' · '}{fmtDateOnly(prevSnap!.snapshot_date)} → {fmtDateOnly(latestSnap!.snapshot_date)}
+              </span>
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 // PendingCandidateIII (ACT-525 R2 (b)) removed 2026-07-21 (Option-A render
@@ -694,7 +908,7 @@ export function OvershootOverview() {
           series is too short for a given window, that card renders a
           typed-absence naming the shortfall (never fabricates). */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <WindowedGainCard title="Today"     sessionsBack={1}   snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
+        <TodayCard snapshots={snapshots} snapshotsLoading={equitySeriesQuery.isLoading} now={new Date()} />
         <WindowedGainCard title="5-day"     sessionsBack={5}   snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
         <WindowedGainCard title="1-month"   sessionsBack={21}  snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
         <WindowedGainCard title="1-year"    sessionsBack={252} snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
@@ -854,14 +1068,22 @@ export function OvershootOverview() {
                 <div>
                   <Badge
                     variant={
-                      siStaleDays !== null && siStaleDays > DETECTOR_SI_STALENESS_MAX_DAYS
+                      siStaleDays !== null && siStaleDays > SI_STALENESS_MAX_DAYS
                         ? 'destructive'
                         : 'outline'
                     }
                     className="font-mono text-xs"
                   >
-                    staleness: {siStaleDays ?? '—'}d (window: {DETECTOR_SI_STALENESS_MAX_DAYS}d)
+                    staleness: {siStaleDays ?? '—'}d (window: {SI_STALENESS_MAX_DAYS}d)
                   </Badge>
+                  <p className="mt-1 text-xs text-muted-foreground/80 font-mono">
+                    stale = FINRA publication cycle missed (alert), not "cadence
+                    breathing". Next publication expected ~
+                    <span>{addDays(si.as_of_date, SI_SETTLEMENT_INTERVAL_DAYS)}</span>
+                    {' '}(settlement interval {SI_SETTLEMENT_INTERVAL_DAYS}d + ~11d
+                    normal FINRA lag; window {SI_STALENESS_MAX_DAYS}d per
+                    DEC-504-4 AMENDMENT).
+                  </p>
                 </div>
               </div>
             )}
