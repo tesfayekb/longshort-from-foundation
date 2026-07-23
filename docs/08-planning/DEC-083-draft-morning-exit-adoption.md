@@ -6,7 +6,18 @@
 
 **Authority chain (R-007 REPRODUCED).** Charter (ACT-509 Stage-2 morning-exit leg) → Pre-Screen v2 (T1 forfeit 4.30 bps / T2 5.36 bps ALIVE-STRONG) → Canonical SLICE-B substrate (6,538 pairs / 189,673 bars, MIG-167) → Committed SQL (`scripts/act-509/verdict-exec-cost-pooled.sql`, INC-135 discipline) → Pooled Verdict (conservative Δ = 2.956 bps at 09:45 ET, ADOPT for both tiers). Supervisor independently re-derived every delta; ratification recorded in R-007 ledger row.
 
-**Honest-net envelope (recorded, not headline).** ≈ 2–3 bps/slot-night, ≈ **$600–800/yr BLEND**, ≈ **$9.7K/yr FLOOR**. Below the DEC-085 headline threshold; adopted on structural microstructure grounds plus positive-EV, cross-year texture consistency (all five years ADOPT-band; worst 2026 cell Δ = 4.530 bps < 5.0 T2-lower).
+**Honest-net envelope — CANONICAL EXPRESSION (operator-preferred, ratified 2026-07-23).**
+
+Expressed as **yield on the idle slice** — the ~4.5 slots × $2.5K ≈ **$11.25K/night** of capital that DEC-083 activates for one extra overnight cycle per day (≈ 1/10th of book):
+
+- Gross overnight edge on slice ≈ **26%/yr** (matches strategy blend — operator's intuition verbatim).
+- Minus forfeit ≈ **13.5%/yr**.
+- Minus friction ≈ **7.5%/yr**.
+- **NET ≈ 6%/yr on the slice at BLEND** (≈ **86%/yr at FLOOR**), vs **0%/yr today** (slice idle at 19:50Z anchor).
+
+**Whole-book equivalent (secondary line, not headline):** +0.6–1.2%/yr, ≈ $600–800/yr BLEND, ≈ $9.7K/yr FLOOR.
+
+Below the DEC-085 whole-book headline threshold; adopted on structural microstructure grounds plus positive-EV, cross-year texture consistency (all five years ADOPT-band; worst 2026 cell Δ = 4.530 bps < 5.0 T2-lower). **The slice-yield framing is the canonical ROI expression; the whole-book % is the secondary line for portfolio-level views.**
 
 ---
 
