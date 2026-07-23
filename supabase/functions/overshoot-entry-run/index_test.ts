@@ -413,9 +413,42 @@ Deno.test('separation-guard: zero Alpaca market-data consumers (LIVE-PRICE SOURC
 });
 
 Deno.test('probe short-circuit taxonomy: alpaca / polygon only; else 400', () => {
-  assertStringIncludes(SRC, 'probe_invalid_expected_alpaca_or_polygon');
+  // FIX-3 (ACT-565) re-pin: taxonomy extended to include 'version' rail.
+  // Semantic preserved — invalid probe strings still return 400 with a
+  // typed refusal that names the FULL accepted set.
+  assertStringIncludes(SRC, 'probe_invalid_expected_alpaca_polygon_or_version');
   assertStringIncludes(SRC, 'alpaca_probe_failed');
   assertStringIncludes(SRC, 'polygon_probe_failed');
+  // Negative branch: the invalid-probe apiError sits inside the probe
+  // taxonomy guard so unknown strings are rejected BEFORE the pipeline.
+  const idxTaxGuard = SRC.indexOf("probeMode !== 'alpaca' && probeMode !== 'polygon' && probeMode !== 'version'");
+  const idxTaxErr   = SRC.indexOf("'probe_invalid_expected_alpaca_polygon_or_version'");
+  assert(idxTaxGuard > 0 && idxTaxErr > 0 && idxTaxGuard < idxTaxErr,
+    'unknown-probe taxonomy guard precedes its 400 refusal');
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// FIX-3 (ACT-565) — SOURCE_VERSION rail (INC-126.b) drift-guards.
+// The `x-source-version` header is the discriminator that proves the
+// deployed bundle carries the FIX-1 (negative-age) code even while the
+// env-pinned BUILD_SHA remains stale. These byte-scans ensure the rail
+// cannot silently unwire: (i) the SOURCE_VERSION export is present,
+// (ii) it is echoed in the {probe:'version'} envelope, and (iii) it is
+// passed to createHandler so the response stamp fires.
+// ─────────────────────────────────────────────────────────────────────────
+
+Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it, handler wired', () => {
+  // (i) Exported constant present with the ratified fb5fdf13+fix1 marker.
+  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix1'");
+  // (ii) Version-probe positive envelope carries all three keys.
+  const idxProbeStart = SRC.indexOf("probe: 'version',");
+  assert(idxProbeStart > 0, "version-probe branch present");
+  const probeBlock = SRC.slice(idxProbeStart, idxProbeStart + 400);
+  assertStringIncludes(probeBlock, 'SOURCE_VERSION,');
+  assertStringIncludes(probeBlock, 'RATIFIED_DETECTOR_VERSION,');
+  assertStringIncludes(probeBlock, "BUILD_SHA: Deno.env.get('BUILD_SHA') ?? null");
+  // (iii) createHandler wired with { sourceVersion: SOURCE_VERSION }.
+  assertStringIncludes(SRC, '{ sourceVersion: SOURCE_VERSION }');
 });
 
 Deno.test('single account key ratified for v1 (A3)', () => {
