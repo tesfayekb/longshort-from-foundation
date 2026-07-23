@@ -746,7 +746,7 @@ Deno.serve(createHandler(async (req: Request) => {
         metadata: {
           reason: regime.reason, refusal: regime.refusal,
           bars_available: spyClosesAscending.length,
-          session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot,
+          session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel,
         },
       });
     }
@@ -828,7 +828,7 @@ Deno.serve(createHandler(async (req: Request) => {
         capacity_long_ratified: OVERSHOOT_CAPACITY_LONG, capacity_short_ratified: OVERSHOOT_CAPACITY_SHORT,
         regime: regimeLabel, regime_ok: regime.ok, regime_signal_context: regimeSignalContext,
         detector_version: RATIFIED_DETECTOR_VERSION,
-        dry_run: dryRun, manual: manualConfirm, slot, minutes_to_close: minutesToClose,
+        dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, minutes_to_close: minutesToClose,
       },
     });
 
@@ -976,7 +976,7 @@ Deno.serve(createHandler(async (req: Request) => {
             correlationId,
             metadata: {
               ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
-              session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot,
+              session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel,
               pass: passLabel, reason: 'symbol already admitted in pass-1 (double-count guard)',
             },
           });
@@ -991,7 +991,7 @@ Deno.serve(createHandler(async (req: Request) => {
             correlationId,
             metadata: {
               ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
-              session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot,
+              session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel,
               pass: passLabel, reason: 'prior pass-1 refusal classified terminal (see fix-8.md §2(4))',
             },
           });
@@ -1002,7 +1002,7 @@ Deno.serve(createHandler(async (req: Request) => {
       filteredSelections = kept;
     }
 
-    for (const sel of selections) {
+    for (const sel of filteredSelections) {
       const sideUpper: OvershootSide = sel.side === 'long' ? 'LONG' : 'SHORT';
       const sizeSide: OvershootSizeSide = sideUpper;
       const entrySide: EntrySide = sideUpper;
@@ -1029,7 +1029,7 @@ Deno.serve(createHandler(async (req: Request) => {
           metadata: {
             ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
             regime: regimeLabel, regime_signal_context: regimeSignalContext,
-            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId,
           },
         });
         continue;
@@ -1056,7 +1056,7 @@ Deno.serve(createHandler(async (req: Request) => {
             broker_position_qty: brokerHit.length > 0 ? brokerHit[0].qty : null,
             broker_position_side: brokerHit.length > 0 ? (brokerHit[0].qty > 0 ? 'long' : 'short') : null,
             manual_broker_position: lotHit.length === 0 && brokerHit.length > 0,
-            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId,
           },
         });
         continue;
@@ -1093,7 +1093,7 @@ Deno.serve(createHandler(async (req: Request) => {
             reason: `daily-bar reference price missing (t_close_ref=${sel.t_close_ref} pre_event_ref=${sel.pre_event_ref}); detection as_of=${sel.as_of}; argmax_window_days=${sel.argmax_window_days}`,
             t_close_ref: sel.t_close_ref, pre_event_ref: sel.pre_event_ref,
             detection_as_of: sel.as_of, argmax_window_days: sel.argmax_window_days,
-            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId,
             inc83_sentinel_persists: true,
           },
         });
@@ -1118,7 +1118,7 @@ Deno.serve(createHandler(async (req: Request) => {
           action: `overshoot.entry.i5_refusal.${i5.refusal}`,
           actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
           correlationId,
-          metadata: { ticker: sel.ticker, side: sel.side, reason: i5.reason, reversionPct: i5.reversionPct, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId, inc83_sentinel_persists: true },
+          metadata: { ticker: sel.ticker, side: sel.side, reason: i5.reason, reversionPct: i5.reversionPct, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId, inc83_sentinel_persists: true },
         });
         continue;
       }
@@ -1136,7 +1136,7 @@ Deno.serve(createHandler(async (req: Request) => {
           action: `overshoot.entry.sizing_refusal.${sizing.refusal}`,
           actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
           correlationId,
-          metadata: { ticker: sel.ticker, side: sel.side, reason: sizing.reason, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId },
+          metadata: { ticker: sel.ticker, side: sel.side, reason: sizing.reason, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId },
         });
         continue;
       }
@@ -1179,7 +1179,7 @@ Deno.serve(createHandler(async (req: Request) => {
             sizing_base_usd: sizingBase,
             mv_basis_mix: openMV.basis_mix[capSide],
             handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
-            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId,
           },
         });
         continue;
@@ -1194,7 +1194,7 @@ Deno.serve(createHandler(async (req: Request) => {
       // Ratified K=5 by ACT-500 Part 1 DEC; W5 4-week live tripwire may
       // drop to 4 on evidence.
       const budgetEval = evaluateDailyBudget({
-        budget: OVERSHOOT_DAILY_ENTRY_BUDGET,
+        budget: effectiveBudget,
         admittedThisRun: admittedByDailyBudget,
       });
       if (!budgetEval.ok) {
@@ -1210,7 +1210,7 @@ Deno.serve(createHandler(async (req: Request) => {
             budget: budgetEval.budget,
             admitted_this_run: budgetEval.admitted_this_run,
             handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
-            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId,
+            session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId,
           },
         });
         continue;
@@ -1234,7 +1234,7 @@ Deno.serve(createHandler(async (req: Request) => {
           action: `overshoot.entry.buying_power_refusal.${bpCheck.refusal}`,
           actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
           correlationId,
-          metadata: { ticker: sel.ticker, side: sel.side, reason: bpCheck.reason, buying_power: bpCheck.buyingPower, intended_notional: bpCheck.intendedNotional, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId },
+          metadata: { ticker: sel.ticker, side: sel.side, reason: bpCheck.reason, buying_power: bpCheck.buyingPower, intended_notional: bpCheck.intendedNotional, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId },
         });
         continue;
       }
@@ -1249,7 +1249,7 @@ Deno.serve(createHandler(async (req: Request) => {
             action: 'overshoot.entry.shortability_refusal.not_shortable',
             actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
             correlationId,
-            metadata: { ticker: sel.ticker, side: sel.side, easy_to_borrow: shortability.easy_to_borrow, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId },
+            metadata: { ticker: sel.ticker, side: sel.side, easy_to_borrow: shortability.easy_to_borrow, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId },
           });
           continue;
         }
@@ -1264,7 +1264,7 @@ Deno.serve(createHandler(async (req: Request) => {
           action: `overshoot.entry.price_refusal.${priced.refusal}`,
           actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
           correlationId,
-          metadata: { ticker: sel.ticker, side: sel.side, reason: priced.reason, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId },
+          metadata: { ticker: sel.ticker, side: sel.side, reason: priced.reason, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId },
         });
         continue;
       }
@@ -1398,7 +1398,7 @@ Deno.serve(createHandler(async (req: Request) => {
           action: 'overshoot.entry.submit_failed',
           actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
           correlationId,
-          metadata: { ticker: sel.ticker, side: sel.side, reason, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, run_id: runId },
+          metadata: { ticker: sel.ticker, side: sel.side, reason, session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId },
         });
       }
     }
@@ -1438,6 +1438,7 @@ Deno.serve(createHandler(async (req: Request) => {
 
     return apiSuccess({
       outcome: 'completed',
+      pass: passLabel,
       run_id: runId,
       intent,
       dry_run: dryRun,
@@ -1481,8 +1482,11 @@ Deno.serve(createHandler(async (req: Request) => {
       // response for operator triage / attestation).
       daily_budget: {
         budget: OVERSHOOT_DAILY_ENTRY_BUDGET,
+        effective_budget: effectiveBudget,
         consumed: admittedByDailyBudget,
         refusals: tally.daily_budget_reached,
+        pass2_skips_already_admitted: pass2SkipsAlreadyAdmitted,
+        pass2_skips_terminal: pass2SkipsTerminal,
       },
       correlation_id: correlationId,
     });
