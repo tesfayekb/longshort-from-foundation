@@ -46,10 +46,10 @@ Original wording: "consider at first W5 read-out". Reconciled against `docs/08-p
 | C | ACT-493 | exit adoption + Option-B smoothing | deadline 2026-07-17 (missed → renegotiated); first exits ≈ 2026-07-22 | 2026-07-10 | 2026-07-24 | `overshoot-master-plan.md:63,71` |
 | C | ACT-498 STEP B | self-healing ladder step B | AFTER ACT-493 | 2026-07-11 | post-493 | `overshoot-master-plan.md:88` |
 | C | ACT-515 (engine) | sector-cap engine + fixture byte-match | lane #1 resumption; INC-119 fixture ruling | 2026-07-19 | 2026-07-30 | action-tracker ACT-515 |
-| C | ACT-537 | rank-weighted sizing | sequenced-after-engine | 2026-07-17 | — | tracker |
-| C | ACT-509 Stage-2 | 1-min-bar validation (3.1M bars) | sequenced-after-527-curve | 2026-07-17 | — | tracker |
-| C | ACT-540 | insider × dislocation | sequenced-after-engine | 2026-07-17 | — | tracker |
-| C | ACT-541 | earnings-crash | sequenced-after-engine | 2026-07-17 | — | tracker |
+| C | ACT-509 Stage-2 (exit-minute leg) | **ELEVATED 2026-07-23** — 1-min bars, exit-minute grid {09:31,09:35,10:00,15:00,15:50,close}×{T1,T2}; three-term arithmetic (redeploy_gain − morning_exec_cost − extra_overnight_effect) per frozen adoption rule; entry-minute grid retained. Priced prize = ACT-558 v4 blend $2.98K/yr / floor $12.0K/yr. Verdict: net>0 @ n≥1000 & regime-stable → morning-exit ADOPTS; net≤0 → 15:50 stands & ACT-558 ceiling closes as structurally unrecoverable. | sequenced-immediately-after-engine-verdict (Monday) | 2026-07-23 | days-after-engine | `docs/08-planning/artifacts/ACT-509-STAGE2-EXIT-MINUTE-LEG-CHARTER.md`; corpus 3.1M 1-min bars |
+| C | ACT-537 | rank-weighted sizing | sequenced-after-509-Stage-2-exit-minute | 2026-07-17 | — | tracker |
+| C | ACT-540 | insider × dislocation | sequenced-after-509-Stage-2-exit-minute | 2026-07-17 | — | tracker |
+| C | ACT-541 | earnings-crash | sequenced-after-509-Stage-2-exit-minute | 2026-07-17 | — | tracker |
 | C | ACT-527 | short-side curve delivery | curve → ACT-531 map | 2026-07-13 | — | ACT-527 short output contract |
 | C | ACT-531 | Signal-Conditioned Continuation Map | curve upstream | 2026-07-16 | — | ACT-531 charter |
 | C | ACT-511-U2 | Russell-2000 roster + backfill quote (HAND-OFF-CANDIDATE) | Polygon quote + IWM CSV | 2026-07-13 | — | tracker ACT-511-U2 |
@@ -165,14 +165,14 @@ Ranking rubric: **value** ∈ {LOW/MED/HIGH} (dial impact + risk-reduction) · *
 | 11 | **DW-216 / DW-217** (F2 quantization / F4 dividend-drift) | M / M | opportunistic on next dispatcher touch (paired) |
 | 12 | **ACT-556** (news feasibility scan) | L / S | scoping only; no build; low priority vs above |
 
-**Held (NOT now-workable — sequence-locked):** ACT-515 engine (INC-119 fixture ruling accepted, but full engine build sequences after receipts + ACT-493 exit adoption) · ACT-537 (rank-weighted sizing — sequenced-after-engine) · ACT-509 Stage-2 (sequenced-after-527-curve) · ACT-540 / ACT-541 (sequenced-after-engine) · ACT-511-U2 (Polygon quote + IWM CSV upstream) · Phase-11 items (evidence-gated on ≥20 round-trips + operator sign-off) · **ACT-564 full build** (locked as tomorrow's first deliverable, single turn — do NOT preempt).
+**Held (NOT now-workable — sequence-locked):** ACT-515 engine (INC-119 fixture ruling accepted, but full engine build sequences after receipts + ACT-493 exit adoption) · **ACT-509 Stage-2 exit-minute leg (ELEVATED 2026-07-23 — runs immediately after Monday engine verdict; priced prize = ACT-558 v4 ceiling)** · ACT-537 (rank-weighted sizing — sequenced-after-509-Stage-2) · ACT-540 / ACT-541 (sequenced-after-509-Stage-2) · ACT-511-U2 (Polygon quote + IWM CSV upstream) · Phase-11 items (evidence-gated on ≥20 round-trips + operator sign-off) · **ACT-564 full build** (locked as tomorrow's first deliverable, single turn — do NOT preempt).
 
 **Members confirmed from operator's expected list:** ACT-565 ✔ (rank 9), ACT-558 ✔ (rank 4), ACT-561 ✔ (rank 7), ACT-556 ✔ (rank 12), ACT-554-b.h ✔ (rank 10), F2 quant ✔ (DW-216 rank 11), F4 dividend-drift ✔ (DW-217 rank 11), DW-H3-DRILL ✔ (rank 8), ACT-560 ✔ (rank 1), SEC-A ✔ (rank 3), ACT-559.a/b/c ✔ (filed as DW-218 — held pending 559-core observation window; not now-workable this week).
 **Members surfaced by the sweep that supervisor lists missed:** DW-215 (G3) · DW-224 (repo TODO artifact) · DW-221 (ACT-529 redeploy discipline) · DW-222 (ACT-533 CI lint) · DW-223 (ACT-534 class monitoring) · INC-103.
 
 ### §0.5 Sequencing block (unchanged from prior turn — re-asserted here as canonical)
 
-Receipts > Engine > everything else. Lane order after receipts: ACT-515 (engine) → ACT-537 (sizing) → ACT-509 Stage-2 → ACT-540 → ACT-541. Phase-11 pre-live decisions gated on ≥20 round-trips + operator sign-off. Phase-13 shadow-universe expansion gated on PERF-D-A (kernel sharding) + PERF-D-C (capacity-dilution). Deploy-hold fallacy (INC-112): auto-deploy on commit — no sequencing plan may assume a "hold until deploy" step.
+Receipts > Engine > everything else. Lane order after receipts: ACT-515 (engine) → **ACT-509 Stage-2 exit-minute leg (ELEVATED 2026-07-23)** → ACT-537 (sizing) → ACT-540 → ACT-541. Rationale: ACT-558 v4 closed the freed-cash ceiling as the priced prize of morning-exit; ACT-509 Stage-2 is the terminal measured verdict on whether that prize is capturable. Phase-11 pre-live decisions gated on ≥20 round-trips + operator sign-off. Phase-13 shadow-universe expansion gated on PERF-D-A (kernel sharding) + PERF-D-C (capacity-dilution). Deploy-hold fallacy (INC-112): auto-deploy on commit — no sequencing plan may assume a "hold until deploy" step.
 
 ### §0.6 Completeness attestation
 
