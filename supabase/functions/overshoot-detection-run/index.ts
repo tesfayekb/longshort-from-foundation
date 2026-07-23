@@ -42,6 +42,9 @@
  * overshoot_detection_runs.append_run_ids. No kind-enum extension.
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
+
+/** SOURCE_VERSION — see overshoot-entry-run for INC-126 rationale. */
+export const SOURCE_VERSION = 'fb5fdf13+fix1';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
@@ -263,6 +266,7 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiSuccess({
       ok: true, probe: 'version',
       function: 'overshoot-detection-run',
+      SOURCE_VERSION,
       RATIFIED_DETECTOR_VERSION,
       BUILD_SHA: Deno.env.get('BUILD_SHA') ?? null,
       correlation_id: correlationId,
@@ -978,7 +982,7 @@ Deno.serve(createHandler(async (req: Request) => {
     console.error(JSON.stringify({ event: 'detection_run_unhandled', correlationId, err: String(err) }));
     return apiError(500, 'detection_run_unhandled_error', { correlationId });
   }
-}));
+}, { sourceVersion: SOURCE_VERSION }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 // deno-lint-ignore no-explicit-any
