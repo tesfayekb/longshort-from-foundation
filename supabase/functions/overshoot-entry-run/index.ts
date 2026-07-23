@@ -332,9 +332,24 @@ Deno.serve(createHandler(async (req: Request) => {
   const dryRun = body.dry_run === true;
   const manualConfirm = body.manual_confirm === true;
   const secondConfirmToken = typeof body.second_confirm_token === 'string' ? body.second_confirm_token : null;
-  const probeMode = body.probe as ('alpaca' | 'polygon' | undefined);
-  if (probeMode !== undefined && probeMode !== 'alpaca' && probeMode !== 'polygon') {
-    return apiError(400, 'probe_invalid_expected_alpaca_or_polygon', { correlationId });
+  const probeMode = body.probe as ('alpaca' | 'polygon' | 'version' | undefined);
+  if (probeMode !== undefined && probeMode !== 'alpaca' && probeMode !== 'polygon' && probeMode !== 'version') {
+    return apiError(400, 'probe_invalid_expected_alpaca_polygon_or_version', { correlationId });
+  }
+  // FIX-3 (ACT-565) — VERSION PROBE. Cron-gated by the branch above.
+  // Returns ratified constants + deployed BUILD_SHA BEFORE any boot
+  // assertion so a stale-bundle deploy (INC-128 class) is diagnosable
+  // WITHOUT running the pipeline. This branch is the verification rail
+  // that MUST precede every subsequent money-path change (permanent
+  // policy per operator ruling FIX-2 pre-market Friday sequencing).
+  if (probeMode === 'version') {
+    return apiSuccess({
+      ok: true, probe: 'version',
+      function: 'overshoot-entry-run',
+      RATIFIED_DETECTOR_VERSION,
+      BUILD_SHA: Deno.env.get('BUILD_SHA') ?? null,
+      correlation_id: correlationId,
+    });
   }
   const slot = typeof body.slot === 'string' ? body.slot : null;
 
