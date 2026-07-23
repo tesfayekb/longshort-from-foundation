@@ -1696,3 +1696,44 @@ Whole-book equivalent +0.6–1.2%/yr is the **secondary line**. The slice-yield 
 - **Committed SQL:** `scripts/act-509/verdict-exec-cost-pooled.sql`.
 - **Adoption vehicle (staged, awaiting GO):** `docs/08-planning/DEC-083-draft-morning-exit-adoption.md`.
 - **Calibration follow-on:** first-week 09:45 realized-slip vs 2.956-bps estimator (per DEC-083 §(e) monitoring hook).
+
+---
+
+## R-008 (SLOT OPENED 2026-07-23; day-5 close due) — Morning-Exit First-Week Realized-Slip Calibration
+
+**Status:** OPEN — no data yet. Filled at close of the fifth trading session after DEC-083 §(a) primary cron activates.
+
+**Charter.** DEC-083 §(e) monitoring hook — verify the R-007 conservative Δ = **2.956 bps** prediction against realized 09:45 ET execution over the first five post-adoption sessions.
+
+**Comparator.** R-007 estimator [b] pooled mean at 09:45 = **8.755 bps** (upper envelope); conservative Δ prediction = **2.956 bps** vs 15:50 baseline.
+
+**Metric per fill.**
+
+```
+realized_slip_bps = abs(fill_avg_price - vwap(09:45 minute bar)) / vwap * 1e4
+```
+
+**Data path.** Per-fill row into `overshoot_lots.avg_exit_price` / `closed_at`; daily rollup via `public.overshoot_morning_exit_calibration_daily` (MIG-168, planned next turn — R-008 fills after MIG-168 lands so the substrate view exists).
+
+**Verdict thresholds (baked from DEC-083 §(e)).**
+
+| Band | First-week mean `realized_slip_bps` | Action |
+|---|---|---|
+| GREEN | < 8.755 | Ratify — estimator confirmed conservative-upward (SLICE-A n=1 calibration validated at population). |
+| YELLOW | 8.755 – 13.0 | Continue monitoring; no action; extend to day-10 receipt. |
+| RED | > 13.0 for ≥3 of 5 sessions | Auto-trigger DEC-083 §(f) rollback (single-line cron revert 13:45Z → 19:50Z). |
+
+**Filled artifact (planned columns, empty until day-5 close).**
+
+| Session | Fills at 09:45Z | Mean realized_slip_bps | Median | Max | 15:50 baseline slip (control, sampled if any residual sweep fires) | Band |
+|---|---|---|---|---|---|---|
+| Session 1 (2026-07-24 pending) | — | — | — | — | — | — |
+| Session 2 | — | — | — | — | — | — |
+| Session 3 | — | — | — | — | — | — |
+| Session 4 | — | — | — | — | — | — |
+| Session 5 | — | — | — | — | — | — |
+| **Pooled** | — | — | — | — | — | — |
+
+**Supervisor pre-registered prediction (Standing Format Rule).** Estimator [b] is conservative-upward per SLICE-A n=1 (3.0 realized vs 9.7 predicted); pooled first-week mean expected to land in the 4–7 bps range (well below 8.755 GREEN cutoff). Recording this on-the-record so a symmetric-skepticism check can fire post-hoc.
+
+**Cross-refs.** R-007 (adoption verdict), DEC-083 §(e)/§(f), MIG-168 (planned substrate), `docs/06-tracking/2026-07-24-morning-precommit.md` (session-1 pre-committed expectations).
