@@ -103,6 +103,22 @@ Deno.serve(createHandler(async (req: Request) => {
     });
   }
 
+  // Debug probe (non-leaking): confirms whether the cron-secret header
+  // matches the edge-runtime CRON_SECRET, without echoing the value.
+  if (bodyRaw?.probe === 'cron_auth') {
+    const envSecret = Deno.env.get('CRON_SECRET') ?? '';
+    const hdr = req.headers.get('x-cron-secret') ?? '';
+    return apiSuccess({
+      probe: 'cron_auth',
+      env_secret_present: envSecret.length > 0,
+      header_present: hdr.length > 0,
+      matches: envSecret.length > 0 && hdr.length > 0 && envSecret === hdr,
+      env_len: envSecret.length,
+      hdr_len: hdr.length,
+      correlation_id: correlationId,
+    });
+  }
+
   // Auth: either a signed-in user with overshoot.manage, or a cron-secret
   // caller (operator-invoked service path for one-shot backfills).
   const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
