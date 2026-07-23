@@ -93,3 +93,17 @@ Deno.test('ACT-501 malformed inputs refuse defensively (never a silent pass)', (
   const bad3 = evaluateDailyBudget({ budget: 5.5, admittedThisRun: 0 });
   assertEquals(bad3.ok, false);
 });
+// ── FIX-8 (DEC-083 §c) — computeRemainingBudget boundary tests ────────────
+import { computeRemainingBudget } from './daily-budget.ts';
+
+Deno.test('FIX-8: K_remaining=0 when priorAdmittedCount >= K', () => {
+  assertEquals(computeRemainingBudget({ budget: 5, priorAdmittedCount: 5 }), 0);
+  assertEquals(computeRemainingBudget({ budget: 5, priorAdmittedCount: 7 }), 0);
+});
+Deno.test('FIX-8: K_remaining=K when priorAdmittedCount=0 (primary-skipped-day)', () => {
+  assertEquals(computeRemainingBudget({ budget: 5, priorAdmittedCount: 0 }), 5);
+});
+Deno.test('FIX-8: K_remaining=K-n on interior counts', () => {
+  assertEquals(computeRemainingBudget({ budget: 5, priorAdmittedCount: 2 }), 3);
+  assertEquals(computeRemainingBudget({ budget: 5, priorAdmittedCount: 4 }), 1);
+});
