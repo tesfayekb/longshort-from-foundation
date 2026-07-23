@@ -150,6 +150,7 @@ import {
   computePriorSpySessionDate,
   type OvershootDetectionRunRow,
 } from '../_shared/overshoot-execution/detection-linkage.ts';
+import { fetchPolygonSnapshotWithRetry } from '../_shared/overshoot-execution/snapshot-retry.ts';
 import {
   computeRegime,
   shouldThrottleUnderRegime,
@@ -272,6 +273,10 @@ interface RefusalTally {
   // allocation_cap_reached in the evaluation order and the identity —
   // a name refused by the cap does NOT consume budget.
   daily_budget_reached: number;
+  // FIX-2 (2026-07-23): count of lots where the shared snapshot-retry
+  // wrapper recovered a fresh attempt-2 after a stale attempt-1. Surfaced
+  // via run tally so FIX-6-class analyses can price the fix.
+  snapshot_retry_recovered: number;
 }
 function newTally(): RefusalTally {
   return {
@@ -289,6 +294,7 @@ function newTally(): RefusalTally {
     fill_unfilled_no_lots: 0,
     allocation_cap_reached: 0,
     daily_budget_reached: 0,
+    snapshot_retry_recovered: 0,
   };
 }
 
@@ -933,7 +939,16 @@ Deno.serve(createHandler(async (req: Request) => {
       }
 
       // Fetch pre-open Polygon snapshot (reused for I5 + entry-price).
-      const snap = await fetchPolygonSnapshot(env.polygonKey, sel.ticker);
+      // FIX-2 (2026-07-23): in-run single retry on stale-freshness at the
+      // shared seam. Predicate itself is untouched — retry only defeats
+      // VICR-class transient +15s skews. See docs/08-planning/FIX-2-spec.md.
+      const _entryRetry = await fetchPolygonSnapshotWithRetry({
+        fetcher: () => fetchPolygonSnapshot(env.polygonKey, sel.ticker),
+        asOf: nowTs,
+        sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+      });
+      if (_entryRetry.retryRecovered) tally.snapshot_retry_recovered += 1;
+      const snap = _entryRetry.snapshot;
 
       // ACT-485 Option A (INC-90 fix) — reference_bar_missing typed
       // refusal. Sourced by LATERAL JOIN above (never `NULL::` placeholder).
