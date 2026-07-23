@@ -24,6 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { OvershootCapCompliance } from './portfolio/OvershootCapCompliance';
 import { useOvershootEquitySnapshots } from '../hooks/useOvershootEquitySnapshots';
 import { useOvershootPortfolioPositions } from '../hooks/useOvershootPortfolioPositions';
+import { useOvershootDayNumber, type OvershootDayNumber } from '../hooks/useOvershootDayNumber';
 import { InfoHint } from '@/components/dashboard/InfoHint';
 
 /**
