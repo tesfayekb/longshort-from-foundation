@@ -1754,3 +1754,36 @@ INC-20 transitions to **Resolved (full)** at this SHA.
 | **Cross-refs** | Registry Tradier row (product_tier=`sandbox`; consumers=longshort options-flow producers + `overshoot-tradier-chain-probe`); ACT-554-a Polygon audit (options SKU CANCEL-CANDIDATE — options-flow is NOT satisfied by re-enabling that SKU); DEC-047 (queue-worker), FP-045 Phase 4 (arm site); §4.3.5 non-critical-signal typed-skip rule (correctly applied at row level — the alert-gap is at the aggregate level). |
 | **Follow-on** | On operator ruling (a): no code change, verify next-run `signal_compute_log` non-null. On (b): unschedule the cron via a migration, stamp the signal registry row `SHELVED-PENDING-ENTITLEMENT`. Regardless: **ACT-555** filed to add the "N-consecutive-days 100 %-typed-skip on armed producer → PAGE" watchdog rule to the longshort alert lane (health-monitoring, not money-path — safe to ship independently). |
 | **Filed under** | Operator ruling 2026-07-18, ACT-554-b acceptance packet (Tradier finding). |
+
+## INC-129 — Two-defect FINRA-SI cadence handling (2026-07-23)
+
+**Class:** Cadence-vs-threshold mismatch → ritual DEC-504-4 engage on healthy feeds. Filed as TWO defects on operator ruling.
+
+### INC-129 (a) — PICKUP LAG
+
+| Field | Value |
+|---|---|
+| **Symptom** | Every FINRA short-interest publication ingested 5–7 days after it landed at FINRA. |
+| **Root cause** | Cron `overshoot.short_interest.compute` scheduled `0 21 1,15 * *` (twice-monthly on the 1st and 15th), but FINRA publications land ~T+9–11 biz days post-settlement. The 1st/15th fires therefore run BEFORE the publication window every cycle — the file is picked up on the NEXT scheduled fire, 5–7 days late by construction. |
+| **Evidence** | `sql/30_overshoot_short_interest_cron_schedule.sql:88-90` (pre-amendment schedule); job_registry seed `20260704043127` L37 (same schedule byte-identical). |
+| **Fix** | Reschedule to daily Mon–Fri 21:00Z (`0 21 * * 1-5`). Function is idempotent per D3 (`ON CONFLICT DO NOTHING` on `(as_of_date, ticker)` PK), so no-op fires cost ~zero. Every publication is captured the day it appears. Landed in `sql/30` amendment header (operator applies at ~13:55Z 2026-07-24 before the one-shot). |
+| **One-shot** | Operator invokes `overshoot-short-interest-compute` once at ~14:00Z 2026-07-24 to catch the 2026-07-15 publication same-day if landed; retry Friday if not. |
+
+### INC-129 (b) — THRESHOLD-BELOW-CADENCE
+
+| Field | Value |
+|---|---|
+| **Symptom** | `si_stale_active = TRUE` firing on schedule each FINRA cycle on healthy feeds, ritually engaging DEC-504-4 sleeve reallocation (LONG absorbs SHORT capacity, 36/4 → 40/0) for non-failures. The 2026-07-22 engage episode is the FIRST LIVE INSTANCE of that ritual. |
+| **Root cause** | `OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 21` (strict `>`) was BELOW the FINRA cadence's natural max age. Freshest observation ages to ~24–26 calendar days by design between cycles (15d settlement + ~9–11 biz d publication lag). The 21d cap therefore flipped TRUE for 3–5 calendar days every cycle — cadence breathing, not degradation. |
+| **Evidence** | `supabase/functions/_shared/overshoot/si-freshness.ts` L69 (pre-amendment constant); 2026-07-22 sleeve-reallocation engage row (motivating instance, cited in DEC-504-4 amendment §3). |
+| **Fix** | Bump `OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT` 21 → **26** (= 15d settlement + ~11d worst-normal lag). Strict `>` compare: age ≤ 26 FRESH, age ≥ 27 STALE (= alert-tier: publication cycle missed). Semantics restated: "stale means the expected publication FAILED to arrive, not that the cadence is breathing." |
+| **Motivating instance receipt** | 2026-07-22 engage: freshest SI as_of `2026-07-01`, age crossed 21→22 across the day boundary. Under amended 26d cap: age 21 ≤ 26 → engage would not have occurred. Original engage row remains valid under the pre-amendment contract (not retroactively invalidated). |
+| **Amendment artifact** | `docs/08-planning/artifacts/DEC-504-4-AMENDMENT-cadence-aware-si-staleness.md`. |
+| **Tests landed** | `si-freshness_test.ts`: age 24 fresh / age 26 fresh-boundary / age 27 stale + default = 26. `sleeve-reallocation-writer_test.ts`: dates re-anchored to `2026-07-27` / `2026-07-01` / `2026-06-30` to preserve cap-fresh/cap+1-stale pair semantics under the 26d threshold. |
+| **UI companion (next turn)** | Overview SI chip: cadence-aware `age Nd (of 26d cap) — next publication expected ~MM-DD` from settlement calendar. Universe chip: cadence-aware `fresh ≤ 9d / stale > 9d` vs daily-refresh cadence. Same design principle: staleness measured against expected cadence. |
+
+**Class rule (forward-binding):** every staleness threshold MUST be justified against the upstream feed's natural cadence. A threshold below the cadence's max age is by-construction a ritual-engage generator, not a degradation detector. Precedent: DEC-080-v2 / DEC-081-v2 weekday-cadence amendment (2026-07-21) applied the same class of fix to analyst-revision feed.
+
+**Cross-refs:** DEC-504-4 (parent), DEC-504-4 AMENDMENT (this thread), DEC-080-v2 / DEC-081-v2 (class precedent), 2026-07-22 sleeve-engage row (motivating instance), DW-226 (INC-125.b — the corpus-vs-window-map defect adjacent to this one; unrelated root cause, same file).
+
+**Filed under:** Operator ruling 2026-07-23, DEC-504-4 AMENDMENT ratification.
