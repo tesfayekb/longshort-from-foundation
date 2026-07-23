@@ -1,6 +1,7 @@
 # ACT-509 Stage-2 — EXIT-MINUTE LEG (ELEVATED) Charter
 
 > **Owner:** Overshoot strategy | **Filed:** 2026-07-23 (operator priority elevation)
+> **Amended:** 2026-07-23 (operator variant correctly encoded — v1 supervisor mis-framing corrected: primary = SAME-DAY-EARLIER exit on ordinal-10, NOT next-morning exit)
 > **Mode:** INVESTIGATION only — read-only (1-min bars + `overshoot_lots` closed-lot ledger + ratified corpus). NO engine changes.
 > **Sequencing:** Runs IMMEDIATELY AFTER Monday engine verdict. Ahead of ACT-537 (sizing), ACT-540 (insider×dislocation), ACT-541 (earnings-crash). Register reordered same PR.
 > **Supersedes scope of:** ACT-509 Stage-2 original charter §"Intraday timing (CONDITIONAL — scope only)" — elevated to first-class execution leg.
@@ -14,6 +15,36 @@ ACT-558 v4 closed the freed-cash-idle-drag family at **blend $2.98K/yr (2.98% of
 
 No other queued item has a comparably priced, measurable, terminal-answer verdict awaiting a single study. Sizing / insider / earnings-crash lanes slide behind.
 
+## AMENDMENT (2026-07-23) — Operator variant correctly encoded
+
+**v1 mis-framed the variant.** Supervisor drafted "morning-exit = exit on ordinal-11 morning after holding one extra night." Operator's actual variant:
+
+> Exit on the **ORDINAL-10 DAY** at `{09:31, 09:35, 09:45}` ET (hold shortens ~6.5h). **NO extra overnight exists.** Freed cash funds the **SAME morning's 09:35 admission wave** (sequencing: exit minute precedes entry minute; both configurable).
+
+**Retired term:** `extra_overnight_effect` (belonged to the mis-framed variant). Kept only as ONE comparison cell for completeness, non-primary.
+
+**New term (primary):** `final_day_forfeit` = ordinal-10 open→close move surrendered by leaving at the open — **MEASURED from `overshoot_daily_bars` across the ratified corpus** (mean/median/winsorized, per tier + regime), NOT assumed.
+
+### Revised three-term arithmetic (morning cells)
+
+For each morning exit-minute cell `m ∈ {09:31, 09:35, 09:45}` per tier, on the ORDINAL-10 session:
+
+```text
+net(m) = redeploy_gain − morning_exec_cost(m) − final_day_forfeit
+```
+
+- **(a) redeploy_gain** = one recovered slot-night at the measured blended edge. ACT-558 scalars unchanged: floor $10.60/sd, blend $4.05/sd.
+- **(b) morning_exec_cost(m)** = `(spread + impact @ minute m) − (spread + impact @ 15:50)` from actual 1-min bars.
+- **(c) final_day_forfeit** = `(close − open)/open` on the ordinal-10 session, measured across corpus. Signed: positive value = leaving-at-open surrenders a gain = SUBTRACTS from net. Negative value = leaving-at-open avoids a loss = ADDS to net.
+
+### Comparison cell (non-primary) — mis-framed variant retained
+
+One next-morning-exit (ordinal-11 open, after one extra night held) cell reported alongside primary grid for completeness. Not adopted regardless of verdict.
+
+### Same-day reentry mechanics
+
+**Confirmed:** Alpaca paper/margin account — same-day proceeds from a market-open sale are immediately available for market-open purchases within the same session (T+0 buying power via margin; settlement is T+1 but non-blocking for purchases against margin). **No settlement-block risk** on the 09:31→09:35 exit→admission sequence in paper. Production cash-account variant would need explicit confirmation; scoped out of this study.
+
 ## Scope
 
 **Data:**
@@ -21,35 +52,16 @@ No other queued item has a comparably priced, measurable, terminal-answer verdic
 - Sampled study-era set targeting **n ≥ 1000 per cell** across the ratified 1888e113 corpus
 - Corpus already staged: 3.1M 1-min bars (confirmed earlier receipt)
 
-**Exit-minute grid (per tier T1, T2):**
-`{09:31, 09:35, 10:00, 15:00, 15:50, close}` ET
+**Exit-minute grid (per tier T1, T2) — ORDINAL-10 SESSION:**
+`{09:31, 09:35, 09:45, 10:00, 15:00, 15:50, close}` ET
+(Primary morning cells: 09:31, 09:35, 09:45. Baseline: 15:50. Comparison cell for retired variant: ordinal-11 open.)
 
 **Entry-minute grid (retained per original Stage-2 charter):**
 `{09:35, 10:00, 10:30, 11:00, 14:00}` ET — T+0/pre-close refusal RE-CONFIRMED on minute data while corpus is loaded.
 
-## Three-term arithmetic (morning cells)
+## Three-term arithmetic — see AMENDMENT above (supersedes original v1 text)
 
-For each morning exit-minute cell `m ∈ {09:31, 09:35, 10:00}` per tier:
-
-```text
-net(m) = redeploy_gain − morning_exec_cost(m) − extra_overnight_effect
-```
-
-Where:
-
-- **(a) redeploy_gain** = one recovered slot-night at the measured blended edge.
-  - Basis: ACT-558 v4 blended edge = **$4.05/slot-day** (arithmetic printed in v4 artifact: `2500 × (42.42×0.4 + 8.09×0.6) / 10000`).
-  - One night = one slot-day recovered per morning-exit lot.
-
-- **(b) morning_exec_cost(m)** = `(spread + impact @ minute m) − (spread + impact @ 15:50)`
-  - Measured from ACTUAL 1-min bars (bid-ask spread proxy from OHLC range; impact from volume-weighted deviation from VWAP-of-minute).
-  - NEVER assumed. NEVER modeled from vendor library defaults.
-  - Zero baseline: 15:50 is the current production exit minute.
-
-- **(c) extra_overnight_effect** = `close_to_open_drift(ordinal-10 positions, corpus)`
-  - Measured across corpus, NOT assumed.
-  - Signed: negative drift = morning-exit AVOIDS a loss = ADDS to net; positive drift = morning-exit MISSES a gain = SUBTRACTS from net.
-  - Bootstrap CI reported; cell-conditional (T1 vs T2) reported separately.
+Original v1 text retired. Primary variant now = same-day-earlier exit; term (c) is `final_day_forfeit` measured on ordinal-10 open→close.
 
 ## Verdict grammar (mechanical, pre-committed, binding)
 
@@ -64,6 +76,14 @@ else (net ≤ 0 OR n < 1000 OR knife-edge):
 ```
 
 Regime-stability: monotone across ±1 minute perturbations on the exit axis. Knife-edge (adjacent-minute collapse) disqualifies.
+
+## Pre-screen (TONIGHT, before Monday) — decision rule
+
+**Pre-committed:**
+- If corpus mean `final_day_forfeit` > **~+20 bps** → forfeit swamps the $10.60 / $4.05 per-slot-night gain → **variant likely fails**; report and stop cheaply.
+- If ≈ 0 or negative → final day is chop, not recovery → **variant ALIVE**; Stage-2 minute grid prices only the execution term.
+
+Delivered same-turn as this amendment. See companion artifact `ACT-509-STAGE2-PRESCREEN-final-day-forfeit.md` for the verbatim SQL + result tables + verdict.
 
 ## Deliverables (single artifact)
 
