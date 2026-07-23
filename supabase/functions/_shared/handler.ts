@@ -18,6 +18,19 @@ type HandlerFn = (req: Request) => Promise<Response>
 export interface HandlerOptions {
   /** Rate limit class for this endpoint. Default: 'standard' */
   rateLimit?: RateLimitClass
+  /**
+   * Code-level source version marker (e.g. 'fb5fdf13+fix1').
+   * Unlike BUILD_SHA (env-sourced — see INC-126: read stale `0c5ad0d9`
+   * for two straight days while the runtime executed newer bundles),
+   * this value is a literal string in the deployed source module and
+   * cannot go stale relative to the code that runs. Stamped as
+   * `x-source-version` on EVERY response (including OPTIONS) so a
+   * no-auth OPTIONS probe proves the deployed bundle vs. the source.
+   *
+   * Bump rule: change the suffix whenever the function's money-path
+   * behavior changes (e.g. '+fix1' → '+fix2' when FIX-2 lands).
+   */
+  sourceVersion?: string
 }
 
 /**
@@ -73,19 +86,28 @@ export function createHandler(
   options?: HandlerOptions
 ): (req: Request) => Promise<Response> {
   const rateLimitClass = options?.rateLimit ?? 'standard'
+  const sourceVersion = options?.sourceVersion ?? null
+
+  const stampAll = (r: Response): Response => {
+    stampBuildSha(r)
+    if (sourceVersion !== null && !r.headers.has('x-source-version')) {
+      r.headers.set('x-source-version', sourceVersion)
+    }
+    return r
+  }
 
   return async (req: Request): Promise<Response> => {
     const origin = req.headers.get('origin')
     const cors = getCorsHeaders(origin)
 
     if (req.method === 'OPTIONS') {
-      return stampBuildSha(new Response('ok', { headers: cors }))
+      return stampAll(new Response('ok', { headers: cors }))
     }
 
     // Rate limit check (before any auth or processing)
     const rateLimitResponse = checkRateLimit(req, rateLimitClass)
     if (rateLimitResponse) {
-      return stampBuildSha(rateLimitResponse)
+      return stampAll(rateLimitResponse)
     }
 
     // Generate a correlation ID for the request lifecycle
@@ -95,7 +117,7 @@ export function createHandler(
     const MAX_BODY_BYTES = 64 * 1024
     const contentLength = req.headers.get('content-length')
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
-      return stampBuildSha(apiError(413, 'Request body too large', { correlationId, _cors: cors }))
+      return stampAll(apiError(413, 'Request body too large', { correlationId, _cors: cors }))
     }
 
     try {
@@ -106,16 +128,16 @@ export function createHandler(
         response.headers.set(key, value)
       }
 
-      return stampBuildSha(response)
+      return stampAll(response)
     } catch (err) {
       // Extract correlation ID from authenticated context if available
       const cid = (err as Record<string, unknown>)?.correlationId as string ?? correlationId
 
       if (err instanceof AuthError) {
-        return stampBuildSha(apiError(401, err.message, { correlationId: cid, _cors: cors }))
+        return stampAll(apiError(401, err.message, { correlationId: cid, _cors: cors }))
       }
       if (err instanceof ValidationError) {
-        return stampBuildSha(apiError(400, err.message, {
+        return stampAll(apiError(400, err.message, {
           code: 'VALIDATION_ERROR',
           field: Object.keys(err.fieldErrors)[0],
           correlationId: cid,
@@ -136,18 +158,18 @@ export function createHandler(
 
         // Distinguish re-auth requirement from permission denial
         if (err.reason === 'recent_auth_required') {
-          return stampBuildSha(apiError(403, 'Session too old for this action — please re-authenticate', {
+          return stampAll(apiError(403, 'Session too old for this action — please re-authenticate', {
             code: 'RECENT_AUTH_REQUIRED',
             correlationId: cid,
             _cors: cors,
           }))
         }
 
-        return stampBuildSha(apiError(403, 'Permission denied', { correlationId: cid, _cors: cors }))
+        return stampAll(apiError(403, 'Permission denied', { correlationId: cid, _cors: cors }))
       }
 
       console.error('[HANDLER] Unhandled error:', err, { correlationId: cid })
-      return stampBuildSha(apiError(500, 'Internal server error', { correlationId: cid, _cors: cors }))
+      return stampAll(apiError(500, 'Internal server error', { correlationId: cid, _cors: cors }))
     }
   }
 }
