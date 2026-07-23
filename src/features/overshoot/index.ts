@@ -92,6 +92,12 @@ export const overshootNav: NavSection = {
       icon: Settings,
       permission: 'overshoot.view',
     },
+    {
+      title: 'Profile',
+      url: '/trading/overshoot/profile',
+      icon: LayoutDashboard,
+      permission: 'overshoot.view',
+    },
   ],
 };
 
