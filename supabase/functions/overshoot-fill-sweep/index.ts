@@ -184,9 +184,19 @@ Deno.serve(createHandler(async (req: Request) => {
   const asOfDate = asOfRaw ? parseAsOfDate(asOfRaw) : productionClock.getWallClockTs();
   if (!asOfDate) return apiError(400, 'as_of_invalid_format_expected_YYYY_MM_DD', { correlationId });
   const dryRun = body.dry_run === true;
-  const probeMode = body.probe as ('alpaca' | 'polygon' | undefined);
-  if (probeMode !== undefined && probeMode !== 'alpaca' && probeMode !== 'polygon') {
-    return apiError(400, 'probe_invalid_expected_alpaca_or_polygon', { correlationId });
+  const probeMode = body.probe as ('alpaca' | 'polygon' | 'version' | undefined);
+  if (probeMode !== undefined && probeMode !== 'alpaca' && probeMode !== 'polygon' && probeMode !== 'version') {
+    return apiError(400, 'probe_invalid_expected_alpaca_polygon_or_version', { correlationId });
+  }
+  // FIX-3 (ACT-565) — VERSION PROBE. See overshoot-entry-run for rationale.
+  if (probeMode === 'version') {
+    return apiSuccess({
+      ok: true, probe: 'version',
+      function: 'overshoot-fill-sweep',
+      RATIFIED_DETECTOR_VERSION,
+      BUILD_SHA: Deno.env.get('BUILD_SHA') ?? null,
+      correlation_id: correlationId,
+    });
   }
 
   const env = readEnv();
