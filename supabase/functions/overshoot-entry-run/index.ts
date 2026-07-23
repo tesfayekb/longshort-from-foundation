@@ -355,6 +355,7 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiSuccess({
       ok: true, probe: 'version',
       function: 'overshoot-entry-run',
+      SOURCE_VERSION,
       RATIFIED_DETECTOR_VERSION,
       BUILD_SHA: Deno.env.get('BUILD_SHA') ?? null,
       correlation_id: correlationId,
