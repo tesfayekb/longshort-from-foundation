@@ -185,13 +185,16 @@ export function evaluateI5PreOpenRecheck(input: I5RecheckInput): I5RecheckResult
     };
   }
   const snapshotAgeMs = asOf.getTime() - capturedAt.getTime();
+  // FIX-1: negative age = quote NEWER than run clock = fresh. Clamp to
+  // MIN (0) for the staleness comparison; keep raw signed age on the
+  // result envelope for FIX-6 forensics.
+  const effectiveAgeMs = Math.max(OVERSHOOT_SNAPSHOT_MIN_AGE_MS, snapshotAgeMs);
   if (!Number.isFinite(snapshotAgeMs)
-      || snapshotAgeMs > OVERSHOOT_SNAPSHOT_MAX_AGE_MS
-      || snapshotAgeMs < OVERSHOOT_SNAPSHOT_MIN_AGE_MS) {
+      || effectiveAgeMs > OVERSHOOT_SNAPSHOT_MAX_AGE_MS) {
     return {
       ok: false, side, reversionPct: null,
       refusal: 'polygon_snapshot_stale',
-      reason: `snapshot age ${snapshotAgeMs}ms outside [${OVERSHOOT_SNAPSHOT_MIN_AGE_MS}, ${OVERSHOOT_SNAPSHOT_MAX_AGE_MS}ms]`,
+      reason: `snapshot age ${snapshotAgeMs}ms exceeds max ${OVERSHOOT_SNAPSHOT_MAX_AGE_MS}ms (effective ${effectiveAgeMs}ms; MIN=${OVERSHOOT_SNAPSHOT_MIN_AGE_MS}ms — negatives clamped fresh)`,
     };
   }
 

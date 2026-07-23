@@ -79,13 +79,26 @@ Deno.test('typed refusal — polygon_snapshot_stale when snapshot older than 15s
   assertEquals(r.refusal, 'polygon_snapshot_stale');
 });
 
-Deno.test('typed refusal — polygon_snapshot_stale when negative age (asOf < capturedAt)', () => {
+Deno.test('FIX-1 — negative age (asOf < capturedAt, VICR-class -2115ms) is ACCEPTED (fresh)', () => {
   const r = constructEntryLimitPrice({
-    snapshot: snap({ bid: 99.95, ask: 100.00, capturedAt: new Date(AS_OF.getTime() + 5_000) }),
+    snapshot: snap({ bid: 99.95, ask: 100.00, capturedAt: new Date(AS_OF.getTime() + 2_115) }),
     side: 'LONG', asOf: AS_OF,
   });
-  assert(!r.ok);
-  assertEquals(r.refusal, 'polygon_snapshot_stale');
+  assert(r.ok, `expected pass on -2115ms; got ${r.ok ? 'n/a' : r.refusal}`);
+  assertEquals(r.snapshotAgeMs, -2_115); // raw signed age preserved
+});
+
+Deno.test('FIX-1 — age at MAX-1ms (+14999ms) passes; +15538ms refuses stale', () => {
+  const ok = constructEntryLimitPrice({
+    snapshot: snap({ bid: 99.95, ask: 100.00, capturedAt: new Date(AS_OF.getTime() - 14_999) }),
+    side: 'LONG', asOf: AS_OF,
+  });
+  assert(ok.ok);
+  const bad = constructEntryLimitPrice({
+    snapshot: snap({ bid: 99.95, ask: 100.00, capturedAt: new Date(AS_OF.getTime() - 15_538) }),
+    side: 'LONG', asOf: AS_OF,
+  });
+  assert(!bad.ok); assertEquals(bad.refusal, 'polygon_snapshot_stale');
 });
 
 Deno.test('side inversion — LONG and SHORT on identical book yield different orderSides + prices', () => {

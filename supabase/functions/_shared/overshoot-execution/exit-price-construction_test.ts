@@ -59,18 +59,27 @@ Deno.test('refusal: stale snapshot (age > 15s) → polygon_snapshot_stale', () =
   assert(!r.ok); assertEquals(r.refusal, 'polygon_snapshot_stale');
 });
 
-Deno.test('refusal: negative snapshot age beyond MIN bound → polygon_snapshot_stale', () => {
-  // ACT-486 (INC-91): MIN bound widened to -1000ms to absorb open-time
-  // wall-clock skew. Ages below MIN (e.g. -2000) still refuse.
-  const r = constructExitLimitPrice({ snapshot: snap(100, 100.1, -2000), side: 'LONG', asOf: ASOF });
-  assert(!r.ok); assertEquals(r.refusal, 'polygon_snapshot_stale');
+Deno.test('FIX-1 accept: large negative snapshot age (-2115ms, VICR-class) is FRESH', () => {
+  // FIX-1: negative age = quote NEWER than run clock = fresh. Accept.
+  const r = constructExitLimitPrice({ snapshot: snap(100, 100.1, -2115), side: 'LONG', asOf: ASOF });
+  assert(r.ok, `expected pass on -2115ms; got ${r.ok ? 'n/a' : r.refusal}: ${r.ok ? 'n/a' : r.reason}`);
+  assertEquals(r.snapshotAgeMs, -2115); // raw signed age preserved for audit
 });
 
-Deno.test('accept: negative snapshot age within MIN bound (ACT-486 widening)', () => {
-  // ageMs = -500 → snapshotAgeMs = -500 → inside [-1000, 15000], accept.
-  const r = constructExitLimitPrice({ snapshot: snap(100, 100.1, -500), side: 'LONG', asOf: ASOF });
+Deno.test('FIX-1 accept: any negative age (-2000ms) is FRESH', () => {
+  const r = constructExitLimitPrice({ snapshot: snap(100, 100.1, -2000), side: 'LONG', asOf: ASOF });
   assert(r.ok);
-  assertEquals(r.snapshotAgeMs, -500);
+  assertEquals(r.snapshotAgeMs, -2000);
+});
+
+Deno.test('FIX-1 accept: age at MAX-1ms (+14999ms) passes', () => {
+  const r = constructExitLimitPrice({ snapshot: snap(100, 100.1, 14_999), side: 'LONG', asOf: ASOF });
+  assert(r.ok);
+});
+
+Deno.test('FIX-1 refuse: age above MAX (+15538ms) refuses stale', () => {
+  const r = constructExitLimitPrice({ snapshot: snap(100, 100.1, 15_538), side: 'LONG', asOf: ASOF });
+  assert(!r.ok); assertEquals(r.refusal, 'polygon_snapshot_stale');
 });
 
 Deno.test('override slippage for A/B: 25 bps LONG', () => {

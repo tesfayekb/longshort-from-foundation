@@ -123,13 +123,15 @@ export function constructEntryLimitPrice(
   }
 
   const snapshotAgeMs = asOf.getTime() - capturedAt.getTime();
+  // FIX-1: negative age = quote NEWER than run clock = fresh. Clamp for
+  // the staleness check; keep raw signed age for audit forensics.
+  const effectiveAgeMs = Math.max(OVERSHOOT_SNAPSHOT_MIN_AGE_MS, snapshotAgeMs);
   if (!Number.isFinite(snapshotAgeMs)
-      || snapshotAgeMs > OVERSHOOT_SNAPSHOT_MAX_AGE_MS
-      || snapshotAgeMs < OVERSHOOT_SNAPSHOT_MIN_AGE_MS) {
+      || effectiveAgeMs > OVERSHOOT_SNAPSHOT_MAX_AGE_MS) {
     return {
       ok: false, side,
       refusal: 'polygon_snapshot_stale',
-      reason: `snapshot age ${snapshotAgeMs}ms outside [${OVERSHOOT_SNAPSHOT_MIN_AGE_MS}, ${OVERSHOOT_SNAPSHOT_MAX_AGE_MS}ms]`,
+      reason: `snapshot age ${snapshotAgeMs}ms exceeds max ${OVERSHOOT_SNAPSHOT_MAX_AGE_MS}ms (effective ${effectiveAgeMs}ms; MIN=${OVERSHOOT_SNAPSHOT_MIN_AGE_MS}ms — negatives clamped fresh per FIX-1)`,
     };
   }
 

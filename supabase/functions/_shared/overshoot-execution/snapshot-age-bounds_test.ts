@@ -15,8 +15,8 @@ import {
   OVERSHOOT_SNAPSHOT_MAX_AGE_MS,
 } from './snapshot-age-bounds.ts';
 
-Deno.test('ratified pair: MIN=-1000ms, MAX=15000ms', () => {
-  assertEquals(OVERSHOOT_SNAPSHOT_MIN_AGE_MS, -1_000);
+Deno.test('FIX-1 ratified pair: MIN=0ms (negatives clamped fresh), MAX=15000ms', () => {
+  assertEquals(OVERSHOOT_SNAPSHOT_MIN_AGE_MS, 0);
   assertEquals(OVERSHOOT_SNAPSHOT_MAX_AGE_MS, 15_000);
 });
 
