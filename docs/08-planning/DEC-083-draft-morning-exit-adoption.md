@@ -1,6 +1,21 @@
-# DEC-083 (DRAFT — pre-stage; awaiting operator GO per frozen grammar)
+# DEC-083 — Morning-Exit Adoption at 09:45 ET (ACTIVE)
 
-**Status:** DRAFT — no code lands until operator utters the one-word GO. This file is the ratification target; on GO, promote into `approved-decisions.md` as `DEC-083` and cite from `docs/06-tracking/action-tracker.md`.
+**Status:** ACTIVE — operator-ratified 2026-07-23 (one-word GO received). Index entry landed in `docs/08-planning/approved-decisions.md`. Execution artifacts (cron move, monitoring view, DST watch-row, R-008 ledger slot, 2026-07-24 pre-commit table) serialized across follow-on turns per anti-completion-theater discipline; sequence and receipts anchored below.
+
+**Operator-GO provenance.** Operator utterance "DEC-083: GO — operator word received 2026-07-23. EXECUTE ADOPTION NOW, receipts binding" (turn timestamp 2026-07-23) discharges the draft-gate defined in the pre-GO §SEQUENCING block. No prior soft-GO exists; this is the single ratifying event.
+
+**Execution ledger (post-GO).**
+
+| Step | Artifact | Turn | Status |
+|---|---|---|---|
+| (1) Promote DEC-083 → approved-decisions.md | `docs/08-planning/approved-decisions.md` (DEC-083 index entry) | this turn | LANDED |
+| (4) §(g) DST watch-row | `docs/06-tracking/dst-retiming-watch-2026-11-01.md` | this turn | LANDED |
+| (5) R-008 slot opened | `docs/06-tracking/ACT-551-reproduction-ledger.md` (R-008 header) | this turn | LANDED |
+| (6) 2026-07-24 morning pre-commit table | `docs/06-tracking/2026-07-24-morning-precommit.md` | this turn | LANDED |
+| (2) Cron move 19:50Z → 13:45Z + seed + registry byte-match + §22.5.1 read-back | `sql/` seed + `cron.alter_job` + `job_registry` UPDATE (single transaction) | next turn | PENDING (requires seed-file + registry-row read; no fabricated read-back) |
+| (3) Monitoring view `overshoot_morning_exit_calibration_daily` + auto-rollback rule | MIG-168 (planned) | after (2) | PENDING |
+
+Serialization rationale: items (2) and (3) each require pre-transaction reads I have not honestly captured; batching them with the doc-only steps risks a fabricated read-back (INC-114/115/121 recurrence class). One item per turn, real receipts.
 
 **Title:** Morning-Exit Adoption at 09:45 ET (T1+T2 primary time-exit cron move 19:50Z → 13:45Z).
 
