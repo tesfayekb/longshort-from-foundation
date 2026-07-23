@@ -72,8 +72,11 @@
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 
-/** SOURCE_VERSION — see overshoot-entry-run for INC-126 rationale. */
-export const SOURCE_VERSION = 'fb5fdf13+fix1';
+/** SOURCE_VERSION — see overshoot-entry-run for INC-126 rationale.
+ *  2026-07-23 — FIX-2 rail-parity bump. No money-path change here
+ *  (fill-sweep has no per-lot Polygon fetch); bump preserves uniform
+ *  `x-source-version` across the four rail functions. */
+export const SOURCE_VERSION = 'fb5fdf13+fix2';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';

@@ -438,8 +438,9 @@ Deno.test('probe short-circuit taxonomy: alpaca / polygon only; else 400', () =>
 // ─────────────────────────────────────────────────────────────────────────
 
 Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it, handler wired', () => {
-  // (i) Exported constant present with the ratified fb5fdf13+fix1 marker.
-  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix1'");
+  // (i) Exported constant present with the ratified FIX-2 marker (bumped
+  //     2026-07-23 for in-run snapshot retry — see FIX-2-spec.md).
+  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2'");
   // (ii) Version-probe positive envelope carries all three keys.
   const idxProbeStart = SRC.indexOf("probe: 'version',");
   assert(idxProbeStart > 0, "version-probe branch present");
@@ -498,11 +499,14 @@ Deno.test('ACT-466: broker-position-no-lot (manual position) → refused', () =>
 
 Deno.test('ACT-466: no-position → gate does NOT continue (falls through to Polygon snapshot)', () => {
   // The gate is a guarded `continue`; when the ticker is absent from
-  // heldTickers, control flows into fetchPolygonSnapshot (the next line
-  // in-source). Assert placement: gate precedes snapshot fetch, snapshot
-  // fetch precedes I5.
+  // heldTickers, control flows into the FIX-2 retry-wrapped Polygon
+  // snapshot fetch (the next line in-source). Assert placement: gate
+  // precedes snapshot fetch, snapshot fetch precedes I5.
+  // FIX-2 (2026-07-23): the direct `await fetchPolygonSnapshot(...)` was
+  // replaced with `fetchPolygonSnapshotWithRetry({ fetcher: () => ... })`.
+  // We anchor on the fetcher-arrow to survive future wrapper renames.
   const idxGate     = SRC.indexOf('if (heldTickers.has(sel.ticker)) {');
-  const idxSnap     = SRC.indexOf('await fetchPolygonSnapshot(env.polygonKey, sel.ticker)');
+  const idxSnap     = SRC.indexOf('fetcher: () => fetchPolygonSnapshot(env.polygonKey, sel.ticker)');
   const idxI5eval   = SRC.indexOf('evaluateI5PreOpenRecheck({');
   assert(idxGate > 0 && idxSnap > 0 && idxI5eval > 0);
   assert(idxGate < idxSnap, 'position_already_open gate precedes Polygon snapshot');

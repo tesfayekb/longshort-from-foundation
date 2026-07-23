@@ -123,8 +123,9 @@
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 
-/** SOURCE_VERSION — see overshoot-entry-run for INC-126 rationale. */
-export const SOURCE_VERSION = 'fb5fdf13+fix1';
+/** SOURCE_VERSION — see overshoot-entry-run for INC-126 rationale.
+ *  2026-07-23 — FIX-2 bump. Retry wired at the per-lot Polygon fetch. */
+export const SOURCE_VERSION = 'fb5fdf13+fix2';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
@@ -165,6 +166,7 @@ import {
   reconcileOpenPositions,
   type ReconciliationSide,
 } from '../_shared/overshoot-execution/position-reconciliation.ts';
+import { fetchPolygonSnapshotWithRetry } from '../_shared/overshoot-execution/snapshot-retry.ts';
 
 // I6 manual-confirm window (ratified: 15 minutes).
 const OVERSHOOT_MANUAL_CONFIRM_WINDOW_MS = 15 * 60 * 1000;
@@ -273,6 +275,9 @@ interface RefusalTally {
   // invocations when the broker /v2/orders fetch fails. PRIMARY invocations
   // continue degraded-to-empty; only catch-up trips this class.
   in_flight_guard_unavailable: number;
+  // FIX-2 (2026-07-23): count of lots where the shared snapshot-retry
+  // wrapper recovered a fresh attempt-2 after a stale attempt-1.
+  snapshot_retry_recovered: number;
 }
 function newTally(): RefusalTally {
   return {
@@ -286,6 +291,7 @@ function newTally(): RefusalTally {
     market_closing_soon: 0,
     in_flight_exit_order_skipped: 0,
     in_flight_guard_unavailable: 0,
+    snapshot_retry_recovered: 0,
   };
 }
 
@@ -925,8 +931,16 @@ Deno.serve(createHandler(async (req: Request) => {
       }
 
       // (f) Polygon snapshot.
+      // FIX-2 (2026-07-23): in-run single retry on stale-freshness at the
+      // shared seam. Predicate untouched. See docs/08-planning/FIX-2-spec.md.
       perLotStage = 'snapshot_fetch';
-      const snap = await fetchPolygonSnapshot(env.polygonKey, m.symbol);
+      const _exitRetry = await fetchPolygonSnapshotWithRetry({
+        fetcher: () => fetchPolygonSnapshot(env.polygonKey, m.symbol),
+        asOf: nowTs,
+        sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+      });
+      if (_exitRetry.retryRecovered) tally.snapshot_retry_recovered += 1;
+      const snap = _exitRetry.snapshot;
       // (g) exit-price construction (d-i module).
       perLotStage = 'exit_price';
       const priced = constructExitLimitPrice({

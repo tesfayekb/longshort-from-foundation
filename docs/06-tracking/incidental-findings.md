@@ -1829,3 +1829,15 @@ INC-20 transitions to **Resolved (full)** at this SHA.
 | **Class rule (forward-binding, Tier-A discipline)** | **Any sampling SQL that drives substrate ingestion MUST commit to `scripts/` WITH its emitted pair-list BEFORE the ingest fires.** No exceptions for "quick iteration" or "in-flight tuning". The generator + the emitted set are both artifacts; committing one without the other leaves an unreconciled surface. Same discipline applies to any future `{tier × minute}` verdict SQL, forfeit-computation template, or top-up delta-draw generator (see queue: TOP-UP against INSUFFICIENT-N year-cells uses the committed generator, not a fresh authored variant). |
 | **Precedent** | INC-103 (ACT-514 portfolio-backtest non-reproducible — no generating engine committed) — same class of failure, financial-materiality-adjacent. INC-114 (fabrication) recurrence discipline motivates the pre-fire commit gate. |
 | **Cross-refs** | MIG-167 (canonicalization ledger row + reconcile of last-turn's ~4,150 miscount); ACT-509 Stage-2; `scripts/act-509/slice-b-pairs-canonical.jsonl`; `overshoot-minute-ingest` edge function; operator ruling 2026-07-23 (Option 3-Modified). |
+
+### INC-135 footnote — behavioural specs for money-path fixes (2026-07-23, FIX-2 close)
+
+**Class extension.** The INC-135 pre-fire commit gate — originally scoped to *sampling SQL that drives substrate ingestion* — extends by symmetry to **behavioural specs for money-path fixes**. Both are artifacts that fully determine the resulting bytes on money-touching surfaces (substrate rows / deployed function behavior); a chat-only spec that is executed then paraphrased into the codebase is a reproducibility gap of the same class.
+
+**Precipitating gap (now closed).** FIX-2 (in-run snapshot retry) was locked verbatim by the operator earlier in the 2026-07-23 session but was not committed as a repo artifact before the build turn. The operator's GO turn made this explicit: *"File the spec-was-chat-only gap as an INC-135-family footnote"*. Same turn, the verbatim spec landed at `docs/08-planning/FIX-2-spec.md` **before** the build (per this file's ordering: spec commit → wrapper + test → SOURCE_VERSION bumps → probe verify).
+
+**Forward-binding class rule.** Any change to per-lot money-path behavior in the four rail functions (`overshoot-entry-run`, `overshoot-exit-run`, `overshoot-detection-run`, `overshoot-fill-sweep`) — retries, backoffs, refusal-class changes, freshness predicate touches, sizing/allocation adjustments, price-construction rules — MUST commit a `docs/08-planning/FIX-N-spec.md` (or equivalent DEC / ACT scope note) **before** the build turn fires. The spec is a first-class artifact; a `SOURCE_VERSION` bump without an accompanying spec artifact is invalid under this rule.
+
+**Precedent.** INC-135 body (sampling generator); INC-114 / INC-115 (fabrication recurrences that motivate all pre-commit gates on money-adjacent surfaces).
+
+**Cross-refs.** `docs/08-planning/FIX-2-spec.md`; `supabase/functions/_shared/overshoot-execution/snapshot-retry.ts`; DEC-083 §(a) (FIX-2 now protects the 13:45Z maiden morning-exits); operator GO turn 2026-07-23.
