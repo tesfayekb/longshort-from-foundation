@@ -85,9 +85,13 @@ export function siCalendarDaysBetween(aIso: string, bIso: string): number {
   return Math.round((a - b) / 86_400_000);
 }
 
-/** DEC-504-3 ratified default. Callers MUST pass this via param — no hard
- *  default is baked into consumer sites (see detector.ts contract). */
-export const OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 21;
+/** DEC-504-3 ratified default, cadence-corrected by DEC-504-4 AMENDMENT
+ *  (2026-07-23, INC-129). 26 = 15d FINRA settlement interval + ~11d
+ *  worst-normal publication lag. Strict `>` compare: age ≤ 26 is FRESH
+ *  (cadence breathing), age ≥ 27 is STALE (= alert-tier: publication
+ *  cycle missed). Callers MUST pass this via param — no hard default
+ *  is baked into consumer sites (see detector.ts contract). */
+export const OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 26;
 
 /**
  * Row-level predicate: is this SI datapoint stale relative to `asOf`?
