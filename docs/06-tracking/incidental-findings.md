@@ -1,6 +1,34 @@
 
 ---
 
+## INC-131 — Narrative-fabrication, register-identity class (2026-07-23)
+
+**Category:** narrative-fabrication (Catalog #64). **Severity:** HIGH (governance — SSOT trust). **Filed by:** operator clone-check + supervisor pins across 2026-07-23 turns. **Related:** INC-108, INC-114, INC-115, INC-130 (prior narrative-fabrication class instances); catalog entry #64 in `docs/ai-failure-modes.md` (pending).
+
+**Symptom.** Across two consecutive turns on 2026-07-23, the AI asserted five identity claims about register / SSOT rows without reading either tracking file, and asserted having "filed" four items (INC-130, INC-131, DW-229, DW-230) that were never written to disk. Supervisor's fresh `origin/main` clone-check confirmed **zero occurrences** of all four IDs in `docs/06-tracking/incidental-findings.md` + `docs/08-planning/deferred-work-register.md`. The five identity errors: `detector_version='df339497…'` (that value is the **PREDICATE_SPEC_V2_SHA256** test-side constant from Gate-11; the ratified `detector_version` is `aff20a13`, unchanged since ACT-527 step 1); post-close dial columns `n_events / mean_bps / p10_bps / breach_flag / watch_session_ordinal` (invented — the deployed R-003 view shape per INC-125 standing rule is `(as_of_date, verdict, is_realized, …)`); `DW-224 = "staleness epidemic quantification"` (wrong — that was FIX-6, delivered; DW-224 is the repo-wide TODO/FIXME sweep artifact); `ACT-565 = "chip cadence tests"` (wrong — ACT-565 is IBKR-vs-Alpaca decision-prep, slipped 3× already); `HK-001 = "retire 4 stale 2026-04 lots"` (wrong on both counts — HK-001 is delete-superseded-`decideSleeveReallocation`; ledger-row deletion violates Rule-8 history-preservation).
+
+**Root-cause pattern.** When a fact was not under the AI's hand at write-time, it defaulted to reconstructing plausible-sounding content instead of stopping to read the file. Same class as INC-108 / INC-114 / INC-115 / INC-130; this is **recurrence #4** of the narrative-fabrication class, and the **first** where the fabricated surface was register/SSOT identity claims (prior instances fabricated quantitative results or failure narratives).
+
+**Fix — structural rule adopted this turn (binding both agents, filed as Catalog #65 "NO ARTIFACT, NO ASSERTION" in the register header alongside the existing `date -u` rule).** (a) Any claim of the form "X = Y" about a register row, ratified constant, schema shape, or file content MUST be accompanied in the same turn by the fresh `grep` / `SELECT` line that proves it — otherwise it is phrased "unverified; checking". (b) Any claim that something was "filed / landed / updated" MUST carry the commit sha (or, when the AI cannot mint one under sandbox git-write restrictions, an explicit statement of that constraint plus the file-edit diff). (c) The un-greppable default is STOP, per this incident's own pattern-diagnosis. Extends the Standing Format Rule from quantitative claims to identity claims — closes the lane all five fabrications drove through.
+
+**Cross-refs.** INC-130 (immediately below — same-day narrative-fabrication precedent); `docs/08-planning/deferred-work-register.md` §0 header (Catalog #65 rule text); operator clone-check + pins message 2026-07-23.
+
+---
+
+## INC-130 — Narrative-fabrication on morning-batch attribution (2026-07-23)
+
+**Category:** narrative-fabrication (Catalog #63). **Severity:** LOW (numbers unaffected; narrative surface only). **Filed by:** operator correction on 2026-07-23 evening receipts pack. **Related:** INC-131 (structural fix), INC-108, INC-114, INC-115 (prior narrative-fabrication class instances).
+
+**Symptom.** In the 07-23 senior-tail receipts reply, the AI narrated "the −$329.95 was the morning batch pre-settlement" as the explanation for a delta between mid-day and end-of-day realized numbers. That explanation is **retracted**: −$329.95 was **07-22's** nine-lot morning batch (last-turn's slot), not any 07-23 batch. Today's morning-11 realized = **+$11.79** from first print; senior tail (4 seniors at 19:51Z) = **−$345.15**; day Σ = **−$333.36**. Numbers are unaffected — only the causal narrative was fabricated.
+
+**Root cause.** Same class as INC-131: reconstruction of a plausible-sounding causal story when the actual attribution was un-checked. No SELECT was run before writing the explanation.
+
+**Fix.** Covered by the structural rule adopted under INC-131 (Catalog #65 "NO ARTIFACT, NO ASSERTION"). No standalone remediation.
+
+**Cross-refs.** INC-131 (structural rule); prior-turn receipts message; today's SQL foot: `SELECT count(*), sum(realized_pnl_partial) FROM public.overshoot_lots WHERE status='closed' AND closed_at >= '2026-07-23T00:00:00Z'` → `(15, -333.36)`.
+
+---
+
 ## INC-126 — `overshoot_universe` identity is IVV+IJH composite (S&P 500 + S&P MidCap 400), not Russell 2000; refresh implementation inherited "IWM / Russell 2000" as the identity string (2026-07-21)
 
 ---
