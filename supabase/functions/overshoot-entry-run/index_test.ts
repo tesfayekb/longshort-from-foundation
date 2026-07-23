@@ -438,8 +438,9 @@ Deno.test('probe short-circuit taxonomy: alpaca / polygon only; else 400', () =>
 // ─────────────────────────────────────────────────────────────────────────
 
 Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it, handler wired', () => {
-  // (i) Exported constant present with the ratified fb5fdf13+fix1 marker.
-  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix1'");
+  // (i) Exported constant present with the ratified FIX-2 marker (bumped
+  //     2026-07-23 for in-run snapshot retry — see FIX-2-spec.md).
+  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2'");
   // (ii) Version-probe positive envelope carries all three keys.
   const idxProbeStart = SRC.indexOf("probe: 'version',");
   assert(idxProbeStart > 0, "version-probe branch present");
