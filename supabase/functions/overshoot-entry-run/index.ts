@@ -899,6 +899,109 @@ Deno.serve(createHandler(async (req: Request) => {
       short: sizingBase * OVERSHOOT_SIDE_ALLOCATION_PCT_SHORT,
     } as const;
 
+    // ── FIX-8 (DEC-083 §c) — pass='completion' pre-loop filter ────────────
+    // Three additional filters when passLabel==='completion':
+    //   (a) K_remaining from ledger truth (double-count guard #1 via
+    //       COUNT(*) FROM overshoot_lots for the session).
+    //   (b) Prior-admitted symbol set → typed skip
+    //       `pass2_already_admitted_in_pass1`.
+    //   (c) Prior pass-1 refusal classification →  typed skip
+    //       `pass2_terminal_class_refused_in_pass1` (i5_reversion, cap,
+    //       shortability, alpaca 4xx-non-transient, credential-missing).
+    // Rank-order preserved by keeping the original iteration order of
+    // `selections`. ACT-466 heldTickers guard (line ~918) remains the
+    // in-loop safety net regardless of pass.
+    let filteredSelections: SelectionRow[] = selections as SelectionRow[];
+    let effectiveBudget: number = OVERSHOOT_DAILY_ENTRY_BUDGET;
+    let pass2SkipsAlreadyAdmitted = 0;
+    let pass2SkipsTerminal = 0;
+    if (passLabel === 'completion') {
+      const [{ count: priorAdmittedCount }] = await sql<{ count: number }[]>`
+        SELECT COUNT(*)::int AS count
+        FROM overshoot_lots
+        WHERE entry_ts::date = ${sessionDate}::date
+      `;
+      const kRemaining = computeRemainingBudget({
+        budget: OVERSHOOT_DAILY_ENTRY_BUDGET,
+        priorAdmittedCount,
+      });
+      if (kRemaining === 0) {
+        await sql.end({ timeout: 5 });
+        return apiSuccess({
+          outcome: 'no_op',
+          reason: 'budget_exhausted_pre_loop',
+          pass: passLabel,
+          session_date: sessionDate,
+          prior_admitted_count: priorAdmittedCount,
+          budget: OVERSHOOT_DAILY_ENTRY_BUDGET,
+          k_remaining: 0,
+          targets_loaded: targetsLoaded,
+          orders_submitted: 0,
+          detector_version: RATIFIED_DETECTOR_VERSION,
+          correlation_id: correlationId,
+        });
+      }
+      effectiveBudget = kRemaining;
+
+      const priorAdmittedRows = await sql<{ symbol: string }[]>`
+        SELECT DISTINCT symbol FROM overshoot_lots
+        WHERE entry_ts::date = ${sessionDate}::date
+      `;
+      const priorAdmittedSymbols = new Set<string>(priorAdmittedRows.map((r) => r.symbol));
+
+      const priorRefusals = await sql<{
+        ticker: string; action: string; reason: string | null;
+      }[]>`
+        SELECT target_id AS ticker, action, metadata->>'reason' AS reason
+        FROM overshoot_audit_logs
+        WHERE action LIKE 'overshoot.entry.%'
+          AND (metadata->>'session_date') = ${sessionDate}
+          AND (metadata->>'pass') IS DISTINCT FROM 'completion'
+      `;
+      const terminallyRefusedSymbols = new Set<string>();
+      for (const r of priorRefusals) {
+        if (classifyPass1Refusal(r.action, r.reason) === 'terminal') {
+          terminallyRefusedSymbols.add(r.ticker);
+        }
+      }
+
+      const kept: SelectionRow[] = [];
+      for (const sel of filteredSelections) {
+        if (priorAdmittedSymbols.has(sel.ticker)) {
+          pass2SkipsAlreadyAdmitted += 1;
+          await writeStrategyAuditEvent({
+            strategyKey: 'overshoot',
+            action: 'overshoot.entry.pass2_already_admitted_in_pass1',
+            actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+            correlationId,
+            metadata: {
+              ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
+              session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot,
+              pass: passLabel, reason: 'symbol already admitted in pass-1 (double-count guard)',
+            },
+          });
+          continue;
+        }
+        if (terminallyRefusedSymbols.has(sel.ticker)) {
+          pass2SkipsTerminal += 1;
+          await writeStrategyAuditEvent({
+            strategyKey: 'overshoot',
+            action: 'overshoot.entry.pass2_terminal_class_refused_in_pass1',
+            actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+            correlationId,
+            metadata: {
+              ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
+              session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot,
+              pass: passLabel, reason: 'prior pass-1 refusal classified terminal (see fix-8.md §2(4))',
+            },
+          });
+          continue;
+        }
+        kept.push(sel);
+      }
+      filteredSelections = kept;
+    }
+
     for (const sel of selections) {
       const sideUpper: OvershootSide = sel.side === 'long' ? 'LONG' : 'SHORT';
       const sizeSide: OvershootSizeSide = sideUpper;
