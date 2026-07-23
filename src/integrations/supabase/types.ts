@@ -3769,6 +3769,30 @@ export type Database = {
         }
         Relationships: []
       }
+      overshoot_morning_exit_monitor: {
+        Row: {
+          band: string | null
+          broker_avg_fill_price: number | null
+          broker_filled_qty: number | null
+          client_order_id: string | null
+          correlation_id: string | null
+          fill_latency_seconds: number | null
+          filled_at: string | null
+          git_sha: string | null
+          intent: string | null
+          limit_price: number | null
+          order_id: string | null
+          realized_slip_bps: number | null
+          reference_source: string | null
+          run_id: string | null
+          side: string | null
+          snapshot_age_ms: number | null
+          submit_slippage_bps: number | null
+          submitted_at: string | null
+          symbol: string | null
+        }
+        Relationships: []
+      }
       reconciliation_events_daily_agg: {
         Row: {
           bucket_day: string | null
