@@ -40,7 +40,7 @@
 //       if the row exists — its price/float context is too old to gate
 //       an entry.
 //
-//   (2) OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 21 (strict `>`)
+//   (2) OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 26 (strict `>`)
 //       Location: this file (below), consumed via `siStaleActive`.
 //       Role: BOOK-LEVEL STALENESS FLAG. Decides whether the ENTIRE
 //       short sleeve is in a stale-feed window and must reallocate to
@@ -56,6 +56,27 @@
 // exists, just past the per-row envelope." The durable diagnostic is
 // CORPUS-MAX-vs-FRESHEST divergence — if the two diverge, someone
 // re-coupled the reads. Do NOT re-diagnose from scratch.
+//
+// ═══ 2026-07-23 AMENDMENT — CADENCE-AWARE THRESHOLD (21d → 26d) ═══════
+// DEC-504-4 AMENDMENT (operator-ratified 2026-07-23, INC-129 root cause).
+// The 21d threshold was BELOW the FINRA cadence's natural max age:
+//   settlement interval (15d) + typical publication lag (~9-11 biz d)
+//   → freshest observation ages to ~24-26 calendar days by design
+//   between cycles. A 21d strict-> cap therefore fired si_stale_active
+//   TRUE for 3-5 calendar days every cycle on healthy feeds, ritually
+//   engaging DEC-504-4 sleeve reallocation for non-failures. The
+//   2026-07-22 engage episode was the FIRST LIVE INSTANCE of that
+//   ritual — cited in the amendment as the motivating case (had the
+//   amended cap been live, that engage would not have occurred).
+// New cap 26 = 15d settlement + ~11d worst-normal-lag. Age > 26 now
+// genuinely indicates FINRA/API publication FAILURE (missed cycle) —
+// alert-tier condition, not breathing cadence. Semantics restated:
+// "stale means the expected publication FAILED to arrive, not that
+// the cadence is breathing." Companion cron fix: overshoot.short_
+// interest.compute moved twice-monthly → DAILY Mon-Fri (`0 21 * * 1-5`)
+// so each FINRA publication is captured the day it appears (function
+// idempotent per D3; no-op cost ~= zero). See sql/30 amendment header
+// and the DEC-504-4 amendment artifact for the full ratification record.
 
 /** Days between two YYYY-MM-DD dates, UTC midnight, integer. */
 export function siCalendarDaysBetween(aIso: string, bIso: string): number {
@@ -64,9 +85,13 @@ export function siCalendarDaysBetween(aIso: string, bIso: string): number {
   return Math.round((a - b) / 86_400_000);
 }
 
-/** DEC-504-3 ratified default. Callers MUST pass this via param — no hard
- *  default is baked into consumer sites (see detector.ts contract). */
-export const OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 21;
+/** DEC-504-3 ratified default, cadence-corrected by DEC-504-4 AMENDMENT
+ *  (2026-07-23, INC-129). 26 = 15d FINRA settlement interval + ~11d
+ *  worst-normal publication lag. Strict `>` compare: age ≤ 26 is FRESH
+ *  (cadence breathing), age ≥ 27 is STALE (= alert-tier: publication
+ *  cycle missed). Callers MUST pass this via param — no hard default
+ *  is baked into consumer sites (see detector.ts contract). */
+export const OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 26;
 
 /**
  * Row-level predicate: is this SI datapoint stale relative to `asOf`?

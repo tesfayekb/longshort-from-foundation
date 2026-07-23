@@ -25,23 +25,25 @@ Deno.test('siCalendarDaysBetween — UTC-midnight integer days', () => {
 });
 
 Deno.test('isSiRowStale — boundary at exactly stalenessMaxDays is FRESH', () => {
-  // > is strict: 21 days == max is fresh; 22 is stale.
-  assertFalse(isSiRowStale('2026-07-16', '2026-06-25', 21)); // 21d — fresh
-  assert(isSiRowStale('2026-07-16', '2026-06-24', 21));      // 22d — stale
+  // > is strict: 26 days == max is fresh; 27 is stale (DEC-504-4 AMENDMENT).
+  assertFalse(isSiRowStale('2026-07-16', '2026-06-20', 26)); // 26d — fresh (boundary)
+  assert(isSiRowStale('2026-07-16', '2026-06-19', 26));      // 27d — stale
 });
 
 Deno.test('siStaleActive — null (empty corpus) returns TRUE (fail-closed; sibling to analyst/M&A guards)', () => {
-  assert(siStaleActive('2026-07-16', null, 21));
+  assert(siStaleActive('2026-07-16', null, 26));
 });
 
 Deno.test('siStaleActive — dormant-at-birth: SI computed 07-15, asOf 07-16 → FALSE', () => {
   // The dormant-at-birth invariant for the 2026-07-16 landing.
-  assertFalse(siStaleActive('2026-07-16', '2026-07-15', 21));
+  assertFalse(siStaleActive('2026-07-16', '2026-07-15', 26));
 });
 
-Deno.test('siStaleActive — engages once freshest SI ages past threshold', () => {
-  // ~early August: 07-15 datapoint > 21 days old on 2026-08-06.
-  assert(siStaleActive('2026-08-06', '2026-07-15', 21));
+Deno.test('siStaleActive — engages once freshest SI ages past threshold (DEC-504-4 AMENDMENT: 26d cap)', () => {
+  // DEC-504-4 AMENDMENT test triple — age 24 fresh / 26 fresh-boundary / 27 stale.
+  assertFalse(siStaleActive('2026-08-08', '2026-07-15', 26)); // 24d — fresh
+  assertFalse(siStaleActive('2026-08-10', '2026-07-15', 26)); // 26d — fresh (boundary)
+  assert(siStaleActive('2026-08-11', '2026-07-15', 26));      // 27d — stale (alert-tier: missed publication)
 });
 
 Deno.test('overshootSleeveAllocation — INACTIVE preserves 0.90/0.10 and 36/4', () => {
@@ -74,8 +76,10 @@ Deno.test('overshootSleeveAllocation — ACTIVE folds short into long (1.00/0.00
   assertEquals(s.longAllocationPct / s.longCapacity, 0.025);
 });
 
-Deno.test('DEC-504-3 default is 21 days', () => {
-  assertEquals(OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT, 21);
+Deno.test('DEC-504-4 AMENDMENT (2026-07-23, INC-129) — default is 26 days (cadence-aware)', () => {
+  // 26 = 15d FINRA settlement interval + ~11d worst-normal publication lag.
+  // Strict > compare: age <= 26 is FRESH; age >= 27 is STALE (= alert-tier).
+  assertEquals(OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT, 26);
 });
 
 // ─── DEC-080-v2 / DEC-081-v2 (2026-07-21 amendment) ─────────────────────
