@@ -698,10 +698,13 @@ export function OvershootOverview() {
     queryFn: async () => {
       const { data, error, count } = await supabase
         .from('overshoot_lots')
-        .select('lot_id, side, cost_basis', { count: 'exact' })
+        .select('lot_id, side, cost_basis, realized_pnl_partial', { count: 'exact' })
         .eq('status', 'closed');
       if (error) throw error;
-      return { count: count ?? 0, rows: (data ?? []) as { side: string; cost_basis: number }[] };
+      return {
+        count: count ?? 0,
+        rows: (data ?? []) as { side: string; cost_basis: number | null; realized_pnl_partial: number | string | null }[],
+      };
     },
   });
 
@@ -816,6 +819,33 @@ export function OvershootOverview() {
     ? (dayPnlUsd! / snapshots[snapN - 2].broker_equity) * 100
     : null;
 
+  // UI invariant (2026-07-23) — single source of the Day number for
+  // BOTH the KPI-strip tile and the TodayCard below. No snapshot-delta
+  // "day" computation remains on Overview.
+  const day = useOvershootDayNumber(snapshots, equitySeriesQuery.isLoading, new Date());
+
+  // Realized P&L aggregates (lifetime) — rebound from stale
+  // pending-CANDIDATE-iii prose to the closed-lots aggregate.
+  const closedRows = closed.rows;
+  const realizedRows = closedRows.filter((r) => r.realized_pnl_partial !== null);
+  let realizedSum = 0;
+  let wins = 0;
+  let bpsSum = 0;
+  let bpsN = 0;
+  for (const r of realizedRows) {
+    const pnl = Number(r.realized_pnl_partial);
+    if (Number.isNaN(pnl)) continue;
+    realizedSum += pnl;
+    if (pnl > 0) wins += 1;
+    const cb = r.cost_basis === null ? 0 : Math.abs(Number(r.cost_basis));
+    if (cb > 0) {
+      bpsSum += (pnl / cb) * 10_000;
+      bpsN += 1;
+    }
+  }
+  const winRatePct = realizedRows.length > 0 ? (wins / realizedRows.length) * 100 : null;
+  const avgBps = bpsN > 0 ? bpsSum / bpsN : null;
+
   const longMvUsd = openLotsQuery.isLoading
     ? null
     : longs.reduce((acc, l) => acc + Math.abs(Number(l.cost_basis) || 0), 0);
@@ -850,6 +880,7 @@ export function OvershootOverview() {
         shortMvUsd={shortMvUsd}
         dayPnlUsd={dayPnlUsd}
         dayPnlPct={dayPnlPct}
+        day={day}
       />
 
       {/* INC-96 cap-compliance affordance — ratified vs actual per side. */}
@@ -865,7 +896,7 @@ export function OvershootOverview() {
           series is too short for a given window, that card renders a
           typed-absence naming the shortfall (never fabricates). */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <TodayCard snapshots={snapshots} snapshotsLoading={equitySeriesQuery.isLoading} now={new Date()} />
+        <TodayCard day={day} />
         <WindowedGainCard title="5-day"     sessionsBack={5}   snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
         <WindowedGainCard title="1-month"   sessionsBack={21}  snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
         <WindowedGainCard title="1-year"    sessionsBack={252} snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
@@ -1050,7 +1081,9 @@ export function OvershootOverview() {
         {/* Realized P&L */}
         <Card>
           <CardHeader>
-            <CardTitle>Realized P&amp;L (exited lots)</CardTitle>
+            <CardTitle>
+              Realized P&amp;L — exited lots ({closed.count} lifetime)
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {closedLotsQuery.isLoading ? (
@@ -1058,15 +1091,55 @@ export function OvershootOverview() {
             ) : closedLotsQuery.error ? (
               <p className="text-sm text-destructive">Failed to load closed lots.</p>
             ) : (
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">exited-lot count:</span>{' '}
-                  <span className="font-mono">{closed.count}</span>
+              <div className="space-y-3 text-sm">
+                <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+                  <div>
+                    <span className="text-muted-foreground">Σ realized:</span>{' '}
+                    <span className={
+                      'font-mono font-semibold ' +
+                      (realizedSum > 0 ? 'text-emerald-600 dark:text-emerald-400'
+                        : realizedSum < 0 ? 'text-destructive' : 'text-muted-foreground')
+                    }>
+                      {realizedSum >= 0 ? '+' : ''}{fmtMoney(realizedSum)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">count:</span>{' '}
+                    <span className="font-mono">{closed.count}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">win-rate:</span>{' '}
+                    <span className="font-mono">
+                      {winRatePct === null ? '—' : `${winRatePct.toFixed(1)}%`}
+                      <span className="text-muted-foreground/70"> ({wins}/{realizedRows.length})</span>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">avg bps:</span>{' '}
+                    <span className={
+                      'font-mono ' +
+                      (avgBps === null ? 'text-muted-foreground'
+                        : avgBps > 0 ? 'text-emerald-600 dark:text-emerald-400'
+                        : avgBps < 0 ? 'text-destructive' : 'text-muted-foreground')
+                    }>
+                      {avgBps === null ? '—' : `${avgBps >= 0 ? '+' : ''}${avgBps.toFixed(1)}`}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground/80 font-mono">
-                  Realized $ P&amp;L per lot is derived from the exit audit trail (via source_order_id) and
-                  the exited-fill price. Both surfaces are pending Part 2 EXEC first-light; dollar figures
-                  land with FP-069-CANDIDATE-iii equity snapshots.
+                  Source: <span className="font-mono">overshoot_lots</span> WHERE{' '}
+                  <span className="font-mono">status='closed'</span> — Σ{' '}
+                  <span className="font-mono">realized_pnl_partial</span> (lifetime),
+                  win = pnl &gt; 0, avg bps = mean of{' '}
+                  <span className="font-mono">realized_pnl_partial / |cost_basis| × 10⁴</span>.
+                </p>
+                <p className="text-xs">
+                  <a
+                    href="/trading/overshoot/portfolio?tab=closed"
+                    className="text-primary hover:underline font-mono"
+                  >
+                    view round-trip ledger →
+                  </a>
                 </p>
               </div>
             )}
