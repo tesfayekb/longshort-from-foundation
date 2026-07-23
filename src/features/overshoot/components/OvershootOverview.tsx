@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { OvershootCapCompliance } from './portfolio/OvershootCapCompliance';
 import { useOvershootEquitySnapshots } from '../hooks/useOvershootEquitySnapshots';
-import { useOvershootPortfolioPositions } from '../hooks/useOvershootPortfolioPositions';
+import { useOvershootDayNumber, type OvershootDayNumber } from '../hooks/useOvershootDayNumber';
 import { InfoHint } from '@/components/dashboard/InfoHint';
 
 /**
@@ -112,24 +112,9 @@ function fmtMoney(n: number | null | undefined): string {
   return `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-/**
- * US equity RTH gate — Mon-Fri 13:30Z–20:00Z (14:30Z–21:00Z during
- * standard time; we use the summer window as the widest RTH surface
- * to avoid falsely-collapsing to "settled" in the last hour DST-side).
- * Display-only; DEC-034 wall-clock ban does not scope src/.
- */
-function isUsEquityMarketHours(now: Date): boolean {
-  const dow = now.getUTCDay();
-  if (dow === 0 || dow === 6) return false;
-  const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
-  // 13:30Z (810) .. 21:00Z (1260) — covers both DST regimes conservatively.
-  return mins >= 810 && mins < 1260;
-}
-
-/** UTC calendar-date string YYYY-MM-DD for `d`. */
-function utcDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+// RTH gate + UTC date helpers moved to useOvershootDayNumber hook — the
+// single source of the day number is now the hook so both TodayCard and
+// the KPI-strip "Today" tile branch identically.
 
 /** Add N calendar days to a YYYY-MM-DD string, returning YYYY-MM-DD. */
 function addDays(iso: string, n: number): string {
@@ -157,59 +142,12 @@ function addDays(iso: string, n: number): string {
  * Same source as the Portfolio tab (`useOvershootPortfolioPositions`)
  * so the two surfaces agree at any single clock tick.
  */
-function TodayCard({
-  snapshots,
-  snapshotsLoading,
-  now,
-}: {
-  snapshots: Array<{ snapshot_date: string; broker_equity: number }>;
-  snapshotsLoading: boolean;
-  now: Date;
-}) {
-  const live = isUsEquityMarketHours(now);
-  const positions = useOvershootPortfolioPositions();
-  const todayIso = utcDateStr(now);
-  const realizedTodayQuery = useQuery({
-    queryKey: ['overshoot', 'overview', 'realized-today', todayIso],
-    enabled: live,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('overshoot_lots')
-        .select('realized_pnl_partial, closed_at')
-        .eq('status', 'closed')
-        .gte('closed_at', `${todayIso}T00:00:00Z`);
-      if (error) throw error;
-      const rows = data ?? [];
-      let sum = 0;
-      for (const r of rows as Array<{ realized_pnl_partial: number | string | null }>) {
-        if (r.realized_pnl_partial === null) continue;
-        sum += Number(r.realized_pnl_partial);
-      }
-      return { sum, count: rows.length };
-    },
-    refetchInterval: 25_000,
-    staleTime: 20_000,
-  });
-
-  const n = snapshots.length;
-  const latestSnap = n > 0 ? snapshots[n - 1] : null;
-  const prevSnap = n >= 2 ? snapshots[n - 2] : null;
-
-  if (live) {
-    const openPnl = (positions.data?.broker_positions ?? []).reduce(
-      (acc, p) => acc + (p.unrealized_intraday_pl ?? 0),
-      0,
-    );
-    const realizedToday = realizedTodayQuery.data?.sum ?? 0;
-    const realizedCount = realizedTodayQuery.data?.count ?? 0;
-    const loading = positions.isLoading || snapshotsLoading || realizedTodayQuery.isLoading;
-    const anchorMissing = latestSnap === null;
-    const total = openPnl + realizedToday;
-    const pct = latestSnap && latestSnap.broker_equity > 0
-      ? (total / latestSnap.broker_equity) * 100
-      : null;
+function TodayCard({ day }: { day: OvershootDayNumber }) {
+  if (day.mode === 'live') {
+    const total = day.valueUsd;
+    const loading = day.loading;
     const variant: 'good' | 'bad' | 'muted' =
-      loading ? 'muted' : total > 0 ? 'good' : total < 0 ? 'bad' : 'muted';
+      loading || total === null ? 'muted' : total > 0 ? 'good' : total < 0 ? 'bad' : 'muted';
     const valueClass =
       variant === 'good' ? 'text-emerald-600 dark:text-emerald-400'
       : variant === 'bad' ? 'text-destructive'
@@ -218,10 +156,13 @@ function TodayCard({
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground truncate flex items-center gap-1.5">
-            <span className="truncate">Today (live)</span>
+            <span className="truncate">{day.label}</span>
             <InfoHint label="Today (live) — broker-truth intraday">
-              During RTH (Mon-Fri 13:30Z–21:00Z) this card renders live from the
-              same Alpaca paper source as the Portfolio tab
+              Single source of the day number (UI invariant 2026-07-23) — the
+              same hook feeds the KPI-strip "Today" tile so the two surfaces can
+              never disagree at the same tick. During RTH (Mon-Fri 13:30Z–21:00Z)
+              this card renders live from the same Alpaca paper source as the
+              Portfolio tab
               (<span className="font-mono">overshoot-portfolio-positions-readonly</span>) —
               <span className="font-mono"> Σ unrealized_intraday_pl</span> across open
               positions plus realized closures today
@@ -237,30 +178,32 @@ function TodayCard({
         <CardContent>
           {loading ? (
             <p className="text-2xl font-semibold text-muted-foreground">…</p>
-          ) : positions.error ? (
+          ) : day.error ? (
             <>
               <p className="text-2xl font-semibold text-muted-foreground">—</p>
               <p className="mt-2 text-xs text-destructive">Broker read failed.</p>
             </>
+          ) : total === null ? (
+            <p className="text-2xl font-semibold text-muted-foreground">—</p>
           ) : (
             <>
               <p className={`text-2xl font-semibold font-mono ${valueClass}`}>
                 {total >= 0 ? '+' : ''}{fmtMoney(total)}
               </p>
               <p className={`mt-1 text-xs font-mono ${valueClass}`}>
-                {pct === null ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}
+                {day.pct === null ? '' : `${day.pct >= 0 ? '+' : ''}${day.pct.toFixed(2)}%`}
                 <span className="text-muted-foreground/80">
                   {' · live · '}Alpaca paper
                 </span>
               </p>
               <p className="mt-1 text-xs font-mono text-muted-foreground/90">
-                realized {realizedToday >= 0 ? '+' : ''}{fmtMoney(realizedToday)} across {realizedCount} lot{realizedCount === 1 ? '' : 's'}
-                {' · '}open {openPnl >= 0 ? '+' : ''}{fmtMoney(openPnl)}
-                {anchorMissing ? null : (
+                realized {(day.realizedToday ?? 0) >= 0 ? '+' : ''}{fmtMoney(day.realizedToday ?? 0)} across {day.realizedCount ?? 0} lot{day.realizedCount === 1 ? '' : 's'}
+                {' · '}open {(day.openPnl ?? 0) >= 0 ? '+' : ''}{fmtMoney(day.openPnl ?? 0)}
+                {day.anchorDate ? (
                   <span className="text-muted-foreground/70">
-                    {' · vs settled '}{fmtDateOnly(latestSnap!.snapshot_date)}
+                    {' · vs settled '}{fmtDateOnly(day.anchorDate)}
                   </span>
-                )}
+                ) : null}
               </p>
             </>
           )}
@@ -270,10 +213,8 @@ function TodayCard({
   }
 
   // Settled mode — no live word.
-  const delta = latestSnap && prevSnap ? latestSnap.broker_equity - prevSnap.broker_equity : null;
-  const pct = latestSnap && prevSnap && prevSnap.broker_equity > 0 && delta !== null
-    ? (delta / prevSnap.broker_equity) * 100
-    : null;
+  const delta = day.valueUsd;
+  const pct = day.pct;
   const variant: 'good' | 'bad' | 'muted' =
     delta === null ? 'muted' : delta > 0 ? 'good' : delta < 0 ? 'bad' : 'muted';
   const valueClass =
@@ -284,9 +225,7 @@ function TodayCard({
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground truncate flex items-center gap-1.5">
-          <span className="truncate">
-            Settled {latestSnap ? fmtDateOnly(latestSnap.snapshot_date) : '—'}
-          </span>
+          <span className="truncate">{day.label}</span>
           <InfoHint label="Settled — post-close broker equity delta">
             Outside RTH (before 13:30Z or after 21:00Z, and on weekends) the card
             renders the settled delta between the two most recent
@@ -298,13 +237,13 @@ function TodayCard({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {snapshotsLoading ? (
+        {day.loading ? (
           <p className="text-2xl font-semibold text-muted-foreground">…</p>
         ) : delta === null ? (
           <>
             <p className="text-2xl font-semibold text-muted-foreground">—</p>
             <p className="mt-2 text-xs text-muted-foreground/80">
-              {n === 0 ? 'No snapshots loaded yet' : 'Need 2+ snapshots'}
+              {day.latestDate === null ? 'No snapshots loaded yet' : 'Need 2+ snapshots'}
             </p>
           </>
         ) : (
@@ -315,7 +254,7 @@ function TodayCard({
             <p className={`mt-1 text-xs font-mono ${valueClass}`}>
               {pct === null ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}
               <span className="text-muted-foreground/80">
-                {' · '}{fmtDateOnly(prevSnap!.snapshot_date)} → {fmtDateOnly(latestSnap!.snapshot_date)}
+                {' · '}{fmtDateOnly(day.prevDate)} → {fmtDateOnly(day.latestDate)}
               </span>
             </p>
           </>
@@ -488,6 +427,8 @@ interface KpiStripInputs {
   dayPnlUsd: number | null;
   /** Broker-equity pct delta between the two most-recent snapshots. */
   dayPnlPct: number | null;
+  /** Same-hook day number (rebound tile — UI invariant 2026-07-23). */
+  day: OvershootDayNumber;
 }
 
 function KpiCell({
@@ -604,22 +545,35 @@ function HealthKpiStrip(k: KpiStripInputs) {
         variant={openTotal > 0 ? 'default' : 'muted'}
       />
       <KpiCell
-        label="Day P&L"
-        value={k.dayPnlUsd === null
-          ? '—'
-          : `${k.dayPnlUsd >= 0 ? '+' : ''}${fmtMoney(k.dayPnlUsd)}`}
-        sub={k.dayPnlUsd === null
-          ? (k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Need 2+ snapshots')
-          : k.dayPnlPct === null
-            ? 'post-close'
-            : `${k.dayPnlPct >= 0 ? '+' : ''}${k.dayPnlPct.toFixed(2)}% · post-close`}
-        hint={k.equitySnapshotsCount === 0
-          ? <>No equity snapshots exist. Arm <span className="font-mono">overshoot_equity_snapshot</span> via the INC-82 bracket. No synthetic P&L is fabricated.</>
-          : <>Delta between the two latest post-close <span className="font-mono">broker_equity</span> rows in <span className="font-mono">overshoot_equity_snapshots</span> (source <span className="font-mono">alpaca_paper_overshoot</span>). Post-close settled state; no mid-session refresh.</>}
+        label={k.day.mode === 'live' ? 'Today (live)' : k.day.label}
+        value={k.day.loading
+          ? '…'
+          : k.day.valueUsd === null
+            ? '—'
+            : `${k.day.valueUsd >= 0 ? '+' : ''}${fmtMoney(k.day.valueUsd)}`}
+        sub={k.day.mode === 'live'
+          ? (k.day.valueUsd === null
+              ? 'live · pending broker read'
+              : `${k.day.pct !== null ? `${k.day.pct >= 0 ? '+' : ''}${k.day.pct.toFixed(2)}% · ` : ''}realized ${(k.day.realizedToday ?? 0) >= 0 ? '+' : ''}${fmtMoney(k.day.realizedToday ?? 0)} · ${k.day.realizedCount ?? 0} lot${k.day.realizedCount === 1 ? '' : 's'}`)
+          : (k.day.valueUsd === null
+              ? (k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Need 2+ snapshots')
+              : `${k.day.pct !== null ? `${k.day.pct >= 0 ? '+' : ''}${k.day.pct.toFixed(2)}% · ` : ''}${k.day.prevDate ? fmtDateOnly(k.day.prevDate) + ' → ' : ''}${k.day.latestDate ? fmtDateOnly(k.day.latestDate) : ''}`)}
+        hint={<>
+          <strong>UI invariant (2026-07-23):</strong> this tile binds to the
+          SAME <span className="font-mono">useOvershootDayNumber</span> hook as
+          the "Today" card below — one Day number per page. Live during RTH
+          (Σ broker <span className="font-mono">unrealized_intraday_pl</span> +
+          realized closures today from{' '}
+          <span className="font-mono">overshoot_lots</span>); Settled outside
+          RTH (delta between the two most recent{' '}
+          <span className="font-mono">overshoot_equity_snapshots.broker_equity</span>
+          {' '}rows, source <span className="font-mono">alpaca_paper_overshoot</span>).
+          The label follows the branch — "Today" never sits on a prior-day range.
+        </>}
         variant={
-          k.dayPnlUsd === null ? 'muted'
-          : k.dayPnlUsd > 0 ? 'good'
-          : k.dayPnlUsd < 0 ? 'bad'
+          k.day.valueUsd === null ? 'muted'
+          : k.day.valueUsd > 0 ? 'good'
+          : k.day.valueUsd < 0 ? 'bad'
           : 'muted'
         }
       />
@@ -744,10 +698,13 @@ export function OvershootOverview() {
     queryFn: async () => {
       const { data, error, count } = await supabase
         .from('overshoot_lots')
-        .select('lot_id, side, cost_basis', { count: 'exact' })
+        .select('lot_id, side, cost_basis, realized_pnl_partial', { count: 'exact' })
         .eq('status', 'closed');
       if (error) throw error;
-      return { count: count ?? 0, rows: (data ?? []) as { side: string; cost_basis: number }[] };
+      return {
+        count: count ?? 0,
+        rows: (data ?? []) as { side: string; cost_basis: number | null; realized_pnl_partial: number | string | null }[],
+      };
     },
   });
 
@@ -862,6 +819,33 @@ export function OvershootOverview() {
     ? (dayPnlUsd! / snapshots[snapN - 2].broker_equity) * 100
     : null;
 
+  // UI invariant (2026-07-23) — single source of the Day number for
+  // BOTH the KPI-strip tile and the TodayCard below. No snapshot-delta
+  // "day" computation remains on Overview.
+  const day = useOvershootDayNumber(snapshots, equitySeriesQuery.isLoading, new Date());
+
+  // Realized P&L aggregates (lifetime) — rebound from stale
+  // pending-CANDIDATE-iii prose to the closed-lots aggregate.
+  const closedRows = closed.rows;
+  const realizedRows = closedRows.filter((r) => r.realized_pnl_partial !== null);
+  let realizedSum = 0;
+  let wins = 0;
+  let bpsSum = 0;
+  let bpsN = 0;
+  for (const r of realizedRows) {
+    const pnl = Number(r.realized_pnl_partial);
+    if (Number.isNaN(pnl)) continue;
+    realizedSum += pnl;
+    if (pnl > 0) wins += 1;
+    const cb = r.cost_basis === null ? 0 : Math.abs(Number(r.cost_basis));
+    if (cb > 0) {
+      bpsSum += (pnl / cb) * 10_000;
+      bpsN += 1;
+    }
+  }
+  const winRatePct = realizedRows.length > 0 ? (wins / realizedRows.length) * 100 : null;
+  const avgBps = bpsN > 0 ? bpsSum / bpsN : null;
+
   const longMvUsd = openLotsQuery.isLoading
     ? null
     : longs.reduce((acc, l) => acc + Math.abs(Number(l.cost_basis) || 0), 0);
@@ -896,6 +880,7 @@ export function OvershootOverview() {
         shortMvUsd={shortMvUsd}
         dayPnlUsd={dayPnlUsd}
         dayPnlPct={dayPnlPct}
+        day={day}
       />
 
       {/* INC-96 cap-compliance affordance — ratified vs actual per side. */}
@@ -911,7 +896,7 @@ export function OvershootOverview() {
           series is too short for a given window, that card renders a
           typed-absence naming the shortfall (never fabricates). */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <TodayCard snapshots={snapshots} snapshotsLoading={equitySeriesQuery.isLoading} now={new Date()} />
+        <TodayCard day={day} />
         <WindowedGainCard title="5-day"     sessionsBack={5}   snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
         <WindowedGainCard title="1-month"   sessionsBack={21}  snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
         <WindowedGainCard title="1-year"    sessionsBack={252} snapshots={snapshots} loading={equitySeriesQuery.isLoading} />
@@ -1096,7 +1081,9 @@ export function OvershootOverview() {
         {/* Realized P&L */}
         <Card>
           <CardHeader>
-            <CardTitle>Realized P&amp;L (exited lots)</CardTitle>
+            <CardTitle>
+              Realized P&amp;L — exited lots ({closed.count} lifetime)
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {closedLotsQuery.isLoading ? (
@@ -1104,15 +1091,55 @@ export function OvershootOverview() {
             ) : closedLotsQuery.error ? (
               <p className="text-sm text-destructive">Failed to load closed lots.</p>
             ) : (
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">exited-lot count:</span>{' '}
-                  <span className="font-mono">{closed.count}</span>
+              <div className="space-y-3 text-sm">
+                <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+                  <div>
+                    <span className="text-muted-foreground">Σ realized:</span>{' '}
+                    <span className={
+                      'font-mono font-semibold ' +
+                      (realizedSum > 0 ? 'text-emerald-600 dark:text-emerald-400'
+                        : realizedSum < 0 ? 'text-destructive' : 'text-muted-foreground')
+                    }>
+                      {realizedSum >= 0 ? '+' : ''}{fmtMoney(realizedSum)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">count:</span>{' '}
+                    <span className="font-mono">{closed.count}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">win-rate:</span>{' '}
+                    <span className="font-mono">
+                      {winRatePct === null ? '—' : `${winRatePct.toFixed(1)}%`}
+                      <span className="text-muted-foreground/70"> ({wins}/{realizedRows.length})</span>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">avg bps:</span>{' '}
+                    <span className={
+                      'font-mono ' +
+                      (avgBps === null ? 'text-muted-foreground'
+                        : avgBps > 0 ? 'text-emerald-600 dark:text-emerald-400'
+                        : avgBps < 0 ? 'text-destructive' : 'text-muted-foreground')
+                    }>
+                      {avgBps === null ? '—' : `${avgBps >= 0 ? '+' : ''}${avgBps.toFixed(1)}`}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground/80 font-mono">
-                  Realized $ P&amp;L per lot is derived from the exit audit trail (via source_order_id) and
-                  the exited-fill price. Both surfaces are pending Part 2 EXEC first-light; dollar figures
-                  land with FP-069-CANDIDATE-iii equity snapshots.
+                  Source: <span className="font-mono">overshoot_lots</span> WHERE{' '}
+                  <span className="font-mono">status='closed'</span> — Σ{' '}
+                  <span className="font-mono">realized_pnl_partial</span> (lifetime),
+                  win = pnl &gt; 0, avg bps = mean of{' '}
+                  <span className="font-mono">realized_pnl_partial / |cost_basis| × 10⁴</span>.
+                </p>
+                <p className="text-xs">
+                  <a
+                    href="/trading/overshoot/portfolio?tab=closed"
+                    className="text-primary hover:underline font-mono"
+                  >
+                    view round-trip ledger →
+                  </a>
                 </p>
               </div>
             )}
