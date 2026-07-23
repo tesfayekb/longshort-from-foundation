@@ -83,8 +83,16 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
  * retry wired into the per-lot Polygon fetch at the shared seam. Freshness
  * predicate untouched; retry_recovered surfaced in tally. See
  * `docs/08-planning/FIX-2-spec.md`.
+ *
+ * 2026-07-23 — FIX-8 bump: fb5fdf13+fix2 → fb5fdf13+fix2+fix8. Completion-pass
+ * re-invocation surface (DEC-083 §c). `body.pass ∈ {'primary','completion'}`
+ * (absent → 'primary'; other → 400). Pass-2 filters `selections` by ledger
+ * (double-count) + prior-refusal terminal-classifier, substitutes
+ * K_remaining for the budget cap, and stamps `metadata.pass` on every
+ * audit row (primary rows now stamp 'primary'). See
+ * `docs/04-modules/overshoot/fix-8.md`.
  */
-export const SOURCE_VERSION = 'fb5fdf13+fix2';
+export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
