@@ -143,7 +143,7 @@ function addDays(iso: string, n: number): string {
  * so the two surfaces agree at any single clock tick.
  */
 function TodayCard({ day }: { day: OvershootDayNumber }) {
-  if (day.mode === 'live') {
+  if (day.mode === 'live' || day.mode === 'closing_unsettled') {
     const total = day.valueUsd;
     const loading = day.loading;
     const variant: 'good' | 'bad' | 'muted' =
@@ -205,6 +205,11 @@ function TodayCard({ day }: { day: OvershootDayNumber }) {
                   </span>
                 ) : null}
               </p>
+              {day.prevSettled ? (
+                <p className="mt-1 text-xs font-mono text-muted-foreground/60">
+                  {`prev settled: ${day.prevSettled.valueUsd >= 0 ? '+' : ''}${fmtMoney(day.prevSettled.valueUsd)} (${fmtDateOnly(day.prevSettled.prevDate)}→${fmtDateOnly(day.prevSettled.latestDate)})`}
+                </p>
+              ) : null}
             </>
           )}
         </CardContent>
@@ -257,6 +262,11 @@ function TodayCard({ day }: { day: OvershootDayNumber }) {
                 {' · '}{fmtDateOnly(day.prevDate)} → {fmtDateOnly(day.latestDate)}
               </span>
             </p>
+            {day.prevSettled ? (
+              <p className="mt-1 text-xs font-mono text-muted-foreground/60">
+                {`prev settled: ${day.prevSettled.valueUsd >= 0 ? '+' : ''}${fmtMoney(day.prevSettled.valueUsd)} (${fmtDateOnly(day.prevSettled.prevDate)}→${fmtDateOnly(day.prevSettled.latestDate)})`}
+              </p>
+            ) : null}
           </>
         )}
       </CardContent>
