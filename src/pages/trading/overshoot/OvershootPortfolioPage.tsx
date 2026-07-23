@@ -57,6 +57,7 @@ import {
   useOvershootPortfolioPositions,
   OvershootCapCompliance,
   useOvershootEquitySnapshots,
+  useOvershootRealizedToday,
 } from '@/features/overshoot';
 
 function formatRelative(ts: number | null): string {
@@ -113,6 +114,14 @@ export default function OvershootPortfolioPage() {
   const netDaily = sumPriced(broker.map((r) => r.unrealized_intraday_pl));
   const netSince = sumPriced(broker.map((r) => r.unrealized_pl));
 
+  // Realized today — identical source/branch logic as the Overview
+  // TodayCard so the two pages tie on the page (no mental math).
+  const realizedToday = useOvershootRealizedToday();
+  const realizedSum = realizedToday.data?.sum ?? null;
+  const realizedCount = realizedToday.data?.count ?? 0;
+  const dayTotal = (netDaily.sum ?? 0) + (realizedSum ?? 0);
+  const dayTotalKnown = netDaily.sum !== null || realizedSum !== null;
+
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => (t + 1) % 1_000_000), 1000);
@@ -162,6 +171,20 @@ export default function OvershootPortfolioPage() {
               since={netSince}
               bold
             />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs border-t border-border/60 pt-2">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap">
+              <span className="text-muted-foreground text-[10px] uppercase tracking-wide">Realized today</span>
+              <PnlCell v={realizedSum} />
+              <span className="text-[10px] text-muted-foreground">
+                ({realizedCount} lot{realizedCount === 1 ? '' : 's'} closed today)
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap font-semibold">
+              <span className="text-muted-foreground text-[10px] uppercase tracking-wide">Total day</span>
+              <PnlCell v={dayTotalKnown ? dayTotal : null} />
+              <span className="text-[10px] text-muted-foreground">= open + realized (matches Overview Today)</span>
+            </span>
           </div>
         </div>
       ) : null}
