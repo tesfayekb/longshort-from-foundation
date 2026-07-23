@@ -112,24 +112,9 @@ function fmtMoney(n: number | null | undefined): string {
   return `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-/**
- * US equity RTH gate — Mon-Fri 13:30Z–20:00Z (14:30Z–21:00Z during
- * standard time; we use the summer window as the widest RTH surface
- * to avoid falsely-collapsing to "settled" in the last hour DST-side).
- * Display-only; DEC-034 wall-clock ban does not scope src/.
- */
-function isUsEquityMarketHours(now: Date): boolean {
-  const dow = now.getUTCDay();
-  if (dow === 0 || dow === 6) return false;
-  const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
-  // 13:30Z (810) .. 21:00Z (1260) — covers both DST regimes conservatively.
-  return mins >= 810 && mins < 1260;
-}
-
-/** UTC calendar-date string YYYY-MM-DD for `d`. */
-function utcDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+// RTH gate + UTC date helpers moved to useOvershootDayNumber hook — the
+// single source of the day number is now the hook so both TodayCard and
+// the KPI-strip "Today" tile branch identically.
 
 /** Add N calendar days to a YYYY-MM-DD string, returning YYYY-MM-DD. */
 function addDays(iso: string, n: number): string {
