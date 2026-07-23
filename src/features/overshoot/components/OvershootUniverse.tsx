@@ -56,6 +56,57 @@ function fmtNum(n: number | null): string {
   return Number(n).toFixed(2);
 }
 
+/**
+ * Cadence-aware universe staleness — weekly Monday refresh cron
+ * (see sql/39_overshoot_universe_refresh_cron_schedule.sql).
+ *
+ *   fresh  age ≤ 9d   (one full weekly cycle + weekend + one biz-day slack)
+ *   stale  9d < age ≤ 35d (missed one refresh — investigate)
+ *   alert  age > 35d  (multiple missed refreshes — page)
+ *
+ * Kills the false "stale 3d" chip that came from the raw calendar-day
+ * derivation. Same design rule as DEC-504-4 AMENDMENT (SI staleness):
+ * staleness is measured against the expected refresh cadence, not the
+ * literal age of the data.
+ */
+const UNIVERSE_FRESH_MAX_DAYS = 9;
+const UNIVERSE_ALERT_MIN_DAYS = 35;
+
+function universeAgeDays(maxAddedAsOf: string | null, now: Date): number | null {
+  if (!maxAddedAsOf) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(maxAddedAsOf);
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const days = Math.floor((now.getTime() - t) / 86_400_000);
+  return days < 0 ? 0 : days;
+}
+
+function UniverseFreshnessChip({ maxAddedAsOf }: { maxAddedAsOf: string | null }) {
+  const age = universeAgeDays(maxAddedAsOf, new Date());
+  if (age === null) {
+    return <Badge variant="outline" className="font-mono text-xs">no refresh yet</Badge>;
+  }
+  if (age > UNIVERSE_ALERT_MIN_DAYS) {
+    return (
+      <Badge variant="destructive" className="font-mono text-xs" title={`age ${age}d > alert ${UNIVERSE_ALERT_MIN_DAYS}d`}>
+        universe: alert · {age}d
+      </Badge>
+    );
+  }
+  if (age > UNIVERSE_FRESH_MAX_DAYS) {
+    return (
+      <Badge variant="secondary" className="font-mono text-xs" title={`age ${age}d > fresh ${UNIVERSE_FRESH_MAX_DAYS}d — one weekly refresh missed`}>
+        universe: stale · {age}d
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="font-mono text-xs" title={`fresh (age ≤ ${UNIVERSE_FRESH_MAX_DAYS}d; weekly Monday refresh cadence)`}>
+      universe: fresh · {age}d
+    </Badge>
+  );
+}
+
 export function OvershootUniverse() {
   const universeQuery = useQuery({
     queryKey: ['overshoot', 'universe', 'active'],
@@ -117,6 +168,10 @@ export function OvershootUniverse() {
     (acc, r) => (r.si_as_of && (!acc || r.si_as_of > acc) ? r.si_as_of : acc),
     null,
   );
+  const maxAddedAsOf = universe.reduce<string | null>(
+    (acc, r) => (r.added_as_of && (!acc || r.added_as_of > acc) ? r.added_as_of : acc),
+    null,
+  );
 
   const loading = universeQuery.isLoading || siQuery.isLoading;
   const error = universeQuery.error || siQuery.error;
@@ -124,7 +179,10 @@ export function OvershootUniverse() {
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <h1 className="font-display text-2xl font-semibold">Overshoot — Universe</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="font-display text-2xl font-semibold">Overshoot — Universe</h1>
+          <UniverseFreshnessChip maxAddedAsOf={maxAddedAsOf} />
+        </div>
         <p className="text-sm text-muted-foreground">
           Active <code className="font-mono">overshoot_universe</code> set joined to the latest
           <code className="font-mono"> overshoot_short_interest</code> snapshot per ticker. Tickers whose SI row
