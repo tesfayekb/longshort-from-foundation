@@ -1068,14 +1068,22 @@ export function OvershootOverview() {
                 <div>
                   <Badge
                     variant={
-                      siStaleDays !== null && siStaleDays > DETECTOR_SI_STALENESS_MAX_DAYS
+                      siStaleDays !== null && siStaleDays > SI_STALENESS_MAX_DAYS
                         ? 'destructive'
                         : 'outline'
                     }
                     className="font-mono text-xs"
                   >
-                    staleness: {siStaleDays ?? '—'}d (window: {DETECTOR_SI_STALENESS_MAX_DAYS}d)
+                    staleness: {siStaleDays ?? '—'}d (window: {SI_STALENESS_MAX_DAYS}d)
                   </Badge>
+                  <p className="mt-1 text-xs text-muted-foreground/80 font-mono">
+                    stale = FINRA publication cycle missed (alert), not "cadence
+                    breathing". Next publication expected ~
+                    <span>{addDays(si.as_of_date, SI_SETTLEMENT_INTERVAL_DAYS)}</span>
+                    {' '}(settlement interval {SI_SETTLEMENT_INTERVAL_DAYS}d + ~11d
+                    normal FINRA lag; window {SI_STALENESS_MAX_DAYS}d per
+                    DEC-504-4 AMENDMENT).
+                  </p>
                 </div>
               </div>
             )}
