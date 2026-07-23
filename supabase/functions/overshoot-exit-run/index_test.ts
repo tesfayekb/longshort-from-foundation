@@ -423,9 +423,28 @@ Deno.test('session-age (PIN-1 + ACT-510): SPY prior-session strictly > spyLowerB
 });
 
 Deno.test('probe short-circuit taxonomy: alpaca / polygon only; else 400', () => {
-  assertStringIncludes(SRC, 'probe_invalid_expected_alpaca_or_polygon');
+  // FIX-3 (ACT-565) re-pin: taxonomy extended to include 'version' rail.
+  assertStringIncludes(SRC, 'probe_invalid_expected_alpaca_polygon_or_version');
   assertStringIncludes(SRC, 'alpaca_probe_failed');
   assertStringIncludes(SRC, 'polygon_probe_failed');
+  const idxTaxGuard = SRC.indexOf("probeMode !== 'alpaca' && probeMode !== 'polygon' && probeMode !== 'version'");
+  const idxTaxErr   = SRC.indexOf("'probe_invalid_expected_alpaca_polygon_or_version'");
+  assert(idxTaxGuard > 0 && idxTaxErr > 0 && idxTaxGuard < idxTaxErr,
+    'unknown-probe taxonomy guard precedes its 400 refusal');
+});
+
+// FIX-3 (ACT-565) — SOURCE_VERSION rail drift-guard (see entry-run test
+// for full INC-126.b rationale). Mirrored here so the exit engine cannot
+// silently regress independently.
+Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it, handler wired', () => {
+  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix1'");
+  const idxProbeStart = SRC.indexOf("probe: 'version',");
+  assert(idxProbeStart > 0, 'version-probe branch present');
+  const probeBlock = SRC.slice(idxProbeStart, idxProbeStart + 400);
+  assertStringIncludes(probeBlock, 'SOURCE_VERSION,');
+  assertStringIncludes(probeBlock, 'RATIFIED_DETECTOR_VERSION,');
+  assertStringIncludes(probeBlock, "BUILD_SHA: Deno.env.get('BUILD_SHA') ?? null");
+  assertStringIncludes(SRC, '{ sourceVersion: SOURCE_VERSION }');
 });
 
 Deno.test('INC-108 completed exit run writes overshoot.exit.run.completed audit row (watchdog heartbeat)', () => {
