@@ -140,7 +140,11 @@ import {
 import {
   OVERSHOOT_DAILY_ENTRY_BUDGET,
   evaluateDailyBudget,
+  computeRemainingBudget,
 } from '../_shared/overshoot-execution/daily-budget.ts';
+import {
+  classifyPass1Refusal,
+} from '../_shared/overshoot-execution/completion-pass-allow-list.ts';
 import {
   OVERSHOOT_ENTRY_MARKETABLE_LIMIT_SLIPPAGE_BPS,
   OVERSHOOT_ENTRY_SNAPSHOT_MAX_AGE_MS,
