@@ -46,10 +46,10 @@ Original wording: "consider at first W5 read-out". Reconciled against `docs/08-p
 | C | ACT-493 | exit adoption + Option-B smoothing | deadline 2026-07-17 (missed → renegotiated); first exits ≈ 2026-07-22 | 2026-07-10 | 2026-07-24 | `overshoot-master-plan.md:63,71` |
 | C | ACT-498 STEP B | self-healing ladder step B | AFTER ACT-493 | 2026-07-11 | post-493 | `overshoot-master-plan.md:88` |
 | C | ACT-515 (engine) | sector-cap engine + fixture byte-match | lane #1 resumption; INC-119 fixture ruling | 2026-07-19 | 2026-07-30 | action-tracker ACT-515 |
-| C | ACT-537 | rank-weighted sizing | sequenced-after-engine | 2026-07-17 | — | tracker |
-| C | ACT-509 Stage-2 | 1-min-bar validation (3.1M bars) | sequenced-after-527-curve | 2026-07-17 | — | tracker |
-| C | ACT-540 | insider × dislocation | sequenced-after-engine | 2026-07-17 | — | tracker |
-| C | ACT-541 | earnings-crash | sequenced-after-engine | 2026-07-17 | — | tracker |
+| C | ACT-509 Stage-2 (exit-minute leg) | **ELEVATED 2026-07-23** — 1-min bars, exit-minute grid {09:31,09:35,10:00,15:00,15:50,close}×{T1,T2}; three-term arithmetic (redeploy_gain − morning_exec_cost − extra_overnight_effect) per frozen adoption rule; entry-minute grid retained. Priced prize = ACT-558 v4 blend $2.98K/yr / floor $12.0K/yr. Verdict: net>0 @ n≥1000 & regime-stable → morning-exit ADOPTS; net≤0 → 15:50 stands & ACT-558 ceiling closes as structurally unrecoverable. | sequenced-immediately-after-engine-verdict (Monday) | 2026-07-23 | days-after-engine | `docs/08-planning/artifacts/ACT-509-STAGE2-EXIT-MINUTE-LEG-CHARTER.md`; corpus 3.1M 1-min bars |
+| C | ACT-537 | rank-weighted sizing | sequenced-after-509-Stage-2-exit-minute | 2026-07-17 | — | tracker |
+| C | ACT-540 | insider × dislocation | sequenced-after-509-Stage-2-exit-minute | 2026-07-17 | — | tracker |
+| C | ACT-541 | earnings-crash | sequenced-after-509-Stage-2-exit-minute | 2026-07-17 | — | tracker |
 | C | ACT-527 | short-side curve delivery | curve → ACT-531 map | 2026-07-13 | — | ACT-527 short output contract |
 | C | ACT-531 | Signal-Conditioned Continuation Map | curve upstream | 2026-07-16 | — | ACT-531 charter |
 | C | ACT-511-U2 | Russell-2000 roster + backfill quote (HAND-OFF-CANDIDATE) | Polygon quote + IWM CSV | 2026-07-13 | — | tracker ACT-511-U2 |
