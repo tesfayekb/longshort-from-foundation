@@ -15,12 +15,26 @@
 //     `< 0` lower bound. This module single-homes the ratified pair so
 //     every site imports the same values and drift becomes impossible.
 //
-// Ratified pair (do NOT change without a fresh ACT/DEC):
-//   MIN = -1000 ms  — absorbs Polygon-vs-server clock skew at open.
+// FIX-1 (2026-07-23) — NEGATIVE-AGE LOGIC CORRECTION.
+//   A negative snapshot age means Polygon's event timestamp is AHEAD of
+//   the run's injected clock — i.e. the quote is NEWER than the run's
+//   "as-of" moment. By definition that is FRESH, not stale. The prior
+//   ACT-485/486 lower bound (-1000 ms) refused legitimately-fresh
+//   quotes whenever the server clock lagged Polygon by more than 1s
+//   (observed today: −1249 / −1767 / −2115 ms exit refusals on
+//   FCX / HL / VICR at 14:00Z).
+//
+// Ratified pair (FIX-1 semantics — do NOT change without a fresh ACT):
+//   MIN = 0 ms      — informational lower bound. Sites clamp negative
+//                     ages to 0 for the staleness comparison, but the
+//                     RAW signed `snapshotAgeMs` remains on the
+//                     returned result for audit forensics (FIX-6).
 //   MAX = 15000 ms  — true staleness cap; tolerates polling jitter.
 //
-// Ages outside [MIN, MAX] refuse `polygon_snapshot_stale` — never a
-// silent default, never a fabricated zero (anti-phantom).
+// Callers compute `effectiveAge = Math.max(0, snapshotAgeMs)` and
+// refuse only when `effectiveAge > MAX`. Ages < 0 always pass
+// (fresher-than-clock). Non-finite ages refuse as `polygon_snapshot_stale`.
+// Never a silent default, never a fabricated zero (anti-phantom).
 
-export const OVERSHOOT_SNAPSHOT_MIN_AGE_MS = -1_000;
+export const OVERSHOOT_SNAPSHOT_MIN_AGE_MS = 0;
 export const OVERSHOOT_SNAPSHOT_MAX_AGE_MS = 15_000;
