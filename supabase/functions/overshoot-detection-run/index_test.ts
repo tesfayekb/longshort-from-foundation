@@ -106,8 +106,15 @@ Deno.test('FP-069 W3.8 T2.4 (INC-84 §5): dry-run envelope carries detector_vers
 });
 
 Deno.test('probe short-circuit: BEFORE the three skip gates', () => {
-  assertStringIncludes(SRC, "body.probe as ('alpaca' | 'polygon' | undefined)");
-  assertStringIncludes(SRC, 'probe_invalid_expected_alpaca_or_polygon');
+  // FIX-3 (ACT-565) re-pin: probe taxonomy extended to include the
+  // 'version' rail (INC-126.b). SEMANTIC PRESERVED and stated in the
+  // test name — the probe short-circuit still fires BEFORE the two
+  // skip gates (kill-switch supremacy note unchanged: the alpaca /
+  // polygon / version probe branches all short-circuit before the
+  // kill-switch and job-disarmed gates, so probes remain diagnostic
+  // and cron-gated per FIX-3 policy).
+  assertStringIncludes(SRC, "body.probe as ('alpaca' | 'polygon' | 'version' | undefined)");
+  assertStringIncludes(SRC, 'probe_invalid_expected_alpaca_polygon_or_version');
   // W3.5.c live-probe wiring (α): sentinels moved from stub note to the
   // typed error codes emitted only inside the alpaca/polygon probe branch.
   assertStringIncludes(SRC, 'alpaca_probe_failed');
@@ -117,6 +124,24 @@ Deno.test('probe short-circuit: BEFORE the three skip gates', () => {
   const idxJR = SRC.indexOf("id = 'overshoot.detection.run'");
   assert(idxProbeBranch < idxKS, 'probe short-circuit precedes kill-switch');
   assert(idxProbeBranch < idxJR, 'probe short-circuit precedes job-disarmed');
+  // FIX-3 rail: the version-probe branch also short-circuits BEFORE
+  // both skip gates (no code change would leave it below).
+  const idxVersionProbe = SRC.indexOf("probe: 'version',");
+  assert(idxVersionProbe > 0, 'version probe branch present');
+  assert(idxVersionProbe < idxKS, 'version probe short-circuit precedes kill-switch');
+  assert(idxVersionProbe < idxJR, 'version probe short-circuit precedes job-disarmed');
+});
+
+// FIX-3 (ACT-565) — SOURCE_VERSION rail drift-guard. Mirrors entry/exit.
+Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it, handler wired', () => {
+  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix1'");
+  const idxProbeStart = SRC.indexOf("probe: 'version',");
+  assert(idxProbeStart > 0, 'version-probe branch present');
+  const probeBlock = SRC.slice(idxProbeStart, idxProbeStart + 400);
+  assertStringIncludes(probeBlock, 'SOURCE_VERSION,');
+  assertStringIncludes(probeBlock, 'RATIFIED_DETECTOR_VERSION,');
+  assertStringIncludes(probeBlock, "BUILD_SHA: Deno.env.get('BUILD_SHA') ?? null");
+  assertStringIncludes(SRC, '{ sourceVersion: SOURCE_VERSION }');
 });
 
 Deno.test('FP-069 W3.8 T3c (INC-84 §5): probe envelopes echo detector_version (alpaca + polygon)', () => {
