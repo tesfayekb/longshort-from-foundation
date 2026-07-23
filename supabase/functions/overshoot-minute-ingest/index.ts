@@ -103,8 +103,18 @@ Deno.serve(createHandler(async (req: Request) => {
     });
   }
 
-  const authCtx = await authenticateRequest(req);
-  await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+  // Auth: either a signed-in user with overshoot.manage, or a cron-secret
+  // caller (operator-invoked service path for one-shot backfills).
+  const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
+  const hdrSecret  = req.headers.get('x-cron-secret') ?? '';
+  let actorId: string | null = null;
+  if (cronSecret && hdrSecret && hdrSecret === cronSecret) {
+    actorId = null; // service-invoked
+  } else {
+    const authCtx = await authenticateRequest(req);
+    await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+    actorId = authCtx.user.id;
+  }
 
   const polygonKey = Deno.env.get('POLYGON_API_KEY');
   if (!polygonKey) return apiError(500, 'polygon_api_key_unset', { correlationId });
@@ -128,7 +138,7 @@ Deno.serve(createHandler(async (req: Request) => {
       scope: { pair_count: pairs.length, sample: pairs.slice(0, 5) },
       seed: seed,
       status: 'running',
-      created_by: authCtx.user.id,
+      created_by: actorId,
     })
     .select('run_id')
     .single();
