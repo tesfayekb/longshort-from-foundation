@@ -2102,6 +2102,96 @@ export type Database = {
         }
         Relationships: []
       }
+      overshoot_minute_bars: {
+        Row: {
+          c: number
+          created_at: string
+          h: number
+          ingest_run_id: string
+          l: number
+          n: number | null
+          o: number
+          slice_tag: string
+          source: string
+          ticker: string
+          ts: string
+          v: number
+          vw: number | null
+        }
+        Insert: {
+          c: number
+          created_at?: string
+          h: number
+          ingest_run_id: string
+          l: number
+          n?: number | null
+          o: number
+          slice_tag: string
+          source?: string
+          ticker: string
+          ts: string
+          v: number
+          vw?: number | null
+        }
+        Update: {
+          c?: number
+          created_at?: string
+          h?: number
+          ingest_run_id?: string
+          l?: number
+          n?: number | null
+          o?: number
+          slice_tag?: string
+          source?: string
+          ticker?: string
+          ts?: string
+          v?: number
+          vw?: number | null
+        }
+        Relationships: []
+      }
+      overshoot_minute_ingest_runs: {
+        Row: {
+          api_calls: number
+          created_by: string | null
+          error: string | null
+          finished_at: string | null
+          rows_written: number
+          run_id: string
+          scope: Json
+          seed: number | null
+          slice_tag: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          api_calls?: number
+          created_by?: string | null
+          error?: string | null
+          finished_at?: string | null
+          rows_written?: number
+          run_id?: string
+          scope: Json
+          seed?: number | null
+          slice_tag: string
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          api_calls?: number
+          created_by?: string | null
+          error?: string | null
+          finished_at?: string | null
+          rows_written?: number
+          run_id?: string
+          scope?: Json
+          seed?: number | null
+          slice_tag?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       overshoot_reconciliation_state: {
         Row: {
           call_name: string
