@@ -119,13 +119,17 @@ Deno.serve(createHandler(async (req: Request) => {
     });
   }
 
-  // Auth: either a service_role Bearer (operator-invoked one-shot backfill),
-  // or a signed-in user with overshoot.manage.
+  // Auth: either a one-shot backfill secret (operator-invoked service path),
+  // a service_role Bearer, or a signed-in user with overshoot.manage.
   let actorId: string | null = null;
   const authHeader = req.headers.get('Authorization') ?? '';
   const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  if (bearer && svcKey && bearer === svcKey) {
+  const oneshot = Deno.env.get('BACKFILL_ONESHOT_SECRET') ?? '';
+  const hdrOneshot = req.headers.get('x-oneshot-secret') ?? '';
+  if (oneshot && hdrOneshot && oneshot === hdrOneshot) {
+    actorId = null; // one-shot backfill invoked
+  } else if (bearer && svcKey && bearer === svcKey) {
     actorId = null; // service-role invoked
   } else {
     const authCtx = await authenticateRequest(req);
