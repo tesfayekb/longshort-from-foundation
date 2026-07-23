@@ -71,6 +71,15 @@
  * truth (clock, account, positions, orders, fills, shortability).
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
+
+/**
+ * SOURCE_VERSION — code-level version marker (INC-126 fix, operator ruling B).
+ * BUILD_SHA is env-sourced and has read stale for two days while the runtime
+ * ran newer bundles. This literal is baked into the deployed module and
+ * stamped as `x-source-version` on every response by createHandler.
+ * Bump the suffix whenever money-path behavior changes.
+ */
+export const SOURCE_VERSION = 'fb5fdf13+fix1';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
