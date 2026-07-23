@@ -71,6 +71,13 @@
 -- correction.
 --
 -- SCHEDULE: '50 19 * * 1-5' (19:50 UTC Mon-Fri).
+-- AMENDED 2026-07-23 (DEC-083 GO): primary schedule moved to
+--   '45 13 * * 1-5' (13:45 UTC Mon-Fri = 09:45 ET summer, open + 15m).
+--   The 19:50Z tick is retained as a NEW residual sweep seeded in
+--   sql/41_overshoot_exit_run_residual_cron_schedule.sql. See DEC-083
+--   §(a)(b)(g) + docs/06-tracking/dst-retiming-watch-2026-11-01.md.
+--   Byte-identical schedule contract vs job_registry.schedule for
+--   id='overshoot.exit.run' preserved (both now '45 13 * * 1-5').
 --   - MUST be byte-identical to job_registry.schedule for
 --     id='overshoot.exit.run'. Drift between cron.job.schedule and
 --     job_registry.schedule is a paragraph 22.5 DRIFT-class defect.
@@ -83,7 +90,7 @@
 
 SELECT cron.schedule(
   'overshoot-exit-run',
-  '50 19 * * 1-5',
+  '45 13 * * 1-5',
   $$
   SELECT net.http_post(
     url := 'https://PROJECT_REF.supabase.co/functions/v1/overshoot-exit-run',
