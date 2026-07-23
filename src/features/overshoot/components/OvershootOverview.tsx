@@ -179,11 +179,13 @@ function TodayCard({
         .eq('status', 'closed')
         .gte('closed_at', `${todayIso}T00:00:00Z`);
       if (error) throw error;
-      return (data ?? []).reduce(
-        (acc, r: { realized_pnl_partial: number | string | null }) =>
-          acc + (r.realized_pnl_partial === null ? 0 : Number(r.realized_pnl_partial)),
-        0,
-      );
+      const rows = data ?? [];
+      let sum = 0;
+      for (const r of rows as Array<{ realized_pnl_partial: number | string | null }>) {
+        if (r.realized_pnl_partial === null) continue;
+        sum += Number(r.realized_pnl_partial);
+      }
+      return { sum, count: rows.length };
     },
     refetchInterval: 25_000,
     staleTime: 20_000,
@@ -198,7 +200,8 @@ function TodayCard({
       (acc, p) => acc + (p.unrealized_intraday_pl ?? 0),
       0,
     );
-    const realizedToday = realizedTodayQuery.data ?? 0;
+    const realizedToday = realizedTodayQuery.data?.sum ?? 0;
+    const realizedCount = realizedTodayQuery.data?.count ?? 0;
     const loading = positions.isLoading || snapshotsLoading || realizedTodayQuery.isLoading;
     const anchorMissing = latestSnap === null;
     const total = openPnl + realizedToday;
@@ -251,7 +254,7 @@ function TodayCard({
                 </span>
               </p>
               <p className="mt-1 text-xs font-mono text-muted-foreground/90">
-                realized {realizedToday >= 0 ? '+' : ''}{fmtMoney(realizedToday)}
+                realized {realizedToday >= 0 ? '+' : ''}{fmtMoney(realizedToday)} across {realizedCount} lot{realizedCount === 1 ? '' : 's'}
                 {' · '}open {openPnl >= 0 ? '+' : ''}{fmtMoney(openPnl)}
                 {anchorMissing ? null : (
                   <span className="text-muted-foreground/70">

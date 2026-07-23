@@ -177,6 +177,7 @@ export { OvershootEquityCurveTab } from './components/OvershootEquityCurveTab';
 export { useOvershootPortfolioPositions } from './hooks/useOvershootPortfolioPositions';
 export { OvershootCapCompliance } from './components/portfolio/OvershootCapCompliance';
 export { useOvershootEquitySnapshots } from './hooks/useOvershootEquitySnapshots';
+export { useOvershootRealizedToday } from './hooks/useOvershootRealizedToday';
 
 /**
  * ACT-564: Strategy Profile page (read-only). Route:
