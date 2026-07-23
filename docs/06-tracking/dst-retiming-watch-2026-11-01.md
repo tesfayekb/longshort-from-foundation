@@ -8,7 +8,7 @@
 
 | # | Cron key | Summer UTC | Winter UTC (target after 2026-11-01) | ET intent | Source authority |
 |---|---|---|---|---|---|
-| 1 | `overshoot.exit.run` (primary time-exit — legacy anchor) | 19:50Z | 20:50Z | 15:50 ET (close-adjacent) | PIN-2 baseline (pre-DEC-083 anchor). Row retained even after DEC-083 §(a) repoints primary to entry (2), because §(b) keeps 19:50Z as the residual/retry sweep. |
+| 1 | `overshoot.exit.run.residual` (late-day residual/retry sweep) | 19:50Z | 20:50Z | 15:50 ET (close-adjacent) | **DEC-083 §(b)** — created 2026-07-23 as a NEW cron.job row (`overshoot-exit-run-residual`, jobid 134) + `job_registry` row (`overshoot.exit.run.residual`) when the DEC-083 GO transaction moved the original 19:50Z primary to 13:45Z. Command body byte-identical to the primary (md5 `3b2be524cd7f807e1a5eb89522945da5`, len 607). This row REPLACES the prior placeholder that pointed at `overshoot.exit.run` (the moved primary is now row (2)). |
 | 2 | `overshoot.exit.run` (primary time-exit — DEC-083 anchor) | 13:45Z | 14:45Z | 09:45 ET (open + 15m) | **DEC-083 §(a) + §(g).** Added by DEC-083 GO turn (2026-07-23). |
 | 3 | `overshoot.fix8.pass2` (proposed anchor, if adopted as ET-relative) | 14:05Z | 15:05Z | 10:05 ET (open + 35m) | **DEC-083 §(g)** — "any additional cron the adoption touches inherits the same watch-row obligation." Populates once FIX-8 build lands with a fixed ET anchor. |
 | 4 | `overshoot.entry.run` (primary entry) | 13:35Z | 14:35Z | 09:35 ET (open + 5m) | PIN-2 baseline (pre-existing). Included for completeness — DEC-083 does not touch entry cadence, but it IS ET-anchored and shares the DST obligation. |
