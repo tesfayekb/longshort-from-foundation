@@ -171,3 +171,11 @@ export { OvershootEquityCurveTab } from './components/OvershootEquityCurveTab';
 export { useOvershootPortfolioPositions } from './hooks/useOvershootPortfolioPositions';
 export { OvershootCapCompliance } from './components/portfolio/OvershootCapCompliance';
 export { useOvershootEquitySnapshots } from './hooks/useOvershootEquitySnapshots';
+
+/**
+ * ACT-564: Strategy Profile page (read-only). Route:
+ * `/trading/overshoot/profile`. Wrapper at
+ * `src/pages/trading/overshoot/OvershootProfilePage.tsx` imports through
+ * the façade per T1.
+ */
+export { StrategyProfilePage as OvershootProfilePage } from './components/profile/StrategyProfilePage';

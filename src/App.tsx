@@ -61,6 +61,7 @@ const OvershootPortfolioPage = lazy(() => import("./pages/trading/overshoot/Over
 const OvershootConfigPage = lazy(() => import("./pages/trading/overshoot/OvershootConfigPage"));
 const OvershootDetectorRunDetailPage = lazy(() => import("./pages/trading/overshoot/OvershootDetectorRunDetailPage"));
 const OvershootUniversePage = lazy(() => import("./pages/trading/overshoot/OvershootUniversePage"));
+const OvershootProfilePage = lazy(() => import("./pages/trading/overshoot/OvershootProfilePage"));
 const ProfilePage = lazy(() => import("./pages/user/ProfilePage"));
 const SecurityPage = lazy(() => import("./pages/user/SecurityPage"));
 
@@ -286,6 +287,11 @@ const App = () => (
                 <Route path="overshoot/universe" element={
                   <PermissionGate permission="overshoot.view">
                     <OvershootUniversePage />
+                  </PermissionGate>
+                } />
+                <Route path="overshoot/profile" element={
+                  <PermissionGate permission="overshoot.view">
+                    <OvershootProfilePage />
                   </PermissionGate>
                 } />
               </Route>
