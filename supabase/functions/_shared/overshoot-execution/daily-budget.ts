@@ -35,6 +35,27 @@
 
 export const OVERSHOOT_DAILY_ENTRY_BUDGET = 5 as const;
 
+// ── FIX-8 (DEC-083 §c) — completion-pass budget helper ────────────────────
+// PURE: no I/O, no clock. Handler passes ledger truth priorAdmittedCount
+// (COUNT(*) FROM overshoot_lots WHERE entry_ts::date = sessionDate).
+// K_remaining = max(0, K − priorAdmittedCount). Substituted into
+// evaluateDailyBudget's budget input for pass-2. Cash sufficiency stays
+// with the existing sizing/BP path (DEC-083 §c).
+export interface RemainingBudgetInputs {
+  budget: number;
+  priorAdmittedCount: number;
+}
+export function computeRemainingBudget(input: RemainingBudgetInputs): number {
+  const { budget, priorAdmittedCount } = input;
+  if (!Number.isFinite(budget) || !Number.isInteger(budget) || budget < 0) {
+    throw new Error(`computeRemainingBudget: budget=${budget} not a finite non-negative integer`);
+  }
+  if (!Number.isFinite(priorAdmittedCount) || !Number.isInteger(priorAdmittedCount) || priorAdmittedCount < 0) {
+    throw new Error(`computeRemainingBudget: priorAdmittedCount=${priorAdmittedCount} not a finite non-negative integer`);
+  }
+  return Math.max(0, budget - priorAdmittedCount);
+}
+
 export interface DailyBudgetInputs {
   budget: number;
   admittedThisRun: number;
