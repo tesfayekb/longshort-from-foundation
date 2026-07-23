@@ -89,10 +89,25 @@ realized_slip_bps = abs(fill_avg_price - vwap(09:45 minute bar)) / vwap * 1e4
 
 ---
 
+## §(g) F1.a DST re-time watch-row addendum (binding regardless of GO timing)
+
+**Motivating rail.** PIN-2 (overshoot.md L108) documents `pg_cron` as UTC-fixed; the F1.a re-time watch-row governs seasonal ET-anchored crons so they survive the US DST transition on **2026-11-01** (fall-back). The 19:50Z cron is already on that watch-row (19:50Z = 15:50 ET summer → 14:50 ET winter, ~70 min early).
+
+**Addendum.** On DEC-083 GO, the new **13:45Z** cron (09:45 ET summer → 08:45 ET winter, ~45 min pre-open) MUST be added to the same F1.a 2026-11-01 watch-row so the winter drift is caught by the same instrumentation loop rather than silently mis-firing pre-open. **Any additional cron the adoption touches** (e.g., a 14:05Z FIX-8 redeploy anchor if adopted as ET-relative) inherits the same watch-row obligation.
+
+**Handler-side guard already in place.** The exit-run handler reads `/v2/clock` on every run and refuses typed `market_closed` on pre-open / weekends / holidays (PIN-2), so a winter-mis-fired 13:45Z cron fails typed-closed rather than transacting. The watch-row is the *scheduling-layer* correction; the typed refusal is the *behavioural* safety net. Both remain in force.
+
+**Applies whether DEC-083 GOs before or after 2026-11-01.** If GO lands pre-DST, the 13:45Z cron enters the watch-row at GO turn. If GO lands post-DST, the watch-row is amended in the same GO turn to include the (already-winter) new cron.
+
+**Not landing now (no cron change until GO):** this addendum is a *policy* attachment; the watch-row entry is written in the GO turn alongside the actual cron move so the two artifacts land together.
+
+---
+
 ## SEQUENCING
 
 - **This turn:** DEC-083 DRAFT filed. **No code lands.**
 - **On operator GO:** promote DEC-083 into `approved-decisions.md`; execute the single-line cron schedule change; land the monitoring view; open R-008 slot in the ledger.
+- **On operator GO (adds from §(g)):** amend the F1.a 2026-11-01 DST re-time watch-row to include the 13:45Z cron (and any further ET-anchored crons DEC-083 touches).
 - **Held queue tonight (independent of DEC-083 GO):** FIX-2 grep-lock+build+deploy+probe (zero-exposure window to 13:30Z) → FIX-8 build+arm (now doubly motivated) → SPY one-shot → FIX-7 memo → Turn-5 stack → replay harness.
 
 ## CROSS-REFS
@@ -105,3 +120,5 @@ realized_slip_bps = abs(fill_avg_price - vwap(09:45 minute bar)) / vwap * 1e4
 - **DEC-504-4** (sleeve reallocation — orthogonal, unaffected by exit-time move).
 - **ACT-558 v4** (honest-net ceiling arithmetic; source for the $600–800 BLEND / $9.7K FLOOR envelope).
 - **T4** (audit-writer trap — no platform audit_logs writes), **T5** (strategy/platform separation), **T8** (idempotency), **T9** (MFA via panel policy — unchanged).
+- **PIN-2** (overshoot.md L108 — DST drift accepted DOCUMENTED + INSTRUMENTED; source of §(g) watch-row obligation).
+- **F1.a 2026-11-01 DST re-time watch-row** — attachment target for §(g).
