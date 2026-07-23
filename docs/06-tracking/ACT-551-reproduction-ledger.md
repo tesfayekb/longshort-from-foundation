@@ -1677,7 +1677,16 @@ Supervisor prediction going into R-ACT-553.a: "the tide-class sleeve will clear 
 
 **R-007 = REPRODUCED — ADOPT at 09:45 ET for both T1 and T2.** Supervisor re-derivation independently reproduced every delta.
 
-**Honest-net note.** Adoption saves the conservative Δ = 2.956 bps at 09:45 vs 15:50 baseline, net of estimator uncertainty ≈ **2–3 bps/slot-night**. Applied to observed slot volume: **≈ $600–800 / yr BLEND, ≈ $9.7K / yr FLOOR** (arithmetic per ACT-558 v4 reference ceilings). Below the DEC-085 tier threshold but positive-EV and directionally-consistent across all five years — adoption defensible on structural microstructure grounds, not headline economics.
+**Honest-net note.** Adoption saves the conservative Δ = 2.956 bps at 09:45 vs 15:50 baseline, net of estimator uncertainty ≈ **2–3 bps/slot-night**. Applied to observed slot volume: ≈ $600–800 / yr BLEND, ≈ $9.7K / yr FLOOR (arithmetic per ACT-558 v4 reference ceilings). Below the DEC-085 whole-book threshold but positive-EV and directionally-consistent across all five years — adoption defensible on structural microstructure grounds, not headline economics.
+
+**CANONICAL ROI EXPRESSION (operator-preferred, ratified 2026-07-23).** Expressed as yield on the **idle slice** — ~4.5 slots × $2.5K ≈ **$11.25K/night** (≈ 1/10th of book) that DEC-083 activates for one extra overnight cycle per day:
+
+- Gross overnight edge on slice ≈ **26%/yr** (matches strategy blend).
+- − forfeit ≈ **13.5%/yr**.
+- − friction ≈ **7.5%/yr**.
+- **NET ≈ 6%/yr on the slice at BLEND (≈ 86%/yr at FLOOR), vs 0%/yr today.**
+
+Whole-book equivalent +0.6–1.2%/yr is the **secondary line**. The slice-yield framing is canonical for all downstream cites; the whole-book % is retained for portfolio-level views.
 
 ### CROSS-REFS
 
