@@ -427,6 +427,8 @@ interface KpiStripInputs {
   dayPnlUsd: number | null;
   /** Broker-equity pct delta between the two most-recent snapshots. */
   dayPnlPct: number | null;
+  /** Same-hook day number (rebound tile — UI invariant 2026-07-23). */
+  day: OvershootDayNumber;
 }
 
 function KpiCell({
@@ -543,22 +545,35 @@ function HealthKpiStrip(k: KpiStripInputs) {
         variant={openTotal > 0 ? 'default' : 'muted'}
       />
       <KpiCell
-        label="Day P&L"
-        value={k.dayPnlUsd === null
-          ? '—'
-          : `${k.dayPnlUsd >= 0 ? '+' : ''}${fmtMoney(k.dayPnlUsd)}`}
-        sub={k.dayPnlUsd === null
-          ? (k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Need 2+ snapshots')
-          : k.dayPnlPct === null
-            ? 'post-close'
-            : `${k.dayPnlPct >= 0 ? '+' : ''}${k.dayPnlPct.toFixed(2)}% · post-close`}
-        hint={k.equitySnapshotsCount === 0
-          ? <>No equity snapshots exist. Arm <span className="font-mono">overshoot_equity_snapshot</span> via the INC-82 bracket. No synthetic P&L is fabricated.</>
-          : <>Delta between the two latest post-close <span className="font-mono">broker_equity</span> rows in <span className="font-mono">overshoot_equity_snapshots</span> (source <span className="font-mono">alpaca_paper_overshoot</span>). Post-close settled state; no mid-session refresh.</>}
+        label={k.day.mode === 'live' ? 'Today (live)' : k.day.label}
+        value={k.day.loading
+          ? '…'
+          : k.day.valueUsd === null
+            ? '—'
+            : `${k.day.valueUsd >= 0 ? '+' : ''}${fmtMoney(k.day.valueUsd)}`}
+        sub={k.day.mode === 'live'
+          ? (k.day.valueUsd === null
+              ? 'live · pending broker read'
+              : `${k.day.pct !== null ? `${k.day.pct >= 0 ? '+' : ''}${k.day.pct.toFixed(2)}% · ` : ''}realized ${(k.day.realizedToday ?? 0) >= 0 ? '+' : ''}${fmtMoney(k.day.realizedToday ?? 0)} · ${k.day.realizedCount ?? 0} lot${k.day.realizedCount === 1 ? '' : 's'}`)
+          : (k.day.valueUsd === null
+              ? (k.equitySnapshotsCount === 0 ? 'Snapshots not armed' : 'Need 2+ snapshots')
+              : `${k.day.pct !== null ? `${k.day.pct >= 0 ? '+' : ''}${k.day.pct.toFixed(2)}% · ` : ''}${k.day.prevDate ? fmtDateOnly(k.day.prevDate) + ' → ' : ''}${k.day.latestDate ? fmtDateOnly(k.day.latestDate) : ''}`)}
+        hint={<>
+          <strong>UI invariant (2026-07-23):</strong> this tile binds to the
+          SAME <span className="font-mono">useOvershootDayNumber</span> hook as
+          the "Today" card below — one Day number per page. Live during RTH
+          (Σ broker <span className="font-mono">unrealized_intraday_pl</span> +
+          realized closures today from{' '}
+          <span className="font-mono">overshoot_lots</span>); Settled outside
+          RTH (delta between the two most recent{' '}
+          <span className="font-mono">overshoot_equity_snapshots.broker_equity</span>
+          {' '}rows, source <span className="font-mono">alpaca_paper_overshoot</span>).
+          The label follows the branch — "Today" never sits on a prior-day range.
+        </>}
         variant={
-          k.dayPnlUsd === null ? 'muted'
-          : k.dayPnlUsd > 0 ? 'good'
-          : k.dayPnlUsd < 0 ? 'bad'
+          k.day.valueUsd === null ? 'muted'
+          : k.day.valueUsd > 0 ? 'good'
+          : k.day.valueUsd < 0 ? 'bad'
           : 'muted'
         }
       />
