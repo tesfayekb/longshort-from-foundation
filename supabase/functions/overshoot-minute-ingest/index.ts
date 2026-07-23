@@ -119,13 +119,14 @@ Deno.serve(createHandler(async (req: Request) => {
     });
   }
 
-  // Auth: either a signed-in user with overshoot.manage, or a cron-secret
-  // caller (operator-invoked service path for one-shot backfills).
-  const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
-  const hdrSecret  = req.headers.get('x-cron-secret') ?? '';
+  // Auth: either a service_role Bearer (operator-invoked one-shot backfill),
+  // or a signed-in user with overshoot.manage.
   let actorId: string | null = null;
-  if (cronSecret && hdrSecret && hdrSecret === cronSecret) {
-    actorId = null; // service-invoked
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  if (bearer && svcKey && bearer === svcKey) {
+    actorId = null; // service-role invoked
   } else {
     const authCtx = await authenticateRequest(req);
     await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
