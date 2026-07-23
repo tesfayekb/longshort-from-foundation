@@ -1,0 +1,48 @@
+-- =============================================================================
+-- Overshoot Entry-Run COMPLETION-PASS Cron Schedule -- DEC-083 §(c) / FIX-8
+--
+-- STATUS: APPLIED 2026-07-23 (build+arm turn). Row id
+--   'overshoot-entry-run-completion' + job_registry row
+--   'overshoot.entry.run.completion' + system_config row
+--   'overshoot_completion_pass_minutes' created in the same transaction.
+--
+-- NOTE: sql/41 consumed the previously-planned filename slot for this
+--   file (residual-sweep landed first). Contract file
+--   docs/04-modules/overshoot/fix-8.md updated to reflect sql/42.
+--
+-- PURPOSE: Re-invoke overshoot-entry-run at 14:05 UTC Mon-Fri with
+--   body {"pass":"completion"}. Same handler, same detection_run_id;
+--   filters by ledger truth (double-count guard) + prior-refusal
+--   terminal-classifier (see fix-8.md §2). Consumes K_remaining slots
+--   freed by (a) morning-exit fills at 13:45Z (per DEC-083 §a) and
+--   (b) any pass-1 budget truncation at 13:35Z.
+--
+-- SAFETY: Budget-exhausted days no-op with a clean heartbeat
+--   ({outcome:'no_op', reason:'budget_exhausted_pre_loop'}) --
+--   ENABLED at seed is safe.
+--
+-- DST OBLIGATION: 14:05 UTC == 09:05 America/New_York summer.
+--   Watch-row entry logged in
+--   docs/06-tracking/dst-retiming-watch-2026-11-01.md alongside the
+--   13:45Z primary exit + 13:35Z primary entry.
+--
+-- AUTHORITY:
+--   - DEC-083 §(c) (Morning-Exit Adoption redeploy half)
+--   - Operator FIX-8 spec supplied 2026-07-23 (docs/04-modules/overshoot/fix-8.md)
+--   - DEC-023 (edge-function handler envelope)
+--   - DEC-040 (scheduled-execution attestations)
+--   - PIN-2 (pg_cron UTC-fixed)
+--
+-- POST-APPLY VERIFICATION (§22.5.1, four surfaces):
+--   SELECT jobid, jobname, schedule, active, md5(command)
+--   FROM cron.job WHERE jobname = 'overshoot-entry-run-completion';
+--
+--   SELECT id, enabled, schedule, description
+--   FROM job_registry WHERE id = 'overshoot.entry.run.completion';
+--
+--   SELECT key, value FROM system_config
+--   WHERE key = 'overshoot_completion_pass_minutes';
+--
+--   curl -X OPTIONS $URL/functions/v1/overshoot-entry-run -i | grep x-source-version
+--   -- Expect: x-source-version: fb5fdf13+fix2+fix8
+-- =============================================================================
