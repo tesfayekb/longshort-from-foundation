@@ -92,6 +92,9 @@ Original wording: "consider at first W5 read-out". Reconciled against `docs/08-p
 | C | INC-123 | executor search failure (alpaca-portfolio-history-fetcher) | filed; do-not-repeat | 2026-07-21 | — | this-turn precedent |
 | C | INC-125 | dial fabrication (RECURRENCE-3); raw-SELECT-only rule | standing discipline | 2026-07-21 | — | tracker |
 | C | INC-126 | build-sha staleness in run stamps | addressed by ACT-563; monitor | 2026-07-22 | 2026-08-05 | ACT-563 |
+| C | INC-126.b | env-pinned BUILD_SHA staleness (second confirmed harm — `x-build-sha=0c5ad0d9` persists across redeploys; discriminator now `x-source-version`) | fix env-pin path or drop the header; do not rely on x-build-sha for deploy truth until fixed | 2026-07-23 | 2026-08-05 | `_shared/handler.ts` header emit; probe evidence in receipts-2026-07-23 |
+| C | DW-227 | typed `snapshotAgeMs` (replace ad-hoc negative-age math with a single typed helper across entry/exit/detection/fill-sweep) | fold into next money-path touch after FIX-1 soak | 2026-07-23 | 2026-08-10 | FIX-1 landing; receipts-2026-07-23 §rulings-(C) |
+| C | DW-228 | source-version rail extended to non-money edge functions (dispatcher, snapshot, universe-refresh) so deploy-truth is uniform | opportunistic; ride next dispatcher/snapshot touch | 2026-07-23 | 2026-08-15 | FIX-3 rail landed for 4 money fns; receipts-2026-07-23 §rulings-(C) |
 | C | INC-127 | memory drift ("BLOCKED" claim) | filed; do-not-repeat | 2026-07-22 | — | tracker |
 | C | INC-128 | pre-flight calendar off-by-one | fix pending | 2026-07-22 | 2026-08-05 | tracker |
 | C | W5.a | slippage vs haircut (entry closed; exit window opens 2026-07-22) | live telemetry accrual | 2026-07-11 | ~2026-08-20 | `ACT-499-TRACK-C-*.md` |
