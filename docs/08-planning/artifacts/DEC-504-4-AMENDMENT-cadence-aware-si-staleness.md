@@ -80,14 +80,42 @@ under the new threshold.
 
 ## 6. Expected sequence (acceptance test)
 
-1. Tomorrow (2026-07-24) ~14:00Z: operator one-shot invokes
-   `overshoot-short-interest-compute`.
-2. If 07-15 publication has landed at FINRA: `freshest = 2026-07-15`,
-   age = 9 (as of 2026-07-24) → `si_stale_active = FALSE` (well
-   under 26).
-3. `DEC-504-4` sleeve DISENGAGES — the acceptance test fires.
-4. Daily cron (`0 21 * * 1-5`) captures each subsequent publication
-   the day it appears; the ritual is extinguished.
+The acceptance test SPLITS into two independent events under the
+operator ruling (2026-07-23, pre-22:00Z):
+
+**Event A — Disengage-by-amendment (TONIGHT, 2026-07-23 22:00Z detection run):**
+
+1. Freshest SI as_of unchanged at `2026-06-30` (no new ingest yet).
+2. Age = 23 calendar days. Under the deployed 26d threshold this is
+   FRESH (`23 ≤ 26 → si_stale_active = FALSE`).
+3. Prior run (2026-07-22 22:00Z) engaged the sleeve at 40L/0S.
+4. Expected transition: `disengage`.
+5. Expected artifacts:
+   - `overshoot_audit_logs` row: action=`overshoot.sleeve.reallocation_disengaged`,
+     reason=`si_freshness_restored`, metadata note carries
+     `threshold amendment DEC-504-4-A; freshest unchanged at 2026-06-30`.
+   - `overshoot_detection_runs.sleeves` = `{reallocation_active:false,
+     long_capacity:36, short_capacity:4, prior:{40,0},
+     transition:'disengage'}`.
+   - Target book returns to **36L/4S**; SHORT selections may reappear
+     (squeeze gate now evaluates them normally at age 23).
+   - Tomorrow's admits carry `w5_reallocation_ref = NULL`.
+
+**Deviation to investigate:** if tonight's run does NOT disengage, that
+is the failure mode — file immediately as INC-129 sub-defect (c)
+"amendment did not propagate to run-time detector".
+
+**Event B — FINRA-ingest freshness advance (TOMORROW, 2026-07-24):**
+
+1. Self-invoked one-shot (~14:00Z, CRON_SECRET path — R-003 pattern) of
+   `overshoot-short-interest-compute`. Retry Fri if 07-15 publication
+   has not landed at FINRA.
+2. If landed: `freshest = 2026-07-15`, age = 9 (as of 2026-07-24) →
+   `si_stale_active = FALSE` (well under 26).
+3. **NO new sleeve transition** — book is already disengaged from
+   Event A; state is steady 36L/4S.
+4. Daily cron (`0 21 * * 1-5`) then captures each subsequent
+   publication the day it appears; the ritual is extinguished.
 
 Under the amended 26d threshold, this week's 07-22 engage would not
 have occurred (see §3).
