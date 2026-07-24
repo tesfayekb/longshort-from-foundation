@@ -261,4 +261,135 @@ single-purpose artifact; (d) DEV-3 no-drama, retry schedule confirmed;
 **Tail as locked:** ACT-569 tonight-gated on 22:00Z si_unavailable
 collapse; FIX-7 memo; Turn-5 stack (ACT-565 TODAY per operator);
 replay harness — unaffected.
+
+---
+
+## RECEIPTS — 2026-07-24 17:26Z (operator "TWO GOs" turn)
+
+### FIX-9 — ARMED
+
+- **Charter filed:** `docs/04-modules/overshoot/fix-9.md` (spec, per
+  INC-136 charter-before-build discipline).
+- **Code diff:** `overshoot-entry-run/index.ts` L608–631 — predicate
+  gains `AND COALESCE(metadata->>'pass', 'primary') = ${passLabel}`;
+  no_op response now stamps `pass: passLabel`; comment block rewritten
+  to name the FIX-8 interaction and INC-126 rail discipline. Session
+  marker write (L853–865) already stamps `pass: passLabel` — grep-guard
+  test added to prevent silent regression.
+- **SOURCE_VERSION:** `fb5fdf13+fix2+fix8+sp1` → `fb5fdf13+fix2+fix8+sp1+fix9`.
+- **Tests:** `overshoot-entry-run/index_test.ts` — 6 new pins (predicate
+  shape, primary-reblocks-primary, completion-passes-primary,
+  completion-blocks-completion, legacy-null=primary via COALESCE,
+  marker grep-guard, SOURCE_VERSION bump). Full run: **73 passed / 0
+  failed (36ms)**.
+- **Deploy:** `overshoot-entry-run` deployed OK.
+- **Probe echo (OPTIONS `x-source-version` header):**
+  ```
+  HTTP/2 200
+  x-build-sha: 0c5ad0d9588fd62df6e88b1b50516069ffaea390
+  x-source-version: fb5fdf13+fix2+fix8+sp1+fix9
+  ```
+  Rail confirms deployed bundle. §22.5.1 read-back GREEN.
+
+### FIX-9 MAIDEN RECEIPT — pass='completion' invocation with real body
+
+`POST /overshoot-entry-run` with `{"time":"…","slot":"completion",
+"pass":"completion"}` + X-Cron-Secret:
+
+```json
+{"outcome":"no_op","reason":"budget_exhausted_pre_loop",
+ "pass":"completion","session_date":"2026-07-24",
+ "prior_admitted_count":5,"budget":5,"k_remaining":0,
+ "targets_loaded":36,"orders_submitted":0,
+ "detector_version":"aff20a13",
+ "correlation_id":"69bcbd09-ed83-4a40-8a51-9a2dae89e399"}
+```
+
+**Interpretation.** The `run_already_exists` gate NO LONGER
+short-circuited (pre-FIX-9 it returned `reason:'run_already_exists'`;
+see INC-139 root-cause SQL). The invocation proceeded past the gate,
+past detection-linkage/regime/selections, and reached the FIX-8
+pre-loop filter at L959. The filter recomputed `k_remaining` from
+ledger truth:
+```
+  budget = OVERSHOOT_DAILY_ENTRY_BUDGET = 5
+  prior_admitted_count = 5   (from 13:35Z primary run's ledger)
+  k_remaining = max(0, 5 − 5) = 0
+```
+and emitted the honest `budget_exhausted_pre_loop` no-op with
+`orders_submitted:0`. `detector_version:'aff20a13'` correctly
+stamped (permanent per INC-126 two-rail discipline; `+fix9` is
+source-version rail only). **Zero admits, zero side-effects, clean
+heartbeat.** Monday 2026-07-27 14:05Z scheduled fire becomes
+routine.
+
+### DEV-4 RE-ARM — DIAGNOSED, NO RE-ARM NEEDED; LATENT DEFECT SURFACED
+
+**cron.job row (jobid=133) verbatim:**
+```
+ jobid: 133
+ jobname: overshoot-universe-refresh
+ schedule: '0 10 * * 1'
+ active: true
+ nodename: localhost
+ nodeport: 5432
+ database: postgres
+ username: postgres
+ command: SELECT net.http_post(
+   url := 'https://sftatlxatbdrotivxcip.supabase.co/functions/v1/overshoot-universe-refresh',
+   headers := '{"Content-Type": "application/json", "Authorization": "Bearer <anon>",
+                "X-Cron-Secret": "<cron>"}'::jsonb,
+   body := concat('{"time": "', now(), '"}')::jsonb
+ ) AS request_id;
+```
+
+**Verdict:** row is well-formed and matches the working jobid=120/135
+pattern. Root cause = **inserted after most-recent Monday 10Z
+window (last Monday elapsed = 2026-07-20; next = 2026-07-27)**.
+Corroborating pattern: sibling jobid=134 (inserted after Thurs 19:50Z)
+also has `COUNT(*)=0`; jobid=135 (schedule daily 14:05Z, inserted
+before today's 14:05Z) fired today on its first eligible window.
+**No cron re-arm required.** Monday 2026-07-27 10:00:00Z is the
+empirical proof-point.
+
+**Manual universe refresh fired (non-money-path, safe midday):**
+```json
+{"ok":false,"status":"roster_sanity_failed",
+ "roster_count":8000,"sanity_band":[850,950],
+ "sample_first_10":["A","AA","AAA","AAAA","AAAC","AAAD",…],
+ "index_code":"I:RUT","pages_fetched":8,
+ "correlationId":"6d519bf7-873b-4bd2-a378-1b5955af2213"}
+```
+
+**LATENT DEFECT surfaced — INC-126 continuation, filed in INC-139
+update.** Refresh implementation still targets Polygon `I:RUT`
+(Russell 2000) while ratified identity is IVV+IJH composite (S&P
+500 + MidCap 400). Sanity band [850,950] correctly fails-closed on
+8000-ticker return → NO writes → drift vs 07-21 baseline = **ZERO**
+(table state unchanged: 905 active / 920 total; latest_add 07-21).
+Even after Monday 07-27 10Z fires jobid=133, refresh will
+fail-closed again unless the source is re-pointed. **Not patched
+this turn** — re-pointing is a money-adjacent code change requiring
+its own charter; STOP per uncertainty protocol. INC-126 continuation
+charter owed.
+
+### Rail-alignment note (all four money functions)
+
+```
+overshoot-entry-run       x-source-version: fb5fdf13+fix2+fix8+sp1+fix9  ✓ (this turn)
+overshoot-detection-run   x-source-version: fb5fdf13+fix2+si26           ✓ (last night)
+overshoot-exit-run        x-source-version: fb5fdf13+fix2                (unchanged — no FIX-9 dependency)
+overshoot-fill-sweep      x-source-version: fb5fdf13+fix2                (unchanged — no FIX-9 dependency)
+```
+FIX-9 is entry-only (gate lives in entry-run); no cross-function
+source-version cascade needed.
+
+### Evening slate reconfirmed
+
+~20:00Z FINRA retry (Event-B second attempt); **22:00Z = H-1
+EMPIRICAL VERDICT** (si_unavailable 21→~0 expected on committed
+`+si26` envelope) + honest short-funnel decomposition → ACT-569
+(d)(e)(f) + H-2 overnight; ACT-570 Phase-0 as its own turn tomorrow;
+ACT-565 IBKR artifact TODAY (no-slip); FIX-7 memo; remaining Turn-5;
+replay harness.
 22:00Z re-run.

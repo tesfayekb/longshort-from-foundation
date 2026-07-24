@@ -54,9 +54,58 @@ report vs the 07-01 backfill seed. (c) Monday 07-27 10:00Z becomes
 the empirical re-arm proof-point; verify `cron.job_run_details` row
 appears within 60s of schedule.
 
-**NOT executed this turn.** Manual refresh + re-arm queued as
-**ACT-570 companion** pending operator ruling (rulings turn owed
-diagnosis + STOP per uncertainty protocol, not silent remediation).
+**ROOT CAUSE — CONFIRMED 2026-07-24 17:26Z (operator GO turn).**
+`cron.job` row for jobid=133 is well-formed:
+`active=true, schedule='0 10 * * 1', nodename='localhost',
+nodeport=5432, database='postgres', username='postgres'`. Command
+string matches the working jobid=120/135 shape exactly (URL, anon
+Bearer, X-Cron-Secret). **No cron-level defect.** The row was
+inserted after the most-recent Monday 10:00Z window (last elapsed
+Monday = 2026-07-20; next Monday = 2026-07-27). Neighbouring later
+jobs corroborate the "not-yet-reached" pattern: jobid=134
+(`overshoot-exit-run-residual`, schedule `50 19 * * 1-5`) also has
+`COUNT(*)=0` because it was inserted after 19:50Z Thurs 07-23;
+jobid=135 (`overshoot-entry-run-completion`, schedule `5 14 * * 1-5`)
+DID fire today at 14:05:00Z on its first eligible window. **No
+re-arm required for cron itself.** Monday 2026-07-27 10:00:00Z is
+the empirical proof-point.
+
+**HOWEVER — LATENT defect found on manual invoke.**
+`POST /overshoot-universe-refresh` (manual, cron-secret-authenticated)
+returned:
+```json
+{"ok":false,"status":"roster_sanity_failed",
+ "roster_count":8000,"sanity_band":[850,950],
+ "sample_first_10":["A","AA","AAA","AAAA","AAAC","AAAD",…],
+ "index_code":"I:RUT","pages_fetched":8,
+ "correlationId":"6d519bf7-873b-4bd2-a378-1b5955af2213"}
+```
+The refresh implementation is still targeting Polygon `I:RUT`
+(Russell 2000, ~2000 constituents; the 8000 return reflects
+Polygon's index-membership feed including delisted/inactive
+historical tickers) while the ratified identity per **INC-126** is
+the IVV+IJH composite (S&P 500 + S&P MidCap 400, ~900). The sanity
+band [850,950] correctly fails-closed on the mis-sourced roster —
+which is why the table has NOT drifted despite ACT-548's 07-21 patch
+being the last write. **INC-126 is unresolved in code** even though
+the identity string was corrected in docs. This means: even after
+Monday 07-27 10:00Z fires jobid=133, the refresh will fail-closed
+again and the table will remain at 07-21 state.
+
+**Filed as blocking follow-up:** `overshoot-universe-refresh`
+source needs to be re-pointed from `I:RUT` to the IVV+IJH composite
+(iShares `IVV.HOLDINGS` + `IJH.HOLDINGS` via a provider that exposes
+them, or a periodic fetch from S&P's own dissemination path). Charter
+is **INC-126 continuation**, not a new INC. NOT patched this turn per
+operator directive scope (DEV-4 was "re-arm cron + manual refresh +
+drift report"; the drift report IS the failure-closed sanity refusal,
+which surfaced the deeper defect). STOP per uncertainty protocol —
+re-pointing the refresh implementation is a money-adjacent code change
+requiring its own charter and approval.
+
+**Drift vs 07-21 baseline:** ZERO (refresh fail-closed → no writes).
+Table state unchanged: `active_members=905, total=920,
+latest_add=2026-07-21, latest_update=2026-07-21 06:59:27Z`.
 
 **Cross-refs.** `docs/06-tracking/2026-07-24-midday-deviations.md`
 §RULINGS(e); operator turn 2026-07-24 17:xxZ ("RULINGS on all four").
