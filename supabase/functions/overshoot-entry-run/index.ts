@@ -92,7 +92,7 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
  * audit row (primary rows now stamp 'primary'). See
  * `docs/04-modules/overshoot/fix-8.md`.
  */
-export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8';
+export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
@@ -141,6 +141,9 @@ import {
   OVERSHOOT_DAILY_ENTRY_BUDGET,
   evaluateDailyBudget,
   computeRemainingBudget,
+  OVERSHOOT_SHORT_DAILY_BUDGET_DEFAULT,
+  evaluateShortDailyBudget,
+  computeRemainingShortBudget,
 } from '../_shared/overshoot-execution/daily-budget.ts';
 import {
   classifyPass1Refusal,
@@ -285,6 +288,10 @@ interface RefusalTally {
   // allocation_cap_reached in the evaluation order and the identity —
   // a name refused by the cap does NOT consume budget.
   daily_budget_reached: number;
+  // DEC-084: per-side short daily budget (default 1/session). Distinct
+  // from daily_budget_reached — shorts refused here do NOT consume K
+  // (gate placed BEFORE the global K gate for side==='short').
+  short_daily_budget_reached: number;
   // FIX-2 (2026-07-23): count of lots where the shared snapshot-retry
   // wrapper recovered a fresh attempt-2 after a stale attempt-1. Surfaced
   // via run tally so FIX-6-class analyses can price the fix.
@@ -306,6 +313,7 @@ function newTally(): RefusalTally {
     fill_unfilled_no_lots: 0,
     allocation_cap_reached: 0,
     daily_budget_reached: 0,
+    short_daily_budget_reached: 0,
     snapshot_retry_recovered: 0,
   };
 }
@@ -708,6 +716,30 @@ Deno.serve(createHandler(async (req: Request) => {
     }
     const sizingBase = accountSnapshot.equity * strategyAllocationPct * marginMultiplier;
 
+    // ── DEC-084 short-side daily pacing config load ─────────────────────
+    // Config-not-constant: value read from system_config; absence falls
+    // back to OVERSHOOT_SHORT_DAILY_BUDGET_DEFAULT (seeded at DEC-084
+    // promotion). Non-integer / negative / missing values fall back to
+    // the default with a stamped `short_daily_budget_config` field on
+    // the run response for operator triage.
+    const shortBudgetRows = await sql<{ value: unknown }[]>`
+      SELECT value FROM system_config WHERE key = 'overshoot_short_daily_budget'
+    `;
+    let shortDailyBudget: number = OVERSHOOT_SHORT_DAILY_BUDGET_DEFAULT;
+    let shortDailyBudgetSource: 'system_config' | 'default_fallback' = 'default_fallback';
+    if (shortBudgetRows.length > 0) {
+      const raw = shortBudgetRows[0].value;
+      const parsed = typeof raw === 'number'
+        ? raw
+        : (raw !== null && typeof raw === 'object' && 'budget' in (raw as Record<string, unknown>)
+            ? Number((raw as { budget: unknown }).budget)
+            : Number(raw));
+      if (Number.isFinite(parsed) && Number.isInteger(parsed) && parsed >= 0) {
+        shortDailyBudget = parsed;
+        shortDailyBudgetSource = 'system_config';
+      }
+    }
+
     // ── T3b (ACT-480) REGIME GOVERNOR ────────────────────────────────────
     // Compute the SPY-drawdown regime BEFORE loading selections so the
     // regime + full signal context is stamped on the entry-run row + every
@@ -846,6 +878,10 @@ Deno.serve(createHandler(async (req: Request) => {
     // allocation-cap gate (and thus consumes budget). Cap-refused names
     // never touch this counter — identity + rank-preservation guarantee.
     let admittedByDailyBudget = 0;
+    // DEC-084 per-side short daily-budget counter. Incremented AFTER a
+    // short passes BOTH the short-budget gate AND the global K gate.
+    // Long-side selections never touch this counter.
+    let admittedShortsByDailyBudget = 0;
 
     const shortabilityFetcher = new OvershootAlpacaShortabilityFetcher(client);
     const fillFetcher = new OvershootAlpacaFillFetcher(client);
@@ -913,6 +949,11 @@ Deno.serve(createHandler(async (req: Request) => {
     // in-loop safety net regardless of pass.
     let filteredSelections: SelectionRow[] = selections as SelectionRow[];
     let effectiveBudget: number = OVERSHOOT_DAILY_ENTRY_BUDGET;
+    // DEC-084 completion-pass symmetry: shortEffectiveBudget mirrors
+    // effectiveBudget for the short pacing gate. Pass-1 default =
+    // shortDailyBudget; pass-2 = shortDailyBudget − prior admitted shorts
+    // for the session (ledger truth, double-count guard).
+    let shortEffectiveBudget: number = shortDailyBudget;
     let pass2SkipsAlreadyAdmitted = 0;
     let pass2SkipsTerminal = 0;
     if (passLabel === 'completion') {
@@ -942,6 +983,18 @@ Deno.serve(createHandler(async (req: Request) => {
         });
       }
       effectiveBudget = kRemaining;
+
+      // DEC-084: recompute short-remaining from ledger truth.
+      const [{ count: priorAdmittedShorts }] = await sql<{ count: number }[]>`
+        SELECT COUNT(*)::int AS count
+        FROM overshoot_lots
+        WHERE entry_ts::date = ${sessionDate}::date
+          AND side = 'short'
+      `;
+      shortEffectiveBudget = computeRemainingShortBudget({
+        budget: shortDailyBudget,
+        priorAdmittedShorts,
+      });
 
       const priorAdmittedRows = await sql<{ symbol: string }[]>`
         SELECT DISTINCT symbol FROM overshoot_lots
@@ -1193,6 +1246,39 @@ Deno.serve(createHandler(async (req: Request) => {
       // budget; the tail truncates cleanly with `daily_budget_reached`.
       // Ratified K=5 by ACT-500 Part 1 DEC; W5 4-week live tripwire may
       // drop to 4 on evidence.
+      //
+      // DEC-084 short-side pacing gate — evaluated FIRST for shorts, so
+      // shorts refused for per-side pacing do NOT consume the global K.
+      // Long-side selections skip this gate entirely. Placement mirrors
+      // the K-gate rationale: AFTER allocation_cap_reached (cap-refused
+      // shorts don't consume the short budget either) and BEFORE the
+      // R-gamma BP guard. Rank-preserving within the short arm.
+      if (sel.side === 'short') {
+        const shortBudgetEval = evaluateShortDailyBudget({
+          budget: shortEffectiveBudget,
+          admittedShortsThisRun: admittedShortsByDailyBudget,
+        });
+        if (!shortBudgetEval.ok) {
+          tally.short_daily_budget_reached += 1;
+          await writeStrategyAuditEvent({
+            strategyKey: 'overshoot',
+            action: 'overshoot.entry.short_daily_budget_reached',
+            actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+            correlationId,
+            metadata: {
+              ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
+              reason: shortBudgetEval.reason,
+              short_budget: shortBudgetEval.budget,
+              admitted_shorts_this_run: shortBudgetEval.admitted_this_run,
+              short_daily_budget_source: shortDailyBudgetSource,
+              handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
+              session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId,
+            },
+          });
+          continue;
+        }
+      }
+
       const budgetEval = evaluateDailyBudget({
         budget: effectiveBudget,
         admittedThisRun: admittedByDailyBudget,
@@ -1221,6 +1307,7 @@ Deno.serve(createHandler(async (req: Request) => {
       // not as SUCCESSFUL FILLS/day. This is the same accounting the W5
       // live-tripwire will measure against.
       admittedByDailyBudget += 1;
+      if (sel.side === 'short') admittedShortsByDailyBudget += 1;
 
       // R-gamma cumulative BP guardrail BEFORE this submission.
       const bpCheck = assertBuyingPowerCoversNotional({
@@ -1487,6 +1574,18 @@ Deno.serve(createHandler(async (req: Request) => {
         refusals: tally.daily_budget_reached,
         pass2_skips_already_admitted: pass2SkipsAlreadyAdmitted,
         pass2_skips_terminal: pass2SkipsTerminal,
+      },
+      // DEC-084 short-side pacing surface. PRESENT on every response
+      // (long-only-mode days will show consumed=0, refusals=0). Source
+      // field distinguishes system_config value from default fallback so
+      // operators can verify config wiring after the seed migration.
+      short_daily_budget: {
+        default: OVERSHOOT_SHORT_DAILY_BUDGET_DEFAULT,
+        configured: shortDailyBudget,
+        source: shortDailyBudgetSource,
+        effective_budget: shortEffectiveBudget,
+        consumed: admittedShortsByDailyBudget,
+        refusals: tally.short_daily_budget_reached,
       },
       correlation_id: correlationId,
     });

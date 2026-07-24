@@ -44,6 +44,13 @@ export const OVERSHOOT_COMPLETION_TERMINAL_ACTIONS = [
   'overshoot.entry.allocation_cap_reached',
   'overshoot.entry.position_already_open',
   'overshoot.entry.shortability_refusal.not_shortable',
+  // DEC-084 (2026-07-24): short-side daily budget is TERMINAL for the day.
+  // The per-side pacing budget is a hard cadence gate — a short refused
+  // in pass-1 for short_daily_budget_reached must NOT re-admit in pass-2
+  // (same reasoning as the K=5 global budget: the ratified admission
+  // rate is preserved regardless of pass count). Grep-anchored emit-site:
+  // `overshoot.entry.short_daily_budget_reached` in overshoot-entry-run.
+  'overshoot.entry.short_daily_budget_reached',
 ] as const;
 
 // ── TERMINAL two-field match for submit_failed ─────────────────────────────

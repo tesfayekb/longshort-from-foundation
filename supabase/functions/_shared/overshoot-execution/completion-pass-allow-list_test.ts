@@ -98,8 +98,16 @@ Deno.test('FIX-8: TERMINAL_ACTIONS enumeration is stable (FLAG-E-dropped exclusi
     'overshoot.entry.allocation_cap_reached',
     'overshoot.entry.i5_refusal.i5_reversion_exceeded',
     'overshoot.entry.position_already_open',
+    'overshoot.entry.short_daily_budget_reached',
     'overshoot.entry.shortability_refusal.not_shortable',
   ]);
+});
+
+// DEC-084 (2026-07-24): short_daily_budget_reached is TERMINAL for the day
+// (per-side cadence is a hard gate; pass-2 must not re-admit beyond the
+// per-side budget any more than beyond K).
+Deno.test('DEC-084: short_daily_budget_reached → terminal', () => {
+  assertEquals(classifyPass1Refusal('overshoot.entry.short_daily_budget_reached', null), 'terminal');
 });
 Deno.test('FIX-8: TERMINAL_SUBMIT_FAILED_REASONS stable', () => {
   assertEquals([...OVERSHOOT_COMPLETION_TERMINAL_SUBMIT_FAILED_REASONS], ['alpaca_credential_missing']);
