@@ -301,6 +301,70 @@ Deno.test('run_already_exists idempotency gate (DUAL-SLOT DST collapse)', () => 
   assertStringIncludes(SRC, 'if (!manualConfirm) {');
 });
 
+// ──────────────────────────────────────────────────────────────────────
+// FIX-9 — pass-scoped `run_already_exists` idempotency gate.
+// See docs/04-modules/overshoot/fix-9.md. Prior gate was pass-blind and
+// silently no-op'd every completion invocation because the primary
+// marker satisfied the predicate. These tests pin the fix at code level
+// so a future refactor cannot regress it.
+// ──────────────────────────────────────────────────────────────────────
+Deno.test('FIX-9 gate: predicate is pass-scoped with COALESCE legacy=primary', () => {
+  // The gate's SQL predicate carries the pass filter with legacy default.
+  assertStringIncludes(
+    SRC,
+    "AND COALESCE(metadata->>'pass', 'primary') = ${passLabel}",
+  );
+  // The no_op response now stamps the pass label for observability.
+  assertStringIncludes(
+    SRC,
+    "correlation_id: correlationId, dry_run: dryRun, slot, pass: passLabel",
+  );
+});
+
+Deno.test('FIX-9 gate: primary-reblocks-primary (DST slot-b semantics intact)', () => {
+  // The predicate for a primary invocation still matches a prior primary
+  // marker (COALESCE default = 'primary'), so DST slot-b returns no_op.
+  // This is asserted by (a) the pass-scoped predicate presence + (b) the
+  // manual-exempt guard, which together preserve the DST collapse path.
+  assertStringIncludes(SRC, 'if (!manualConfirm) {');
+  assertStringIncludes(SRC, "COALESCE(metadata->>'pass', 'primary')");
+});
+
+Deno.test('FIX-9 gate: completion-passes-primary-marker (proceeds to FIX-8 filter)', () => {
+  // The completion path's predicate binds ${passLabel}='completion', which
+  // COALESCE'd against a legacy or primary marker (both resolve to
+  // 'primary') does NOT match. Assertion: passLabel is the binding.
+  assertStringIncludes(SRC, "= ${passLabel}");
+  // And the FIX-8 pre-loop filter downstream is reachable — the block
+  // still exists at its known site.
+  assertStringIncludes(SRC, "if (passLabel === 'completion') {");
+});
+
+Deno.test('FIX-9 gate: completion-blocks-second-completion', () => {
+  // A completion marker matches the completion predicate (both sides
+  // resolve to 'completion'), so the second completion returns no_op.
+  // Guarded by the same pass-scoped predicate + no_op response shape.
+  assertStringIncludes(SRC, "reason: 'run_already_exists'");
+  assertStringIncludes(SRC, "= ${passLabel}");
+});
+
+Deno.test('FIX-9 marker write carries `pass` key (grep-guard)', () => {
+  // The session_marker write MUST include the pass label so the FIX-9
+  // predicate can discriminate on subsequent runs. A refactor that drops
+  // this key silently re-introduces the pre-FIX-9 bug for future markers.
+  const markerBlockStart = SRC.indexOf("action: 'overshoot.entry.session_marker'");
+  const markerBlockEnd = SRC.indexOf('});', markerBlockStart);
+  const markerBlock = SRC.slice(markerBlockStart, markerBlockEnd);
+  assertStringIncludes(markerBlock, 'pass: passLabel');
+});
+
+Deno.test('FIX-9 SOURCE_VERSION rail bump: fb5fdf13+fix2+fix8+sp1+fix9', () => {
+  assertStringIncludes(
+    SRC,
+    "export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1+fix9'",
+  );
+});
+
 Deno.test('detection-linkage: three ratified typed refusals surfaced + audited', () => {
   assertStringIncludes(SRC, 'resolveDetectionRunForEntry');
   assertStringIncludes(SRC, 'overshoot.entry.detection_linkage_refusal.${linkage.refusal}');
