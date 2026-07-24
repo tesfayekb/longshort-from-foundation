@@ -8031,3 +8031,18 @@ Only ONE operator touch on this leg: run snippet #3 (chat below). No SQL editor 
 
 1. **Friday pre-commit Re-Freeze** — `docs/06-tracking/2026-07-24-morning-precommit.md` appended with operator-derived Re-Freeze section: 13:45Z maiden = HEARTBEAT-ONLY (`exits_submitted=0`, `session_age_no_fire=7` for 5×T1 07-22 ord 3 + 2×T2 07-23 ord 2; any submit = deviation); first live morning-exit ~07-29/30 at T1 ord 6; 14:05Z FIX-8 K_remaining clean no-op = GREEN when pass-1 saturates budget; 13:35Z primary owes funnel table with `negative_age` class EXTINCT under FIX-1+2. Supersedes rows 13:35Z / 13:45Z / 14:05Z in the original table (originals preserved for audit chain, non-authoritative for scoring).
 2. **07-23 2-admit post-mortem** — `docs/06-tracking/2026-07-23-2admit-postmortem.md` created: 13:35Z run predated FIX-1 deploy; 27 stale-anchor + 25 `negative_age` refusals killed 3 slots (K=5, admits=2); ENS + SAM both T2 (cohort-tag artifact — tier is per-event dislocation class, not admission-priority tag). Filed as sign-bug's closing exhibit. Regression guard: `refusal_class_counts.negative_age > 0` post-FIX-1 = P0 rollback.
+
+---
+
+## Register cross-references (2026-07-24 evening — standing-rule catch-up)
+
+Standing rule (register §0 preamble): any "later / queued / deferred / pending / chartered" spoken in any channel must land as a register row **the same turn**. Prior-turn miss corrected here — all six items below now have rows in `docs/08-planning/deferred-work-register.md` §0.2:
+
+- **DEC-084** (short-daily-pacing, LIVE `+sp1`) — register row state `A`; clone 9b033d5f; charter → `docs/decisions/DEC-084-overshoot-short-daily-pacing.md`.
+- **FIX-9** (pass-scoped idempotency, LIVE `+fix9`) — register row state `A`; charter `docs/04-modules/overshoot/fix-9.md`; scheduled-fire proof-point Mon 07-27 14:05Z.
+- **ACT-571** (universe-refresh source re-point) — register row state `D`; hard gate **Mon 07-27 10:00Z**; charter `docs/06-tracking/ACT-571-charter-refresh-repoint.md`.
+- **ACT-572** (IBKR shadow lane) — register row state `D`; weekend skeleton + operator §4 secrets gate; charter `docs/06-tracking/ACT-572-charter-ibkr-shadow-lane.md`.
+- **ACT-573** (refused-winners forensics) — register row state `D`; weekend Phase-1 SQL; charter `docs/06-tracking/ACT-573-charter-refused-winners-forensics.md`.
+- **ACT-574** (entry-day-offset grid) — register row state `D`; weekend build; charter `docs/06-tracking/ACT-574-charter-entry-day-offset-grid.md`.
+
+**48h sweep of INC identities.** INC-138 (lowercase `overshoot_events.side` invariant), INC-139 (jobid=133 never-fired, empirical proof-point Mon 07-27 10:00Z), INC-140 (universe-refresh source never re-pointed after IVV+IJH identity ratification) — all three confirmed present in `docs/06-tracking/incidental-findings.md` (INC-140/139 inserted above INC-131 by chronological order; INC-138 at line 2039). No further INC rows owed from the last 48h. Priority guard: this catch-up is documentation only — does not displace tonight's 22:00Z H-1 verdict, ACT-569 (d)(e)(f)+H-2, or ACT-565 artifact.
