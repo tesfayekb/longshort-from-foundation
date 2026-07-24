@@ -42,13 +42,21 @@ import {
 } from '../_shared/overshoot/detector/detector.ts';
 import { bandLabelFor } from '../_shared/overshoot/detector/band-label.ts';
 
-// Handler-verbatim constants (overshoot-detection-run/index.ts:92-106).
+// Handler-verbatim constants (overshoot-detection-run/index.ts:140-152).
+// ═══ 2026-07-23 CADENCE AMENDMENT — SI envelope 20 → 26 (H-1 fix) ══════
+// Per-row SI envelope aligned to FINRA natural max age (15d settlement +
+// ~11d publication lag = ~24-26 calendar days between cycles). String-
+// identical to `overshoot-detection-run/index.ts` — both sites MUST stay
+// in lockstep so diagnostic funnels mirror production windowing. Grep
+// `DETECTOR_SI_STALENESS_MAX_DAYS` before any future flip. Shared-home
+// refactor queued as DW-234. Detector composite `aff20a13` UNTOUCHED (this
+// is data-fetch envelope, not detector.ts predicate).
 const DETECTOR_EXCLUSION_WIDTH_DAYS = 5;
 const DETECTOR_CAPACITY_PER_SIDE = 20;
 const DETECTOR_LONG_EXCESS_THRESHOLD = 0.10;
 const DETECTOR_SHORT_EXCESS_THRESHOLD = 0.08;
 const DETECTOR_SQUEEZE_SI_PCT_FLOAT_MIN = 0.20;
-const DETECTOR_SI_STALENESS_MAX_DAYS = 20;
+const DETECTOR_SI_STALENESS_MAX_DAYS = 26;
 const DETECTOR_LONG_WINDOWS = [1, 2, 3] as const;
 const DETECTOR_SHORT_WINDOWS = [1, 2, 3, 4, 5] as const;
 const DETECTOR_LONG_MOMENTUM = [4, 5] as const;
