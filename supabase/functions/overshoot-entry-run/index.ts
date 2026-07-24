@@ -1246,6 +1246,39 @@ Deno.serve(createHandler(async (req: Request) => {
       // budget; the tail truncates cleanly with `daily_budget_reached`.
       // Ratified K=5 by ACT-500 Part 1 DEC; W5 4-week live tripwire may
       // drop to 4 on evidence.
+      //
+      // DEC-084 short-side pacing gate — evaluated FIRST for shorts, so
+      // shorts refused for per-side pacing do NOT consume the global K.
+      // Long-side selections skip this gate entirely. Placement mirrors
+      // the K-gate rationale: AFTER allocation_cap_reached (cap-refused
+      // shorts don't consume the short budget either) and BEFORE the
+      // R-gamma BP guard. Rank-preserving within the short arm.
+      if (sel.side === 'short') {
+        const shortBudgetEval = evaluateShortDailyBudget({
+          budget: shortEffectiveBudget,
+          admittedShortsThisRun: admittedShortsByDailyBudget,
+        });
+        if (!shortBudgetEval.ok) {
+          tally.short_daily_budget_reached += 1;
+          await writeStrategyAuditEvent({
+            strategyKey: 'overshoot',
+            action: 'overshoot.entry.short_daily_budget_reached',
+            actorId: authCtx.user.id, targetType: 'overshoot_events', targetId: sel.ticker,
+            correlationId,
+            metadata: {
+              ticker: sel.ticker, side: sel.side, tier: sel.tier, rank_score: sel.rank_score,
+              reason: shortBudgetEval.reason,
+              short_budget: shortBudgetEval.budget,
+              admitted_shorts_this_run: shortBudgetEval.admitted_this_run,
+              short_daily_budget_source: shortDailyBudgetSource,
+              handler_version: OVERSHOOT_ENTRY_RUN_VERSION,
+              session_date: sessionDate, dry_run: dryRun, manual: manualConfirm, slot, pass: passLabel, run_id: runId,
+            },
+          });
+          continue;
+        }
+      }
+
       const budgetEval = evaluateDailyBudget({
         budget: effectiveBudget,
         admittedThisRun: admittedByDailyBudget,
@@ -1274,6 +1307,7 @@ Deno.serve(createHandler(async (req: Request) => {
       // not as SUCCESSFUL FILLS/day. This is the same accounting the W5
       // live-tripwire will measure against.
       admittedByDailyBudget += 1;
+      if (sel.side === 'short') admittedShortsByDailyBudget += 1;
 
       // R-gamma cumulative BP guardrail BEFORE this submission.
       const bpCheck = assertBuyingPowerCoversNotional({
