@@ -80,3 +80,29 @@ Post-hoc: any prediction wrong is recorded symmetrically alongside the R-005 / R
 ### Supersession note
 
 The rows in the original table above (13:35Z / 13:45Z / 14:05Z) remain visible for the audit chain but are **NON-AUTHORITATIVE** for GREEN/RED scoring — the receipts pack scores against this Re-Freeze section, not against the original rows. All other rows (13:30Z FIX-2 rail check, 14:00Z catch-up + FINRA Event B) stand as originally drafted.
+
+---
+
+## H-1 CADENCE-FIX PRE-COMMIT FLIPS (filed 2026-07-24 pre-market; supersedes any prior si_unavailable expectation for Friday 22:00Z onward)
+
+**Provenance.** ACT-569(a) proof (10/10 tickers — ISRG/PATH/HIMS/WDAY/TYL × 07-22/07-23 — had a 2026-06-30 SI row present, outside 20d envelope, inside 26d envelope). Detection-run per-row SI envelope amended from 20 → 26 calendar days (SOURCE_VERSION `fb5fdf13+fix2+si26`, deployed, header-echo probe-verified). detector.ts composite `aff20a13` UNTOUCHED. Filed as ACT-569(f)-EARLY (H-1 branch closed by fix; H-2 orphan-stack trace stays Friday as chartered).
+
+### Friday 22:00Z (detection) — SI-envelope COLLAPSE expected (H-1 live confirmation)
+
+- **EXPECTED:** `si_unavailable` refusal count on the SHORT arm **collapses to ~zero** for tickers with a 2026-06-30 corpus row. As of Friday 07-24, 06-30 corpus age = 24 calendar days → INSIDE the amended 26d envelope. Collapse is independent of Event-B timing (Event B, if it fires today, drops age to 9 — belt-and-suspenders, not the driver).
+- **GREEN success signal:** `refusal_class_counts.si_unavailable` for SHORT candidates drops materially vs. 07-22/07-23 baseline; the ISRG/PATH/HIMS/WDAY/TYL cohort (and siblings with 06-30 rows) admits into the detector map instead of being refused pre-eligibility.
+- **Deviation signal:** `si_unavailable` count unchanged → deploy did not land, envelope constant not read, or a second envelope exists undocumented. **P0 investigate.**
+- **NOT a bug (do not misread):** SHORT candidates that clear the envelope may still be refused by downstream gates (`si_above_squeeze_threshold`, `analyst_upgrade_proximate`, `ma_target_proximate`, `excess_below_threshold`, etc.). H-1 fix only removes the envelope-artifact blackout; it does NOT relax any admission gate.
+
+### Friday target book (post-22:00Z) — SHORT survivors may LEGITIMATELY appear for the first time
+
+- **EXPECTED:** SHORT-arm target-book entries may appear for the first cycle since 07-22. Squeeze gate (SI < 20% float), three-guard bundle (DEC-080-v2 / DEC-081-v2 / DEC-082), and DEC-504-4 sleeve reallocation all evaluate normally on the newly-admitted rows. Sleeve state stays **36/4** by design (book-level SI corpus at age 24 is INSIDE the strict-`>` 26d book-flag → `siStaleActive = false` → fresh-branch allocation).
+- **GREEN success signal:** SHORT-side target rows either (i) present with normal refusal-mix downstream, or (ii) legitimately absent because remaining gates refuse them — both outcomes acceptable, both mean H-1 landed. The **envelope-artifact absence is now impossible.**
+- **Deviation signal:** SHORT-side rows present AND sleeve state showing 40/0 (stale) would be a book-level flag misfire — INC on the spot.
+
+### Monday 07-27 13:35Z — first SHORT admits become POSSIBLE (milestone receipt pre-committed)
+
+- **EXPECTED:** With H-1 landed, `overshoot-entry-run` may admit SHORT lots for the first time since ACT-569 chartered. Ratified per-side cap = **4 SHORT slots** (DETECTOR_CAPACITY_SHORT = 4, sleeve fresh branch); guards live (DEC-080-v2/081-v2/082); W5 provenance rules apply; per-lot funnel owed.
+- **GREEN success signal (milestone):** any SHORT admit fires with full envelope — `SOURCE_VERSION = fb5fdf13+fix2+fix8` on entry-run echo, per-lot `w5_reallocation_ref` populated (FIX-3 rail), lot passes double-count guard, funnel table cited in receipts pack.
+- **Escalation:** first SHORT admit is a **MILESTONE RECEIPT** — surface it explicitly in the Monday close-out, do not let it slide by unremarked.
+- **Deviation signal:** SHORT candidates present in target book Friday but **zero admits Monday despite** available capacity — points to entry-run gate (rank-cut, K spent on longs, sleeve state, entry-side guard). This is exactly the H-2 orphan-survivor question queued for Friday analysis — expect the trace to name the gate verbatim.

@@ -135,7 +135,8 @@ Deno.test('probe short-circuit: BEFORE the three skip gates', () => {
 // FIX-3 (ACT-565) — SOURCE_VERSION rail drift-guard. Mirrors entry/exit.
 Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it, handler wired', () => {
   // FIX-2 bump 2026-07-23 (rail-parity — no money-path change in detection).
-  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2'");
+  // H-1 bump 2026-07-23 (+si26 — per-row SI envelope 20→26; detection-run only).
+  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2+si26'");
   const idxProbeStart = SRC.indexOf("probe: 'version',");
   assert(idxProbeStart > 0, 'version-probe branch present');
   const probeBlock = SRC.slice(idxProbeStart, idxProbeStart + 400);
@@ -269,9 +270,43 @@ Deno.test('append leg ordering: backfill_runs row inserted BEFORE the upsert', (
   assert(iERun > 0 && iEUps > 0 && iERun < iEUps, 'earnings: backfill_runs row precedes earnings_calendar upsert');
 });
 
-Deno.test('SI read within staleness window (DETECTOR_SI_STALENESS_MAX_DAYS bound)', () => {
-  assertStringIncludes(SRC, 'DETECTOR_SI_STALENESS_MAX_DAYS = 20');
+Deno.test('SI read within staleness window (DETECTOR_SI_STALENESS_MAX_DAYS bound) — cadence-amended 20→26 (2026-07-23, H-1)', () => {
+  assertStringIncludes(SRC, 'DETECTOR_SI_STALENESS_MAX_DAYS = 26');
   assertStringIncludes(SRC, '(${asOfDay}::date - ${DETECTOR_SI_STALENESS_MAX_DAYS}::int)');
+  // Negative sentinel — the retired 20d cap must NOT reappear as a literal.
+  assert(!SRC.includes('DETECTOR_SI_STALENESS_MAX_DAYS = 20'),
+    'retired 20d envelope literal must not resurface');
+});
+
+Deno.test('H-1 amendment triple: age 24 usable / 26 boundary / 27 excluded (per-row SI envelope semantics)', () => {
+  // Mirrors the SQL clause `as_of_date >= (asOf - CAP)` at pure arithmetic
+  // level. Guards the semantic (inclusive-at-boundary) independent of the
+  // constant's numeric value.
+  const CAP = 26;
+  const dayMs = 86_400_000;
+  const asOf = new Date('2026-07-24T00:00:00Z');
+  const usable = (ageDays: number): boolean => {
+    const rowDate = new Date(asOf.getTime() - ageDays * dayMs);
+    const cutoff  = new Date(asOf.getTime() - CAP     * dayMs);
+    return rowDate.getTime() >= cutoff.getTime();
+  };
+  assertEquals(usable(24), true,  'age 24 must be inside the 26d envelope (usable)');
+  assertEquals(usable(26), true,  'age 26 must be on-boundary (usable — `<=`, not `<`)');
+  assertEquals(usable(27), false, 'age 27 must be outside the 26d envelope (excluded)');
+});
+
+Deno.test('H-1 fix does NOT bump detector predicate spec — composite aff20a13 held (data-fetch envelope, not detector.ts predicate)', () => {
+  // The 20→26 flip is the caller-side data-fetch envelope in this file's
+  // index.ts, NOT the detector.ts spec predicate. The composite version
+  // MUST remain aff20a13; selection-parity + detector canaries must stay
+  // green. This test is the near-guard; the selection-parity_test.ts
+  // 20-day byte-exact re-verify is the far-guard.
+  assertEquals(RATIFIED_DETECTOR_VERSION, 'aff20a13',
+    'detector composite must not bump on caller-envelope-only fixes');
+});
+
+Deno.test('SOURCE_VERSION carries the +si26 suffix (deploy-truth rail)', () => {
+  assertStringIncludes(SRC, "SOURCE_VERSION = 'fb5fdf13+fix2+si26'");
 });
 
 Deno.test('DEC-504-4 WIRE: handler consumes overshootSleeveAllocation; BOTH branches byte-present (fresh 36/4, stale 40/0); no hardcoded post-decision caps', async () => {
