@@ -92,7 +92,7 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
  * audit row (primary rows now stamp 'primary'). See
  * `docs/04-modules/overshoot/fix-8.md`.
  */
-export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8';
+export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
@@ -141,6 +141,9 @@ import {
   OVERSHOOT_DAILY_ENTRY_BUDGET,
   evaluateDailyBudget,
   computeRemainingBudget,
+  OVERSHOOT_SHORT_DAILY_BUDGET_DEFAULT,
+  evaluateShortDailyBudget,
+  computeRemainingShortBudget,
 } from '../_shared/overshoot-execution/daily-budget.ts';
 import {
   classifyPass1Refusal,
@@ -285,6 +288,10 @@ interface RefusalTally {
   // allocation_cap_reached in the evaluation order and the identity —
   // a name refused by the cap does NOT consume budget.
   daily_budget_reached: number;
+  // DEC-084: per-side short daily budget (default 1/session). Distinct
+  // from daily_budget_reached — shorts refused here do NOT consume K
+  // (gate placed BEFORE the global K gate for side==='short').
+  short_daily_budget_reached: number;
   // FIX-2 (2026-07-23): count of lots where the shared snapshot-retry
   // wrapper recovered a fresh attempt-2 after a stale attempt-1. Surfaced
   // via run tally so FIX-6-class analyses can price the fix.
@@ -306,6 +313,7 @@ function newTally(): RefusalTally {
     fill_unfilled_no_lots: 0,
     allocation_cap_reached: 0,
     daily_budget_reached: 0,
+    short_daily_budget_reached: 0,
     snapshot_retry_recovered: 0,
   };
 }
