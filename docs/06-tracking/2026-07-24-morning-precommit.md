@@ -51,3 +51,32 @@ Post-hoc: any prediction wrong is recorded symmetrically alongside the R-005 / R
 - R-008 (calibration slot opened same turn).
 - FIX-2 / FIX-8 (queued build turns; contract path pending — see standing queue).
 - Rule-8 (07-22 T1 cohort `w5_reallocation_ref` NULL by design — applies to 13:35Z admits when disengaged).
+
+---
+
+## Re-Freeze (filed 2026-07-23 pre-sleep, operator-derived — SUPERSEDES the 13:45Z / 14:05Z EXPECTED rows above)
+
+**Reason for re-freeze.** The rows above were drafted before the ordinal-eligibility ledger was reconciled against DEC-083's `holdingDayOrdinal >= 9 (T1) / >= 10 (T2)` gates. The corrected posture for tomorrow's book (5×T1 admitted 07-22 at ordinal 3 as of open; 2×T2 admitted 07-23 at ordinal 2) is that **no lot is ordinal-mature by Friday 07-24**. The prior "≥ 1 admits" prediction was wrong by construction; recording it as an EXPECTED miss would inflate the deviation ledger. Retraction filed here per Catalog #65 rather than editing the original rows — audit chain preserved.
+
+### 13:45Z — MAIDEN MORNING EXITS run (re-frozen as **HEARTBEAT-ONLY**)
+
+- **EXPECTED:** `overshoot.exit.run` fires; `exits_submitted = 0`; per-lot rows written with class `session_age_no_fire` (or equivalent) for **all 7 open lots** — 5×T1 (07-22 cohort, ordinal 3) and 2×T2 (07-23 cohort, ordinal 2). Every lot must appear in the per-lot classification (empty per-lot table is itself a divergence — see below).
+- **GREEN success signal:** run row `outcome = completed`, `exits_submitted = 0`, `session_age_no_fire` count = 7, `SOURCE_VERSION` echo present, `realized_slip_bps` absent by design (no fills).
+- **Deviation signal (ANY submit):** `exits_submitted > 0` on Friday would mean either (i) ordinal-ledger drift, (ii) a T1 lot inaccurately aged to ≥ 9, or (iii) DEC-083 anchor mis-wired. Any single submit is a **P1 investigate**, not a celebration. R-008 slip-band collection stays open but does **not** start populating tomorrow.
+- **First live morning-exit exercise expected:** ~2026-07-29 or 07-30 (T1 cohort at ordinal 6 → T+3–4 more sessions to ordinal 9). Filed here so tomorrow's heartbeat is not mistaken for a rollback signal and next week's real maiden is not mistaken for a re-fire.
+
+### 14:05Z — FIX-8 COMPLETION MAIDEN (re-frozen)
+
+- **EXPECTED:** `pass = 'completion'` run fires; `K_remaining = OVERSHOOT_DAILY_ENTRY_BUDGET (5) − pass-1_admits`. If pass-1 admits 5 (i.e., saturates budget), **clean no-op with `pass='completion'` stamp is the GREEN outcome** — the completion pass proves it can fire without double-admitting. If pass-1 admits < 5 AND no cash was freed at 13:45Z (heartbeat-only outcome above), pass-2 K equals the leftover budget and pass-2 admits depend on the remaining short-list post-13:35Z.
+- **GREEN success signal (all three permissible):** (i) `pass = 'completion'` stamp present on run row; (ii) `admits ≤ K_remaining` — invariant never breached; (iii) EITHER `admits = 0` (saturated / no cash freed) OR `admits > 0` with fresh (session,symbol) — no double-admit against pass-1.
+- **Deviation signal:** (session,symbol) double-count vs pass-1 (P0 defect); K arithmetic breach (P0); missing `pass` stamp (P1).
+
+### 13:35Z — PRIMARY under FIX-1 + FIX-2 (re-frozen: first morning under the sign-bug fix)
+
+- **EXPECTED:** Up to K = 5 admits. **Funnel table owed** in the receipts pack, per-refusal-class counts from `refusal_class_counts`. **`negative_age` class expected EXTINCT** (count = 0) — FIX-1 corrected the sign bug that killed 25 slots on Thursday. If any `negative_age` count > 0 appears, FIX-1 did not land or a regression slipped in — **P0 rollback**.
+- **GREEN success signal:** `refusal_class_counts.negative_age = 0` (or key absent); admits > 0 (assuming valid short-list); `SOURCE_VERSION = fb5fdf13+fix2` (entry-run is the FIX-2 rail carrier).
+- **Deviation signal:** any `negative_age > 0`; admit count = 0 despite non-empty short-list AND no other terminal refusal explaining it.
+
+### Supersession note
+
+The rows in the original table above (13:35Z / 13:45Z / 14:05Z) remain visible for the audit chain but are **NON-AUTHORITATIVE** for GREEN/RED scoring — the receipts pack scores against this Re-Freeze section, not against the original rows. All other rows (13:30Z FIX-2 rail check, 14:00Z catch-up + FINRA Event B) stand as originally drafted.
