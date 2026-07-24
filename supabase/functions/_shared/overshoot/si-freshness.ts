@@ -31,10 +31,13 @@
 // Two distinct SI-staleness constants coexist ON PURPOSE, at two different
 // call sites. They measure two different things and must not be merged:
 //
-//   (1) DETECTOR_SI_STALENESS_MAX_DAYS = 20
-//       Location: `overshoot-detection-run/index.ts` (near line 126).
+//   (1) DETECTOR_SI_STALENESS_MAX_DAYS = 26  (amended 2026-07-23; was 20)
+//       Location: `overshoot-detection-run/index.ts` (near line 146);
+//       string-identical duplicate at `overshoot-sweep-diagnostic/
+//       index.ts` (near line 51) for diagnostic funnel parity — grep
+//       both before any future flip; shared-home refactor queued as DW-234.
 //       Role: PER-ROW USABLE-DATA ENVELOPE. The windowed SQL clause
-//       `as_of_date >= (asOf - 20)` bounds which short-interest rows are
+//       `as_of_date >= (asOf - 26)` bounds which short-interest rows are
 //       admissible into the per-ticker detector map. A row outside the
 //       envelope is unusable for THAT ticker's admission decision even
 //       if the row exists — its price/float context is too old to gate
@@ -48,6 +51,13 @@
 //       `as_of_date` from `overshoot_short_interest` (no window filter
 //       — see MIG note in overshoot-detection-run for the decoupled
 //       read). Strict `>` so a fresh-cycle-day-of doesn't misfire.
+//
+// POST-AMENDMENT NOTE (2026-07-23, H-1) — the two constants now
+// COINCIDE at 26 by shared FINRA cadence rationale but retain DISTINCT
+// ROLES (per-row envelope vs book-level flag) and DISTINCT COMPARISON
+// SEMANTICS (envelope `<=` vs book-level strict `>`). This is
+// coincidence by shared cadence, NOT a merger — do not collapse to a
+// single constant.
 //
 // TELL FOR NEXT READER — the pathology INC-125.b closed was the reverse:
 // deriving the book-level freshest from the ALREADY-WINDOWED per-row map,
