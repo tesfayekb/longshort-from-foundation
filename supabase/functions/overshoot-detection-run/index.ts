@@ -47,7 +47,7 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
  *  2026-07-23 — FIX-2 rail-parity bump. No money-path change here
  *  (detection has no per-lot Polygon fetch); bump preserves uniform
  *  `x-source-version` across the four rail functions. */
-export const SOURCE_VERSION = 'fb5fdf13+fix2';
+export const SOURCE_VERSION = 'fb5fdf13+fix2+si26';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
@@ -122,20 +122,41 @@ import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
 // sleeve-slots per side` structurally, closes the SHORT 5× over-deployment
 // hazard). Thresholds L=0.10 S=0.08, window sets L={1,2,3} S={1..5},
 // momentum L={4,5} S={1,5}, drawdown L={1,2,3} S={4,5}, squeeze SI% min =
-// 0.20 (20% of float), SI staleness = 20 calendar days.
+// 0.20 (20% of float), SI staleness = 26 calendar days.
 //
-// ═══ TWO-CONSTANT DESIGN — INC-125.b (2026-07-22) ══════════════════════
-// `DETECTOR_SI_STALENESS_MAX_DAYS` (below, 20) is the PER-ROW USABLE-DATA
+// ═══ TWO-CONSTANT DESIGN — INC-125.b (2026-07-22), AMENDED 2026-07-23 ══
+// `DETECTOR_SI_STALENESS_MAX_DAYS` (below, 26) is the PER-ROW USABLE-DATA
 // ENVELOPE — bounds which SI rows are admissible into the per-ticker
-// detector map. It is DISTINCT from `OVERSHOOT_SI_STALENESS_MAX_DAYS_
-// DEFAULT` (21, strict `>`) in `_shared/overshoot/si-freshness.ts`, which
-// is the BOOK-LEVEL STALENESS FLAG feeding the DEC-504-4 sleeve
+// detector map. It is DISTINCT IN ROLE from `OVERSHOOT_SI_STALENESS_MAX_
+// DAYS_DEFAULT` (26, strict `>`) in `_shared/overshoot/si-freshness.ts`,
+// which is the BOOK-LEVEL STALENESS FLAG feeding the DEC-504-4 sleeve
 // reallocation decision. The BOOK-LEVEL flag is compared against the
 // CORPUS-MAX `as_of_date` from an UNWINDOWED SELECT — never against the
 // per-row windowed map, or a corpus older than the envelope collapses
 // silently into a fabricated `si_corpus_absent` refusal (the pathology
 // INC-125.b closed). See file-header block in `si-freshness.ts` for the
 // full rationale — do NOT re-diagnose from scratch.
+//
+// ═══ 2026-07-23 CADENCE AMENDMENT (H-1 FIX, per-row envelope 20→26) ════
+// PROVEN by ACT-569(a)-early: 07-22 / 07-23 detection runs' `si_unavailable`
+// short candidates (ISRG/PATH/HIMS/WDAY/TYL, 10/10) all had a valid
+// 2026-06-30 SI row present — outside the 20d envelope but well inside a
+// 26d envelope. The 20d cap sat BELOW FINRA's natural max age (15d
+// settlement + ~11d publication lag → ~24-26 calendar days between
+// cycles), producing recurring full si_unavailable blackouts on the
+// short arm every cycle-tail — identical class to the book-level 21d
+// bug DEC-504-4-A fixed. Per-row envelope aligned to FINRA natural max
+// age; stale = missed publication, not cadence breathing. The two
+// constants now coincide at 26 with DISTINCT ROLES — envelope vs
+// book-flag — coincidence by shared cadence, not merger. This is the
+// data-fetch envelope in `index.ts`, NOT the detector.ts predicate;
+// composite `aff20a13` unchanged; canaries (selection-parity, detector
+// tests) must stay green.
+//
+// CROSS-REF (drift-guard): a string-identical declaration lives at
+// `overshoot-sweep-diagnostic/index.ts:51` for diagnostic funnel parity.
+// Both sites MUST be updated together; grep `DETECTOR_SI_STALENESS_MAX_DAYS`
+// before any future flip. Follow-up shared-home refactor tracked as DW-234.
 // ══════════════════════════════════════════════════════════════════════
 const DETECTOR_EXCLUSION_WIDTH_DAYS = 5;
 const DETECTOR_CAPACITY_LONG = 36;
@@ -143,7 +164,7 @@ const DETECTOR_CAPACITY_SHORT = 4;
 const DETECTOR_LONG_EXCESS_THRESHOLD = 0.10;
 const DETECTOR_SHORT_EXCESS_THRESHOLD = 0.08;
 const DETECTOR_SQUEEZE_SI_PCT_FLOAT_MIN = 0.20;
-const DETECTOR_SI_STALENESS_MAX_DAYS = 20;
+const DETECTOR_SI_STALENESS_MAX_DAYS = 26;
 const DETECTOR_LONG_WINDOWS = [1, 2, 3] as const;
 const DETECTOR_SHORT_WINDOWS = [1, 2, 3, 4, 5] as const;
 const DETECTOR_LONG_MOMENTUM = [4, 5] as const;
