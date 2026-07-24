@@ -640,11 +640,13 @@ Deno.test('DEC-084: short-budget gate placed AFTER allocation_cap_reached and BE
 });
 
 Deno.test('DEC-084: short-budget gate is shorts-only (side === short guard)', () => {
-  const idxShortGate = SRC.indexOf('evaluateShortDailyBudget');
+  // Use the CALL site (`evaluateShortDailyBudget({`), not the import
+  // line — the import is the first `evaluateShortDailyBudget` in file.
+  const idxShortGate = SRC.indexOf('evaluateShortDailyBudget({');
   assert(idxShortGate > 0, 'evaluateShortDailyBudget call present');
   // The guard `if (sel.side === 'short') {` must appear immediately before
   // the gate block — grep-anchored to the block prelude.
-  const prelude = SRC.slice(Math.max(0, idxShortGate - 400), idxShortGate);
+  const prelude = SRC.slice(Math.max(0, idxShortGate - 600), idxShortGate);
   assertStringIncludes(prelude, "if (sel.side === 'short') {");
 });
 
