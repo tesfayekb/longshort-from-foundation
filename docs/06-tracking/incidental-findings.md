@@ -3,7 +3,72 @@
 
 ## INC-131 — Narrative-fabrication, register-identity class (2026-07-23)
 
-<!-- INC-139 inserted above INC-131 by chronological order 2026-07-24 -->
+<!-- INC-140, INC-139 inserted above INC-131 by chronological order 2026-07-24 -->
+
+---
+
+## INC-140 — `overshoot-universe-refresh` source never re-pointed after IVV+IJH identity ratification (2026-07-24)
+
+**Category:** unpatched-code-path / identity-drift-persistence.
+**Severity:** HIGH (money-adjacent: leaves the universe refresh path
+fail-closed on every scheduled fire — the substrate that seeds every
+detection cycle silently ages until manual seed re-runs).
+**Filed by:** operator re-numbering ruling 2026-07-24 evening (turn
+"BOTH ACCEPTED"). Separated from INC-126 per Catalog #65 file-check:
+INC-126 = IVV+IJH identity **clarification** (docs); INC-126.b =
+BUILD_SHA env-pin two-rail (unrelated header path); this incident =
+the **code-side defect** where the refresh implementation was never
+re-pointed after INC-126's ratification.
+**Related:** INC-126 (identity ratification — the DEC/Option C ruling
+this incident is downstream of), INC-139 (cron re-arm diagnostic that
+surfaced the fail-closed manual invoke), ACT-548 (universe-identity
+seeding work — the ratified source path and its provenance tag
+`ishares:ivv_ijh:manual_seed` are the authoritative reuse target),
+ACT-571 (this incident's fix-path charter).
+
+**Symptom.** Manual invoke of `POST /overshoot-universe-refresh`
+(cron-secret authenticated, 2026-07-24 17:2xZ) returned:
+```json
+{"ok":false,"status":"roster_sanity_failed",
+ "roster_count":8000,"sanity_band":[850,950],
+ "sample_first_10":["A","AA","AAA","AAAA","AAAC","AAAD",…],
+ "index_code":"I:RUT","pages_fetched":8,
+ "correlationId":"6d519bf7-873b-4bd2-a378-1b5955af2213"}
+```
+
+**Root cause.** `supabase/functions/overshoot-universe-refresh/index.ts`
+still fetches Polygon `/v3/reference/tickers` with
+`POLYGON_RUSSELL2000_CODE = 'I:RUT'` as the DEFAULT (non-probe) refresh
+path. The ACT-548 backfill correctly wrote the IVV+IJH composite via
+the `probe:'seed'` path (source tag `ishares:ivv_ijh:manual_seed`,
+parsed by `parseIsharesCsv`) — but the **scheduled** entry point was
+never migrated off `I:RUT`. Every Monday-10Z fire will therefore hit
+the `checkRosterSanity` fail-closed at the `[850, 950]` band (I:RUT
+returns ~2000 legitimate names plus historical inactives → ~8000; band
+correctly refuses; drift = 0 by fail-closed, not by "no change").
+
+**Money-path impact.** ZERO drift written vs 07-21 backfill baseline
+(fail-closed = no writes). But: without a fix, `overshoot_universe`
+ages unbounded from the 07-21 substrate — every corporate action,
+delisting, S&P 500/400 index reconstitution silently missed until the
+next manual ACT-548-style backfill. Bounded-drift discipline requires
+the scheduled fire to actually WRITE.
+
+**Fix path.** ACT-571 charter (`docs/06-tracking/ACT-571-charter-refresh-repoint.md`).
+Re-point the default refresh source from Polygon `I:RUT` to the same
+ratified IVV+IJH path ACT-548 used (`parseIsharesCsv` reuse + the
+existing ishares fetch primitives at `_shared/overshoot/csv-fetch-primitives.ts`).
+Sanity band `[850, 950]` stays exactly. Provenance stamp on written
+rows: `source='ivv_ijh_composite'` (distinct from
+`ishares:ivv_ijh:manual_seed` so downstream readers can tell scheduled
+refreshes apart from operator seeds — per SEED_SOURCE_TAG comment
+discipline in index.ts:126–133). Hard gate = Monday 2026-07-27 10:00Z
+(else 4th silent Monday and INC-139's proof-point turns red).
+
+**Cross-refs.** `docs/06-tracking/2026-07-24-midday-deviations.md`
+§DEV-4; `docs/06-tracking/ACT-571-charter-refresh-repoint.md`;
+operator ruling turn 2026-07-24 evening ("TWO ITEMS: (1) INC RENUMBER,
+(2) ACT-571 CHARTERED").
 
 ---
 
@@ -14,8 +79,10 @@
 staleness compounds week-over-week; no immediate money-path harm because
 the table WAS refreshed 07-21 via non-cron ACT-548 backfill path).
 **Filed by:** operator DEV-4 diagnosis, 2026-07-24 midday rulings turn.
-**Related:** INC-126 (universe identity clarification), INC-126.b
-(deploy-truth-header-drift precedent).
+**Related:** INC-126 (universe identity clarification), INC-140
+(universe-refresh source never re-pointed after identity ratification —
+the LATENT defect surfaced by this INC's manual-invoke diagnostic),
+INC-126.b (deploy-truth-header-drift precedent — separate rail concern).
 
 **Symptom.** `SELECT COUNT(*), MIN(start_time) FROM
 cron.job_run_details WHERE jobid=133` → `(0, NULL)`. Job row exists
@@ -87,16 +154,22 @@ historical tickers) while the ratified identity per **INC-126** is
 the IVV+IJH composite (S&P 500 + S&P MidCap 400, ~900). The sanity
 band [850,950] correctly fails-closed on the mis-sourced roster —
 which is why the table has NOT drifted despite ACT-548's 07-21 patch
-being the last write. **INC-126 is unresolved in code** even though
-the identity string was corrected in docs. This means: even after
+being the last write. **The code-side defect is now filed as INC-140**
+(the identity-clarification finding INC-126 stays as the ratification
+record; INC-140 is the "refresh source never re-pointed after that
+ratification" incident, chartered under ACT-571). This means: even after
 Monday 07-27 10:00Z fires jobid=133, the refresh will fail-closed
-again and the table will remain at 07-21 state.
+again and the table will remain at 07-21 state — unless ACT-571 lands
+the re-point before Monday 10:00Z (hard gate per operator).
 
 **Filed as blocking follow-up:** `overshoot-universe-refresh`
 source needs to be re-pointed from `I:RUT` to the IVV+IJH composite
 (iShares `IVV.HOLDINGS` + `IJH.HOLDINGS` via a provider that exposes
 them, or a periodic fetch from S&P's own dissemination path). Charter
-is **INC-126 continuation**, not a new INC. NOT patched this turn per
+is **INC-140 / ACT-571** (separated from INC-126 per operator
+re-numbering ruling 2026-07-24 evening — INC-126 is identity
+clarification; INC-140 is the code-side unpatched refresh source).
+NOT patched this turn per
 operator directive scope (DEV-4 was "re-arm cron + manual refresh +
 drift report"; the drift report IS the failure-closed sanity refusal,
 which surfaced the deeper defect). STOP per uncertainty protocol —
