@@ -5069,3 +5069,27 @@ Baseline crit-both-present pool = 827 names; the 11-name gate loss is entirely f
 **Reversal / promotion condition.** Promote to an execution ACT under any of: (1) first FIX-8 defect where a unit-test regression would have caught it; (2) any spec change to `classifyPass1Refusal` that alters cross-seam behaviour (e.g. adding a new refusal class); (3) 2026-08-15 review-by date, whichever comes first. Promotion cost estimate: ~1 build turn (fixture DB + 4-6 assertion cases).
 
 **Cross-refs.** ACT-568 (build+arm milestone); FIX-8 spec `docs/04-modules/overshoot/fix-8.md` §6 (existing unit test enumeration); sql/42 (cron seed); INC-137 (paired auditor note).
+
+
+## DW-233 — detector.ts stale header-comment refresh (`>= 21` → `<= 26`) (queued, non-blocking, comment-only)
+
+**Status:** OPEN-DOCUMENTED (state `[C]`). **Filed:** 2026-07-24 (ACT-569(f)-EARLY H-1 fix turn). **Owner:** overshoot / detector. **Gate:** next detector.ts substantive edit (opportunistic — do NOT touch detector.ts solely for a comment refresh; risks composite-spec-sha canary noise even though comments are byte-excluded by the SHA scope, per operator caution on detector.ts touch discipline). **Review-by:** first substantive detector.ts change after 2026-08-15.
+
+**Scope.** After H-1 amended `DETECTOR_SI_STALENESS_MAX_DAYS` from 20 → 26 in `overshoot-detection-run/index.ts`, one narrative header comment inside `_shared/overshoot/detector/detector.ts` still references the retired `>= 21` book-flag threshold as prose context (not executable — the executable `OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 26` in `si-freshness.ts` was already amended, DEC-504-4-A). The stale prose is misleading to future auditors but has zero runtime effect and cannot be fixed opportunistically without touching detector.ts, which is under strict change-control for composite-spec-sha reasons.
+
+**Deferral rationale.** Composite `aff20a13` and predicate spec-sha `df339497…` are the hardest canaries in the project. Touching detector.ts — even for a comment — burns a build turn on canary re-verification and normalises detector.ts edits, which is a discipline hazard. Coalesce this refresh into the next legitimate detector.ts substantive edit.
+
+**Cross-refs.** ACT-569(f)-EARLY (H-1 fix turn); DEC-504-4-A (book-flag 21→26 amendment); `_shared/overshoot/si-freshness.ts:30-66` (two-constant design block, already refreshed this turn).
+
+
+## DW-234 — shared-home refactor for `DETECTOR_SI_STALENESS_MAX_DAYS` (drift-guard hardening, non-blocking)
+
+**Status:** OPEN-DOCUMENTED (state `[C]`). **Filed:** 2026-07-24 (ACT-569(f)-EARLY H-1 fix turn). **Owner:** overshoot / execution. **Gate:** post-maiden hardening wave (after ~4 weeks of live H-1 operation confirms the 26d envelope is stable across regime shifts). **Review-by:** 2026-08-21.
+
+**Scope.** `DETECTOR_SI_STALENESS_MAX_DAYS = 26` currently exists as two string-identical local declarations at (i) `supabase/functions/overshoot-detection-run/index.ts:146` and (ii) `supabase/functions/overshoot-sweep-diagnostic/index.ts:51`, with cross-ref comments naming each other. This is the recognised drift hazard from FIX-3's grep-anchor pattern. The forward refactor extracts a single canonical export from `_shared/overshoot/si-freshness.ts` (co-located with `OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT = 26`, whose 26d shares the same cadence rationale by coincidence, not merger — see the two-constant design block).
+
+**Why deferred.** (1) The current two-site pattern was operator-approved for this turn under the zero-exposure-window fix-now order; refactor was not in scope. (2) Extracting to `_shared` while both callers are on the SAME value is a purely-mechanical refactor with no behavioural change — safer to land after H-1 has proven stable in production over multiple cycles. (3) A grep-anchor drift regression is caught by CI lint (ACT-533 guards) — the two-site risk is bounded.
+
+**Non-goal.** Do NOT merge the caller-envelope constant with `OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT`. Their coincidence at 26 is by shared FINRA cadence; their roles (caller `<=` per-row envelope vs book-level strict `>` fresh-branch flag) are distinct and MUST remain separately named for auditability.
+
+**Cross-refs.** ACT-569(f)-EARLY (H-1 fix turn, this DW's provenance); FIX-3 (source-version rail, drift-guard family); ACT-533 (CI lint guards); DEC-504-4-A (book-flag constant, sibling declaration in si-freshness.ts).
