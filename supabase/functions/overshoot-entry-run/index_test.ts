@@ -448,7 +448,9 @@ Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it,
   //     Re-pinned 2026-07-24 for FIX-8 completion-pass arm (DEC-083 §c /
   //     fix-8.md) — the deploy-truth rail must track every entry-run
   //     code bump.
-  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8'");
+  // 2026-07-24 re-pin: DEC-084 short-side pacing marker `+sp1` appended
+  // after FIX-8. Every entry-run code bump MUST bump this rail.
+  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1'");
   // (ii) Version-probe positive envelope carries all three keys.
   const idxProbeStart = SRC.indexOf("probe: 'version',");
   assert(idxProbeStart > 0, "version-probe branch present");
