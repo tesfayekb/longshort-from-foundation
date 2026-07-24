@@ -2354,3 +2354,17 @@ This subsection records `sql/NN_*_cron_schedule.sql` artifacts that are applied 
 | Cross-references | DEC-083 §(a)(b)(e)(f) (Morning-Exit Adoption, ratified 2026-07-23); ACT-567 (paired cron move milestone this same turn); R-008 (reproduction-ledger slot — first realized slip vs 2.956 bps prediction lands from this view tomorrow); INC-136 sibling (submit_reference_mid capture, follow-up); MIG-169 (LAYER-2 evening enrichment — 21:10Z 13:45-13:46Z minute-bar ingest for exited tickers, not-yet-landed). Rollback (safe — read-only): `DROP VIEW IF EXISTS public.overshoot_morning_exit_monitor;`. |
 | Linked | DEC-083; ACT-567; R-008; INC-136 sibling. |
 | Linked | ACT-509 Stage-2; INC-134 (closed); INC-135 (new); FIX-3. |
+
+### sql/42 — `overshoot-entry-run-completion` cron @ 14:05Z Mon-Fri (DEC-083 §c / FIX-8)
+
+| Field | Value |
+|---|---|
+| Applied | 2026-07-23 (build+arm turn, ACT-568). Row id `overshoot-entry-run-completion` (jobid 135) + `job_registry` row `overshoot.entry.run.completion` + `system_config` row `overshoot_completion_pass_minutes = 5` created in the same transaction. |
+| Purpose | Re-invoke `overshoot-entry-run` at 14:05Z Mon-Fri with body `{"pass":"completion"}`. Same handler, same detection_run_id; filters by ledger truth (double-count guard) + prior-refusal terminal classifier (`_shared/overshoot-execution/completion-pass-allow-list.ts`). Consumes `K_remaining` slots freed by (a) 13:45Z morning-exit fills (DEC-083 §a) and (b) pass-1 budget truncation at 13:35Z. |
+| Objects | `cron.job` row `overshoot-entry-run-completion` (schedule `5 14 * * 1-5`, active=t, md5=`42c103aa…`); `job_registry` row `overshoot.entry.run.completion` (enabled=true); `system_config` row `overshoot_completion_pass_minutes`. |
+| Idempotency | Budget-exhausted days no-op with clean heartbeat (`{outcome:'no_op', reason:'budget_exhausted_pre_loop'}`) — ENABLED at seed is safe. Handler's pre-loop double-count guard is the hard gate; classifier mis-classification cannot double-admit. |
+| md5-vs-primary note | Cron md5 differs from `overshoot-entry-run-slot-a` (jobid 124, md5=`f3584574…`) **by design**: only the body payload differs (`{"pass":"completion"}` vs default). Auditors doing cron-diff drift-checks: see INC-137 for the standing note. |
+| DST obligation | 14:05Z ↔ 09:05 America/New_York summer. Watch-row entry logged in `docs/06-tracking/dst-retiming-watch-2026-11-01.md` alongside the 13:45Z morning-exit + 13:35Z primary-entry crons. |
+| Verification (§22.5.1, four surfaces) | (1) `cron.job` jobid 135 present; (2) `job_registry` enabled=true; (3) `system_config` key present; (4) `curl -X OPTIONS $URL/functions/v1/overshoot-entry-run` → `x-source-version: fb5fdf13+fix2+fix8`. All four GREEN as of 2026-07-23 build+arm turn. |
+| Cross-references | DEC-083 §(c); FIX-8 spec `docs/04-modules/overshoot/fix-8.md`; ACT-568 (build+arm milestone); INC-137 (auditor note on cron md5 divergence); DW-232 (FLAG-C integration-harness extraction, queued). Rollback (safe — reversible): `SELECT cron.unschedule('overshoot-entry-run-completion'); UPDATE job_registry SET enabled=false WHERE id='overshoot.entry.run.completion';`. |
+| Linked | DEC-083; ACT-568; INC-137; DW-232; sql/33 (primary entry cron); sql/MIG-168 (morning-exit monitor). |
