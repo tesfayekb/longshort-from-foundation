@@ -949,6 +949,11 @@ Deno.serve(createHandler(async (req: Request) => {
     // in-loop safety net regardless of pass.
     let filteredSelections: SelectionRow[] = selections as SelectionRow[];
     let effectiveBudget: number = OVERSHOOT_DAILY_ENTRY_BUDGET;
+    // DEC-084 completion-pass symmetry: shortEffectiveBudget mirrors
+    // effectiveBudget for the short pacing gate. Pass-1 default =
+    // shortDailyBudget; pass-2 = shortDailyBudget − prior admitted shorts
+    // for the session (ledger truth, double-count guard).
+    let shortEffectiveBudget: number = shortDailyBudget;
     let pass2SkipsAlreadyAdmitted = 0;
     let pass2SkipsTerminal = 0;
     if (passLabel === 'completion') {
@@ -978,6 +983,18 @@ Deno.serve(createHandler(async (req: Request) => {
         });
       }
       effectiveBudget = kRemaining;
+
+      // DEC-084: recompute short-remaining from ledger truth.
+      const [{ count: priorAdmittedShorts }] = await sql<{ count: number }[]>`
+        SELECT COUNT(*)::int AS count
+        FROM overshoot_lots
+        WHERE entry_ts::date = ${sessionDate}::date
+          AND side = 'short'
+      `;
+      shortEffectiveBudget = computeRemainingShortBudget({
+        budget: shortDailyBudget,
+        priorAdmittedShorts,
+      });
 
       const priorAdmittedRows = await sql<{ symbol: string }[]>`
         SELECT DISTINCT symbol FROM overshoot_lots
