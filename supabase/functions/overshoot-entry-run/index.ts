@@ -92,7 +92,7 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
  * audit row (primary rows now stamp 'primary'). See
  * `docs/04-modules/overshoot/fix-8.md`.
  */
-export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1';
+export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1+fix9';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
@@ -605,15 +605,27 @@ Deno.serve(createHandler(async (req: Request) => {
       });
     }
 
-    // (b) run_already_exists idempotency gate (DUAL-SLOT DST collapse).
-    // A same-session-date session marker means slot-a fired already; slot-b
-    // returns typed no-op. Cron and manual paths both consult the gate;
-    // manual path is exempt from the no-op (operator re-fire is deliberate).
+    // (b) run_already_exists idempotency gate — PASS-SCOPED (FIX-9).
+    // The gate was authored for DUAL-SLOT DST collapse (slot-a → slot-b
+    // no-op). FIX-8 (DEC-083 §c) added a second re-invocation axis:
+    // `pass ∈ {'primary','completion'}`. Before FIX-9 the marker query
+    // ignored `pass`, so a primary marker false-blocked every completion
+    // invocation BEFORE reaching the pre-loop filter at line ~959. FIX-9
+    // scopes the predicate to the invocation's own pass, so:
+    //   - primary re-fire is still blocked by a prior primary marker
+    //     (DST slot-b semantics preserved),
+    //   - completion sees ONLY completion markers → proceeds past primary,
+    //     and cannot double-fire itself,
+    //   - LEGACY markers written before FIX-9 have no `pass` key; they
+    //     are COALESCE'd to 'primary' so history does NOT false-block a
+    //     scheduled completion pass. See docs/04-modules/overshoot/fix-9.md.
+    // Manual-confirm path remains exempt (operator re-fire is deliberate).
     if (!manualConfirm) {
       const [existing] = await sql<{ id: string }[]>`
         SELECT id FROM overshoot_audit_logs
         WHERE action = 'overshoot.entry.session_marker'
           AND metadata->>'session_date' = ${sessionDate}
+          AND COALESCE(metadata->>'pass', 'primary') = ${passLabel}
         ORDER BY created_at DESC
         LIMIT 1
       `;
@@ -623,7 +635,7 @@ Deno.serve(createHandler(async (req: Request) => {
           outcome: 'no_op', reason: 'run_already_exists',
           session_date: sessionDate,
           targets_loaded: 0, orders_submitted: 0,
-          correlation_id: correlationId, dry_run: dryRun, slot,
+          correlation_id: correlationId, dry_run: dryRun, slot, pass: passLabel,
         });
       }
     }
