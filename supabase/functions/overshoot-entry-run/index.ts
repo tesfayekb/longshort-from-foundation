@@ -716,6 +716,30 @@ Deno.serve(createHandler(async (req: Request) => {
     }
     const sizingBase = accountSnapshot.equity * strategyAllocationPct * marginMultiplier;
 
+    // ── DEC-084 short-side daily pacing config load ─────────────────────
+    // Config-not-constant: value read from system_config; absence falls
+    // back to OVERSHOOT_SHORT_DAILY_BUDGET_DEFAULT (seeded at DEC-084
+    // promotion). Non-integer / negative / missing values fall back to
+    // the default with a stamped `short_daily_budget_config` field on
+    // the run response for operator triage.
+    const shortBudgetRows = await sql<{ value: unknown }[]>`
+      SELECT value FROM system_config WHERE key = 'overshoot_short_daily_budget'
+    `;
+    let shortDailyBudget: number = OVERSHOOT_SHORT_DAILY_BUDGET_DEFAULT;
+    let shortDailyBudgetSource: 'system_config' | 'default_fallback' = 'default_fallback';
+    if (shortBudgetRows.length > 0) {
+      const raw = shortBudgetRows[0].value;
+      const parsed = typeof raw === 'number'
+        ? raw
+        : (raw !== null && typeof raw === 'object' && 'budget' in (raw as Record<string, unknown>)
+            ? Number((raw as { budget: unknown }).budget)
+            : Number(raw));
+      if (Number.isFinite(parsed) && Number.isInteger(parsed) && parsed >= 0) {
+        shortDailyBudget = parsed;
+        shortDailyBudgetSource = 'system_config';
+      }
+    }
+
     // ── T3b (ACT-480) REGIME GOVERNOR ────────────────────────────────────
     // Compute the SPY-drawdown regime BEFORE loading selections so the
     // regime + full signal context is stamped on the entry-run row + every
