@@ -135,7 +135,8 @@ Deno.test('probe short-circuit: BEFORE the three skip gates', () => {
 // FIX-3 (ACT-565) — SOURCE_VERSION rail drift-guard. Mirrors entry/exit.
 Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it, handler wired', () => {
   // FIX-2 bump 2026-07-23 (rail-parity — no money-path change in detection).
-  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2'");
+  // H-1 bump 2026-07-23 (+si26 — per-row SI envelope 20→26; detection-run only).
+  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2+si26'");
   const idxProbeStart = SRC.indexOf("probe: 'version',");
   assert(idxProbeStart > 0, 'version-probe branch present');
   const probeBlock = SRC.slice(idxProbeStart, idxProbeStart + 400);
