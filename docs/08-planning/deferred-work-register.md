@@ -5057,3 +5057,15 @@ Baseline crit-both-present pool = 827 names; the 11-name gate loss is entirely f
 
 **Cross-ref:** F9 (universe short-eligibility truth gap — the condition this DW mitigates until F9 lands); F11 (paired universe posture); DEC-068(n) / DW-154 (broker-capability long-only derivation, preserved); ACT-559 (this build turn); sql/40_longshort_book_long_only_flag.sql (row seed); `long-only-flag-reader.ts` + `rebalance-submit-orchestrator.ts` (consumption).
 
+
+## DW-232 — FIX-8 completion-pass integration-harness extraction (queued, non-blocking)
+
+**Status:** OPEN-DOCUMENTED (state `[C]`). **Filed:** 2026-07-23 (ACT-568 build+arm turn). **Owner:** overshoot / execution. **Gate:** post-maiden-observation hardening wave. **Review-by:** 2026-08-15 (or first FIX-8 defect surfaced, whichever comes first).
+
+**Scope.** The FIX-8 classifier (`_shared/overshoot-execution/completion-pass-allow-list.ts`) is exhaustively unit-tested (25 tests in `completion-pass-allow-list_test.ts` covering FLAG-A/B/C/D/E cases + grep-anchor enumeration stability). What is NOT yet built: a full **pass-2 integration harness** that exercises the pre-loop filter end-to-end against a fixture DB — specifically the ledger-truth query on `overshoot_lots` (double-count guard) + the pass-1 audit-scan against `overshoot_audit_logs` (terminal-skip classification), wired through the actual `evaluateDailyBudget` + `computeRemainingBudget` seam, with recorded pass-1/pass-2 audit outcomes asserted against a canned fixture.
+
+**Why deferred (honest gap).** The classifier's pure-function surface is fully covered; the integration seam (ledger-query + audit-scan) is production-exercised by the maiden fire on 2026-07-24 14:05Z under operator-observed conditions with §22.5.1 receipts. Adding a fixture harness is defensive hardening, not a blocking dependency. Committing an integration harness pre-maiden risks fixture-drift against real audit shapes we have not yet observed.
+
+**Reversal / promotion condition.** Promote to an execution ACT under any of: (1) first FIX-8 defect where a unit-test regression would have caught it; (2) any spec change to `classifyPass1Refusal` that alters cross-seam behaviour (e.g. adding a new refusal class); (3) 2026-08-15 review-by date, whichever comes first. Promotion cost estimate: ~1 build turn (fixture DB + 4-6 assertion cases).
+
+**Cross-refs.** ACT-568 (build+arm milestone); FIX-8 spec `docs/04-modules/overshoot/fix-8.md` §6 (existing unit test enumeration); sql/42 (cron seed); INC-137 (paired auditor note).

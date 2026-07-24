@@ -1841,3 +1841,15 @@ INC-20 transitions to **Resolved (full)** at this SHA.
 **Precedent.** INC-135 body (sampling generator); INC-114 / INC-115 (fabrication recurrences that motivate all pre-commit gates on money-adjacent surfaces).
 
 **Cross-refs.** `docs/08-planning/FIX-2-spec.md`; `supabase/functions/_shared/overshoot-execution/snapshot-retry.ts`; DEC-083 §(a) (FIX-2 now protects the 13:45Z maiden morning-exits); operator GO turn 2026-07-23.
+
+## INC-137 — `cron.job` md5 divergence between `overshoot-entry-run-slot-a` and `overshoot-entry-run-completion` is BY DESIGN (auditor note)
+
+**Category:** documentation / auditor-note (Catalog #66 — cross-artifact drift-check false-positive class). **Severity:** LOW (no code / no data). **Filed:** 2026-07-23 (ACT-568 build+arm turn). **Cross-refs:** ACT-568; sql/42; DEC-083 §(c).
+
+**Symptom (anticipatory — flag for future auditors).** A cron-diff drift-check comparing `cron.job` rows for `overshoot-entry-run-slot-a` (jobid 124, md5=`f3584574…`) and `overshoot-entry-run-completion` (jobid 135, md5=`42c103aa…`) will surface a **md5 mismatch**. Under the usual drift-check heuristic ("same edge function target = same md5"), that mismatch reads as a defect.
+
+**It is not a defect.** Both rows invoke the same `overshoot-entry-run` handler at the same URL. The md5 differs because the completion-pass row carries a body payload override (`{"pass":"completion"}`) so the handler's `body.pass` parser routes into the pre-loop pass-2 filter branch (FIX-8 spec §4). The pass-1 row has no body override (default `pass='primary'`). Same code path root; different entry payload by design.
+
+**Auditor rule.** When comparing `cron.job.command` md5s across rows that reference the same edge function URL, decode the `command` column (`SELECT command FROM cron.job WHERE jobname IN (...)`) and diff the request bodies before flagging md5 divergence. If the only diff is a documented body payload (as here), the divergence is by-design and no ticket is warranted.
+
+**Cross-refs.** ACT-568 build+arm milestone; sql/42 seed (contains the same note in its header comment); DEC-083 §(c) morning-exit adoption redeploy half; FIX-8 spec §4 (`pass` param routing).

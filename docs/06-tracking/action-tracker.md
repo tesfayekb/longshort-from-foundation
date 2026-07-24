@@ -7981,3 +7981,30 @@ Only ONE operator touch on this leg: run snippet #3 (chat below). No SQL editor 
 **First-fire expectation (Wed 2026-07-22 14:35Z rebalance).** `long_only_source='operator_flag'`, `shorts_suppressed_long_only=<count of short_rank ∈ [1..cap] on that fire's rankings>` (empirically ~0-30 depending on rankings coverage), `submission_counts.accepted` for shorts = 0, any pre-existing short position becomes a `close` intent (`kind='accepted'`, `intent='close'`, `side='short'`) — cover-exempt path holds. `long_only_mode` remains whatever the broker capabilities produce (independent).
 
 **What this turn did NOT touch.** OVERSHOOT strategy (binding prohibition). Reconciliation channel. Universe refresh path. Broker credentials. Cron schedules. `long_only_mode` boolean semantics. `RebalanceSubmitResponse` field ordering for pre-existing fields.
+
+## ACT-568 — FIX-8 completion-pass build + arm (DEC-083 §c)
+
+**Status:** LANDED 2026-07-23. **Tier:** A (money path). **Cross-refs:** DEC-083 §(c) (morning-exit adoption redeploy half); FIX-8 spec `docs/04-modules/overshoot/fix-8.md`; sql/42; MIG ledger row `sql/42`; INC-137 (md5-divergence-by-construction note); deferred register row DW-232 (FLAG-C integration-harness extraction).
+
+**Landed artifacts (6 files, atomic).**
+1. `docs/04-modules/overshoot/fix-8.md` — spec with all six operator micro-rulings inline (FLAG-A/B replacement set + pattern rule, FLAG-C Option-2 terminal set minus FLAG-E, FLAG-D `daily_budget_reached` NOT-terminal with `:1080-1092` citation, unknown-action default = non-terminal, layer-boundary note).
+2. `supabase/functions/_shared/overshoot-execution/completion-pass-allow-list.ts` — `classifyPass1Refusal(action, reason)`, transient allow-set + terminal-action set + terminal-submit-failed reasons set, `alpaca_api_4xx` (excluding 429) non-transient predicate.
+3. `supabase/functions/_shared/overshoot-execution/completion-pass-allow-list_test.ts` — 25 Deno tests (FLAG-C regression case, alpaca_api_403 terminal-skip, unknown-action non-terminal, grep-anchor enumeration stability).
+4. `supabase/functions/_shared/overshoot-execution/daily-budget.ts` — added `computeRemainingBudget(K, priorAdmittedCount)`.
+5. `supabase/functions/overshoot-entry-run/index.ts` — `SOURCE_VERSION` bumped to `fb5fdf13+fix2+fix8`; parses `body.pass` (400 on invalid); pre-loop pass-2 filter queries ledger truth from `overshoot_lots` for double-count guard + pass-1 audits for terminal-skip classification; `effectiveBudget` substituted into `evaluateDailyBudget`; `pass: passLabel` metadata injected into 15 `writeStrategyAuditEvent` sites and the response envelope's `daily_budget` block (with `effective_budget` + skip counters).
+6. `sql/42_overshoot_entry_completion_pass_cron.sql` — 14:05Z Mon-Fri cron seed with DST obligations documented (paired with the 13:35Z primary entry + 13:45Z primary exit crons on the 2026-11-01 DST watch row).
+
+**§22.5.1 read-back — four surfaces GREEN.**
+| Surface | Value |
+|---|---|
+| `cron.job` (jobid 135) | `overshoot-entry-run-completion` @ `5 14 * * 1-5`, `active=t`, md5=`42c103aa…` |
+| `cron.job` (jobid 124, primary reference) | `overshoot-entry-run-slot-a` @ `35 13 * * 1-5`, md5=`f3584574…` (**md5 differs by design — pass="completion" body override**; see INC-137 for the auditor note) |
+| `job_registry` | id `overshoot.entry.run.completion`, `enabled=true`, schedule `5 14 * * 1-5` |
+| `system_config` | `overshoot_completion_pass_minutes = 5` |
+| Version echo | `curl -X OPTIONS $URL/functions/v1/overshoot-entry-run` → `x-source-version: fb5fdf13+fix2+fix8` (verified) |
+
+**Maiden fire.** Friday **2026-07-24 14:05Z** (Mon-Fri thereafter). Watch = the pre-commit doc's 14:05Z slot. Success signal: run row `outcome=completed`, `pass=completion` on run + per-admit metadata, `K_remaining` arithmetic reconciles against pass-1 admits + budget. Failure signal: pass-2 K exceeds daily budget invariant (P0 defect) OR missing `pass` stamp OR FIX-8 fires against wrong entry function.
+
+**Guardrail invariant (from spec §4).** The pre-loop `(session, symbol)` double-count lookup against `overshoot_lots` is the hard gate regardless of classifier verdict — a mis-classed refusal can only skip-or-consider, never double-admit.
+
+**Deferred (queued, non-blocking).** DW-232 (FLAG-C integration-harness extraction) — the classifier is unit-tested end-to-end via `completion-pass-allow-list_test.ts`, but a full pass-2 integration harness (exercising the ledger-truth query + audits scan against a live fixture DB) is queued as an honest gap. INC-137 for auditors reading the cron md5 diff.
