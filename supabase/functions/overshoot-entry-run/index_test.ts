@@ -248,7 +248,12 @@ Deno.test('T3b MIG-157 persistence: INSERT INTO overshoot_entry_runs after loop 
   assertStringIncludes(SRC, 'overshoot_entry_runs_insert_failed');
   // Persistence happens AFTER the per-target loop (does not block money-
   // path decisions).
-  const idxLoop = SRC.indexOf('for (const sel of selections) {');
+  // 2026-07-24 re-pin (FIX-8 sweep): the per-target loop iterator was
+  // renamed `selections` → `filteredSelections` when the completion-pass
+  // pre-loop filter (DEC-083 §c) landed. Anchor updated; SEMANTICS
+  // preserved (INSERT still emitted AFTER the per-target loop, still
+  // non-blocking on failure).
+  const idxLoop = SRC.indexOf('for (const sel of filteredSelections) {');
   const idxInsert = SRC.indexOf('INSERT INTO overshoot_entry_runs');
   assert(idxLoop > 0 && idxInsert > 0 && idxLoop < idxInsert,
     'MIG-157 INSERT must follow the per-target loop (non-blocking additive persistence)');
@@ -440,7 +445,10 @@ Deno.test('probe short-circuit taxonomy: alpaca / polygon only; else 400', () =>
 Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it, handler wired', () => {
   // (i) Exported constant present with the ratified FIX-2 marker (bumped
   //     2026-07-23 for in-run snapshot retry — see FIX-2-spec.md).
-  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2'");
+  //     Re-pinned 2026-07-24 for FIX-8 completion-pass arm (DEC-083 §c /
+  //     fix-8.md) — the deploy-truth rail must track every entry-run
+  //     code bump.
+  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8'");
   // (ii) Version-probe positive envelope carries all three keys.
   const idxProbeStart = SRC.indexOf("probe: 'version',");
   assert(idxProbeStart > 0, "version-probe branch present");
@@ -524,7 +532,12 @@ Deno.test('ACT-466: gate placement — AFTER detection-linkage / config / equity
   const idxLinkage = SRC.indexOf('resolveDetectionRunForEntry');
   const idxMarker  = SRC.indexOf("action: 'overshoot.entry.session_marker'");
   const idxPrefetch = SRC.indexOf('const openLotRows = await sql');
-  const idxLoop    = SRC.indexOf('for (const sel of selections) {');
+  // 2026-07-24 re-pin (FIX-8 sweep): loop iterator renamed
+  // `selections` → `filteredSelections`. SEMANTICS preserved: the
+  // position_already_open gate still sits INSIDE the per-target loop,
+  // AFTER detection-linkage / config / equity / session-marker and
+  // BEFORE per-target vendor calls (Polygon snapshot + I5).
+  const idxLoop    = SRC.indexOf('for (const sel of filteredSelections) {');
   const idxGate    = SRC.indexOf('if (heldTickers.has(sel.ticker)) {');
   const idxI5      = SRC.indexOf('const i5 = evaluateI5PreOpenRecheck');
   assert(idxLinkage > 0 && idxMarker > 0 && idxPrefetch > 0 && idxLoop > 0 && idxGate > 0 && idxI5 > 0);
