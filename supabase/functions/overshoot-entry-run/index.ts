@@ -878,6 +878,10 @@ Deno.serve(createHandler(async (req: Request) => {
     // allocation-cap gate (and thus consumes budget). Cap-refused names
     // never touch this counter — identity + rank-preservation guarantee.
     let admittedByDailyBudget = 0;
+    // DEC-084 per-side short daily-budget counter. Incremented AFTER a
+    // short passes BOTH the short-budget gate AND the global K gate.
+    // Long-side selections never touch this counter.
+    let admittedShortsByDailyBudget = 0;
 
     const shortabilityFetcher = new OvershootAlpacaShortabilityFetcher(client);
     const fillFetcher = new OvershootAlpacaFillFetcher(client);
