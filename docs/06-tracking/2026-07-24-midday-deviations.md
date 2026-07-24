@@ -361,8 +361,10 @@ empirical proof-point.
  "correlationId":"6d519bf7-873b-4bd2-a378-1b5955af2213"}
 ```
 
-**LATENT DEFECT surfaced — INC-126 continuation, filed in INC-139
-update.** Refresh implementation still targets Polygon `I:RUT`
+**LATENT DEFECT surfaced — filed as INC-140 (per operator re-numbering
+ruling 2026-07-24 evening: INC-126 = identity clarification, INC-140 =
+"universe-refresh source never re-pointed after identity ratification").
+Cross-ref updated in INC-139 body.** Refresh implementation still targets Polygon `I:RUT`
 (Russell 2000) while ratified identity is IVV+IJH composite (S&P
 500 + MidCap 400). Sanity band [850,950] correctly fails-closed on
 8000-ticker return → NO writes → drift vs 07-21 baseline = **ZERO**
@@ -370,8 +372,9 @@ update.** Refresh implementation still targets Polygon `I:RUT`
 Even after Monday 07-27 10Z fires jobid=133, refresh will
 fail-closed again unless the source is re-pointed. **Not patched
 this turn** — re-pointing is a money-adjacent code change requiring
-its own charter; STOP per uncertainty protocol. INC-126 continuation
-charter owed.
+its own charter; STOP per uncertainty protocol. **ACT-571 chartered
+this evening** (`docs/06-tracking/ACT-571-charter-refresh-repoint.md`);
+hard gate = Monday 2026-07-27 10:00Z (else 4th silent Monday).
 
 ### Rail-alignment note (all four money functions)
 

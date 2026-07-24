@@ -14,8 +14,10 @@
 staleness compounds week-over-week; no immediate money-path harm because
 the table WAS refreshed 07-21 via non-cron ACT-548 backfill path).
 **Filed by:** operator DEV-4 diagnosis, 2026-07-24 midday rulings turn.
-**Related:** INC-126 (universe identity clarification), INC-126.b
-(deploy-truth-header-drift precedent).
+**Related:** INC-126 (universe identity clarification), INC-140
+(universe-refresh source never re-pointed after identity ratification —
+the LATENT defect surfaced by this INC's manual-invoke diagnostic),
+INC-126.b (deploy-truth-header-drift precedent — separate rail concern).
 
 **Symptom.** `SELECT COUNT(*), MIN(start_time) FROM
 cron.job_run_details WHERE jobid=133` → `(0, NULL)`. Job row exists
@@ -87,16 +89,22 @@ historical tickers) while the ratified identity per **INC-126** is
 the IVV+IJH composite (S&P 500 + S&P MidCap 400, ~900). The sanity
 band [850,950] correctly fails-closed on the mis-sourced roster —
 which is why the table has NOT drifted despite ACT-548's 07-21 patch
-being the last write. **INC-126 is unresolved in code** even though
-the identity string was corrected in docs. This means: even after
+being the last write. **The code-side defect is now filed as INC-140**
+(the identity-clarification finding INC-126 stays as the ratification
+record; INC-140 is the "refresh source never re-pointed after that
+ratification" incident, chartered under ACT-571). This means: even after
 Monday 07-27 10:00Z fires jobid=133, the refresh will fail-closed
-again and the table will remain at 07-21 state.
+again and the table will remain at 07-21 state — unless ACT-571 lands
+the re-point before Monday 10:00Z (hard gate per operator).
 
 **Filed as blocking follow-up:** `overshoot-universe-refresh`
 source needs to be re-pointed from `I:RUT` to the IVV+IJH composite
 (iShares `IVV.HOLDINGS` + `IJH.HOLDINGS` via a provider that exposes
 them, or a periodic fetch from S&P's own dissemination path). Charter
-is **INC-126 continuation**, not a new INC. NOT patched this turn per
+is **INC-140 / ACT-571** (separated from INC-126 per operator
+re-numbering ruling 2026-07-24 evening — INC-126 is identity
+clarification; INC-140 is the code-side unpatched refresh source).
+NOT patched this turn per
 operator directive scope (DEV-4 was "re-arm cron + manual refresh +
 drift report"; the drift report IS the failure-closed sanity refusal,
 which surfaced the deeper defect). STOP per uncertainty protocol —
