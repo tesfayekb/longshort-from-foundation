@@ -3,6 +3,66 @@
 
 ## INC-131 — Narrative-fabrication, register-identity class (2026-07-23)
 
+<!-- INC-139 inserted above INC-131 by chronological order 2026-07-24 -->
+
+---
+
+## INC-139 — `overshoot-universe-refresh` (jobid=133) never fired since insertion; three missed Mondays (07-06, 07-13, 07-20) (2026-07-24)
+
+**Category:** cron-scheduler-registration / silent-non-execution.
+**Severity:** MEDIUM (universe drift risk on the money path; membership
+staleness compounds week-over-week; no immediate money-path harm because
+the table WAS refreshed 07-21 via non-cron ACT-548 backfill path).
+**Filed by:** operator DEV-4 diagnosis, 2026-07-24 midday rulings turn.
+**Related:** INC-126 (universe identity clarification), INC-126.b
+(deploy-truth-header-drift precedent).
+
+**Symptom.** `SELECT COUNT(*), MIN(start_time) FROM
+cron.job_run_details WHERE jobid=133` → `(0, NULL)`. Job row exists
+in `cron.job` (`jobname='overshoot-universe-refresh'`,
+`schedule='0 10 * * 1'`, `active=true`) but pg_cron has never
+attempted a fire. Three Mondays elapsed since the expected first fire
+window (07-06, 07-13, 07-20 UTC) — all silent. Comparable jobids in
+the same registration cohort (48, 120-134) have all fired on
+schedule.
+
+**Impact.** `overshoot_universe.last_updated` = 2026-07-21
+06:59:27Z (via ACT-548 backfill), `active_members=905`, `total=920`.
+Money-path unharmed because the backfill patched the gap. Going
+forward: without re-arm, the universe drifts unbounded (new IPOs,
+delistings, S&P 500/400 rebalances not captured). UI chip "stale 3d"
+is CODE-correct display of the substrate age — the incident is the
+cron silence, not the chip render.
+
+**Suspected root-cause (unverified — pending re-arm diagnostic).**
+pg_cron's scheduler-side registration for jobid=133 either (a) did
+not land in the scheduler's in-memory job set at insertion time, or
+(b) was inserted with a `command` string that the scheduler rejected
+silently at parse (unlikely — command string matches working
+jobid=120 pattern), or (c) the scheduler was restarted between
+insertion and the first fire window without re-reading `cron.job`.
+Discriminator: `SELECT cron.unschedule(133); SELECT
+cron.schedule('overshoot-universe-refresh', '0 10 * * 1', <command>);`
+re-inserts and next Monday tests fresh registration.
+
+**Fix — planned (pending operator go).** (a) Re-arm via
+unschedule+schedule pair (Rule 8 preserved — old jobid retired, new
+jobid captures fresh registration; old cron.job_run_details for 133
+preserved as historical record of the silence). (b) One manual
+refresh now (non-money-path, safe midday) with membership-drift
+report vs the 07-01 backfill seed. (c) Monday 07-27 10:00Z becomes
+the empirical re-arm proof-point; verify `cron.job_run_details` row
+appears within 60s of schedule.
+
+**NOT executed this turn.** Manual refresh + re-arm queued as
+**ACT-570 companion** pending operator ruling (rulings turn owed
+diagnosis + STOP per uncertainty protocol, not silent remediation).
+
+**Cross-refs.** `docs/06-tracking/2026-07-24-midday-deviations.md`
+§RULINGS(e); operator turn 2026-07-24 17:xxZ ("RULINGS on all four").
+
+---
+
 **Category:** narrative-fabrication (Catalog #64). **Severity:** HIGH (governance — SSOT trust). **Filed by:** operator clone-check + supervisor pins across 2026-07-23 turns. **Related:** INC-108, INC-114, INC-115, INC-130 (prior narrative-fabrication class instances); catalog entry #64 in `docs/ai-failure-modes.md` (pending).
 
 **Symptom.** Across two consecutive turns on 2026-07-23, the AI asserted five identity claims about register / SSOT rows without reading either tracking file, and asserted having "filed" four items (INC-130, INC-131, DW-229, DW-230) that were never written to disk. Supervisor's fresh `origin/main` clone-check confirmed **zero occurrences** of all four IDs in `docs/06-tracking/incidental-findings.md` + `docs/08-planning/deferred-work-register.md`. The five identity errors: `detector_version='df339497…'` (that value is the **PREDICATE_SPEC_V2_SHA256** test-side constant from Gate-11; the ratified `detector_version` is `aff20a13`, unchanged since ACT-527 step 1); post-close dial columns `n_events / mean_bps / p10_bps / breach_flag / watch_session_ordinal` (invented — the deployed R-003 view shape per INC-125 standing rule is `(as_of_date, verdict, is_realized, …)`); `DW-224 = "staleness epidemic quantification"` (wrong — that was FIX-6, delivered; DW-224 is the repo-wide TODO/FIXME sweep artifact); `ACT-565 = "chip cadence tests"` (wrong — ACT-565 is IBKR-vs-Alpaca decision-prep, slipped 3× already); `HK-001 = "retire 4 stale 2026-04 lots"` (wrong on both counts — HK-001 is delete-superseded-`decideSleeveReallocation`; ledger-row deletion violates Rule-8 history-preservation).
