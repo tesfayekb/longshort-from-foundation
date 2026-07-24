@@ -607,3 +607,65 @@ Deno.test('ACT-485: SelectionRow carries as_of + argmax_window_days for referenc
   assertStringIncludes(SRC, 'e.argmax_window_days,');
   assertStringIncludes(SRC, 'dr.as_of::text AS as_of,');
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// DEC-084 — SHORT-SIDE DAILY PACING (source-sentinel).
+// Handler-side wiring for the per-side budget (default=1/session). The
+// pure primitive is covered by daily-budget_test.ts; here we lock the
+// (i) tally field, (ii) config load from system_config, (iii) gate
+// placement (shorts-only, BEFORE global K, AFTER allocation_cap),
+// (iv) response envelope, and (v) refusal action + counter increment.
+// ─────────────────────────────────────────────────────────────────────────
+
+Deno.test('DEC-084: tally carries short_daily_budget_reached counter, initialized to 0', () => {
+  assertStringIncludes(SRC, 'short_daily_budget_reached: number;');
+  assertStringIncludes(SRC, 'short_daily_budget_reached: 0,');
+});
+
+Deno.test('DEC-084: short-budget config loaded from system_config with default fallback', () => {
+  assertStringIncludes(SRC, "OVERSHOOT_SHORT_DAILY_BUDGET_DEFAULT");
+  assertStringIncludes(SRC, "WHERE key = 'overshoot_short_daily_budget'");
+  assertStringIncludes(SRC, "shortDailyBudgetSource");
+  assertStringIncludes(SRC, "'system_config' | 'default_fallback'");
+});
+
+Deno.test('DEC-084: short-budget gate placed AFTER allocation_cap_reached and BEFORE global daily-budget gate', () => {
+  const idxCap        = SRC.indexOf("action: 'overshoot.entry.allocation_cap_reached'");
+  const idxShortGate  = SRC.indexOf("action: 'overshoot.entry.short_daily_budget_reached'");
+  const idxGlobalGate = SRC.indexOf("action: 'overshoot.entry.daily_budget_reached'");
+  assert(idxCap > 0 && idxShortGate > 0 && idxGlobalGate > 0,
+    'all three gates must be present');
+  assert(idxCap < idxShortGate && idxShortGate < idxGlobalGate,
+    'ordering: allocation_cap_reached < short_daily_budget_reached < daily_budget_reached');
+});
+
+Deno.test('DEC-084: short-budget gate is shorts-only (side === short guard)', () => {
+  const idxShortGate = SRC.indexOf('evaluateShortDailyBudget');
+  assert(idxShortGate > 0, 'evaluateShortDailyBudget call present');
+  // The guard `if (sel.side === 'short') {` must appear immediately before
+  // the gate block — grep-anchored to the block prelude.
+  const prelude = SRC.slice(Math.max(0, idxShortGate - 400), idxShortGate);
+  assertStringIncludes(prelude, "if (sel.side === 'short') {");
+});
+
+Deno.test('DEC-084: short-admit counter increment gated on side === short', () => {
+  assertStringIncludes(SRC, "if (sel.side === 'short') admittedShortsByDailyBudget += 1;");
+});
+
+Deno.test('DEC-084: response envelope carries short_daily_budget block (default/configured/source/effective/consumed/refusals)', () => {
+  const idx = SRC.indexOf('short_daily_budget: {');
+  assert(idx > 0, 'short_daily_budget block present');
+  const block = SRC.slice(idx, idx + 400);
+  assertStringIncludes(block, 'default: OVERSHOOT_SHORT_DAILY_BUDGET_DEFAULT');
+  assertStringIncludes(block, 'configured: shortDailyBudget');
+  assertStringIncludes(block, 'source: shortDailyBudgetSource');
+  assertStringIncludes(block, 'effective_budget: shortEffectiveBudget');
+  assertStringIncludes(block, 'consumed: admittedShortsByDailyBudget');
+  assertStringIncludes(block, 'refusals: tally.short_daily_budget_reached');
+});
+
+Deno.test('DEC-084: completion-pass recomputes short-remaining from ledger truth', () => {
+  assertStringIncludes(SRC, 'computeRemainingShortBudget');
+  assertStringIncludes(SRC, "AND side = 'short'");
+  assertStringIncludes(SRC, 'shortEffectiveBudget = computeRemainingShortBudget');
+});
