@@ -1853,3 +1853,22 @@ INC-20 transitions to **Resolved (full)** at this SHA.
 **Auditor rule.** When comparing `cron.job.command` md5s across rows that reference the same edge function URL, decode the `command` column (`SELECT command FROM cron.job WHERE jobname IN (...)`) and diff the request bodies before flagging md5 divergence. If the only diff is a documented body payload (as here), the divergence is by-design and no ticket is warranted.
 
 **Cross-refs.** ACT-568 build+arm milestone; sql/42 seed (contains the same note in its header comment); DEC-083 §(c) morning-exit adoption redeploy half; FIX-8 spec §4 (`pass` param routing).
+
+## INC-138 — `overshoot_events.side` is lowercase-only; uppercase DB queries would silently return zero rows
+
+**Category:** latent-defect-guard / footnote-with-grep-evidence. **Severity:** LOW (no live consumer bug found — see grep). **Filed:** 2026-07-23 (ACT-569 (b) funnel-scan turn). **Cross-refs:** ACT-569; INC-108 (semantics-false-page class); DEC-504-4 (side normalization boundary).
+
+**Observation.** `public.overshoot_events.side` is persisted lowercase (`'long'` / `'short'`) by `overshoot-detection-run`. TypeScript domain code uses uppercase (`'LONG'` / `'SHORT'`) and normalizes at read/write boundaries (e.g. `overshoot-entry-run/index.ts:1006` — `sel.side === 'long' ? 'LONG' : 'SHORT'`; `overshoot-exit-run/index.ts:917` — `m.side.toUpperCase() as 'LONG' | 'SHORT'`). Any consumer that queries the DB directly with an uppercase literal would silently return zero rows — the same class as the INC-108 21:00Z semantics-false-positive (mapping-error → empty-set → falsely-clean).
+
+**Grep evidence (this turn — clean).** Searched `supabase/`, `src/`, `sql/` for the following patterns and found **no live consumer bug**:
+- `\.eq\(['"]side['"], ['"]SHORT['"]|['"]LONG['"]\)` — **0 hits**.
+- `side\s*=\s*'SHORT'|'LONG'` (raw SQL predicate) — **0 hits** outside doc-comments (`session-age.ts:190`, `detector.ts:481`).
+- `side IN \('SHORT'` / `'LONG'` (SQL IN-list) — **0 hits**.
+
+All 60+ uppercase-`'SHORT'`/`'LONG'` occurrences in the codebase are in TypeScript domain code operating on already-normalized values (detector output, sizing, session-age, client-order-id, exit-price-construction, tests). No SQL query or PostgREST filter references the uppercase literal against the DB column.
+
+**Class rule (forward-binding).** Any new consumer that queries `overshoot_events` (or the derivative `overshoot_lots.side` / `overshoot_target_positions.side` / `overshoot_audit_logs` metadata carrying `side`) MUST either (a) use the domain read-path that normalizes at the boundary, or (b) filter with the lowercase literal that matches persisted storage. A future migration to uppercase-at-rest requires a same-PR sweep of all consumers; until then, the case-boundary is a first-class invariant.
+
+**Auditor pattern (for future grep-checks).** `rg "\.eq\(['\"]side['\"], ['\"](SHORT|LONG)['\"]\)" supabase/ src/ sql/` — any hit = live bug (empty-set query against lowercase-persisted column), not a footnote.
+
+**Not-INC-108 distinction.** INC-108 was an exit-leg **artifact-mapping** semantics error (function-name typo → clean-looking empty query). INC-138 is a **value-case** boundary that would produce the same clean-looking empty result if violated. Same failure surface (silently-empty query = false-clean page), different injection point.
