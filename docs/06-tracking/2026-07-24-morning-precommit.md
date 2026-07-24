@@ -2,6 +2,8 @@
 
 **Status:** PRE-COMMIT — filed before the session. Every entry below is **EXPECTED**, not **OBSERVED**. Post-hoc receipts land in a separate `2026-07-24-morning-receipts.md` after each tick clears. Purpose: symmetric-skepticism anchor per Standing Format Rule (a pre-registered prediction is a testable claim, not narration).
 
+**DATE CORRECTION (filed 2026-07-23 pre-sleep, on the record).** The FIX-8 build+arm summary line "Maiden completion pass fires: Monday 2026-07-27 14:05Z" is **RETRACTED**. Today is Thursday 2026-07-23; the cron schedule `5 14 * * 1-5` includes Friday. **Maiden FIX-8 completion pass = TOMORROW Friday 2026-07-24 14:05Z** — the 14:05Z slot in the table below is the authoritative timeline and governs. Retraction filed here (not in a separate doc) per Catalog #65 "NO ARTIFACT, NO ASSERTION" — the pre-commit doc is the artifact for tomorrow's watch, so its 14:05Z row is where the correction belongs.
+
 **Session significance.** DEC-083 §(a) has NOT yet moved the cron (item (2) is next-turn). If the cron move lands before 13:45Z tomorrow, this is the **first morning-exit ever fired**. If item (2) does not land in time, the 13:45Z row below reverts to "NOT-EXPECTED" and morning-exit maiden fire slips to the next session — recorded honestly at receipts time.
 
 ## Pre-Committed Table
