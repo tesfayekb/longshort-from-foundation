@@ -1575,6 +1575,18 @@ Deno.serve(createHandler(async (req: Request) => {
         pass2_skips_already_admitted: pass2SkipsAlreadyAdmitted,
         pass2_skips_terminal: pass2SkipsTerminal,
       },
+      // DEC-084 short-side pacing surface. PRESENT on every response
+      // (long-only-mode days will show consumed=0, refusals=0). Source
+      // field distinguishes system_config value from default fallback so
+      // operators can verify config wiring after the seed migration.
+      short_daily_budget: {
+        default: OVERSHOOT_SHORT_DAILY_BUDGET_DEFAULT,
+        configured: shortDailyBudget,
+        source: shortDailyBudgetSource,
+        effective_budget: shortEffectiveBudget,
+        consumed: admittedShortsByDailyBudget,
+        refusals: tally.short_daily_budget_reached,
+      },
       correlation_id: correlationId,
     });
   } catch (err) {
