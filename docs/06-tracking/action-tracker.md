@@ -8008,3 +8008,26 @@ Only ONE operator touch on this leg: run snippet #3 (chat below). No SQL editor 
 **Guardrail invariant (from spec §4).** The pre-loop `(session, symbol)` double-count lookup against `overshoot_lots` is the hard gate regardless of classifier verdict — a mis-classed refusal can only skip-or-consider, never double-admit.
 
 **Deferred (queued, non-blocking).** DW-232 (FLAG-C integration-harness extraction) — the classifier is unit-tested end-to-end via `completion-pass-allow-list_test.ts`, but a full pass-2 integration harness (exercising the ledger-truth query + audits scan against a live fixture DB) is queued as an honest gap. INC-137 for auditors reading the cron md5 diff.
+
+---
+
+## ACT-569 — SHORT-ARM DEEP INVESTIGATION (chartered 2026-07-23 pre-sleep)
+
+**Status:** (a)-(c) DELIVERED tonight; (d)-(f) QUEUED Friday 07-24 analysis lane. **Verdict grammar pre-committed:** TAPE-CONSISTENT / CALIBRATION-SUSPECT / DEFECT. **Deliverable:** `docs/06-tracking/ACT-569-short-arm-deep-investigation.md`.
+
+**Tonight's key reads.**
+
+1. **Thresholds (a) — grepped and cited.** `DETECTOR_SHORT_EXCESS_THRESHOLD = 0.08` (`overshoot-detection-run/index.ts:144`), `DETECTOR_SQUEEZE_SI_PCT_FLOAT_MIN = 0.20` (`:145`), spec-frozen in `detector.ts:622` (spec-sha `df339497…`). **No regime or sleeve multiplier** — code inspection confirms thresholds are numerically constant across BULL / BEAR / ENGAGED / DISENGAGED. Sleeve state gates *whether* shorts are considered; it does not scale the number.
+2. **Funnel (b) — 12 sessions, 6 total survivors.** 4 admits 07-20, 1 each on 07-17 / 07-16, 0 on the other 9 sessions. 07-21 → 07-23 all 0-admit coincides with `detector_version=aff20a13` first-appearance BUT prior-NULL-detector sessions were also mostly 0-admit — version delta is inconclusive on its own. `si_above_squeeze_threshold` fires 2× total (both 07-20); INC-106 gate is dormant.
+3. **Near-miss (c) — decisive.** Top-20 short candidates every session are **ALL ≥ 100% of the 0.08 excess bar** (min top-20 across 10 sessions: 0.085-0.132). Excess-threshold miscalibration is **REFUTED**. The killer of high-conviction shorts on 07-22 / 07-23 is **`si_unavailable`** (ISRG, PATH, HIMS, WDAY, TYL among the top-10 — all refused for missing SI). This is the leading DEFECT candidate for (f).
+
+**Queued for Friday.** (d) studied-arrival Poisson band vs observed 6; (e) 3-ticker computation spot-check (DOCN excess-threshold classification anomaly, ISRG si-unavailable feed-join check, SNDK admit positive control); (f) verdict assignment.
+
+**Cross-refs.** ACT-527 (short-side threshold curve, will feed (d)), INC-106, DEC-504-4-A, detector spec v2. Incidental log inside the deliverable flags `overshoot_events.side` lowercase-only casing landmine.
+
+---
+
+## Documentation micro-actions (2026-07-23 pre-sleep, filed alongside ACT-569)
+
+1. **Friday pre-commit Re-Freeze** — `docs/06-tracking/2026-07-24-morning-precommit.md` appended with operator-derived Re-Freeze section: 13:45Z maiden = HEARTBEAT-ONLY (`exits_submitted=0`, `session_age_no_fire=7` for 5×T1 07-22 ord 3 + 2×T2 07-23 ord 2; any submit = deviation); first live morning-exit ~07-29/30 at T1 ord 6; 14:05Z FIX-8 K_remaining clean no-op = GREEN when pass-1 saturates budget; 13:35Z primary owes funnel table with `negative_age` class EXTINCT under FIX-1+2. Supersedes rows 13:35Z / 13:45Z / 14:05Z in the original table (originals preserved for audit chain, non-authoritative for scoring).
+2. **07-23 2-admit post-mortem** — `docs/06-tracking/2026-07-23-2admit-postmortem.md` created: 13:35Z run predated FIX-1 deploy; 27 stale-anchor + 25 `negative_age` refusals killed 3 slots (K=5, admits=2); ENS + SAM both T2 (cohort-tag artifact — tier is per-event dislocation class, not admission-priority tag). Filed as sign-bug's closing exhibit. Regression guard: `refusal_class_counts.negative_age > 0` post-FIX-1 = P0 rollback.
