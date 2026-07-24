@@ -155,3 +155,65 @@ Metric per session: `max_abs_excess` over `excess_w1…w5` per candidate; take t
 - DEC-504-4-A (dial-based sleeve disengage — orthogonal to threshold questions).
 - Detector spec v2 (`detector.ts:622`, spec-sha `df339497…`).
 - FIX-8 completion pass (`docs/04-modules/overshoot/fix-8.md`) — unrelated but note that FIX-8 does not re-run the detector; SHORT-arm-0 is upstream of FIX-8.
+
+---
+
+## ACT-569(f)-EARLY — H-1 BRANCH CLOSED BY FIX (filed 2026-07-24 pre-market, out-of-band from Friday (d)-(f) lane)
+
+**Trigger.** Operator "PROVE-THEN-FIX" order (2026-07-24 zero-exposure window). H-1 hypothesis (per-row SI envelope below FINRA natural cadence) proven then fixed in a single turn.
+
+**Proof (STEP 1).** ACT-569(a)-early SELECT against `overshoot_short_interest` UNWINDOWED for the top-cited si_unavailable short candidates:
+
+| ticker | run_date | has_row | as_of_date | age | inside_20d | inside_26d |
+|---|---|---|---|---|---|---|
+| HIMS | 07-22 | ✅ | 2026-06-30 | 22 | ❌ | ✅ |
+| ISRG | 07-22 | ✅ | 2026-06-30 | 22 | ❌ | ✅ |
+| PATH | 07-22 | ✅ | 2026-06-30 | 22 | ❌ | ✅ |
+| TYL  | 07-22 | ✅ | 2026-06-30 | 22 | ❌ | ✅ |
+| WDAY | 07-22 | ✅ | 2026-06-30 | 22 | ❌ | ✅ |
+| HIMS | 07-23 | ✅ | 2026-06-30 | 23 | ❌ | ✅ |
+| ISRG | 07-23 | ✅ | 2026-06-30 | 23 | ❌ | ✅ |
+| PATH | 07-23 | ✅ | 2026-06-30 | 23 | ❌ | ✅ |
+| TYL  | 07-23 | ✅ | 2026-06-30 | 23 | ❌ | ✅ |
+| WDAY | 07-23 | ✅ | 2026-06-30 | 23 | ❌ | ✅ |
+
+**10/10 (100%) — H-1 PROVEN.** `si_unavailable` was envelope-artifact, not data-absence. Same class as book-level 21d bug DEC-504-4-A fixed.
+
+**Fix (STEP 2).** `DETECTOR_SI_STALENESS_MAX_DAYS: 20 → 26` at two string-identical declaration sites:
+
+- `supabase/functions/overshoot-detection-run/index.ts:146` (production data-fetch envelope; SOURCE_VERSION bumped `fb5fdf13+fix2` → `fb5fdf13+fix2+si26`).
+- `supabase/functions/overshoot-sweep-diagnostic/index.ts:51` (diagnostic funnel — kept in lockstep to prevent phantom si_unavailable in future funnel scans).
+- Two-constant design comment block in `_shared/overshoot/si-freshness.ts` amended to note the two constants now coincide at 26 by shared cadence with distinct roles (envelope `<=` vs book-level strict `>`).
+- Cross-ref comments at both sites naming each other; shared-home refactor queued as DW-234.
+
+**Detector spec bytes UNTOUCHED.** `detector.ts` not modified. `RATIFIED_DETECTOR_VERSION === 'aff20a13'` re-asserted in the 32/32 detection-run suite (new near-guard test). Selection-parity byte-exact far-guard structurally holds (fixtures + detector source unchanged).
+
+**Tests.** 32/32 GREEN in `overshoot-detection-run` (28 baseline + 4 new):
+1. `SI read within staleness window ... — cadence-amended 20→26` — asserts `= 26` present and `= 20` retired.
+2. `H-1 amendment triple: age 24 usable / 26 boundary / 27 excluded` — pure-arithmetic mirror of the SQL envelope semantics.
+3. `H-1 fix does NOT bump detector predicate spec — composite aff20a13 held` — near-guard on composite version.
+4. `SOURCE_VERSION carries the +si26 suffix (deploy-truth rail)`.
+
+**Deploy + probe verify.**
+- Deployed: `overshoot-detection-run`, `overshoot-sweep-diagnostic` (2026-07-24 pre-market).
+- Probe: `curl -X POST .../functions/v1/overshoot-detection-run -d '{"probe":"version"}'` — response header `x-source-version: fb5fdf13+fix2+si26` **verified**. (Body auth-gated per DEC-023; header rail is the deploy-truth surface per FIX-3.)
+
+**§22.5.1-style receipt.**
+
+| Surface | Expected | Observed | Status |
+|---|---|---|---|
+| Constant flip (detection-run) | `DETECTOR_SI_STALENESS_MAX_DAYS = 26` | present at line 146 | ✅ |
+| Constant flip (sweep-diagnostic) | `= 26` string-identical | present at line 51 | ✅ |
+| Cross-ref comments | both sites name the other | present at both | ✅ |
+| si-freshness two-constant block | updated w/ cadence-coincidence note | updated (lines 30-66) | ✅ |
+| SOURCE_VERSION bump | `fb5fdf13+fix2+si26` (detection-run only) | present at line 50 | ✅ |
+| detector.ts UNTOUCHED | composite `aff20a13` held | RATIFIED_DETECTOR_VERSION asserted green | ✅ |
+| Test suite | 32/32 detection-run | 32/32 | ✅ |
+| Deploy | both functions | both deployed | ✅ |
+| Probe echo | `x-source-version: fb5fdf13+fix2+si26` | matched | ✅ |
+
+**H-1 branch verdict:** **CLOSED BY FIX (proven → amended → deployed → verified in a single turn).** The (f) VERDICT grammar's DEFECT branch is REALIZED for H-1 — Tier-A fix landed under change-control with pre-fix proof, tests, and post-fix probe evidence. Live confirmation Friday 22:00Z (si_unavailable collapse) pre-committed in `2026-07-24-morning-precommit.md`.
+
+**H-2 stays Friday (orphan-stack trace).** The six 07-16/17/20 short detection-survivors that never admitted — trace each through the entry funnel and name the gate that killed each, verbatim. Chartered lane remains as originally specified.
+
+**Deviations from operator order.** None substantive. One approved: sweep-diagnostic constant also flipped (D-1 ruling); one deferred: detector.ts stale `>= 21` header-comment refresh filed as DW-233 (D-2 ruling).
