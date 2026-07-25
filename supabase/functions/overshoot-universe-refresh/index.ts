@@ -63,6 +63,37 @@ const KILL_SWITCH_ID = '__kill_switch__';
 const MAX_PAGES = 8; // 8 * 1000 tickers/page = 8000 headroom vs ~2000 R2000.
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
+// INC-141-b (ACT-571 follow-up) — TYPED REFUSAL AUDIT.
+// Every !ok early-return on the default (scheduled/manual real-write) path
+// MUST leave an observable audit row so Monday 10:00Z's fail-closed refusal
+// is LOUD, not silent-200. Called immediately before each early return.
+// Best-effort: audit-write failure never masks the original refusal shape.
+async function writeUniverseRefusalAudit(args: {
+  status: string;
+  correlationId: string;
+  isCron: boolean;
+  metadata: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await writeStrategyAuditEvent({
+      strategyKey: 'overshoot',
+      actorId: DEFAULT_OPERATOR_ID,
+      action: 'overshoot.universe.refresh.refused',
+      targetType: 'overshoot_universe',
+      correlationId: args.correlationId,
+      metadata: {
+        source: IVV_IJH_SOURCE_TAG,
+        status: args.status,
+        is_cron: args.isCron,
+        ...args.metadata,
+      },
+    });
+  } catch (_e) {
+    // Never let audit failure mask the refusal. Sweeper will detect the
+    // missing row via completed/refused pair invariants (DW-family).
+  }
+}
+
 // Polygon ticker-set code for Russell 2000 index membership. Matches the
 // longshort PolygonConstituentFetcher taxonomy (I:SPX / I:MID). The prior
 // `?index=russell2000` string was silently ignored — Polygon's reference
