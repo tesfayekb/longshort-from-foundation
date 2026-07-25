@@ -113,7 +113,7 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((res) => setTimeout(res, ms));
 }
 
-export default createHandler(async (req: Request): Promise<Response> => {
+Deno.serve(createHandler(async (req: Request): Promise<Response> => {
   const correlationId = crypto.randomUUID();
   const cronErr = verifyCronSecret(req);
   const isCron = cronErr === null;
@@ -367,7 +367,4 @@ export default createHandler(async (req: Request): Promise<Response> => {
     errors_sample: errors.slice(0, 20),
     correlationId,
   });
-}, { sourceVersion: SOURCE_VERSION });
-
-// Deno.serve wiring (mirrors sibling overshoot handlers per DEV-27).
-Deno.serve(await import('./index.ts').then((m) => m.default).catch(() => (_: Request) => new Response('boot')));
+}, { sourceVersion: SOURCE_VERSION }));
