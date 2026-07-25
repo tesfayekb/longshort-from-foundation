@@ -8,17 +8,51 @@
 //
 // FIVE PINS (per ruling 2026-07-25):
 //
-//   (a) EXIT RULE = ordinal-from-EVENT per tier — T1 ord-6, T2 ord-10 —
-//       counted STRICTLY FORWARD from `eventDate` (event day = ord-0;
-//       next session = ord-1). Byte-anchored to the hand-truth fixture
-//       header:
-//         fixtures/overshoot-backtest/2024-05-02-hand-truth.jsonl:1
-//           `"exit_convention":"ordinal-10 close (LONG T2,
-//             holdingDayOrdinal>=10, session-age.ts:145)"`
-//       and to the ACT-574 T+1-open / ordinal-close-exit convention.
-//       The kernel's exit day is provably the studied day iff the
-//       injected `SessionCalendar` reproduces the fixture's session grid
-//       (verified in the LAYER-1 integration gate — see §11).
+//   (a) EXIT RULE = SIDE×TIER-DISPATCHED anchor (post-2026-07-25 TIER-A
+//       repair; supersedes the LONG-only ordinal-from-event framing).
+//       Byte-anchored to production dispatch in
+//         supabase/functions/_shared/overshoot-execution/session-age.ts
+//       at :57-70 (T1 LONG event-anchor rationale), :88-93 (constant
+//       `OVERSHOOT_EXIT_T1_EVENT_ANCHOR_SESSIONS = 6`), :142-147 (fire
+//       predicate + ACT-471/472 citations), :266-274 (dispatched
+//       threshold selection). Four-way ratified map:
+//
+//         long  T1  → { mode:'event', n:6 }              // sessions_since_event ≥ 6
+//         long  T2  → { mode:'entry', H:10 } ⇔ n=9       // holdingDayOrdinal ≥ 10
+//         short T1  → { mode:'entry', H:5  } ⇔ n=4       // ACT-472 HARD
+//         short T2  → { mode:'entry', H:5  } ⇔ n=4       // ACT-472 HARD
+//
+//       ⇔ CONVERSION (stated once, applied everywhere):
+//         holdingDayOrdinal ≥ H  ⇔  sessionAfter(entryDate, H − 1)
+//       because holdingDayOrdinal = sessionsSinceEntry + 1 (session-age.ts
+//       :133-141: "entry day itself = 1; the next trading session = 2;
+//       the FIFTH holding day (Fri after a Mon entry) = 5"). Therefore
+//       the (H−1)-th session STRICTLY AFTER `entryDate` is the exit fill
+//       session under entry-anchor mode.
+//
+//       ENTRY = T+1 VINTAGE CAVEAT (session-age.ts:6-8, quoted verbatim):
+//         "The exit cron fires INTRADAY at 19:50 UTC. Today's SPY daily
+//          bar is appended by the detection run at ~22:00 UTC (post-
+//          close)."
+//       In the kernel this manifests as `entryDate` being the T+1
+//       session after `eventDate` (the studied entry-open convention;
+//       ACT-574). Callers MUST inject `entryDate` explicitly — the
+//       kernel never derives it from `eventDate`.
+//
+//   (a′) OPTION-3 GUARD: any `(side, tier)` combination absent from the
+//        `EXIT_ANCHOR_BY_SIDE_TIER` map yields a typed
+//        `exit_spec_unmapped` refusal. The kernel MUST NEVER silently
+//        generalize a LONG anchor to a SHORT lot again (root cause of
+//        the pre-TURN-1 Fixture-II divergence).
+//
+//   (a″) TRIANGLE CITATION (kernel = study = production, per side).
+//        Standing law, register-filed: every kernel module that encodes
+//        semantics carries a per-side production citation as a docs-as-
+//        code test. For SHORTS this file cites session-age.ts:142-147
+//        (ACT-472 HARD); for LONG T1 it cites session-age.ts:57-70/88-93;
+//        for LONG T2 it cites session-age.ts:69-73 + the fixture-i
+//        hand-truth header (LONG T2 ONLY). Fixture-i corroborates ONLY
+//        the LONG T2 leg — never the SHORT leg.
 //
 //   (b) EXIT PRICE = ordinal-session CLOSE from `BarSource`. Haircut per
 //       `estimator-assumptions.md §2` rows "Long-side haircut" (5 bps/side)
@@ -119,6 +153,29 @@ export const EXIT_ORDINAL_BY_TIER: Readonly<Record<Tier, number>> = Object.freez
   T2: 10,
 });
 
+/** Post-TURN-1 side×tier anchor dispatch (see PIN (a) map). `mode:'event'`
+ *  uses `n` sessions STRICTLY AFTER `eventDate`; `mode:'entry'` uses
+ *  `H − 1` sessions STRICTLY AFTER `entryDate` (⇔ `holdingDayOrdinal ≥ H`).
+ *  Byte-anchored to `session-age.ts:57-70/88-93/142-147/266-274`. */
+export interface ExitAnchorSpec {
+  readonly mode: 'event' | 'entry';
+  /** For mode:'event': `sessionAfter(eventDate, n)`.
+   *  For mode:'entry': `sessionAfter(entryDate, H − 1)` (H stored below). */
+  readonly n: number;
+  /** Populated only for mode:'entry'; the production `H` (holdingDayOrdinal
+   *  threshold). Kept for citation clarity; kernel arithmetic uses `n`. */
+  readonly H?: number;
+}
+
+export const EXIT_ANCHOR_BY_SIDE_TIER: Readonly<
+  Record<`${SideDb}/${Tier}`, ExitAnchorSpec>
+> = Object.freeze({
+  'long/T1':  Object.freeze({ mode: 'event', n: 6 }),
+  'long/T2':  Object.freeze({ mode: 'entry', H: 10, n: 9 }),
+  'short/T1': Object.freeze({ mode: 'entry', H: 5,  n: 4 }),
+  'short/T2': Object.freeze({ mode: 'entry', H: 5,  n: 4 }),
+});
+
 /** Per-side haircut in bps applied at BOTH entry and exit under
  *  `haircutMode:'study'`. Anchored to `estimator-assumptions.md §2`. */
 export const HAIRCUT_BPS_BY_SIDE: Readonly<Record<SideDb, number>> = Object.freeze({
@@ -137,6 +194,7 @@ export interface ExitInput {
   readonly tier: Tier;
   readonly shares: Shares;
   readonly entryPrice: Price;      // entry OPEN (T+1 open per convention)
+  readonly entryDate: SessionDate; // T+1 fill session (entry-anchor input)
   readonly eventDate: SessionDate; // as_of_event_date (ord-0)
 }
 
@@ -213,14 +271,26 @@ export function runExit(
   // PIN (c) — optional override (default OFF).
   const override = opts.exitOverride?.(input) ?? null;
 
-  // PIN (a) — ordinal from event.
-  const ordinal = EXIT_ORDINAL_BY_TIER[input.tier];
-  const scheduled = calendar.sessionAfter(input.eventDate, ordinal);
+  // PIN (a) — side×tier-dispatched anchor + PIN (a′) unmapped guard.
+  const anchorKey = `${input.side}/${input.tier}` as const;
+  const spec = EXIT_ANCHOR_BY_SIDE_TIER[anchorKey];
+  if (!spec) {
+    return {
+      ok: false, lotId: input.lotId, ticker: input.ticker, side: input.side, tier: input.tier,
+      refusal: 'exit_spec_unmapped',
+      reason: `no anchor for (side=${input.side}, tier=${input.tier}); ` +
+        `EXIT_ANCHOR_BY_SIDE_TIER keys = ${Object.keys(EXIT_ANCHOR_BY_SIDE_TIER).join(',')}`,
+      scheduledExitDate: null,
+    };
+  }
+  const anchorDate: SessionDate = spec.mode === 'event' ? input.eventDate : input.entryDate;
+  const scheduled = calendar.sessionAfter(anchorDate, spec.n);
   if (scheduled === null && override === null) {
     return {
       ok: false, lotId: input.lotId, ticker: input.ticker, side: input.side, tier: input.tier,
       refusal: 'exit_calendar_exhausted',
-      reason: `calendar has no session at ord-${ordinal} beyond eventDate=${input.eventDate}`,
+      reason: `calendar has no session at ord-${spec.n} beyond ${spec.mode}Date=${anchorDate} ` +
+        `(anchor spec ${anchorKey} = ${JSON.stringify(spec)})`,
       scheduledExitDate: null,
     };
   }
