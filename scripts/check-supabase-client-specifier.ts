@@ -26,29 +26,89 @@ export interface Violation {
 const SCAN_ROOT = 'supabase/functions';
 const BANNED_SPECIFIER = /^https:\/\/esm\.sh\/@supabase\/supabase-js(?:@|\/|$)/;
 
-const IMPORT_RE = /(?:from\s+|import\s*\(\s*)(['"])([^'"]+)\1/g;
+// Only real ES module specifiers count:
+//   * `import ... from '...'`
+//   * `export ... from '...'`
+//   * `import '...'` (side-effect)
+//   * dynamic `import('...')`
+// Comments and other prose that mention the substring `from '…'` must NOT
+// trigger. We enforce this by (a) stripping line + block comments before
+// scanning and (b) anchoring the regex to real import/export statement heads.
+const IMPORT_RE =
+  /(?:^|[\s;{}()])(?:import\s*(?:[\s\S]*?\s+from\s+|\(\s*)?|export\s+[\s\S]*?\s+from\s+)(['"])([^'"\n]+)\1/g;
+
+/**
+ * Strip `//` line comments and `/* … *\/` block comments from source text
+ * without perturbing string-literal contents. This is deliberately naive
+ * (no full JS tokenizer) but sufficient for the import-header scan: it
+ * walks the text once, tracking whether the cursor sits inside a string,
+ * a line comment, or a block comment.
+ */
+export function stripComments(src: string): string {
+  let out = '';
+  let i = 0;
+  const n = src.length;
+  let mode: 'code' | 'sl' | 'dq' | 'bt' | 'line' | 'block' = 'code';
+  while (i < n) {
+    const c = src[i];
+    const c2 = src[i + 1];
+    if (mode === 'code') {
+      if (c === '/' && c2 === '/') { mode = 'line'; i += 2; continue; }
+      if (c === '/' && c2 === '*') { mode = 'block'; i += 2; continue; }
+      if (c === "'") { mode = 'sl'; out += c; i++; continue; }
+      if (c === '"') { mode = 'dq'; out += c; i++; continue; }
+      if (c === '`') { mode = 'bt'; out += c; i++; continue; }
+      out += c; i++; continue;
+    }
+    if (mode === 'line') {
+      if (c === '\n') { mode = 'code'; out += '\n'; }
+      i++; continue;
+    }
+    if (mode === 'block') {
+      if (c === '*' && c2 === '/') { mode = 'code'; i += 2; continue; }
+      if (c === '\n') out += '\n';
+      i++; continue;
+    }
+    // string modes — pass through, honor escapes
+    if (c === '\\' && i + 1 < n) { out += c + src[i + 1]; i += 2; continue; }
+    if (mode === 'sl' && c === "'") { mode = 'code'; out += c; i++; continue; }
+    if (mode === 'dq' && c === '"') { mode = 'code'; out += c; i++; continue; }
+    if (mode === 'bt' && c === '`') { mode = 'code'; out += c; i++; continue; }
+    out += c; i++;
+  }
+  return out;
+}
 
 export function isBannedSupabaseSpecifier(specifier: string): boolean {
   return BANNED_SPECIFIER.test(specifier);
 }
 
-export function findViolationsInLines(lines: string[], filePath: string): Violation[] {
+export function findViolationsInText(text: string, filePath: string): Violation[] {
   const violations: Violation[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    IMPORT_RE.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = IMPORT_RE.exec(lines[i])) !== null) {
-      const specifier = match[2];
-      if (!isBannedSupabaseSpecifier(specifier)) continue;
-      violations.push({
-        file: filePath,
-        line: i + 1,
-        text: lines[i].trim(),
-        specifier,
-      });
-    }
+  const stripped = stripComments(text);
+  const lines = text.split('\n');
+  IMPORT_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = IMPORT_RE.exec(stripped)) !== null) {
+    const specifier = match[2];
+    if (!isBannedSupabaseSpecifier(specifier)) continue;
+    // Compute 1-based line number in the original (unstripped) text by
+    // counting newlines in the stripped prefix — stripComments preserves
+    // newlines, so indices align.
+    const lineIdx = stripped.slice(0, match.index).split('\n').length - 1;
+    violations.push({
+      file: filePath,
+      line: lineIdx + 1,
+      text: (lines[lineIdx] ?? '').trim(),
+      specifier,
+    });
   }
   return violations;
+}
+
+/** Back-compat shim: preserved for existing callers/tests. */
+export function findViolationsInLines(lines: string[], filePath: string): Violation[] {
+  return findViolationsInText(lines.join('\n'), filePath);
 }
 
 export async function scanRepository(rootDir = '.'): Promise<Violation[]> {
@@ -57,7 +117,7 @@ export async function scanRepository(rootDir = '.'): Promise<Violation[]> {
     for await (const entry of walk(`${rootDir}/${SCAN_ROOT}`, { exts: ['.ts'], includeDirs: false })) {
       const relPath = entry.path.replace(`${rootDir}/`, '').replace(/^\.\//, '');
       const text = await Deno.readTextFile(entry.path);
-      violations.push(...findViolationsInLines(text.split('\n'), relPath));
+      violations.push(...findViolationsInText(text, relPath));
     }
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
