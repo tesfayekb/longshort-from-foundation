@@ -28,6 +28,13 @@ multi-turn workstream; ACT-515 matrix lands **mid-week**, not Monday.
   operator ROI-first standing rule: **matrix window re-dated 2026-07-26..27**
   (ahead of schedule, was mid-week). First compute (1x-const baseline)
   begins next turn; delivery grammar one config per receipt.
+  **CI note (ca4b413 red / tip 7ef44d52 green):** `ca4b413` red = mid-batch
+  snapshot without the seam fix (git-verified: 0 `entryCash` hits at
+  ca4b413, 6 at tip 7ef44d52; local gate green at tip); tip-run is the
+  record; per §22.8.5(b) atomicity-is-a-hint, gate verdicts bind to
+  cumulative tip state, not mid-batch snapshots. **FORWARD RULE:** fix +
+  its test land in the SAME edit batch wherever the platform allows, so no
+  future mid-batch snapshot can flash a certified gate red.
 - **(e) sector-cap.** Blocked on sector-metadata ingest per B2
   amendment. Ingest workstream (~3 turns) filed separately.
 - **DW-236 FINRA orchestrator.** Chain gate ~08-03.
