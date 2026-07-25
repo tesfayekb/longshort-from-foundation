@@ -781,8 +781,17 @@ export type IvvIjhCompositeResult =
       ijh: { status: string; detail?: string; http_status?: number };
     };
 
+// Browser-shaped headers — matches probeIsharesIwmBrowser (INC-123 fix).
+// The iShares CDN serves an HTML anti-bot landing page for raw
+// text/csv Accept requests from server IPs; a Mozilla UA + Referer
+// causes the same URL to return the real CSV payload. Same shape as
+// the ACT-548 manual-seed operator flow (operator downloaded via browser).
 const IVV_IJH_DEFAULT_HEADERS: Record<string, string> = {
-  'Accept': 'text/csv, */*;q=0.1',
+  'Accept': 'text/csv,application/csv,*/*;q=0.1',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Referer': 'https://www.ishares.com/us/products/etf-investments',
+  'User-Agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 };
 
 export async function fetchIvvIjhComposite(
