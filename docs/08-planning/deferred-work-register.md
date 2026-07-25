@@ -73,7 +73,7 @@ Original wording: "consider at first W5 read-out". Reconciled against `docs/08-p
 | C | ACT-561 | P&L attribution | filed | 2026-07-21 | 2026-08-05 | ledger 07-21 |
 | C | ACT-562 | analyst warn-band | first: Labor Day week | 2026-07-19 | 2026-09-01 | tracker |
 | C | ACT-564 | Strategy Profile page (7 sections) | spec file tonight; full build 2026-07-23 | 2026-07-22 | 2026-07-23 | spec pending |
-| C | ACT-565 | IBKR vs Alpaca comparison artifact | authored, awaits Phase-L | 2026-07-22 | Phase-11 (Live Gate) | ACT-565 artifact |
+| C | ACT-565 | IBKR vs Alpaca comparison artifact — **LANDED 2026-07-25** as `docs/06-tracking/ACT-565-ibkr-alpaca-decision-baseline.md`; ACT-572 comparator schema seeded (§5), Phase-L verdict grammar pre-committed (§6). Slip #6 closed per operator ruling. | CLOSED | 2026-07-22 | 2026-07-25 | `docs/06-tracking/ACT-565-ibkr-alpaca-decision-baseline.md`; ACT-572 charter §5; DEC-083; DEC-084; INC-138 |
 | C | ACT-554-b.h | horizon sweep (analyst-downgrade proximate) | after 554-b landing | 2026-07-19 | 2026-08-10 | ACT-554-b tracker |
 | C | DW-213 | long-only mode flag (ACT-559 body) | landed; monitor | 2026-07-22 | 2026-08-05 | `feature_flags` row |
 | C | DW-215 (**new**) | G3 exit-cancel observability | cheap-fold into ACT-493 else Phase 8 hardening | 2026-07-22 | 2026-08-15 | `overshoot-exit-run/index.ts:801` |
