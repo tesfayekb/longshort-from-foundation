@@ -34,8 +34,11 @@ const BANNED_SPECIFIER = /^https:\/\/esm\.sh\/@supabase\/supabase-js(?:@|\/|$)/;
 // Comments and other prose that mention the substring `from '…'` must NOT
 // trigger. We enforce this by (a) stripping line + block comments before
 // scanning and (b) anchoring the regex to real import/export statement heads.
+// Lookbehind keeps the anchor character out of the match, so match.index
+// points at the `import`/`export` token itself — required for accurate
+// line-number reporting.
 const IMPORT_RE =
-  /(?:^|[\s;{}()])(?:import\s*(?:[\s\S]*?\s+from\s+|\(\s*)?|export\s+[\s\S]*?\s+from\s+)(['"])([^'"\n]+)\1/g;
+  /(?<=^|[\s;{}()])(?:import\s*(?:[\s\S]*?\s+from\s+|\(\s*)?|export\s+[\s\S]*?\s+from\s+)(['"])([^'"\n]+)\1/g;
 
 /**
  * Strip `//` line comments and `/* … *\/` block comments from source text
