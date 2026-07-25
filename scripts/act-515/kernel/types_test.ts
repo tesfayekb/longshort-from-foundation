@@ -94,10 +94,10 @@ Deno.test('CellKey uses lowercase DB side', () => {
 Deno.test('RefusalTallyKey covers all top-level tally categories', () => {
   const keys: RefusalTallyKey[] = [
     'i5_refusals', 'sizing_refusals', 'buying_power_refusals',
-    'shortability_refusals', 'allocation_cap_reached',
+    'shortability_refusals', 'position_already_open', 'allocation_cap_reached',
     'daily_budget_reached', 'short_daily_budget_reached',
   ];
-  assertEquals(keys.length, 7);
+  assertEquals(keys.length, 8);
 });
 
 Deno.test('NoOpReason covers emitted no-op strings', () => {
