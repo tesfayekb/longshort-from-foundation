@@ -641,6 +641,8 @@ If any field is missing → the decision is **INVALID**.
 
 ### DEC-045: Signal #3 Vendor Lock — Tradier Production Options Chains
 
+> **[CANCELLED-2026-07-25]** Polygon Options Developer + Polygon Indices Advanced subscriptions formally cancelled by operator 2026-07-25. DEC-045's vendor lock at Tradier stands unchanged; the Polygon-Options-Developer disqualification recorded here is now doubly permanent (both technically disqualified per INC-71 AND subscription retired). Canonical provider inventory: `docs/04-modules/overshoot/overshoot.md` §Data-Providers.
+
 - **ID:** DEC-045
 - **Title:** Signal #3 (Options Flow Imbalance) sources options chains exclusively from Tradier production (`api.tradier.com/v1`); Polygon Options Developer is disqualified per INC-71
 - **Plan Section:** FP-043 (CROSSWIND §4.4.7 implementation)

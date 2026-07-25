@@ -2368,3 +2368,17 @@ This subsection records `sql/NN_*_cron_schedule.sql` artifacts that are applied 
 | Verification (§22.5.1, four surfaces) | (1) `cron.job` jobid 135 present; (2) `job_registry` enabled=true; (3) `system_config` key present; (4) `curl -X OPTIONS $URL/functions/v1/overshoot-entry-run` → `x-source-version: fb5fdf13+fix2+fix8`. All four GREEN as of 2026-07-23 build+arm turn. |
 | Cross-references | DEC-083 §(c); FIX-8 spec `docs/04-modules/overshoot/fix-8.md`; ACT-568 (build+arm milestone); INC-137 (auditor note on cron md5 divergence); DW-232 (FLAG-C integration-harness extraction, queued). Rollback (safe — reversible): `SELECT cron.unschedule('overshoot-entry-run-completion'); UPDATE job_registry SET enabled=false WHERE id='overshoot.entry.run.completion';`. |
 | Linked | DEC-083; ACT-568; INC-137; DW-232; sql/33 (primary entry cron); sql/MIG-168 (morning-exit monitor). |
+
+### sql/44 — ACT-515(e) sector-ingest columns on `overshoot_universe` (Turn 1 of 3)
+
+| Field | Value |
+|---|---|
+| Applied | 2026-07-25 via `supabase--migration` (verified: all 3 columns present per `information_schema.columns` read-back). |
+| Purpose | Add `gics_sector text`, `sector_source text`, `sector_asof timestamptz` to `public.overshoot_universe` to unlock the ACT-515 (e) sector-concentration cap engine variant. Columns start NULL per §2 axiom-3 typed-absence — no data written this turn. |
+| Objects | `overshoot_universe.gics_sector` / `.sector_source` / `.sector_asof` (all NULLable); CHECK constraint `overshoot_universe_sector_provenance_chk` (sector NULL OR both provenance cols populated); partial index `idx_overshoot_universe_gics_sector` on populated rows only. |
+| Idempotency | `ADD COLUMN IF NOT EXISTS` × 3; constraint added inside `DO $$` guard; `CREATE INDEX IF NOT EXISTS`. Repeated apply is byte-safe. |
+| Grants / RLS | No change — inherits existing `overshoot_universe` grants (already governed by RLS from MIG at `20260703044900_*.sql`). |
+| Provenance contract | If `gics_sector` is populated, `sector_source ∈ {'fmp','ishares','manual'}` AND `sector_asof` MUST be non-null. Enforced by CHECK; guards against fabricated / undated classifications per INC-71 lesson. |
+| Turn plan | Turn 1 (this) = schema only. Turn 2 = FMP `/stable/profile` fetcher + `overshoot-sector-ingest` edge function + `verifyFieldsPresent` self-check. Turn 3 = 905-ticker backfill + iShares CSV cross-check + coverage table + live-book concentration citation. |
+| Cross-references | `scripts/act-515/charter-amendment-e-sector-cap.md` (charter authority — FMP primary recommended path); ACT-515(e) sector-cap engine variant (consumer); DEV-10 (Ultimate-tier ETF Holdings rejected — informs Turn-2 endpoint selection); ACT-548 (iShares CSV monthly seed — Turn-3 cross-check basis); `docs/04-modules/overshoot/overshoot.md` §Data-Providers (FMP Premium ACTIVE). Rollback (destructive — operator gate required): `ALTER TABLE public.overshoot_universe DROP COLUMN gics_sector, DROP COLUMN sector_source, DROP COLUMN sector_asof; DROP INDEX IF EXISTS idx_overshoot_universe_gics_sector;`. |
+| Linked | ACT-515(e); DEV-10; ACT-548; §Data-Providers inventory. |

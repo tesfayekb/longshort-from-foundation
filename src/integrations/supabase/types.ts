@@ -2803,6 +2803,9 @@ export type Database = {
           active: boolean
           added_as_of: string
           created_at: string
+          gics_sector: string | null
+          sector_asof: string | null
+          sector_source: string | null
           source: string
           ticker: string
           updated_at: string
@@ -2811,6 +2814,9 @@ export type Database = {
           active?: boolean
           added_as_of: string
           created_at?: string
+          gics_sector?: string | null
+          sector_asof?: string | null
+          sector_source?: string | null
           source: string
           ticker: string
           updated_at?: string
@@ -2819,6 +2825,9 @@ export type Database = {
           active?: boolean
           added_as_of?: string
           created_at?: string
+          gics_sector?: string | null
+          sector_asof?: string | null
+          sector_source?: string | null
           source?: string
           ticker?: string
           updated_at?: string

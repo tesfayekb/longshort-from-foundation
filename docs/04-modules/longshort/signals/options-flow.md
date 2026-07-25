@@ -34,7 +34,7 @@ Per §4.3.5 the signal is **NON-CRITICAL**: tickers with no qualifying flow, no 
 
 **Out of scope (other components / phases):**
 - Full per-trade timesales reconstruction over a true rolling 5-day window — deferred to v2 per **DEC-046** (conscious approximation: v1 collapses the 5-day window to nearest-DTE same-day chain snapshots; see §"DEC-046 approximation" below).
-- Polygon Options Developer NBBO data — disqualified per **INC-71** (well-formed payloads but `bid`/`ask`/`last`/`greeks` are all null at the Developer tier; real-time NBBO requires a higher entitlement).
+- Polygon Options Developer NBBO data — disqualified per **INC-71** (well-formed payloads but `bid`/`ask`/`last`/`greeks` are all null at the Developer tier; real-time NBBO requires a higher entitlement). **[CANCELLED-2026-07-25 — subscription formally cancelled by operator; see `docs/04-modules/overshoot/overshoot.md` §Data-Providers.]**
 - Combiner-stage missingness imputation — Phase 3.
 - Cron wiring / enable-flip / cron-attributable attestation — separate operator step per DEC-040 + DEC-043.
 

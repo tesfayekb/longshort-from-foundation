@@ -1617,7 +1617,7 @@ INC-20 transitions to **Resolved (full)** at this SHA.
 | **Disposition** | Open (data-acquisition replacement deferred to DW-094). Signal #4 is cleanly disarmed; the P2 double-tally telemetry bug is closed in this PR. The pattern lesson is codified for all remaining feed-signals. |
 | **Status** | Open — Signal #4 disarmed pending DW-094 (EDGAR rebuild); orchestrator double-tally bug resolved at ACT-156. |
 
-## INC-71 — Polygon Options Developer tier returns well-shaped but NBBO-absent payloads; real-time bid/ask/last/greeks are gated behind a higher paid entitlement
+## INC-71 — Polygon Options Developer tier returns well-shaped but NBBO-absent payloads; real-time bid/ask/last/greeks are gated behind a higher paid entitlement  **[CANCELLED-2026-07-25 — Polygon Options Developer subscription formally cancelled by operator; see `docs/04-modules/overshoot/overshoot.md` §Data-Providers. Retained here as historical evidence only; do NOT re-propose.]**
 
 | Field | Value |
 |---|---|

@@ -86,7 +86,7 @@ Each fetcher's PR MUST include `verifyFilterHonored()` test evidence. Without it
 
 ### The second axis: filter-honored is necessary, not sufficient
 
-FP-043's Tradier vetting added a second class of phantom: **filter-honored but key-fields-absent**. INC-71 captured the precedent — the Polygon Options Developer tier honored `underlying_ticker=` and `expiration_date=` correctly, but every quote in the response returned `bid=null`, `ask=null`, `last=null`, and `greeks=null` because real-time NBBO is a separate (paid) entitlement. A naive consumer that only ran `verifyFilterHonored()` would have happily ingested 100% well-shaped, 100% structurally-empty payloads — and the downstream compute would silently classify every contract as `no_qualifying_flow` (the smart-money filter trips on `volume>=100` against `volume=null`). Same phantom-signal class as INC-70, different surface.
+FP-043's Tradier vetting added a second class of phantom: **filter-honored but key-fields-absent**. INC-71 captured the precedent — the Polygon Options Developer tier honored `underlying_ticker=` and `expiration_date=` correctly, but every quote in the response returned `bid=null`, `ask=null`, `last=null`, and `greeks=null` because real-time NBBO is a separate (paid) entitlement. A naive consumer that only ran `verifyFilterHonored()` would have happily ingested 100% well-shaped, 100% structurally-empty payloads — and the downstream compute would silently classify every contract as `no_qualifying_flow` (the smart-money filter trips on `volume>=100` against `volume=null`). Same phantom-signal class as INC-70, different surface. **[CANCELLED-2026-07-25 — the Polygon Options Developer subscription itself is now cancelled by operator; the pattern lesson stands, the vendor does not.]**
 
 The discipline therefore has **two axes** and both are mandatory:
 
@@ -149,6 +149,6 @@ Without Axis-2 evidence in the PR, the fetcher is presumed phantom-prone.
 
 ## Cross-references (added FP-043)
 
-- INC-71 — Polygon Options Developer tier returns well-shaped but NBBO-absent payloads (the second-axis exhibit).
+- INC-71 — Polygon Options Developer tier returns well-shaped but NBBO-absent payloads (the second-axis exhibit). **[CANCELLED-2026-07-25 — subscription cancelled by operator; retained as historical evidence.]**
 - FP-043 / ACT-157 — Tradier vetting that produced this axis (4-axis vendor probe: reachability + entitlement + filter-honored + fields-present).
 - `_shared/longshort-signals/shared/tradier-options-chain-fetcher.ts` — first fetcher to embed both verifyFilterHonored and verifyFieldsPresent self-checks.
