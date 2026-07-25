@@ -4,7 +4,7 @@
 
 import { assertEquals, assert, assertThrows, assertAlmostEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
-  runExit, cashRequired, settleProceeds,
+  runExit, slotBuyingPower, entryCash, settleProceeds,
   ArraySessionCalendar, EXIT_ORDINAL_BY_TIER, EXIT_ANCHOR_BY_SIDE_TIER,
   HAIRCUT_BPS_BY_SIDE,
   type ExitInput,
@@ -199,9 +199,20 @@ Deno.test('PIN (c) no exitOverride by default; exitReason=ordinal_scheduled', ()
 // PIN (d) — Cash seam
 // -----------------------------------------------------------------------------
 
-Deno.test('PIN (d) cashRequired: long +slot; short −slot', () => {
-  assertEquals(cashRequired('long',  money(2500)) as number,  2500);
-  assertEquals(cashRequired('short', money(2500)) as number, -2500);
+Deno.test('PIN (d) slotBuyingPower (renamed from cashRequired): long +slot; short −slot', () => {
+  // Buying-power TARGET only — NOT a cash-ledger flow. See exit.ts JSDoc and
+  // Module 7 header "CASH SEAM RENAME" (ACT-515 GATE-(iii) 2026-07-25).
+  assertEquals(slotBuyingPower('long',  money(2500)) as number,  2500);
+  assertEquals(slotBuyingPower('short', money(2500)) as number, -2500);
+});
+
+Deno.test('PIN (d) entryCash: long −shares·entry; short +shares·entry (executed cents; mirrors settleProceeds)', () => {
+  // 25 shares @ $100.00
+  assertEquals(entryCash('long',  shares(25), price(100)) as number, -2500);
+  assertEquals(entryCash('short', shares(25), price(100)) as number,  2500);
+  // Partial-slot (floor) case that would previously drift: 86 shares @ 116.26 = 9,998.36
+  assertEquals(entryCash('long',  shares(86), price(116.26)) as number, -9998.36);
+  assertEquals(entryCash('short', shares(50), price(197.32)) as number,  9866.00);
 });
 
 Deno.test('PIN (d) settleProceeds: long +proceeds; short −cover-cost', () => {
@@ -209,7 +220,7 @@ Deno.test('PIN (d) settleProceeds: long +proceeds; short −cover-cost', () => {
   assertEquals(settleProceeds('short', shares(10), price(50)) as number, -500);
 });
 
-Deno.test('PIN (d) round-trip: realized = settleProceeds − cashRequired (both sides)', () => {
+Deno.test('PIN (d) round-trip: realized = settleProceeds + entryCash (both sides, executed cents)', () => {
   const cal = handTruthCalendar();
   const bars = makeBars([['X', '2024-05-16', 110]]);
 
@@ -220,9 +231,9 @@ Deno.test('PIN (d) round-trip: realized = settleProceeds − cashRequired (both 
     entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars, { haircutMode: 'none' });
   assert(rl.ok); if (!rl.ok) return;
-  const cashL = cashRequired('long', money(2500)) as number;             //  2500
+  const cashL = entryCash('long', shares(25), price(100)) as number;     // -2500
   const proceedsL = settleProceeds('long', shares(25), rl.exitClosePostHaircut) as number;  // 2750
-  assertEquals(proceedsL - cashL, rl.realizedUsd as number);
+  assertEquals(proceedsL + cashL, rl.realizedUsd as number);             //  250
 
   // SHORT mirror — anchor now entry-relative (H=5); exit at 2024-05-09 close.
   const barsShort = makeBars([['X', '2024-05-09', 110]]);
@@ -232,9 +243,9 @@ Deno.test('PIN (d) round-trip: realized = settleProceeds − cashRequired (both 
     entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, barsShort, { haircutMode: 'none' });
   assert(rs.ok); if (!rs.ok) return;
-  const cashS = cashRequired('short', money(2500)) as number;            // -2500
+  const cashS = entryCash('short', shares(25), price(100)) as number;    //  2500
   const proceedsS = settleProceeds('short', shares(25), rs.exitClosePostHaircut) as number; // -2750
-  assertEquals(proceedsS - cashS, rs.realizedUsd as number);
+  assertEquals(proceedsS + cashS, rs.realizedUsd as number);             // -250
 });
 
 // -----------------------------------------------------------------------------
