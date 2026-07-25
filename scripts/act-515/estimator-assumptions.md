@@ -129,3 +129,25 @@ If any of these five inputs change mid-window during the run, the run is INVALID
 and re-started against a fresh frozen snapshot.
 
 **END ESTIMATOR.**
+
+## 7. Kernel abstractions (ACT-515 Module 3 — Admit)
+
+The kernel deliberately does NOT model the following gates. This block is
+duplicated verbatim in `scripts/act-515/kernel/admit.ts` header (PIN (e))
+and a test asserts both copies stay in sync.
+
+- **I5 snapshot gates** — corpus events are pre-filtered to include only
+  fresh-i5 rows; the matrix does not re-simulate the I5 layer.
+- **Shortability** — Alpaca ETB/HTB state at admit time is inherited from
+  the ratified corpus filter; not re-evaluated.
+- **Earnings / analyst-downgrade / M&A proximity** (DEC-080/081/082) —
+  encoded in the corpus events stream; the kernel does not re-check.
+- **Fill mechanics** — entry_price / buying_power / submit_failed live in
+  Module 6 (exit / fill). Admit stops at "would this order be sent?".
+
+Gates the kernel DOES model (byte-anchored to
+`supabase/functions/overshoot-entry-run/index.ts`):
+1. `position_already_open` (SYMBOL-scoped dedup; pyramiding=NO) — :930-935 + :1121-1132.
+2. `allocation_cap`  — :1246-1268.
+3. `short_daily_budget` (DEC-084; SHORT-only; non-K-consuming) — :1286-1311.
+4. `daily_budget` (ACT-501 K=5) — :1313-1332.
