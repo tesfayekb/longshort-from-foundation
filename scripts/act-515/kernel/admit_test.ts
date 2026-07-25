@@ -46,10 +46,14 @@ Deno.test('gate 1: position_already_open dedup (SYMBOL-scoped, either side)', ()
     candidates: [mkC('ANF', 'short', 1.0), mkC('BOX', 'long', 0.9)],
     openBook,
   }));
-  // ANF short refused (already held long); BOX long admitted.
+  // ANF short refused (already held long); BOX long admitted. Sort puts
+  // 'long' before 'short', so BOX admit lands first.
   assertEquals(res.tally.position_already_open, 1);
   assertEquals(res.tally.admits, 1);
   assertEquals(res.decisions[0], {
+    kind: 'admit', ticker: 'BOX', side: 'long', slotNotionalUsd: 2500,
+  });
+  assertEquals(res.decisions[1], {
     kind: 'refuse', ticker: 'ANF', side: 'short', category: 'position_already_open',
   });
 });
