@@ -175,8 +175,10 @@ Deno.test('RngSource injection contract (deterministic stub)', () => {
 
 Deno.test('types.ts contains no Date.now / new Date( / Math.random tokens', async () => {
   const src = await Deno.readTextFile(new URL('./types.ts', import.meta.url));
-  // Strip line comments so grep-anchor prose in comments doesn't false-positive.
-  const codeOnly = src
+  // Strip block AND line comments so grep-anchor prose in doc comments
+  // doesn't false-positive.
+  const noBlock = src.replace(/\/\*[\s\S]*?\*\//g, '');
+  const codeOnly = noBlock
     .split('\n')
     .map((ln) => {
       const idx = ln.indexOf('//');
