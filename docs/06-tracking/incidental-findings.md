@@ -2180,3 +2180,41 @@ All 60+ uppercase-`'SHORT'`/`'LONG'` occurrences in the codebase are in TypeScri
 **Auditor pattern (for future grep-checks).** `rg "\.eq\(['\"]side['\"], ['\"](SHORT|LONG)['\"]\)" supabase/ src/ sql/` — any hit = live bug (empty-set query against lowercase-persisted column), not a footnote.
 
 **Not-INC-108 distinction.** INC-108 was an exit-leg **artifact-mapping** semantics error (function-name typo → clean-looking empty query). INC-138 is a **value-case** boundary that would produce the same clean-looking empty result if violated. Same failure surface (silently-empty query = false-clean page), different injection point.
+
+## INC-143 instance #3 — fixture-header convention drift (LONG off-by-one + SHORT side-generalization jointly repaired)
+
+**Category:** documentation-drift / spec-boundary. **Severity:** MEDIUM (blocked TURN-1 fixture-ii emit; caught pre-fire by the integration gate itself). **Filed:** 2026-07-25 (ACT-515 GATE-(iii) TURN-2 FULL RE-PICK). **Cross-refs:** INC-143 body; INC-143 instance #2 (TURN-1 pass); ACT-515 GATE-(i)(ii)(iii); `scripts/act-515/build-fixture-2023q2.ts`; `scripts/act-515/kernel/exit.ts:117-120` (EXIT_ANCHOR_BY_SIDE_TIER).
+
+**Symptom.** The DRAFT-INVALID fixture-ii carried TWO joint header/body defects that only surfaced under the corrected TURN-1 kernel:
+  · (a) SHORT exits used LONG-generalized (event+H) anchors — repaired by TURN-1's `EXIT_ANCHOR_BY_SIDE_TIER` four-way map (Short T1/T2 = entry+4).
+  · (b) LONG exits used the event-anchored (event+6 / event+9) form in header prose while the kernel dispatch key resolves entry-anchored — the two coincided under T+1 for most lots but drifted off-by-one wherever entry ≠ event+1 (e.g. holiday-adjacent entries).
+  Both defects vanished in the same TURN-2 re-pick; ratifying only (a) would have failed the LONG lots in Gate-II.
+
+**Corrective law (forward-binding).** Fixture headers state the **ENTRY-ANCHORED** form as canonical (matching kernel dispatch keys verbatim: `Long T1 = event+6`, `Long T2 = entry+9`, `Short T1/T2 = entry+4`). Event-anchored phrasing may appear only as a derived-under-T+1 footnote, never as the primary spec line. Exemplar: `fixtures/overshoot-backtest/2024-05-02-hand-truth.jsonl` header (already certified TURN-1).
+
+**Class rule.** When a kernel dispatch table is updated (TURN-1 side-generalization), every fixture header authored against the pre-update convention is presumed drift-adjacent and must be re-authored against the new canonical form — even where the numeric bytes happen to coincide under T+1. The gate is the referee; header prose is not exempt.
+
+**Supersession bookkeeping.** All pre-TURN-2 DRAFT-INVALID sha-stamps of fixture-ii files (four files: hand-truth, bars, calendar, checkpoints) are jointly superseded by the TURN-2 committed SHAs pinned in `scripts/act-515/fixture-shas.ts` (see file header for the joint-defect note). No prior SHA is valid for gate replay.
+
+## INC-145 — Module-7 short/residue cash-plumbing untested pre-fixture-ii (TIER-A latent-defect class discovery)
+
+**Category:** latent-defect discovery / test-coverage-gap. **Severity:** HIGH (money-path; asymptomatic in LONG-only reality but silently under-credits equity when shorts + partial-slot fills are present — exactly the ACT-515 study surface). **Filed:** 2026-07-25 (ACT-515 GATE-(iii) TIER-A repair, supervisor-prediction verified byte-exact then fixed). **Cross-refs:** ACT-515 GATE-(iii); INC-143 instance #3; `scripts/act-515/kernel/exit.ts` (CASH SEAM RENAME); `scripts/act-515/kernel/equity.ts` (CASH SEAM RENAME header §); `scripts/act-515/tests/module7-cash-invariant_test.ts` (class-killer).
+
+**Root cause.** Module-7's `runEquityPath` entry seam called `cashRequired(side, slotNotional)` — a **buying-power target**, not an executed flow. Under floor-to-shares sizing (`floor(slot / entryPrice) → sharesN`), the raw slot notional (e.g. $10,000.00) diverges from the executed cash flow (`sharesN × entryPrice`, e.g. $9,998.36) by a per-lot residue signed by side (long: +, short: −). Ledger drift accumulates as Σ per-lot residues — over fixture-ii's 14 lots: **−$1,047.42 total** (10 longs contributing −$1,239.13; 4 shorts contributing +$191.71). Terminal-equity impact matched supervisor prediction to the cent.
+
+**Why untested pre-fixture-ii.** Fixture-i is LONG-only + T+1 entry, so kernel's `slot(1000)` happened to equal `shares(10) × entry(100)` on every hand-picked lot (round-number 25-share slots at round-number entry prices). LONG-only reality with a round slot masks both branches of the residue-sign asymmetry (residue-sign for LONG is opposite SHORT; a mixed book is required to make either branch visibly non-zero on Σ). Fixture-i's four-field gate (shares, entryCashOut, exitCashIn, realized) does NOT touch Module-7 cash — the round-trip API projects directly from `shares × entryPx` and `shares × exitPx` in the runner, byte-passing Module-7's cash accumulator. Only a cash-checkpoint gate over shorts + partial-slot fills exposes it. Fixture-ii is the first such gate.
+
+**Fix (this turn, atomic).** Two-part rename + one-line ledger swap; six-file diff:
+  · `scripts/act-515/kernel/exit.ts` — renamed `cashRequired` → `slotBuyingPower` (buying-power target only; NOT a ledger flow); added `entryCash(side, shares, entryPrice)` (executed cents at fill; sign mirrors `settleProceeds`).
+  · `scripts/act-515/kernel/equity.ts` — entry seam now calls `entryCash(en.side, en.shares, en.entryPrice)`; `en.slotNotional` retained on the event for pre-trade / buying-power inspection but no longer touches cash. Header CASH SEAM RENAME § documents the repair.
+  · `scripts/act-515/kernel/runner.ts` — re-export updated; `PipelineLot.slotNotionalUsd` JSDoc clarified as buying-power target only.
+  · `scripts/act-515/kernel/exit_test.ts` — PIN (d) tests split: `slotBuyingPower` (target); `entryCash` (executed cents, with partial-slot cases); round-trip identity now `realized = settleProceeds + entryCash` (both signed by side).
+  · `scripts/act-515/tests/module7-cash-invariant_test.ts` — **class-killer** structural test (permanent guard, no fixture dependency): over a seeded-random 24-lot mixed L/S book with non-round prices + partial-slot fills, asserts per session `cash(t) === startingCash + Σ per-lot executed flows to date − Σ carry` to the cent.
+
+**Verdict (triple-green + kernel + parity, this turn):** 126/126 kernel + gate; 4/4 selection-parity; fixture-ii CHK-1/2/3 + TERMINAL all Δ=0c against walker convention; TERMINAL identity `start + Σ realized (M6)` = 10,154,296c matches fixture M6 to the cent; kernel equity_end = 10,154,295c matches walker convention. Both certified conventions are within 1c per fixture-header cent_drift note (3-decimal NVDA lot); the gate accepts either.
+
+**Class rule (forward-binding).** Any pre-trade "target" / "aspirational" / "buying-power" quantity is FORBIDDEN from touching a cash ledger. Cash flows are EXECUTED cents only. Naming discipline: `slotBuyingPower`, `bpTarget`, `sizingTarget` for the former; `entryCash`, `settleProceeds` (executed) for the latter. Any future code review that finds a cash-ledger mutation whose operand is a slot / target / notional (not an executed `shares × price`) fails the review — this is a Tier-A class, not a style nit.
+
+**Auditor pattern.** `rg "cash.*[+-]=.*slot|cashCents.*[+-]=.*Notional|cashCents.*[+-]=.*Target" scripts/` — any hit = latent instance of this bug class.
+
+**Supersession.** Pre-repair `cashRequired` export is renamed, not deleted; call sites that survive are limited to pre-trade sizing / buying-power headroom checks (currently: none in-tree beyond documentation). Any external consumer that imported `cashRequired` for a ledger flow was buggy under this class rule.
