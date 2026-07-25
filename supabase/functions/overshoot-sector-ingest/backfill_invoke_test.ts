@@ -4,7 +4,12 @@
 // per-batch summaries verbatim. NOT a regression test — meant to be run
 // manually for ACT-515(e) Sector Ingest Turn 3.
 
-const URL_BASE = 'http://localhost:8000/overshoot-sector-ingest';
+// Import the edge-function module — its top-level `Deno.serve(...)` call
+// starts an HTTP listener in this test process. We then invoke it via
+// localhost, which shares this process's env (so CRON_SECRET matches).
+import './index.ts';
+
+const URL_BASE = 'http://localhost:8000';
 const BATCH_LIMIT = 200;
 const MAX_BATCHES = 6;
 
