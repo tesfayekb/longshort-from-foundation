@@ -5,7 +5,8 @@
 import { assertEquals, assert, assertThrows, assertAlmostEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   runExit, cashRequired, settleProceeds,
-  ArraySessionCalendar, EXIT_ORDINAL_BY_TIER, HAIRCUT_BPS_BY_SIDE,
+  ArraySessionCalendar, EXIT_ORDINAL_BY_TIER, EXIT_ANCHOR_BY_SIDE_TIER,
+  HAIRCUT_BPS_BY_SIDE,
   type ExitInput,
 } from './exit.ts';
 import { makeBars, MapBarSource } from './mark.ts';
@@ -42,7 +43,8 @@ Deno.test('PIN (a) T2 fixture row ANF byte-exact under haircutMode:none', () => 
   const bars = makeBars([['ANF', '2024-05-16', 135.69]]);
   const r = runExit({
     lotId: 'ANF#1', ticker: 'ANF', side: 'long', tier: 'T2',
-    shares: shares(19), entryPrice: price(126.62), eventDate: '2024-05-02',
+    shares: shares(19), entryPrice: price(126.62),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars, { haircutMode: 'none' });
   assert(r.ok); if (!r.ok) return;
   assertEquals(r.scheduledExitDate, '2024-05-16');
@@ -58,7 +60,8 @@ Deno.test('PIN (a) T1 ord-6 reaches 2024-05-10 from same event', () => {
   const bars = makeBars([['X', '2024-05-10', 105]]);
   const r = runExit({
     lotId: 'X#1', ticker: 'X', side: 'long', tier: 'T1',
-    shares: shares(10), entryPrice: price(100), eventDate: '2024-05-02',
+    shares: shares(10), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars, { haircutMode: 'none' });
   assert(r.ok); if (!r.ok) return;
   assertEquals(r.scheduledExitDate, '2024-05-10');
@@ -70,7 +73,8 @@ Deno.test('PIN (a) calendar exhausted → typed refusal (no clamp)', () => {
   const bars = new MapBarSource(new Map());
   const r = runExit({
     lotId: 'X#1', ticker: 'X', side: 'long', tier: 'T2',
-    shares: shares(1), entryPrice: price(10), eventDate: '2024-05-02',
+    shares: shares(1), entryPrice: price(10),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars);
   assert(!r.ok); if (r.ok) return;
   assertEquals(r.refusal, 'exit_calendar_exhausted');
@@ -86,7 +90,8 @@ Deno.test('PIN (b) long haircut = 5 bps/side; effective entry↑ + effective exi
   const bars = makeBars([['X', '2024-05-16', 110]]);
   const r = runExit({
     lotId: 'X#1', ticker: 'X', side: 'long', tier: 'T2',
-    shares: shares(100), entryPrice: price(100), eventDate: '2024-05-02',
+    shares: shares(100), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars);   // default haircutMode:'study'
   assert(r.ok); if (!r.ok) return;
   assertEquals(r.haircutBpsPerSide, 5);
@@ -99,10 +104,12 @@ Deno.test('PIN (b) long haircut = 5 bps/side; effective entry↑ + effective exi
 
 Deno.test('PIN (b) short haircut = 15 bps/side; entry↓ + cover↑', () => {
   const cal = handTruthCalendar();
-  const bars = makeBars([['X', '2024-05-16', 90]]);
+  // SHORT T2 now exits at sessionAfter(entryDate=2024-05-03, 4) = 2024-05-09
+  const bars = makeBars([['X', '2024-05-09', 90]]);
   const r = runExit({
     lotId: 'X#1', ticker: 'X', side: 'short', tier: 'T2',
-    shares: shares(100), entryPrice: price(100), eventDate: '2024-05-02',
+    shares: shares(100), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars);
   assert(r.ok); if (!r.ok) return;
   assertEquals(r.haircutBpsPerSide, 15);
@@ -120,7 +127,8 @@ Deno.test('PIN (b) exit-day bar missing → defers to next priced session with s
   const bars = makeBars([['X', '2024-05-17', 111]]);
   const r = runExit({
     lotId: 'X#1', ticker: 'X', side: 'long', tier: 'T2',
-    shares: shares(10), entryPrice: price(100), eventDate: '2024-05-02',
+    shares: shares(10), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars, { haircutMode: 'none' });
   assert(r.ok); if (!r.ok) return;
   assertEquals(r.scheduledExitDate, '2024-05-16');
@@ -134,7 +142,8 @@ Deno.test('PIN (b) beyond maxCarryDays → typed exit_price_unavailable (no fabr
   const bars = new MapBarSource(new Map());   // nothing priced
   const r = runExit({
     lotId: 'X#1', ticker: 'X', side: 'long', tier: 'T2',
-    shares: shares(1), entryPrice: price(10), eventDate: '2024-05-02',
+    shares: shares(1), entryPrice: price(10),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars, { maxCarryDays: 2 });
   assert(!r.ok); if (r.ok) return;
   assertEquals(r.refusal, 'exit_price_unavailable');
@@ -146,7 +155,8 @@ Deno.test('PIN (b) maxCarryDays=0 refuses at first missing exit bar', () => {
   const bars = makeBars([['X', '2024-05-17', 105]]);
   const r = runExit({
     lotId: 'X#1', ticker: 'X', side: 'long', tier: 'T2',
-    shares: shares(1), entryPrice: price(10), eventDate: '2024-05-02',
+    shares: shares(1), entryPrice: price(10),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars, { maxCarryDays: 0 });
   assert(!r.ok); if (r.ok) return;
   assertEquals(r.refusal, 'exit_price_unavailable');
@@ -161,7 +171,8 @@ Deno.test('PIN (c) exitOverride replaces ordinal exit; reason=override', () => {
   const bars = makeBars([['X', '2024-05-07', 108]]);
   const r = runExit({
     lotId: 'X#1', ticker: 'X', side: 'long', tier: 'T2',
-    shares: shares(10), entryPrice: price(100), eventDate: '2024-05-02',
+    shares: shares(10), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars, {
     haircutMode: 'none',
     exitOverride: () => ({ exitDate: '2024-05-07', reason: 'dd_stop' }),
@@ -177,7 +188,8 @@ Deno.test('PIN (c) no exitOverride by default; exitReason=ordinal_scheduled', ()
   const bars = makeBars([['X', '2024-05-16', 100]]);
   const r = runExit({
     lotId: 'X#1', ticker: 'X', side: 'long', tier: 'T2',
-    shares: shares(1), entryPrice: price(100), eventDate: '2024-05-02',
+    shares: shares(1), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars);
   assert(r.ok); if (!r.ok) return;
   assertEquals(r.exitReason, 'ordinal_scheduled');
@@ -204,18 +216,21 @@ Deno.test('PIN (d) round-trip: realized = settleProceeds − cashRequired (both 
   // LONG at entry 100, 25 shares, slot 2500 (constant-notional prod baseline).
   const rl = runExit({
     lotId: 'L', ticker: 'X', side: 'long', tier: 'T2',
-    shares: shares(25), entryPrice: price(100), eventDate: '2024-05-02',
+    shares: shares(25), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars, { haircutMode: 'none' });
   assert(rl.ok); if (!rl.ok) return;
   const cashL = cashRequired('long', money(2500)) as number;             //  2500
   const proceedsL = settleProceeds('long', shares(25), rl.exitClosePostHaircut) as number;  // 2750
   assertEquals(proceedsL - cashL, rl.realizedUsd as number);
 
-  // SHORT mirror.
+  // SHORT mirror — anchor now entry-relative (H=5); exit at 2024-05-09 close.
+  const barsShort = makeBars([['X', '2024-05-09', 110]]);
   const rs = runExit({
     lotId: 'S', ticker: 'X', side: 'short', tier: 'T2',
-    shares: shares(25), entryPrice: price(100), eventDate: '2024-05-02',
-  }, cal, bars, { haircutMode: 'none' });
+    shares: shares(25), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
+  }, cal, barsShort, { haircutMode: 'none' });
   assert(rs.ok); if (!rs.ok) return;
   const cashS = cashRequired('short', money(2500)) as number;            // -2500
   const proceedsS = settleProceeds('short', shares(25), rs.exitClosePostHaircut) as number; // -2750
@@ -228,15 +243,23 @@ Deno.test('PIN (d) round-trip: realized = settleProceeds − cashRequired (both 
 
 Deno.test('PIN (e) mirror positions (long vs short, same entry/exit) → negated realized', () => {
   const cal = handTruthCalendar();
+  // Pin both fills to the SAME session (05-16) so long-vs-short symmetry
+  // holds despite side-dispatched anchors: long T2 exits at 05-16 by ordinal,
+  // short T2 exits at 05-16 via exitOverride (dd-stop style).
   const bars = makeBars([['X', '2024-05-16', 108]]);
   const rl = runExit({
     lotId: 'L', ticker: 'X', side: 'long', tier: 'T2',
-    shares: shares(7), entryPrice: price(100), eventDate: '2024-05-02',
+    shares: shares(7), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   }, cal, bars, { haircutMode: 'none' });
   const rs = runExit({
     lotId: 'S', ticker: 'X', side: 'short', tier: 'T2',
-    shares: shares(7), entryPrice: price(100), eventDate: '2024-05-02',
-  }, cal, bars, { haircutMode: 'none' });
+    shares: shares(7), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
+  }, cal, bars, {
+    haircutMode: 'none',
+    exitOverride: () => ({ exitDate: '2024-05-16', reason: 'pair_mirror' }),
+  });
   assert(rl.ok && rs.ok); if (!(rl.ok && rs.ok)) return;
   assertEquals(rl.grossRealizedUsd as number, -(rs.grossRealizedUsd as number));
   assertEquals(rl.realizedUsd as number,      -(rs.realizedUsd as number));
@@ -251,12 +274,17 @@ Deno.test('PIN (e) property — realized sign follows convention across a price 
       const bars = makeBars([['X', '2024-05-16', x]]);
       const rl = runExit({
         lotId: 'L', ticker: 'X', side: 'long', tier: 'T2',
-        shares: shares(3), entryPrice: price(e), eventDate: '2024-05-02',
+        shares: shares(3), entryPrice: price(e),
+        entryDate: '2024-05-03', eventDate: '2024-05-02',
       }, cal, bars, { haircutMode: 'none' });
       const rs = runExit({
         lotId: 'S', ticker: 'X', side: 'short', tier: 'T2',
-        shares: shares(3), entryPrice: price(e), eventDate: '2024-05-02',
-      }, cal, bars, { haircutMode: 'none' });
+        shares: shares(3), entryPrice: price(e),
+        entryDate: '2024-05-03', eventDate: '2024-05-02',
+      }, cal, bars, {
+        haircutMode: 'none',
+        exitOverride: () => ({ exitDate: '2024-05-16', reason: 'pair_mirror' }),
+      });
       assert(rl.ok && rs.ok); if (!(rl.ok && rs.ok)) return;
       // Sign identity: long_realized = 3*(x-e); short_realized = 3*(e-x)
       assertEquals(rl.grossRealizedUsd as number, 3 * (x - e));
@@ -274,10 +302,116 @@ Deno.test('runExit rejects negative / non-integer maxCarryDays', () => {
   const bars = new MapBarSource(new Map());
   const input: ExitInput = {
     lotId: 'X', ticker: 'X', side: 'long', tier: 'T2',
-    shares: shares(1), entryPrice: price(10), eventDate: '2024-05-02',
+    shares: shares(1), entryPrice: price(10),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
   };
   assertThrows(() => runExit(input, cal, bars, { maxCarryDays: -1 }));
   assertThrows(() => runExit(input, cal, bars, { maxCarryDays: 1.5 }));
+});
+
+// -----------------------------------------------------------------------------
+// PIN (a) — SIDE×TIER DISPATCH (four-way ratified map, byte-anchored to
+// production session-age.ts:57-70/88-93/142-147/266-274).
+// -----------------------------------------------------------------------------
+
+Deno.test('EXIT_ANCHOR_BY_SIDE_TIER map matches production dispatch verbatim', () => {
+  assertEquals(EXIT_ANCHOR_BY_SIDE_TIER['long/T1'],  { mode: 'event', n: 6 });
+  assertEquals(EXIT_ANCHOR_BY_SIDE_TIER['long/T2'],  { mode: 'entry', H: 10, n: 9 });
+  assertEquals(EXIT_ANCHOR_BY_SIDE_TIER['short/T1'], { mode: 'entry', H: 5,  n: 4 });
+  assertEquals(EXIT_ANCHOR_BY_SIDE_TIER['short/T2'], { mode: 'entry', H: 5,  n: 4 });
+  // Docs-as-code check: legacy LONG-only ordinal map still exposed but the
+  // canonical dispatch is the four-way map.
+  assertEquals(EXIT_ORDINAL_BY_TIER.T1, 6);
+  assertEquals(EXIT_ORDINAL_BY_TIER.T2, 10);
+});
+
+Deno.test('LONG T2 entry-anchor: sessionAfter(entry=2024-05-03, 9) = 2024-05-16', () => {
+  const cal = handTruthCalendar();
+  const bars = makeBars([['X', '2024-05-16', 110]]);
+  const r = runExit({
+    lotId: 'X#1', ticker: 'X', side: 'long', tier: 'T2',
+    shares: shares(1), entryPrice: price(100),
+    entryDate: '2024-05-03', eventDate: '2024-05-02',
+  }, cal, bars, { haircutMode: 'none' });
+  assert(r.ok); if (!r.ok) return;
+  assertEquals(r.scheduledExitDate, '2024-05-16');
+});
+
+Deno.test('SHORT T2 entry-anchor: sessionAfter(entry, 4) = holding day 5 (ACT-472 HARD)', () => {
+  const cal = handTruthCalendar();
+  // Entry 2024-05-03 → sessionAfter(_,4) = 2024-05-09 (Thu). Same for T1.
+  const bars = makeBars([['X', '2024-05-09', 90]]);
+  for (const tier of ['T1', 'T2'] as const) {
+    const r = runExit({
+      lotId: `X#${tier}`, ticker: 'X', side: 'short', tier,
+      shares: shares(1), entryPrice: price(100),
+      entryDate: '2024-05-03', eventDate: '2024-05-02',
+    }, cal, bars, { haircutMode: 'none' });
+    assert(r.ok, `short/${tier} should succeed`); if (!r.ok) return;
+    assertEquals(r.scheduledExitDate, '2024-05-09');
+  }
+});
+
+Deno.test('REGRESSION: TSLA-short 5-session divergence pins to production exit (not LONG-generalized)', () => {
+  // Named regression: pre-TURN-1 kernel would have used LONG T2 ordinal
+  // (event+10 = 2024-04-16) for a SHORT T2 lot. Corrected kernel uses
+  // sessionAfter(entryDate=2024-04-03, 4) = 2024-04-10 (Wed) — matching
+  // production session-age.ts:142-147 (ACT-472 HARD). The user-cited
+  // TSLA 04-11 exit corresponds to a T+1 offset variant of the same
+  // (entry 2024-04-04 → exit 2024-04-11); both variants are pinned.
+  const apr = new ArraySessionCalendar([
+    '2024-04-02', '2024-04-03', '2024-04-04', '2024-04-05',
+    '2024-04-08', '2024-04-09', '2024-04-10', '2024-04-11',
+    '2024-04-12', '2024-04-15', '2024-04-16', '2024-04-17',
+  ]);
+  const bars = makeBars([['TSLA', '2024-04-10', 170], ['TSLA', '2024-04-11', 171]]);
+  const rA = runExit({
+    lotId: 'TSLA#A', ticker: 'TSLA', side: 'short', tier: 'T2',
+    shares: shares(10), entryPrice: price(175),
+    entryDate: '2024-04-04', eventDate: '2024-04-03',
+  }, apr, bars, { haircutMode: 'none' });
+  assert(rA.ok); if (!rA.ok) return;
+  assertEquals(rA.scheduledExitDate, '2024-04-10');
+  // Anti-regression: NOT 2024-04-16 (that would be LONG T2 ord-10 generalization).
+
+  const rB = runExit({
+    lotId: 'TSLA#B', ticker: 'TSLA', side: 'short', tier: 'T2',
+    shares: shares(10), entryPrice: price(175),
+    entryDate: '2024-04-05', eventDate: '2024-04-04',
+  }, apr, bars, { haircutMode: 'none' });
+  assert(rB.ok); if (!rB.ok) return;
+  assertEquals(rB.scheduledExitDate, '2024-04-11');
+});
+
+Deno.test('PIN-1 (session-age.ts:22): Mon SHORT entry exits Fri, NEVER following Mon', () => {
+  // HAND_TRUTH grid: Mon 2024-05-06 entry → sessionAfter(_,4) =
+  //   Tue 05-07(1), Wed 05-08(2), Thu 05-09(3), Fri 05-10(4). Fires Fri.
+  const cal = handTruthCalendar();
+  const bars = makeBars([['X', '2024-05-10', 95]]);
+  const r = runExit({
+    lotId: 'X#Mon', ticker: 'X', side: 'short', tier: 'T2',
+    shares: shares(1), entryPrice: price(100),
+    entryDate: '2024-05-06', eventDate: '2024-05-03',
+  }, cal, bars, { haircutMode: 'none' });
+  assert(r.ok); if (!r.ok) return;
+  assertEquals(r.scheduledExitDate, '2024-05-10');
+  // Anti-regression: NOT 2024-05-13 (the following Monday) — that was the
+  // pre-PIN-1 defect explicitly forbidden in session-age.ts:14-32.
+});
+
+Deno.test('OPTION-3 GUARD: unmapped (side,tier) → typed exit_spec_unmapped refusal', () => {
+  const cal = handTruthCalendar();
+  const bars = makeBars([['X', '2024-05-16', 110]]);
+  // Fabricate an unmapped tier via TS bypass — the kernel must refuse rather
+  // than fall back to a LONG anchor.
+  const bogus = {
+    lotId: 'X#B', ticker: 'X', side: 'long' as const, tier: 'T3' as unknown as 'T1',
+    shares: shares(1), entryPrice: price(100),
+    entryDate: '2024-05-03' as const, eventDate: '2024-05-02' as const,
+  };
+  const r = runExit(bogus, cal, bars);
+  assert(!r.ok); if (r.ok) return;
+  assertEquals(r.refusal, 'exit_spec_unmapped');
 });
 
 Deno.test('ArraySessionCalendar rejects duplicates + non-positive n', () => {

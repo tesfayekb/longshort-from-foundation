@@ -138,7 +138,8 @@ export function runPipeline(
     const res = runExit(
       {
         lotId: lot.lotId, ticker: lot.ticker, side: lot.side, tier: lot.tier,
-        shares: lot.shares, entryPrice: lot.entryPrice, eventDate: lot.eventDate,
+        shares: lot.shares, entryPrice: lot.entryPrice,
+        entryDate: lot.entryDate, eventDate: lot.eventDate,
       },
       plan.calendar,
       barSource,

@@ -240,7 +240,8 @@ export type Tier = 'T1' | 'T2';
  *      from the prior mark. */
 export type ExitRefusalCode =
   | 'exit_calendar_exhausted'
-  | 'exit_price_unavailable';
+  | 'exit_price_unavailable'
+  | 'exit_spec_unmapped';
 
 // -----------------------------------------------------------------------------
 // Equity/DD vocabulary + refusals (Module 7 — EQUITY)
