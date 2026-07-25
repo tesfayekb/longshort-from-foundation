@@ -33,6 +33,10 @@ Verdict lattice:
 - **Cheapest minute BUT non-monotone** → NOISE-AT-N, no adoption, retest at next quarter's corpus refresh
 - **No minute beats current by 5 bps** → REJECT, publish curve as evidence and close
 
+**Launch-independence clause (2026-07-25 amendment):** The paper lane runs CONTINUOUSLY past the mid-August live date (ACT-577); this study never gates the launch — mid-Aug launches on the current ratified config; this lever adopts post-launch on its own evidence.
+
+**Deadline (restated per implementation-calendar lock):** deliverable landing window **2026-07-26 / 2026-07-27** (weekend). Substance unchanged.
+
 ## §5 — Rollback
 Config-flip only; no capital at risk. Rollback = revert DEC.
 
