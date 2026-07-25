@@ -252,7 +252,7 @@ export function runEquityPath(
   // State.
   let cashCents = toCents(opts.startingEquityUsd as number);
   let priorMarks = new Map<string, PriorMark>();
-  let openLots = new Map<string, OpenLot>();
+  const openLots = new Map<string, OpenLot>();
   let cumCarryCents = 0;
 
   const rows: EquityRow[] = [];

@@ -71,7 +71,7 @@ const queryClient = new QueryClient({
       // M4/N1: surface query errors that would otherwise be silently swallowed
       // by prefetchQuery and other React Query paths. Critical for diagnosability
       // of silent-fallback paths in layout prefetches.
-      // eslint-disable-next-line no-console
+       
       console.error('[query-error]', query.queryKey, error);
       Sentry.captureException(error, {
         tags: { source: 'react-query' },

@@ -1117,7 +1117,7 @@ async function fetchPkPairsForDay(
 ): Promise<Set<string>> {
   const out = new Set<string>();
   let offset = 0;
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     const url = `${env.supabaseUrl.replace(/\/+$/, '')}/rest/v1/insider_accession_discovery_queue?select=issuer_cik,accession_number&as_of_date=eq.${encodeURIComponent(asOfDate)}&order=issuer_cik.asc,accession_number.asc`;
     const resp = await fetch(url, {

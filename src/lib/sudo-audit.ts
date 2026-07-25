@@ -47,7 +47,7 @@ export async function logSudoEvent(
     const serverCid = res?.correlation_id ?? null;
     const matched = serverCid === correlationId;
     if (!matched) {
-      // eslint-disable-next-line no-console
+       
       console.warn('[sudo-audit] correlation_id mismatch', {
         client: correlationId,
         server: serverCid,
@@ -68,7 +68,7 @@ export async function logSudoEvent(
       err instanceof ApiError
         ? ((err as unknown as { correlation_id?: string }).correlation_id ?? null)
         : null;
-    // eslint-disable-next-line no-console
+     
     console.warn('[sudo-audit] failed to persist', action, actionKey, {
       client_correlation_id: correlationId,
       server_correlation_id: serverCid,

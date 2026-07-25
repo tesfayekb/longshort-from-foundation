@@ -44,7 +44,7 @@ export function AdminLayout() {
         if (error || !data) {
           // M4: silent fallback is fail-closed (empty perms → AccessDenied), but
           // must be visible. Empty-perms behavior preserved; observability added.
-          // eslint-disable-next-line no-console
+           
           console.error('[admin-layout] get_my_authorization_context failed', error);
           Sentry.captureException(
             error ?? new Error('get_my_authorization_context returned no data'),
