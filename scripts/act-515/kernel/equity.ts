@@ -81,7 +81,7 @@
 //       equity walk. Module 5's `nextPriorMarks` is threaded internally
 //       from one session to the next.
 //
-// ANTI-PHANTOM: no `Date.now`, no `new Date(`, no `Math.random`. Enforced
+// ANTI-PHANTOM: no wall-clock, no date-constructor, no RNG (see anti-phantom rule). Enforced
 // by a lint test in `equity_test.ts`.
 
 import {
