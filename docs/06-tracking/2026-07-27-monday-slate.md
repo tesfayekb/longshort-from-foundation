@@ -17,10 +17,17 @@ multi-turn workstream; ACT-515 matrix lands **mid-week**, not Monday.
 
 ## What is NOT on Monday's slate
 
-- **ACT-515 engine matrix.** Kernel is multi-turn (types → clock →
+- **ACT-515 engine matrix.** ~~Kernel is multi-turn (types → clock →
   admit → size → mark → exit → equity/DD; fixture #1 byte-exact green
   + fixture #2 2023-Q2 built during `mark`/`equity`; then per-config
-  chains). Register row carries **mid-week** — never Monday.
+  chains). Register row carries **mid-week** — never Monday.~~
+  **UPDATE 2026-07-26 — INTEGRATION GATE COMPLETE (register row flipped).**
+  Kernel bring-up (Modules 1–7) landed + gate half-1 (fixture-i byte-exact) +
+  gate half-2 (fixture-ii 2023-Q2 CHK-1/2/3 + TERMINAL Δ=0c, cash-invariant
+  class-killer green — see INC-146). Matrix pull-forward RATIFIED per
+  operator ROI-first standing rule: **matrix window re-dated 2026-07-26..27**
+  (ahead of schedule, was mid-week). First compute (1x-const baseline)
+  begins next turn; delivery grammar one config per receipt.
 - **(e) sector-cap.** Blocked on sector-metadata ingest per B2
   amendment. Ingest workstream (~3 turns) filed separately.
 - **DW-236 FINRA orchestrator.** Chain gate ~08-03.

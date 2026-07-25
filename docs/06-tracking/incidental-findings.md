@@ -2196,7 +2196,9 @@ All 60+ uppercase-`'SHORT'`/`'LONG'` occurrences in the codebase are in TypeScri
 
 **Supersession bookkeeping.** All pre-TURN-2 DRAFT-INVALID sha-stamps of fixture-ii files (four files: hand-truth, bars, calendar, checkpoints) are jointly superseded by the TURN-2 committed SHAs pinned in `scripts/act-515/fixture-shas.ts` (see file header for the joint-defect note). No prior SHA is valid for gate replay.
 
-## INC-145 — Module-7 short/residue cash-plumbing untested pre-fixture-ii (TIER-A latent-defect class discovery)
+## INC-146 — Module-7 short/residue cash-plumbing untested pre-fixture-ii (TIER-A latent-defect class discovery)
+
+**Renumber note (2026-07-26):** filed originally as INC-145 in the ACT-515 GATE-(iii) receipt; collided with the same-day INC-145 (universe punctuation-alias). Renumbered to INC-146 (next free id) per operator hygiene ruling. All cross-refs to this finding in the ACT-515 GATE-(iii) receipt and register rows now read INC-146.
 
 **Category:** latent-defect discovery / test-coverage-gap. **Severity:** HIGH (money-path; asymptomatic in LONG-only reality but silently under-credits equity when shorts + partial-slot fills are present — exactly the ACT-515 study surface). **Filed:** 2026-07-25 (ACT-515 GATE-(iii) TIER-A repair, supervisor-prediction verified byte-exact then fixed). **Cross-refs:** ACT-515 GATE-(iii); INC-143 instance #3; `scripts/act-515/kernel/exit.ts` (CASH SEAM RENAME); `scripts/act-515/kernel/equity.ts` (CASH SEAM RENAME header §); `scripts/act-515/tests/module7-cash-invariant_test.ts` (class-killer).
 
