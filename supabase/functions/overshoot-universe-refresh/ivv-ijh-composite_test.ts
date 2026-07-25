@@ -136,9 +136,13 @@ Deno.test('§3.3 — buildIvvIjhUpsertRows stamps source=ivv_ijh_composite on ev
 
 // ---------- §3.4 — Partial failure --------------------------------------
 
-Deno.test('§3.4 — IVV 500 error, IJH ok → partial_source_failure, no roster', async () => {
+Deno.test('§3.4 — IVV 404 error, IJH ok → partial_source_failure, no roster', async () => {
+  // 4xx (non-retryable) surfaces as `http_error` with status carried
+  // through. 5xx would be retried by fetchWithTimeoutAndRetry and eventually
+  // surface as `network_error` — the fail-closed semantic is identical
+  // (no writes), but this test pins the http_status carry-through path.
   const httpFetch = mockFetch((url) => {
-    if (url === ISHARES_IVV_HOLDINGS_URL) return textResp(500, 'server error', 'text/plain');
+    if (url === ISHARES_IVV_HOLDINGS_URL) return textResp(404, 'not found', 'text/plain');
     if (url === ISHARES_IJH_HOLDINGS_URL) return textResp(200, isharesCsv(alphaTickers(400, 'M')));
     return jsonResp(404, {});
   });
@@ -148,7 +152,8 @@ Deno.test('§3.4 — IVV 500 error, IJH ok → partial_source_failure, no roster
   assertEquals(r.status, 'partial_source_failure');
   assert(r.ivv !== null, 'ivv failure should be surfaced');
   assertEquals(r.ijh, null);
-  assertEquals(r.ivv?.http_status, 500);
+  assertEquals(r.ivv?.status, 'http_error');
+  assertEquals(r.ivv?.http_status, 404);
 });
 
 // ---------- §3.5 — Idempotency ------------------------------------------
