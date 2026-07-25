@@ -166,8 +166,16 @@ export function reconstructFixtureI(
   for (const [t, d, px] of barEntries) barMap.set(MapBarSource.key(t, d), price(px));
   const barSource = new MapBarSource(barMap);
 
-  const sessions = FIXTURE_I_SESSIONS_2024_05;
-  const calendar = new ArraySessionCalendar(sessions);
+  // CALENDAR keeps the full session grid so the ord-10 exit resolves
+  // to 2024-05-16 (event_date=5/2 + 10 sessions). The EQUITY-WALK grid
+  // is deliberately reduced to just {entry_date, exit_date}: the fixture
+  // carries bars only at those two boundaries (pnl_rule: raw entry_open →
+  // raw exit_close, with no intermediate marks). Walking the equity path
+  // over interior sessions would trip `mark_gap_in_open_book` — honestly,
+  // because those interior bars aren't in the fixture. Fixture-ii (TURN-2)
+  // will exercise the interior-mark path with hand-computed checkpoints.
+  const calendar = new ArraySessionCalendar(FIXTURE_I_SESSIONS_2024_05);
+  const sessions = deriveSessionsFromFixture(fixture.rows);
 
   const plan: PipelinePlan = {
     startingEquityUsd: money(startingEquityUsd),
