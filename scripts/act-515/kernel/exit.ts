@@ -366,13 +366,41 @@ export function runExit(
 // Cash seam (PIN (d))
 // -----------------------------------------------------------------------------
 
-/** Cash outlay at entry.
- *  · LONG: `+slotNotional` (cash spent to buy).
- *  · SHORT: `−slotNotional` (short-sale proceeds credited; Reg-T
- *    maintenance is handled at Module 7 per estimator-assumptions §1). */
-export function cashRequired(side: SideDb, slotNotional: Money): Money {
+/** BUYING-POWER TARGET (pre-trade sizing / risk-limit check). NOT a ledger flow.
+ *
+ *  · LONG: `+slotNotional` (target USD to spend).
+ *  · SHORT: `−slotNotional` (target USD of short-sale proceeds).
+ *
+ *  Renamed from `cashRequired` on 2026-07-25 (ACT-515 GATE-(iii) TIER-A
+ *  repair; see equity.ts header §"CASH SEAM RENAME"). Prior name overloaded
+ *  a buying-power target as a cash-ledger flow, which under-credited the
+ *  ledger by Σ(slot − shares·entryPrice) — sign-flipped by side. The cash
+ *  LEDGER (Module 7) now moves ONLY executed cents via `entryCash`; this
+ *  function is reserved for pre-trade sizing / margin-headroom checks. */
+export function slotBuyingPower(side: SideDb, slotNotional: Money): Money {
   const n = slotNotional as number;
   return money(side === 'long' ? n : -n);
+}
+
+/** ENTRY CASH FLOW — executed cents at fill. This is the ONE-AND-ONLY entry
+ *  seam for the Module-7 cash ledger.
+ *
+ *  · LONG: `−shares × entryPrice`  (cash debited to buy).
+ *  · SHORT: `+shares × entryPrice` (short-sale proceeds credited into cash;
+ *    Reg-T maintenance is handled at Module 7 per estimator-assumptions §1).
+ *
+ *  Sign convention MIRRORS `settleProceeds` (long: +proceeds; short: −cover).
+ *  Round-trip identity:  realized  =  settleProceeds(...)  +  entryCash(...)
+ *  (equivalently: `realized = settleProceeds − (−entryCash)`; the sign
+ *  arithmetic is symmetric because both entry and exit are executed flows,
+ *  not target-based amounts). */
+export function entryCash(
+  side: SideDb,
+  sharesCount: Shares,
+  entryPrice: Price,
+): Money {
+  const gross = (sharesCount as number) * (entryPrice as number);
+  return money(fromCents(toCents(side === 'long' ? -gross : gross)));
 }
 
 /** Cash settlement at exit.
