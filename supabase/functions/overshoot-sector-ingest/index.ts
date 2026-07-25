@@ -153,6 +153,23 @@ Deno.serve(createHandler(async (req: Request): Promise<Response> => {
   const authMode = cronOk ? 'cron' : svcOk ? 'service_role' : oneshotOk ? 'oneshot' : userOk ? 'user_perm' : 'none';
   const isCron = cronOk;
 
+  // Debug probe (non-leaking): returns auth-mode + presence flags for each
+  // path. No secret values echoed. Used for one-shot backfill invocation
+  // diagnosis when apply=true is refused.
+  if (req.headers.get('x-probe-auth') === '1') {
+    return apiSuccess({
+      probe: 'auth',
+      auth_mode: authMode,
+      cron_hdr_present: (req.headers.get('x-cron-secret') ?? '').length > 0,
+      bearer_present: bearer.length > 0,
+      svc_key_env_present: svcKey.length > 0,
+      oneshot_hdr_present: hdrOneshot.length > 0,
+      oneshot_env_present: oneshot.length > 0,
+      user_ok: userOk,
+      correlationId,
+    });
+  }
+
   const bodyRaw = await req.text();
   let body: {
     probe?: string;
