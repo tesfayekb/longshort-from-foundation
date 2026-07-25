@@ -76,44 +76,51 @@ Every config chain delivers in one turn as:
 
 ## 5. Blockers (pre-compute)
 
-### B1 — Hand-truth fixture DEVIATION (from `estimator-assumptions.md` §5)
+### B1 — Hand-truth fixture — **CLOSED** (INC-144)
 
-Operator cited "2024-05-02 hand-truth fixture (sha `d06bd24c`)". Repo state:
-- `d06bd24c` sha absent from every file in HEAD.
-- `2024-05-02` in `selection-parity_test.ts` is an EMPTY-MAP negative-control date, not a hand-truth fixture.
-- Engine README plans a `2023-Q2` validation window; not built.
+Fixture verified PRESENT at HEAD, byte-exact sha
+`d06bd24cadcb608c2525b042ec40a1db112fa6f363ac3ae288d3f4ac7ecff1a2`
+(see `hand-truth-fixture-verification.md` and updated
+`estimator-assumptions.md §5`). Prior "absent" claim was a
+string-grep-for-a-hash fabrication — filed as INC-144 with
+never-delete-class extension for `fixtures/**`. Layer-1 gate stands:
+selection-parity replay green + hand-truth replay byte-exact-green
+BEFORE any matrix cell computes. 2023-Q2 becomes fixture #2, built
+during kernel `mark`/`equity` module bring-up.
 
-**Cannot proceed to Layer-1 validity gate (C0) without operator ruling on:**
-- (i) Build the 2023-Q2 hand-truth fixture as the engine README plans, then run selection-parity + fixture as the L1 gate; OR
-- (ii) `d06bd24c` lives on a branch — provide branch name; OR
-- (iii) Use the 2024-05-02 empty-map date as the L1 gate (trivial coverage — not recommended).
+### B2 — Sector-cap (e) — **GATED on sector-metadata ingest**
 
-### B2 — "Sector-cap variants (d)-(e) per charter" — SCOPE CLARIFICATION
+Operator ruling B2: charter amendment adds (e) sector-cap with
+pre-committed levels, but evidence-first. Grep result:
 
-Operator instruction §2 says "(d) sector-cap variants (state the cap levels from the
-charter), (e) per charter". The charter's §1 defines:
-- **(a)** 1.0× baseline
-- **(b)** 2.0× leverage
-- **(c)** SPY buy-and-hold
-- **(d)** regime-exit counterfactual (d1/d2/d3)
-- **(e)** — **NOT PRESENT in charter**. Charter §1 has (a)/(b)/(c)/(d) only.
+| Table | Sector column? |
+|---|---|
+| `public.overshoot_universe` (MIG in `20260703044900_...`) | **NO** — columns are `ticker/source/added_as_of/active/timestamps` only |
+| `public.universe_membership` (longshort lane) | YES — `gics_sector text` (MIG `20260605065818_...`) |
 
-Sector-cap does NOT appear as a charter config; it is referenced in the operator's
-earlier ACT-515(e) filings as a separate control (see conversation summary
-"ACT-515(e) sector-cap"). This is a SCOPE DEVIATION — either:
-- (i) The operator wants a NEW charter amendment adding (e) sector-cap as a config row with cap levels named; OR
-- (ii) Sector-cap analysis is out-of-scope for this deliverable and lives in a companion ACT (charter as-written).
+Overshoot substrate has **no sector metadata**. Amendment landed as
+`charter-amendment-e-sector-cap.md`: (e) is defined with levels
+{baseline uncapped, 30% notional/sector, 20% notional/sector} but its
+compute is **BLOCKED on sector-metadata ingest**. Ingest source
+candidates + cost documented in the amendment; no fabricated GICS
+classifications will be written into the substrate. (a)–(d) proceed
+independently.
 
-**Cannot compute (e) without operator ruling on scope + cap-level values.** Charter
-amendment recommended if (i).
+### B3 — Kernel re-sequence — **ACCEPTED** (per operator ruling B3)
 
-### B3 — Layer-1 validity re-verification prerequisite
+DEV-13 accepted. Engine kernel is a multi-turn workstream (one module
+per turn: types → clock → admit → size → mark → exit → equity/DD,
+each unit-tested; then both hand-truth fixtures green before the first
+cell computes). It proceeds **in parallel** with SQL-only weekend
+deliverables that need no engine:
 
-Charter §2 of user instruction: "the engine must prove it still reproduces known truth
-first." Selection-parity replay tests exist at
-`supabase/functions/_shared/overshoot/detector/selection-parity_test.ts` and are the
-standing Layer-1 gate. They need re-run green in the SAME turn as the first config
-chain lands, per §22.5.1 read-back discipline.
+1. **ACT-573 Phase-1** — refused-winners forensics (folds DEV-8 dual-side walkthrough + λ corpus rate). NOW.
+2. **ACT-574** — entry-day offset grid.
+3. **ACT-570 Phase-0/1**.
+4. **ACT-515 matrix** — lands **mid-week**, when kernel + both fixtures go green. Register row and estimated turn count filed honestly (not "Monday").
+
+Layer-1 validity replay (selection-parity + hand-truth) remains the
+§22.5.1 read-back gate in the same turn as the first cell chain.
 
 ## 6. What lands this turn (pre-commit only)
 
@@ -122,18 +129,23 @@ chain lands, per §22.5.1 read-back discipline.
 - `scripts/act-515/verdict-table-template.md` (empty template, PENDING cells)
 - `scripts/act-515/estimator-assumptions.md` (frozen assumptions + B1 deviation)
 - `scripts/act-515/compute-plan.md` (this file)
+- `scripts/act-515/hand-truth-fixture-verification.md` (B1 evidence)
+- `scripts/act-515/charter-amendment-e-sector-cap.md` (B2 amendment)
 
 **Zero numbers quoted. Zero compute run. Zero engine code touched.** Pre-commit is the
 full turn deliverable, per operator §1 discipline.
 
 ## 7. What lands NEXT turn (subject to B1/B2 rulings)
 
-- If B1 ruling = (i): engine kernel build begins (`engine/types.ts` first, then
-  `clock.ts`, then `admit.ts`, etc. — unit-tested per file).
-- If B2 ruling = (i): charter amendment lands as `ACT-515-CHARTER-AMENDMENT-sector-cap.md`
-  with cap-level values pre-committed BEFORE compute.
-- If B1/B2 ruling = defer: the pre-commit bundle stands complete; the engine build
-  workstream proceeds under its own tracker without ACT-515 numeric deliverable this
-  weekend.
+Per B1/B2/B3 rulings:
+- Kernel bring-up starts with `engine/types.ts` module (one turn), then
+  `clock.ts`, `admit.ts`, `size.ts`, `mark.ts`, `exit.ts`,
+  `equity.ts` — each with unit tests. In parallel: hand-truth fixture
+  #2 (2023-Q2) built during `mark`/`equity` bring-up.
+- SQL-only weekend chains (ACT-573 Phase-1 → ACT-574 → ACT-570) run
+  independently and produce numeric deliverables that do NOT wait on
+  the kernel.
+- ACT-515 matrix computes when both fixtures green (mid-week
+  expected; register row carries the honest date).
 
 **END COMPUTE PLAN.**
