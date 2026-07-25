@@ -367,17 +367,17 @@ function serializeCheckpoints(): string {
     purpose: 'Mid-path equity checkpoints for gate-fixture-ii. Each row states the hand-computed cashCents, longMvCents, shortMvCents, and equityCents that the kernel must reproduce byte-exactly on the given sessionDate. Every number in the arithmetic is witnessed by the header block in build-fixture-2023q2.ts (search for "CHECKPOINT HAND-ARITHMETIC").',
   };
   const rows = [
-    { checkpoint: 'CHK-1',    sessionDate: '2023-05-04', cashCents:  8_188_966, longMvCents: 1_985_165, shortMvCents: 0, equityCents: 10_174_131, openLotIds: ['fixII-07','fixII-08'] },
-    { checkpoint: 'CHK-2',    sessionDate: '2023-05-16', cashCents:  8_227_239, longMvCents: 1_961_598, shortMvCents: 0, equityCents: 10_188_837, openLotIds: ['fixII-09','fixII-10'] },
-    { checkpoint: 'CHK-3',    sessionDate: '2023-06-02', cashCents:  7_242_623, longMvCents: 3_006_544, shortMvCents: 0, equityCents: 10_249_167, openLotIds: ['fixII-11','fixII-12','fixII-13'] },
+    { checkpoint: 'CHK-1',    sessionDate: '2023-05-04', cashCents:  8_153_017, longMvCents: 1_985_165, shortMvCents: 0, equityCents: 10_138_182, openLotIds: ['fixII-07','fixII-08'] },
+    { checkpoint: 'CHK-2',    sessionDate: '2023-05-16', cashCents:  8_204_950, longMvCents: 1_961_598, shortMvCents: 0, equityCents: 10_166_548, openLotIds: ['fixII-09','fixII-10'] },
+    { checkpoint: 'CHK-3',    sessionDate: '2023-06-02', cashCents:  8_225_422, longMvCents: 2_012_400, shortMvCents: 0, equityCents: 10_237_822, openLotIds: ['fixII-12','fixII-13'] },
   ];
   const terminal = {
     checkpoint: 'TERMINAL', sessionDate: '2023-06-23',
-    cashCents: 10_166_772, longMvCents: 0, shortMvCents: 0, equityCents: 10_166_772,
-    sumRealizedCents_module6: 166_771,
-    cashWalker_delta_cents: 166_772,
+    cashCents: 10_154_295, longMvCents: 0, shortMvCents: 0, equityCents: 10_154_295,
+    sumRealizedCents_module6: 154_296,
+    cashWalker_delta_cents: 154_295,
     cent_drift_cents: 1,
-    cent_drift_source: 'fixII-04 NFLX: |entry_cash|−|exit_cash| = 999571−964261 = 35310 vs realized round(294*(33.999−32.798)*100) = 35309',
+    cent_drift_source: 'fixII-03 NVDA: cash-walker Δ = round(376*26.584*100)−round(376*26.463*100) = 999558−995009 = 4549 vs realized round(376*(26.584−26.463)*100) = 4550 (walker LOW by 1c under TURN-2 exits; prior NFLX drift eliminated by new 32.312 exit close).',
   };
   return [
     '# ' + JSON.stringify(header),
