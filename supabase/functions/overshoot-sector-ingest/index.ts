@@ -60,10 +60,10 @@ const DEFAULT_APPLY_LIMIT = 1000; // ~IVV+IJH universe headroom
 const REQUIRED_FMP_FIELDS = ['symbol', 'sector', 'industry'] as const;
 const RATE_LIMIT_DELAY_MS = 100;
 
-// SOURCE_VERSION — sector-ingest Turn 2 landing (fetcher + fn + smoke).
-// Bump on any money-path / substrate-behaviour change (Turn 3 backfill flips
-// to '+t3'). See _shared/handler.ts sourceVersion contract.
-const SOURCE_VERSION = 'sector-ingest-t2';
+// SOURCE_VERSION — sector-ingest Turn 3 armed (MIG-169 seeded job_registry
+// row; apply-mode gated by cron secret + kill-switch + job.enabled + explicit
+// `?apply=true`). See _shared/handler.ts sourceVersion contract.
+const SOURCE_VERSION = 'sector-ingest-t3';
 
 function todayUtcIso(): string {
   return productionClock.getWallClockTs().toISOString().slice(0, 10);
