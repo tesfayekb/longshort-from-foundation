@@ -91,8 +91,17 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
  * K_remaining for the budget cap, and stamps `metadata.pass` on every
  * audit row (primary rows now stamp 'primary'). See
  * `docs/04-modules/overshoot/fix-8.md`.
+ *
+ * 2026-07-25 — L-01 arm bump: fb5fdf13+fix2+fix8+sp1+fix9 →
+ * fb5fdf13+fix2+fix8+sp1+fix9+l01a. Per-admit A/B randomization of the
+ * marketable-limit slippage cap (Arm A = 50 bps, Arm B = 40 bps).
+ * Deterministic FNV-1a over (runId, ticker) inside
+ * `_shared/overshoot-execution/limit-arm.ts`; stamped on the entry
+ * submission audit metadata AND on `overshoot_lots.metadata`
+ * (`{"limit_arm","limit_slippage_bps"}`). Charter:
+ * `docs/06-tracking/charters/L-01-limit-ladder-tightening.md`.
  */
-export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1+fix9';
+export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1+fix9+l01a';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
@@ -154,6 +163,15 @@ import {
   constructEntryLimitPrice,
   type EntrySide,
 } from '../_shared/overshoot-execution/entry-price-construction.ts';
+import {
+  pickLimitArm,
+  OVERSHOOT_LIMIT_ARM_A_SLIPPAGE_BPS,
+  OVERSHOOT_LIMIT_ARM_B_SLIPPAGE_BPS,
+} from '../_shared/overshoot-execution/limit-arm.ts';
+// Grep-anchor: L-01 A/B constants void-referenced so the source-sentinel
+// tests can prove both arms are wired into the deployed handler.
+void OVERSHOOT_LIMIT_ARM_A_SLIPPAGE_BPS;
+void OVERSHOOT_LIMIT_ARM_B_SLIPPAGE_BPS;
 import type { PolygonQuoteSnapshot } from '../_shared/overshoot-execution/exit-price-construction.ts';
 import {
   OVERSHOOT_I5_REVERSION_MAX_LONG,
@@ -1354,8 +1372,17 @@ Deno.serve(createHandler(async (req: Request) => {
         }
       }
 
-      // Entry-price construction (W3.6.e-i).
-      const priced = constructEntryLimitPrice({ snapshot: snap, side: entrySide, asOf: nowTs });
+      // L-01 charter — per-admit A/B arm assignment (deterministic under
+      // (runId, ticker); session-matched pairing per §3). Arm chooses the
+      // slippage cap passed into constructEntryLimitPrice; both arms
+      // cross the quote in the same direction, only the cross-magnitude
+      // differs. Audit + lot metadata carry the arm forward.
+      const limitArmPick = pickLimitArm(runId, sel.ticker, 0);
+      // Entry-price construction (W3.6.e-i) — slippage cap = arm's cap.
+      const priced = constructEntryLimitPrice({
+        snapshot: snap, side: entrySide, asOf: nowTs,
+        slippageBps: limitArmPick.slippageBps,
+      });
       if (!priced.ok) {
         tally.entry_price[priced.refusal] = (tally.entry_price[priced.refusal] ?? 0) + 1;
         await writeStrategyAuditEvent({
@@ -1447,6 +1474,11 @@ Deno.serve(createHandler(async (req: Request) => {
             cohort_band: sel.study_cell_band,
             cohort_drawdown_bucket: sel.drawdown_bucket,
             cohort_entry_day_offset: cohortEntryDayOffset,
+            // L-01: arm on every submission audit row for offline
+            // paired-t analysis. limit_slippage_bps mirrors priced.slippageBps
+            // for self-consistency check.
+            limit_arm: limitArmPick.arm,
+            limit_slippage_bps: limitArmPick.slippageBps,
           },
         });
 
@@ -1462,7 +1494,8 @@ Deno.serve(createHandler(async (req: Request) => {
                tier, tier_source_event_run_id, tier_source_as_of_date,
                remaining_qty, filled_qty, exit_attempts,
                cohort_cell_id, cohort_band, cohort_drawdown_bucket, cohort_entry_day_offset,
-               w5_reallocation_ref)
+               w5_reallocation_ref,
+               metadata)
             VALUES (
               ${sel.ticker}, ${nowTs.toISOString()}::timestamptz,
               ${fill.filled_qty}, ${fill.avg_fill_price * fill.filled_qty},
@@ -1470,7 +1503,8 @@ Deno.serve(createHandler(async (req: Request) => {
               ${sel.tier}, ${linkage.runId}, ${sessionDate}::date,
               ${fill.filled_qty}, 0, 0,
               ${cohortCellId}, ${sel.study_cell_band}, ${sel.drawdown_bucket}, ${cohortEntryDayOffset},
-              ${sel.w5_reallocation_ref}
+              ${sel.w5_reallocation_ref},
+              ${sql.json({ limit_arm: limitArmPick.arm, limit_slippage_bps: limitArmPick.slippageBps })}
             )
             RETURNING lot_id::text AS lot_id
           `;
