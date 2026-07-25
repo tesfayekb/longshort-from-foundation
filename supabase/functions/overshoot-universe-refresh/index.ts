@@ -1350,6 +1350,15 @@ Deno.serve(createHandler(async (req: Request) => {
 
   const composite = await fetchIvvIjhComposite();
   if (!composite.ok) {
+    await writeUniverseRefusalAudit({
+      status: composite.status,
+      correlationId,
+      isCron,
+      metadata: {
+        ivv: composite.ivv ?? null,
+        ijh: composite.ijh ?? null,
+      },
+    });
     return apiSuccess({
       ok: false,
       source: IVV_IJH_SOURCE_TAG,
@@ -1365,6 +1374,16 @@ Deno.serve(createHandler(async (req: Request) => {
   // file regressions. The fail-closed 8000-roster test (§3.1) pins this.
   const sanity = checkRosterSanity(composite.tickers.length);
   if (sanity !== null) {
+    await writeUniverseRefusalAudit({
+      status: 'roster_sanity_failed',
+      correlationId,
+      isCron,
+      metadata: {
+        roster_count: composite.tickers.length,
+        sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
+        per_source_counts: composite.per_source_counts,
+      },
+    });
     return apiSuccess({
       ok: false,
       source: IVV_IJH_SOURCE_TAG,
@@ -1385,6 +1404,12 @@ Deno.serve(createHandler(async (req: Request) => {
     .select('ticker')
     .eq('active', true);
   if (readErr) {
+    await writeUniverseRefusalAudit({
+      status: 'universe_read_failed',
+      correlationId,
+      isCron,
+      metadata: { detail: readErr.message },
+    });
     return apiSuccess({ ok: false, status: 'universe_read_failed', detail: readErr.message, correlationId });
   }
   const priorActive = new Set((current ?? []).map((r) => r.ticker as string));
@@ -1419,6 +1444,12 @@ Deno.serve(createHandler(async (req: Request) => {
     .from('overshoot_universe')
     .upsert(upsertRows, { onConflict: 'ticker', ignoreDuplicates: false });
   if (upsertErr) {
+    await writeUniverseRefusalAudit({
+      status: 'universe_upsert_failed',
+      correlationId,
+      isCron,
+      metadata: { detail: upsertErr.message, roster_count: composite.tickers.length },
+    });
     return apiSuccess({ ok: false, status: 'universe_upsert_failed', detail: upsertErr.message, correlationId });
   }
 
@@ -1429,6 +1460,12 @@ Deno.serve(createHandler(async (req: Request) => {
       .update({ active: false }, { count: 'exact' })
       .in('ticker', drift.removed);
     if (deactErr) {
+      await writeUniverseRefusalAudit({
+        status: 'universe_deactivate_failed',
+        correlationId,
+        isCron,
+        metadata: { detail: deactErr.message, removed_count: drift.removed.length },
+      });
       return apiSuccess({ ok: false, status: 'universe_deactivate_failed', detail: deactErr.message, correlationId });
     }
     deactivated = count ?? drift.removed.length;
