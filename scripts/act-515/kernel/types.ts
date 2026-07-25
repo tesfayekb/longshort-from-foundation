@@ -137,7 +137,8 @@ export function sideDetectorToDb(s: SideDetector): SideDb {
 // -----------------------------------------------------------------------------
 
 /** Top-level tally categories emitted by overshoot-entry-run.
- *  Grep-anchor: supabase/functions/overshoot-entry-run/index.ts:294-334. */
+ *  Grep-anchor: supabase/functions/overshoot-entry-run/index.ts:292-334
+ *  (includes `position_already_open` at :292 + :323 + :1126). */
 export type RefusalTallyKey =
   | 'i5_refusals'
   | 'sizing_refusals'
