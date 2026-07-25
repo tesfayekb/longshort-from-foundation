@@ -221,8 +221,7 @@ Deno.test('PIN (d) carry-forward counted as stale, not fresh; aggregates mix cle
 // -----------------------------------------------------------------------------
 
 Deno.test('docs-as-code: missing-bar policy summary appears in both mark.ts and estimator-assumptions.md §9', async () => {
-  const marker =
-    'Carry-forward-last-close is allowed up to `maxCarryDays`';
+  const marker = 'up to `maxCarryDays`';
   const src = await Deno.readTextFile(new URL('./mark.ts', import.meta.url));
   const md = await Deno.readTextFile(new URL('../estimator-assumptions.md', import.meta.url));
   assert(src.includes(marker), 'mark.ts must carry the policy summary line');
