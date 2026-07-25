@@ -16,6 +16,8 @@ Deno.test({
   fn: async () => {
     const cron = Deno.env.get('CRON_SECRET');
     const anon = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY');
+    console.log('cron_present=', Boolean(cron), 'len=', cron?.length ?? 0);
+    console.log('env_keys_sample=', Object.keys(Deno.env.toObject()).filter(k => /secret|key|cron|fmp|supabase/i.test(k)).sort());
     if (!cron) throw new Error('CRON_SECRET missing in test env');
     if (!anon) throw new Error('SUPABASE_ANON_KEY / SUPABASE_PUBLISHABLE_KEY missing in test env');
 
