@@ -194,6 +194,25 @@ export type SizingRefusalCode =
   | 'zero_price_guard'
   | 'notional_overflow';
 
+// -----------------------------------------------------------------------------
+// Mark refusal vocabulary (Module 5 — MARK)
+// -----------------------------------------------------------------------------
+
+/** Typed refusal emitted by the MARK module (`mark.ts`).
+ *  KERNEL-ONLY per PIN (c) of the MARK ruling (2026-07-25): the missing-bar
+ *  policy is a kernel modeling choice — production's equity snapshot writer
+ *  omits the mark entirely when a bar is absent (see
+ *  `supabase/functions/overshoot-equity-snapshot/index.ts:84-89` — rows with
+ *  no `market_value` are simply not summed). The kernel instead PROPAGATES a
+ *  typed absence so the DD curve can flag stale-mark days rather than
+ *  silently priced them.
+ *
+ *  · `mark_unavailable` — no fresh bar AND either (i) no prior mark to carry
+ *      forward, or (ii) carry-forward would exceed `maxCarryDays`. Emitted
+ *      per-lot-day; the aggregate carries `unavailableLots > 0` and the DD
+ *      curve consumer is expected to widen its confidence band or halt. */
+export type MarkRefusalCode = 'mark_unavailable';
+
 /** Per-selection refusal record. `subReason` carries the nested class
  *  (`i5_refusal.<x>`, `price_refusal.<y>`, etc.) verbatim from the audit
  *  action string; the kernel does not enumerate those — it only counts. */
