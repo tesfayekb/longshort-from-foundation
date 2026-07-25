@@ -213,6 +213,35 @@ export type SizingRefusalCode =
  *      curve consumer is expected to widen its confidence band or halt. */
 export type MarkRefusalCode = 'mark_unavailable';
 
+// -----------------------------------------------------------------------------
+// Exit vocabulary + refusals (Module 6 — EXIT)
+// -----------------------------------------------------------------------------
+
+/** Tier literal consumed by the exit-ordinal lookup. Matches the study
+ *  substrate: T1 (long-tail) exits at ord-6; T2 (short-tail) at ord-10.
+ *  Grep-anchor for exit ordinals: operator PIN (a) of the EXIT ruling
+ *  (2026-07-25), corroborated by the hand-truth fixture header
+ *  (`exit_convention:"ordinal-10 close (LONG T2 …)"`) at
+ *    fixtures/overshoot-backtest/2024-05-02-hand-truth.jsonl:1. */
+export type Tier = 'T1' | 'T2';
+
+/** Typed refusals emitted by the EXIT module (`exit.ts`).
+ *  KERNEL-ONLY per PIN (b) of the EXIT ruling (2026-07-25). No phantom
+ *  production strings.
+ *
+ *  · `exit_calendar_exhausted` — the injected `SessionCalendar` returned
+ *      `null` for the tier's ordinal; the study horizon does not reach far
+ *      enough forward from `eventDate`. Emitted rather than clamping to
+ *      the last known session — clamping would silently redefine the exit
+ *      basis.
+ *  · `exit_price_unavailable` — the exit-day close (and any carry-forward
+ *      up to `maxCarryDays`) is absent. Mirror of `mark_unavailable` at
+ *      the exit fill; a typed refusal rather than fabricating an exit price
+ *      from the prior mark. */
+export type ExitRefusalCode =
+  | 'exit_calendar_exhausted'
+  | 'exit_price_unavailable';
+
 /** Per-selection refusal record. `subReason` carries the nested class
  *  (`i5_refusal.<x>`, `price_refusal.<y>`, etc.) verbatim from the audit
  *  action string; the kernel does not enumerate those — it only counts. */
