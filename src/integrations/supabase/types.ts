@@ -2246,6 +2246,7 @@ export type Database = {
           expected_settlement_ts: string | null
           filled_qty: number
           lot_id: string
+          metadata: Json
           operator_id: string
           qty: number
           realized_pnl_partial: number
@@ -2275,6 +2276,7 @@ export type Database = {
           expected_settlement_ts?: string | null
           filled_qty?: number
           lot_id?: string
+          metadata?: Json
           operator_id?: string
           qty: number
           realized_pnl_partial?: number
@@ -2304,6 +2306,7 @@ export type Database = {
           expected_settlement_ts?: string | null
           filled_qty?: number
           lot_id?: string
+          metadata?: Json
           operator_id?: string
           qty?: number
           realized_pnl_partial?: number

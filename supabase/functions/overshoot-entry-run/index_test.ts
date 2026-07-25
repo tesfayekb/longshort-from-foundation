@@ -25,6 +25,46 @@ import { OVERSHOOT_DAILY_ENTRY_BUDGET } from '../_shared/overshoot-execution/dai
 const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
 
 // ─────────────────────────────────────────────────────────────────────────
+// L-01 charter — limit-ladder A/B arm source sentinels
+// (charter: docs/06-tracking/charters/L-01-limit-ladder-tightening.md)
+// ─────────────────────────────────────────────────────────────────────────
+
+Deno.test('L-01: SOURCE_VERSION bumped to fb5fdf13+fix2+fix8+sp1+fix9+l01a', () => {
+  assertStringIncludes(SRC, "SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1+fix9+l01a'");
+});
+
+Deno.test('L-01: limit-arm module imported (pickLimitArm + both slippage constants)', () => {
+  assertStringIncludes(SRC, "from '../_shared/overshoot-execution/limit-arm.ts'");
+  assertStringIncludes(SRC, 'pickLimitArm,');
+  assertStringIncludes(SRC, 'OVERSHOOT_LIMIT_ARM_A_SLIPPAGE_BPS');
+  assertStringIncludes(SRC, 'OVERSHOOT_LIMIT_ARM_B_SLIPPAGE_BPS');
+  assertStringIncludes(SRC, 'void OVERSHOOT_LIMIT_ARM_A_SLIPPAGE_BPS');
+  assertStringIncludes(SRC, 'void OVERSHOOT_LIMIT_ARM_B_SLIPPAGE_BPS');
+});
+
+Deno.test('L-01: pickLimitArm invoked before constructEntryLimitPrice (arm chooses the cap)', () => {
+  const idxPick    = SRC.indexOf('pickLimitArm(runId, sel.ticker');
+  const idxConstr  = SRC.indexOf('constructEntryLimitPrice({');
+  assert(idxPick > 0, 'pickLimitArm call not found');
+  assert(idxConstr > 0, 'constructEntryLimitPrice call not found');
+  assert(idxPick < idxConstr, 'pickLimitArm MUST precede constructEntryLimitPrice');
+  assertStringIncludes(SRC, 'slippageBps: limitArmPick.slippageBps');
+});
+
+Deno.test('L-01: arm + slippage stamped on submission-audit metadata', () => {
+  assertStringIncludes(SRC, 'limit_arm: limitArmPick.arm');
+  assertStringIncludes(SRC, 'limit_slippage_bps: limitArmPick.slippageBps');
+});
+
+Deno.test('L-01: arm + slippage stamped on overshoot_lots.metadata (jsonb) at INSERT', () => {
+  assertStringIncludes(SRC, 'metadata)');
+  assertStringIncludes(
+    SRC,
+    "sql.json({ limit_arm: limitArmPick.arm, limit_slippage_bps: limitArmPick.slippageBps })}::jsonb",
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────
 // ACT-501 — Daily entry budget (K=5) source sentinels.
 // ─────────────────────────────────────────────────────────────────────────
 
