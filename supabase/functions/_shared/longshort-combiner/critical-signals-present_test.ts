@@ -1,5 +1,5 @@
 // @ts-nocheck — Deno test file
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 /**
  * DW-206 Fix B (ACT-434) — shared critical-signal presence helper.
  * Single source of truth for the tick's Gate-3 and the shadow-rank

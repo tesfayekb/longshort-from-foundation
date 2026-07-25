@@ -559,7 +559,7 @@ export function createRankerOrchestrator(ctx: RankerOrchestratorContext) {
             intraday_slot,
           });
         } catch (shapErr) {
-          // eslint-disable-next-line no-console
+           
           console.error(
             '[ranker-orchestrator] shap-attribution sidecar failed (non-blocking):',
             (shapErr as Error).message,
