@@ -716,6 +716,51 @@ export type Database = {
         }
         Relationships: []
       }
+      finra_shvol_ingest_log: {
+        Row: {
+          attempted_at: string
+          bytes_downloaded: number | null
+          duration_ms: number | null
+          error_message: string | null
+          http_status: number | null
+          id: string
+          rows_in_file: number | null
+          rows_matched_universe: number | null
+          rows_upserted: number | null
+          source_url: string
+          status: string
+          trade_date: string
+        }
+        Insert: {
+          attempted_at?: string
+          bytes_downloaded?: number | null
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          rows_in_file?: number | null
+          rows_matched_universe?: number | null
+          rows_upserted?: number | null
+          source_url: string
+          status: string
+          trade_date: string
+        }
+        Update: {
+          attempted_at?: string
+          bytes_downloaded?: number | null
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          rows_in_file?: number | null
+          rows_matched_universe?: number | null
+          rows_upserted?: number | null
+          source_url?: string
+          status?: string
+          trade_date?: string
+        }
+        Relationships: []
+      }
       hard_exclusions: {
         Row: {
           applied_at: string
@@ -2255,6 +2300,42 @@ export type Database = {
           si_pct_float?: number | null
           source_run_id?: string | null
           ticker?: string
+        }
+        Relationships: []
+      }
+      overshoot_short_volume_daily: {
+        Row: {
+          ingested_at: string
+          market: string | null
+          short_exempt_volume: number
+          short_volume: number
+          source: string
+          svr: number | null
+          ticker: string
+          total_volume: number
+          trade_date: string
+        }
+        Insert: {
+          ingested_at?: string
+          market?: string | null
+          short_exempt_volume?: number
+          short_volume: number
+          source?: string
+          svr?: number | null
+          ticker: string
+          total_volume: number
+          trade_date: string
+        }
+        Update: {
+          ingested_at?: string
+          market?: string | null
+          short_exempt_volume?: number
+          short_volume?: number
+          source?: string
+          svr?: number | null
+          ticker?: string
+          total_volume?: number
+          trade_date?: string
         }
         Relationships: []
       }
@@ -3817,6 +3898,17 @@ export type Database = {
           call_name: string | null
           event_count: number | null
           outcome: Database["public"]["Enums"]["reconciliation_outcome"] | null
+        }
+        Relationships: []
+      }
+      v_finra_shvol_coverage: {
+        Row: {
+          first_day: string | null
+          last_day: string | null
+          n_days: number | null
+          n_rows: number | null
+          n_tickers: number | null
+          yr: number | null
         }
         Relationships: []
       }

@@ -1,0 +1,1 @@
+ALTER VIEW public.v_finra_shvol_coverage SET (security_invoker = true);

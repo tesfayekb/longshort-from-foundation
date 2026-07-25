@@ -1,1 +1,4 @@
 project_id = "sftatlxatbdrotivxcip"
+
+[functions.finra-shvol-ingest]
+verify_jwt = false
