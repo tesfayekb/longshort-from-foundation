@@ -42,6 +42,8 @@
  */
 import { createHandler, apiSuccess } from '../_shared/handler.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
+import { authenticateRequest } from '../_shared/authenticate-request.ts';
+import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { supabaseAdmin } from '../_shared/supabase-admin.ts';
 import { productionClock } from '../_shared/longshort-clock.ts';
 import { writeStrategyAuditEvent } from '../_shared/strategy-audit.ts';
@@ -137,8 +139,18 @@ Deno.serve(createHandler(async (req: Request): Promise<Response> => {
   const oneshot = Deno.env.get('BACKFILL_ONESHOT_SECRET') ?? '';
   const hdrOneshot = req.headers.get('x-oneshot-secret') ?? '';
   const oneshotOk = oneshot.length > 0 && hdrOneshot.length > 0 && oneshot === hdrOneshot;
-  const privileged = cronOk || svcOk || oneshotOk;
-  const authMode = cronOk ? 'cron' : svcOk ? 'service_role' : oneshotOk ? 'oneshot' : 'none';
+  let userOk = false;
+  if (!cronOk && !svcOk && !oneshotOk) {
+    try {
+      const authCtx = await authenticateRequest(req);
+      await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
+      userOk = true;
+    } catch {
+      userOk = false;
+    }
+  }
+  const privileged = cronOk || svcOk || oneshotOk || userOk;
+  const authMode = cronOk ? 'cron' : svcOk ? 'service_role' : oneshotOk ? 'oneshot' : userOk ? 'user_perm' : 'none';
   const isCron = cronOk;
 
   const bodyRaw = await req.text();
