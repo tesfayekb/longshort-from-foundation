@@ -21,8 +21,6 @@
 // This mirrors the fixture header's "certifies BOTH separately" clause.
 
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { crypto } from 'https://deno.land/std@0.224.0/crypto/mod.ts';
-import { encodeHex } from 'https://deno.land/std@0.224.0/encoding/hex.ts';
 import {
   parseHandTruthFixtureII, parseBars, parseCalendar, parseCheckpoints,
   reconstructFixtureII,
@@ -41,7 +39,7 @@ const PATHS = {
 async function sha256Hex(path: URL): Promise<string> {
   const bytes = await Deno.readFile(path);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return encodeHex(new Uint8Array(digest));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 Deno.test('GATE FIXTURE-II — INC-135 sha-stamp gate (four files byte-pinned)', async () => {
