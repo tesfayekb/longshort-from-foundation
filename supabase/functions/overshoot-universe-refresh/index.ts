@@ -1302,74 +1302,68 @@ Deno.serve(createHandler(async (req: Request) => {
     return apiSuccess({ ok: true, skipped: 'kill_switch_active', correlationId });
   }
 
-  if (!apiKey) {
-    return apiSuccess({ ok: false, status: 'polygon_api_key_missing', correlationId });
-  }
-
+  // ACT-571 — DEFAULT PATH: IVV ∪ IJH composite. Polygon `I:RUT` is DELETED
+  // from the default path (misconfigured for our identity per INC-140); the
+  // `probe:'polygon'` diagnostic above retains a probe-only sanity read.
   const nowIso = productionClock.getWallClockTs();
   const asOfDate = (body.as_of ?? nowIso.toISOString().slice(0, 10));
 
-  const roster = await fetchRussellRoster(apiKey);
-  if (roster.kind !== 'ok') {
+  const composite = await fetchIvvIjhComposite();
+  if (!composite.ok) {
     return apiSuccess({
       ok: false,
-      status: `roster_${roster.kind}`,
+      source: IVV_IJH_SOURCE_TAG,
+      status: composite.status,
+      ivv: composite.ivv ?? undefined,
+      ijh: composite.ijh ?? undefined,
       correlationId,
-      http_status: 'http_status' in roster ? roster.http_status : undefined,
-      reason: 'reason' in roster ? roster.reason : undefined,
     });
   }
 
-  // Hard sanity gate — refuse ALL writes when count is outside the band.
-  // This defends against silent filter-ignore regressions (INC-120 root
-  // cause) and any future taxonomy drift on Polygon's side.
-  const sanity = checkRosterSanity(roster.tickers.length);
+  // Hard sanity gate — refuse ALL writes when composite roster is outside
+  // [850, 950]. Defends against silent filter-ignore / CDN-returned-wrong-
+  // file regressions. The fail-closed 8000-roster test (§3.1) pins this.
+  const sanity = checkRosterSanity(composite.tickers.length);
   if (sanity !== null) {
     return apiSuccess({
       ok: false,
+      source: IVV_IJH_SOURCE_TAG,
       status: 'roster_sanity_failed',
-      roster_count: roster.tickers.length,
+      roster_count: composite.tickers.length,
       sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
-      sample_first_10: roster.tickers.slice(0, 10),
-      index_code: POLYGON_RUSSELL2000_CODE,
-      pages_fetched: roster.pages,
+      per_source_counts: composite.per_source_counts,
+      csv_sha256_provenances: composite.csv_sha256_provenances,
+      sample_first_10: composite.tickers.slice(0, 10),
       correlationId,
     });
   }
 
-  const freshSet = new Set(roster.tickers);
+  const freshSet = new Set(composite.tickers);
 
-  // Load current active universe for delta computation.
   const { data: current, error: readErr } = await supabaseAdmin
     .from('overshoot_universe')
-    .select('ticker, active')
+    .select('ticker')
     .eq('active', true);
   if (readErr) {
     return apiSuccess({ ok: false, status: 'universe_read_failed', detail: readErr.message, correlationId });
   }
-  const currentActive = new Set((current ?? []).map((r) => r.ticker as string));
-  const toDeactivate: string[] = [];
-  for (const t of currentActive) {
-    if (!freshSet.has(t)) toDeactivate.push(t);
-  }
-  const upsertRows = roster.tickers.map((t) => ({
-    ticker: t,
-    source: 'polygon:russell2000',
-    added_as_of: asOfDate,
-    active: true,
-  }));
+  const priorActive = new Set((current ?? []).map((r) => r.ticker as string));
+  const drift = computeUniverseDrift(priorActive, freshSet);
+  const upsertRows = buildIvvIjhUpsertRows(composite.tickers, asOfDate);
 
   if (body.dry_run === true) {
     return apiSuccess({
       ok: true,
       dry_run: true,
-      roster_count: roster.tickers.length,
+      source: IVV_IJH_SOURCE_TAG,
+      roster_count: composite.tickers.length,
       sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
+      per_source_counts: composite.per_source_counts,
+      csv_sha256_provenances: composite.csv_sha256_provenances,
+      as_of_from_source: composite.as_of_from_source,
+      drift_report: drift,
       would_upsert: upsertRows.length,
-      would_deactivate: toDeactivate.length,
-      would_deactivate_sample: toDeactivate.slice(0, 10),
-      pages_fetched: roster.pages,
-      index_code: POLYGON_RUSSELL2000_CODE,
+      would_deactivate: drift.removed.length,
       as_of_date: asOfDate,
       correlationId,
     });
@@ -1389,15 +1383,15 @@ Deno.serve(createHandler(async (req: Request) => {
   }
 
   let deactivated = 0;
-  if (toDeactivate.length > 0) {
+  if (drift.removed.length > 0) {
     const { error: deactErr, count } = await supabaseAdmin
       .from('overshoot_universe')
       .update({ active: false }, { count: 'exact' })
-      .in('ticker', toDeactivate);
+      .in('ticker', drift.removed);
     if (deactErr) {
       return apiSuccess({ ok: false, status: 'universe_deactivate_failed', detail: deactErr.message, correlationId });
     }
-    deactivated = count ?? toDeactivate.length;
+    deactivated = count ?? drift.removed.length;
   }
 
   await writeStrategyAuditEvent({
@@ -1407,22 +1401,38 @@ Deno.serve(createHandler(async (req: Request) => {
     targetType: 'overshoot_universe',
     correlationId,
     metadata: {
+      source: IVV_IJH_SOURCE_TAG,
       as_of_date: asOfDate,
-      roster_count: roster.tickers.length,
+      as_of_from_source: composite.as_of_from_source,
+      roster_count: composite.tickers.length,
       upserted: upsertRows.length,
       deactivated,
-      pages_fetched: roster.pages,
+      per_source_counts: composite.per_source_counts,
+      csv_sha256_provenances: composite.csv_sha256_provenances,
+      drift_report: {
+        added_count: drift.added.length,
+        removed_count: drift.removed.length,
+        unchanged_count: drift.unchanged_count,
+        prior_active_count: drift.prior_active_count,
+        next_active_count: drift.next_active_count,
+        added_sample: drift.added.slice(0, 20),
+        removed_sample: drift.removed.slice(0, 20),
+      },
       is_cron: isCron,
     },
   });
 
   return apiSuccess({
     ok: true,
+    source: IVV_IJH_SOURCE_TAG,
     as_of_date: asOfDate,
-    roster_count: roster.tickers.length,
-    upserted: upsertRows.length,
-    deactivated,
-    pages_fetched: roster.pages,
+    roster_count: composite.tickers.length,
+    sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
+    per_source_counts: composite.per_source_counts,
+    csv_sha256_provenances: composite.csv_sha256_provenances,
+    as_of_from_source: composite.as_of_from_source,
+    drift_report: drift,
+    writes: { upserted: upsertRows.length, deactivated },
     correlationId,
   });
 }));
