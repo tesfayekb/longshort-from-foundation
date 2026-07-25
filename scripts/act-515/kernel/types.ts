@@ -159,6 +159,41 @@ export type NoOpReason =
   | 'equity_snapshot_unavailable'
   | 'budget_exhausted_pre_loop';
 
+// -----------------------------------------------------------------------------
+// Sizing refusal vocabulary (Module 4 — SIZE)
+// -----------------------------------------------------------------------------
+
+/** Typed refusals emitted by the SIZE module (`size.ts`).
+ *  Each literal is either grep-anchored to production or explicitly
+ *  LABELED `kernel-only` per PIN (d) of the SIZE ruling (2026-07-25).
+ *  No phantom production strings.
+ *
+ *  · `below_min_share` — KERNEL-ONLY. Rounded share count is <1 after
+ *      `Math.floor(slotNotional / price)`. Production's nearest analogue
+ *      is `reference_price_exceeds_slot_notional`
+ *      (supabase/functions/_shared/overshoot-execution/sizing.ts:290) but
+ *      the kernel names the OUTCOME (shares<1) rather than the CAUSE
+ *      (price>slot), because the kernel's slot may derive from either the
+ *      constant $2,500/$5,000 rail OR from a compounding equity path —
+ *      cause-phrasing would be ambiguous. Labeled kernel-only to prevent
+ *      grep-collision with the production audit stream.
+ *  · `zero_price_guard` — KERNEL-ONLY. Data-absent Price (null / not
+ *      supplied). The `price()` brand constructor already rejects ≤ 0
+ *      and non-finite at construction time; this refusal covers the
+ *      DATA-LAYER absence (no bar / no reference) that would prevent a
+ *      Price from ever being constructed. Explicitly kernel-only —
+ *      production keys this off `entry_reference_price_null` upstream
+ *      of sizing (index.ts:1180-1194) and never reaches the sizing call.
+ *  · `notional_overflow` — KERNEL-ONLY. Product `shares × price` in
+ *      integer-cents overflows `Number.MAX_SAFE_INTEGER`. Cannot occur
+ *      at realistic $100k-scale equity but is asserted as a guard so a
+ *      pathological property-test input yields a typed refusal, not a
+ *      silent precision loss. */
+export type SizingRefusalCode =
+  | 'below_min_share'
+  | 'zero_price_guard'
+  | 'notional_overflow';
+
 /** Per-selection refusal record. `subReason` carries the nested class
  *  (`i5_refusal.<x>`, `price_refusal.<y>`, etc.) verbatim from the audit
  *  action string; the kernel does not enumerate those — it only counts. */
