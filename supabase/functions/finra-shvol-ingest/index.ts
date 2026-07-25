@@ -258,16 +258,13 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const pubKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
     const backfillSecret = Deno.env.get("BACKFILL_ONESHOT_SECRET") ?? "";
-    // ACT-570 Stage-2 backfill window token (temporary; remove after 2026-07-27)
-    const stage2Token = "act570_stage2_backfill_2026_07_25_a7f3k2m9x1";
     const bearer = auth.replace(/^Bearer\s+/i, "");
     const ok =
       (cronSecret && bearer === cronSecret) ||
       (svcKey && bearer === svcKey) ||
       (anonKey && bearer === anonKey) ||
       (pubKey && bearer === pubKey) ||
-      (backfillSecret && bearer === backfillSecret) ||
-      bearer === stage2Token;
+      (backfillSecret && bearer === backfillSecret);
     if (!ok) {
       return new Response(JSON.stringify({ error: "unauthorized" }), {
         status: 401,
