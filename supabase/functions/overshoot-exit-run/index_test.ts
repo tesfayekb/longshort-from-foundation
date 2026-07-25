@@ -32,6 +32,9 @@ import {
 
 const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
 
+// SOURCE_VERSION single-constant (mechanical mitigation — CI-RED 3c698a5).
+const EXPECTED_SOURCE_VERSION = 'fb5fdf13+fix2';
+
 Deno.test('DEC-023 envelope: createHandler + authenticateRequest + overshoot.manage RBAC', () => {
   assertStringIncludes(SRC, "import { createHandler, apiSuccess } from '../_shared/handler.ts'");
   assertStringIncludes(SRC, "import { authenticateRequest } from '../_shared/authenticate-request.ts'");
@@ -438,7 +441,7 @@ Deno.test('probe short-circuit taxonomy: alpaca / polygon only; else 400', () =>
 // silently regress independently.
 Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it, handler wired', () => {
   // FIX-2 bump 2026-07-23 — see docs/08-planning/FIX-2-spec.md.
-  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2'");
+  assertStringIncludes(SRC, `export const SOURCE_VERSION = '${EXPECTED_SOURCE_VERSION}'`);
   const idxProbeStart = SRC.indexOf("probe: 'version',");
   assert(idxProbeStart > 0, 'version-probe branch present');
   const probeBlock = SRC.slice(idxProbeStart, idxProbeStart + 400);
