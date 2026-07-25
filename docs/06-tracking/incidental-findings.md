@@ -7,6 +7,77 @@
 
 ---
 
+## INC-141-b — `overshoot-universe-refresh` typed-refusal silent-200 (2026-07-25) — FIXED
+
+**Category:** observability / audit-log completeness.
+**Severity:** MEDIUM (money-adjacent: silent-200 on fail-closed
+refusals hides substrate-aging events from operator dashboards and
+audit sweeps; INC-140 class defect at the audit-log layer).
+**Filed by:** ACT-571 DEV-9 evidence pack drive-by finding.
+**Fixed by:** this turn (helper `writeUniverseRefusalAudit` in
+`supabase/functions/overshoot-universe-refresh/index.ts`; grep-lock
+test `inc141b-refusal-audit_test.ts`; 11/11 GREEN; deployed
+2026-07-25 post-`0c5ad0d9`).
+
+**Symptom.** Default-path `!ok` early-returns (`both_sources_failed`,
+`roster_sanity_failed`, `universe_read_failed`,
+`universe_upsert_failed`, `universe_deactivate_failed`) exited via
+`apiSuccess({ok:false,...})` without emitting any row to
+`overshoot_audit_logs`. Monday 10:00Z would have fired HTTP 200 with
+`job_run_details.status='succeeded'` and left zero forensic evidence.
+
+**Fix.** New helper writes `overshoot.universe.refresh.refused` audit
+row (best-effort; audit-failure does not mask refusal shape) before
+every default-path `!ok` return. Loud-fail contract: Monday's expected
+GREEN outcome is now `{ok:false, status:'both_sources_failed'}` PLUS
+one refusal audit row.
+
+---
+
+## INC-141 — FINRA short-interest partial ingest (2026-07-25)
+
+See DEV-7 in `docs/06-tracking/2026-07-25-dev-7-finra-completion.md` —
+901-of-905 coverage restored; permanent chain-orchestrator filed as
+DW-236. This entry is a placeholder for register cross-referencing
+(the primary evidence lives in the DEV-7 completion memo).
+
+---
+
+## DEV-9 — iShares CDN blocks Deno edge egress for IVV+IJH (2026-07-25)
+
+**Category:** environmental (pre-existing INC-123/INC-124 class).
+**Severity:** HIGH operational (blocks the ACT-571 auto-lane;
+substrate would age past 7d without manual seed).
+**Status:** OPEN — mitigated by Option A-Plus manual-seed ritual;
+DW-237 filed as auto-lane recovery candidate.
+
+Two probes against deployed handler (post-`0c5ad0d9`) confirmed the
+CDN serves an HTML anti-bot landing page in place of the CSV
+regardless of browser-shaped headers on Deno-edge requests from
+`eu-central-1`. See `docs/06-tracking/2026-07-25-act-571-build-and-cdn-block.md`
+for probe bytes and verdict table.
+
+---
+
+## DEV-10 — FMP Premium tier does NOT include ETF Holdings (2026-07-25)
+
+**Category:** vendor entitlement (tier-correct refusal).
+**Severity:** N/A (not a defect).
+**Status:** CLOSED (operator ruling 2026-07-25 05:17Z — upgrade
+rejected on ROI; +$840/yr to automate a 5-min monthly ritual).
+
+Two live probes against production `FMP_API_KEY`:
+`GET /api/v3/etf-holder/IVV` → 402;
+`GET /api/v3/etf-holder/IJH` → 402.
+Operator screenshot of FMP pricing page confirmed `ETF & Mutual Fund
+Holdings` is **Ultimate ($139/mo)**-only; operator's plan is Premium
+($69/mo). Also confirmed `1 Minute Intraday` is Ultimate-only, so
+Polygon Stocks Advanced remains the intraday-minute substrate (NOT
+among the current Polygon cancellations: only Options Developer +
+Indices Advanced are cancelled).
+
+---
+
 ## INC-140 — `overshoot-universe-refresh` source never re-pointed after IVV+IJH identity ratification (2026-07-24)
 
 **Category:** unpatched-code-path / identity-drift-persistence.
