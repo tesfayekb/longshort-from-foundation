@@ -2,10 +2,29 @@
 //
 // SCOPE: pure per-session equity path over an evolving book. Consumes
 // Module 5's `markBook` (threaded via `nextPriorMarks`) and Module 6's
-// `cashRequired` / `settleProceeds` cash seams. Emits `EquityRow[]` +
+// `entryCash` / `settleProceeds` cash seams. Emits `EquityRow[]` +
 // `EquitySummary` matching the frozen columns of
 // `scripts/act-515/verdict-table-template.md` and `config-matrix.md §3`.
 // No I/O, no wall-clock, no RNG.
+//
+// CASH SEAM RENAME (2026-07-25, ACT-515 GATE-(iii) TIER-A repair):
+//   Pre-repair, the ledger entry-flow called `cashRequired(side, slotNotional)`,
+//   which moved the RAW SLOT (e.g. $10,000) rather than the EXECUTED cents
+//   (`shares × entryPrice`). Under partial-slot fills (floor-to-shares
+//   sizing) this systematically under-credited the cash ledger by
+//   Σ side-signed (slot − shares·entryPrice). Diagnosed on fixture-ii
+//   (four SHORT + ten LONG lots, TERMINAL Δ = −104,742c). Fixed by:
+//     · renaming `cashRequired` → `slotBuyingPower` (buying-power target,
+//       not a ledger flow); reserved for pre-trade sizing / risk headroom.
+//     · introducing `entryCash(side, shares, entryPrice)` for the ledger
+//       seam. Sign mirrors `settleProceeds` (executed cents, both sides).
+//   Buying-power checks may STILL consult slot targets; the cash LEDGER
+//   only ever moves executed cents. Round-trip identity preserved:
+//     realized = settleProceeds + entryCash  (both signed by side).
+//   Regression class-killer: `equity_test.ts::LEDGER FOOT INVARIANT
+//   (synthetic mixed book)` asserts per-session
+//     cash(t) === startingCash + Σ per-lot executed flows to date
+//   to the cent, over a randomized long/short book.
 //
 // SIX PINS (per ruling 2026-07-25):
 //
@@ -17,7 +36,7 @@
 //       short liability nets against the short-sale proceeds already
 //       booked into `cash`). Haircuts are already inside realized/entry
 //       math at the Module-6 cash seam (`settleProceeds` uses the
-//       post-haircut close, `cashRequired` uses the raw slot notional);
+//       post-haircut close, `entryCash` uses shares × post-haircut entry);
 //       the EQUITY module NEVER re-applies a haircut — a property test
 //       verifies no double-count vs the study-haircut path.
 //
@@ -93,7 +112,7 @@ import type { SessionDate } from './clock.ts';
 import {
   markBook, type BarSource, type OpenLot, type PriorMark,
 } from './mark.ts';
-import { cashRequired, settleProceeds } from './exit.ts';
+import { entryCash, settleProceeds } from './exit.ts';
 
 // -----------------------------------------------------------------------------
 // Constants — PIN (b) carry formula
@@ -132,7 +151,7 @@ export interface EntryEvent {
   readonly side: SideDb;
   readonly shares: Shares;
   readonly entryPrice: Price;      // post-haircut entry (Module 6 pre-computes)
-  readonly slotNotional: Money;    // for cashRequired
+  readonly slotNotional: Money;    // buying-power target only; NOT a ledger flow
 }
 
 export interface ExitEventScheduled {
@@ -282,8 +301,12 @@ export function runEquityPath(
       if (openLots.has(en.lotId)) {
         throw new Error(`runEquityPath: duplicate lotId ${en.lotId}`);
       }
-      const cashReq = cashRequired(en.side, en.slotNotional) as number;
-      cashCents -= toCents(cashReq);   // long: -slot; short: +slot
+      // ACT-515 GATE-(iii) repair: ledger moves EXECUTED cents (shares ×
+      // entryPrice), never the raw slot notional. `en.slotNotional` is
+      // retained on the event for pre-trade / buying-power inspection but
+      // is deliberately unused here.
+      const flow = entryCash(en.side, en.shares, en.entryPrice) as number;
+      cashCents += toCents(flow);   // long: −shares·entry; short: +shares·entry
       openLots.set(en.lotId, {
         lotId: en.lotId, ticker: en.ticker, side: en.side,
         shares: en.shares, entryPrice: en.entryPrice,

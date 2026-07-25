@@ -34,7 +34,7 @@ import {
 import type { SessionDate } from './clock.ts';
 import type { BarSource } from './mark.ts';
 import {
-  runExit, cashRequired, settleProceeds,
+  runExit, slotBuyingPower, entryCash, settleProceeds,
   type SessionCalendar, type ExitResult, type HaircutMode,
 } from './exit.ts';
 import {
@@ -54,7 +54,7 @@ export interface PipelineLot {
   readonly tier: Tier;
   readonly shares: Shares;
   readonly entryPrice: Price;          // T+1 open per convention
-  readonly slotNotionalUsd: Money;     // for cashRequired
+  readonly slotNotionalUsd: Money;     // buying-power target only (see Module 7 CASH SEAM RENAME)
   readonly entryDate: SessionDate;
   readonly eventDate: SessionDate;     // for ordinal exit resolution
 }
@@ -243,4 +243,4 @@ export function runPipeline(
 
 // Silence unused-import warnings for brand constructors kept in-scope
 // so downstream callers (adapters/tests) can re-export them from one place.
-export const _reExports = { money, price, sharesBrand, cashRequired, settleProceeds };
+export const _reExports = { money, price, sharesBrand, slotBuyingPower, entryCash, settleProceeds };
