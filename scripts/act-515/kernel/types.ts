@@ -143,6 +143,7 @@ export type RefusalTallyKey =
   | 'sizing_refusals'
   | 'buying_power_refusals'
   | 'shortability_refusals'
+  | 'position_already_open'
   | 'allocation_cap_reached'
   | 'daily_budget_reached'
   | 'short_daily_budget_reached';

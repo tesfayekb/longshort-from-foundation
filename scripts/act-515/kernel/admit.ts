@@ -157,6 +157,7 @@ export function runAdmit(input: AdmitInput): AdmitResult {
     sizing_refusals: 0,
     buying_power_refusals: 0,
     shortability_refusals: 0,
+    position_already_open: 0,
     allocation_cap_reached: 0,
     daily_budget_reached: 0,
     short_daily_budget_reached: 0,
@@ -186,31 +187,14 @@ export function runAdmit(input: AdmitInput): AdmitResult {
   for (const c of ordered) {
     // ── Gate 1: position_already_open ────────────────────────────────
     if (heldTickers.has(c.ticker)) {
-      // No RefusalTallyKey exists for position_already_open in Module 1's
-      // enum (it is not one of the seven top-level tally categories in
-      // index.ts:294-334 — those are refusals that consume the per-target
-      // audit path). Model it as a refuse decision but do NOT increment
-      // any tally key; use a dedicated category-less decision.
+      // `position_already_open` is a top-level tally in the entry-run
+      // (index.ts:292 + :323 + :1126). Module 1's RefusalTallyKey was
+      // extended in the same diff to include it (grep-anchor updated).
+      tally.position_already_open += 1;
       decisions.push({
-        kind: 'refuse',
-        ticker: c.ticker,
-        side: c.side,
-        // Reuse `allocation_cap_reached` would be wrong (double-counting).
-        // We surface a decision without a tally increment by borrowing
-        // the closest-fit key ONLY IF one exists; here we choose to omit
-        // via a distinct tally-less path by using `sizing_refusals`? No —
-        // that would lie. Instead we emit the decision with a synthetic
-        // key that the kernel maps to 'held_dedup'.
-        category: 'i5_refusals' as RefusalTallyKey, // placeholder — corrected below
-      });
-      // Correct the just-pushed decision to use a dedicated held-dedup
-      // marker. To avoid extending RefusalTallyKey (Module 1 is frozen
-      // and grep-anchored), we replace with a symbol the caller checks
-      // via `decision.kind === 'refuse' && decision.category === 'held_dedup'`.
-      decisions[decisions.length - 1] = {
         kind: 'refuse', ticker: c.ticker, side: c.side,
-        category: 'held_dedup' as unknown as RefusalTallyKey,
-      };
+        category: 'position_already_open',
+      });
       continue;
     }
 
