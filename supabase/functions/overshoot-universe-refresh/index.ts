@@ -708,6 +708,163 @@ function checkRosterSanity(count: number):
   return null;
 }
 
+/**
+ * ACT-571 — Per-file iShares CSV fetch + parse. Reuses
+ * `fetchWithTimeoutAndRetry` (network) and `parseIsharesCsv` (parse)
+ * verbatim so the default-path failure-mode surface is byte-identical to
+ * the ACT-548 operator-seed path. Returns a normalized typed result
+ * (never throws through the caller seam).
+ */
+export type IsharesFileResult =
+  | { ok: true; tickers: string[]; as_of: string; sha256: string; bytes: number }
+  | { ok: false; status: string; detail?: string; http_status?: number };
+
+export async function fetchIsharesFile(
+  httpFetch: typeof fetch,
+  url: string,
+  headers: Record<string, string>,
+): Promise<IsharesFileResult> {
+  let resp;
+  try {
+    resp = await fetchWithTimeoutAndRetry(
+      httpFetch as never,
+      url,
+      { method: 'GET', headers },
+      { timeoutMs: ISHARES_FETCH_TIMEOUT_MS },
+    );
+  } catch (e) {
+    return { ok: false, status: 'network_error', detail: e instanceof Error ? e.message : String(e) };
+  }
+  if (!resp.ok) {
+    return { ok: false, status: 'http_error', http_status: resp.status, detail: resp.statusText };
+  }
+  let csv: string;
+  try {
+    csv = await resp.text();
+  } catch (e) {
+    return { ok: false, status: 'body_read_failed', detail: e instanceof Error ? e.message : String(e) };
+  }
+  const parsed = parseIsharesCsv(csv);
+  if (!parsed.ok) {
+    return { ok: false, status: parsed.status, detail: parsed.detail ?? `bytes=${csv.length}` };
+  }
+  const sha = await sha256Hex(csv);
+  return { ok: true, tickers: parsed.tickers, as_of: parsed.as_of, sha256: sha, bytes: csv.length };
+}
+
+/**
+ * ACT-571 — IVV ∪ IJH composite fetch. Fetches both iShares product CSVs
+ * concurrently and returns the deduped union, per-source counts, overlap
+ * count, per-file sha256 provenances, and the per-file iShares
+ * "Fund Holdings as of" dates. On typed refusal (either file fails), the
+ * caller MUST abort ALL writes — partial fetches never produce a partial
+ * roster (charter §2 fail-closed matrix).
+ */
+export type IvvIjhCompositeResult =
+  | {
+      ok: true;
+      tickers: string[]; // sorted, deduped, uppercase
+      per_source_counts: { ivv: number; ijh: number; union: number; overlap: number };
+      csv_sha256_provenances: string[]; // [ivv_sha256, ijh_sha256]
+      as_of_from_source: { ivv: string; ijh: string };
+    }
+  | {
+      ok: false;
+      status: 'partial_source_failure';
+      ivv: { status: string; detail?: string; http_status?: number } | null;
+      ijh: { status: string; detail?: string; http_status?: number } | null;
+    }
+  | {
+      ok: false;
+      status: 'both_sources_failed';
+      ivv: { status: string; detail?: string; http_status?: number };
+      ijh: { status: string; detail?: string; http_status?: number };
+    };
+
+const IVV_IJH_DEFAULT_HEADERS: Record<string, string> = {
+  'Accept': 'text/csv, */*;q=0.1',
+};
+
+export async function fetchIvvIjhComposite(
+  httpFetch: typeof fetch = fetch,
+  headers: Record<string, string> = IVV_IJH_DEFAULT_HEADERS,
+): Promise<IvvIjhCompositeResult> {
+  const [ivv, ijh] = await Promise.all([
+    fetchIsharesFile(httpFetch, ISHARES_IVV_HOLDINGS_URL, headers),
+    fetchIsharesFile(httpFetch, ISHARES_IJH_HOLDINGS_URL, headers),
+  ]);
+  if (!ivv.ok && !ijh.ok) {
+    return {
+      ok: false,
+      status: 'both_sources_failed',
+      ivv: { status: ivv.status, detail: ivv.detail, http_status: ivv.http_status },
+      ijh: { status: ijh.status, detail: ijh.detail, http_status: ijh.http_status },
+    };
+  }
+  if (!ivv.ok || !ijh.ok) {
+    return {
+      ok: false,
+      status: 'partial_source_failure',
+      ivv: ivv.ok ? null : { status: ivv.status, detail: ivv.detail, http_status: ivv.http_status },
+      ijh: ijh.ok ? null : { status: ijh.status, detail: ijh.detail, http_status: ijh.http_status },
+    };
+  }
+  const ivvSet = new Set<string>();
+  for (const t of ivv.tickers) ivvSet.add(t.toUpperCase());
+  const ijhSet = new Set<string>();
+  for (const t of ijh.tickers) ijhSet.add(t.toUpperCase());
+  const union = new Set<string>([...ivvSet, ...ijhSet]);
+  let overlap = 0;
+  for (const t of ivvSet) if (ijhSet.has(t)) overlap += 1;
+  const tickers = Array.from(union).sort();
+  return {
+    ok: true,
+    tickers,
+    per_source_counts: { ivv: ivvSet.size, ijh: ijhSet.size, union: union.size, overlap },
+    csv_sha256_provenances: [ivv.sha256, ijh.sha256],
+    as_of_from_source: { ivv: ivv.as_of, ijh: ijh.as_of },
+  };
+}
+
+/**
+ * ACT-571 — Deterministic upsert-row shape for the DEFAULT path.
+ * Provenance stamp is the composite tag; matches the acceptance-run SQL
+ * assertion in charter §6.3.
+ */
+export function buildIvvIjhUpsertRows(tickers: string[], asOfDate: string) {
+  return tickers.map((t) => ({
+    ticker: t,
+    source: IVV_IJH_SOURCE_TAG,
+    added_as_of: asOfDate,
+    active: true,
+  }));
+}
+
+/**
+ * ACT-571 — Drift computation between the prior active roster and the
+ * fresh composite roster. Returned lists are sorted for stable diffs.
+ */
+export function computeUniverseDrift(prior: Iterable<string>, fresh: Iterable<string>) {
+  const priorSet = new Set<string>();
+  for (const t of prior) priorSet.add(t);
+  const freshSet = new Set<string>();
+  for (const t of fresh) freshSet.add(t);
+  const added: string[] = [];
+  const removed: string[] = [];
+  for (const t of freshSet) if (!priorSet.has(t)) added.push(t);
+  for (const t of priorSet) if (!freshSet.has(t)) removed.push(t);
+  added.sort();
+  removed.sort();
+  const unchanged_count = freshSet.size - added.length;
+  return {
+    added,
+    removed,
+    unchanged_count,
+    prior_active_count: priorSet.size,
+    next_active_count: freshSet.size,
+  };
+}
+
 Deno.serve(createHandler(async (req: Request) => {
   const correlationId = crypto.randomUUID();
   if (req.method !== 'POST') {
