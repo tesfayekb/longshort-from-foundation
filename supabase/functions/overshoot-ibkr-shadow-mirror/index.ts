@@ -17,7 +17,7 @@ import { isIbkrShadowEnabled, IbkrShadowNotImplementedError } from '../_shared/o
 
 const SOURCE_VERSION = 'act572-skel-v1';
 
-export default createHandler(async (req: Request): Promise<Response> => {
+Deno.serve(createHandler(async (req: Request): Promise<Response> => {
   if (req.method !== 'POST' && req.method !== 'GET') {
     return apiSuccess({ status: 'method_not_allowed', method: req.method }, 405);
   }
@@ -41,4 +41,4 @@ export default createHandler(async (req: Request): Promise<Response> => {
       source_version: SOURCE_VERSION,
     }, 200);
   }
-}, { sourceVersion: SOURCE_VERSION });
+}, { sourceVersion: SOURCE_VERSION }));
