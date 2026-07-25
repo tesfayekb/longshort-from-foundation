@@ -12,7 +12,7 @@ Deno.test({
   name: 'ACT-515(e) T3 backfill driver — fires up to 6x200 apply batches',
   sanitizeResources: false,
   sanitizeOps: false,
-  ignore: Deno.env.get('RUN_T3_BACKFILL') !== '1',
+    // One-shot: unconditionally run when the pattern matches.
   fn: async () => {
     const cron = Deno.env.get('CRON_SECRET');
     const anon = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY');
