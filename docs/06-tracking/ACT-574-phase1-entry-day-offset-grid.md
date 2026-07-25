@@ -1,6 +1,10 @@
 # ACT-574 Phase-1 — Entry-Day Offset Grid (Timing of SELECTED Design)
 
 **Delivered:** 2026-07-25 05:52Z  •  **Clock:** `SELECT now() → 2026-07-25 05:52:05Z`
+
+> **HEADER CORRECTION (2026-07-25 06:01Z, operator-ratified) — "designed red day 0-1" framing REFUTED at corpus mean.**
+> Both tiers rise MONOTONICALLY from T+0 in the mark-path curves (§2): T1 = 0 → +23.7 → +37.2 → … → +184.8 bps (ord-6); T2 = 0 → +9.6 → +18.3 → … → +76.2 bps (ord-10). There is NO designed early-red phase. Live-book "day 0-1 redness" is **regime + execution drag**, NOT strategy design. This correction supersedes any prior framing (supervisor claim) that the strategy intentionally holds through an early drawdown. Do not re-propagate.
+
 **Corpus:** `overshoot_study_candidate_events` (n=523,694, 2022-03-08 → 2026-07-02, 839 tickers) ⋈ `overshoot_daily_bars` (n=1,061,654). LONG side. Detector version `b7cdfcd8` (pre-screen v2 tier geometry per `detector.ts:622`).
 **Tier resolution:** T1 = `excess_w[argmax_window] ≥ 0.10 ∧ window_days ∈ {1,2,3} ∧ momentum_quintile ∈ {4,5} ∧ drawdown_bucket ∈ {1,2,3}`; T2 = LONG complement within study grid. Formula lifted verbatim from `detector.ts` L1041-1074.
 **Basis convention (verbatim, apples-to-apples):** entry = T+k open; exit = FIXED ORDINAL FROM EVENT (T1 → close of ordinal-6; T2 → close of ordinal-10). Later entry ⇒ shorter hold of the SAME window. This is the whole point.
