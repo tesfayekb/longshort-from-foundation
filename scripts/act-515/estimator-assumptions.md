@@ -208,3 +208,68 @@ declared policy — never a silent zero (anti-phantom, DEC-034 clause 5):
 **Docs-as-code pin:** a test in `mark_test.ts` asserts this section exists
 in this file AND the same policy summary line appears verbatim in the
 `mark.ts` header (same pattern as §7 Module 3 and §8 Module 4).
+
+## 10. Exit basis + cash seam (ACT-515 Module 6 — Exit)
+
+The EXIT module (`scripts/act-515/kernel/exit.ts`) prices the round-trip on
+the STUDIED close basis and exposes the cash seam consumed by Module 7.
+
+- **Exit ordinal:** `T1 = ord-6`, `T2 = ord-10`, counted STRICTLY FORWARD
+  from `eventDate` (event day = ord-0; next session = ord-1). Anchored to
+  the hand-truth fixture header
+  (`fixtures/overshoot-backtest/2024-05-02-hand-truth.jsonl:1` —
+  `exit_convention:"ordinal-10 close (LONG T2, holdingDayOrdinal>=10, session-age.ts:145)"`)
+  and to the ACT-574 T+1-open / ordinal-close-exit convention.
+  Ordinals are resolved by an INJECTED `SessionCalendar` — the kernel never
+  reads a calendar globally.
+- **Exit price:** the ordinal session's CLOSE from `BarSource`. Haircuts per
+  §2 rows "Long-side haircut" (5 bps/side) and "Short-side haircut"
+  (15 bps/side) applied under `haircutMode:'study'` (default). `haircutMode:'none'`
+  disables both sides — used by the LAYER-1 fixture matcher because the
+  hand-truth fixture's `pnl_rule` is `shares × (exit_close − entry_open)`
+  with **no haircut** (fixture header, verbatim).
+- **Exit-day mark_unavailable interaction (PIN (b)):** if the exit-day
+  bar is absent, exit DEFERS to the next priced session, stamping
+  `stalenessDays >= 1`. Beyond `maxCarryDays` (default 5, matching Mark),
+  a typed `exit_price_unavailable` propagates — never a fabricated exit
+  price from the prior mark, never an entry-price echo.
+- **DEC-083 09:45-exit is NOT modeled** in the kernel. The kernel prices
+  the STUDIED close basis; the morning-exit delta is priced separately by
+  the R-007 study (adopted 07-23). Wiring DEC-083 into a kernel run
+  requires a new module + charter — the kernel MUST NOT silently pull the
+  09:45 mark into the ordinal exit.
+- **No partial fills** (all-or-none per fixture); **no early-exit paths**
+  by default. Drawdown-stop variants are matrix rows expressed via the
+  optional `exitOverride` hook (default OFF).
+
+**Cash seam (consumed by Module 7):**
+
+- `cashRequired(side, slotNotional)` — cash needed at entry.
+  Long: `+slotNotional` (buy); Short: `−slotNotional` (short proceeds
+  credit; the broker collateral requirement is a Reg-T maintenance issue
+  addressed under §1 C9, not a cash outlay).
+- `settleProceeds(side, shares, exitClosePostHaircut)` — cash at exit.
+  Long: `+shares × exit`; Short: `−shares × exit` (cover cost).
+- Round-trip `realized = settleProceeds − cashRequired` — the sign-symmetry
+  identity is property-tested in `exit_test.ts` (mirror positions ⇒
+  negated realized).
+
+**Docs-as-code pin:** a test in `exit_test.ts` asserts this section exists
+in this file AND the exit-basis summary line appears verbatim in the
+`exit.ts` header (same pattern as §7 Module 3, §8 Module 4, §9 Module 5).
+
+## 11. LAYER-1 END-TO-END integration gate (D-SCHEDULED after Module 7)
+
+Before ANY matrix cell runs, the assembled kernel pipeline
+(types → clock → admit → size → mark → exit → equity/DD) MUST replay
+two hand-truth fixtures BYTE-EXACT:
+
+- (i) `fixtures/overshoot-backtest/2024-05-02-hand-truth.jsonl` — every
+  row's `shares`, `notional_usd`, `pnl_usd`, `pnl_bps`, plus final
+  epoch equity, matched byte-exact under `haircutMode:'none'`.
+- (ii) A 2023-Q2 window fixture (per operator B1 ruling) built and
+  matched the same way — two eras, one truth standard.
+- (iii) The selection-parity replay green.
+
+Any mismatch → STOP, module-level diff hunt, no numbers reported.
+This gate carries its own COMPLETE-flag and register row (D-SCHEDULED).
