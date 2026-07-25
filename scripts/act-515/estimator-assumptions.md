@@ -329,3 +329,41 @@ equity path over the assembled book and produces `EquityRow[]` + an
 **Docs-as-code pin:** a test in `equity_test.ts` asserts this section exists
 in this file AND the carry-formula summary line + column-ID list appear in
 both `equity.ts` and this file (same pattern as §7/§8/§9/§10).
+## §7-survivorship — Universe basis honesty (ACT-515 R1, ratified 2026-07-25)
+
+**Section number note:** §7 in this file already carries "Kernel abstractions
+Module 3" (landed 2026-06-XX). The R1-receipt survivorship block is filed
+here as **§7-survivorship** to preserve prior anchors — do not renumber the
+older §7 without a docs-as-code migration turn.
+
+**Universe basis for R1 (`1x-const` baseline) and all downstream matrix
+configs:** per-session universe membership is resolved as
+
+    active_at(session) := (added_as_of ≤ session) ∧ (active = TRUE)
+
+as observed AT REPLAY TIME on `public.overshoot_universe`. This is
+**survivorship-biased**: tickers that were once in the universe but were
+later removed (`active = FALSE`) are **excluded even from sessions where
+they were legitimately live**. R1 therefore over-represents tickers that
+survived to the replay date.
+
+**Bound reporting (mandatory in every matrix receipt):** the R1 receipt
+MUST report:
+1. `corpus_rows_total` — count of rows in
+   `overshoot_study_candidate_events` for `run_id = 1888e113` within the
+   window.
+2. `corpus_rows_excluded_by_universe` — count of the above whose
+   `(ticker, event_date)` does NOT satisfy `active_at(event_date)`.
+3. `corpus_rows_consumed` — count actually reconstructed into the
+   `SessionPlan` stream. Identity: `consumed = total − excluded`.
+
+**Compensating controls (not fixes):** (a) all matrix configs share the
+same universe basis, so ranking (variant vs. variant) is unbiased even if
+absolute returns are; (b) the ACT-515 charter explicitly deprioritized
+point-in-time universe rebuild (DW-XXX) pending the R1-receipt
+quantification of the bias size.
+
+**Docs-as-code pin (deferred to R1-receipt turn):** a test in
+`matrix/run-r1-const_test.ts` will assert this block exists in this file
+AND that the three bound-report field names above appear verbatim in
+`run-r1-const.ts` receipt-writer once landed.

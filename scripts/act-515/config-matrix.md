@@ -19,6 +19,15 @@ SPY benchmark: R5.
 
 ## 2. Common corpus / window / mechanics (FROZEN)
 
+> **STALE-PROSE ANNOTATION (2026-07-25, GAP-1(c) ruling).** Any per-tier
+> entry-offset or exit-horizon numbers written in prose in this §2 are
+> **stale** and non-authoritative. The AUTHORITATIVE dispatch is
+> `EXIT_ANCHOR_BY_SIDE_TIER` in `scripts/act-515/kernel/exit.ts`
+> (LONG T1: entry+10, LONG T2: entry+5, SHORT T1/T2: entry+4). Any
+> discrepancy → the kernel constant wins; docs are updated in a follow-up
+> turn, never the code.
+
+
 | Element | Value | Provenance |
 |---|---|---|
 | Window | 2022-06-29 → 2026-07-10 (~1,011 trading days, 4.03 yr) | ACT-514 basis |
