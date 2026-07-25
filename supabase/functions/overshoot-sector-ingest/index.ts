@@ -70,7 +70,11 @@ function todayUtcIso(): string {
 }
 
 function isValidTicker(t: unknown): t is string {
-  return typeof t === 'string' && /^[A-Z][A-Z0-9.\-]{0,9}$/.test(t.trim().toUpperCase());
+  // Hyphen is placed last inside the char class so it is a literal without
+  // needing to be escaped — satisfies eslint `no-useless-escape`. Behaviour
+  // is identical to the prior `[A-Z0-9.\-]` form; regression coverage
+  // (BRK.B, MOG-A) lives in `overshoot-sector-ingest_test.ts`.
+  return typeof t === 'string' && /^[A-Z][A-Z0-9.-]{0,9}$/.test(t.trim().toUpperCase());
 }
 
 async function isDisarmed(id: string): Promise<boolean> {
