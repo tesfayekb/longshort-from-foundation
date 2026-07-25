@@ -368,7 +368,7 @@ Deno.test('REGRESSION: TSLA-short 5-session divergence pins to production exit (
   const rA = runExit({
     lotId: 'TSLA#A', ticker: 'TSLA', side: 'short', tier: 'T2',
     shares: shares(10), entryPrice: price(175),
-    entryDate: '2024-04-03', eventDate: '2024-04-02',
+    entryDate: '2024-04-04', eventDate: '2024-04-03',
   }, apr, bars, { haircutMode: 'none' });
   assert(rA.ok); if (!rA.ok) return;
   assertEquals(rA.scheduledExitDate, '2024-04-10');
@@ -377,7 +377,7 @@ Deno.test('REGRESSION: TSLA-short 5-session divergence pins to production exit (
   const rB = runExit({
     lotId: 'TSLA#B', ticker: 'TSLA', side: 'short', tier: 'T2',
     shares: shares(10), entryPrice: price(175),
-    entryDate: '2024-04-04', eventDate: '2024-04-03',
+    entryDate: '2024-04-05', eventDate: '2024-04-04',
   }, apr, bars, { haircutMode: 'none' });
   assert(rB.ok); if (!rB.ok) return;
   assertEquals(rB.scheduledExitDate, '2024-04-11');
