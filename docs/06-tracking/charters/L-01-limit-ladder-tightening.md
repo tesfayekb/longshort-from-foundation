@@ -14,11 +14,13 @@ Tighter limit ladder captures more of the ACT-506-documented ~−50 bps limit→
 | G-1 fill rate | `fill_rate_arm ≥ 0.88` (arm) AND `|fill_rate_arm − fill_rate_ctrl| ≤ 0.04` | REJECT if either |
 | G-2 entry slip | `mean(entry_slip_bps_arm) ≤ +20` AND `mean(entry_slip_bps_arm) < mean(entry_slip_bps_ctrl)` | REJECT if either |
 | G-3 paired diff | paired-t p-value `< 0.10` on (arm − ctrl) `entry_slip_bps`, matched by session | REJECT if `p ≥ 0.10` |
-| G-4 sample size | `n_arm ≥ 200 fills` AND `n_ctrl ≥ 200 fills` | EXTEND window up to 120 days then REJECT |
+| G-4 sample size | `n_arm ≥ 200 fills` AND `n_ctrl ≥ 200 fills`; **first-verdict look at n ≥ 100/arm (~4 weeks)** — informational only, does not adopt | window is **rolling-until-gates-clear** (no calendar deadline) |
 | G-5 dollar-weighted | primary metric = **dollar-weighted** entry_slip_bps (per §E.2 discipline); unweighted reported as secondary | — |
 | G-6 no adverse-selection | fwd-5d realized return on arm-fills ≥ ctrl-fills − 30 bps (rules out cherry-picking safer fills) | REJECT if arm underperforms by >30 bps |
 
 **Adoption:** ALL SIX gates green → propose config flip via new DEC. **Any single fail → charter closes REJECTED; no partial adoption.**
+
+**Launch-independence clause (2026-07-25 amendment):** The paper lane runs CONTINUOUSLY past the mid-August live date (ACT-577); this study never gates the launch — mid-Aug launches on the current ratified config; this lever adopts post-launch on its own evidence.
 
 ## §3 — Design
 - **Arm A (control):** current limit-ladder as of `SOURCE_VERSION` = `fb5fdf13+fix2+fix8+sp1+fix9`.
@@ -27,9 +29,10 @@ Tighter limit ladder captures more of the ACT-506-documented ~−50 bps limit→
 - **Session-matched pairing:** for each session, compute (arm B mean − arm A mean) as the pair; use these session-pairs for the paired-t on G-3.
 
 ## §4 — Window
-- **Start:** operator kickoff (target 2026-07-28 following FIX-8 stabilization).
-- **End:** first date where G-4 satisfied AND ≥ 90 calendar days elapsed (whichever is later).
-- **Max:** 120 calendar days (fail-open on G-4 extension).
+- **Arm date (Arm-B code path landed):** Sun **2026-07-26**.
+- **A/B live (first randomized admit):** Mon **2026-07-27** 13:35Z.
+- **First-verdict look:** at n ≥ 100/arm (~4 weeks) — informational readout, no adoption.
+- **End:** **rolling-until-gates-clear** — charter remains OPEN until ALL SIX gates resolve (green → adopt, any red → REJECT). No calendar deadline; no 90-day / 120-day cap. Runs continuously past the mid-August live date (ACT-577).
 
 ## §5 — Rollback
 Arm-B admits routable to close on ordinary exit path; no state that requires unwind. If G-6 fires mid-window → **immediate charter-halt, arm B deprecated**.
