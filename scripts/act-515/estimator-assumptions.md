@@ -273,3 +273,37 @@ two hand-truth fixtures BYTE-EXACT:
 
 Any mismatch → STOP, module-level diff hunt, no numbers reported.
 This gate carries its own COMPLETE-flag and register row (D-SCHEDULED).
+
+## 12. Equity path + drawdown (ACT-515 Module 7 — Equity/DD)
+
+The EQUITY module (`scripts/act-515/kernel/equity.ts`) walks the per-session
+equity path over the assembled book and produces `EquityRow[]` + an
+`EquitySummary` matching the frozen matrix columns.
+
+- **Equity definition (PIN (a)):** `equity(t) = cash(t) + longMv(t) + shortMv(t)`
+  where `shortMv` is NEGATIVE per Module 5 (§9). Haircuts are already inside
+  realized / entry math at the Module-6 cash seam; EQUITY MUST NOT re-apply.
+- **Compounding convention (PIN (a)):** verbatim from §3 —
+  "the equity path IS compounded — realized gains/losses feed the next day's
+  equity, and (for `-comp` sizing variants) feed the next day's slot size."
+  EQUITY does not re-size lots — sizing is Module 4's job at entry time.
+- **Margin carry (PIN (b)):** 50 bps/month flat on the debit balance
+  (`cash < 0`), applied per-session as
+  `carry(t) = max(0, -cash_end_of_day) × (0.0050 × 12 / 252)`.
+  Policy summary line (docs-as-code anchor — do not edit without also editing
+  `equity.ts` PIN (b)):
+    carry(t) = max(0, -cash_end_of_day) × (0.0050 × 12 / 252).
+  1×-const paths accrue ZERO carry by construction (starting equity covers
+  40 slots × $2.5k = $100k of aspirational notional).
+- **Drawdown (PIN (c)):** running peak; `dd(t) = (peak − equity(t)) / peak`;
+  report `maxDd` with (peakDate, troughDate, recoveryDate | 'UNRECOVERED')
+  and worst-calendar-year return. Column IDs (`max-p2t-dd`, `dd-dates`,
+  `dd-duration-days`, `dd-recovery-days`, `cagr`, `margin-interest`) are
+  byte-matched to `config-matrix.md §3` via a docs-as-code test.
+- **Ledger foot property (PIN (e)):** for every t,
+  `equity(t) − equity(t−1) = realizedToday + Δunrealized − carryToday`,
+  asserted to the cent across a multi-lot synthetic path (no-leak invariant).
+
+**Docs-as-code pin:** a test in `equity_test.ts` asserts this section exists
+in this file AND the carry-formula summary line + column-ID list appear in
+both `equity.ts` and this file (same pattern as §7/§8/§9/§10).
