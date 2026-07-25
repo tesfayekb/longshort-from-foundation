@@ -176,3 +176,35 @@ test in `size_test.ts` (docs-as-code pattern, matches Module 3 §7).
 `scripts/act-515/kernel/size.ts` (`SIZING_VARIANTS`) MUST match the Row IDs
 in `config-matrix.md` §1 byte-for-byte (`1x-const`, `1x-comp`, `2x-const`,
 `2x-comp`). R5 (`spy-bh`) is a benchmark, not a sizing variant.
+
+## 9. Missing-bar policy (ACT-515 Module 5 — Mark)
+
+The MARK module (`scripts/act-515/kernel/mark.ts`) prices open lots at daily
+close via an INJECTED `BarSource`. Missing bars are handled by an explicit,
+declared policy — never a silent zero (anti-phantom, DEC-034 clause 5):
+
+- **Carry-forward-last-close is allowed** up to `maxCarryDays` (default `5`).
+  Every carried mark stamps `stalenessDays >= 1` on the lot-day and the
+  aggregate reports `staleLots > 0`. `stalenessDays = 0` iff the bar was
+  fresh for the requested `sessionDate`.
+- **Beyond `maxCarryDays`**, the lot-day propagates a typed
+  `mark_unavailable` refusal (see `MarkRefusalCode` in `types.ts`). The DD
+  curve consumer MUST NOT silently substitute a zero mark; the halt/delisting
+  honesty rule (a DD curve over silent stale marks is fiction) is enforced
+  by tests, not comments — see `mark_test.ts::PIN (c) carry-forward staleness
+  ladder`.
+- **Entry-day missing bar** yields `mark_unavailable` even for a brand-new
+  lot: the kernel MUST NOT echo `entryPrice` as a mark. Entry price and
+  mark price are semantically distinct (entry is a fill anchor; mark is a
+  daily-close observation), and echoing them collapses that distinction.
+- **Sign convention** (PIN (b), grep-anchored to production):
+  - `unrealized_long  = (mark − entry) × shares`
+  - `unrealized_short = (entry − mark) × shares`
+  - `market_value_long`  is reported **POSITIVE**; `market_value_short` is
+    reported **NEGATIVE** — matching
+    `overshoot-equity-snapshot/index.ts:83-89` where `if (mv >= 0) longMv +=
+    mv; else shortMv += mv;`. `gross_exposure = long_mv + |short_mv|`.
+
+**Docs-as-code pin:** a test in `mark_test.ts` asserts this section exists
+in this file AND the same policy summary line appears verbatim in the
+`mark.ts` header (same pattern as §7 Module 3 and §8 Module 4).
