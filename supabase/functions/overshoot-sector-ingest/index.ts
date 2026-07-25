@@ -66,7 +66,7 @@ const RATE_LIMIT_DELAY_MS = 100;
 const SOURCE_VERSION = 'sector-ingest-t2';
 
 function todayUtcIso(): string {
-  return productionClock.now().toISOString().slice(0, 10);
+  return productionClock.getWallClockTs().toISOString().slice(0, 10);
 }
 
 function isValidTicker(t: unknown): t is string {
@@ -305,7 +305,7 @@ Deno.serve(createHandler(async (req: Request): Promise<Response> => {
   const applied: string[] = [];
   const unavailable: Array<{ ticker: string; reason: string }> = [];
   const errors: Array<{ ticker: string; error: string }> = [];
-  const asOfIso = productionClock.now().toISOString();
+  const asOfIso = productionClock.getWallClockTs().toISOString();
 
   for (const t of tickers) {
     try {
