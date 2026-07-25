@@ -97,6 +97,24 @@ const ISHARES_IWM_HOLDINGS_URL =
   'https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/1467271812596.ajax?fileType=csv&fileName=IWM_holdings&dataType=fund';
 const ISHARES_FETCH_TIMEOUT_MS = 30_000;
 
+// ACT-571 — DEFAULT-PATH SOURCE. IVV (iShares Core S&P 500) ∪ IJH (iShares
+// Core S&P MidCap 400) is the ratified `overshoot_universe` identity
+// (INC-126 Option C). Same iShares product-ajax URL family as IWM above —
+// only product-id + fileName differ. Fetched via the SAME
+// `fetchWithTimeoutAndRetry` primitive and parsed by the SAME
+// `parseIsharesCsv` used by the ACT-548 operator-seed path (§1 charter:
+// reuse — no re-implementation).
+export const ISHARES_IVV_HOLDINGS_URL =
+  'https://www.ishares.com/us/products/239726/ishares-core-sp-500-etf/1467271812596.ajax?fileType=csv&fileName=IVV_holdings&dataType=fund';
+export const ISHARES_IJH_HOLDINGS_URL =
+  'https://www.ishares.com/us/products/239763/ishares-core-sp-midcap-etf/1467271812596.ajax?fileType=csv&fileName=IJH_holdings&dataType=fund';
+
+// Provenance tag for the DEFAULT (scheduled/manual non-seed) refresh path.
+// Deliberately DISTINCT from `ishares:ivv_ijh:manual_seed` so operators can
+// tell a scheduled cron write from an operator-CSV seed at a glance in the
+// `overshoot_universe.source` column.
+export const IVV_IJH_SOURCE_TAG = 'ivv_ijh_composite';
+
 // FMP ETF-holdings endpoint — keyed vendor fallback if iShares egress fails.
 // Premium-era path: /stable/etf-holdings?symbol=IWM (v3 /etf-holder is legacy
 // and returned 403 on the operator's Premium key per INC-124). Response
