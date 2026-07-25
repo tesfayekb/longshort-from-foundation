@@ -11,7 +11,9 @@
 //     finra_shvol_ingest_log for EVERY date attempted (including
 //     weekends/holidays which are recorded as skipped_holiday).
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+// Gate 14 (check-supabase-client-specifier): must import via canonical
+// '@supabase/supabase-js' specifier mapped in supabase/functions/deno.json.
+import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
