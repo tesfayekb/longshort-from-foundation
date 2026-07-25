@@ -214,14 +214,36 @@ in this file AND the same policy summary line appears verbatim in the
 The EXIT module (`scripts/act-515/kernel/exit.ts`) prices the round-trip on
 the STUDIED close basis and exposes the cash seam consumed by Module 7.
 
-- **Exit ordinal:** `T1 = ord-6`, `T2 = ord-10`, counted STRICTLY FORWARD
-  from `eventDate` (event day = ord-0; next session = ord-1). Anchored to
-  the hand-truth fixture header
-  (`fixtures/overshoot-backtest/2024-05-02-hand-truth.jsonl:1` —
-  `exit_convention:"ordinal-10 close (LONG T2, holdingDayOrdinal>=10, session-age.ts:145)"`)
-  and to the ACT-574 T+1-open / ordinal-close-exit convention.
-  Ordinals are resolved by an INJECTED `SessionCalendar` — the kernel never
-  reads a calendar globally.
+- **Exit anchor (SIDE×TIER-DISPATCHED, post-2026-07-25 TIER-A repair).**
+  Byte-anchored to production
+  `supabase/functions/_shared/overshoot-execution/session-age.ts:57-70/88-93/142-147/266-274`
+  and re-scoped from the previous LONG-only phrasing (which incorrectly
+  suggested a uniform `T1=ord-6/T2=ord-10` for all sides). The full
+  four-way ratified map is:
+
+  | side  | tier | mode          | anchor date              | threshold                            | production cite                     |
+  |-------|------|---------------|--------------------------|--------------------------------------|-------------------------------------|
+  | long  | T1   | event         | `eventDate`              | `sessionAfter(eventDate, 6)`         | session-age.ts:57-70, :88-93        |
+  | long  | T2   | entry (T+1)   | `entryDate`              | `sessionAfter(entryDate, 9)` ⇔ H=10  | session-age.ts:69-73, :142-147      |
+  | short | T1   | entry (T+1)   | `entryDate`              | `sessionAfter(entryDate, 4)` ⇔ H=5   | session-age.ts:142-147 (ACT-472 HARD)|
+  | short | T2   | entry (T+1)   | `entryDate`              | `sessionAfter(entryDate, 4)` ⇔ H=5   | session-age.ts:142-147 (ACT-472 HARD)|
+
+  **⇔ conversion:** `holdingDayOrdinal ≥ H  ⇔  sessionAfter(entryDate, H − 1)`
+  because `holdingDayOrdinal = sessionsSinceEntry + 1` (session-age.ts
+  :133-141). Ordinals are resolved by an INJECTED `SessionCalendar` —
+  the kernel never reads a calendar globally.
+
+  **OPTION-3 GUARD:** any `(side, tier)` pair absent from the
+  `EXIT_ANCHOR_BY_SIDE_TIER` map raises a typed `exit_spec_unmapped`
+  refusal. The kernel MUST NEVER silently generalize a LONG anchor to a
+  SHORT lot again (the root cause of the pre-TURN-1 Fixture-II
+  divergence — see ACT-575 register entry).
+
+  **Fixture-i corroboration (scope-corrected):** the hand-truth fixture
+  header (`fixtures/overshoot-backtest/2024-05-02-hand-truth.jsonl:1`)
+  corroborates the **LONG T2** leg ONLY (`exit_convention:"ordinal-10
+  close (LONG T2, holdingDayOrdinal>=10, session-age.ts:145)"`). The
+  SHORT leg is corroborated by the production trace, not fixture-i.
 - **Exit price:** the ordinal session's CLOSE from `BarSource`. Haircuts per
   §2 rows "Long-side haircut" (5 bps/side) and "Short-side haircut"
   (15 bps/side) applied under `haircutMode:'study'` (default). `haircutMode:'none'`
