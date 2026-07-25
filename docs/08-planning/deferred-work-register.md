@@ -5099,3 +5099,23 @@ Baseline crit-both-present pool = 827 names; the 11-name gate loss is entirely f
 **Non-goal.** Do NOT merge the caller-envelope constant with `OVERSHOOT_SI_STALENESS_MAX_DAYS_DEFAULT`. Their coincidence at 26 is by shared FINRA cadence; their roles (caller `<=` per-row envelope vs book-level strict `>` fresh-branch flag) are distinct and MUST remain separately named for auditability.
 
 **Cross-refs.** ACT-569(f)-EARLY (H-1 fix turn, this DW's provenance); FIX-3 (source-version rail, drift-guard family); ACT-533 (CI lint guards); DEC-504-4-A (book-flag constant, sibling declaration in si-freshness.ts).
+
+
+## DW-236 — Overshoot SI compute: permanent chain-orchestrator (single-fire full-universe walk)
+
+**Status:** OPEN-DOCUMENTED (state `[C]`). **Filed:** 2026-07-25 (DEV-7 completion turn). **Owner:** overshoot / signals. **Gate:** next non-blocked overshoot signals build slot. **Review-by:** 2026-08-08.
+
+**Scope.** `overshoot-short-interest-compute` handler is batched (default 40, max 80 tickers per invocation) and returns `{done:false, last_cursor}` when more tickers remain. Cron `jobid=121` (`0 21 * * 1-5`) invokes it exactly ONCE per night with `{"mode":"watchdog"}` and NO resume-chain caller. Consequence: only the first 40 alphabetical tickers (A → ALV) are processed per fire; the remainder of the ~905-ticker universe never gets ingested until a manual operator sweep (as executed 2026-07-25 for `as_of_date=2026-07-15`, restoring 40 → 901 coverage).
+
+**Fix options (to be evaluated in charter).**
+1. Wrap the handler in an orchestrator that self-loops with `resume_from = last_cursor` until `done:true`, bounded by wall-clock and per-batch failure caps.
+2. Add a separate cron entry that re-fires every N minutes for M hours after 21:00Z until `done:true` is observed.
+3. Raise `MAX_FULL_BATCH_SIZE` and shift to fewer invocations (blocked by Polygon per-ticker call cost / edge-function wall-clock).
+
+**Preferred direction (non-binding).** Option 1 with a supervisor edge function `overshoot-short-interest-compute-driver` invoking the compute handler in a bounded loop, emitting per-batch bookkeeping to a runs table (or `audit_logs`), idempotent-safe by construction (compute upserts `onConflict as_of_date,ticker`).
+
+**Why deferred.** DEV-7 completion resolved the immediate coverage gap for 2026-07-15 idempotently. The next FINRA settlement is 2026-07-31 (rows land ~2026-08-03) — permanent chaining should land before then so no manual sweep is required. This is a build slot on the overshoot signals lane, not a Monday-gated blocker.
+
+**Acceptance.** After chain-orchestrator lands, a single 21:00Z fire produces `count(DISTINCT ticker) ≥ 900` at the current settlement `as_of_date` within one wall-clock evening, with per-batch bookkeeping visible in audit or a runs table.
+
+**Cross-refs.** DEV-7 (`docs/06-tracking/2026-07-25-dev-7-finra-completion.md`); INC-141 (partial-ingest defect, coverage restored); cron.jobid=121; `_shared/overshoot/si-freshness.ts` (26d envelope consumer).
