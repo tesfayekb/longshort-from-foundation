@@ -156,7 +156,7 @@ Deno.serve(createHandler(async (req: Request): Promise<Response> => {
   // Debug probe (non-leaking): returns auth-mode + presence flags for each
   // path. No secret values echoed. Used for one-shot backfill invocation
   // diagnosis when apply=true is refused.
-  if (req.headers.get('x-probe-auth') === '1') {
+  if (req.headers.get('x-probe-auth') === '1' || bodyRaw.includes('"probe":"auth"')) {
     return apiSuccess({
       probe: 'auth',
       auth_mode: authMode,
