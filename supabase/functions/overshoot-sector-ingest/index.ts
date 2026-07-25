@@ -61,9 +61,12 @@ const REQUIRED_FMP_FIELDS = ['symbol', 'sector', 'industry'] as const;
 const RATE_LIMIT_DELAY_MS = 100;
 
 // SOURCE_VERSION — sector-ingest Turn 3 armed (MIG-169 seeded job_registry
-// row; apply-mode gated by cron secret + kill-switch + job.enabled + explicit
-// `?apply=true`). See _shared/handler.ts sourceVersion contract.
-const SOURCE_VERSION = 'sector-ingest-t3';
+// row; apply-mode gated by (cron secret OR service-role bearer OR
+// x-oneshot-secret) + kill-switch + job.enabled + explicit `?apply=true`).
+// House standard backfill-invocation triad — matches overshoot-minute-ingest
+// and finra-shvol-ingest verbatim (DEV-17/DEV-28 pattern). Permanent, not
+// a temporary loosening.
+const SOURCE_VERSION = 'sector-ingest-t3+oneshot';
 
 function todayUtcIso(): string {
   return productionClock.getWallClockTs().toISOString().slice(0, 10);
@@ -119,8 +122,24 @@ async function sleep(ms: number): Promise<void> {
 
 Deno.serve(createHandler(async (req: Request): Promise<Response> => {
   const correlationId = crypto.randomUUID();
+  // House standard privileged-invocation triad (DEV-17/DEV-28):
+  //   1. X-Cron-Secret matches CRON_SECRET
+  //   2. Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>
+  //   3. x-oneshot-secret matches BACKFILL_ONESHOT_SECRET
+  // Any one grants privileged (apply=true) access. Mirrors
+  // overshoot-minute-ingest and finra-shvol-ingest verbatim.
   const cronErr = verifyCronSecret(req);
-  const isCron = cronErr === null;
+  const cronOk = cronErr === null;
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const svcOk = bearer.length > 0 && svcKey.length > 0 && bearer === svcKey;
+  const oneshot = Deno.env.get('BACKFILL_ONESHOT_SECRET') ?? '';
+  const hdrOneshot = req.headers.get('x-oneshot-secret') ?? '';
+  const oneshotOk = oneshot.length > 0 && hdrOneshot.length > 0 && oneshot === hdrOneshot;
+  const privileged = cronOk || svcOk || oneshotOk;
+  const authMode = cronOk ? 'cron' : svcOk ? 'service_role' : oneshotOk ? 'oneshot' : 'none';
+  const isCron = cronOk;
 
   const bodyRaw = await req.text();
   let body: {
@@ -272,8 +291,14 @@ Deno.serve(createHandler(async (req: Request): Promise<Response> => {
   }
 
   // ---------- apply=true — REAL WRITE (Turn 3 territory) ----------
-  if (cronErr !== null) {
-    return apiSuccess({ ok: false, apply: true, status: 'cron_secret_required', correlationId });
+  if (!privileged) {
+    return apiSuccess({
+      ok: false,
+      apply: true,
+      status: 'privileged_auth_required',
+      hint: 'Provide one of: X-Cron-Secret, Authorization: Bearer <service_role>, or x-oneshot-secret.',
+      correlationId,
+    });
   }
   // Kill-switch supreme + dormant-at-birth job row.
   if (await isDisarmed(KILL_SWITCH_ID)) {
@@ -353,6 +378,7 @@ Deno.serve(createHandler(async (req: Request): Promise<Response> => {
       error_count: errors.length,
       applied_sample: applied.slice(0, 20),
       is_cron: isCron,
+      auth_mode: authMode,
     },
   });
 
@@ -367,6 +393,7 @@ Deno.serve(createHandler(async (req: Request): Promise<Response> => {
       unavailable_count: unavailable.length,
       error_count: errors.length,
     },
+    auth_mode: authMode,
     unavailable_sample: unavailable.slice(0, 20),
     errors_sample: errors.slice(0, 20),
     correlationId,
