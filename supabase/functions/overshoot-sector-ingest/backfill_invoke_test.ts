@@ -21,6 +21,17 @@ Deno.test({
     if (!cron) throw new Error('CRON_SECRET missing in test env');
     if (!anon) throw new Error('SUPABASE_ANON_KEY / SUPABASE_PUBLISHABLE_KEY missing in test env');
 
+    // Wait for local edge-function dev server to be listening.
+    for (let i = 0; i < 30; i++) {
+      try {
+        const r = await fetch(URL_BASE, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        await r.text();
+        break;
+      } catch {
+        await new Promise((res) => setTimeout(res, 500));
+      }
+    }
+
     for (let i = 1; i <= MAX_BATCHES; i++) {
       const t0 = Date.now();
       const resp = await fetch(URL_BASE, {
