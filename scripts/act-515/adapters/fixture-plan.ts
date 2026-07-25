@@ -20,6 +20,7 @@
 
 import {
   type HandTruthFixture, type HandTruthFixtureHeader, type HandTruthFixtureRow,
+  type SideDb,
   sideDetectorToDb, money, price, shares as sharesBrand,
 } from '../kernel/types.ts';
 import type { SessionDate } from '../kernel/clock.ts';
@@ -191,4 +192,174 @@ export function reconstructFixtureI(
     startingEquityUsd,
     endingEquityExpectedUsd,
   };
+}
+
+// =============================================================================
+// FIXTURE-II SUPPORT (TURN-2 — landed 2026-07-25 gate half-2)
+// -----------------------------------------------------------------------------
+// Fixture-ii has FOUR files (hand-truth, bars, calendar, checkpoints) and
+// carries pre-computed integer-cent expectations per lot + checkpoint rows.
+// Row shape (see build-fixture-2023q2.ts::serializeHandTruth):
+//   { lot_id, ticker, side ('long'|'short'), tier ('T1'|'T2'),
+//     event_date, entry_date, exit_date,
+//     entry_open, exit_close, shares,
+//     entry_cash_out_cents (SIGNED — long: +, short: −),
+//     exit_cash_in_cents   (SIGNED — long: +, short: −),
+//     realized_cents       (SIGNED — long-natural, short-natural) }
+// =============================================================================
+
+export interface HandTruthIIRow {
+  readonly lot_id: string;
+  readonly ticker: string;
+  readonly side: 'long' | 'short';
+  readonly tier: 'T1' | 'T2';
+  readonly event_date: SessionDate;
+  readonly entry_date: SessionDate;
+  readonly exit_date: SessionDate;
+  readonly entry_open: number;
+  readonly exit_close: number;
+  readonly shares: number;
+  readonly entry_cash_out_cents: number;
+  readonly exit_cash_in_cents: number;
+  readonly realized_cents: number;
+}
+
+export interface HandTruthIIFixture {
+  readonly header: Record<string, unknown>;
+  readonly rows: ReadonlyArray<HandTruthIIRow>;
+}
+
+export function parseHandTruthFixtureII(source: string): HandTruthIIFixture {
+  const lines = source.split('\n').filter((l) => l.length > 0);
+  if (lines.length < 3) throw new Error(`fixture-ii: expected header + separator + ≥1 row, got ${lines.length} lines`);
+  const header = JSON.parse(lines[0].slice(2)) as Record<string, unknown>;
+  const rows: HandTruthIIRow[] = [];
+  for (let i = 2; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.startsWith('#')) continue;
+    rows.push(JSON.parse(l) as HandTruthIIRow);
+  }
+  return { header, rows };
+}
+
+export interface BarLine {
+  readonly ticker: string;
+  readonly trade_date: SessionDate;
+  readonly close: number;
+}
+export function parseBars(source: string): BarLine[] {
+  const lines = source.split('\n').filter((l) => l.length > 0);
+  const out: BarLine[] = [];
+  for (const l of lines) {
+    if (l.startsWith('#')) continue;
+    out.push(JSON.parse(l) as BarLine);
+  }
+  return out;
+}
+
+export interface CalendarPayload {
+  readonly full_calendar: ReadonlyArray<SessionDate>;
+  readonly equity_walk_sessions: ReadonlyArray<SessionDate>;
+}
+export function parseCalendar(source: string): CalendarPayload {
+  const lines = source.split('\n').filter((l) => l.length > 0);
+  let full: ReadonlyArray<SessionDate> = [];
+  let walk: ReadonlyArray<SessionDate> = [];
+  for (const l of lines) {
+    if (l.startsWith('#')) continue;
+    const obj = JSON.parse(l) as { kind: string; dates: SessionDate[] };
+    if (obj.kind === 'full_calendar') full = obj.dates;
+    else if (obj.kind === 'equity_walk_sessions') walk = obj.dates;
+  }
+  if (full.length === 0 || walk.length === 0) {
+    throw new Error(`calendar: missing full_calendar or equity_walk_sessions kind`);
+  }
+  return { full_calendar: full, equity_walk_sessions: walk };
+}
+
+export interface CheckpointRow {
+  readonly checkpoint: string;
+  readonly sessionDate: SessionDate;
+  readonly cashCents: number;
+  readonly longMvCents: number;
+  readonly shortMvCents: number;
+  readonly equityCents: number;
+  readonly openLotIds?: ReadonlyArray<string>;
+  readonly sumRealizedCents_module6?: number;
+  readonly cashWalker_delta_cents?: number;
+  readonly cent_drift_cents?: number;
+}
+export function parseCheckpoints(source: string): CheckpointRow[] {
+  const lines = source.split('\n').filter((l) => l.length > 0);
+  const rows: CheckpointRow[] = [];
+  for (const l of lines) {
+    if (l.startsWith('#')) continue;
+    rows.push(JSON.parse(l) as CheckpointRow);
+  }
+  return rows;
+}
+
+export interface FixtureIIExpected {
+  readonly lotId: string;
+  readonly ticker: string;
+  readonly sharesCount: number;
+  readonly entryCashOutCents: number;
+  readonly exitCashInCents: number;
+  readonly realizedCents: number;
+}
+
+export interface FixtureIIReconstructed {
+  readonly plan: PipelinePlan;
+  readonly barSource: MapBarSource;
+  readonly expected: ReadonlyArray<FixtureIIExpected>;
+  readonly startingEquityUsd: number;
+}
+
+/** Fixture-ii reconstruction. `startingEquityUsd` = 100_000 (fixture header
+ *  `starting_equity_usd`). Bars, calendar and hand-truth rows are all passed
+ *  through untouched — the reconstructor invents no data, only shape-adapts. */
+export function reconstructFixtureII(
+  fixture: HandTruthIIFixture,
+  bars: ReadonlyArray<BarLine>,
+  calendarPayload: CalendarPayload,
+  startingEquityUsd = 100_000,
+): FixtureIIReconstructed {
+  const lots: PipelineLot[] = fixture.rows.map((r) => ({
+    lotId: r.lot_id,
+    ticker: r.ticker,
+    side: r.side as SideDb,
+    tier: r.tier,
+    shares: sharesBrand(r.shares),
+    entryPrice: price(r.entry_open),
+    // Fixture sizing_rule: floor($10,000 / entry_open). The nominal slot
+    // notional passed to `cashRequired` is $10,000; kernel then re-floors
+    // to the same share count.
+    slotNotionalUsd: money(10_000),
+    entryDate: r.entry_date,
+    eventDate: r.event_date,
+  }));
+
+  const expected: FixtureIIExpected[] = fixture.rows.map((r) => ({
+    lotId: r.lot_id,
+    ticker: r.ticker,
+    sharesCount: r.shares,
+    entryCashOutCents: r.entry_cash_out_cents,
+    exitCashInCents: r.exit_cash_in_cents,
+    realizedCents: r.realized_cents,
+  }));
+
+  const barMap = new Map<string, ReturnType<typeof price>>();
+  for (const b of bars) barMap.set(MapBarSource.key(b.ticker, b.trade_date), price(b.close));
+  const barSource = new MapBarSource(barMap);
+
+  const calendar = new ArraySessionCalendar(calendarPayload.full_calendar);
+
+  const plan: PipelinePlan = {
+    startingEquityUsd: money(startingEquityUsd),
+    sessions: calendarPayload.equity_walk_sessions,
+    calendar,
+    lots,
+  };
+
+  return { plan, barSource, expected, startingEquityUsd };
 }
