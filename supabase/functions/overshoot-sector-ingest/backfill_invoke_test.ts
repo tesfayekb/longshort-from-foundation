@@ -4,7 +4,7 @@
 // per-batch summaries verbatim. NOT a regression test — meant to be run
 // manually for ACT-515(e) Sector Ingest Turn 3.
 
-const URL_BASE = 'https://sftatlxatbdrotivxcip.supabase.co/functions/v1/overshoot-sector-ingest';
+const URL_BASE = 'http://localhost:8000/overshoot-sector-ingest';
 const BATCH_LIMIT = 200;
 const MAX_BATCHES = 6;
 
