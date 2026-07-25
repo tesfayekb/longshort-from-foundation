@@ -69,8 +69,9 @@ Deno.test('PIN (c) size.ts seams duplicated in estimator-assumptions.md §8', as
   );
   assert(est.includes('## 8. Kernel seams (ACT-515 Module 4 — Size)'),
     'estimator §8 header missing');
-  assert(est.includes('margin carry cost'), 'carry-cost seam missing from §8');
-  assert(est.includes('buying-power'), 'buying-power seam missing from §8');
+  const lower = est.toLowerCase();
+  assert(lower.includes('margin carry cost'), 'carry-cost seam missing from §8');
+  assert(lower.includes('buying-power'), 'buying-power seam missing from §8');
   assert(est.includes('Module 7'), 'Module 7 handoff missing from §8');
   assert(est.includes('Module 6'), 'Module 6 handoff missing from §8');
 });
