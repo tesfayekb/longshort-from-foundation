@@ -25,12 +25,22 @@ import { OVERSHOOT_DAILY_ENTRY_BUDGET } from '../_shared/overshoot-execution/dai
 const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
 
 // ─────────────────────────────────────────────────────────────────────────
+// SOURCE_VERSION single-constant (mechanical mitigation — CI-RED 3c698a5).
+// Every rail/drift test in this file asserts against this ONE literal;
+// future bumps are a one-line edit and half-misses are structurally
+// impossible. See deferred-work-register.md checklist item flipped to
+// "single-constant pattern (mechanical)" per the #21/#29 enforcement-as-
+// code precedent.
+// ─────────────────────────────────────────────────────────────────────────
+const EXPECTED_SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1+fix9+l01a';
+
+// ─────────────────────────────────────────────────────────────────────────
 // L-01 charter — limit-ladder A/B arm source sentinels
 // (charter: docs/06-tracking/charters/L-01-limit-ladder-tightening.md)
 // ─────────────────────────────────────────────────────────────────────────
 
-Deno.test('L-01: SOURCE_VERSION bumped to fb5fdf13+fix2+fix8+sp1+fix9+l01a', () => {
-  assertStringIncludes(SRC, "SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1+fix9+l01a'");
+Deno.test('L-01: SOURCE_VERSION bumped to expected rail literal', () => {
+  assertStringIncludes(SRC, `SOURCE_VERSION = '${EXPECTED_SOURCE_VERSION}'`);
 });
 
 Deno.test('L-01: limit-arm module imported (pickLimitArm + both slippage constants)', () => {
