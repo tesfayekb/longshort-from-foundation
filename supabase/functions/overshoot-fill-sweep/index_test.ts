@@ -17,6 +17,21 @@ import {
   OVERSHOOT_EXIT_CID_REGEX_STRING,
 } from './pure.ts';
 
+// SOURCE_VERSION single-constant rail-guard (mechanical mitigation — CI-RED
+// 3c698a5). Every rail assertion here reads from ONE literal so future
+// bumps are a one-line edit; half-misses are structurally impossible.
+const EXPECTED_SOURCE_VERSION = 'fb5fdf13+fix2';
+const FILL_SWEEP_SRC = await Deno.readTextFile(
+  new URL('./index.ts', import.meta.url),
+);
+
+Deno.test('SOURCE_VERSION rail: fill-sweep index.ts export matches expected literal', () => {
+  assert(
+    FILL_SWEEP_SRC.includes(`export const SOURCE_VERSION = '${EXPECTED_SOURCE_VERSION}'`),
+    `fill-sweep SOURCE_VERSION drift — expected '${EXPECTED_SOURCE_VERSION}'`,
+  );
+});
+
 Deno.test('toEtSessionDate: DST-safe YYYY-MM-DD for America/New_York', () => {
   // 2026-07-08 13:37:10 UTC = 09:37:10 ET (EDT summer).
   const d = new Date('2026-07-08T13:37:10.000Z');

@@ -23,6 +23,9 @@ import {
 
 const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
 
+// SOURCE_VERSION single-constant (mechanical mitigation — CI-RED 3c698a5).
+const EXPECTED_SOURCE_VERSION = 'fb5fdf13+fix2+si26';
+
 Deno.test('DEC-023 envelope: uses createHandler + authenticateRequest + overshoot.manage RBAC', () => {
   assertStringIncludes(SRC, "import { createHandler, apiSuccess } from '../_shared/handler.ts'");
   assertStringIncludes(SRC, "import { authenticateRequest } from '../_shared/authenticate-request.ts'");
@@ -136,7 +139,7 @@ Deno.test('probe short-circuit: BEFORE the three skip gates', () => {
 Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it, handler wired', () => {
   // FIX-2 bump 2026-07-23 (rail-parity — no money-path change in detection).
   // H-1 bump 2026-07-23 (+si26 — per-row SI envelope 20→26; detection-run only).
-  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2+si26'");
+  assertStringIncludes(SRC, `export const SOURCE_VERSION = '${EXPECTED_SOURCE_VERSION}'`);
   const idxProbeStart = SRC.indexOf("probe: 'version',");
   assert(idxProbeStart > 0, 'version-probe branch present');
   const probeBlock = SRC.slice(idxProbeStart, idxProbeStart + 400);
@@ -306,7 +309,7 @@ Deno.test('H-1 fix does NOT bump detector predicate spec — composite aff20a13 
 });
 
 Deno.test('SOURCE_VERSION carries the +si26 suffix (deploy-truth rail)', () => {
-  assertStringIncludes(SRC, "SOURCE_VERSION = 'fb5fdf13+fix2+si26'");
+  assertStringIncludes(SRC, `SOURCE_VERSION = '${EXPECTED_SOURCE_VERSION}'`);
 });
 
 Deno.test('DEC-504-4 WIRE: handler consumes overshootSleeveAllocation; BOTH branches byte-present (fresh 36/4, stale 40/0); no hardcoded post-decision caps', async () => {
