@@ -242,6 +242,27 @@ export type ExitRefusalCode =
   | 'exit_calendar_exhausted'
   | 'exit_price_unavailable';
 
+// -----------------------------------------------------------------------------
+// Equity/DD vocabulary + refusals (Module 7 — EQUITY)
+// -----------------------------------------------------------------------------
+
+/** Typed refusals emitted by the EQUITY module (`equity.ts`).
+ *  KERNEL-ONLY per PIN (a)/(b) of the EQUITY ruling (2026-07-25). No phantom
+ *  production strings.
+ *
+ *  · `mark_gap_in_open_book` — one or more surviving open lots returned
+ *      `mark_unavailable` on this session and the day's equity therefore
+ *      cannot be honestly recorded. Emitted rather than silently zeroing
+ *      or forward-filling equity (the DD curve MUST NOT be fiction over
+ *      halt/delisting — estimator-assumptions §9).
+ *  · `insufficient_buying_power` — a compounding / 2× path requested more
+ *      cash than the equity path can front and the seam declined the entry.
+ *      Reserved for future compounding-with-cap variants; the four frozen
+ *      matrix variants currently do not exercise this path. */
+export type EquityRefusalCode =
+  | 'mark_gap_in_open_book'
+  | 'insufficient_buying_power';
+
 /** Per-selection refusal record. `subReason` carries the nested class
  *  (`i5_refusal.<x>`, `price_refusal.<y>`, etc.) verbatim from the audit
  *  action string; the kernel does not enumerate those — it only counts. */
