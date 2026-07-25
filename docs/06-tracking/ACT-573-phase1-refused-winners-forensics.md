@@ -6,11 +6,16 @@
 **Return convention:** T+1 open → T+6 close (5 trading-day hold, ordinal), same as corpus. Bars available through 2026-07-24 ⇒ sessions after 2026-07-17 have INSUFFICIENT-N for full T+5 close.
 **Honest-frame header (verbatim):** 12 sessions = **DIRECTIONAL ONLY**. Any pattern GRADUATES to the corpus cells before any config flip — adoption only through verdict grammar vs the 42.42 bps/slot-day floor.
 
+> **AMENDMENT 2026-07-25 05:52Z (operator ratified):**
+> (a) **DEV-12 REFUTED-WITHDRAWN.** 07-22 selected 40 longs because sleeves were ENGAGED 40/0 that night (DEC-504-4 engage, run b593645c, receipts on file). Ratified posture, not over-emit. Friday-close recon item KILLED.
+> (b) **Terminology fix:** 'admitted' at detection-level → **SELECTED** throughout. Detection-level SELECTED ≠ filled lots. FILLED-LOTS-ONLY split rows added §2.3 and §3.1. Console 'admitted' overloads the term and means FILLED — artifacts must not overload (Catalog #65).
+> (c) **Findings routing:** short `drawdown_out_of_set` (+371.4 bps, n=131) → filed **ACT-548 CELL-ADD CANDIDATE** for S-band × drawdown-bucket-4 corpus study (post-ACT-574, verdict vs 42.42 floor). `si_unavailable` (+55.7 bps) → **MOOT-BY-H-1** (class extinct since 2026-07-23 fix; those names now flow to later gates). `momentum_out_of_set` (+71.6 bps) → HOLD as texture pending same corpus pass.
+
 ---
 
 ## §0 — ONE-LINE ANSWER TO THE OPERATOR'S QUESTION
 
-> **Yes — on the SHORT side.** Three refusal classes materially outperformed the (near-empty) admitted-short cohort during the window: `drawdown_out_of_set` (+371.4 bps short-PnL, n=131), `momentum_out_of_set` (+71.6 bps, n=143), `si_unavailable` (+55.7 bps, n=110). On the LONG side, `capacity`-refused (+3.3 bps, n=1,001) beat `ADMITTED` (−321.1 bps, n=234) — but the entire long book was underwater across the window (SPY-drag), so the read is regime-contaminated. **No pattern GRADUATED; all findings are DIRECTIONAL and gated by the honest-frame header above.**
+> **Refused vs SELECTED — yes on the SHORT side.** Three refusal classes materially outperformed the near-empty SELECTED-short cohort during the window: `drawdown_out_of_set` (+371.4 bps short-PnL, n=131) → **ACT-548 CELL-ADD CANDIDATE FILED**; `momentum_out_of_set` (+71.6 bps, n=143) → HOLD; `si_unavailable` (+55.7 bps, n=110) → **MOOT-BY-H-1**. On the LONG side, `capacity`-refused (+3.3 bps, n=1,001) beat SELECTED (−321.1 bps, n=234) but the entire long book was underwater (SPY-drag) — regime-contaminated. **Execution-reality (filled-lots) is a separate row per side (§2.3/§3.1); do not conflate SELECTED with FILLED.** No pattern GRADUATED; findings are DIRECTIONAL and gated by the honest-frame header.
 
 ---
 
@@ -91,6 +96,15 @@
 
 `exclusion_earnings_proximity`-refused (−173 bps, 3.6% win) validates the guard: earnings-proximate names were catastrophically worse than typical. Guard is EARNING ITS KEEP.
 
+
+### §2.3 FILLED-LOTS-ONLY — LONG side (execution reality)
+
+| bucket | n_filled | n_ret | mean_bps | win_pct |
+|---|---|---|---|---|
+| FILLED-LOTS (from `overshoot_lots`, entry_ts 07-08..07-24, avg-cost basis → T+5 close) | 50 | 50 | **−473.4** | 36.0% |
+
+**Read.** Filled-lots long cohort n=50 (vs SELECTED n=456; SELECTED includes dry-run + capacity-cut layers that never reached the broker). Filled cohort is materially worse than SELECTED (−473 vs −321 bps) — reflects execution slippage + Friday-heavy admit clustering during the sell-off. Selection-quality (SELECTED) and execution-reality (FILLED) diverge; both rows stand.
+
 ---
 
 ## §3 — SHORT-SIDE COHORT FORWARD RETURNS (short-PnL sign)
@@ -113,6 +127,15 @@
 - **`momentum_out_of_set`** and **`si_unavailable`** also positive but smaller effect. `si_unavailable` mattered before the H-1 fix (SI staleness envelope 20d → 26d landed 07-24); post-fix cohort not yet in this window.
 - **`excess_below_threshold`** (the bulk-refusal gate) sits at −10.4 bps — refusal was **near-neutral**, meaning the gate saved capital without leaving alpha on the table for the bottom-excess names. **Gate does its job.**
 - **ADMITTED short n=1** (Friday 07-24 fills only, exits not yet observed) — the −395 bps single point is one open trade caught mid-window and is not evidence of anything.
+
+
+### §3.1 FILLED-LOTS-ONLY — SHORT side (execution reality)
+
+| bucket | n_filled | n_ret | mean_bps | win_pct |
+|---|---|---|---|---|
+| FILLED-LOTS (from `overshoot_lots`, entry_ts 07-08..07-24) | **0** | — | — | — |
+
+**Read.** SELECTED short n=10 (per §3), FILLED short **n=0** across the entire window (up to and including the maiden receipt evidence). Every SELECTED short row on 07-16/17/20/24 either dry-ran, was overtaken by budget/completion gating, or refused at the broker layer. Execution-reality confirms the short-lane is **DEBUT-PENDING** — Monday's 13:35Z admit is the true first fill test.
 
 ---
 
