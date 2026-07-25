@@ -17,7 +17,7 @@
 // `overshoot_study_candidate_events` run `1888e113`. Cell map =
 // `overshoot_study_cell_results` run `045d2dfc` (exclusion_width=5).
 //
-// SURVIVORSHIP-BIAS DISCLOSURE (estimator-assumptions.md §7, ratified 2026-07-25):
+// SURVIVORSHIP-BIAS DISCLOSURE (estimator-assumptions.md §7-survivorship, ratified 2026-07-25):
 // Per-session universe membership = `added_as_of ≤ session AND active=TRUE`
 // as observed at replay time. The R1 receipt REPORTS the measured bound:
 // count of corpus events excluded by this predicate at their event_date, and
