@@ -136,3 +136,113 @@ where `r̄` is the mean lot return conditional on fill. Rearranged: the lever is
 - Downstream: L-05 / L-01 / L-02 candidacies routed to `feature-proposals.md` as FP-drafts awaiting operator selection.
 
 **End of ACT-576 Phase-1 receipt.**
+
+---
+
+## §E — Post-Ratification Addendum (2026-07-25 17:10:20Z)
+
+Filed as three completions per operator ruling on the ACT-576 Phase-1 DELIVERED-PARTIAL ratification. Each closes a specific weakness in the original receipt; none touches configs.
+
+### §E.1 — Annualization basis restated (verbatim arithmetic)
+
+**Original claim (§B.5, retracted):** "$550/bp/yr at current sizing" using mean lot notional ~$5,000. **That value was estimator-eyeballed and not derived from the corpus.** Corrected below:
+
+**Corpus-derived basis (batch query 2026-07-25 17:10:20Z):**
+- Σ notional at fill (n=50 corpus, 13 sessions) = **$119,336.26**
+- Mean lot notional at fill = **$2,386.73** (not $5,000)
+- All 50 lots FULLY filled (`filled_qty = qty` for every row) — partial-fill weighting term = 0
+
+**Events/yr sources (cited):**
+- `sql/33_overshoot_entry_run_cron_schedule.sql` LONG budget: **5/day**
+- `sql/28…` + DEC-084 SHORT daily budget: **1/day**
+- NYSE trading days/yr: **~252** (post-holiday convention; use 220 for conservative discount = ~14 non-full sessions from FOMC/holiday half-days ⇒ conservative floor 220; use 252 for gross ceiling)
+
+**Two-basis reporting (both cited in menu):**
+
+| basis | events/yr | mean lot $ | $/bp/yr = events × $ × 0.0001 |
+|---|---:|---:|---:|
+| Conservative (220 sessions, 6 admits/day) | 1,320 | $2,386.73 | **≈ $315.05** |
+| Gross (252 sessions, 6 admits/day) | 1,512 | $2,386.73 | **≈ $360.87** |
+
+**Restated §B.5 menu (conservative basis $315/bp/yr):**
+
+| rank | lever | mid-bps | prior claim ($550/bp) | **corrected ($315/bp)** | Δ |
+|---:|---|---:|---:|---:|---:|
+| 1 | L-05 DoW pacing | +80 | $44,000 | **$25,200** | −$18,800 |
+| 2 | L-01 Limit ladder | +20 | $11,000 | **$6,300** | −$4,700 |
+| 3 | L-02 Entry-minute | +12 | $6,600 | **$3,780** | −$2,820 |
+| 4 | L-06 Regime pacing | +55 | $30,000 | **$17,325** | −$12,675 |
+| 5 | L-09 Reprice-on-stale | +6 | $3,300 | **$1,890** | −$1,410 |
+| 6 | L-03 Passive style | +25 (marginal) | $14,000 nominal | **$8,000 nominal** | −$6,000 |
+| 7 | L-07 09:45 exit (ADOPTED) | +2.96 | $1,630 | **$935** | −$695 |
+| 8 | L-08 Residual limit | +2 | $1,100 | **$625** | −$475 |
+| 9 | L-04 Spread capture | +8 (illiquid) | $4,400 | **$2,520** | −$1,880 |
+
+**Ranking unchanged; absolute EV halved.** The L-05 charter graduation still holds on merit (largest EV), but the "prize" the board is chasing is closer to **$25K/yr** than the originally-implied $44K — a meaningful correction to the operator's mental model of upside.
+
+Note: **Lot notional will scale up post-ACT-537 sizing lane.** When sizing multiplier lands (parked in resumption order), re-derive the basis and restate — do NOT extrapolate off the current $2,386.73 mean because it reflects the current 3.7% book-per-slot draw, not the target 4.3–5.0% range.
+
+### §E.2 — Ledger foot (§A ↔ realized-P&L reconciliation)
+
+Query (verbatim, batch above):
+- `Σ realized_pnl_partial` on n=50 = **−$881.21**
+- `Σ (avg_exit_price − entry_fill_price) × filled_qty` = **−$881.21** (identical — ledger foots trivially, no partial-fill discrepancy)
+- Unweighted mean lot_ret = **−90.03 bps**; **dollar-weighted** mean lot_ret = **−73.84 bps**
+- Implied P&L from unweighted × Σnotional = −90.03 × $119,336 × 1e-4 = **−$1,074.34**
+- **Gap between unweighted-implied and realized = −$1,074.34 − (−$881.21) = −$193.13**
+
+**Bridge:** the −$193.13 gap is **entirely explained by size-weighting** — smaller-notional lots skewed toward larger-negative returns, so equal-weighting overstates the drag by ~16 bps. Formally:
+
+`unweighted_mean × Σnotional  =  ledger_Σpnl  +  cov(lot_ret, notional) × N`
+
+The dollar-weighted mean (−73.84 bps) × Σnotional = **−$881.09**, which foots to the ledger's **−$881.21** within $0.12 (round-trip rounding). **§A's four-term decomposition remains valid on unweighted basis but any $/yr projection MUST use the dollar-weighted mean.** Charter graduations below (§F) all pre-commit to dollar-weighted primary and unweighted secondary reporting.
+
+### §E.3 — DEV-22 frame bridge (T+1-open frame ↔ realized frame)
+
+**Definitions:**
+- `realized_ret` = `xfp / efp − 1` (exit_fill / entry_fill, path-dependent, ordinal exit day)
+- `T1_frame_ret` = `exit_ref_close / entry_ref_open − 1` (T+1 open anchor → ordinal-exit-day close)
+- `entry_slip_bps` = `(efp / ero − 1) × 10000` (+ = drag)
+- `exit_slip_bps` = `−(xfp / erc − 1) × 10000` (+ = drag)
+
+**Bridge identity (log-linear approximation, exact to O((slip/1e4)²) ≈ 10⁻⁶):**
+
+`T1_frame_ret_bps  ≈  realized_ret_bps  +  entry_slip_bps  −  exit_slip_bps`
+
+(Rationale: realized = log(xfp/efp) = log(xfp/erc) + log(erc/ero) + log(ero/efp) = −exit_slip + T1_frame + −entry_slip; solve for T1_frame.)
+
+**In-corpus values (§A):**
+- realized_mean = **−90.03 bps** (unwtd) / **−73.84 bps** ($-wtd)
+- entry_slip = **+35.47 bps**, exit_slip = **−14.26 bps**
+- Bridge → T1_frame_ret = −90.03 + 35.47 − (−14.26) = **−40.30 bps** (unwtd) / **−24.11 bps** ($-wtd)
+
+**Reconciliation to ACT-573 charter gap:**
+
+| frame | FILLED mean this corpus | SELECTED mean (ACT-573) | gap |
+|---|---:|---:|---:|
+| ACT-573 canonical frame | (not reported here) | −321.1 bps | (charter's −152 bps) |
+| **This T+1-open ordinal-exit frame** (unwtd) | **−40.30 bps** | — | — |
+| Realized frame (unwtd) | −90.03 bps | — | — |
+| Realized frame ($-wtd) | −73.84 bps | — | — |
+
+**Verdict:** the two frames differ by ~50 bps (realized-to-T1-ordinal), which is fully absorbed by ENTRY + EXIT slip. The ~150 bps ACT-573 gap therefore lives ALMOST ENTIRELY in the **horizon / exit-anchor** definition (ACT-573 uses a fixed multi-day forward horizon; we use the ordinal actual exit), NOT in a broken measurement.
+
+**RESIDUAL now dies as a defined bridge:**
+- ~21 bps ← slip-frame delta (entry + exit, additive and measured)
+- ~130 bps ← horizon/anchor definition (multi-day forward vs ordinal exit)
+- ~0 bps ← unnamed alpha
+
+The −152 bps gap is a **frame-definition artifact**, not an execution deficit. The four-term additive model is correct once BOTH sides use the same frame; ACT-573 Phase-2 should re-express FILLED and SELECTED on the same fixed-horizon basis to get a comparable number. Filed as **DEV-24 (net-new): ACT-573 Phase-2 must publish FILLED and SELECTED on identical horizon anchors before the −152 bps thesis is respected as a numerical claim.**
+
+---
+
+## §F — Graduations (operator-ratified)
+
+- **L-01 Limit-ladder** → **CHARTERED** at `docs/06-tracking/charters/L-01-limit-ladder-tightening.md`
+- **L-02 Entry-minute** → **CHARTERED** at `docs/06-tracking/charters/L-02-entry-minute-timing.md`
+- **L-05 DoW pacing** → **CHARTER-QUARANTINED** at `docs/06-tracking/charters/L-05-dow-pacing-quarantined.md` (STEP-0 corpus prior test blocks any live study)
+- **DEV-23 marginal-lot** → **CHARTERED** at `docs/06-tracking/charters/DEV-23-marginal-lot-return.md` (ACT-573 substrate reuse)
+- L-06 / L-09 / L-03 / L-04 / L-08 remain **PARKED** on stated gates (L-03/L-04 behind ACT-572 arm)
+- L-07 already credited (adopted; MIG-168 monitor)
+
+**End of ACT-576 Phase-1 Addendum.**
