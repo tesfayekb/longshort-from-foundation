@@ -68,6 +68,10 @@ const RATE_LIMIT_DELAY_MS = 100;
 // House standard backfill-invocation triad — matches overshoot-minute-ingest
 // and finra-shvol-ingest verbatim (DEV-17/DEV-28 pattern). Permanent, not
 // a temporary loosening.
+// DEV-29 RIP (2026-07-25 19:12Z): temporary in-source token
+// (act515e_sector_backfill_...) used for the six-batch sector backfill
+// removed same-session. Probe-verified refused. Standing pattern
+// codified in deferred-work-register.md.
 const SOURCE_VERSION = 'sector-ingest-t3+oneshot';
 
 function todayUtcIso(): string {
