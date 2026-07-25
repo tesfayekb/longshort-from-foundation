@@ -7,6 +7,61 @@
 
 ---
 
+## INC-144 — Fixture fabricated-absence (self-inflicted, not a delete) (2026-07-25)
+
+**Category:** narrative-fabrication / evidence discipline.
+**Severity:** HIGH — same class as INC-131. Falsely reported a committed
+fixture as "absent from HEAD" in `scripts/act-515/estimator-assumptions.md
+§5` and in the ACT-515 pre-commit turn's DEV-11 surface. Nothing was
+deleted; the fixture was present at HEAD the entire time.
+
+**Filed by:** operator ruling B1 (2026-07-25).
+
+**Ground truth (this turn, verified):**
+
+| Check | Result |
+|---|---|
+| `git log --diff-filter=D -- 'fixtures/*'` (all refs) | **zero delete commits** |
+| `git log --diff-filter=A -- '*hand-truth*'` | `ff4b4aac2` (2026-07-23 18:07:05Z), single add, still present |
+| `git ls-tree -r HEAD -- fixtures/overshoot-backtest/` | `100644 blob c98d3d31... 2024-05-02-hand-truth.jsonl` (present) |
+| `sha256sum fixtures/overshoot-backtest/2024-05-02-hand-truth.jsonl` | `d06bd24cadcb608c2525b042ec40a1db112fa6f363ac3ae288d3f4ac7ecff1a2` (byte-exact match) |
+| `rg 'd06bd24c' .` | hits only in scripts/act-515/{README,estimator-assumptions,compute-plan}.md (my own scratch), NEVER in fixtures — the sha is the CONTENT hash, not a literal in the file |
+
+**Root cause of the false claim.** Prior turn grepped for the literal
+string `d06bd24c` and, finding it only in my own scratch docs, wrote
+"sha does not appear anywhere in the repo → fixture absent." That
+conflates the *hash of a file's content* with a *string embedded in
+source*. Zero attempt was made to run `find fixtures/`,
+`git ls-tree HEAD -- fixtures/`, or `sha256sum` against candidate
+files. Classic INC-131 pattern (assertion without artifact).
+
+**Lesson (Rule-8 extension — codify).** `fixtures/**` joins the
+**never-delete class** alongside migrations, ledgers, and reference
+indexes. Any future removal from `fixtures/**` requires an explicit
+INC + register row before the deleting commit lands. Verification
+protocol for "is fixture X in repo?" is:
+
+1. `git ls-tree -r HEAD -- fixtures/`  (present in HEAD?)
+2. `git log --diff-filter=AD --all -- <path>`  (add/delete history)
+3. `sha256sum <path>`  (content match)
+
+String-grep for a sha is **evidence of nothing** — the sha is a
+derived hash, not something the fixture contains.
+
+**Corrections landed this turn:**
+
+- `scripts/act-515/estimator-assumptions.md §5` — rewritten from
+  "DEVIATION SURFACED" to "VERIFIED PRESENT (sha byte-match)".
+- `scripts/act-515/hand-truth-fixture-verification.md` — new artifact
+  with the four verification commands and their outputs.
+- `scripts/act-515/compute-plan.md` — Blocker B1 flipped CLOSED.
+
+**Standing:** OPEN as a governance lesson (never-delete class extension
+pending Constitution Rule 8 amendment PR); the material claim is
+corrected in-place this turn.
+
+---
+
 ## INC-141-b — `overshoot-universe-refresh` typed-refusal silent-200 (2026-07-25) — FIXED
 
 **Category:** observability / audit-log completeness.
