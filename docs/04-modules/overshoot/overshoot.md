@@ -1018,3 +1018,18 @@ The operator console at `/trading/overshoot/*` is complete across seven read-onl
 **Monday's checklist item (E) — retroactive close-out for Wave-1 armed legs.** (E1) sweep — cite 15:14Z row. (E2) dispatcher — cite one in-window dispatch. (E3) equity-snapshot — capture at 21:10Z. (E4) detection — capture at 22:00Z. (E5) SI compute — deferred to 2026-07-15 21:00Z tick; leg is DISARMED-EQUIVALENT until proven. Any leg without (E) evidence at Tuesday's arming decision is NOT counted toward the autonomous-entry gate.
 
 **A5 corporate-action first-check (Fable-max F4, 2026-07-16).** On ANY `reconciliation_events.outcome='qty_mismatch'` for a symbol held on a date `D`, the operator's FIRST triage step is a corporate-action check against Polygon `/v3/reference/dividends` and `/v3/reference/splits` for the affected ticker with `execution_date ∈ [entry_ts::date, D]`. Dividends produce a cosmetic equity-drift (`qty * cash_dividend`) that is NOT a substantive divergence and MUST NOT page. Splits produce a `qty` factor change that is likewise a corporate-action, not a broker/ledger defect. Only after both endpoints return zero events for the window does the qty_mismatch escalate to substantive A5 handling. This ordering prevents the phantom-defect class where a real dividend/split is misread as a reconciliation failure. Emergency-kill path is documented in `docs/04-modules/overshoot/emergency-kill-runbook.md`.
+
+## §Data-Providers (canonical inventory — as of 2026-07-25)
+
+Authoritative list of external data subscriptions consumed by the overshoot lane (and shared lanes). This section is the single source of truth; any doc, tracker, register, or code reference that names a provider must reconcile against this table.
+
+| # | Provider / Product | Status | Used for |
+|---|---|---|---|
+| 1 | **Polygon Stocks Advanced** | **ACTIVE** | daily bars, minute bars (MIG-167), reference tickers, corporate-actions (dividends/splits), universe probe path (`I:RUT` retained as probe-only per ACT-571) |
+| 2 | **FMP Premium** | **ACTIVE** | `/stable/profile` (planned primary for sector metadata — ACT-515(e) sector-ingest); other reference data as needed. Tier-restricted endpoints (e.g. ETF Holdings) rejected per DEV-10. |
+| 3 | ~~Polygon Options Developer~~ | **CANCELLED-2026-07-25** | previously vetted then disqualified for Signal #3 (INC-71); subscription formally cancelled by operator 2026-07-25 — do NOT re-propose without an explicit superseding DEC + fresh 4-axis vetting. |
+| 4 | ~~Polygon Indices Advanced~~ | **CANCELLED-2026-07-25** | previously used for `I:RUT` / `I:SPX` / `I:MID` constituent probes; superseded by ACT-571 IVV+IJH composite (iShares CSV) + operator monthly seed ritual (ACT-548 primary). Subscription formally cancelled 2026-07-25 — do NOT re-propose. |
+
+**Cancellation record (2026-07-25):** operator confirms Polygon Options Developer + Polygon Indices Advanced subscriptions cancelled on 2026-07-25. Both products are permanently retired from the roadmap; any future revival requires an explicit DEC. All prior register / tracker / doc mentions are historical and stamped **CANCELLED-2026-07-25** at point of reference.
+
+**Sector-metadata primary lane (planned):** FMP `/stable/profile` for the 905-ticker roster + iShares CSV cross-check (piggybacks on the ACT-548 monthly seed ritual). Sector-ingest is chartered as the next weekend workstream (see `docs/08-planning/deferred-work-register.md` — ACT-515(e) sector-ingest row).

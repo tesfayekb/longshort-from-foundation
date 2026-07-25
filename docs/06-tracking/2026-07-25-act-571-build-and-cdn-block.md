@@ -165,7 +165,7 @@ not a key defect. `+$840/yr` to automate a 5-minute monthly ritual =
 **REJECTED on ROI**. Note also `1 Minute Intraday` is Ultimate-only,
 confirming Polygon Stocks Advanced remains the minute-bar substrate
 and is NOT among the cancellations in flight (only Options Developer
-+ Indices Advanced are).
++ Indices Advanced are). **[CANCELLED-2026-07-25 — both formally cancelled by operator 2026-07-25; canonical inventory in `docs/04-modules/overshoot/overshoot.md` §Data-Providers.]**
 
 **Ruling: OPTION A-PLUS.**
 
