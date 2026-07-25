@@ -408,10 +408,10 @@ Deno.test('FIX-9 marker write carries `pass` key (grep-guard)', () => {
   assertStringIncludes(markerBlock, 'pass: passLabel');
 });
 
-Deno.test('FIX-9 SOURCE_VERSION rail bump: fb5fdf13+fix2+fix8+sp1+fix9', () => {
+Deno.test('FIX-9 SOURCE_VERSION rail bump matches expected literal', () => {
   assertStringIncludes(
     SRC,
-    "export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1+fix9'",
+    `export const SOURCE_VERSION = '${EXPECTED_SOURCE_VERSION}'`,
   );
 });
 
@@ -566,7 +566,7 @@ Deno.test('FIX-3 (ACT-565) SOURCE_VERSION rail: export present, probe echoes it,
   // after FIX-8. Every entry-run code bump MUST bump this rail.
   // 2026-07-24 re-pin: FIX-9 pass-scoped idempotency-gate marker `+fix9`
   // appended after `+sp1`. See docs/04-modules/overshoot/fix-9.md.
-  assertStringIncludes(SRC, "export const SOURCE_VERSION = 'fb5fdf13+fix2+fix8+sp1+fix9'");
+  assertStringIncludes(SRC, `export const SOURCE_VERSION = '${EXPECTED_SOURCE_VERSION}'`);
   // (ii) Version-probe positive envelope carries all three keys.
   const idxProbeStart = SRC.indexOf("probe: 'version',");
   assert(idxProbeStart > 0, "version-probe branch present");
