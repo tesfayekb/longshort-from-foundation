@@ -165,7 +165,7 @@ export function runPipeline(
       // when haircutMode='none'; when 'study', Module 6 applied a haircut
       // and we use its post-haircut entry so cash flows reconcile.
       entryPrice: haircutMode === 'none' ? lot.entryPrice : exit.entryPricePostHaircut,
-      slotNotionalUsd: lot.slotNotionalUsd,
+      slotNotional: lot.slotNotionalUsd,
     };
     const ex: ExitEventScheduled = {
       lotId: lot.lotId, ticker: lot.ticker, side: lot.side,
