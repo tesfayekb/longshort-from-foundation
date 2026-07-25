@@ -63,6 +63,37 @@ const KILL_SWITCH_ID = '__kill_switch__';
 const MAX_PAGES = 8; // 8 * 1000 tickers/page = 8000 headroom vs ~2000 R2000.
 const DEFAULT_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
 
+// INC-141-b (ACT-571 follow-up) — TYPED REFUSAL AUDIT.
+// Every !ok early-return on the default (scheduled/manual real-write) path
+// MUST leave an observable audit row so Monday 10:00Z's fail-closed refusal
+// is LOUD, not silent-200. Called immediately before each early return.
+// Best-effort: audit-write failure never masks the original refusal shape.
+async function writeUniverseRefusalAudit(args: {
+  status: string;
+  correlationId: string;
+  isCron: boolean;
+  metadata: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await writeStrategyAuditEvent({
+      strategyKey: 'overshoot',
+      actorId: DEFAULT_OPERATOR_ID,
+      action: 'overshoot.universe.refresh.refused',
+      targetType: 'overshoot_universe',
+      correlationId: args.correlationId,
+      metadata: {
+        source: IVV_IJH_SOURCE_TAG,
+        status: args.status,
+        is_cron: args.isCron,
+        ...args.metadata,
+      },
+    });
+  } catch (_e) {
+    // Never let audit failure mask the refusal. Sweeper will detect the
+    // missing row via completed/refused pair invariants (DW-family).
+  }
+}
+
 // Polygon ticker-set code for Russell 2000 index membership. Matches the
 // longshort PolygonConstituentFetcher taxonomy (I:SPX / I:MID). The prior
 // `?index=russell2000` string was silently ignored — Polygon's reference
@@ -1319,6 +1350,15 @@ Deno.serve(createHandler(async (req: Request) => {
 
   const composite = await fetchIvvIjhComposite();
   if (!composite.ok) {
+    await writeUniverseRefusalAudit({
+      status: composite.status,
+      correlationId,
+      isCron,
+      metadata: {
+        ivv: composite.ivv ?? null,
+        ijh: composite.ijh ?? null,
+      },
+    });
     return apiSuccess({
       ok: false,
       source: IVV_IJH_SOURCE_TAG,
@@ -1334,6 +1374,16 @@ Deno.serve(createHandler(async (req: Request) => {
   // file regressions. The fail-closed 8000-roster test (§3.1) pins this.
   const sanity = checkRosterSanity(composite.tickers.length);
   if (sanity !== null) {
+    await writeUniverseRefusalAudit({
+      status: 'roster_sanity_failed',
+      correlationId,
+      isCron,
+      metadata: {
+        roster_count: composite.tickers.length,
+        sanity_band: [ROSTER_SANITY_MIN, ROSTER_SANITY_MAX],
+        per_source_counts: composite.per_source_counts,
+      },
+    });
     return apiSuccess({
       ok: false,
       source: IVV_IJH_SOURCE_TAG,
@@ -1354,6 +1404,12 @@ Deno.serve(createHandler(async (req: Request) => {
     .select('ticker')
     .eq('active', true);
   if (readErr) {
+    await writeUniverseRefusalAudit({
+      status: 'universe_read_failed',
+      correlationId,
+      isCron,
+      metadata: { detail: readErr.message },
+    });
     return apiSuccess({ ok: false, status: 'universe_read_failed', detail: readErr.message, correlationId });
   }
   const priorActive = new Set((current ?? []).map((r) => r.ticker as string));
@@ -1388,6 +1444,12 @@ Deno.serve(createHandler(async (req: Request) => {
     .from('overshoot_universe')
     .upsert(upsertRows, { onConflict: 'ticker', ignoreDuplicates: false });
   if (upsertErr) {
+    await writeUniverseRefusalAudit({
+      status: 'universe_upsert_failed',
+      correlationId,
+      isCron,
+      metadata: { detail: upsertErr.message, roster_count: composite.tickers.length },
+    });
     return apiSuccess({ ok: false, status: 'universe_upsert_failed', detail: upsertErr.message, correlationId });
   }
 
@@ -1398,6 +1460,12 @@ Deno.serve(createHandler(async (req: Request) => {
       .update({ active: false }, { count: 'exact' })
       .in('ticker', drift.removed);
     if (deactErr) {
+      await writeUniverseRefusalAudit({
+        status: 'universe_deactivate_failed',
+        correlationId,
+        isCron,
+        metadata: { detail: deactErr.message, removed_count: drift.removed.length },
+      });
       return apiSuccess({ ok: false, status: 'universe_deactivate_failed', detail: deactErr.message, correlationId });
     }
     deactivated = count ?? drift.removed.length;

@@ -153,3 +153,101 @@ Independent of ACT-571 ruling:
   behind" queue. Ready to kick after ACT-571 ruling lands.
 - Tonight's 22:00Z detection continues on the fresh 07-15 FINRA
   substrate (DEV-7 completion holds — 901 tickers coverage).
+
+---
+
+## Operator ruling (2026-07-25 05:17Z) — OPTION A-PLUS
+
+**Upgrade question CLOSED by operator screenshot** of FMP pricing
+page: `ETF & Mutual Fund Holdings` = **Ultimate ($139/mo)**; operator's
+**Premium ($69/mo) confirmed Active**. DEV-10's 402 was tier-correct,
+not a key defect. `+$840/yr` to automate a 5-minute monthly ritual =
+**REJECTED on ROI**. Note also `1 Minute Intraday` is Ultimate-only,
+confirming Polygon Stocks Advanced remains the minute-bar substrate
+and is NOT among the cancellations in flight (only Options Developer
++ Indices Advanced are).
+
+**Ruling: OPTION A-PLUS.**
+
+### The bridge (accepted operating model until further notice)
+
+Operator runs a **~monthly ritual (≤5 min)** — browser passes the
+iShares CDN cleanly because Cloudflare's fingerprint check trusts real
+browsers:
+
+1. Download `IVV_holdings.csv` and `IJH_holdings.csv` from
+   `www.ishares.com/us/products/{239726,239763}/...` (browser tab —
+   the CDN serves the real file, not the anti-bot HTML page).
+2. Post both files to `overshoot-universe-refresh` via the existing
+   ACT-548 manual-seed apply path (`probe:'seed_apply'`), which is
+   proven and identity-correct (source tag `ishares:ivv_ijh:manual_seed`,
+   band-guarded [850,950], sha-attested).
+
+- **Last seed:** 2026-07-21 (905 active rows, `last_upd`
+  `2026-07-21 06:59:26.947196+00`).
+- **Next seed due:** ~2026-08-04 (roughly monthly).
+- **Staleness between seeds:** ACCEPTED. Delisted names die naturally
+  at bars / shortability / snapshot gates downstream (band-guarded).
+
+### INC-141-b fix landed this turn (loud-fail contract)
+
+Every `!ok` early-return on the default (scheduled/manual real-write)
+path now writes a typed audit row via the new
+`writeUniverseRefusalAudit(...)` helper. Statuses covered:
+`both_sources_failed` (dynamic — from `composite.status`),
+`roster_sanity_failed`, `universe_read_failed`,
+`universe_upsert_failed`, `universe_deactivate_failed`.
+Grep-lock test `inc141b-refusal-audit_test.ts` pins ≥5 audit-write
+call sites and dynamic-status wiring on the composite branch.
+
+**Result:** Monday 10:00Z's fail-closed refusal will be LOUD, not
+silent-200. The typed `both_sources_failed` response + a
+`overshoot.universe.refresh.refused` audit row = the **EXPECTED GREEN
+outcome** under the current bridge. Universe stays 905 @ 07-21 until
+the operator's next seed (~08-04).
+
+### DEV-10 recorded
+
+FMP Premium ($69/mo) does NOT include ETF Holdings — 402 responses
+observed on `etf-holder/IVV` and `etf-holder/IJH`. Tier-correct
+refusal; not a defect. Filed in `incidental-findings.md`. Pricing-page
+citation carried by operator screenshot.
+
+### DW-237 — SSGA composite as durable free auto-lane (probe result)
+
+**Probe evidence** (2026-07-25 05:17Z, edge-shaped `curl`, follow-redirects on):
+
+| URL | HTTP | Bytes | Content-Type | Verdict |
+|---|---|---|---|---|
+| `https://www.ssga.com/us/en/intermediary/library-content/products/fund-data/etfs/us/holdings-daily-us-en-spy.xlsx` (301 → `www.ssga.com/library-content/...`) | 200 | 54,400 | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Real XLSX (SPY) |
+| `https://www.ssga.com/us/en/intermediary/library-content/products/fund-data/etfs/us/holdings-daily-us-en-mdy.xlsx` (301 → `www.ssga.com/library-content/...`) | 200 | 47,318 | (same) | Real XLSX (MDY) |
+
+`file` confirms both as `Microsoft OOXML`. This is a real free
+durable auto-lane candidate (SPY ∪ MDY ≈ IVV ∪ IJH by identity —
+S&P 500 + S&P MidCap 400). Requires: (a) XLSX parser wire-import,
+(b) sheet-shape reverse-engineering, (c) charter amendment, (d) new
+tests. **NOT built this turn** (out of scope per operator ruling —
+one artifact + evidence + file DW-237, then close). Filed as
+`deferred-work-register.md` DW-237 for a future weekend build slot
+if the manual ritual proves burdensome.
+
+### Register hygiene (this turn, corrected)
+
+- `deferred-work-register.md` row 51 → **BRIDGED-OPTION-A** (ACT-571
+  build stands COMPLETE; dual-lane code correct, waiting on any lane
+  that returns data; operator seed is the accepted primary until
+  DW-237 or another auto-lane lands).
+- INC-141-b filed and FIXED this turn (audit-write helper deployed
+  in SHA post-`0c5ad0d9`).
+- INC-140 remains OPEN pending a functioning auto-lane; downgraded
+  in impact — the loud-fail contract closes the observability class
+  defect even while the write defect persists.
+- DEV-10 (FMP tier wall) filed; ruling final on ROI.
+- DW-237 (SSGA composite lane) filed with probe evidence.
+
+### Monday 10:00Z re-pin (loud-fail contract)
+
+EXPECTED GREEN = HTTP 200 with `{ok:false, status:'both_sources_failed', ...}`
+PLUS one `overshoot.universe.refresh.refused` row in
+`overshoot_audit_logs`. `overshoot_universe` unchanged at 905 @ 07-21.
+If any of those three conditions is not observed, escalate.
