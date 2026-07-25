@@ -5,6 +5,9 @@
 {"ticker":"XOM","trade_date":"2023-04-06","close":115.05}
 {"ticker":"TSLA","trade_date":"2023-04-06","close":185.06}
 {"ticker":"NVDA","trade_date":"2023-04-06","close":27.037}
+{"ticker":"XOM","trade_date":"2023-04-11","close":115.35}
+{"ticker":"TSLA","trade_date":"2023-04-11","close":186.79}
+{"ticker":"NVDA","trade_date":"2023-04-11","close":27.169}
 {"ticker":"XOM","trade_date":"2023-04-13","close":115.77}
 {"ticker":"TSLA","trade_date":"2023-04-13","close":185.9}
 {"ticker":"NVDA","trade_date":"2023-04-13","close":26.463}
@@ -24,6 +27,8 @@
 {"ticker":"NFLX","trade_date":"2023-04-19","close":32.312}
 {"ticker":"JPM","trade_date":"2023-04-19","close":141.22}
 {"ticker":"GOOG","trade_date":"2023-04-19","close":105.02}
+{"ticker":"JPM","trade_date":"2023-04-24","close":140.73}
+{"ticker":"GOOG","trade_date":"2023-04-24","close":106.78}
 {"ticker":"NFLX","trade_date":"2023-04-21","close":32.798}
 {"ticker":"JPM","trade_date":"2023-04-21","close":140.54}
 {"ticker":"GOOG","trade_date":"2023-04-21","close":105.91}
@@ -36,12 +41,16 @@
 {"ticker":"JPM","trade_date":"2023-05-01","close":141.2}
 {"ticker":"MSFT","trade_date":"2023-05-01","close":305.56}
 {"ticker":"MSFT","trade_date":"2023-05-04","close":305.41}
+{"ticker":"MSFT","trade_date":"2023-05-05","close":310.65}
 {"ticker":"MSFT","trade_date":"2023-05-08","close":308.65}
 {"ticker":"AAPL","trade_date":"2023-05-08","close":173.5}
+{"ticker":"AAPL","trade_date":"2023-05-10","close":173.555}
+{"ticker":"MSFT","trade_date":"2023-05-10","close":312.31}
 {"ticker":"MSFT","trade_date":"2023-05-11","close":310.11}
 {"ticker":"AAPL","trade_date":"2023-05-11","close":173.75}
 {"ticker":"AAPL","trade_date":"2023-05-12","close":172.57}
 {"ticker":"AAPL","trade_date":"2023-05-16","close":172.07}
+{"ticker":"AAPL","trade_date":"2023-05-19","close":175.16}
 {"ticker":"AAPL","trade_date":"2023-05-22","close":174.2}
 {"ticker":"XOM","trade_date":"2023-05-25","close":105.66}
 {"ticker":"XOM","trade_date":"2023-05-31","close":102.18}
@@ -56,6 +65,9 @@
 {"ticker":"XOM","trade_date":"2023-06-08","close":108.19}
 {"ticker":"MSFT","trade_date":"2023-06-09","close":326.79}
 {"ticker":"XOM","trade_date":"2023-06-09","close":107.39}
+{"ticker":"XOM","trade_date":"2023-06-13","close":106.44}
+{"ticker":"MSFT","trade_date":"2023-06-13","close":334.29}
 {"ticker":"MSFT","trade_date":"2023-06-14","close":337.34}
 {"ticker":"XOM","trade_date":"2023-06-14","close":105.16}
+{"ticker":"XOM","trade_date":"2023-06-22","close":103.3}
 {"ticker":"XOM","trade_date":"2023-06-23","close":102.4}
