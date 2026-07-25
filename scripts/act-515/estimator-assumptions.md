@@ -76,35 +76,44 @@ event. Un-recovered final excursion counts if it exceeds the fifth-place magnitu
   change the governor's entry policy — they only add a book-liquidation / horizon-shortening
   step at the crossing day.
 
-## 5. Layer-1 validity fixture — **DEVIATION SURFACED**
+## 5. Layer-1 validity fixture — **VERIFIED PRESENT (INC-144 correction)**
 
 **Operator instruction cited:** "the 2024-05-02 hand-truth fixture (sha `d06bd24c`)".
 
-**Repo state (verified `rg d06bd24c` across the tree):**
+**Repo state (re-verified 2026-07-25 per operator ruling B1):**
 
-- The sha `d06bd24c` **does not appear anywhere in the repo** (grep returns zero hits).
-- `2024-05-02` appears in `supabase/functions/_shared/overshoot/detector/selection-parity_test.ts`
-  as one of three DATES — but it is an **EMPTY-MAP negative-control date** (no admits
-  expected), NOT a hand-truth fixture with hand-computed expected equity-path values.
-- The engine's own README (`scripts/overshoot-backtest/README.md`) plans its
-  hand-checkable validation window as **2023-Q2** (a quiet-regime 3-month sub-period),
-  not 2024-05-02.
+| Check | Result |
+|---|---|
+| `git ls-tree -r HEAD -- fixtures/overshoot-backtest/` | `100644 c98d3d31... 2024-05-02-hand-truth.jsonl` |
+| Add commit | `ff4b4aac2` (2026-07-23 18:07:05Z, gpt-engineer-app[bot]) |
+| Delete commits touching `fixtures/**` (all refs) | **none** |
+| `sha256sum fixtures/overshoot-backtest/2024-05-02-hand-truth.jsonl` | `d06bd24cadcb608c2525b042ec40a1db112fa6f363ac3ae288d3f4ac7ecff1a2` — **byte-exact match** |
+| Content shape (line 1) | ACT-515 hand-truth-v1 header: `as_of_event_date:2024-05-02`, `entry_convention:T+1 open`, `exit_convention:ordinal-10 close`, `selection_source:fixtures/overshoot-detector-selection/2024-05-02.jsonl (N=20)` |
+| Row count | 22 lines (1 header + 1 separator + 20 hand-computed T2 LONG rows: ANF..) |
 
-**Interpretation options:**
+**Prior-turn error (self-inflicted).** The earlier "sha does not appear
+anywhere in the repo" claim was a string-grep for `d06bd24c` — a sha256
+is a *content hash*, not a literal in the fixture file. Filed as
+**INC-144** with the never-delete-class extension lesson.
 
-- **(i)** Operator conflated the selection-parity negative-control date with a
-  hand-truth fixture that was CHARTERED but never built. Layer-1 validity would then
-  need BOTH: (a) selection-parity replay green (that DOES exist), AND (b) a
-  hand-truth fixture BUILT this charter — most defensibly the 2023-Q2 window per the
-  engine README, with the expected values hand-computed by spreadsheet.
-- **(ii)** A `d06bd24c` fixture landed on a branch not in HEAD. Not visible from this
-  workspace; would need operator confirmation of branch name.
-- **(iii)** Operator wants the 2024-05-02 negative-control (empty-map) date USED AS the
-  hand-truth gate — trivially satisfied (engine must admit zero lots that day) but
-  provides essentially no coverage of the equity/DD kernel.
+**Layer-1 validity gate (RE-COMMITTED, pre-kernel):**
 
-**Pre-commit ruling:** Do NOT proceed to matrix compute until this is resolved. Options
-listed above; operator picks. `compute-plan.md` §Blockers records this as B1.
+1. Selection-parity replay for 2024-05-02 (existing test) → **must be
+   GREEN**.
+2. Hand-truth replay against
+   `fixtures/overshoot-backtest/2024-05-02-hand-truth.jsonl` — engine
+   must reproduce every `entry_open / exit_close / shares / pnl_usd`
+   for each of the 20 rows byte-exact. Sha of fixture read at test
+   time = `d06bd24c...`; mismatch = TEST FAIL.
+3. **Fixture #2 (built during kernel bring-up).** The engine
+   README's 2023-Q2 window becomes the second hand-truth fixture,
+   hand-computed during the `mark`/`equity` module turns. Two eras
+   beats one — a quiet-regime three-month path exercises the
+   equity/DD kernel where the single-event 2024-05-02 fixture only
+   exercises the T+1 → T+10 pnl path.
+
+**Compute-plan blocker B1:** CLOSED (see `compute-plan.md`). Matrix
+compute proceeds after kernel + BOTH fixtures green.
 
 ## 6. What is NOT re-derived by this charter
 
