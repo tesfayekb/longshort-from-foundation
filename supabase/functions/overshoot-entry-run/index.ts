@@ -1504,7 +1504,7 @@ Deno.serve(createHandler(async (req: Request) => {
               ${fill.filled_qty}, 0, 0,
               ${cohortCellId}, ${sel.study_cell_band}, ${sel.drawdown_bucket}, ${cohortEntryDayOffset},
               ${sel.w5_reallocation_ref},
-              ${sql.json({ limit_arm: limitArmPick.arm, limit_slippage_bps: limitArmPick.slippageBps })}
+              ${sql.json({ limit_arm: limitArmPick.arm, limit_slippage_bps: limitArmPick.slippageBps })}::jsonb
             )
             RETURNING lot_id::text AS lot_id
           `;
