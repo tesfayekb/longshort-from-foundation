@@ -151,3 +151,28 @@ Gates the kernel DOES model (byte-anchored to
 2. `allocation_cap`  — :1246-1268.
 3. `short_daily_budget` (DEC-084; SHORT-only; non-K-consuming) — :1286-1311.
 4. `daily_budget` (ACT-501 K=5) — :1313-1332.
+
+## 8. Kernel seams (ACT-515 Module 4 — Size)
+
+The SIZE module computes TARGET slot-notional + integer share count only.
+Two side-effects are deliberately NOT handled here; both are named in the
+`scripts/act-515/kernel/size.ts` header (PIN (c)) and asserted in sync by a
+test in `size_test.ts` (docs-as-code pattern, matches Module 3 §7).
+
+- **Margin carry cost** — 50 bps/month flat on debit balance (charter §1(b),
+  see §1 of this file). Accrual is per-day, applied to the equity path.
+  **OWNED BY MODULE 7 (equity/DD).** The SIZE module MUST NOT deduct
+  interest from slot notional at sizing time; doing so would double-count
+  once the equity-path accrual lands.
+- **Buying-power / cash-sufficiency** — the R-γ guardrail
+  (`assertBuyingPowerCoversNotional`,
+  `supabase/functions/_shared/overshoot-execution/sizing.ts:330`) in
+  production runs AFTER `computeTargetSizing` and BEFORE order submission.
+  **OWNED BY MODULE 6 (fill).** The SIZE module treats the target as
+  aspirational; Module 6 refuses (`insufficient_buying_power`) or trims
+  by side per production semantics.
+
+**Variant IDs (docs-as-code pin):** the four sizing variants in
+`scripts/act-515/kernel/size.ts` (`SIZING_VARIANTS`) MUST match the Row IDs
+in `config-matrix.md` §1 byte-for-byte (`1x-const`, `1x-comp`, `2x-const`,
+`2x-comp`). R5 (`spy-bh`) is a benchmark, not a sizing variant.
