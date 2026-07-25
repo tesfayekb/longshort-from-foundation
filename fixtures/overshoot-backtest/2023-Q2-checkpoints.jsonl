@@ -1,0 +1,6 @@
+# {"file":"2023-Q2-checkpoints.jsonl","purpose":"Mid-path equity checkpoints for gate-fixture-ii. Each row states the hand-computed cashCents, longMvCents, shortMvCents, and equityCents that the kernel must reproduce byte-exactly on the given sessionDate. Every number in the arithmetic is witnessed by the header block in build-fixture-2023q2.ts (search for \"CHECKPOINT HAND-ARITHMETIC\")."}
+# ---
+{"checkpoint":"CHK-1","sessionDate":"2023-05-04","cashCents":8188966,"longMvCents":1985165,"shortMvCents":0,"equityCents":10174131,"openLotIds":["fixII-07","fixII-08"]}
+{"checkpoint":"CHK-2","sessionDate":"2023-05-16","cashCents":8227239,"longMvCents":1961598,"shortMvCents":0,"equityCents":10188837,"openLotIds":["fixII-09","fixII-10"]}
+{"checkpoint":"CHK-3","sessionDate":"2023-06-02","cashCents":7242623,"longMvCents":3006544,"shortMvCents":0,"equityCents":10249167,"openLotIds":["fixII-11","fixII-12","fixII-13"]}
+{"checkpoint":"TERMINAL","sessionDate":"2023-06-23","cashCents":10166772,"longMvCents":0,"shortMvCents":0,"equityCents":10166772,"sumRealizedCents_module6":166771,"cashWalker_delta_cents":166772,"cent_drift_cents":1,"cent_drift_source":"fixII-04 NFLX: |entry_cash|−|exit_cash| = 999571−964261 = 35310 vs realized round(294*(33.999−32.798)*100) = 35309"}
