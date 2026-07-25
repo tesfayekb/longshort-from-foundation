@@ -5122,3 +5122,16 @@ Baseline crit-both-present pool = 827 names; the 11-name gate loss is entirely f
 **Acceptance.** After chain-orchestrator lands, a single 21:00Z fire produces `count(DISTINCT ticker) ≥ 900` at the current settlement `as_of_date` within one wall-clock evening, with per-batch bookkeeping visible in audit or a runs table.
 
 **Cross-refs.** DEV-7 (`docs/06-tracking/2026-07-25-dev-7-finra-completion.md`); INC-141 (partial-ingest defect, coverage restored); cron.jobid=121; `_shared/overshoot/si-freshness.ts` (26d envelope consumer).
+
+
+## INC-144 — Fixture fabricated-absence (self-inflicted, not a delete)
+
+**Status:** OPEN-GOVERNANCE (state `[C]`). **Filed:** 2026-07-25 (ACT-515 pre-commit turn, operator ruling B1). **Owner:** governance / discipline. **Gate:** Constitution Rule 8 amendment PR — `fixtures/**` joins the never-delete class alongside migrations, ledgers, reference indexes. **Review-by:** 2026-08-01.
+
+**Scope.** Prior turn asserted "sha `d06bd24c` does not appear anywhere in the repo → hand-truth fixture absent from HEAD." Verification this turn (per operator ruling B1) shows the fixture was **present at HEAD** the entire time (`git ls-tree` blob `c98d3d31...`, add commit `ff4b4aac2` 2026-07-23, zero delete commits across all refs, `sha256sum` byte-exact match `d06bd24c...`). Root cause: string-grep for a sha256 hex is evidence of nothing — sha256 is a content hash, not a literal in the fixture. See `scripts/act-515/hand-truth-fixture-verification.md` and `docs/06-tracking/incidental-findings.md §INC-144`.
+
+**Lesson.** Verification protocol for "is fixture X in repo?" is (1) `git ls-tree -r HEAD -- <dir>/`, (2) `git log --all --diff-filter=AD -- <path>`, (3) `sha256sum <path>` — never string-grep for a sha.
+
+**Action.** Constitution Rule 8 amendment PR to add `fixtures/**` to the never-delete class. Filed as governance follow-up on the discipline lane.
+
+**Cross-refs.** INC-131 (narrative-fabrication register-identity class); B1 ruling (2026-07-25); `scripts/act-515/estimator-assumptions.md §5` (corrected in-place).
