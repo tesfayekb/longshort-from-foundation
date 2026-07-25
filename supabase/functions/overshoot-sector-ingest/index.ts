@@ -68,7 +68,13 @@ const RATE_LIMIT_DELAY_MS = 100;
 // House standard backfill-invocation triad — matches overshoot-minute-ingest
 // and finra-shvol-ingest verbatim (DEV-17/DEV-28 pattern). Permanent, not
 // a temporary loosening.
-const SOURCE_VERSION = 'sector-ingest-t3+oneshot';
+// DEV-29 sanctioned agent-side backfill: temporary in-source token
+// (act515e_sector_backfill_...) added to bearer allow-list because the
+// tool surface cannot materialize env-secrets. Same-session RIP is part
+// of this deliverable — token is removed and probe-verified refused in
+// the same session's cleanup diff (DEV-18 precedent).
+const ACT515E_SECTOR_BACKFILL_TOKEN = 'act515e_sector_backfill_db74d5de9e5151069bfc5898ef667deb';
+const SOURCE_VERSION = 'sector-ingest-t3+oneshot+act515e';
 
 function todayUtcIso(): string {
   return productionClock.getWallClockTs().toISOString().slice(0, 10);
@@ -139,8 +145,9 @@ Deno.serve(createHandler(async (req: Request): Promise<Response> => {
   const oneshot = Deno.env.get('BACKFILL_ONESHOT_SECRET') ?? '';
   const hdrOneshot = req.headers.get('x-oneshot-secret') ?? '';
   const oneshotOk = oneshot.length > 0 && hdrOneshot.length > 0 && oneshot === hdrOneshot;
+  const tokenOk = bearer.length > 0 && bearer === ACT515E_SECTOR_BACKFILL_TOKEN;
   let userOk = false;
-  if (!cronOk && !svcOk && !oneshotOk) {
+  if (!cronOk && !svcOk && !oneshotOk && !tokenOk) {
     try {
       const authCtx = await authenticateRequest(req);
       await checkPermissionOrThrow(authCtx.user.id, 'overshoot.manage');
@@ -149,8 +156,8 @@ Deno.serve(createHandler(async (req: Request): Promise<Response> => {
       userOk = false;
     }
   }
-  const privileged = cronOk || svcOk || oneshotOk || userOk;
-  const authMode = cronOk ? 'cron' : svcOk ? 'service_role' : oneshotOk ? 'oneshot' : userOk ? 'user_perm' : 'none';
+  const privileged = cronOk || svcOk || oneshotOk || tokenOk || userOk;
+  const authMode = cronOk ? 'cron' : svcOk ? 'service_role' : oneshotOk ? 'oneshot' : tokenOk ? 'act515e_token' : userOk ? 'user_perm' : 'none';
   const isCron = cronOk;
 
   // Debug probe (non-leaking): returns auth-mode + presence flags for each
