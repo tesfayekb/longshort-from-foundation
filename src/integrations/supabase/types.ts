@@ -799,6 +799,180 @@ export type Database = {
           },
         ]
       }
+      ibkr_shadow_equity: {
+        Row: {
+          as_of_session_date: string
+          created_at: string
+          ibkr_cash: number | null
+          ibkr_equity: number | null
+          ibkr_gross_position_value: number | null
+          ibkr_source_version: string
+          id: string
+        }
+        Insert: {
+          as_of_session_date: string
+          created_at?: string
+          ibkr_cash?: number | null
+          ibkr_equity?: number | null
+          ibkr_gross_position_value?: number | null
+          ibkr_source_version: string
+          id?: string
+        }
+        Update: {
+          as_of_session_date?: string
+          created_at?: string
+          ibkr_cash?: number | null
+          ibkr_equity?: number | null
+          ibkr_gross_position_value?: number | null
+          ibkr_source_version?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      ibkr_shadow_lots: {
+        Row: {
+          created_at: string
+          ibkr_cost_basis: number | null
+          ibkr_entry_ts: string | null
+          ibkr_source_version: string
+          id: string
+          mirror_of_alpaca_lot_id: string
+          notes: string | null
+          qty: number
+          side: string
+          status: string
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ibkr_cost_basis?: number | null
+          ibkr_entry_ts?: string | null
+          ibkr_source_version: string
+          id?: string
+          mirror_of_alpaca_lot_id: string
+          notes?: string | null
+          qty: number
+          side: string
+          status?: string
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ibkr_cost_basis?: number | null
+          ibkr_entry_ts?: string | null
+          ibkr_source_version?: string
+          id?: string
+          mirror_of_alpaca_lot_id?: string
+          notes?: string | null
+          qty?: number
+          side?: string
+          status?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ibkr_shadow_orders: {
+        Row: {
+          created_at: string
+          ibkr_fill_px: number | null
+          ibkr_fill_qty: number | null
+          ibkr_fill_ts: string | null
+          ibkr_order_id: string | null
+          ibkr_source_version: string
+          ibkr_submit_ts: string | null
+          id: string
+          mirror_of_alpaca_client_order_id: string
+          mirror_of_alpaca_lot_id: string | null
+          mirror_reason: string
+          raw_response: Json | null
+          refusal_reason: string | null
+          side: string
+          status: string
+          submitted_qty: number
+          symbol: string
+        }
+        Insert: {
+          created_at?: string
+          ibkr_fill_px?: number | null
+          ibkr_fill_qty?: number | null
+          ibkr_fill_ts?: string | null
+          ibkr_order_id?: string | null
+          ibkr_source_version: string
+          ibkr_submit_ts?: string | null
+          id?: string
+          mirror_of_alpaca_client_order_id: string
+          mirror_of_alpaca_lot_id?: string | null
+          mirror_reason: string
+          raw_response?: Json | null
+          refusal_reason?: string | null
+          side: string
+          status: string
+          submitted_qty: number
+          symbol: string
+        }
+        Update: {
+          created_at?: string
+          ibkr_fill_px?: number | null
+          ibkr_fill_qty?: number | null
+          ibkr_fill_ts?: string | null
+          ibkr_order_id?: string | null
+          ibkr_source_version?: string
+          ibkr_submit_ts?: string | null
+          id?: string
+          mirror_of_alpaca_client_order_id?: string
+          mirror_of_alpaca_lot_id?: string | null
+          mirror_reason?: string
+          raw_response?: Json | null
+          refusal_reason?: string | null
+          side?: string
+          status?: string
+          submitted_qty?: number
+          symbol?: string
+        }
+        Relationships: []
+      }
+      ibkr_shadow_reconciliation_events: {
+        Row: {
+          alpaca_value: Json | null
+          as_of_session_date: string
+          created_at: string
+          divergence_kind: string
+          ibkr_source_version: string
+          ibkr_value: Json | null
+          id: string
+          notes: string | null
+          severity: string
+          symbol: string | null
+        }
+        Insert: {
+          alpaca_value?: Json | null
+          as_of_session_date: string
+          created_at?: string
+          divergence_kind: string
+          ibkr_source_version: string
+          ibkr_value?: Json | null
+          id?: string
+          notes?: string | null
+          severity?: string
+          symbol?: string | null
+        }
+        Update: {
+          alpaca_value?: Json | null
+          as_of_session_date?: string
+          created_at?: string
+          divergence_kind?: string
+          ibkr_source_version?: string
+          ibkr_value?: Json | null
+          id?: string
+          notes?: string | null
+          severity?: string
+          symbol?: string | null
+        }
+        Relationships: []
+      }
       insider_accession_discovery_queue: {
         Row: {
           acceptance_datetime: string
