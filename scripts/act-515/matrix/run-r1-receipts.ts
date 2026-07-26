@@ -151,6 +151,17 @@ async function loadOpens(): Promise<Map<string, Price>> {
     if (!Number.isFinite(n) || n <= 0) continue;
     m.set(MapBarSource.key(r.ticker, r.trade_date), price(n));
   }
+  // INC-147 delta re-fetch — some live-walk entries reference (ticker,
+  // entrySession) not covered by slate-stage bars-pairs; the delta file
+  // starts at entryDate and therefore also carries the entry-open row.
+  for (const l of await readLines(`${CACHE_DIR}bars-windows-delta.jsonl`)) {
+    const r = JSON.parse(l) as { ticker: string; trade_date: string; open: string | null };
+    if (r.open === null) continue;
+    const n = Number(r.open);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    const k = MapBarSource.key(r.ticker, r.trade_date);
+    if (!m.has(k)) m.set(k, price(n));
+  }
   return m;
 }
 
@@ -164,6 +175,16 @@ async function loadCloses(): Promise<Map<string, Price>> {
       if (!Number.isFinite(n) || n <= 0) continue;
       m.set(MapBarSource.key(r.ticker, r.trade_date), price(n));
     }
+  }
+  // INC-147 delta re-fetch — 1,078 windows for live-walk lots absent from
+  // slate-stage year files. SHA/rowcount pinned in cache-shas.ts.
+  for (const l of await readLines(`${CACHE_DIR}bars-windows-delta.jsonl`)) {
+    const r = JSON.parse(l) as { ticker: string; trade_date: string; close: string | null };
+    if (r.close === null) continue;
+    const n = Number(r.close);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    const k = MapBarSource.key(r.ticker, r.trade_date);
+    if (!m.has(k)) m.set(k, price(n));
   }
   return m;
 }
