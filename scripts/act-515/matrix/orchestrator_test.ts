@@ -120,7 +120,7 @@ function longT1Row(eventId: number, ticker: string, eventDate: SessionDate): Cor
 // TEST 1 — LONG CAP BINDS + LEDGER FOOT (2x-comp, cap=0.10, LONG T1)
 // -----------------------------------------------------------------------------
 
-Deno.test('orchestrator T1b: LONG cap BINDS + ledger foot (2x-comp, cap=0.10, LONG T1)', () => {
+Deno.test('orchestrator T1: LONG cap BINDS + ledger foot (2x-comp, cap=0.10, LONG T1)', () => {
   // LONG T1: offset=+2 → eventDate 2024-01-02 → entry = 2024-01-04.
   // exit anchor: event + 6 sessions after eventDate = SESSIONS[6] = 2024-01-10.
   const corpusByEntrySession = new Map<SessionDate, ReadonlyArray<CorpusCandidateRow>>();
