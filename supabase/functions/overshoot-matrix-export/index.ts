@@ -290,7 +290,7 @@ WITH w AS (
   SELECT (elem->>'ticker')::text AS ticker,
          (elem->>'from')::date   AS f,
          (elem->>'to')::date     AS t
-  FROM jsonb_array_elements($1::jsonb) AS elem
+  FROM jsonb_array_elements($1::text::jsonb) AS elem
 )
 SELECT b.ticker,
        b.trade_date::text AS trade_date,
