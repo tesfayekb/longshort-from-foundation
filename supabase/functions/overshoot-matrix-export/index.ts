@@ -118,6 +118,19 @@ function ndjsonStream(sql: any, cursorSql: string, params: any[] = []) {
 // SHORT band derivation: argmax-|excess| across excess_w1..w5, then bucket by
 // signed excess into S_03_04..S_10_INF (thresholds mirror cell-aggregation.sql.ts §A).
 // LONG band: fixed 'L_10_INF' per Matrix §1(b) certified geometry.
+//
+// DEV-V RULING (V-β-SCOPED, 2026-07-26): SHORT rows MUST pass the certified
+// kernel qualification INSIDE the compaction — signed excess_at_argmax
+// <= -0.08 (shortExcessThreshold; reconstructor.ts:121) AND
+// (window_days, momentum_quintile, drawdown_bucket) ∈ SHORT_GEOMETRY_MATRIX
+// (reconstructor.ts:117-122, byte-verbatim from detector.ts:317-321):
+//   windows            = {1,2,3,4,5}
+//   momentum_quintiles = {1,5}
+//   drawdown_buckets   = {4,5}
+// Rationale: without kernel-basis pre-qualification, SHORT rows the kernel
+// rejects can crowd qualifying rows below the top-25 cut (displacement =
+// silent strategy substitution). LONG geometry is unchanged (LONG side had
+// zero key_mismatch in Turn-2B admit; already coherent).
 const SLATE_SQL = `
 WITH ev AS (
   SELECT event_id, ticker, event_date, side,
@@ -188,6 +201,18 @@ joined AS (
   WHERE e.band IS NOT NULL
     AND e.momentum_quintile IS NOT NULL
     AND e.drawdown_bucket IS NOT NULL
+    -- DEV-V kernel-basis qualification (SHORT only; LONG untouched).
+    AND (
+      e.side = 'long'
+      OR (
+        e.side = 'short'
+        AND e.short_excess_at_argmax IS NOT NULL
+        AND e.short_excess_at_argmax <= -0.08
+        AND e.window_days        IN (1,2,3,4,5)
+        AND e.momentum_quintile  IN (1,5)
+        AND e.drawdown_bucket    IN (4,5)
+      )
+    )
 ),
 ranked AS (
   SELECT j.*,
