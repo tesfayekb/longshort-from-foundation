@@ -159,6 +159,26 @@ export interface CapBindTelemetry {
     readonly lotId: string; readonly ticker: string; readonly side: SideDb;
     readonly reason: string;
   }>;
+  /** Per-lot exit records — one per lot that reached settlement in the walk.
+   *  Populated for R1 attribution (ACT-515). Not written to disk here;
+   *  downstream consumers (run-attribution.ts) join to slate metadata via
+   *  eventId. Never influences kernel decisions. */
+  readonly perLot: ReadonlyArray<{
+    readonly lotId: string;
+    readonly ticker: string;
+    readonly side: SideDb;
+    readonly tier: Tier;
+    readonly eventId: number;
+    readonly eventDate: SessionDate;
+    readonly entryDate: SessionDate;
+    readonly actualExitDate: SessionDate;
+    readonly entryPriceEff: number;
+    readonly exitClosePostHaircut: number;
+    readonly sharesQty: number;
+    readonly notionalUsd: number;      // shares × entryPriceEff, positive
+    readonly realizedUsd: number;      // signed, post-haircut
+    readonly holdingSessions: number;  // actualExitDate − entryDate (session count)
+  }>;
 }
 
 export type OrchestratorResult =
@@ -223,6 +243,12 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
   const exitCalendarExhaustedSkips: Array<{
     sessionDate: SessionDate; lotId: string; ticker: string; side: SideDb; reason: string;
   }> = [];
+  const perLot: Array<{
+    lotId: string; ticker: string; side: SideDb; tier: Tier; eventId: number;
+    eventDate: SessionDate; entryDate: SessionDate; actualExitDate: SessionDate;
+    entryPriceEff: number; exitClosePostHaircut: number; sharesQty: number;
+    notionalUsd: number; realizedUsd: number; holdingSessions: number;
+  }> = [];
 
   // BarSource adapters — Module 5/6 consume `close(ticker, session)`.
   const closeSource: BarSource = { close: (t, s) => input.bars.close(t, s) };
@@ -266,6 +292,32 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
         if (lot.side === 'long') totalRealizedLongC += toCents(lot.realizedUsd);
         else totalRealizedShortC += toCents(lot.realizedUsd);
         exitedLotIds.push(lot.lotId);
+        // Attribution sidecar: emit one record per settled lot. Session-index
+        // math via calendar would need input.calendar.indexOf; we compute
+        // holdingSessions cheaply by counting sessions from rows[] range.
+        const hashIdx = lot.lotId.indexOf('#');
+        const eventId = Number(lot.lotId.slice(hashIdx + 1));
+        // holding = index(actualExit) - index(entry) using calendar sessionAfter
+        // — cheap linear probe (bounded by maxCarry+tier-window, ~<15 steps).
+        let hold = 0;
+        {
+          let cursor: SessionDate | null = lot.entryDate;
+          while (cursor !== null && cursor !== lot.actualExitDate && hold < 60) {
+            cursor = input.calendar.sessionAfter(cursor, 1);
+            hold += 1;
+          }
+        }
+        perLot.push({
+          lotId: lot.lotId, ticker: lot.ticker, side: lot.side, tier: lot.tier,
+          eventId, eventDate: lot.eventDate, entryDate: lot.entryDate,
+          actualExitDate: lot.actualExitDate,
+          entryPriceEff: lot.entryPriceEff as number,
+          exitClosePostHaircut: lot.exitClosePostHaircut as number,
+          sharesQty: lot.shares as number,
+          notionalUsd: (lot.shares as number) * (lot.entryPriceEff as number),
+          realizedUsd: lot.realizedUsd,
+          holdingSessions: hold,
+        });
       }
     }
     for (const id of exitedLotIds) openLots.delete(id);
@@ -491,6 +543,7 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
     totalRealizedShortUsd: money(fromCents(totalRealizedShortC)),
     exitPriceUnavailableSkips,
     exitCalendarExhaustedSkips,
+    perLot,
   };
   return { ok: true, rows, summary, telemetry };
 }
