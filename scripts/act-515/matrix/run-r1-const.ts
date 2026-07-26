@@ -193,15 +193,18 @@ export async function runR1(
   const sessionOffset = (s: SessionDate, n: number) => calendar.sessionAfter(s, n);
 
   // 2. Universe filter (survivorship-biased per §7-survivorship). Any
-  //    corpus row whose (ticker, event_date) fails `active_at(event_date)`
-  //    is EXCLUDED before reconstruction.
+  //    RULING 2026-07-26 · DEV-R R-1 (M-1 conforming): the `isActiveAt`
+  //    gate is REMOVED here. The corpus inherits its universe from the
+  //    study run (M-1 law) — filtering at replay-time against the
+  //    as-of-today `overshoot_universe` snapshot would drop rows the
+  //    study already accepted, biasing the receipt. The survivorship
+  //    BOUND is reported instead from the universe.jsonl trailer
+  //    (15/839 corpus-only per UNIVERSE_BOUND) in §7 metadata. R-2
+  //    (fabricating a replay-time `added_as_of`) rejected outright as
+  //    the INC-141 defect class.
   const corpus_rows_total = corpus.length;
-  const kept: CorpusCandidateRow[] = [];
-  let corpus_rows_excluded_by_universe = 0;
-  for (const r of corpus) {
-    if (universe.isActiveAt(r.ticker, r.eventDate)) kept.push(r);
-    else corpus_rows_excluded_by_universe += 1;
-  }
+  const kept: CorpusCandidateRow[] = corpus.slice();
+  const corpus_rows_excluded_by_universe = 0; // R-1: no engine gate.
   const corpus_rows_consumed = kept.length;
   const prune_risk_flag =
     corpus_rows_total > 0 &&
