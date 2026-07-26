@@ -100,6 +100,16 @@ export interface OrchestratorInput {
    *  arithmetic matters (e.g. the ledger-foot invariant test). */
   readonly haircutMode?: HaircutMode;
   readonly clock: Clock;
+  /** RECEIPT MODE (ruling 2026-07-26, INC-147): when true, the two typed
+   *  exit failures — `exit_price_unavailable` (true market gaps inside a
+   *  window: halts/delistings post-maxCarry) and `exit_calendar_exhausted`
+   *  (tail lots whose scheduled exit runs past the pinned calendar) —
+   *  become PRE-AUTHORIZED TYPED SKIPS instead of hard halts. The admit is
+   *  discarded (no cash movement, no book entry, no realized), counted per
+   *  class, and listed in telemetry. Caller enforces >20 STOP for
+   *  `exit_price_unavailable`. When false (default), the orchestrator
+   *  halts on either class (matches the frozen construction-lane behavior). */
+  readonly permitExitDegradation?: boolean;
 }
 
 export interface OrchestratorRow {
@@ -135,6 +145,20 @@ export interface CapBindTelemetry {
   readonly totalRealizedUsd: Money;
   readonly totalRealizedLongUsd: Money;
   readonly totalRealizedShortUsd: Money;
+  /** Pre-authorized typed skip: exit_price_unavailable post-maxCarry.
+   *  Populated only in `permitExitDegradation` mode. */
+  readonly exitPriceUnavailableSkips: ReadonlyArray<{
+    readonly sessionDate: SessionDate;
+    readonly lotId: string; readonly ticker: string; readonly side: SideDb;
+    readonly reason: string;
+  }>;
+  /** Pre-authorized typed skip: exit_calendar_exhausted (tail lots).
+   *  Populated only in `permitExitDegradation` mode. */
+  readonly exitCalendarExhaustedSkips: ReadonlyArray<{
+    readonly sessionDate: SessionDate;
+    readonly lotId: string; readonly ticker: string; readonly side: SideDb;
+    readonly reason: string;
+  }>;
 }
 
 export type OrchestratorResult =
@@ -190,6 +214,15 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
   if (!variant) throw new Error(`orchestrator: unknown variant ${input.variantId}`);
   const maxCarry = input.maxCarryDays ?? 5;
   const haircutMode: HaircutMode = input.haircutMode ?? 'study';
+  const permitDegradation = input.permitExitDegradation ?? false;
+
+  // Typed-skip accumulators (populated only under permitDegradation).
+  const exitPriceUnavailableSkips: Array<{
+    sessionDate: SessionDate; lotId: string; ticker: string; side: SideDb; reason: string;
+  }> = [];
+  const exitCalendarExhaustedSkips: Array<{
+    sessionDate: SessionDate; lotId: string; ticker: string; side: SideDb; reason: string;
+  }> = [];
 
   // BarSource adapters — Module 5/6 consume `close(ticker, session)`.
   const closeSource: BarSource = { close: (t, s) => input.bars.close(t, s) };
@@ -314,6 +347,18 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
         { haircutMode, maxCarryDays: maxCarry },
       );
       if (!exitRes.ok) {
+        if (permitDegradation) {
+          const kind = exitRes.refusal === 'exit_spec_unmapped'
+            ? 'exit_calendar_exhausted'
+            : exitRes.refusal;
+          const rec = {
+            sessionDate: session, lotId: entry.lotId, ticker: entry.ticker,
+            side: entry.side, reason: exitRes.reason,
+          };
+          if (kind === 'exit_calendar_exhausted') exitCalendarExhaustedSkips.push(rec);
+          else exitPriceUnavailableSkips.push(rec);
+          continue; // discard admit; no cash / no book / no realized
+        }
         // exit_calendar_exhausted or exit_price_unavailable — surface typed.
         return {
           ok: false,
@@ -444,6 +489,8 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
     totalRealizedUsd: money(fromCents(totalRealizedC)),
     totalRealizedLongUsd: money(fromCents(totalRealizedLongC)),
     totalRealizedShortUsd: money(fromCents(totalRealizedShortC)),
+    exitPriceUnavailableSkips,
+    exitCalendarExhaustedSkips,
   };
   return { ok: true, rows, summary, telemetry };
 }

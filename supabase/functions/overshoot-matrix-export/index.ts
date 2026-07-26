@@ -44,10 +44,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js';
 
-// ONE-SHOT IN-SOURCE TOKEN — RIPPED (2026-07-26, post Turn-2B DEV-V seal).
-// Auth surface now: triad only (x-cron-secret / bearer(service_role) /
-// x-backfill-secret). Rip-probe receipt below MUST show 401 for any request
-// carrying only the old x-matrix-export-token header.
+// ONE-SHOT IN-SOURCE TOKEN — RIPPED (2026-07-26, post INC-147 delta fetch,
+// third and most recent use of the standing mint→fetch→rip pattern).
+// Auth surface now: triad only (bearer(service_role) / x-cron-secret /
+// x-backfill-secret).
 const MATRIX_EXPORT_ONESHOT_TOKEN: null = null;
 
 const CORPUS_RUN_ID = '1888e113-f9b3-43f5-856c-d91666a3c121';
