@@ -1,0 +1,22 @@
+{
+  "source_path": "docs/06-tracking/ACT-574-phase1-entry-day-offset-grid.md",
+  "source_section": "§2.1 Data (chains verbatim)",
+  "committed_by": "supervisor clone-verified 2026-07-26 (lines 63-72)",
+  "units": "mean cumulative bps from event close",
+  "n_disclosed": { "T1": 1961, "T2": 257768 },
+  "exit_ordinals": { "T1": 6, "T2": 10 },
+  "clamp_rule": "actual_holding_sessions > 10 → clamp to ord-10 (counted + reported as clamped_ord10)",
+  "table": [
+    { "day": 0,  "T1": 0.00,   "T2": 0.00  },
+    { "day": 1,  "T1": 23.70,  "T2": 9.55  },
+    { "day": 2,  "T1": 37.18,  "T2": 18.31 },
+    { "day": 3,  "T1": 85.58,  "T2": 25.99 },
+    { "day": 4,  "T1": 106.31, "T2": 31.21 },
+    { "day": 5,  "T1": 130.94, "T2": 37.78 },
+    { "day": 6,  "T1": 184.79, "T2": 44.30 },
+    { "day": 7,  "T1": 212.71, "T2": 51.13 },
+    { "day": 8,  "T1": 212.96, "T2": 58.56 },
+    { "day": 9,  "T1": 225.62, "T2": 68.34 },
+    { "day": 10, "T1": 253.65, "T2": 76.23 }
+  ]
+}
