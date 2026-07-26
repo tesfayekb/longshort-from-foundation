@@ -26,10 +26,7 @@ function toNumOrNull(x: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-async function readLines(path: string): Promise<string[]> {
-  const text = await Deno.readTextFile(path);
-  return text.split('\n').filter(l => l.length > 0);
-}
+export type ReadTextFile = (path: string) => Promise<string>;
 
 export interface FileR1Paths {
   readonly cacheDir: string;              // e.g. scripts/act-515/matrix/cache/
@@ -39,13 +36,21 @@ export interface FileR1Paths {
 }
 
 export class FileR1DataSource implements R1DataSource {
-  constructor(private readonly paths: FileR1Paths) {}
+  private readonly readFile: ReadTextFile;
+  constructor(private readonly paths: FileR1Paths, readFile?: ReadTextFile) {
+    this.readFile = readFile ?? ((p) => Deno.readTextFile(p));
+  }
+
+  private async readLines(path: string): Promise<string[]> {
+    const text = await this.readFile(path);
+    return text.split('\n').filter(l => l.length > 0);
+  }
 
   async fetchCorpus(): Promise<ReadonlyArray<CorpusCandidateRow>> {
     const out: CorpusCandidateRow[] = [];
     for (const y of this.paths.slateYears) {
       const path = `${this.paths.cacheDir}slate-${y}.jsonl`;
-      for (const line of await readLines(path)) {
+      for (const line of await this.readLines(path)) {
         const s = parseSlateLine(line);
         out.push({
           eventId: s.event_id,
@@ -74,7 +79,7 @@ export class FileR1DataSource implements R1DataSource {
       argmaxWindowDays: number; magnitudeQuintile: number; drawdownBucket: number;
       exclusionHorizonDays: number; meanFwdReturn5d: number;
     }> = [];
-    for (const line of await readLines(path)) {
+    for (const line of await this.readLines(path)) {
       const r = JSON.parse(line) as Record<string, unknown>;
       out.push({
         side: r.side as SideDb,
@@ -92,7 +97,7 @@ export class FileR1DataSource implements R1DataSource {
   async fetchUniverse() {
     const path = `${this.paths.cacheDir}universe.jsonl`;
     const out: Array<{ ticker: string; addedAsOf: SessionDate; active: boolean }> = [];
-    for (const line of await readLines(path)) {
+    for (const line of await this.readLines(path)) {
       const r = JSON.parse(line) as Record<string, unknown>;
       if (r.trailer === true) continue;
       out.push({
@@ -107,7 +112,7 @@ export class FileR1DataSource implements R1DataSource {
   async fetchSessions(windowStart: SessionDate, windowEnd: SessionDate) {
     const path = `${this.paths.cacheDir}calendar.jsonl`;
     const out: SessionDate[] = [];
-    for (const line of await readLines(path)) {
+    for (const line of await this.readLines(path)) {
       const r = JSON.parse(line) as { session: string };
       if (r.session >= windowStart && r.session <= windowEnd) out.push(r.session);
     }
@@ -120,7 +125,7 @@ export class FileR1DataSource implements R1DataSource {
     void tickers; void sessions;
     const path = this.paths.barsPairsPath;
     const map = new Map<string, Price>();
-    for (const line of await readLines(path)) {
+    for (const line of await this.readLines(path)) {
       const r = JSON.parse(line) as { ticker: string; trade_date: string; open: string };
       const opn = Number(r.open);
       if (!Number.isFinite(opn) || opn <= 0) continue;
@@ -133,7 +138,7 @@ export class FileR1DataSource implements R1DataSource {
   async loadStageACloses(): Promise<Map<string, number | null>> {
     const path = this.paths.barsPairsPath;
     const m = new Map<string, number | null>();
-    for (const line of await readLines(path)) {
+    for (const line of await this.readLines(path)) {
       const r = JSON.parse(line) as { ticker: string; trade_date: string; open: string | null };
       const opn = r.open === null ? null : Number(r.open);
       m.set(`${r.ticker}\u0000${r.trade_date}`, opn === null || !Number.isFinite(opn) ? null : opn);
