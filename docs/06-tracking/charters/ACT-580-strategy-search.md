@@ -1,0 +1,174 @@
+# Charter ACT-580 — SYSTEMATIC STRATEGY SEARCH (Phase-0 design)
+
+**Filed:** 2026-07-26 • **Class:** Multi-family research charter • **Owner:** operator
+**Sequence:** runs BEHIND the options month in priority. **Phase-0 (this document) = design-only, zero data queries.** Phase-1 first computes await explicit operator GO after the options data pull is running.
+**Substrate:** existing sealed cache + platform tables (external Supabase). No new ingestion in Phase-0.
+**Kernel/orchestrator pattern:** each family Phase-1 executes on the **certified** ACT-515 kernel + orchestrator patterns (session-walk, cap arithmetic, haircutMode='study', ledger-foot envelope assertion, FixedClock, sealed-cache + parity harness).
+
+## §1 — Multiple-comparison law (verbatim, pre-committed)
+
+> k families tested ⇒ surviving p-value bar tightens; a lone marginal pass among eight is presumed noise.
+
+**Operationalization:**
+- Family gate (per-family, pre-registered): **net CAGR ≥ 15% ∧ Sharpe ≥ 1.0 ∧ maxDD ≤ 1.5×CAGR ∧ ≥ 300 trades** — over the BUILD window (2022-01 → 2025-12).
+- Multiple-comparison discount: with k=8 families, a family clearing the gate on the build window must ALSO clear the same gate on the **locked 2026 holdout** (see §3) with margin ≥ 3pp on CAGR and ≥ 0.15 on Sharpe. A single-margin pass is presumed noise and requires a second orthogonal replication (different universe slice OR different cost model) to survive.
+- A lone family clearing build only (no holdout) is presumed noise; NO write-up as a live candidate.
+
+## §2 — Universe (FROZEN)
+
+- **Composite universe of 905** (ACT-571 output, sealed): identical to the ACT-515 R1 substrate.
+- Universe honesty pin: build-time membership derived from ACT-571 composite tables; NO look-ahead survivorship correction beyond what ACT-571 already applies.
+- Family-level filters (e.g., "has consensus estimate row on event date") are ALLOWED and MUST be declared in the family spec's data-gap audit (§5).
+
+## §3 — Windows (FROZEN)
+
+- **Build window:** 2022-01-01 → 2025-12-31 (4 calendar years). All signal construction, hyperparameter selection, cost calibration, and eligibility scoring occur on this window.
+- **Locked 2026 holdout:** 2026-01-01 → PRESENT (rolling). **ONE LOOK PER SURVIVOR.** Every touch logged as an ACT row (evidence: query hash + timestamp + operator co-sign). Zero re-optimization after holdout look.
+- Cross-family holdout budget: each family gets ONE look regardless of ordering. If a family fails on holdout, it does not re-enter.
+
+## §4 — Cost model (FROZEN)
+
+Applied identically to all families in Phase-1:
+
+- **Half-spread by ADV bucket** (2022-01 cutoff ADV percentiles, sealed):
+  - ADV bucket A (top-quintile): 3 bps half-spread
+  - ADV bucket B (2nd-quintile): 5 bps
+  - ADV bucket C (3rd-quintile): 8 bps
+  - ADV bucket D (4th-quintile): 12 bps
+  - ADV bucket E (bottom-quintile): 20 bps
+- **PLUS** ACT-506 measured slippage layer: 8 bps per side on entry, 6 bps per side on exit (session-walk empirical mean, sealed in `ACT-506-slippage-measurement.md`).
+- **Total per round-trip:** 2 × half-spread + 14 bps slippage.
+- Carry (short leg): existing ACT-515 short-carry formula (per DEC-081-v2), if the family holds shorts.
+
+## §5 — Eight families S1–S8 (FROZEN signal definitions)
+
+All specs cite REAL tables/columns from this project's external Supabase schema. Where a required column is missing, a **PRE-REGISTERED FALLBACK** is stated BEFORE Phase-1 first query.
+
+### S1 — PEAD (Post-Earnings-Announcement Drift)
+
+- **Signal:** earnings surprise on announcement date.
+  - **Primary spec (if consensus-estimate column exists):** `surprise = (actual_eps − consensus_eps) / |consensus_eps|` from `public.overshoot_earnings_calendar` (columns TBD in data-gap audit).
+  - **PRE-REGISTERED FALLBACK (if no consensus column):** revision-direction surprise = sign-weighted count of net analyst estimate revisions in the [−30, −1] session window prior to announcement, from `public.overshoot_analyst_actions` (columns: `action_date`, `action_type ∈ {upgrade, downgrade, price_target_raise, price_target_lower}`, `ticker`).
+- **Entry:** T+1 open post-announcement.
+- **Hold:** 20 sessions.
+- **Portfolio:** decile long-short (top-decile surprise long, bottom-decile short), equal-weighted within decile, rebalanced daily as new announcements arrive.
+- **Universe:** 905 composite; requires `overshoot_earnings_calendar` row on event date.
+- **Data-gap audit item:** confirm consensus-estimate field presence in `overshoot_earnings_calendar` (Phase-1 first query is a schema check, not a return computation).
+
+### S2 — Analyst-revision momentum
+
+- **Signal:** rolling net analyst-revision score = `Σ(upgrades − downgrades + 0.5·(price_target_raise − price_target_lower))` over trailing 30 sessions, from `public.overshoot_analyst_actions`.
+- **Entry:** T+1 open following score-rank recomputation (weekly, Monday open).
+- **Hold:** 20 sessions with weekly rebalance overlay.
+- **Portfolio:** decile long-short on score.
+- **Universe:** 905; requires ≥ 3 analyst actions in trailing 30d.
+- **Data-gap audit item:** none (own data).
+
+### S3 — SI-delta factor
+
+- **Signal:** short-interest delta = `SI_pct_t − SI_pct_{t−14sessions}` from `public.finra_short_interest` (bimonthly FINRA cadence, forward-filled per ACT-570 Phase-1).
+- **Entry:** T+1 open after new SI report ingestion (14th/28th monthly).
+- **Hold:** 14 sessions (until next SI report).
+- **Portfolio:** decile long-short on ΔSI (rising SI short, falling SI long — the mean-reversion prior).
+- **Universe:** 905 ∩ has SI coverage (per ACT-570 Phase-1 output — ~99.6% at DEV-7 close).
+- **Data-gap audit item:** confirm forward-fill window; confirm ACT-570 Phase-1 columns landed.
+
+### S4 — Overnight (close-to-open) factor
+
+- **Signal:** trailing 60-session overnight-return mean per ticker, from sealed bars.
+- **Entry:** last 15 min of session (proxied by session-close in study — will require intraday cache in Phase-1 if intraday is not available; PRE-REGISTERED FALLBACK: use close-price proxy with a −5 bps additional cost).
+- **Hold:** overnight only (exit next open).
+- **Portfolio:** decile long-short on trailing overnight mean.
+- **Universe:** 905 ∩ bars-pairs coverage.
+- **Data-gap audit item:** intraday last-15-min not in sealed cache; fallback pre-registered.
+
+### S5 — Trend-chassis (12-1 momentum)
+
+- **Signal:** 12-month return excluding last month, per ticker, monthly rebalance.
+- **Entry:** T+1 open of first session of month.
+- **Hold:** 1 calendar month.
+- **Portfolio:** decile long-short on 12-1.
+- **Universe:** 905 ∩ ≥ 250 sessions of bar history.
+- **Data-gap audit item:** none.
+
+### S6 — Sector pairs
+
+- **Signal:** cross-sectional ranking WITHIN GICS sector (from `public.tickers.gics_sector`, added via `sql/44`) of trailing 5-day residual return after regressing on sector-mean return.
+- **Entry:** T+1 open on rebalance day (weekly).
+- **Hold:** 5 sessions.
+- **Portfolio:** long-short within-sector deciles, sector-neutralized book.
+- **Universe:** 905 ∩ non-null GICS sector.
+- **Data-gap audit item:** confirm GICS coverage (added via `sql/44`, spot-check needed).
+
+### S7 — VRP-in-options-month
+
+- **Signal:** volatility-risk-premium proxy = 30d realized vol vs implied vol.
+- **Requires options data** — HARD DEPENDENCY on Polygon Options subscribe (path (i) of ACT-577 amendment).
+- **Status:** SPEC-LOCKED, EXECUTION-DEFERRED until options data lands.
+- **Data-gap audit item:** ENTIRE FAMILY BLOCKED on options month.
+
+### S8 — Index-events (S&P 500 / Russell rebalance)
+
+- **Signal:** long additions, short deletions on announcement date; hold through effective date + 5 sessions.
+- **Data-gap audit item:** NO index-membership-events table exists in current schema. Building requires historical S&P Dow Jones / FTSE Russell announcements — modest external ingest (est. 2-4 hrs).
+- **Status:** DEFERRED — enters queue after S1..S3 receipts, subject to operator GO on the ingest cost.
+
+## §6 — Data-gap audit (Phase-0 output — actionable)
+
+| family | gap | cost to fill | pre-registered fallback | Phase-1 blocker? |
+|---|---|---|---|:---:|
+| S1 | consensus-estimate column presence uncertain in `overshoot_earnings_calendar` | schema check (1 query) | revision-direction surprise via `overshoot_analyst_actions` | NO |
+| S2 | none | — | — | NO |
+| S3 | ACT-570 Phase-1 forward-fill columns need spot-check | schema check (1 query) | tighten to 7-session forward-fill window | NO |
+| S4 | intraday last-15-min not sealed | out of Phase-0 scope | close-price proxy + 5 bps cost adder | NO |
+| S5 | none | — | — | NO |
+| S6 | GICS coverage post-`sql/44` needs spot-check | schema check (1 query) | drop tickers with null sector | NO |
+| S7 | options data absent | Polygon $79/mo (operator gate) | — | **YES** |
+| S8 | index-events table absent | 2-4 hr external ingest | — | **YES (queued)** |
+
+## §7 — Execution order (Phase-1 receipts, when operator GO fires)
+
+1. **S1 PEAD** — strongest prior × owned data.
+2. **S2 Analyst-revision momentum** — owned data, orthogonal signal to S1.
+3. **S3 SI-delta** — owned data (post ACT-570 Phase-1), orthogonal to earnings/analyst.
+4. S4 Overnight — owned data with cost-adder fallback.
+5. S5 Trend-chassis — owned data, classical benchmark.
+6. S6 Sector pairs — owned data, sector-neutralized comparator.
+7. S7 VRP — awaits options month.
+8. S8 Index-events — awaits ingest GO.
+
+**Cadence:** ONE family per receipt turn. Kernel and orchestrator untouched between families (variant hooks are family-scoped).
+
+## §8 — Per-family receipt format (pre-committed)
+
+Each family Phase-1 receipt MUST contain:
+
+1. Signal coverage counts (universe intersect; drop reasons).
+2. Decile construction table (n per decile per rebalance date).
+3. Long-short net returns by year (build window).
+4. Frozen columns: CAGR, Sharpe, Sortino, maxDD, worst-year, turnover, avg lots per rebalance, cost-drag bps.
+5. Gate verdict PASS/TEXTURE/FAIL with the four clauses stamped.
+6. Chains verbatim (baselines, cost model, universe, sealed SHAs).
+7. If PASS on build: register the ONE-LOOK holdout query, submit for co-sign, execute, log outcome.
+
+## §9 — Register rows (lane + families)
+
+To be added to `docs/06-tracking/register.md` at charter-land time:
+
+```
+ACT-580        SYSTEMATIC STRATEGY SEARCH (lane)                  Phase-0-design-only
+ACT-580.S1     PEAD                                                PHASE-0-SPEC-LOCKED
+ACT-580.S2     Analyst-revision momentum                           PHASE-0-SPEC-LOCKED
+ACT-580.S3     SI-delta factor                                     PHASE-0-SPEC-LOCKED
+ACT-580.S4     Overnight factor                                    PHASE-0-SPEC-LOCKED
+ACT-580.S5     Trend-chassis (12-1)                                PHASE-0-SPEC-LOCKED
+ACT-580.S6     Sector pairs (sector-neutral)                       PHASE-0-SPEC-LOCKED
+ACT-580.S7     VRP-in-options-month                                PHASE-0-BLOCKED (options)
+ACT-580.S8     Index-events                                        PHASE-0-DEFERRED (ingest)
+```
+
+## §10 — Interaction with ACT-577 amendment
+
+An ACT-580 family PASS (build + locked 2026 holdout, per §1 multiple-comparison law) satisfies **path (ii)** of the ACT-577 §5.1 amendment. It does NOT waive rows G-1..G-9 of ACT-577 §5 (operational gates); it provides the substrate-eligibility that G-rows presuppose.
+
+**End Phase-0.** No data queries executed in this document. Phase-1 first computes await operator GO after options data pull is running.
