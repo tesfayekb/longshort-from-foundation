@@ -1,4 +1,4 @@
-import { extractPairs } from './turn2b/pair-extractor.ts';
+import { extractPairs, type SessionOffset } from './turn2b/pair-extractor.ts';
 import { parseSlateLine } from './turn2b/slate-row.ts';
 
 const cacheDir = 'cache/';
@@ -10,8 +10,29 @@ for (const y of years) {
 }
 console.log(`slate rows: ${slate.length}`);
 
-const pairs = extractPairs(slate);
-console.log(`unique (ticker, entrySession) pairs: ${pairs.length}`);
+// Build calendar from cache/calendar.jsonl (SPY-marker sessions).
+const calText = await Deno.readTextFile(`${cacheDir}calendar.jsonl`);
+const sessions: string[] = [];
+for (const line of calText.split('\n').filter(l => l.length > 0)) {
+  sessions.push((JSON.parse(line) as { session: string }).session);
+}
+sessions.sort();
+const idx = new Map<string, number>();
+sessions.forEach((s, i) => idx.set(s, i));
+const calendar: SessionOffset = {
+  sessionAfter(s, n) {
+    const i = idx.get(s);
+    if (i === undefined) return null;
+    const j = i + n;
+    if (j < 0 || j >= sessions.length) return null;
+    return sessions[j];
+  },
+};
+
+const res = extractPairs(slate, calendar);
+const pairs = res.pairs;
+console.log(`unique (ticker, entrySession) pairs: ${pairs.length}  off-calendar skipped: ${res.offCalendar}`);
+console.log(`bySide: ${JSON.stringify(res.bySide)}`);
 
 // Load pinned bars-pairs.jsonl into a Set of "ticker\0trade_date"
 const seen = new Set<string>();
@@ -22,13 +43,14 @@ for (const line of barsText.split('\n').filter(l => l.length > 0)) {
 }
 console.log(`sealed bars-pairs entries: ${seen.size}`);
 
-const delta = pairs.filter(p => !seen.has(`${p.ticker}\u0000${p.entrySession}`));
+const delta = pairs.filter(([t, s]) => !seen.has(`${t}\u0000${s}`));
 console.log(`delta pairs to fetch: ${delta.length}`);
 
 // Also count pairs in seal that are NOT needed by new slate (orphaned but retained)
-const needed = new Set(pairs.map(p => `${p.ticker}\u0000${p.entrySession}`));
+const needed = new Set(pairs.map(([t, s]) => `${t}\u0000${s}`));
 let orphaned = 0;
 for (const k of seen) if (!needed.has(k)) orphaned++;
 console.log(`sealed pairs no longer referenced (orphan, retained for history): ${orphaned}`);
 
-await Deno.writeTextFile('cache/pairs-delta.json', JSON.stringify(delta));
+await Deno.writeTextFile('cache/pairs-delta.json',
+  JSON.stringify(delta.map(([t, s]) => ({ ticker: t, entrySession: s }))));
