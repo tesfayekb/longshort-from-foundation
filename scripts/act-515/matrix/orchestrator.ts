@@ -129,6 +129,16 @@ export interface OrchestratorInput {
    *  policy is the caller's responsibility (V-D: 1× during first 200
    *  sessions per operator ruling — encoded in the resolver body). */
   readonly variantResolver?: (session: SessionDate) => SizingVariantId | null;
+
+  /** V-B′ ADDITIVE HOOK (RULING 2026-07-26). Per-tier multiplier applied to
+   *  candidate slot notional BEFORE the reconstructor's cap-binding pass.
+   *  Fixes the V-B geometry-honesty gap where caps were computed against
+   *  1× notional while shares/cash carried N×. When set, downstream shares
+   *  scale via the reconstructor's `slotNotional / entryPrice` and BOTH the
+   *  allocation-cap arithmetic AND cash entry see the multiplied ticket.
+   *  MUST NOT be combined with `slotMultiplierByTier` for the same tier
+   *  (would double-multiply); orchestrator asserts this. */
+  readonly preAdmitSlotMultiplierByTier?: Readonly<Partial<Record<Tier, number>>>;
 }
 
 export interface OrchestratorRow {
@@ -255,6 +265,15 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
   const haircutMode: HaircutMode = input.haircutMode ?? 'study';
   const permitDegradation = input.permitExitDegradation ?? false;
   const tierMul = input.slotMultiplierByTier ?? {};
+  const preTierMul = input.preAdmitSlotMultiplierByTier ?? {};
+  // Guard: same tier cannot be multiplied on both hooks.
+  for (const t of Object.keys(preTierMul) as Tier[]) {
+    const post = tierMul[t] ?? 1;
+    const pre = preTierMul[t] ?? 1;
+    if (post !== 1 && pre !== 1) {
+      throw new Error(`orchestrator: tier ${t} cannot use both slotMultiplierByTier and preAdmitSlotMultiplierByTier`);
+    }
+  }
   const resolveVariant = (s: SessionDate) => {
     const r = input.variantResolver ? input.variantResolver(s) : null;
     if (r === null || r === undefined) return defaultVariant;
@@ -391,6 +410,7 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
       referencePrice: (t, s) => input.bars.open(t, s),
       sessionOffset: (s, n) => input.calendar.sessionAfter(s, n),
       clock: input.clock,
+      preAdmitSlotMultiplierByTier: preTierMul,
     });
 
     // Build eventId → CorpusCandidateRow for tier + eventDate resolution.

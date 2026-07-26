@@ -203,6 +203,40 @@ Deno.test('C0 gate — cell absent from map → no_cell_map_hit skip', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TEST 5b — V-B′ preAdmitSlotMultiplierByTier: a ×2 T1 lot consumes ×2 wallet
+//           and materialises with ×2 shares. Cap-tight scenario proves the
+//           reconstructor's cap arithmetic (not just the post-admit book) sees
+//           the multiplied ticket.
+// ─────────────────────────────────────────────────────────────────────────────
+Deno.test('V-B′ — preAdmit T1 ×2 halves admit count under tight allocation cap', () => {
+  // Three T1-geometry candidates (w=1, mq=5, dd=1 — cell key '1/5/1' = 0.025).
+  // Slot at $2500 each. Cap the long side at $5000: baseline admits 2 (out of
+  // 3, third refused by allocation_cap); with T1 ×2 preAdmit each ticket
+  // consumes $5000 → only 1 admits, other 2 refused by allocation_cap.
+  const rows: CorpusCandidateRow[] = [
+    row(701, 'A', '2024-01-03', 1, 5, 1), // T+2 → 2024-01-05, T1
+    row(702, 'B', '2024-01-03', 1, 5, 1),
+    row(703, 'C', '2024-01-03', 1, 5, 1),
+  ];
+  const tightCap = { sideCapUsd: { long: 5_000, short: 10_000 } };
+
+  const base = reconstructSessionAdmits(baseInput({ corpusRows: rows, caps: tightCap }));
+  assertEquals(base.entries.length, 2, 'baseline: cap admits 2 tickets at 1× slot');
+  assertEquals(base.entries.map(e => e.shares as unknown as number), [50, 50]);
+  assertEquals(base.tally.allocation_cap_reached, 1);
+
+  const scaled = reconstructSessionAdmits(baseInput({
+    corpusRows: rows, caps: tightCap,
+    preAdmitSlotMultiplierByTier: { T1: 2 },
+  }));
+  assertEquals(scaled.entries.length, 1, 'V-B′: ×2 T1 cuts admit count to 1');
+  assertEquals(scaled.entries[0].shares as unknown as number, 100,
+    'V-B′: ×2 T1 admit materialises with ×2 shares');
+  assertEquals(scaled.tally.allocation_cap_reached, 2,
+    'V-B′: the two blocked tickets fail on allocation_cap, not budget');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // TEST 6 — SHUFFLE DETERMINISM: input order does not affect output.
 // ─────────────────────────────────────────────────────────────────────────────
 Deno.test('C0 gate — shuffle-determinism: output invariant to input order', () => {

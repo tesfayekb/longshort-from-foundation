@@ -92,7 +92,7 @@ import type { SessionDate } from '../kernel/clock.ts';
 import type { EntryEvent } from '../kernel/equity.ts';
 import {
   money, price, shares as sharesBrand,
-  type BandLabel, type CellKey, type Clock, type Price, type SideDb,
+  type BandLabel, type CellKey, type Clock, type Price, type SideDb, type Tier,
 } from '../kernel/types.ts';
 
 // Provenance constants (Pin 1 citations — DO NOT ALTER without an INC + doc).
@@ -188,6 +188,16 @@ export interface ReconstructInput {
   readonly referencePrice: ReferencePriceResolver;
   readonly sessionOffset: SessionOffsetResolver;
   readonly clock: Clock;
+  /** V-B′ HOOK (RULING 2026-07-26; orchestrator-scope, kernel untouched).
+   *  Per-tier multiplier applied to a candidate's `slotNotionalUsd` BEFORE
+   *  runAdmit — so the allocation-cap arithmetic and the per-slot share
+   *  count both see the SAME multiplied ticket. Semantics: a T1 lot with
+   *  multiplier N consumes N × slot of the wallet cap AND materialises with
+   *  N × shares. Contrast with the orchestrator's post-admit
+   *  `slotMultiplierByTier` (V-B): that hook lets the reconstructor's cap
+   *  see 1× while shares/cash carry N× — geometry-honesty gap surfaced by
+   *  the V-B receipt caveat. Default 1 for every tier. */
+  readonly preAdmitSlotMultiplierByTier?: Readonly<Partial<Record<Tier, number>>>;
 }
 
 export interface ReconstructResult {
@@ -310,6 +320,7 @@ export function rankScoreFromCell(side: SideDb, meanFwdReturn5d: number): number
 export function reconstructSessionAdmits(input: ReconstructInput): ReconstructResult {
   const variant = SIZING_VARIANTS[input.variantId];
   const skips: Skip[] = [];
+  const preMul = input.preAdmitSlotMultiplierByTier ?? {};
   type Enriched = Candidate & {
     readonly __row: CorpusCandidateRow;
     readonly __tier: 'T1' | 'T2';
@@ -423,13 +434,16 @@ export function reconstructSessionAdmits(input: ReconstructInput): ReconstructRe
       continue;
     }
 
+    const mul = Math.max(1, Math.floor(preMul[recordedTier] ?? 1));
+    const slotNotionalUsd = (sized.slotNotionalUsd as number) * mul;
+
     candidates.push({
       ticker: row.ticker,
       side: row.side,
       tier: recordedTier,
       rankScore,
       band: cellKey.band,
-      slotNotionalUsd: sized.slotNotionalUsd as number,
+      slotNotionalUsd,
       __row: row, __tier: recordedTier, __entrySession: entrySession, __entryPrice: refPx,
     });
   }
