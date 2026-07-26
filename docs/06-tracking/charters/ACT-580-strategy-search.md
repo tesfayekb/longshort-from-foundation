@@ -166,7 +166,7 @@ ACT-580.S6     Sector pairs (sector-neutral)                       PHASE-0-SPEC-
 ACT-580.S7     VRP-in-options-month                                PHASE-0-BLOCKED (options)
 ACT-580.S8     Index-events                                        PHASE-0-DEFERRED (ingest)
 ACT-580.S9     SECTOR MEAN-REVERSION + ROTATION (sub-lane)         PHASE-0-SPEC-LOCKED (charter: ACT-580-S9-sector-mean-reversion.md; pre-registered 2026-07-26 with S5 GO)
-ACT-580.S9-a   Sector dip-buy (composite RSI(2)<10, long-only)     PHASE-0-SPEC-LOCKED — k=7
+ACT-580.S9-a   Sector dip-buy (composite RSI(2)<10, long-only)     PHASE-1-COMPLETE / TEXTURE-AT-BUILD / HOLDOUT-LOCKED — k=7 consumed (receipt: ACT-580-S9a-SECTOR-DIP-BUY.md; build net -9.84% / Sharpe -0.11 / maxDD -25.94%)
 ACT-580.S9-b   Sector rotation (top-3 6mo return, monthly)         PHASE-0-SPEC-LOCKED — k=8
 ACT-580.S9-c   Sector intraday leg                                 DEFERRED-TYPED (unblocks on data purchase IF S9-a/b PASS)
 ACT-580.S10-BACKFILL  Signal-ranked winners on PRICE-DERIVED signals only (historical build) DORMANT / OPERATOR-GATED — filed 2026-07-26 after S10' HALT-AT-STEP-A; unblocks only on explicit operator GO with a pre-registered price-derived-only signal roster
