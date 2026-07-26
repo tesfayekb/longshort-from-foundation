@@ -153,6 +153,7 @@ Deno.test('orchestrator T1: LONG cap BINDS + ledger foot (2x-comp, cap=0.10, LON
     budgets: { k: 5, shortDailyBudget: 5 },
     walletCapFractions: { long: 0.10, short: 0.10 },
     maxCarryDays: 5,
+    haircutMode: 'none',  // cent-exact ledger foot requires no haircut rounding
     clock: CLOCK,
   });
   assert(result.ok, `orchestrator failed: ${JSON.stringify(result)}`);
