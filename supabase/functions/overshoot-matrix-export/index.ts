@@ -108,6 +108,8 @@ WITH ev AS (
          excess_w1, excess_w2, excess_w3, excess_w4, excess_w5
   FROM public.overshoot_study_candidate_events
   WHERE run_id = $1::uuid
+    AND event_date >= $2::date
+    AND event_date <  $3::date
 ),
 ev_short_argmax AS (
   SELECT e.*,
