@@ -307,6 +307,24 @@ function printReceipt(
   console.log(`               daily_budget=${fmtInt(t.dailyBudgetReachedTotal)}  short_daily_budget=${fmtInt(t.shortDailyBudgetReachedTotal)}`);
   console.log(`    max concurrent — LONG=${fmtInt(t.maxConcurrentLongLots)}  SHORT=${fmtInt(t.maxConcurrentShortLots)}`);
 
+  // Pre-authorized typed skips (INC-147 ruling).
+  const epu = t.exitPriceUnavailableSkips;
+  const ece = t.exitCalendarExhaustedSkips;
+  console.log('');
+  console.log('── PRE-AUTHORIZED TYPED SKIPS ─────────────────────────────────────');
+  console.log(`  exit_price_unavailable (post maxCarry=5): count=${fmtInt(epu.length)} — threshold=20`);
+  for (const r of epu) {
+    console.log(`    · ${r.sessionDate}  ${r.side.toUpperCase().padEnd(5)}  ${r.ticker.padEnd(6)}  lot=${r.lotId}  reason=${r.reason}`);
+  }
+  console.log(`  exit_calendar_exhausted (tail lots past pinned calendar): count=${fmtInt(ece.length)}`);
+  for (const r of ece) {
+    console.log(`    · ${r.sessionDate}  ${r.side.toUpperCase().padEnd(5)}  ${r.ticker.padEnd(6)}  lot=${r.lotId}  reason=${r.reason}`);
+  }
+  const epuStop = epu.length > 20;
+  if (epuStop) {
+    console.log(`  STOP: exit_price_unavailable=${epu.length} > 20 threshold — receipt REFUSED.`);
+  }
+
   console.log('');
   console.log('── THE VERDICT ROW (config-matrix.md columns) ─────────────────────');
   console.log(`  starting_equity          = ${fmtUsd(sum.startingEquityUsd as number)}`);
