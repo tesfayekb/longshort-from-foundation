@@ -110,6 +110,25 @@ export interface OrchestratorInput {
    *  `exit_price_unavailable`. When false (default), the orchestrator
    *  halts on either class (matches the frozen construction-lane behavior). */
   readonly permitExitDegradation?: boolean;
+
+  /** V-B ADDITIVE HOOK (turn-1b, orchestrator-scope; kernel untouched).
+   *  Per-tier multiplier applied to admitted `entry.shares` AFTER the
+   *  reconstructor's cap-binding pass. Semantics: T1 slots ×N means an
+   *  admitted T1 lot's share count is multiplied by N; the reconstructor
+   *  still counts 1 slot toward the 36-cap for that admit (its cap
+   *  arithmetic sees the 1× slot notional). Downstream cash entry and
+   *  runExit consume the multiplied share count directly. Default 1 for
+   *  every tier. Omit for baseline behavior. */
+  readonly slotMultiplierByTier?: Readonly<Partial<Record<Tier, number>>>;
+
+  /** V-D ADDITIVE HOOK (turn-1b, orchestrator-scope; kernel untouched).
+   *  Per-session resolver returning the SizingVariantId to use for that
+   *  session's admit + sizingBase computation. `null` falls back to
+   *  `input.variantId`. When present, `input.variantId` acts as the
+   *  DEFAULT (used when the resolver returns null OR is absent). Warmup
+   *  policy is the caller's responsibility (V-D: 1× during first 200
+   *  sessions per operator ruling — encoded in the resolver body). */
+  readonly variantResolver?: (session: SessionDate) => SizingVariantId | null;
 }
 
 export interface OrchestratorRow {
@@ -230,11 +249,19 @@ interface OpenLotState {
 // -----------------------------------------------------------------------------
 
 export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
-  const variant = SIZING_VARIANTS[input.variantId];
-  if (!variant) throw new Error(`orchestrator: unknown variant ${input.variantId}`);
+  const defaultVariant = SIZING_VARIANTS[input.variantId];
+  if (!defaultVariant) throw new Error(`orchestrator: unknown variant ${input.variantId}`);
   const maxCarry = input.maxCarryDays ?? 5;
   const haircutMode: HaircutMode = input.haircutMode ?? 'study';
   const permitDegradation = input.permitExitDegradation ?? false;
+  const tierMul = input.slotMultiplierByTier ?? {};
+  const resolveVariant = (s: SessionDate) => {
+    const r = input.variantResolver ? input.variantResolver(s) : null;
+    if (r === null || r === undefined) return defaultVariant;
+    const v = SIZING_VARIANTS[r];
+    if (!v) throw new Error(`orchestrator: variantResolver returned unknown variant ${r}`);
+    return v;
+  };
 
   // Typed-skip accumulators (populated only under permitDegradation).
   const exitPriceUnavailableSkips: Array<{
@@ -328,6 +355,7 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
     }
 
     // ── (b) ADMIT ────────────────────────────────────────────────────
+    const variant = resolveVariant(session);
     // Equity basis for -comp sizing: last completed row's equity, or the
     // starting equity if this is the first session.
     const equityForSizing = variant.mode === 'const'
@@ -357,7 +385,7 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
       cellMap: input.cellMap,
       openBook: openBookRows,
       equityUsd: equityForSizing,
-      variantId: input.variantId,
+      variantId: variant.id,
       budgets: input.budgets,
       caps: { sideCapUsd: { long: longCapUsd, short: shortCapUsd } },
       referencePrice: (t, s) => input.bars.open(t, s),
@@ -384,13 +412,22 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
         : SHORT_TIER_CONVENTION;
       const eventDate = corpusRow.eventDate;
 
+      // V-B: post-admit share multiplier by tier (default 1). Applied AFTER
+      // reconstructor's cap-binding pass — caveat surfaced in run-variants-bd
+      // receipt: the reconstructor's caps see 1× slot notionals; the effective
+      // T1 exposure carried into cash + runExit is multiplied here.
+      const mul = Math.max(1, Math.floor(tierMul[tier] ?? 1));
+      const scaledShares = mul === 1
+        ? entry.shares
+        : sharesBrand((entry.shares as number) * mul);
+
       const exitRes = runExit(
         {
           lotId: entry.lotId,
           ticker: entry.ticker,
           side: entry.side,
           tier,
-          shares: entry.shares,
+          shares: scaledShares,
           entryPrice: entry.entryPrice,   // raw open per reconstructor
           entryDate: session,
           eventDate,
@@ -426,7 +463,7 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
       // Cash flow at entry uses POST-HAIRCUT entry under 'study' (matches
       // runPipeline) — collapses to RAW entry under 'none' by construction.
       const entryEff = exitRes.entryPricePostHaircut;
-      const flow = entryCash(entry.side, entry.shares, entryEff) as number;
+      const flow = entryCash(entry.side, scaledShares, entryEff) as number;
       cashC += toCents(flow);
 
       openLots.set(entry.lotId, {
@@ -434,7 +471,7 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
         ticker: entry.ticker,
         side: entry.side,
         tier,
-        shares: entry.shares,
+        shares: scaledShares,
         entryPriceEff: entryEff,
         entryDate: session,
         eventDate,
