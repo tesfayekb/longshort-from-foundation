@@ -283,17 +283,36 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (mode === 'slate') {
-      const stream = ndjsonStream(sql, SLATE_SQL, [CORPUS_RUN_ID]);
-      return new Response(stream, {
+      const since = url.searchParams.get('since') ?? '2000-01-01';
+      const until = url.searchParams.get('until') ?? '2100-01-01';
+      // Buffered (not streamed): guarantees the connection isn't held past
+      // Cloudflare's 100s idle window when the CTE is planning. Window is
+      // caller-paginated (yearly slices from the fetch-cache driver).
+      const rows = await sql.unsafe(SLATE_SQL, [CORPUS_RUN_ID, since, until]);
+      await sql.end({ timeout: 5 });
+      const encoder = new TextEncoder();
+      const parts: Uint8Array[] = [];
+      for (const row of rows) parts.push(encoder.encode(JSON.stringify(row) + '\n'));
+      const body = new Blob(parts, { type: 'application/x-ndjson; charset=utf-8' });
+      return new Response(body, {
         headers: { ...CORS, 'Content-Type': 'application/x-ndjson; charset=utf-8',
-                   'X-Mode': 'slate', 'X-Corpus-Run': CORPUS_RUN_ID },
+                   'X-Mode': 'slate', 'X-Corpus-Run': CORPUS_RUN_ID,
+                   'X-Since': since, 'X-Until': until, 'X-Rows': String(rows.length) },
       });
     }
     if (mode === 'cellmap') {
-      const stream = ndjsonStream(sql, CELLMAP_SQL, [CORPUS_RUN_ID]);
-      return new Response(stream, {
+      // Buffered (6,000 rows, ~1MB). Streaming via postgres.js cursor was
+      // hitting a 504 on cold pool; buffered is honest for this size.
+      const rows = await sql.unsafe(CELLMAP_SQL, [CORPUS_RUN_ID]);
+      await sql.end({ timeout: 5 });
+      const encoder = new TextEncoder();
+      const parts: Uint8Array[] = [];
+      for (const row of rows) parts.push(encoder.encode(JSON.stringify(row) + '\n'));
+      const body = new Blob(parts, { type: 'application/x-ndjson; charset=utf-8' });
+      return new Response(body, {
         headers: { ...CORS, 'Content-Type': 'application/x-ndjson; charset=utf-8',
-                   'X-Mode': 'cellmap', 'X-Cellmap-Run': CORPUS_RUN_ID },
+                   'X-Mode': 'cellmap', 'X-Cellmap-Run': CORPUS_RUN_ID,
+                   'X-Rows': String(rows.length) },
       });
     }
     if (mode === 'universe') {
