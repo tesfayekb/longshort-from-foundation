@@ -427,8 +427,158 @@ Deno.serve(async (req: Request) => {
                    'X-Mode': 'universe' },
       });
     }
+    if (mode === 'calendar') {
+      const since = url.searchParams.get('since') ?? '2000-01-01';
+      const until = url.searchParams.get('until') ?? '2100-01-01';
+      const rows = await sql.unsafe(CALENDAR_SQL, [since, until]);
+      await sql.end({ timeout: 5 });
+      const encoder = new TextEncoder();
+      const parts: Uint8Array[] = [];
+      for (const row of rows) parts.push(encoder.encode(JSON.stringify(row) + '\n'));
+      const body = new Blob(parts, { type: 'application/x-ndjson; charset=utf-8' });
+      return new Response(body, {
+        headers: { ...CORS, 'Content-Type': 'application/x-ndjson; charset=utf-8',
+                   'X-Mode': 'calendar', 'X-Since': since, 'X-Until': until,
+                   'X-Rows': String(rows.length),
+                   'X-Calendar-Source': 'spy_marker' },
+      });
+    }
+    if (mode === 'spy') {
+      const since = url.searchParams.get('since') ?? '2000-01-01';
+      const until = url.searchParams.get('until') ?? '2100-01-01';
+      const rows = await sql.unsafe(SPY_SQL, [since, until]);
+      await sql.end({ timeout: 5 });
+      const encoder = new TextEncoder();
+      const parts: Uint8Array[] = [];
+      for (const row of rows) parts.push(encoder.encode(JSON.stringify(row) + '\n'));
+      const body = new Blob(parts, { type: 'application/x-ndjson; charset=utf-8' });
+      return new Response(body, {
+        headers: { ...CORS, 'Content-Type': 'application/x-ndjson; charset=utf-8',
+                   'X-Mode': 'spy', 'X-Since': since, 'X-Until': until,
+                   'X-Rows': String(rows.length) },
+      });
+    }
+    if (mode === 'bars_pairs') {
+      if (req.method !== 'POST') {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'method_required_post' }), {
+          status: 405, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      let body: unknown;
+      try { body = await req.json(); } catch {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'bad_json' }), {
+          status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      const pairs = (body as { pairs?: unknown }).pairs;
+      if (!Array.isArray(pairs) || pairs.length === 0) {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'pairs_required' }), {
+          status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      if (pairs.length > BARS_PAIRS_MAX_PER_REQ) {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({
+          error: 'too_many_pairs', cap: BARS_PAIRS_MAX_PER_REQ, got: pairs.length,
+        }), { status: 413, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      }
+      const tickers: string[] = [];
+      const sessions: string[] = [];
+      for (const p of pairs) {
+        if (!Array.isArray(p) || p.length !== 2
+            || typeof p[0] !== 'string' || typeof p[1] !== 'string') {
+          await sql.end({ timeout: 1 });
+          return new Response(JSON.stringify({ error: 'bad_pair_shape' }), {
+            status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+          });
+        }
+        tickers.push(p[0]);
+        sessions.push(p[1]);
+      }
+      const rows = await sql.unsafe(BARS_PAIRS_SQL, [tickers, sessions]);
+      await sql.end({ timeout: 5 });
+      const encoder = new TextEncoder();
+      const parts: Uint8Array[] = [];
+      for (const row of rows) parts.push(encoder.encode(JSON.stringify(row) + '\n'));
+      const respBody = new Blob(parts, { type: 'application/x-ndjson; charset=utf-8' });
+      return new Response(respBody, {
+        headers: { ...CORS, 'Content-Type': 'application/x-ndjson; charset=utf-8',
+                   'X-Mode': 'bars_pairs',
+                   'X-Pairs-In': String(pairs.length),
+                   'X-Rows-Out': String(rows.length) },
+      });
+    }
+    if (mode === 'bars_windows') {
+      if (req.method !== 'POST') {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'method_required_post' }), {
+          status: 405, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      let body: unknown;
+      try { body = await req.json(); } catch {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'bad_json' }), {
+          status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      const windows = (body as { windows?: unknown }).windows;
+      if (!Array.isArray(windows) || windows.length === 0) {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'windows_required' }), {
+          status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      if (windows.length > BARS_WINDOWS_MAX_PER_REQ) {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({
+          error: 'too_many_windows', cap: BARS_WINDOWS_MAX_PER_REQ, got: windows.length,
+        }), { status: 413, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      }
+      let sumDays = 0;
+      for (const w of windows) {
+        const ww = w as { ticker?: unknown; from?: unknown; to?: unknown };
+        if (typeof ww.ticker !== 'string' || typeof ww.from !== 'string' || typeof ww.to !== 'string') {
+          await sql.end({ timeout: 1 });
+          return new Response(JSON.stringify({ error: 'bad_window_shape' }), {
+            status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+          });
+        }
+        const df = Date.parse(ww.from), dt = Date.parse(ww.to);
+        if (!Number.isFinite(df) || !Number.isFinite(dt) || dt < df) {
+          await sql.end({ timeout: 1 });
+          return new Response(JSON.stringify({ error: 'bad_window_dates' }), {
+            status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+          });
+        }
+        sumDays += Math.floor((dt - df) / 86400000) + 1;
+      }
+      if (sumDays > BARS_WINDOWS_SUM_DAYS_CAP) {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({
+          error: 'too_many_days', cap: BARS_WINDOWS_SUM_DAYS_CAP, got: sumDays,
+        }), { status: 413, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      }
+      const rows = await sql.unsafe(BARS_WINDOWS_SQL, [JSON.stringify(windows)]);
+      await sql.end({ timeout: 5 });
+      const encoder = new TextEncoder();
+      const parts: Uint8Array[] = [];
+      for (const row of rows) parts.push(encoder.encode(JSON.stringify(row) + '\n'));
+      const respBody = new Blob(parts, { type: 'application/x-ndjson; charset=utf-8' });
+      return new Response(respBody, {
+        headers: { ...CORS, 'Content-Type': 'application/x-ndjson; charset=utf-8',
+                   'X-Mode': 'bars_windows',
+                   'X-Windows-In': String(windows.length),
+                   'X-Sum-Days': String(sumDays),
+                   'X-Rows-Out': String(rows.length) },
+      });
+    }
     await sql.end({ timeout: 1 });
-    return new Response(JSON.stringify({ error: 'bad_mode', hint: 'mode=slate|cellmap|universe or probe=version' }), {
+    return new Response(JSON.stringify({ error: 'bad_mode',
+      hint: 'mode=slate|cellmap|universe|calendar|spy|bars_pairs(POST)|bars_windows(POST) or probe=version' }), {
       status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (e) {
