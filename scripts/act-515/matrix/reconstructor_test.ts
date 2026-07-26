@@ -117,7 +117,7 @@ Deno.test('C0 gate — session 1: 3 LONG T2 candidates, all admitted (K=5 unstre
   assertEquals(res.entries.map(e => e.entryPrice as unknown as number), [50, 50, 50]);
   assertEquals(res.tally.admits, 3);
   assertEquals(res.tally.daily_budget_reached, 0);
-  assertEquals(res.tally.skips_short, 0);
+  assertEquals(res.tally.skips_short_geometry, 0);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
