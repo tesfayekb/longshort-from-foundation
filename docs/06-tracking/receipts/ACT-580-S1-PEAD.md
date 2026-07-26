@@ -115,3 +115,6 @@ Cost model: ACT-506 measured round-trip slippage (14 bps) + high-liquidity half-
 - S1 PEAD Phase-1 — **TEXTURE** (net CAGR ~0%, Sharpe ~0.02, 2,498 trades, DD floor 2.17%). Holdout: not consumed. Path: `docs/06-tracking/receipts/ACT-580-S1-PEAD.md`.
 
 Next: **S2 — revision-momentum** (analyst-revision consensus tilt), one family per receipt.
+
+## §12 — Appendix (post-ratification, operator note)
+The 2022 D1 inversion (+293 bps on the worst-surprise decile) is texture, not noise: **miss-panic bounces are our own reversion thesis photobombing the drift trade**. Same tape that pays the overshoot bounce sub-book here punishes the vanilla PEAD short leg. Cross-strategy interference is a real-portfolio consideration for any future PEAD × overshoot combination.
