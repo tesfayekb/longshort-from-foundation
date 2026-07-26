@@ -47,7 +47,7 @@
 import {
   runExit, entryCash, settleProceeds,
   EXIT_ANCHOR_BY_SIDE_TIER, HAIRCUT_BPS_BY_SIDE,
-  type SessionCalendar,
+  type SessionCalendar, type HaircutMode,
 } from '../kernel/exit.ts';
 import {
   markBook,
@@ -95,6 +95,10 @@ export interface OrchestratorInput {
   /** { long: 0.90, short: 0.10 }. */
   readonly walletCapFractions: { readonly long: number; readonly short: number };
   readonly maxCarryDays?: number;
+  /** Haircut policy passed through to runExit. Default 'study' (matches live
+   *  matrix). Set 'none' for fixture-parity replays where cent-exact ledger
+   *  arithmetic matters (e.g. the ledger-foot invariant test). */
+  readonly haircutMode?: HaircutMode;
   readonly clock: Clock;
 }
 
@@ -185,6 +189,7 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
   const variant = SIZING_VARIANTS[input.variantId];
   if (!variant) throw new Error(`orchestrator: unknown variant ${input.variantId}`);
   const maxCarry = input.maxCarryDays ?? 5;
+  const haircutMode: HaircutMode = input.haircutMode ?? 'study';
 
   // BarSource adapters — Module 5/6 consume `close(ticker, session)`.
   const closeSource: BarSource = { close: (t, s) => input.bars.close(t, s) };
@@ -306,7 +311,7 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
           eventDate,
         },
         input.calendar, closeSource,
-        { haircutMode: 'study', maxCarryDays: maxCarry },
+        { haircutMode, maxCarryDays: maxCarry },
       );
       if (!exitRes.ok) {
         // exit_calendar_exhausted or exit_price_unavailable — surface typed.
@@ -321,8 +326,8 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
         };
       }
 
-      // Cash flow at entry uses POST-HAIRCUT entry (matches runPipeline
-      // when haircutMode='study').
+      // Cash flow at entry uses POST-HAIRCUT entry under 'study' (matches
+      // runPipeline) — collapses to RAW entry under 'none' by construction.
       const entryEff = exitRes.entryPricePostHaircut;
       const flow = entryCash(entry.side, entry.shares, entryEff) as number;
       cashC += toCents(flow);
@@ -338,7 +343,9 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
         eventDate,
         actualExitDate: exitRes.actualExitDate,
         exitClosePostHaircut: exitRes.exitClosePostHaircut,
-        realizedUsd: exitRes.realizedUsd as number,
+        realizedUsd: (haircutMode === 'none'
+          ? (exitRes.grossRealizedUsd as number)
+          : (exitRes.realizedUsd as number)),
       });
       admitsToday += 1;
       totalAdmits += 1;
