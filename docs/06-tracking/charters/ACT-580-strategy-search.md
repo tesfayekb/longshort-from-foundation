@@ -162,7 +162,7 @@ ACT-580.S2     Analyst-revision momentum                           PHASE-0-SPEC-
 ACT-580.S3     SI-delta factor                                     PHASE-0-SPEC-LOCKED
 ACT-580.S4     Overnight factor                                    PHASE-0-SPEC-LOCKED
 ACT-580.S5     Trend-chassis (12-1 + SPY200 overlay)               PHASE-1-COMPLETE (TEXTURE — primary LS fails; regime overlay strictly worse; long-only D10 derived-subset would clear build gate — filed as observation, not verdict)
-ACT-580.S6     Sector pairs (sector-neutral)                       PHASE-0-SPEC-LOCKED
+ACT-580.S6     Sector pairs (within-sector 5-day residual, weekly LS)  PHASE-1-COMPLETE / TEXTURE-AT-BUILD / HOLDOUT-LOCKED — k=10 consumed (receipt: ACT-580-S6-PAIRS.md; net -76.67% / CAGR -30.50% / Sharpe -3.05; cost-annihilated: gross +3.5 bps/wk vs 76 bps/wk toll)
 ACT-580.S7     VRP-in-options-month                                PHASE-0-BLOCKED (options)
 ACT-580.S8     Index-events                                        PHASE-0-DEFERRED (ingest)
 ACT-580.S9     SECTOR MEAN-REVERSION + ROTATION (sub-lane)         PHASE-0-SPEC-LOCKED (charter: ACT-580-S9-sector-mean-reversion.md; pre-registered 2026-07-26 with S5 GO)
@@ -202,3 +202,7 @@ Cross-reference: S3 texture verdict (fails CAGR + worst-year + every-year net) i
 ### S9-a TEXTURE (filed 2026-07-26)
 
 > S9-a sector dip-buy (composite RSI(2)<10 → 5-day long-only sector-portfolio hold, 38 bps toll): build 2022–25 net **−9.84% / CAGR −2.55% / Sharpe −0.11 / maxDD −25.94%**, 1,368 baskets. 3/4 gate clauses fail; holdout LOCKED per charter §8. Per-trigger gross edge (+27.7 bps wtd) is below the 38 bps toll — the cost-annihilation showcase pattern from S4 reproduces here. Robustness: substituted equal-weight-all-members proxy for the charter's top-10-ADV basket (D-1 disclosed); top-10 refinement filed as texture-only follow-up `S9-a-basket-refinement`, no k-cost. Ledger: 7/N families TEXTURE; S5-L survivor holds via consumed co-sign. Full receipt: `docs/06-tracking/receipts/ACT-580-S9a-SECTOR-DIP-BUY.md`.
+
+### S6 TEXTURE — cost-annihilated (filed 2026-07-26)
+
+> S6 within-sector 5-day residual, weekly LS deciles across 11 GICS sectors, sector-neutral by construction: build 2022–25 net **−76.67% / CAGR −30.50% / Sharpe −3.05 / maxDD ≤ −77%**, 32,107 legs. All 6 gate clauses fail. Cost arithmetic (verbatim): gross edge +3.5 bps/wk vs 76 bps/wk toll (2 baskets × 38 bps RT weekly) → net −72.5 bps/wk. The residual is real and small; the sector-neutralization strips the directional long-side bounce the six-substrate law says is where the money lives, and what remains cannot survive weekly turnover. **Unified-physics ledger** extended: long-decile and short-decile mean returns are within 3–8 bps/wk of each other in every build year — sector-neutral residuals lack directional persistence at 5 sessions in this universe/era. Ledger: **8/N families TEXTURE**; S5-L survivor holds. Full receipt: `docs/06-tracking/receipts/ACT-580-S6-PAIRS.md`.
