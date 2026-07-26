@@ -11,15 +11,15 @@
 
 import { streamSlateFile, PARITY_K } from './slate-row.ts';
 import type { SlateRow } from './slate-row.ts';
-import { ArraySessionCalendar } from '../kernel/exit.ts';
+import { ArraySessionCalendar } from '../../kernel/exit.ts';
 import {
   checkPartition, selectSampleSessions, summarize, emptyBookProbe,
 } from './parity-harness.ts';
 import type { PartitionParityResult } from './parity-harness.ts';
 import { FileR1DataSource, stageACloseKey } from './file-data-source.ts';
 import { entryOffsetForSideTier } from '../reconstructor.ts';
-import type { SideDb } from '../kernel/types.ts';
-import type { SessionDate } from '../kernel/clock.ts';
+import type { SideDb } from '../../kernel/types.ts';
+import type { SessionDate } from '../../kernel/clock.ts';
 
 const CACHE_DIR = new URL('../cache/', import.meta.url).pathname;
 const SLATE_YEARS = [2022, 2023, 2024, 2025, 2026] as const;
