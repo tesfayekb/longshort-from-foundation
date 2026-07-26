@@ -255,30 +255,16 @@ Deno.test('orchestrator T2: -comp sizingBase reflects prior-session equity', () 
 // -----------------------------------------------------------------------------
 
 Deno.test('orchestrator T3: negative-cash session accrues carry (2x-const, 5 admits)', () => {
-  // startingEquity=$100, variant=2x-const → slot = $100 × 0.025 × 2 = $5.
-  // walletCap long = 0.90 → longCap = $100 × 2 × 0.90 = $180 → 36 slots.
-  // Admit 5 LONG T1 lots at entry price $1.00 → shares=5 → entry cash out =
-  //   5 lots × 5 shares × $1.00 = $25. cash = $100 − $25 = $75 (positive).
+  // 2x-const rails: slot notional is FROZEN at $100k × 0.025 × 2 = $5,000
+  // (per charter — sizingBase uses the $100k KERNEL_CONST_BASE rail
+  // regardless of runtime startingEquity). Wallet cap also scales off that
+  // rail: longCap = $100k × 2 × 0.90 = $180k (36 slots).
   //
-  // We need cash < 0. Change entry prices so shares scale up: entry=$0.10 →
-  // shares = floor($5/$0.10) = 50 → cash per lot = $5. 5 lots → $25 out.
-  // Still $75. To go negative we'd need way more lots than 5 admits/day
-  // allow at $5 slot ($100 starting cash needs $100+ out).
-  //
-  // Alternative: reduce startingEquity to $20. 5 lots × $5 = $25 out → cash =
-  // -$5. But then longCap = $20×2×0.9 = $36 (7 slots OK). K=5 admits fine.
-  //
-  // Bump debit: use price=$0.10 → shares=50/lot; but slot is still $5 so
-  // entry cash = 50 × $0.10 = $5, same. So debit = same $25.
-  //
-  // Use startingEquity=$10 → cash = -$15 → carry(1d) = 15 × 0.000238 = $0.0036 = 0.36c → 0 cents.
-  // Need more days OR bigger debit. startingEquity=$1 → cash = -$24 → carry = 0.57c = 1c.
-  // Better: reduce carry threshold — no, formula is fixed.
-  //
-  // Multi-day accumulation over the 6-session hold: cash sits at -$24 for 6 days
-  // → cumulative carry ≈ 6 × $0.0057 = $0.034 = 3c.
-  //
-  // Cleaner: use startingEquity=$1, 5 admits at $5/slot each = $25 out → cash = -$24.
+  // With startingEquity = $100 and 5 K-limited admits at $5k slot each:
+  //   entry outflow ≈ 5 × 5000 shares × $1.00 = $25,000 (post 5bps LONG
+  //   haircut → $25,012.50). cash after entries = $100 − $25,013 ≈ −$24,913.
+  //   carry(1d) = 24,913 × 0.000238 ≈ $5.93. Over the 6-session hold the
+  //   cumulative carry easily exceeds $30.
   const corpusByEntrySession = new Map<SessionDate, ReadonlyArray<CorpusCandidateRow>>();
   corpusByEntrySession.set('2024-01-04', [
     longT1Row(31, 'AAAA', '2024-01-02'),
@@ -301,67 +287,33 @@ Deno.test('orchestrator T3: negative-cash session accrues carry (2x-const, 5 adm
     corpusByEntrySession,
     cellMap: cellMapAlways(0.05),
     bars,
-    startingEquityUsd: 1,        // tiny start → guaranteed negative cash
-    budgets: { k: 5, shortDailyBudget: 5 },
-    walletCapFractions: { long: 0.90, short: 0.10 },  // longCap = $1×2×0.9 = $1.80
-    maxCarryDays: 5,
-    clock: CLOCK,
-  });
-  // With longCap=$1.80 and slot=$5 (const) → 0 slots fit. Cap will refuse ALL.
-  // We need cap to allow at least 1 admit. Bump startingEquity.
-  // Actually 2x-const slot is $100k×0.025×2 = $5000 (hardcoded rail!). Cap is
-  // $1×2×0.9 = $1.80 vs slot $5000 → 0 admits. Wrong.
-  //
-  // For 2x-const the KERNEL slot is always $5000. So cap MUST exceed $5000 for
-  // any admit. Set startingEquity=$10000 → cap = $10k×2×0.9 = $18k → 3 slots.
-  // Entry cash = 3 × $5000 = $15000. cash = $10000 - $15000 = -$5000.
-  // Carry(1d) = $5000 × 0.000238 = $1.19. Over the ~6-day hold: ~$7.
-  //
-  // Re-run with better start.
-  if (!result.ok) {
-    // Expected in this synthetic — the tiny start blocks 2x-const admits.
-    // Continue with corrected fixture below.
-  }
-
-  const bigResult = runOrchestrator({
-    variantId: '2x-const',
-    sessions: SESSIONS,
-    calendar: new ArraySessionCalendar(SESSIONS as string[]),
-    corpusByEntrySession,
-    cellMap: cellMapAlways(0.05),
-    bars,
-    startingEquityUsd: 10_000,
+    startingEquityUsd: 100,
     budgets: { k: 5, shortDailyBudget: 5 },
     walletCapFractions: { long: 0.90, short: 0.10 },
     maxCarryDays: 5,
+    haircutMode: 'none',  // cent-exact ledger foot for the invariant assert
     clock: CLOCK,
   });
-  assert(bigResult.ok, `orchestrator failed: ${JSON.stringify(bigResult)}`);
+  assert(result.ok, `orchestrator failed: ${JSON.stringify(result)}`);
 
-  // Cap: $10k × 2 × 0.9 = $18k. Slot $5k. → 3 admits fit, 2 refused.
-  const admitRow = bigResult.rows.find(r => r.sessionDate === '2024-01-04')!;
-  assertEquals(admitRow.admitsToday, 3);
-  assertEquals(admitRow.refusalsToday.allocation_cap_reached, 2);
-  // Cash flow: 3 lots × 5000 shares × $1.00 = $15,000 out (shares = floor(5000/1)).
-  //   cash after entry = $10,000 − $15,000 − entry haircut adj ≈ −$5,007.50
-  //   (5bps LONG haircut on entry: entryEff = 1.0005 → cash out = 3×5000×1.0005 = $15,007.5).
+  // Cap-free path: longCap=$180k (rail) vs K×slot=$25k → all 5 admit.
+  const admitRow = result.rows.find(r => r.sessionDate === '2024-01-04')!;
+  assertEquals(admitRow.admitsToday, 5);
+  assertEquals(admitRow.refusalsToday.allocation_cap_reached, 0);
   assert((admitRow.cashUsd as unknown as number) < 0,
     `session 04 cash MUST be negative; got ${admitRow.cashUsd}`);
-  // Carry today MUST be > 0 (session 04 close).
   assert((admitRow.carryTodayUsd as unknown as number) > 0,
     `session 04 carry MUST be > 0 (cash<0); got ${admitRow.carryTodayUsd}`);
-  // Cumulative carry > 0.
-  assert((bigResult.summary.cumulativeCarryUsd as unknown as number) > 0,
-    `cumulative carry MUST be > 0; got ${bigResult.summary.cumulativeCarryUsd}`);
+  assert((result.summary.cumulativeCarryUsd as unknown as number) > 0,
+    `cumulative carry MUST be > 0; got ${result.summary.cumulativeCarryUsd}`);
 
-  // Ledger foot invariant.
   assertLedgerFoot(
-    bigResult.rows.map(r => ({
+    result.rows.map(r => ({
       equityUsd: r.equityUsd as unknown as number,
       realizedTodayUsd: r.realizedTodayUsd as unknown as number,
       unrealizedTotalUsd: r.unrealizedTotalUsd as unknown as number,
       carryTodayUsd: r.carryTodayUsd as unknown as number,
     })),
-    10_000,
+    100,
   );
 });
