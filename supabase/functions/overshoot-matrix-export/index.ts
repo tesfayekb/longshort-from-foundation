@@ -377,7 +377,7 @@ Deno.serve(async (req: Request) => {
 
   if (probe === 'version') {
     return new Response(JSON.stringify({
-      source_version: 'matrix-export-v1',
+      source_version: 'matrix-export-v2-devv',
       corpus_run_id: CORPUS_RUN_ID,
       cellmap_run_id: CORPUS_RUN_ID,
       oneshot_token_present: true,
@@ -390,6 +390,11 @@ Deno.serve(async (req: Request) => {
         bars_windows_sum_days_cap: BARS_WINDOWS_SUM_DAYS_CAP,
       },
       calendar_source: "distinct trade_date from overshoot_daily_bars where ticker='SPY'",
+      slate_predicate: {
+        long:  "band='L_10_INF' (kernel unchanged)",
+        short: "signed excess_at_argmax<=-0.08 AND window_days IN (1..5) AND momentum_quintile IN (1,5) AND drawdown_bucket IN (4,5)",
+        ruling: "DEV-V V-β-SCOPED — kernel-basis qualification inside compaction",
+      },
     }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
