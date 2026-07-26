@@ -29,6 +29,7 @@
  */
 
 // deno-lint-ignore-file no-explicit-any
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js';
 
 // ONE-SHOT IN-SOURCE TOKEN (O-4 lifecycle: rip after Fetch-Cache Turn-2).
