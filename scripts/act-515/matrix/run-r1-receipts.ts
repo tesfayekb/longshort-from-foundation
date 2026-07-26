@@ -404,6 +404,7 @@ export async function runReceipts(
       walletCapFractions: WALLET_CAPS,
       haircutMode: 'study',
       clock,
+      permitExitDegradation: true,
     });
     const ok = printReceipt(variantId, res, sessions.length, slateTotals, startingEquity);
     results.push({ variantId, withinEnvelope: ok });
