@@ -100,6 +100,16 @@ export interface OrchestratorInput {
    *  arithmetic matters (e.g. the ledger-foot invariant test). */
   readonly haircutMode?: HaircutMode;
   readonly clock: Clock;
+  /** RECEIPT MODE (ruling 2026-07-26, INC-147): when true, the two typed
+   *  exit failures — `exit_price_unavailable` (true market gaps inside a
+   *  window: halts/delistings post-maxCarry) and `exit_calendar_exhausted`
+   *  (tail lots whose scheduled exit runs past the pinned calendar) —
+   *  become PRE-AUTHORIZED TYPED SKIPS instead of hard halts. The admit is
+   *  discarded (no cash movement, no book entry, no realized), counted per
+   *  class, and listed in telemetry. Caller enforces >20 STOP for
+   *  `exit_price_unavailable`. When false (default), the orchestrator
+   *  halts on either class (matches the frozen construction-lane behavior). */
+  readonly permitExitDegradation?: boolean;
 }
 
 export interface OrchestratorRow {
@@ -135,6 +145,20 @@ export interface CapBindTelemetry {
   readonly totalRealizedUsd: Money;
   readonly totalRealizedLongUsd: Money;
   readonly totalRealizedShortUsd: Money;
+  /** Pre-authorized typed skip: exit_price_unavailable post-maxCarry.
+   *  Populated only in `permitExitDegradation` mode. */
+  readonly exitPriceUnavailableSkips: ReadonlyArray<{
+    readonly sessionDate: SessionDate;
+    readonly lotId: string; readonly ticker: string; readonly side: SideDb;
+    readonly reason: string;
+  }>;
+  /** Pre-authorized typed skip: exit_calendar_exhausted (tail lots).
+   *  Populated only in `permitExitDegradation` mode. */
+  readonly exitCalendarExhaustedSkips: ReadonlyArray<{
+    readonly sessionDate: SessionDate;
+    readonly lotId: string; readonly ticker: string; readonly side: SideDb;
+    readonly reason: string;
+  }>;
 }
 
 export type OrchestratorResult =
