@@ -41,6 +41,43 @@ SHORT_GEOMETRY_MATRIX).
 | cellmap.jsonl | 6,000 | `67360457…6f93152` (untouched) |
 | universe.jsonl | 906 | `4c439ba2…1129bd4c` (untouched) |
 
+## SUPERSESSION — INC-147 delta re-fetch (2026-07-26)
+
+Stage-B was originally sized from slate-stage admits, but the live
+session-walk under cap-binding produced a DIFFERENT lot set (enumeration
+telemetry: 4,903 lots, 3,825 matched, 1,078 newly needed, 5,362 sealed
+orphans). Delta re-fetch executed via the standing mint→fetch→rip
+pattern (third use — token `mx3-06ee…`, deployed → fetched → ripped
+same session; dual rip-probe: old token = HTTP 401, no creds = HTTP 401).
+
+| File | Rows | SHA-256 | Note |
+|---|---|---|---|
+| bars-windows-delta.jsonl | 11,094 | `4e13c5be…0e98b1` | 1,078 windows, 3 batches (400/400/278) |
+
+Superset assertion: count-caps are sizing-proportional across variants,
+so the enumerated set is the lot superset for all three configs. Each
+receipt asserts admits ⊆ enumeration (violation = STOP + named delta).
+
+## R1 RECEIPTS (all three configs, permitExitDegradation=true)
+
+| variant | admits (L/S) | ending_equity | total_return | max_dd | worst_yr (%) | epu / ece | ledger drift |
+|---|---|---|---|---|---|---|---|
+| 1x-const | 4,902 (4,693 / 209) | $135,137.67 | +35.14% | 11.86% | 2024 (+2.07%) | 1 / 5 | −42c / 4,902c |
+| 2x-const | 4,902 (4,693 / 209) | $171,111.44 | +71.11% | 20.00% | 2024 (+3.59%) | 1 / 5 | −20c / 4,902c |
+| 2x-comp  | 4,894 (4,693 / 201) | $185,350.10 | +85.35% | 27.03% | 2024 (+2.43%) | 1 / 5 | +67c / 4,894c |
+
+Typed skips (identical LONG set across variants):
+- `exit_price_unavailable` (post maxCarry=5): **1** — SATS 2026-06-18
+  lot=2026-06-18#613184 (no close within 5 sessions of 2026-06-25). Well
+  under 20-STOP threshold.
+- `exit_calendar_exhausted` (tail lots): **5** — all 2026-07-07 LONG anchor-6
+  lots (event 2026-07-02) past pinned calendar tail 2026-07-10:
+  PCG#575523, D#602760, EIX#573940, IDA#605462, LNT#634227.
+
+2x-comp admits differ (−8 SHORT) because compounding equity produces
+different sizingBase, shifting cap-bind ordering; admit set remains
+⊆ enumeration.
+
 ## Admit + Parity (DEV-U contract, full)
 
 - Partitions processed: **1,970**
