@@ -89,17 +89,129 @@ async function stageCalendar(fnUrl: string, token: string): Promise<void> {
 // Stub bodies for TURN-2B stages — landed here so the driver is one file
 // across both halves. TURN-2B implements admit / stage-A / stage-B / spy /
 // rip-probe against this scaffold.
-async function stageA(_fnUrl: string, _token: string): Promise<void> {
-  throw new Error('stage-A (bars_pairs + admit) lands in TURN-2B per T-1 split.');
+// TURN-2B stages — de-stubbed per RULING 2026-07-26 (DEV-U · U-α + U-γ
+// FUSED). Each stage is orchestrated in-process against the pinned cache
+// files + the overshoot-matrix-export edge fn.
+import { extractPairs, chunkPairs } from './turn2b/pair-extractor.ts';
+import { streamSlateFile } from './turn2b/slate-row.ts';
+import { ArraySessionCalendar } from '../kernel/exit.ts';
+import { buildWindows, packBatches } from './turn2b/window-batcher.ts';
+import type { AdmittedLotForBars } from './turn2b/window-batcher.ts';
+
+const BARS_PAIRS_MAX_PER_REQ = 5_000;
+const SLATE_YEARS = [2022, 2023, 2024, 2025, 2026] as const;
+
+async function readCalendar(): Promise<string[]> {
+  const text = await Deno.readTextFile(`${CACHE_DIR}calendar.jsonl`);
+  return text.split('\n').filter(l => l.length > 0)
+    .map(l => (JSON.parse(l) as { session: string }).session);
 }
-async function stageB(_fnUrl: string, _token: string): Promise<void> {
-  throw new Error('stage-B (bars_windows) lands in TURN-2B per T-1 split.');
+
+async function stageA(fnUrl: string, token: string): Promise<void> {
+  const calSessions = await readCalendar();
+  const cal = new ArraySessionCalendar(calSessions);
+  const collect: Array<import('./turn2b/slate-row.ts').SlateRow> = [];
+  for (const y of SLATE_YEARS) {
+    for await (const r of streamSlateFile(`${CACHE_DIR}slate-${y}.jsonl`)) collect.push(r);
+  }
+  const { pairs, rowsSeen, offCalendar } = extractPairs(collect,
+    { sessionAfter: (s, n) => cal.sessionAfter(s, n) });
+  console.log(`[stage-A] slate rows=${rowsSeen} off_calendar=${offCalendar} unique_pairs=${pairs.length}`);
+  const batches = chunkPairs(pairs, BARS_PAIRS_MAX_PER_REQ);
+  const outPath = `${CACHE_DIR}bars-pairs.jsonl`;
+  const f = await Deno.open(outPath, { create: true, write: true, truncate: true });
+  let rows = 0;
+  try {
+    const writer = f.writable.getWriter();
+    for (let i = 0; i < batches.length; i++) {
+      const body = JSON.stringify({ pairs: batches[i] });
+      const res = await fetch(`${fnUrl}?mode=bars_pairs`, {
+        method: 'POST',
+        headers: { 'X-Matrix-Export-Token': token, 'Content-Type': 'application/json' },
+        body,
+      });
+      if (!res.ok) throw new Error(`[stage-A] page ${i}: ${res.status} ${await res.text()}`);
+      const text = await res.text();
+      rows += (text.match(/\n/g) ?? []).length;
+      await writer.write(new TextEncoder().encode(text));
+      console.log(`[stage-A] page ${i + 1}/${batches.length} rows_out=${text.split('\n').length - 1}`);
+    }
+    await writer.close();
+  } finally { /* writer already closed */ }
+  const sha = await sha256Hex(outPath);
+  console.log(JSON.stringify({ stage: 'A', file: 'bars-pairs.jsonl', rows,
+    pairs: pairs.length, pages: batches.length, sha256: sha }, null, 2));
 }
-async function stageSpy(_fnUrl: string, _token: string): Promise<void> {
-  throw new Error('spy lands in TURN-2B per T-1 split.');
+
+async function stageB(fnUrl: string, token: string): Promise<void> {
+  // Reads admitted lots emitted by the parity harness (turn-2b-lots.jsonl).
+  const lotsPath = `${CACHE_DIR}turn-2b-lots.jsonl`;
+  const text = await Deno.readTextFile(lotsPath);
+  const lots: AdmittedLotForBars[] = text.split('\n')
+    .filter(l => l.length > 0).map(l => JSON.parse(l));
+  const calArr = await readCalendar();
+  const cal = new ArraySessionCalendar(calArr);
+  const { windows, totalDays, clampedLotIds } = buildWindows(lots, {
+    sessionAfter: (s, n) => cal.sessionAfter(s, n),
+    lastSession: () => calArr[calArr.length - 1],
+  });
+  const batches = packBatches(windows);
+  console.log(`[stage-B] lots=${lots.length} windows=${windows.length} totalDays=${totalDays} batches=${batches.length} clamped=${clampedLotIds.length}`);
+
+  const outPath = `${CACHE_DIR}bars-windows.jsonl`;
+  const f = await Deno.open(outPath, { create: true, write: true, truncate: true });
+  let rows = 0;
+  const writer = f.writable.getWriter();
+  for (let i = 0; i < batches.length; i++) {
+    const body = JSON.stringify({ windows: batches[i].windows });
+    const res = await fetch(`${fnUrl}?mode=bars_windows`, {
+      method: 'POST',
+      headers: { 'X-Matrix-Export-Token': token, 'Content-Type': 'application/json' },
+      body,
+    });
+    if (!res.ok) throw new Error(`[stage-B] batch ${i}: ${res.status} ${await res.text()}`);
+    const t = await res.text();
+    rows += (t.match(/\n/g) ?? []).length;
+    await writer.write(new TextEncoder().encode(t));
+    console.log(`[stage-B] batch ${i + 1}/${batches.length} windows=${batches[i].windows.length} sumDays=${batches[i].sumDays} rows_out=${t.split('\n').length - 1}`);
+  }
+  await writer.close();
+  const sha = await sha256Hex(outPath);
+  console.log(JSON.stringify({ stage: 'B', file: 'bars-windows.jsonl', rows,
+    batches: batches.length, totalDays, clamped: clampedLotIds.length, sha256: sha }, null, 2));
 }
-async function stageRipProbe(_fnUrl: string, _token: string): Promise<void> {
-  throw new Error('rip-probe lands in TURN-2B per sequence law.');
+
+async function stageSpy(fnUrl: string, token: string): Promise<void> {
+  const url = `${fnUrl}?mode=spy&since=${WINDOW_START}&until=${WINDOW_END}`;
+  const outPath = `${CACHE_DIR}spy.jsonl`;
+  const rows = await fetchStream(url, {
+    method: 'GET',
+    headers: { 'X-Matrix-Export-Token': token, 'Accept': 'application/x-ndjson' },
+  }, outPath);
+  const sha = await sha256Hex(outPath);
+  console.log(JSON.stringify({ stage: 'spy', file: 'spy.jsonl', rows, sha256: sha }, null, 2));
+}
+
+async function stageRipProbe(fnUrl: string, token: string): Promise<void> {
+  // Post-rip probe: (a) triad path still succeeds (503 via bearer),
+  // (b) one-shot token now 401. Caller must first REMOVE the token in
+  // source and redeploy the fn — this stage only reads receipts.
+  const withOneshot = await fetch(`${fnUrl}?probe=version`, {
+    method: 'GET', headers: { 'X-Matrix-Export-Token': token },
+  });
+  const bearer = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const withBearer = await fetch(`${fnUrl}?probe=version`, {
+    method: 'GET', headers: { 'Authorization': `Bearer ${bearer}` },
+  });
+  const receipt = {
+    stage: 'rip-probe',
+    oneshot_status: withOneshot.status,
+    triad_bearer_status: withBearer.status,
+    oneshot_should_be_401: withOneshot.status === 401,
+    triad_should_be_200: withBearer.status === 200,
+  };
+  await withOneshot.text(); await withBearer.text();
+  console.log(JSON.stringify(receipt, null, 2));
 }
 
 async function main(): Promise<void> {
