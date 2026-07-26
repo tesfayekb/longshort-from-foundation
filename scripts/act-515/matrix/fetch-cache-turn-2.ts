@@ -149,14 +149,8 @@ async function stageB(fnUrl: string, token: string): Promise<void> {
   const text = await Deno.readTextFile(lotsPath);
   const lots: AdmittedLotForBars[] = text.split('\n')
     .filter(l => l.length > 0).map(l => JSON.parse(l));
-  const cal = new ArraySessionCalendar(await readCalendar());
-  const offset = {
-    sessionAfter: (s: string, n: number) => cal.sessionAfter(s, n),
-    lastSession: () => (await readCalendar()).slice(-1)[0] ?? '',
-  };
-  // ArraySessionCalendar.lastSession is not exported; take the last of the
-  // pinned calendar snapshot instead.
   const calArr = await readCalendar();
+  const cal = new ArraySessionCalendar(calArr);
   const { windows, totalDays, clampedLotIds } = buildWindows(lots, {
     sessionAfter: (s, n) => cal.sessionAfter(s, n),
     lastSession: () => calArr[calArr.length - 1],
