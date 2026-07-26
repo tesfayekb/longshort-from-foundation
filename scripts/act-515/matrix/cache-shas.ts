@@ -69,6 +69,11 @@ export const CACHE_SHAS = Object.freeze({
   'bars-windows-2024.jsonl': 'd43610b3b490bb0e3849c2dca3c99f2449b0266879bb7b884c4e29c628c7c945',
   'bars-windows-2025.jsonl': '0b1e8e420a572390cfe64be7775e071f799de3ce6f716a362f333e49f3a5bb5a',
   'bars-windows-2026.jsonl': '1d94f98910af3f0f608c56f8b963dfdc162f4b49944faab213f71f2468ed9845',
+  // INC-147 delta re-fetch (2026-07-26, standing mint→fetch→rip pattern
+  // third use). 1,078 windows admitted by live session-walk but never
+  // covered by slate-stage Stage-B. SUPERSESSION note in
+  // cache/turn-2b-manifest.md.
+  'bars-windows-delta.jsonl': '4e13c5bed4569dc04d076d59aa49ea4d06acd99a0104c63fd89b23aa6a0e98b1',
   // SPY full-window benchmark for config (d) SPY-BH baseline.
   'spy.jsonl':          '6a98eec8084682f7bb86ed05f1de3eecfde1a70bad4906261253b140fa9b613e',
 } as const);
@@ -90,6 +95,7 @@ export const CACHE_ROW_COUNTS = Object.freeze({
   'bars-windows-2024.jsonl': 22415,
   'bars-windows-2025.jsonl': 23163,
   'bars-windows-2026.jsonl': 12516,
+  'bars-windows-delta.jsonl': 11094,
   'spy.jsonl':          1143,
 } as const);
 
