@@ -358,6 +358,13 @@ Deno.serve(async (req: Request) => {
       oneshot_token_present: true,
       auth: { triad: ['x-cron-secret', 'authorization:bearer(service_role)', 'x-backfill-secret'],
               oneshot: 'x-matrix-export-token' },
+      modes: ['slate','cellmap','universe','calendar','bars_pairs','bars_windows','spy'],
+      envelope: {
+        bars_pairs_max_per_req:   BARS_PAIRS_MAX_PER_REQ,
+        bars_windows_max_per_req: BARS_WINDOWS_MAX_PER_REQ,
+        bars_windows_sum_days_cap: BARS_WINDOWS_SUM_DAYS_CAP,
+      },
+      calendar_source: "distinct trade_date from overshoot_daily_bars where ticker='SPY'",
     }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
