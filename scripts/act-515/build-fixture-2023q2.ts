@@ -36,9 +36,6 @@ interface LotPick {
   readonly lot_id: string;
   readonly ticker: string;
   readonly side: 'long' | 'short';
-  readonly lot_id: string;
-  readonly ticker: string;
-  readonly side: 'long' | 'short';
   readonly tier: 'T1' | 'T2';
   readonly event_date: string;
   readonly entry_date: string;
