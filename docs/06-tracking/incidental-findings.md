@@ -7,6 +7,82 @@
 
 ---
 
+## INC-147 — Stage-B scope defect: slate-stage windows vs live-walk book (2026-07-26)
+
+**Category:** matrix-lane / evidence-scope discipline.
+**Severity:** MEDIUM — no silent-wrong number was published (the receipt
+turn HALTED loudly with a typed refusal `exit_price_unavailable`), but the
+sealed Turn-2B `bars-windows-*.jsonl` artifact was sized against the wrong
+object.
+
+**Filed by:** operator ruling 2026-07-26 (OPTION 1 — DELTA RE-FETCH).
+
+**What happened.** Turn-2B Stage-B enumerated exit windows from
+`turn-2b-lots.jsonl` (the reconstructor's slate-stage admit set — 9,187
+lots) and fetched close bars for those windows only. The R1 receipt turn
+walks the calendar with LIVE book-cap state (5/day K × ~11-session hold
+≈ 55 open lots vs 36-slot LONG cap ⇒ caps bind), so the live-walk lot
+set is a DIFFERENT object — cap-driven displacement produces admits that
+were never included in the Stage-B window set. First manifestation:
+`runExit(2022-07-06#176071)` halted on all three variants because the
+ticker's exit window had no close bars in the sealed cache.
+
+**Fix-of-record (this ruling).** Enumerate the LIVE-WALK lot superset
+via a calendar-pure driver
+(`scripts/act-515/matrix/run-enumeration.ts` — 1x-const count-cap
+geometry, entry prices from `bars-pairs.jsonl` only, exit dates via
+`EXIT_ANCHOR_BY_SIDE_TIER` DATE-ONLY, marks/equity suppressed), diff
+against `turn-2b-lots.jsonl`, and delta-fetch the missing windows via
+a fresh in-source one-shot token on `overshoot-matrix-export` with
+SAME-SESSION rip #2 + dual rip-probe. Receipts then re-run against the
+refreshed cache with a NEW pre-authorized typed class
+`exit_price_unavailable` surviving the maxCarry defer (true market
+gaps — halts / delistings inside a window), counted + listed per
+config, >20 instances = STOP for review.
+
+**Enumeration receipt (this turn, calendar-pure, no network):**
+
+| Metric | Value |
+|---|---|
+| Enumerated lots (LIVE walk, 1x-const superset) | **4,903** (LONG 4,694 / SHORT 209) |
+| Sealed lots (`turn-2b-lots.jsonl`) | 9,187 (LONG 5,030 / SHORT 4,157) |
+| Matched by (side, ticker, eventDate) | 3,825 |
+| Newly needed (LIVE admits absent from Stage-B) | **1,078** |
+| Sealed orphans (Stage-B windows never admitted live) | 5,362 |
+| Cap-bind — allocation_cap_reached | 643 |
+| Cap-bind — position_already_open | 2,934 |
+| Cap-bind — daily_budget_reached (K=5) | 14,632 |
+| Cap-bind — short_daily_budget_reached | 0 (matrix charter; no DEC-084 ramp) |
+| Peak concurrent LONG / SHORT | 32 / 4 (SHORT cap binding; LONG under 36) |
+| Exit off-calendar (horizon exhausted at tail) | 5 |
+
+**Superset assertion (in-file at `run-enumeration.ts` §"SUPERSET ASSERTION"):**
+count caps are sizing-proportional across 1x-const / 2x-const / 2x-comp
+(`KERNEL_SLOT_CONCENTRATION`, wallet cap USD, and slot notional all scale
+1:1 in sizingBase; the sizingBase factor cancels in the count-cap
+arithmetic), so the 1x-const enumeration is a lot superset for all three
+configs. Each receipt run MUST assert its admits ⊆ this enumeration
+(violation = STOP with named delta).
+
+**Artifacts (this turn):**
+
+- `scripts/act-515/matrix/run-enumeration.ts` (new; calendar-pure, kernel-clean)
+- `scripts/act-515/matrix/cache/enumerated-lots.jsonl` (4,903 rows)
+- `scripts/act-515/matrix/cache/enumerated-diff.json` (superset assertion,
+  telemetry, delta window list of 1,078 lots)
+
+**Follow-up:** delta-fetch cycle (fresh in-source one-shot token on
+`overshoot-matrix-export` → mode=bars_windows for the 1,078 delta lots →
+rip #2 + dual rip-probe → append `bars-windows-delta.jsonl`, re-SHA,
+manifest supersession note), then receipts re-run against the refreshed
+cache with the pre-authorized `exit_price_unavailable` typed class. Held
+for operator confirmation to execute against production Supabase (edge
+function edit + deploy + rip cycle is a governance action).
+
+---
+
+---
+
 ## INC-144 — Fixture fabricated-absence (self-inflicted, not a delete) (2026-07-25)
 
 **Category:** narrative-fabrication / evidence discipline.
