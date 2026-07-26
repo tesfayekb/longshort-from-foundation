@@ -84,16 +84,6 @@ function makeBars(overrides: Record<string, Record<string, { open?: number; clos
   };
 }
 
-// LONG T2 geometry (outside T1: window≠{1,2,3} OR mq∉{4,5} OR dd∉{1,2,3}).
-// Use window=4, mq=3, dd=4 → LONG T2 (offset +1 → entry = eventDate+1).
-// Cell key: {side:'long', band:'L_10_INF', argmaxWindowDays:4, mq:3, dd:4, ex:5}.
-function longT2Row(eventId: number, ticker: string, eventDate: SessionDate): CorpusCandidateRow {
-  return {
-    eventId, ticker, side: 'long', eventDate,
-    windowDays: 4, momentumQuintile: 3, drawdownBucket: 4, daysToNearestEarnings: null,
-  };
-}
-
 function cellMapAlways(meanFwd5d: number): CellMapLookup {
   return () => meanFwd5d;
 }
@@ -117,39 +107,18 @@ function assertLedgerFoot(rows: ReadonlyArray<{ equityUsd: number; realizedToday
 }
 
 // -----------------------------------------------------------------------------
-// TEST 1 — LONG CAP BINDS + LEDGER FOOT
-// -----------------------------------------------------------------------------
-
-Deno.test('orchestrator T1: LONG cap BINDS (2x-comp, cap=0.10, 5 candidates → 4 admits)', () => {
-  // 5 LONG T2 candidates with eventDate=2024-01-02. Entry = 2024-01-03.
-  // startingEquity=$100, variant=2x-comp, walletCapFractions={long:0.10, short:0.10}.
-  // sizingBase = $100 * 2 = $200. longCap = $20. slot = $200 * 0.025 = $5.
-  // Cap capacity = $20 / $5 = 4 slots. 5th → allocation_cap_reached.
-  const corpusByEntrySession = new Map<SessionDate, ReadonlyArray<CorpusCandidateRow>>();
-  corpusByEntrySession.set('2024-01-03', [
-    longT2Row(1, 'AAAA', '2024-01-02'),
-    longT2Row(2, 'BBBB', '2024-01-02'),
-    longT2Row(3, 'CCCC', '2024-01-02'),
-    longT2Row(4, 'DDDD', '2024-01-02'),
-    longT2Row(5, 'EEEE', '2024-01-02'),
-  ]);
-
-  // Prices: entry open = $1.00 for all → shares = floor(5/1) = 5 per lot.
-  // Marks: flat $1.00 close through session 4; exit = LONG T2 → entry+9
-  //   sessions after entryDate = 2024-01-03. From SESSIONS above, only 6
-  //   sessions total; ord-9 exhausted. To keep the test short-horizon,
-  //   we use LONG T1 (offset +2, exit event+6 = eventDate+6 sessions).
-  //   Switch to T1 geometry: window=1, mq=4, dd=1.
-  throw new Error('__redirect__');
-});
-
-// The T1 form. Re-registering below to keep the fixture simple.
+// LONG T1 geometry (window∈{1,2,3}, mq∈{4,5}, dd∈{1,2,3}). Offset +2 sessions.
+// Cell key: {side:'long', band:'L_10_INF', windowDays:1, mq:4, dd:1, ex:5}.
 function longT1Row(eventId: number, ticker: string, eventDate: SessionDate): CorpusCandidateRow {
   return {
     eventId, ticker, side: 'long', eventDate,
     windowDays: 1, momentumQuintile: 4, drawdownBucket: 1, daysToNearestEarnings: null,
   };
 }
+
+// -----------------------------------------------------------------------------
+// TEST 1 — LONG CAP BINDS + LEDGER FOOT (2x-comp, cap=0.10, LONG T1)
+// -----------------------------------------------------------------------------
 
 Deno.test('orchestrator T1b: LONG cap BINDS + ledger foot (2x-comp, cap=0.10, LONG T1)', () => {
   // LONG T1: offset=+2 → eventDate 2024-01-02 → entry = 2024-01-04.
