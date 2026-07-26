@@ -166,7 +166,8 @@ export type SkipReason =
   | 'short_band_below_min'
   | 'entry_session_off_calendar'
   | 'entry_price_missing'
-  | 'sizing_refusal';
+  | 'sizing_refusal'
+  | 'short_admits_disabled';
 
 export interface Skip {
   readonly eventId: number;
@@ -198,6 +199,16 @@ export interface ReconstructInput {
    *  see 1× while shares/cash carry N× — geometry-honesty gap surfaced by
    *  the V-B receipt caveat. Default 1 for every tier. */
   readonly preAdmitSlotMultiplierByTier?: Readonly<Partial<Record<Tier, number>>>;
+
+  /** LONG-ONLY MICRO-RECEIPT HOOK (2026-07-26 capstone ruling — smallest
+   *  additive input flag). When true, ALL SHORT candidates are refused
+   *  at the very top of the SHORT branch with typed skip
+   *  `short_admits_disabled` — no cellMap lookup, no admit pass, no
+   *  refusal category. LONG branch untouched. Default false (baseline
+   *  behaviour preserved byte-exact). Test pin:
+   *  reconstructor_test.ts::"LONG-ONLY — disableShortAdmits refuses
+   *  every SHORT candidate; LONG unaffected". */
+  readonly disableShortAdmits?: boolean;
 }
 
 export interface ReconstructResult {
@@ -355,6 +366,12 @@ export function reconstructSessionAdmits(input: ReconstructInput): ReconstructRe
       cellKey = k;
     } else {
       // SHORT branch — G-1 tier convention + H-1 offset.
+      if (input.disableShortAdmits) {
+        skips.push({ eventId: row.eventId, ticker: row.ticker, side: 'short',
+          reason: 'short_admits_disabled',
+          detail: 'disableShortAdmits=true (long-only micro-receipt hook)' });
+        continue;
+      }
       if (row.momentumQuintile === null || row.drawdownBucket === null) {
         skips.push({ eventId: row.eventId, ticker: row.ticker, side: 'short',
           reason: 'incomplete_cell_key' });
@@ -499,6 +516,7 @@ export function reconstructSessionAdmits(input: ReconstructInput): ReconstructRe
       skips_no_bar: skips.filter(s => s.reason === 'entry_price_missing').length,
       skips_off_calendar: skips.filter(s => s.reason === 'entry_session_off_calendar').length,
       skips_sizing: skips.filter(s => s.reason === 'sizing_refusal').length,
+      skips_short_admits_disabled: skips.filter(s => s.reason === 'short_admits_disabled').length,
     },
   };
 }

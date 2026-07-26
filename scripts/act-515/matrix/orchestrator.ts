@@ -139,6 +139,12 @@ export interface OrchestratorInput {
    *  MUST NOT be combined with `slotMultiplierByTier` for the same tier
    *  (would double-multiply); orchestrator asserts this. */
   readonly preAdmitSlotMultiplierByTier?: Readonly<Partial<Record<Tier, number>>>;
+
+  /** LONG-ONLY MICRO-RECEIPT PASS-THROUGH (2026-07-26 capstone).
+   *  When true, forwarded to `reconstructSessionAdmits` — every SHORT
+   *  candidate is refused with `short_admits_disabled`. LONG branch
+   *  untouched. Default false. */
+  readonly disableShortAdmits?: boolean;
 }
 
 export interface OrchestratorRow {
@@ -411,6 +417,7 @@ export function runOrchestrator(input: OrchestratorInput): OrchestratorResult {
       sessionOffset: (s, n) => input.calendar.sessionAfter(s, n),
       clock: input.clock,
       preAdmitSlotMultiplierByTier: preTierMul,
+      disableShortAdmits: input.disableShortAdmits ?? false,
     });
 
     // Build eventId → CorpusCandidateRow for tier + eventDate resolution.

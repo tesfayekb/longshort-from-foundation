@@ -237,6 +237,51 @@ Deno.test('V-B′ — preAdmit T1 ×2 halves admit count under tight allocation 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TEST 5c — LONG-ONLY: disableShortAdmits refuses every SHORT candidate at
+//           the top of the SHORT branch (before cell lookup / admit pass).
+//           LONG candidates are byte-identical to baseline.
+// ─────────────────────────────────────────────────────────────────────────────
+Deno.test('LONG-ONLY — disableShortAdmits refuses every SHORT candidate; LONG unaffected', () => {
+  const rows: CorpusCandidateRow[] = [
+    // 1 LONG T1 admit
+    row(801, 'LNGA', '2024-01-04', 4, 5, 1),
+    // 2 SHORT candidates that would otherwise pass geometry+excess
+    { eventId: 802, ticker: 'SHTA', side: 'short', eventDate: '2024-01-04',
+      windowDays: 4, momentumQuintile: 1, drawdownBucket: 4,
+      daysToNearestEarnings: 30, excessW4: -0.11 },
+    { eventId: 803, ticker: 'SHTB', side: 'short', eventDate: '2024-01-04',
+      windowDays: 4, momentumQuintile: 1, drawdownBucket: 4,
+      daysToNearestEarnings: 30, excessW4: -0.12 },
+  ];
+
+  const baseline = reconstructSessionAdmits(baseInput({
+    corpusRows: rows, budgets: { k: 5, shortDailyBudget: 5 },
+  }));
+  // Baseline sanity — SHORT branch reachable when flag off.
+  const baseSideCounts = baseline.entries.reduce(
+    (acc, e) => (acc[e.side] = (acc[e.side] ?? 0) + 1, acc),
+    {} as Record<string, number>,
+  );
+
+  const longOnly = reconstructSessionAdmits(baseInput({
+    corpusRows: rows, budgets: { k: 5, shortDailyBudget: 5 },
+    disableShortAdmits: true,
+  }));
+  const loSides = longOnly.entries.reduce(
+    (acc, e) => (acc[e.side] = (acc[e.side] ?? 0) + 1, acc),
+    {} as Record<string, number>,
+  );
+
+  assertEquals(loSides.short ?? 0, 0, 'LONG-ONLY: zero SHORT admits');
+  assertEquals(loSides.long, baseSideCounts.long,
+    'LONG-ONLY: LONG admit count byte-identical to baseline');
+  assertEquals(longOnly.tally.skips_short_admits_disabled, 2,
+    'LONG-ONLY: both SHORT candidates skipped with short_admits_disabled');
+  assertEquals(longOnly.tally.skips_short_geometry, 0,
+    'LONG-ONLY: SHORT branch refused BEFORE geometry check');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // TEST 6 — SHUFFLE DETERMINISM: input order does not affect output.
 // ─────────────────────────────────────────────────────────────────────────────
 Deno.test('C0 gate — shuffle-determinism: output invariant to input order', () => {
