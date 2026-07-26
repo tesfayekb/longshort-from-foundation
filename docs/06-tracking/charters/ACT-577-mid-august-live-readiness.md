@@ -90,6 +90,21 @@ Every row must be **GREEN** at T-live − 2 sessions or launch slips. Rows carry
 
 **Adoption rule:** all applicable (non-CONDITIONAL) rows GREEN → operator says GO → T-live executes. **Any single non-CONDITIONAL row not GREEN → launch slips one week; no partial launches.**
 
+### §5.1 — AMENDMENT 2026-07-26 (capstone ruling) — go/no-go clause REPLACED
+
+The Adoption rule in §5 is **superseded** by the following capstone-ruling clause (verbatim per 2026-07-26 operator pin, in light of ACT-515 R1 receipts landing zero decision-eligible rows):
+
+> Mid-August LIVE-SCALING is GATED on one of:
+> (i) options Phase-1 PASS per its pre-registered gate;
+> (ii) an ACT-580 family PASS including the locked 2026 holdout;
+> (iii) explicit operator ruling to run the 1x long-only low-vol profile live.
+> Absent all three, 2026-08-17 is a paper-continuation checkpoint, not a live date.
+> Paper machine + L-01 + short-debut evidence continue regardless (costless).
+
+**Effect on §5 evidence list:** rows G-1..G-9 remain the operational gating for whichever path (i)/(ii)/(iii) fires; NONE of them alone confers live-scaling authority absent the capstone gate above. **Effect on §1 T-live:** 2026-08-17 is redesignated a **paper-continuation checkpoint** by default; live-scaling on that date requires one of (i)/(ii)/(iii) satisfied at T-live − 2.
+
+**Supersession pointer:** capstone verdict + eligibility ledger = `scripts/act-515/matrix/receipts/ACT-515-FINAL-VERDICT.md`. Options Phase-0 memo (waiting-on-operator) = `scripts/act-515/matrix/receipts/OPTIONS-phase-0-waiting-on-operator.md`. ACT-580 family search charter = `docs/06-tracking/charters/ACT-580-strategy-search.md`. Long-only micro-receipt (path (iii) numeric substrate) = `scripts/act-515/matrix/receipts/R1-long-only.md`.
+
 ## §6 — Rollback
 One-line revert to paper-only: set `overshoot_broker_env = 'paper'` and `overshoot.entry` → `hard_paused`; open lots ride out on existing exit rails. No unwind required. Post-mortem within 2 sessions.
 
