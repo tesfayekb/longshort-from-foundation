@@ -21,6 +21,18 @@
  *                   line: {trailer:true, active_count, corpus_ticker_count,
  *                   intersection_count, bound_delta_count}.
  *
+ *   TURN-2A SIBLINGS (RULING 2026-07-26 · DEV-T T-1):
+ *   ?mode=calendar         DISTINCT trading sessions from
+ *                          overshoot_daily_bars WHERE ticker='SPY' over
+ *                          [since, until]. SPY = canonical session marker;
+ *                          NEVER a generated date range (INC-class
+ *                          fabrication guard). Emits {session:'YYYY-MM-DD'}.
+ *   POST mode=bars_pairs   Body: {pairs:[[ticker,session],...]}. Cap
+ *                          5000/req (413 above). Returns joined bar rows.
+ *   POST mode=bars_windows Body: {windows:[{ticker,from,to},...]}. Cap 500
+ *                          windows/req, sum(days) 200k (413 above).
+ *   ?mode=spy              Full SPY OHLCV over [since, until].
+ *
  * AUTH: any ONE of —
  *   X-Cron-Secret: $CRON_SECRET
  *   Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY
