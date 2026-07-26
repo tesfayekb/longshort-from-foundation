@@ -377,7 +377,7 @@ function printReceipt(
   console.log(`  peak_cash_debit_usd      = ${fmtUsd(maxDebitUsd)}`);
   console.log(`  terminal_session         = ${last.sessionDate}   terminal_open_lots = ${fmtInt(last.openLots)}`);
 
-  return withinEnvelope;
+  return withinEnvelope && !epuStop;
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────
