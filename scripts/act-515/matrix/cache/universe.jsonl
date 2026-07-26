@@ -1,0 +1,906 @@
+{"ticker":"A","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"AA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"AAL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"AAON","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"AAPL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ABBV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"ABNB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"ABT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"ACGL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ACI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"ACM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ACN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ADBE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ADC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"ADI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ADM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"ADP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ADSK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"AEE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"AEIS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"AEP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"AES","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"AFG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"AFL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"AGCO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"AHR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"AIG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"AIT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"AIZ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"AJG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"AKAM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ALB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"ALGM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ALGN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"ALK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ALL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ALLE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ALLY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ALSN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"ALV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"AM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"AMAT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"AMCR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"AMD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"AME","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"AMG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"AMGN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"AMH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"AMKR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"AMP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"AMT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"AMZN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"AN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"ANET","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ANF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"AON","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"AOS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"APA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"APD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"APG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"APH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"APO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"APP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"APPF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"APTV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"AR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"ARE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"ARES","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ARMK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ARW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ARWR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"ASB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ASH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"ATI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ATO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"ATR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"AVAV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"AVB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"AVGO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"AVNT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"AVT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"AVTR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"AVY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"AWK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"AXON","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"AXP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"AXTA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"AYI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"AZO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"BA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"BAC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"BAH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"BALL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"BAX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"BBWI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"BBY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"BC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"BCO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"BDC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"BDX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"BEN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"BFB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":null,"sector_source":null}
+{"ticker":"BG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"BHF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"BIIB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"BILL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"BIO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"BJ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"BKH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"BKNG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"BKR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"BLDR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"BLK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"BMRN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"BMY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"BNY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"BR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"BRKB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":null,"sector_source":null}
+{"ticker":"BRKR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"BRO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"BROS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"BRX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"BSX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"BSY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"BTSG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"BURL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"BWA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"BWXT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"BX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"BXP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"BYD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"C","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CACI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CAH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"CAR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CARR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CART","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CASY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CAT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CAVA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CBOE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CBRE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"CBSH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CBT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"CCI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"CCK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CCL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CDE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"CDNS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CDP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"CDW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CEG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"CELH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"CF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"CFG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CFR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CGNX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CHD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"CHDN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CHE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"CHH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CHRD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"CHRW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CHTR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"CHWY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"CIEN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CINF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"CLF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"CLH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CLX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"CMC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"CMCSA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"CME","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CMG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CMI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CMS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"CNC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"CNH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CNM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CNO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CNP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"CNX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"COF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"COHR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"COIN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"COKE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"COLB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"COLM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"COO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"COP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"COR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"COST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"CPAY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CPRI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CPRT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CPT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"CR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CRBG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"CRH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"CRL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"CRM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CROX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CRS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"CRUS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CRWD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CSCO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CSGP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"CSL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CSX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CTAS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CTRE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"CTSH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CTVA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"CUBE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"CUZ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"CVLT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"CVNA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"CVS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"CVX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"CW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CXT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"CYTK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"D","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"DAL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"DAR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"DASH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"DBX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"DCI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"DD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"DDOG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"DE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"DECK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"DELL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"DG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"DGX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"DHI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"DHR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"DINO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"DIS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"DKS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"DLB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"DLR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"DLTR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"DOC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"DOCN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"DOCS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"DOCU","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"DOV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"DOW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"DPZ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"DRI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"DT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"DTE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"DTM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"DUK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"DUOL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"DVA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"DVN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"DXCM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"DY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"EA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"EBAY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"ECHO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"ECL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"ED","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"EEFT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"EFX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"EG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"EGP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"EHC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"EIX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"EL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"ELAN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"ELF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"ELS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"ELV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"EME","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"EMR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ENS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ENSG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"ENTG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"EOG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"EPR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"EQH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"EQIX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"EQR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"EQT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"ERIE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ES","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"ESAB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ESNT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ESS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"ETN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ETR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"EVR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"EVRG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"EW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"EWBC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"EXC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"EXE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"EXEL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"EXLS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"EXP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"EXPD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"EXPE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"EXPO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"EXR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"F","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"FAF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"FANG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"FAST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"FBIN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"FCFS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"FCN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"FCX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"FDS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"FDX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"FDXF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"FE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"FFIN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"FFIV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"FHI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"FHN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"FICO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"FIS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"FISV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"FITB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"FIVE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"FIX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"FLEX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"FLG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"FLR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"FLS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"FN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"FNB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"FND","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"FNF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"FOUR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"FOX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"FOXA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"FR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"FRT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"FSLR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"FTI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"FTNT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"FTV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"G","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"GAP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"GATX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"GBCI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"GD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"GDDY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"GE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"GEF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"GEHC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"GEN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"GEV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"GGG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"GHC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"GILD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"GIS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"GL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"GLPI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"GLW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"GM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"GME","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"GMED","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"GNRC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"GNTX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"GOOG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"GOOGL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"GPC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"GPK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"GPN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"GRMN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"GS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"GWRE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"GWW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"GXO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"H","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"HAE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"HAL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"HALO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"HAS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"HBAN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"HCA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"HD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"HGV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"HIG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"HII","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"HIMS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"HL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"HLI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"HLNE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"HLT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"HOG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"HOLX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"HOMB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"HON","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"HONA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"HOOD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"HPE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"HPQ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"HQY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"HR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"HRB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"HRL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"HSIC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"HST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"HSY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"HUBB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"HUM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"HWC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"HWM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"HXL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"IBKR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"IBM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"IBOC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ICE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"IDA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"IDCC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"IDXX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"IESC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"IEX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"IFF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"ILMN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"INCY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"INGR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"INTC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"INTU","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"INVH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"IP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"IPGP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"IQV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"IR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"IRM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"IRT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"ISRG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"IT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ITT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ITW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"IVZ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"J","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"JAZZ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"JBHT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"JBL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"JCI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"JEF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"JKHY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"JLL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"JNJ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"JPM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"KBH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"KBR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"KD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"KDP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"KEX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"KEY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"KEYS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"KHC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"KIM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"KKR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"KLAC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"KMB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"KMI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"KNF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"KNSL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"KNX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"KO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"KR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"KRC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"KRG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"KTOS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"KVUE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"L","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"LAD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"LAMR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"LDOS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"LEA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"LECO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"LEN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"LFUS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"LH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"LHX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"LII","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"LIN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"LITE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"LIVN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"LLY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"LMT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"LNT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"LNTH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"LOPE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"LOW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"LPX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"LRCX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"LSCC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"LSTR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"LULU","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"LUV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"LVS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"LYB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"LYV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"M","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"MA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"MAA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"MANH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"MAR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"MAS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"MAT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"MCD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"MCHP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"MCK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"MCO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"MDLZ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"MDT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"MEDP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"MET","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"META","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"MGM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"MIDD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"MKC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"MKSI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"MLI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"MLM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"MMM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"MMS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"MNST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"MO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"MOGA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":null,"sector_source":null}
+{"ticker":"MORN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"MOS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"MP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"MPC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"MPWR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"MRK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"MRNA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"MRSH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"MRVL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"MS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"MSA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"MSCI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"MSFT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"MSI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"MSM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"MTB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"MTD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"MTDR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"MTG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"MTN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"MTSI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"MTZ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"MU","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"MUR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"MUSA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"MZTI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"NBIX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"NCLH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"NDAQ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"NDSN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"NEE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"NEM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"NEU","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"NFG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"NFLX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"NI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"NJR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"NKE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"NLY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"NNN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"NOC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"NOV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"NOVT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"NOW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"NRG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"NSA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"NSC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"NTAP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"NTNX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"NTRS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"NUE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"NVDA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"NVR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"NVST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"NVT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"NWE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"NWS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"NWSA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"NXPI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"NXST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"NXT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"NYT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"O","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"OC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"ODFL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"OGE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"OGS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"OHI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"OKE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"OKTA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"OLED","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"OLLI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"OLN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"OMC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"ON","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ONB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ONTO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"OPCH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"ORA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"ORCL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ORI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ORLY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"OSK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"OTIS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"OVV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"OXY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"OZK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"P","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"PAG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"PANW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"PATH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"PAYX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"PB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"PBF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"PCAR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"PCG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"PCTY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"PEG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"PEGA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"PEN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"PEP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"PFE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"PFG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"PFGC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"PG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"PGR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"PH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"PHM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"PII","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"PINS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"PK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"PKG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"PLD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"PLNT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"PLTR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"PM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"PNC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"PNFP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"PNR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"PNW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"PODD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"POR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"POST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"PPC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"PPG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"PPL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"PR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"PRI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"PRU","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"PSA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"PSKY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"PSN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"PSX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"PTC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"PVH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"PWR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"PYPL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"Q","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"QCOM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"QLYS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"QXO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"R","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"RBA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"RBC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"RCL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"REG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"REGN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"REXR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"RF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"RGA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"RGEN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"RGLD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"RH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"RJF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"RL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"RLI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"RMBS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"RMD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"RNR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ROIV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"ROK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ROKU","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"ROL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ROP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ROST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"RPM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"RRC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"RRX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"RS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"RSG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"RTX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"RVTY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"RYAN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"RYN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"SAIA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"SAIC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SAM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"SANM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SARO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"SBAC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"SBRA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"SBUX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"SCHW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"SCI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"SEIC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"SF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"SFM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"SGI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"SHC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"SHW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"SIGI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"SIRI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"SITM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SJM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"SLAB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SLB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"SLGN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"SLM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"SMCI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SMG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"SMTC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"SNA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"SNDK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SNPS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SNX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"SOLS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"SOLV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"SON","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"SPG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"SPGI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"SPXC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"SR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"SRE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"SSB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"SSD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"ST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"STAG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"STE","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"STLD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"STRL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"STT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"STWD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"STX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"STZ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"SW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"SWK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"SWKS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SWX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"SYF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"SYK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"SYNA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"SYY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"T","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"TAP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"TCBI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"TDG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"TDY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"TECH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"TEL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"TER","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"TEX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"TFC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"TGT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"THC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"THG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"THO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"TJX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"TKO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"TKR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"TLN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"TMHC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"TMO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"TMUS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"TNL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"TOL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"TOST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"TPL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"TPR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"TREX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"TRGP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"TRMB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"TROW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"TRU","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"TRV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"TSCO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"TSLA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"TSN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"TT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"TTC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"TTD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"TTEK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"TTMI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"TTWO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"TWLO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"TXN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"TXNM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"TXRH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"TXT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"TYL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"UAL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"UBER","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"UBSI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"UDR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"UFPI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"UGI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"UHS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"ULS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"ULTA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"UMBF","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"UNH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"UNM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"UNP","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"UPS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"URI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"USB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"USFD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"UTHR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"V","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"VAL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"VC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"VEEV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"VFC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"VIAV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"VICI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"VICR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"VLO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"VLTO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"VLY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"VMC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"VMI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"VNO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"VNOM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"VNT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"VOYA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"VRSK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"VRSN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"VRT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"VRTX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"VST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"VTR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"VTRS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"VVV","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"VZ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"WAB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"WAL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"WAT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"WBD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"WBS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"WCC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"WDAY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"WDC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"WEC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"WELL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"WEX","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"WFC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"WFRD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"WH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"WHR","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"WING","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"WLK","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Basic Materials","sector_source":"fmp"}
+{"ticker":"WM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"WMB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"WMG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Communication Services","sector_source":"fmp"}
+{"ticker":"WMS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"WMT","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Defensive","sector_source":"fmp"}
+{"ticker":"WPC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"WRB","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"WSM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"WSO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"WST","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"WTFC","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"WTRG","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"WTS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"WTW","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"WWD","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"WY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Real Estate","sector_source":"fmp"}
+{"ticker":"WYNN","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"XEL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Utilities","sector_source":"fmp"}
+{"ticker":"XOM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Energy","sector_source":"fmp"}
+{"ticker":"XPO","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"XRAY","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"XYL","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Industrials","sector_source":"fmp"}
+{"ticker":"XYZ","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"YETI","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"YUM","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Consumer Cyclical","sector_source":"fmp"}
+{"ticker":"ZBH","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"ticker":"ZBRA","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Technology","sector_source":"fmp"}
+{"ticker":"ZION","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Financial Services","sector_source":"fmp"}
+{"ticker":"ZTS","source":"ishares:ivv_ijh:manual_seed","added_as_of":"2026-07-21","active":true,"gics_sector":"Healthcare","sector_source":"fmp"}
+{"trailer":true,"active_count":905,"corpus_ticker_count":839,"intersection_count":824,"corpus_only_count":15,"active_only_count":81}
