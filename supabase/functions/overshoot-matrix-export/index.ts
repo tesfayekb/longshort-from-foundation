@@ -379,9 +379,9 @@ Deno.serve(async (req: Request) => {
       source_version: 'matrix-export-v2-devv',
       corpus_run_id: CORPUS_RUN_ID,
       cellmap_run_id: CORPUS_RUN_ID,
-      oneshot_token_present: true,
+      oneshot_token_present: false,
       auth: { triad: ['x-cron-secret', 'authorization:bearer(service_role)', 'x-backfill-secret'],
-              oneshot: 'x-matrix-export-token' },
+              oneshot: null },
       modes: ['slate','cellmap','universe','calendar','bars_pairs','bars_windows','spy'],
       envelope: {
         bars_pairs_max_per_req:   BARS_PAIRS_MAX_PER_REQ,
