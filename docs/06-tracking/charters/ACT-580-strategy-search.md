@@ -167,7 +167,7 @@ ACT-580.S7     VRP-in-options-month                                PHASE-0-BLOCK
 ACT-580.S8     Index-events                                        PHASE-0-DEFERRED (ingest)
 ACT-580.S9     SECTOR MEAN-REVERSION + ROTATION (sub-lane)         PHASE-0-SPEC-LOCKED (charter: ACT-580-S9-sector-mean-reversion.md; pre-registered 2026-07-26 with S5 GO)
 ACT-580.S9-a   Sector dip-buy (composite RSI(2)<10, long-only)     PHASE-1-COMPLETE / TEXTURE-AT-BUILD / HOLDOUT-LOCKED — k=7 consumed (receipt: ACT-580-S9a-SECTOR-DIP-BUY.md; build net -9.84% / Sharpe -0.11 / maxDD -25.94%)
-ACT-580.S9-b   Sector rotation (top-3 6mo return, monthly)         PHASE-0-SPEC-LOCKED — k=8
+ACT-580.S9-b   Sector rotation (top-3 6mo return, monthly, long-only)  PHASE-1-COMPLETE / TEXTURE-AT-BUILD / HOLDOUT-LOCKED — k=11 consumed (receipt: ACT-580-S9b-SECTOR-ROTATION.md; net +17.83% / CAGR +4.19% / Sharpe +0.310 / maxDD −17.14% / worst-year 2022 −6.31%; turnover 1.21 swaps/mo → 184 bps/yr toll — affordable-but-insufficient-Sharpe)
 ACT-580.S9-c   Sector intraday leg                                 DEFERRED-TYPED (unblocks on data purchase IF S9-a/b PASS)
 ACT-580.S10-BACKFILL  Signal-ranked winners on PRICE-DERIVED signals only (historical build) DORMANT / OPERATOR-GATED — filed 2026-07-26 after S10' HALT-AT-STEP-A; unblocks only on explicit operator GO with a pre-registered price-derived-only signal roster
 ACT-580.S10-FORWARD   Signal-ranked winners re-test on LIVE signal_observations (S10' spec verbatim) AUTO-REMINDER 2027-07-01 — unblocks when signal_observations shows ≥12 continuous months of dense coverage on the build-eligible substrate; k-cost recharted at unblock
@@ -206,3 +206,29 @@ Cross-reference: S3 texture verdict (fails CAGR + worst-year + every-year net) i
 ### S6 TEXTURE — cost-annihilated (filed 2026-07-26)
 
 > S6 within-sector 5-day residual, weekly LS deciles across 11 GICS sectors, sector-neutral by construction: build 2022–25 net **−76.67% / CAGR −30.50% / Sharpe −3.05 / maxDD ≤ −77%**, 32,107 legs. All 6 gate clauses fail. Cost arithmetic (verbatim): gross edge +3.5 bps/wk vs 76 bps/wk toll (2 baskets × 38 bps RT weekly) → net −72.5 bps/wk. The residual is real and small; the sector-neutralization strips the directional long-side bounce the six-substrate law says is where the money lives, and what remains cannot survive weekly turnover. **Unified-physics ledger** extended: long-decile and short-decile mean returns are within 3–8 bps/wk of each other in every build year — sector-neutral residuals lack directional persistence at 5 sessions in this universe/era. Ledger: **8/N families TEXTURE**; S5-L survivor holds. Full receipt: `docs/06-tracking/receipts/ACT-580-S6-PAIRS.md`.
+
+### S9-b TEXTURE — affordable-but-insufficient-Sharpe (filed 2026-07-26)
+
+> S9-b monthly top-3 sector rotation on trailing 6-mo composite return, long-only, 11 GICS composites: build 2022–25 net **+17.83% / CAGR +4.19% / Sharpe +0.310 / maxDD −17.14% / worst-year 2022 −6.31%**, 1,160 legs. 3/4 gate clauses fail (trade count PASS). Operator prediction ("~1–2 swaps/mo affordable") **CONFIRMED**: realized turnover 1.21 basket-swaps/month → cost drag 184 bps/yr — a tenth of S4 (3,952 bps/yr), a twentieth of S6. **Cost affordability is validated in both directions**: (a) monthly cadence really is affordable; (b) affordability alone does not manufacture edge — gross +64 bps/mo at sd 6.0% is a Sharpe-0.5-class phenomenon in this universe/era, insufficient for the tightened bar. 2022 drawdown (June 2022 −14.21%) is the classic momentum-crash-at-sector-level widow-maker (charter §11 disclosure lineage). Ledger: **9/N families TEXTURE**; only S5-L (12-1 momentum long-only D10) has cleared the bar in this substrate.
+
+### §11.KL — K-LEDGER AUTHORITATIVE RECOUNT (filed 2026-07-26, folded from operator hygiene note; supersedes any prior k= stamps that drifted)
+
+> Recount performed from the charter's own registration order (date pre-registered, not date executed). No verdict changes. Blocked / deferred / dormant rows do NOT consume k until unblocked-and-tested (per §1 multiple-comparison law). k = count of hypotheses actually tested (including HALT-AT-STEP-A, which consumed the pre-registration slot).
+>
+> | k | family | pre-registration order | executed | verdict |
+> |---|---|---|---|---|
+> | 1 | S1 PEAD (20-day LS) | charter §5 (filed 2026-07-26 with lane charter) | ✅ | TEXTURE |
+> | 2 | S2 Analyst-revision momentum | charter §5 | ✅ | TEXTURE (negative-drift) |
+> | 3 | S3 SI-delta factor | charter §5 | ✅ | TEXTURE (prior INVERTED) |
+> | 4 | S1-b PEAD 5-day sign-portfolio | operator pre-reg post-S3, pre-S4 | ✅ | TEXTURE (miss-side reversal law confirmed) |
+> | 5 | S4 Overnight harvest | charter §5 | ✅ | TEXTURE — cost-annihilated |
+> | 6 | S5 Trend-chassis (12-1 LS + SPY200 overlay) | charter §5 | ✅ | TEXTURE (D10-long derived-subset spawned S5-L) |
+> | 7 | S9-a Sector dip-buy (RSI(2)<10, long-only) | S9 charter pre-reg with S5 GO (2026-07-26) | ✅ | TEXTURE — cost-annihilated |
+> | 8 | S5-L 12-1 long-only D10 promotion | pre-reg at S5 close (bar-tightened) | ✅ | **PASS build + PASS holdout (single-look co-sign consumed)** — survivor |
+> | 9 | S10' Signal-ranked winners (operator-direct) | pre-reg immediately before execution | ✅ (HALT-AT-STEP-A) | HALT — 0/11 signals dense on build; k-slot consumed by halt |
+> | 10 | S6 Sector pairs (within-sector 5-day residual, weekly LS) | charter §5 (registration order 6th) but executed after S10' halt | ✅ | TEXTURE — cost-annihilated |
+> | 11 | S9-b Sector rotation (monthly top-3 6-mo, long-only) | S9 charter pre-reg with S5 GO (2026-07-26) | ✅ | TEXTURE — affordable-but-insufficient-Sharpe |
+>
+> **Not counted (unblocked-and-untested):** S7 VRP-in-options-month (BLOCKED on Polygon Options data); S8 Index-events (DEFERRED on ingest); S9-c Sector intraday leg (DEFERRED-TYPED); S10-BACKFILL (DORMANT, operator-gated); S10-FORWARD (AUTO-REMINDER 2027-07-01).
+>
+> **k = 11 consumed. Survivor count = 1 (S5-L).** Tightened bar (CAGR ≥ +18%, Sharpe ≥ +1.15 on holdout) continues to apply to any future promotion. Prior-drift correction: S9-a receipt stamp of "k=7 consumed" and S10'/S6 receipt stamps of "k=10 consumed" reflect intermediate counts at their respective land-times and are historically-accurate-in-context; this §11.KL table is the **authoritative single source of truth** going forward.
