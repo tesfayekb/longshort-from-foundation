@@ -1737,3 +1737,11 @@ realized_slip_bps = abs(fill_avg_price - vwap(09:45 minute bar)) / vwap * 1e4
 **Supervisor pre-registered prediction (Standing Format Rule).** Estimator [b] is conservative-upward per SLICE-A n=1 (3.0 realized vs 9.7 predicted); pooled first-week mean expected to land in the 4–7 bps range (well below 8.755 GREEN cutoff). Recording this on-the-record so a symmetric-skepticism check can fire post-hoc.
 
 **Cross-refs.** R-007 (adoption verdict), DEC-083 §(e)/§(f), MIG-168 (planned substrate), `docs/06-tracking/2026-07-24-morning-precommit.md` (session-1 pre-committed expectations).
+
+---
+
+### R-C0.SHORT — Reconstructor SHORT-branch wiring (G-1 + H-1 batch, RULING 2026-07-26)
+
+**One-liner.** SHORT reconstructor branch LANDED under RULING 2026-07-26 with the G-1 tier convention (record as `'T2'`; zero kernel edit; both short/T1 and short/T2 dispatch to `entry+4/H=5` per `kernel/exit.ts:175-176`) and the H-1 entry offset (T+1 open; anchored verbatim to fixture-ii TSLA 2023-04-03→04-04 rows and to live entry-run cadence). Pacing disclosure line added to `config-matrix.md §2` and to the reconstructor header (matrix replay runs `shortDailyBudget = K`; DEC-084's 1/day is a live-era ramp absent from the studied basis). R1 runner body wired (TOP-N=25 slate, parity gate `≥40` sessions, prune-risk flag at `>15%` universe exclusion, per-lot bar fetch via `SupabaseBarQueryExecutor`, receipt writer emitting the standing grammar). Docs-as-code pin landed in `matrix/run-r1-const_docs_test.ts` binding the three §7-survivorship bound-field names verbatim (`corpus_rows_total`, `corpus_rows_excluded_by_universe`, `corpus_rows_consumed`) plus the SHORT PACING DISCLOSURE anchor. **Test surface:** reconstructor 17/17, docs-as-code 4/4, kernel + integration gate 147/147 green. **INC-143 HEADER LAW** codified in `reconstructor.ts` header (every exit-horizon / entry-offset / geometry / sign-convention prose restatement must be a byte-anchored verbatim quote from the certified source).
+
+**Next.** Fetch-cache turn → R1 receipt turn (pure execution + numeric read-out). Deviations first per Standing Format Rule.
