@@ -172,3 +172,11 @@ ACT-580.S8     Index-events                                        PHASE-0-DEFER
 An ACT-580 family PASS (build + locked 2026 holdout, per §1 multiple-comparison law) satisfies **path (ii)** of the ACT-577 §5.1 amendment. It does NOT waive rows G-1..G-9 of ACT-577 §5 (operational gates); it provides the substrate-eligibility that G-rows presuppose.
 
 **End Phase-0.** No data queries executed in this document. Phase-1 first computes await operator GO after options data pull is running.
+
+## §11 — Findings (running, appended by Phase-1 receipts)
+
+### UNIFIED-PHYSICS NOTE (filed after S1-b close, before S4 open)
+
+> Five independent substrates — the R1 walk (equity lane), ACT-570 Q5 continuation study, ACT-573 refused-winners forensics, S1/S1-b miss-wing analysis, and S3 ΔSI decile inversion — agree: **long-side bounce is real, short-side is structurally punished in this universe/era.** All remaining ACT-580 family tests weight the long expression when a symmetric spec is optional; symmetric specs remain scored as-charter but the reading is applied on receipt.
+
+Cross-reference: S3 texture verdict (fails CAGR + worst-year + every-year net) is noted per the reversal law as texture-only and physically consistent with ACT-570 Q5's continuation finding (same-direction: shorts-piling names kept running in the bull tape).
