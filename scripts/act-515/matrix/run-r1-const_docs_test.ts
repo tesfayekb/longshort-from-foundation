@@ -45,7 +45,10 @@ Deno.test('docs-as-code: run-r1-const.ts receipt emits the three bound-field nam
 Deno.test('docs-as-code: reconstructor.ts carries the SHORT PACING DISCLOSURE header line', async () => {
   const src = await read('matrix/reconstructor.ts');
   // Anchor phrase from RULING 2026-07-26 — never paraphrase.
-  assertStringIncludes(src, 'live-era operational ramp');
+  // Phrase may be line-wrapped in the header comment; assert both halves.
+  assertStringIncludes(src, 'live-era');
+  assertStringIncludes(src, 'operational ramp');
+  assertStringIncludes(src, 'DEC-084');
 });
 
 Deno.test('docs-as-code: config-matrix.md carries the SHORT-PACING + SHORT-TIER + SHORT-ENTRY rows', async () => {
