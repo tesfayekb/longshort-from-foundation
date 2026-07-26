@@ -32,8 +32,6 @@
 //   deno run --allow-write=fixtures/overshoot-backtest \
 //     scripts/act-515/build-fixture-2023q2.ts
 
-/* eslint-disable no-console */
-
 interface LotPick {
   readonly lot_id: string;
   readonly ticker: string;

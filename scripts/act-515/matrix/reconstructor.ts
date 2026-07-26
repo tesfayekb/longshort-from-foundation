@@ -122,7 +122,7 @@ export const SHORT_GEOMETRY_MATRIX = Object.freeze({
 });
 
 /** G-1 record-only tier convention (RULING 2026-07-26). See file header. */
-export const SHORT_TIER_CONVENTION: 'T2' = 'T2';
+export const SHORT_TIER_CONVENTION = 'T2' as const;
 
 /** H-1 SHORT entry offset (T+1 open) — see file header for two anchors. */
 export const SHORT_ENTRY_OFFSET_SESSIONS = 1;
