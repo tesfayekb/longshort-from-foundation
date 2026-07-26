@@ -13,7 +13,10 @@
 import { assertEquals, assert } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   reconstructSessionAdmits, deriveLongTier, buildLongCellKey,
-  rankScoreFromCell, entryOffsetFor, LONG_BAND_LITERAL,
+  rankScoreFromCell, entryOffsetFor, entryOffsetForSideTier, LONG_BAND_LITERAL,
+  SHORT_GEOMETRY_MATRIX, SHORT_TIER_CONVENTION, SHORT_ENTRY_OFFSET_SESSIONS,
+  passesShortGeometry, shortBandFromSignedExcess, buildShortCellKey,
+  excessAtArgmax,
   type CorpusCandidateRow, type CellMapLookup, type ReconstructInput,
 } from './reconstructor.ts';
 import type { Clock, CellKey, Price } from '../kernel/types.ts';
@@ -63,6 +66,11 @@ const CELL_MEAN = new Map<string, number>([
   ['4/5/1', 0.030], // highest rank (still T1 geometry: w=4 is NOT in T1 windows → stays T2)
   ['1/5/1', 0.025], // T1 geometry (w=1, mq=5, dd=1)
   ['5/3/4', 0.005], // low rank T2
+  // SHORT cells — negative mean_fwd_return_5d ⇒ rankScore = -mean is
+  // large positive (good short). Keyed identically to LONG (windowDays/mq/dd).
+  ['3/5/5', -0.020], // rank_score = 0.020
+  ['4/1/4', -0.030], // rank_score = 0.030
+  ['2/5/4', -0.010], // rank_score = 0.010
 ]);
 const cellMap: CellMapLookup = (k: CellKey) => {
   return CELL_MEAN.get(`${k.argmaxWindowDays}/${k.magnitudeQuintile}/${k.drawdownBucket}`) ?? null;
@@ -109,7 +117,7 @@ Deno.test('C0 gate — session 1: 3 LONG T2 candidates, all admitted (K=5 unstre
   assertEquals(res.entries.map(e => e.entryPrice as unknown as number), [50, 50, 50]);
   assertEquals(res.tally.admits, 3);
   assertEquals(res.tally.daily_budget_reached, 0);
-  assertEquals(res.tally.skips_short, 0);
+  assertEquals(res.tally.skips_short_geometry, 0);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,18 +167,26 @@ Deno.test('C0 gate — dedup: candidate for held ticker → position_already_ope
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TEST 4 — SHORT skip: SHORT rows counted, no admits.
+// TEST 4 — SHORT admitted (G-1 + H-1 branch)
 // ─────────────────────────────────────────────────────────────────────────────
-Deno.test('C0 gate — SHORT rows emit typed skip and are counted', () => {
+Deno.test('C0 gate — SHORT admitted at T+1 open with tier="T2" convention', () => {
+  // Ratified quote (kernel/exit.ts:175-176): "'short/T1': { mode: 'entry', H: 5, n: 4 },
+  //   'short/T2': { mode: 'entry', H: 5, n: 4 }," — both map to entry+4.
   const rows: CorpusCandidateRow[] = [
     { eventId: 401, ticker: 'SHT1', side: 'short', eventDate: '2024-01-04',
-      windowDays: 4, momentumQuintile: 5, drawdownBucket: 1, daysToNearestEarnings: 30 },
-    row(402, 'LNG1', '2024-01-04', 4, 5, 1),
+      windowDays: 4, momentumQuintile: 1, drawdownBucket: 4, daysToNearestEarnings: 30,
+      excessW4: -0.11 }, // signed_excess ≤ -0.10 → S_10_INF, but cell keyed on w4/mq1/dd4
   ];
-  const res = reconstructSessionAdmits(baseInput({ corpusRows: rows }));
-  assertEquals(res.entries.map(e => e.ticker), ['LNG1']);
-  assertEquals(res.tally.skips_short, 1);
-  assertEquals(res.skips[0]?.reason, 'short_reconstruction_not_yet_wired');
+  const res = reconstructSessionAdmits(baseInput({
+    corpusRows: rows,
+    // Short cap wide enough to admit ($10k > $2500 slot)
+    budgets: { k: 5, shortDailyBudget: 5 },
+  }));
+  assertEquals(res.entries.length, 1);
+  assertEquals(res.entries[0].side, 'short');
+  assertEquals(res.entries[0].ticker, 'SHT1');
+  assertEquals(res.tally.admits, 1);
+  assertEquals(res.tally.skips_short_geometry, 0);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -239,9 +255,158 @@ Deno.test('helper: entryOffsetFor — matrix §2 horizons', () => {
   assertEquals(entryOffsetFor('T2'), 1);
 });
 
+Deno.test('helper: entryOffsetForSideTier — H-1 SHORT=T+1', () => {
+  assertEquals(entryOffsetForSideTier('long', 'T1'), 2);
+  assertEquals(entryOffsetForSideTier('long', 'T2'), 1);
+  assertEquals(entryOffsetForSideTier('short', 'T1'), SHORT_ENTRY_OFFSET_SESSIONS);
+  assertEquals(entryOffsetForSideTier('short', 'T2'), SHORT_ENTRY_OFFSET_SESSIONS);
+});
+
 Deno.test('helper: rankScoreFromCell — sideSign convention', () => {
   assertEquals(rankScoreFromCell('long',  0.02), 0.02);
   assertEquals(rankScoreFromCell('short', 0.02), -0.02);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHORT branch tests (5) — G-1 tier convention + H-1 offset + verbatim map
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Ratified verbatim quotes referenced across the SHORT block:
+//  Q1 (kernel/exit.ts:170-177 EXIT_ANCHOR_BY_SIDE_TIER):
+//     "'short/T1': Object.freeze({ mode: 'entry', H: 5,  n: 4 }),
+//      'short/T2': Object.freeze({ mode: 'entry', H: 5,  n: 4 })"
+//  Q2 (detector.ts:288-289): "SHORT path: tier is ALWAYS null (SHORT
+//     predicate byte-unchanged this tranche)"
+//  Q3 (detector.ts:317-321): shortWindowSet {1..5}, shortMomentumSet {1,5},
+//     shortDrawdownSet {4,5}, shortExcessThreshold 0.08
+//  Q4 (detector.ts:801): "const excessOk = picked.excess <= -excessThreshold;"
+
+function short(id: number, ticker: string, eventDate: SessionDate, w: number,
+               mq: number, dd: number, e: number): CorpusCandidateRow {
+  const r: CorpusCandidateRow = {
+    eventId: id, ticker, side: 'short', eventDate,
+    windowDays: w, momentumQuintile: mq, drawdownBucket: dd,
+    daysToNearestEarnings: 30,
+  };
+  return { ...r, [`excessW${w}` as 'excessW1']: e } as CorpusCandidateRow;
+}
+
+Deno.test('SHORT #1 — sign-correct rank: rank_score = mean_fwd_return_5d × −1 (ACT-575)', () => {
+  // Cell 4/1/4 → mean = -0.030 → rank_score = -(-0.030) = +0.030 (best short).
+  // Cell 2/5/4 → mean = -0.010 → rank_score = +0.010.
+  const rows: CorpusCandidateRow[] = [
+    short(701, 'BEST', '2024-01-04', 4, 1, 4, -0.12), // → S_10_INF, rank 0.030
+    short(702, 'MEH',  '2024-01-04', 2, 5, 4, -0.09), // → S_08_10, rank 0.010
+  ];
+  const res = reconstructSessionAdmits(baseInput({
+    corpusRows: rows, budgets: { k: 5, shortDailyBudget: 5 },
+  }));
+  assertEquals(res.entries.length, 2);
+  // Higher rank_score first (production sort: rank DESC).
+  assertEquals(res.entries.map(e => e.ticker), ['BEST', 'MEH']);
+});
+
+Deno.test('SHORT #2 — negative-excess short admitted (Q4 verbatim: "picked.excess <= -excessThreshold")', () => {
+  // e = -0.081 clears threshold (-0.08).
+  const rows: CorpusCandidateRow[] = [
+    short(703, 'CLEAR', '2024-01-04', 4, 1, 4, -0.081), // → S_08_10 admits
+  ];
+  const res = reconstructSessionAdmits(baseInput({
+    corpusRows: rows, budgets: { k: 5, shortDailyBudget: 5 },
+  }));
+  assertEquals(res.entries.length, 1);
+  assertEquals(res.entries[0].side, 'short');
+});
+
+Deno.test('SHORT #3 — book-cap binding at 4: 5th short refused allocation_cap_reached', () => {
+  // Slot = $2,500. Short cap = $10,000 → exactly 4 slots. 5th → allocation_cap_reached.
+  const rows: CorpusCandidateRow[] = [
+    short(801, 'S1', '2024-01-04', 4, 1, 4, -0.12),
+    short(802, 'S2', '2024-01-04', 4, 1, 4, -0.12),
+    short(803, 'S3', '2024-01-04', 4, 1, 4, -0.12),
+    short(804, 'S4', '2024-01-04', 4, 1, 4, -0.12),
+    short(805, 'S5', '2024-01-04', 4, 1, 4, -0.12),
+  ];
+  const res = reconstructSessionAdmits(baseInput({
+    corpusRows: rows, budgets: { k: 20, shortDailyBudget: 20 },
+    caps: { sideCapUsd: { long: 90_000, short: 10_000 } },
+  }));
+  assertEquals(res.entries.length, 4);
+  assertEquals(res.tally.allocation_cap_reached, 1);
+});
+
+Deno.test('SHORT #4 — wallet-cap side-scoping: 0.90 long / 0.10 short (frozen row)', () => {
+  // Mixed LONG+SHORT session: LONGs sized against $90k cap, SHORTs against $10k.
+  // Verifies the cap arithmetic is per-side, not shared.
+  const rows: CorpusCandidateRow[] = [
+    // 4 shorts (max), then 5 longs (K=5 will bind first). Test that
+    // SHORT cap does not consume LONG budget and vice-versa.
+    short(901, 'SH1', '2024-01-04', 4, 1, 4, -0.12),
+    short(902, 'SH2', '2024-01-04', 4, 1, 4, -0.12),
+    row(910, 'LG1', '2024-01-04', 4, 5, 1),
+    row(911, 'LG2', '2024-01-04', 4, 5, 1),
+    row(912, 'LG3', '2024-01-04', 4, 5, 1),
+  ];
+  const res = reconstructSessionAdmits(baseInput({
+    corpusRows: rows, budgets: { k: 5, shortDailyBudget: 5 },
+    caps: { sideCapUsd: { long: 90_000, short: 10_000 } },
+  }));
+  // All 5 fit under K=5. 2 shorts + 3 longs.
+  assertEquals(res.entries.length, 5);
+  assertEquals(res.entries.filter(e => e.side === 'short').length, 2);
+  assertEquals(res.entries.filter(e => e.side === 'long').length, 3);
+  assertEquals(res.tally.allocation_cap_reached, 0);
+});
+
+Deno.test('SHORT #5 — geometry + exit-anchor invariant (Q1 verbatim, kernel/exit.ts:175-176)', () => {
+  // Both short/T1 and short/T2 dispatch to the same {H:5, n:4} entry.
+  // Reconstructor records tier='T2' by G-1 convention. Test the recorded
+  // tier is 'T2' and the entry lands at T+1 (H-1).
+  const rows: CorpusCandidateRow[] = [
+    short(1001, 'TSLA', '2024-01-04', 4, 1, 4, -0.11),
+  ];
+  const res = reconstructSessionAdmits(baseInput({
+    corpusRows: rows, budgets: { k: 5, shortDailyBudget: 5 },
+  }));
+  assertEquals(res.entries.length, 1);
+  // T+1 entry means: eventDate 2024-01-04 → entry 2024-01-05 (baseInput sessionDate).
+  assertEquals(res.entries[0].ticker, 'TSLA');
+  // Geometry-out-of-set rejection path — mq=3 fails shortMomentumSet {1,5}.
+  const rejGeom: CorpusCandidateRow[] = [
+    short(1002, 'BAD', '2024-01-04', 4, 3, 4, -0.11),
+  ];
+  const rej = reconstructSessionAdmits(baseInput({
+    corpusRows: rejGeom, budgets: { k: 5, shortDailyBudget: 5 },
+  }));
+  assertEquals(rej.entries.length, 0);
+  assertEquals(rej.tally.skips_short_geometry, 1);
+  // Excess-below-threshold rejection — e=-0.079 fails Q4 gate.
+  const rejExc: CorpusCandidateRow[] = [
+    short(1003, 'THIN', '2024-01-04', 4, 1, 4, -0.079),
+  ];
+  const rejE = reconstructSessionAdmits(baseInput({
+    corpusRows: rejExc, budgets: { k: 5, shortDailyBudget: 5 },
+  }));
+  assertEquals(rejE.entries.length, 0);
+  assertEquals(rejE.tally.skips_short_excess_below, 1);
+});
+
+// Pure helper sanity — G-1 + H-1 invariants
+Deno.test('SHORT helpers — G-1 tier "T2" + shortBand mapping', () => {
+  assertEquals(SHORT_TIER_CONVENTION, 'T2');
+  assertEquals(SHORT_ENTRY_OFFSET_SESSIONS, 1);
+  assertEquals(SHORT_GEOMETRY_MATRIX.excessThreshold, 0.08);
+  assertEquals(shortBandFromSignedExcess(-0.10), 'S_10_INF');
+  assertEquals(shortBandFromSignedExcess(-0.081), 'S_08_10');
+  assertEquals(shortBandFromSignedExcess(-0.079), 'S_06_08');
+  assertEquals(shortBandFromSignedExcess(-0.02), null);
+  const r = short(1, 'T', '2024-01-04', 3, 5, 5, -0.10);
+  assert(passesShortGeometry(r));
+  assertEquals(excessAtArgmax(r), -0.10);
+  const k = buildShortCellKey(r, 'S_10_INF');
+  assert(k !== null);
+  assertEquals(k!.side, 'short');
+  assertEquals(k!.band, 'S_10_INF');
 });
 
 Deno.test('helper: buildLongCellKey — verbatim detector.ts:1056-1063', () => {

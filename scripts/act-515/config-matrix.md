@@ -42,6 +42,9 @@ SPY benchmark: R5.
 | Rank-order | Best `rank_score` first, refusals typed `allocation_cap_reached` | Charter §1(a) |
 | Regime governor | SPY-drawdown bands per `_shared/overshoot/regime.ts` (ACT-478) | Charter §1 |
 | Short-side threshold | signed excess ≤ −0.08 (ACT-575-ratified) | detector.ts:801 |
+| SHORT pacing | Matrix replay runs `shortDailyBudget = K` (NON-BINDING); the 4-slot book cap + 0.10 wallet cap are the binding SHORT constraints. Live operation currently paces shorts 1/day (DEC-084) as a **live-era operational ramp**, absent from ACT-515 charter §1(a) and from the studied basis. The matrix replays chartered geometry WITHOUT ramp pacing — configs compare steady-state strategy, not rollout schedule. | RULING 2026-07-26 (G-1 batch); reconstructor.ts header "PACING DISCLOSURE" |
+| SHORT tier convention | Recorded as `'T2'` by the reconstructor. Production emits `tier=null` per detector.ts:288-296/:506-511; both short map slots resolve identically to `entry+4/H=5` per kernel/exit.ts:175-176. G-2 rejected (post-gate map surgery). | RULING 2026-07-26 (G-1); reconstructor.ts `SHORT_TIER_CONVENTION` |
+| SHORT entry offset | T+1 open. Anchored to (i) certified fixture-ii SHORT rows (TSLA 2023-04-03 → 2023-04-04, byte-exact); (ii) live entry-run cadence (22:00Z detect → next-session 13:35Z entry = T+1). The §2 prose above agreeing is coincidence, not authority (STALE-PROSE-annotated per GAP-1(c)). | RULING 2026-07-26 (H-1); reconstructor.ts `SHORT_ENTRY_OFFSET_SESSIONS` |
 
 ## 3. Columns (12) — FROZEN TABLE SHAPE
 

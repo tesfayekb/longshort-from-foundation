@@ -1,5 +1,12 @@
 // ACT-515 Matrix — Chain C0: Corpus→SessionPlan reconstructor.
 //
+// INC-143 HEADER LAW (RULING 2026-07-26): every prose restatement of an exit
+// horizon, entry offset, geometry set, or side-sign convention MUST be a
+// verbatim quote from the certified source, with a byte-anchored citation
+// on the same line. No paraphrase. If a prose comment drifts from the
+// certified source, the certified source WINS and the comment is filed as
+// an INC in the same batch.
+//
 // SCOPE: pure function that maps a per-session slice of the ratified study
 // corpus (`overshoot_study_candidate_events`, run `1888e113`) + the cell map
 // (`overshoot_study_cell_results`, run `045d2dfc`, exclusion_width=5) into a
@@ -27,9 +34,45 @@
 //     stale prose in `config-matrix.md §2` ("T+11 / SHORT T+6") is
 //     annotated in the same batch (INC-143 family instance).
 //
-// SCOPE NARROWING (D-C0.1, DW-235): reconstructor v1 handles LONG side only.
-// SHORT rows return a typed skip `short_reconstruction_not_yet_wired` and are
-// counted in the receipt. R1 `1x-const` is long-heavy (short capacity ≤ 10%).
+// SHORT-SIDE WIRING (RULING 2026-07-26 · G-1 + H-1):
+//   · G-1 TIER CONVENTION — SHORT tier is RECORDED as 'T2' by this
+//     reconstructor. This is a record-only bookkeeping convention with
+//     zero kernel impact: production emits `tier=null` on every SHORT
+//     event per
+//       supabase/functions/_shared/overshoot/detector/detector.ts:288-296
+//       ("SHORT path: tier is ALWAYS null (SHORT predicate byte-unchanged
+//         this tranche)")
+//     and
+//       supabase/functions/_shared/overshoot/detector/detector.ts:506-511
+//       ("SHORT path is BYTE-UNCHANGED this tranche: no T2 admission, no
+//         tier tagging (tier remains null on every SHORT event) …").
+//     Both `short/T1` and `short/T2` map identically to `entry+4 / H=5`
+//     per `kernel/exit.ts:175-176`
+//       (`'short/T1': { mode: 'entry', H: 5, n: 4 },
+//         'short/T2': { mode: 'entry', H: 5, n: 4 },`)
+//     so the convention is invisible to Module 6. Recorded to keep the
+//     `${SideDb}/${Tier}` dispatch key well-formed; G-2 (extend Tier to
+//     `null`) rejected as post-gate map surgery, G-3 (long-only baseline)
+//     already refused by frozen row.
+//   · H-1 SHORT ENTRY OFFSET — SHORT entry offset is T+1 open. Anchored
+//     to two ratified sources (RULING 2026-07-26):
+//       (i) certified fixture-ii SHORT rows: TSLA event 2023-04-03 →
+//           entry 2023-04-04 (`fixtures/overshoot-backtest/…-2023q2…`),
+//           byte-exact through the integration gate — the fixture IS the
+//           studied basis for this replay;
+//       (ii) live entry-run timing: event detected 22:00Z → entry next
+//            session 13:35Z = T+1 by construction
+//            (`supabase/functions/overshoot-entry-run/index.ts`
+//             morning-cron cadence; ACT-533 cadence memo).
+//     The stale §2 prose ("SHORT: T+1") in `config-matrix.md` agreeing
+//     is coincidence, not authority — that section is annotated STALE per
+//     GAP-1(c) ruling; authority is the two sources above.
+//   · PACING DISCLOSURE — live operation currently paces shorts 1/day
+//     (DEC-084 ramp); the matrix replays the chartered geometry WITHOUT
+//     ramp pacing (`shortDailyBudget = K`) because DEC-084 is a live-era
+//     operational ramp rule, absent from ACT-515 charter §1(a) and from
+//     the studied basis. Binding SHORT constraints are the 4-slot book
+//     cap + 0.10 wallet cap per the frozen matrix row.
 //
 // SCOPE FENCE (Pin 5): zero kernel edits. Readonly imports from `../kernel/*`.
 //
@@ -66,6 +109,24 @@ export const LONG_T1_GEOMETRY_MATRIX = Object.freeze({
   drawdownBuckets: [1, 2, 3] as ReadonlyArray<number>,
 });
 
+/** `detector.ts:317-321` SHORT geometry — SHORT byte-unchanged from v1:
+ *  `shortWindowSet: {1,2,3,4,5}`, `shortMomentumSet: {1,5}`,
+ *  `shortDrawdownSet: {4,5}`. Excess-threshold `shortExcessThreshold=0.08`
+ *  compared to |excess| with sign check separate (`detector.ts:315`,
+ *  `detector.ts:801` — signed comparison `picked.excess <= -excessThreshold`). */
+export const SHORT_GEOMETRY_MATRIX = Object.freeze({
+  windows: [1, 2, 3, 4, 5] as ReadonlyArray<number>,
+  momentumQuintiles: [1, 5] as ReadonlyArray<number>,
+  drawdownBuckets: [4, 5] as ReadonlyArray<number>,
+  excessThreshold: 0.08,
+});
+
+/** G-1 record-only tier convention (RULING 2026-07-26). See file header. */
+export const SHORT_TIER_CONVENTION: 'T2' = 'T2';
+
+/** H-1 SHORT entry offset (T+1 open) — see file header for two anchors. */
+export const SHORT_ENTRY_OFFSET_SESSIONS = 1;
+
 /** Cell-map exclusion width — ACT-514 §preamble / config-matrix.md §2. */
 export const CELL_EXCLUSION_WIDTH_DAYS = 5;
 
@@ -81,6 +142,15 @@ export interface CorpusCandidateRow {
   readonly momentumQuintile: number | null;
   readonly drawdownBucket: number | null;
   readonly daysToNearestEarnings: number | null;
+  /** Excess at each window w∈{1..5}. Required for SHORT band derivation
+   *  (SHORT band = argmax-|excess| across the shortWindowSet). LONG rows
+   *  ignore these — LONG band is `L_10_INF` by construction (see above).
+   *  Any SHORT row missing all five values emits `short_excess_missing`. */
+  readonly excessW1?: number | null;
+  readonly excessW2?: number | null;
+  readonly excessW3?: number | null;
+  readonly excessW4?: number | null;
+  readonly excessW5?: number | null;
 }
 
 export type CellMapLookup = (key: CellKey) => number | null;
@@ -88,9 +158,12 @@ export type ReferencePriceResolver = (ticker: string, entrySessionDate: SessionD
 export type SessionOffsetResolver = (session: SessionDate, n: number) => SessionDate | null;
 
 export type SkipReason =
-  | 'short_reconstruction_not_yet_wired'
   | 'no_cell_map_hit'
   | 'incomplete_cell_key'
+  | 'short_geometry_out_of_set'
+  | 'short_excess_below_threshold'
+  | 'short_excess_missing'
+  | 'short_band_below_min'
   | 'entry_session_off_calendar'
   | 'entry_price_missing'
   | 'sizing_refusal';
@@ -138,9 +211,17 @@ export function deriveLongTier(row: CorpusCandidateRow): 'T1' | 'T2' | null {
   return isT1 ? 'T1' : 'T2';
 }
 
-/** Entry-offset per horizon (matrix §2). T1 = T+2 open; T2 = T+1 open. */
+/** Entry-offset per horizon. LONG T1 = T+2 open; LONG T2 = T+1 open (matrix
+ *  §2, STALE-PROSE-annotated but coincidentally correct). SHORT = T+1 open
+ *  per H-1 anchors (see file header). */
 export function entryOffsetFor(tier: 'T1' | 'T2'): number {
   return tier === 'T1' ? 2 : 1;
+}
+
+/** H-1 (RULING 2026-07-26): SHORT entry offset = T+1 open. */
+export function entryOffsetForSideTier(side: SideDb, tier: 'T1' | 'T2'): number {
+  if (side === 'short') return SHORT_ENTRY_OFFSET_SESSIONS;
+  return entryOffsetFor(tier);
 }
 
 /** Build the CellKey exactly as `detector.ts:1056-1063` for LONG. */
@@ -149,6 +230,69 @@ export function buildLongCellKey(row: CorpusCandidateRow): CellKey | null {
   return {
     side: 'long',
     band: LONG_BAND_LITERAL,
+    argmaxWindowDays: row.windowDays,
+    magnitudeQuintile: row.momentumQuintile,
+    drawdownBucket: row.drawdownBucket,
+    exclusionHorizonDays: CELL_EXCLUSION_WIDTH_DAYS,
+  };
+}
+
+/** SHORT band selection — verbatim mirror of the detector's classifier
+ *  domain: SHORT `signed_excess` is negative and `bandLabelFor('SHORT', …)`
+ *  at `band-label.ts:56-63` maps
+ *    e ≤ -0.10                     → 'S_10_INF'
+ *    -0.10 <  e ≤ -0.08            → 'S_08_10'
+ *    -0.08 <  e ≤ -0.06            → 'S_06_08'
+ *    -0.06 <  e ≤ -0.05            → 'S_05_06'
+ *    -0.05 <  e ≤ -0.04            → 'S_04_05'
+ *    -0.04 <  e ≤ -0.03            → 'S_03_04'
+ *  Below `-0.03` yields `'S_below_min'` (null returned here).
+ *
+ *  The row's `windowDays` field IS the argmax window as recorded by the
+ *  study writer, so the excess used is `excess_w{windowDays}`. If that
+ *  field is missing, callers surface `short_excess_missing`. Above the
+ *  admission threshold (|e| ≥ 0.08 per `detector.ts:315` +
+ *  signed check `detector.ts:801`), only `'S_08_10'` and `'S_10_INF'` are
+ *  admittable bands. */
+export function shortBandFromSignedExcess(e: number): BandLabel | null {
+  if (e <= -0.10) return 'S_10_INF';
+  if (e <= -0.08 && e > -0.10) return 'S_08_10';
+  if (e <= -0.06 && e > -0.08) return 'S_06_08';
+  if (e <= -0.05 && e > -0.06) return 'S_05_06';
+  if (e <= -0.04 && e > -0.05) return 'S_04_05';
+  if (e <= -0.03 && e > -0.04) return 'S_03_04';
+  return null;
+}
+
+/** Pull the excess at the row's recorded argmax window. */
+export function excessAtArgmax(row: CorpusCandidateRow): number | null {
+  switch (row.windowDays) {
+    case 1: return row.excessW1 ?? null;
+    case 2: return row.excessW2 ?? null;
+    case 3: return row.excessW3 ?? null;
+    case 4: return row.excessW4 ?? null;
+    case 5: return row.excessW5 ?? null;
+    default: return null;
+  }
+}
+
+/** SHORT geometry check — geometry sets from `SHORT_GEOMETRY_MATRIX`. */
+export function passesShortGeometry(row: CorpusCandidateRow): boolean {
+  if (row.momentumQuintile === null || row.drawdownBucket === null) return false;
+  return (
+    SHORT_GEOMETRY_MATRIX.windows.includes(row.windowDays) &&
+    SHORT_GEOMETRY_MATRIX.momentumQuintiles.includes(row.momentumQuintile) &&
+    SHORT_GEOMETRY_MATRIX.drawdownBuckets.includes(row.drawdownBucket)
+  );
+}
+
+/** Build the CellKey for a SHORT row given its derived band. Mirror of
+ *  `detector.ts:1053-1063` but keyed to the derived SHORT band. */
+export function buildShortCellKey(row: CorpusCandidateRow, band: BandLabel): CellKey | null {
+  if (row.momentumQuintile === null || row.drawdownBucket === null) return null;
+  return {
+    side: 'short',
+    band,
     argmaxWindowDays: row.windowDays,
     magnitudeQuintile: row.momentumQuintile,
     drawdownBucket: row.drawdownBucket,
@@ -175,26 +319,75 @@ export function reconstructSessionAdmits(input: ReconstructInput): ReconstructRe
   const candidates: Enriched[] = [];
 
   for (const row of input.corpusRows) {
-    if (row.side === 'short') {
-      skips.push({ eventId: row.eventId, ticker: row.ticker, side: 'short',
-        reason: 'short_reconstruction_not_yet_wired' });
-      continue;
+    // Per-side derivation — LONG + SHORT branches share cell-lookup /
+    // sizing / admit downstream.
+    let tier: 'T1' | 'T2';
+    let cellKey: CellKey;
+    let recordedTier: 'T1' | 'T2';
+
+    if (row.side === 'long') {
+      const t = deriveLongTier(row);
+      if (t === null) {
+        skips.push({ eventId: row.eventId, ticker: row.ticker, side: row.side,
+          reason: 'incomplete_cell_key',
+          detail: 'momentum_quintile or drawdown_bucket is null' });
+        continue;
+      }
+      const k = buildLongCellKey(row);
+      if (k === null) {
+        skips.push({ eventId: row.eventId, ticker: row.ticker, side: row.side,
+          reason: 'incomplete_cell_key' });
+        continue;
+      }
+      tier = t;
+      recordedTier = t;
+      cellKey = k;
+    } else {
+      // SHORT branch — G-1 tier convention + H-1 offset.
+      if (row.momentumQuintile === null || row.drawdownBucket === null) {
+        skips.push({ eventId: row.eventId, ticker: row.ticker, side: 'short',
+          reason: 'incomplete_cell_key' });
+        continue;
+      }
+      if (!passesShortGeometry(row)) {
+        skips.push({ eventId: row.eventId, ticker: row.ticker, side: 'short',
+          reason: 'short_geometry_out_of_set',
+          detail: `w=${row.windowDays} mq=${row.momentumQuintile} dd=${row.drawdownBucket}` });
+        continue;
+      }
+      const e = excessAtArgmax(row);
+      if (e === null || !Number.isFinite(e)) {
+        skips.push({ eventId: row.eventId, ticker: row.ticker, side: 'short',
+          reason: 'short_excess_missing',
+          detail: `windowDays=${row.windowDays}` });
+        continue;
+      }
+      // Signed-excess admission threshold — `detector.ts:801`
+      //   `const excessOk = picked.excess <= -excessThreshold;`
+      if (!(e <= -SHORT_GEOMETRY_MATRIX.excessThreshold)) {
+        skips.push({ eventId: row.eventId, ticker: row.ticker, side: 'short',
+          reason: 'short_excess_below_threshold',
+          detail: `signed_excess=${e} threshold=-${SHORT_GEOMETRY_MATRIX.excessThreshold}` });
+        continue;
+      }
+      const band = shortBandFromSignedExcess(e);
+      if (band === null) {
+        skips.push({ eventId: row.eventId, ticker: row.ticker, side: 'short',
+          reason: 'short_band_below_min', detail: `e=${e}` });
+        continue;
+      }
+      const k = buildShortCellKey(row, band);
+      if (k === null) {
+        skips.push({ eventId: row.eventId, ticker: row.ticker, side: 'short',
+          reason: 'incomplete_cell_key' });
+        continue;
+      }
+      // G-1: record 'T2' by convention; kernel dispatch is identical.
+      tier = SHORT_TIER_CONVENTION;
+      recordedTier = SHORT_TIER_CONVENTION;
+      cellKey = k;
     }
 
-    const tier = deriveLongTier(row);
-    if (tier === null) {
-      skips.push({ eventId: row.eventId, ticker: row.ticker, side: row.side,
-        reason: 'incomplete_cell_key',
-        detail: 'momentum_quintile or drawdown_bucket is null' });
-      continue;
-    }
-
-    const cellKey = buildLongCellKey(row);
-    if (cellKey === null) {
-      skips.push({ eventId: row.eventId, ticker: row.ticker, side: row.side,
-        reason: 'incomplete_cell_key' });
-      continue;
-    }
     const meanFwd = input.cellMap(cellKey);
     if (meanFwd === null || !Number.isFinite(meanFwd)) {
       skips.push({ eventId: row.eventId, ticker: row.ticker, side: row.side,
@@ -204,7 +397,7 @@ export function reconstructSessionAdmits(input: ReconstructInput): ReconstructRe
 
     const rankScore = rankScoreFromCell(row.side, meanFwd);
 
-    const entrySession = input.sessionOffset(row.eventDate, entryOffsetFor(tier));
+    const entrySession = input.sessionOffset(row.eventDate, entryOffsetForSideTier(row.side, tier));
     if (entrySession === null) {
       skips.push({ eventId: row.eventId, ticker: row.ticker, side: row.side,
         reason: 'entry_session_off_calendar' });
@@ -233,11 +426,11 @@ export function reconstructSessionAdmits(input: ReconstructInput): ReconstructRe
     candidates.push({
       ticker: row.ticker,
       side: row.side,
-      tier,
+      tier: recordedTier,
       rankScore,
-      band: LONG_BAND_LITERAL,
+      band: cellKey.band,
       slotNotionalUsd: sized.slotNotionalUsd as number,
-      __row: row, __tier: tier, __entrySession: entrySession, __entryPrice: refPx,
+      __row: row, __tier: recordedTier, __entrySession: entrySession, __entryPrice: refPx,
     });
   }
 
@@ -283,7 +476,10 @@ export function reconstructSessionAdmits(input: ReconstructInput): ReconstructRe
       allocation_cap_reached: admitRes.tally.allocation_cap_reached,
       short_daily_budget_reached: admitRes.tally.short_daily_budget_reached,
       daily_budget_reached: admitRes.tally.daily_budget_reached,
-      skips_short: skips.filter(s => s.reason === 'short_reconstruction_not_yet_wired').length,
+      skips_short_geometry: skips.filter(s => s.reason === 'short_geometry_out_of_set').length,
+      skips_short_excess_below: skips.filter(s => s.reason === 'short_excess_below_threshold').length,
+      skips_short_excess_missing: skips.filter(s => s.reason === 'short_excess_missing').length,
+      skips_short_band_below_min: skips.filter(s => s.reason === 'short_band_below_min').length,
       skips_no_cell: skips.filter(s => s.reason === 'no_cell_map_hit').length,
       skips_incomplete_key: skips.filter(s => s.reason === 'incomplete_cell_key').length,
       skips_no_bar: skips.filter(s => s.reason === 'entry_price_missing').length,
@@ -298,6 +494,9 @@ export const _CITATIONS = Object.freeze({
   slotConcentration: KERNEL_SLOT_CONCENTRATION,
   constBaseEquity: KERNEL_CONST_BASE_EQUITY_USD,
   longBand: LONG_BAND_LITERAL,
+  shortGeometry: SHORT_GEOMETRY_MATRIX,
+  shortTierConvention: SHORT_TIER_CONVENTION,
+  shortEntryOffset: SHORT_ENTRY_OFFSET_SESSIONS,
   cellExclusion: CELL_EXCLUSION_WIDTH_DAYS,
   priceCtor: price,
 });
