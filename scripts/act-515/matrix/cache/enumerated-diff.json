@@ -1,0 +1,7570 @@
+{
+  "generated_from": "run-enumeration.ts (1x-const, calendar-pure exits)",
+  "superset_assertion": "count caps invariant across 1x-const/2x-const/2x-comp; enumeration ⊇ receipt admits",
+  "telemetry": {
+    "totalAdmits": 4903,
+    "totalAdmitsLong": 4694,
+    "totalAdmitsShort": 209,
+    "allocationCapRefusalsTotal": 643,
+    "positionAlreadyOpenTotal": 2934,
+    "shortDailyBudgetReachedTotal": 0,
+    "dailyBudgetReachedTotal": 14632,
+    "maxConcurrentLongLots": 32,
+    "maxConcurrentShortLots": 4,
+    "exit_off_calendar": 5,
+    "sessionsWalked": 1011
+  },
+  "diff": {
+    "newlyNeeded": 1078,
+    "sealedOrphans": 5362,
+    "matched": 3825
+  },
+  "delta_windows": [
+    {
+      "ticker": "CAR",
+      "side": "long",
+      "entryDate": "2022-07-06",
+      "scheduledExitDate": "2022-07-19",
+      "eventId": 176071
+    },
+    {
+      "ticker": "BLD",
+      "side": "long",
+      "entryDate": "2022-07-06",
+      "scheduledExitDate": "2022-07-19",
+      "eventId": 208880
+    },
+    {
+      "ticker": "EXEL",
+      "side": "long",
+      "entryDate": "2022-07-07",
+      "scheduledExitDate": "2022-07-13",
+      "eventId": 176863
+    },
+    {
+      "ticker": "CASY",
+      "side": "long",
+      "entryDate": "2022-07-08",
+      "scheduledExitDate": "2022-07-14",
+      "eventId": 230841
+    },
+    {
+      "ticker": "SITM",
+      "side": "long",
+      "entryDate": "2022-07-08",
+      "scheduledExitDate": "2022-07-21",
+      "eventId": 206256
+    },
+    {
+      "ticker": "F",
+      "side": "long",
+      "entryDate": "2022-07-08",
+      "scheduledExitDate": "2022-07-21",
+      "eventId": 233695
+    },
+    {
+      "ticker": "DLTR",
+      "side": "long",
+      "entryDate": "2022-07-11",
+      "scheduledExitDate": "2022-07-15",
+      "eventId": 198591
+    },
+    {
+      "ticker": "UNM",
+      "side": "long",
+      "entryDate": "2022-07-12",
+      "scheduledExitDate": "2022-07-18",
+      "eventId": 239591
+    },
+    {
+      "ticker": "MCK",
+      "side": "long",
+      "entryDate": "2022-07-13",
+      "scheduledExitDate": "2022-07-19",
+      "eventId": 236250
+    },
+    {
+      "ticker": "ORLY",
+      "side": "long",
+      "entryDate": "2022-07-15",
+      "scheduledExitDate": "2022-07-21",
+      "eventId": 229053
+    },
+    {
+      "ticker": "AA",
+      "side": "long",
+      "entryDate": "2022-07-18",
+      "scheduledExitDate": "2022-07-29",
+      "eventId": 175513
+    },
+    {
+      "ticker": "UNH",
+      "side": "long",
+      "entryDate": "2022-07-19",
+      "scheduledExitDate": "2022-07-25",
+      "eventId": 199724
+    },
+    {
+      "ticker": "M",
+      "side": "long",
+      "entryDate": "2022-07-19",
+      "scheduledExitDate": "2022-08-01",
+      "eventId": 190631
+    },
+    {
+      "ticker": "CLF",
+      "side": "long",
+      "entryDate": "2022-07-19",
+      "scheduledExitDate": "2022-08-01",
+      "eventId": 220113
+    },
+    {
+      "ticker": "CAR",
+      "side": "long",
+      "entryDate": "2022-07-20",
+      "scheduledExitDate": "2022-08-02",
+      "eventId": 164161
+    },
+    {
+      "ticker": "PCAR",
+      "side": "long",
+      "entryDate": "2022-07-21",
+      "scheduledExitDate": "2022-07-27",
+      "eventId": 221740
+    },
+    {
+      "ticker": "ACM",
+      "side": "long",
+      "entryDate": "2022-07-25",
+      "scheduledExitDate": "2022-08-05",
+      "eventId": 241993
+    },
+    {
+      "ticker": "LNTH",
+      "side": "long",
+      "entryDate": "2022-07-25",
+      "scheduledExitDate": "2022-07-29",
+      "eventId": 169756
+    },
+    {
+      "ticker": "PM",
+      "side": "long",
+      "entryDate": "2022-07-26",
+      "scheduledExitDate": "2022-08-01",
+      "eventId": 167949
+    },
+    {
+      "ticker": "DY",
+      "side": "long",
+      "entryDate": "2022-07-29",
+      "scheduledExitDate": "2022-08-04",
+      "eventId": 207603
+    },
+    {
+      "ticker": "FIX",
+      "side": "long",
+      "entryDate": "2022-08-01",
+      "scheduledExitDate": "2022-08-05",
+      "eventId": 229909
+    },
+    {
+      "ticker": "LHX",
+      "side": "long",
+      "entryDate": "2022-08-02",
+      "scheduledExitDate": "2022-08-08",
+      "eventId": 192111
+    },
+    {
+      "ticker": "CHRW",
+      "side": "long",
+      "entryDate": "2022-08-02",
+      "scheduledExitDate": "2022-08-08",
+      "eventId": 176289
+    },
+    {
+      "ticker": "MUSA",
+      "side": "long",
+      "entryDate": "2022-08-02",
+      "scheduledExitDate": "2022-08-08",
+      "eventId": 175501
+    },
+    {
+      "ticker": "RYAN",
+      "side": "long",
+      "entryDate": "2022-08-05",
+      "scheduledExitDate": "2022-08-11",
+      "eventId": 182567
+    },
+    {
+      "ticker": "VRSK",
+      "side": "long",
+      "entryDate": "2022-08-08",
+      "scheduledExitDate": "2022-08-12",
+      "eventId": 219130
+    },
+    {
+      "ticker": "JBHT",
+      "side": "long",
+      "entryDate": "2022-08-10",
+      "scheduledExitDate": "2022-08-16",
+      "eventId": 167025
+    },
+    {
+      "ticker": "MET",
+      "side": "long",
+      "entryDate": "2022-08-12",
+      "scheduledExitDate": "2022-08-18",
+      "eventId": 167229
+    },
+    {
+      "ticker": "CBT",
+      "side": "long",
+      "entryDate": "2022-08-16",
+      "scheduledExitDate": "2022-08-22",
+      "eventId": 179111
+    },
+    {
+      "ticker": "FIX",
+      "side": "long",
+      "entryDate": "2022-08-16",
+      "scheduledExitDate": "2022-08-22",
+      "eventId": 197777
+    },
+    {
+      "ticker": "HRB",
+      "side": "long",
+      "entryDate": "2022-08-16",
+      "scheduledExitDate": "2022-08-22",
+      "eventId": 218687
+    },
+    {
+      "ticker": "SMCI",
+      "side": "long",
+      "entryDate": "2022-08-16",
+      "scheduledExitDate": "2022-08-22",
+      "eventId": 200440
+    },
+    {
+      "ticker": "QLYS",
+      "side": "long",
+      "entryDate": "2022-08-18",
+      "scheduledExitDate": "2022-08-24",
+      "eventId": 199493
+    },
+    {
+      "ticker": "D",
+      "side": "long",
+      "entryDate": "2022-08-19",
+      "scheduledExitDate": "2022-08-25",
+      "eventId": 189051
+    },
+    {
+      "ticker": "VC",
+      "side": "long",
+      "entryDate": "2022-08-29",
+      "scheduledExitDate": "2022-09-02",
+      "eventId": 183511
+    },
+    {
+      "ticker": "WCC",
+      "side": "long",
+      "entryDate": "2022-08-29",
+      "scheduledExitDate": "2022-09-02",
+      "eventId": 180573
+    },
+    {
+      "ticker": "ELF",
+      "side": "long",
+      "entryDate": "2022-09-02",
+      "scheduledExitDate": "2022-09-09",
+      "eventId": 191862
+    },
+    {
+      "ticker": "STLD",
+      "side": "long",
+      "entryDate": "2022-09-08",
+      "scheduledExitDate": "2022-09-14",
+      "eventId": 183408
+    },
+    {
+      "ticker": "VNOM",
+      "side": "long",
+      "entryDate": "2022-09-08",
+      "scheduledExitDate": "2022-09-14",
+      "eventId": 163993
+    },
+    {
+      "ticker": "GTLS",
+      "side": "long",
+      "entryDate": "2022-09-12",
+      "scheduledExitDate": "2022-09-16",
+      "eventId": 194139
+    },
+    {
+      "ticker": "CYTK",
+      "side": "long",
+      "entryDate": "2022-09-13",
+      "scheduledExitDate": "2022-09-19",
+      "eventId": 204563
+    },
+    {
+      "ticker": "FSLR",
+      "side": "long",
+      "entryDate": "2022-09-16",
+      "scheduledExitDate": "2022-09-22",
+      "eventId": 228909
+    },
+    {
+      "ticker": "ELF",
+      "side": "long",
+      "entryDate": "2022-09-23",
+      "scheduledExitDate": "2022-09-29",
+      "eventId": 164862
+    },
+    {
+      "ticker": "PSN",
+      "side": "long",
+      "entryDate": "2022-09-23",
+      "scheduledExitDate": "2022-09-29",
+      "eventId": 172666
+    },
+    {
+      "ticker": "MPC",
+      "side": "long",
+      "entryDate": "2022-09-30",
+      "scheduledExitDate": "2022-10-06",
+      "eventId": 205330
+    },
+    {
+      "ticker": "PAG",
+      "side": "long",
+      "entryDate": "2022-09-30",
+      "scheduledExitDate": "2022-10-06",
+      "eventId": 217908
+    },
+    {
+      "ticker": "GTLS",
+      "side": "long",
+      "entryDate": "2022-09-30",
+      "scheduledExitDate": "2022-10-06",
+      "eventId": 171787
+    },
+    {
+      "ticker": "WRB",
+      "side": "long",
+      "entryDate": "2022-10-03",
+      "scheduledExitDate": "2022-10-07",
+      "eventId": 244253
+    },
+    {
+      "ticker": "CASY",
+      "side": "long",
+      "entryDate": "2022-10-03",
+      "scheduledExitDate": "2022-10-07",
+      "eventId": 243232
+    },
+    {
+      "ticker": "SLGN",
+      "side": "long",
+      "entryDate": "2022-10-04",
+      "scheduledExitDate": "2022-10-10",
+      "eventId": 213777
+    },
+    {
+      "ticker": "WSO",
+      "side": "long",
+      "entryDate": "2022-10-06",
+      "scheduledExitDate": "2022-10-12",
+      "eventId": 244089
+    },
+    {
+      "ticker": "EME",
+      "side": "long",
+      "entryDate": "2022-10-12",
+      "scheduledExitDate": "2022-10-18",
+      "eventId": 221145
+    },
+    {
+      "ticker": "JNJ",
+      "side": "long",
+      "entryDate": "2022-10-13",
+      "scheduledExitDate": "2022-10-19",
+      "eventId": 184276
+    },
+    {
+      "ticker": "MCD",
+      "side": "long",
+      "entryDate": "2022-10-13",
+      "scheduledExitDate": "2022-10-19",
+      "eventId": 219077
+    },
+    {
+      "ticker": "MPC",
+      "side": "long",
+      "entryDate": "2022-10-17",
+      "scheduledExitDate": "2022-10-21",
+      "eventId": 198969
+    },
+    {
+      "ticker": "MUR",
+      "side": "long",
+      "entryDate": "2022-10-17",
+      "scheduledExitDate": "2022-10-21",
+      "eventId": 218422
+    },
+    {
+      "ticker": "MTB",
+      "side": "long",
+      "entryDate": "2022-10-18",
+      "scheduledExitDate": "2022-10-24",
+      "eventId": 197020
+    },
+    {
+      "ticker": "CBSH",
+      "side": "long",
+      "entryDate": "2022-10-19",
+      "scheduledExitDate": "2022-10-25",
+      "eventId": 205497
+    },
+    {
+      "ticker": "LMT",
+      "side": "long",
+      "entryDate": "2022-10-20",
+      "scheduledExitDate": "2022-10-26",
+      "eventId": 189911
+    },
+    {
+      "ticker": "MLI",
+      "side": "long",
+      "entryDate": "2022-10-21",
+      "scheduledExitDate": "2022-10-27",
+      "eventId": 202472
+    },
+    {
+      "ticker": "TRV",
+      "side": "long",
+      "entryDate": "2022-10-24",
+      "scheduledExitDate": "2022-10-28",
+      "eventId": 197283
+    },
+    {
+      "ticker": "RLI",
+      "side": "long",
+      "entryDate": "2022-10-25",
+      "scheduledExitDate": "2022-10-31",
+      "eventId": 214781
+    },
+    {
+      "ticker": "TSCO",
+      "side": "long",
+      "entryDate": "2022-10-26",
+      "scheduledExitDate": "2022-11-01",
+      "eventId": 218637
+    },
+    {
+      "ticker": "WCC",
+      "side": "long",
+      "entryDate": "2022-10-26",
+      "scheduledExitDate": "2022-11-01",
+      "eventId": 244493
+    },
+    {
+      "ticker": "VRTX",
+      "side": "long",
+      "entryDate": "2022-10-26",
+      "scheduledExitDate": "2022-11-01",
+      "eventId": 185305
+    },
+    {
+      "ticker": "BDC",
+      "side": "long",
+      "entryDate": "2022-10-27",
+      "scheduledExitDate": "2022-11-02",
+      "eventId": 221789
+    },
+    {
+      "ticker": "PSX",
+      "side": "long",
+      "entryDate": "2022-10-31",
+      "scheduledExitDate": "2022-11-04",
+      "eventId": 203034
+    },
+    {
+      "ticker": "CTAS",
+      "side": "long",
+      "entryDate": "2022-11-01",
+      "scheduledExitDate": "2022-11-07",
+      "eventId": 235751
+    },
+    {
+      "ticker": "HQY",
+      "side": "long",
+      "entryDate": "2022-11-02",
+      "scheduledExitDate": "2022-11-08",
+      "eventId": 224575
+    },
+    {
+      "ticker": "MLI",
+      "side": "long",
+      "entryDate": "2022-11-03",
+      "scheduledExitDate": "2022-11-09",
+      "eventId": 187956
+    },
+    {
+      "ticker": "VLO",
+      "side": "long",
+      "entryDate": "2022-11-03",
+      "scheduledExitDate": "2022-11-09",
+      "eventId": 209918
+    },
+    {
+      "ticker": "TAP",
+      "side": "long",
+      "entryDate": "2022-11-08",
+      "scheduledExitDate": "2022-11-14",
+      "eventId": 232843
+    },
+    {
+      "ticker": "ATI",
+      "side": "long",
+      "entryDate": "2022-11-09",
+      "scheduledExitDate": "2022-11-15",
+      "eventId": 222581
+    },
+    {
+      "ticker": "CTAS",
+      "side": "long",
+      "entryDate": "2022-11-10",
+      "scheduledExitDate": "2022-11-16",
+      "eventId": 239966
+    },
+    {
+      "ticker": "ATO",
+      "side": "long",
+      "entryDate": "2022-11-14",
+      "scheduledExitDate": "2022-11-18",
+      "eventId": 225167
+    },
+    {
+      "ticker": "AES",
+      "side": "long",
+      "entryDate": "2022-11-14",
+      "scheduledExitDate": "2022-11-18",
+      "eventId": 169150
+    },
+    {
+      "ticker": "VC",
+      "side": "long",
+      "entryDate": "2022-11-15",
+      "scheduledExitDate": "2022-11-21",
+      "eventId": 229477
+    },
+    {
+      "ticker": "MUR",
+      "side": "long",
+      "entryDate": "2022-11-15",
+      "scheduledExitDate": "2022-11-21",
+      "eventId": 195497
+    },
+    {
+      "ticker": "CF",
+      "side": "long",
+      "entryDate": "2022-11-16",
+      "scheduledExitDate": "2022-11-22",
+      "eventId": 187634
+    },
+    {
+      "ticker": "JKHY",
+      "side": "long",
+      "entryDate": "2022-11-17",
+      "scheduledExitDate": "2022-11-23",
+      "eventId": 190423
+    },
+    {
+      "ticker": "RGA",
+      "side": "long",
+      "entryDate": "2022-11-17",
+      "scheduledExitDate": "2022-11-23",
+      "eventId": 222074
+    },
+    {
+      "ticker": "SMCI",
+      "side": "long",
+      "entryDate": "2022-11-29",
+      "scheduledExitDate": "2022-12-05",
+      "eventId": 217212
+    },
+    {
+      "ticker": "CNC",
+      "side": "long",
+      "entryDate": "2022-11-30",
+      "scheduledExitDate": "2022-12-06",
+      "eventId": 262246
+    },
+    {
+      "ticker": "UNM",
+      "side": "long",
+      "entryDate": "2022-12-01",
+      "scheduledExitDate": "2022-12-07",
+      "eventId": 275703
+    },
+    {
+      "ticker": "WING",
+      "side": "long",
+      "entryDate": "2022-12-02",
+      "scheduledExitDate": "2022-12-08",
+      "eventId": 266913
+    },
+    {
+      "ticker": "ERIE",
+      "side": "long",
+      "entryDate": "2022-12-02",
+      "scheduledExitDate": "2022-12-08",
+      "eventId": 289538
+    },
+    {
+      "ticker": "PFGC",
+      "side": "long",
+      "entryDate": "2022-12-02",
+      "scheduledExitDate": "2022-12-08",
+      "eventId": 309522
+    },
+    {
+      "ticker": "APPF",
+      "side": "long",
+      "entryDate": "2022-12-05",
+      "scheduledExitDate": "2022-12-09",
+      "eventId": 286381
+    },
+    {
+      "ticker": "UAL",
+      "side": "long",
+      "entryDate": "2022-12-08",
+      "scheduledExitDate": "2022-12-14",
+      "eventId": 298617
+    },
+    {
+      "ticker": "OGE",
+      "side": "long",
+      "entryDate": "2022-12-09",
+      "scheduledExitDate": "2022-12-15",
+      "eventId": 246374
+    },
+    {
+      "ticker": "HALO",
+      "side": "long",
+      "entryDate": "2022-12-12",
+      "scheduledExitDate": "2022-12-16",
+      "eventId": 281737
+    },
+    {
+      "ticker": "RGA",
+      "side": "long",
+      "entryDate": "2022-12-12",
+      "scheduledExitDate": "2022-12-16",
+      "eventId": 282142
+    },
+    {
+      "ticker": "WFRD",
+      "side": "long",
+      "entryDate": "2022-12-12",
+      "scheduledExitDate": "2022-12-16",
+      "eventId": 262662
+    },
+    {
+      "ticker": "H",
+      "side": "long",
+      "entryDate": "2022-12-13",
+      "scheduledExitDate": "2022-12-19",
+      "eventId": 277063
+    },
+    {
+      "ticker": "ARMK",
+      "side": "long",
+      "entryDate": "2022-12-14",
+      "scheduledExitDate": "2022-12-20",
+      "eventId": 245582
+    },
+    {
+      "ticker": "VNOM",
+      "side": "long",
+      "entryDate": "2022-12-15",
+      "scheduledExitDate": "2022-12-21",
+      "eventId": 296500
+    },
+    {
+      "ticker": "FSLR",
+      "side": "long",
+      "entryDate": "2022-12-15",
+      "scheduledExitDate": "2022-12-21",
+      "eventId": 282005
+    },
+    {
+      "ticker": "WING",
+      "side": "long",
+      "entryDate": "2022-12-16",
+      "scheduledExitDate": "2022-12-22",
+      "eventId": 287652
+    },
+    {
+      "ticker": "AM",
+      "side": "long",
+      "entryDate": "2022-12-16",
+      "scheduledExitDate": "2022-12-22",
+      "eventId": 272875
+    },
+    {
+      "ticker": "SIGI",
+      "side": "long",
+      "entryDate": "2022-12-22",
+      "scheduledExitDate": "2022-12-29",
+      "eventId": 297009
+    },
+    {
+      "ticker": "LVS",
+      "side": "long",
+      "entryDate": "2022-12-29",
+      "scheduledExitDate": "2023-01-05",
+      "eventId": 312166
+    },
+    {
+      "ticker": "SLB",
+      "side": "long",
+      "entryDate": "2022-12-30",
+      "scheduledExitDate": "2023-01-06",
+      "eventId": 296642
+    },
+    {
+      "ticker": "GTLS",
+      "side": "long",
+      "entryDate": "2023-01-03",
+      "scheduledExitDate": "2023-01-17",
+      "eventId": 312123
+    },
+    {
+      "ticker": "TCBI",
+      "side": "long",
+      "entryDate": "2023-01-03",
+      "scheduledExitDate": "2023-01-17",
+      "eventId": 292965
+    },
+    {
+      "ticker": "BKR",
+      "side": "long",
+      "entryDate": "2023-01-03",
+      "scheduledExitDate": "2023-01-17",
+      "eventId": 303621
+    },
+    {
+      "ticker": "MTDR",
+      "side": "long",
+      "entryDate": "2023-01-03",
+      "scheduledExitDate": "2023-01-17",
+      "eventId": 280978
+    },
+    {
+      "ticker": "CAR",
+      "side": "long",
+      "entryDate": "2023-01-04",
+      "scheduledExitDate": "2023-01-18",
+      "eventId": 301141
+    },
+    {
+      "ticker": "NEU",
+      "side": "long",
+      "entryDate": "2023-01-04",
+      "scheduledExitDate": "2023-01-18",
+      "eventId": 297495
+    },
+    {
+      "ticker": "FLS",
+      "side": "long",
+      "entryDate": "2023-01-04",
+      "scheduledExitDate": "2023-01-18",
+      "eventId": 272161
+    },
+    {
+      "ticker": "APPF",
+      "side": "long",
+      "entryDate": "2023-01-04",
+      "scheduledExitDate": "2023-01-18",
+      "eventId": 272867
+    },
+    {
+      "ticker": "MTZ",
+      "side": "long",
+      "entryDate": "2023-01-04",
+      "scheduledExitDate": "2023-01-18",
+      "eventId": 288606
+    },
+    {
+      "ticker": "HL",
+      "side": "long",
+      "entryDate": "2023-01-05",
+      "scheduledExitDate": "2023-01-19",
+      "eventId": 258350
+    },
+    {
+      "ticker": "EIX",
+      "side": "long",
+      "entryDate": "2023-01-05",
+      "scheduledExitDate": "2023-01-19",
+      "eventId": 280296
+    },
+    {
+      "ticker": "ULTA",
+      "side": "long",
+      "entryDate": "2023-01-06",
+      "scheduledExitDate": "2023-01-12",
+      "eventId": 275778
+    },
+    {
+      "ticker": "OC",
+      "side": "long",
+      "entryDate": "2023-01-06",
+      "scheduledExitDate": "2023-01-12",
+      "eventId": 270354
+    },
+    {
+      "ticker": "VLO",
+      "side": "long",
+      "entryDate": "2023-01-10",
+      "scheduledExitDate": "2023-01-17",
+      "eventId": 273361
+    },
+    {
+      "ticker": "HAE",
+      "side": "long",
+      "entryDate": "2023-01-12",
+      "scheduledExitDate": "2023-01-19",
+      "eventId": 272173
+    },
+    {
+      "ticker": "MEDP",
+      "side": "long",
+      "entryDate": "2023-01-13",
+      "scheduledExitDate": "2023-01-20",
+      "eventId": 288688
+    },
+    {
+      "ticker": "BMRN",
+      "side": "long",
+      "entryDate": "2023-01-17",
+      "scheduledExitDate": "2023-01-23",
+      "eventId": 293969
+    },
+    {
+      "ticker": "PWR",
+      "side": "long",
+      "entryDate": "2023-01-18",
+      "scheduledExitDate": "2023-01-24",
+      "eventId": 278130
+    },
+    {
+      "ticker": "FICO",
+      "side": "long",
+      "entryDate": "2023-01-18",
+      "scheduledExitDate": "2023-01-24",
+      "eventId": 305334
+    },
+    {
+      "ticker": "BF.B",
+      "side": "long",
+      "entryDate": "2023-01-19",
+      "scheduledExitDate": "2023-01-25",
+      "eventId": 278529
+    },
+    {
+      "ticker": "FTI",
+      "side": "long",
+      "entryDate": "2023-01-19",
+      "scheduledExitDate": "2023-01-25",
+      "eventId": 255388
+    },
+    {
+      "ticker": "ULTA",
+      "side": "long",
+      "entryDate": "2023-01-20",
+      "scheduledExitDate": "2023-01-26",
+      "eventId": 265900
+    },
+    {
+      "ticker": "MEDP",
+      "side": "long",
+      "entryDate": "2023-01-20",
+      "scheduledExitDate": "2023-01-26",
+      "eventId": 249528
+    },
+    {
+      "ticker": "RGLD",
+      "side": "long",
+      "entryDate": "2023-01-23",
+      "scheduledExitDate": "2023-01-27",
+      "eventId": 292995
+    },
+    {
+      "ticker": "FLR",
+      "side": "long",
+      "entryDate": "2023-01-24",
+      "scheduledExitDate": "2023-01-30",
+      "eventId": 261152
+    },
+    {
+      "ticker": "PSX",
+      "side": "long",
+      "entryDate": "2023-01-24",
+      "scheduledExitDate": "2023-01-30",
+      "eventId": 245416
+    },
+    {
+      "ticker": "WING",
+      "side": "long",
+      "entryDate": "2023-01-25",
+      "scheduledExitDate": "2023-01-31",
+      "eventId": 259535
+    },
+    {
+      "ticker": "LSCC",
+      "side": "long",
+      "entryDate": "2023-01-25",
+      "scheduledExitDate": "2023-01-31",
+      "eventId": 268310
+    },
+    {
+      "ticker": "NDSN",
+      "side": "long",
+      "entryDate": "2023-01-26",
+      "scheduledExitDate": "2023-02-01",
+      "eventId": 286942
+    },
+    {
+      "ticker": "TAP",
+      "side": "long",
+      "entryDate": "2023-01-30",
+      "scheduledExitDate": "2023-02-03",
+      "eventId": 297207
+    },
+    {
+      "ticker": "WLK",
+      "side": "long",
+      "entryDate": "2023-01-31",
+      "scheduledExitDate": "2023-02-06",
+      "eventId": 275859
+    },
+    {
+      "ticker": "FSLR",
+      "side": "long",
+      "entryDate": "2023-01-31",
+      "scheduledExitDate": "2023-02-06",
+      "eventId": 293194
+    },
+    {
+      "ticker": "ALGM",
+      "side": "long",
+      "entryDate": "2023-02-01",
+      "scheduledExitDate": "2023-02-07",
+      "eventId": 253308
+    },
+    {
+      "ticker": "MLI",
+      "side": "long",
+      "entryDate": "2023-02-06",
+      "scheduledExitDate": "2023-02-10",
+      "eventId": 294652
+    },
+    {
+      "ticker": "TXT",
+      "side": "long",
+      "entryDate": "2023-02-06",
+      "scheduledExitDate": "2023-02-10",
+      "eventId": 311014
+    },
+    {
+      "ticker": "HUM",
+      "side": "long",
+      "entryDate": "2023-02-10",
+      "scheduledExitDate": "2023-02-16",
+      "eventId": 283867
+    },
+    {
+      "ticker": "PTC",
+      "side": "long",
+      "entryDate": "2023-02-10",
+      "scheduledExitDate": "2023-02-16",
+      "eventId": 267171
+    },
+    {
+      "ticker": "WEX",
+      "side": "long",
+      "entryDate": "2023-02-13",
+      "scheduledExitDate": "2023-02-17",
+      "eventId": 309801
+    },
+    {
+      "ticker": "BDC",
+      "side": "long",
+      "entryDate": "2023-02-13",
+      "scheduledExitDate": "2023-02-17",
+      "eventId": 268008
+    },
+    {
+      "ticker": "WM",
+      "side": "long",
+      "entryDate": "2023-02-14",
+      "scheduledExitDate": "2023-02-21",
+      "eventId": 291634
+    },
+    {
+      "ticker": "CBT",
+      "side": "long",
+      "entryDate": "2023-02-15",
+      "scheduledExitDate": "2023-02-22",
+      "eventId": 288956
+    },
+    {
+      "ticker": "LEN",
+      "side": "long",
+      "entryDate": "2023-02-15",
+      "scheduledExitDate": "2023-02-22",
+      "eventId": 264536
+    },
+    {
+      "ticker": "FLEX",
+      "side": "long",
+      "entryDate": "2023-02-15",
+      "scheduledExitDate": "2023-02-22",
+      "eventId": 293728
+    },
+    {
+      "ticker": "TDG",
+      "side": "long",
+      "entryDate": "2023-02-17",
+      "scheduledExitDate": "2023-02-24",
+      "eventId": 285893
+    },
+    {
+      "ticker": "CDNS",
+      "side": "long",
+      "entryDate": "2023-02-17",
+      "scheduledExitDate": "2023-02-24",
+      "eventId": 278295
+    },
+    {
+      "ticker": "AAON",
+      "side": "long",
+      "entryDate": "2023-02-17",
+      "scheduledExitDate": "2023-02-24",
+      "eventId": 307892
+    },
+    {
+      "ticker": "BMY",
+      "side": "long",
+      "entryDate": "2023-02-23",
+      "scheduledExitDate": "2023-03-01",
+      "eventId": 303052
+    },
+    {
+      "ticker": "BWXT",
+      "side": "long",
+      "entryDate": "2023-03-01",
+      "scheduledExitDate": "2023-03-07",
+      "eventId": 303248
+    },
+    {
+      "ticker": "GWW",
+      "side": "long",
+      "entryDate": "2023-03-01",
+      "scheduledExitDate": "2023-03-07",
+      "eventId": 253690
+    },
+    {
+      "ticker": "PCG",
+      "side": "long",
+      "entryDate": "2023-03-01",
+      "scheduledExitDate": "2023-03-07",
+      "eventId": 286234
+    },
+    {
+      "ticker": "FTI",
+      "side": "long",
+      "entryDate": "2023-03-01",
+      "scheduledExitDate": "2023-03-07",
+      "eventId": 248424
+    },
+    {
+      "ticker": "BKNG",
+      "side": "long",
+      "entryDate": "2023-03-02",
+      "scheduledExitDate": "2023-03-08",
+      "eventId": 250552
+    },
+    {
+      "ticker": "AIT",
+      "side": "long",
+      "entryDate": "2023-03-02",
+      "scheduledExitDate": "2023-03-08",
+      "eventId": 285713
+    },
+    {
+      "ticker": "DUOL",
+      "side": "long",
+      "entryDate": "2023-03-03",
+      "scheduledExitDate": "2023-03-09",
+      "eventId": 313102
+    },
+    {
+      "ticker": "CMI",
+      "side": "long",
+      "entryDate": "2023-03-03",
+      "scheduledExitDate": "2023-03-09",
+      "eventId": 301322
+    },
+    {
+      "ticker": "FOUR",
+      "side": "long",
+      "entryDate": "2023-03-03",
+      "scheduledExitDate": "2023-03-09",
+      "eventId": 260460
+    },
+    {
+      "ticker": "LVS",
+      "side": "long",
+      "entryDate": "2023-03-03",
+      "scheduledExitDate": "2023-03-09",
+      "eventId": 306044
+    },
+    {
+      "ticker": "OPCH",
+      "side": "long",
+      "entryDate": "2023-03-06",
+      "scheduledExitDate": "2023-03-10",
+      "eventId": 300218
+    },
+    {
+      "ticker": "MPC",
+      "side": "long",
+      "entryDate": "2023-03-06",
+      "scheduledExitDate": "2023-03-10",
+      "eventId": 277033
+    },
+    {
+      "ticker": "SLB",
+      "side": "long",
+      "entryDate": "2023-03-07",
+      "scheduledExitDate": "2023-03-13",
+      "eventId": 249398
+    },
+    {
+      "ticker": "PAG",
+      "side": "long",
+      "entryDate": "2023-03-09",
+      "scheduledExitDate": "2023-03-15",
+      "eventId": 312519
+    },
+    {
+      "ticker": "AEIS",
+      "side": "long",
+      "entryDate": "2023-03-10",
+      "scheduledExitDate": "2023-03-16",
+      "eventId": 246860
+    },
+    {
+      "ticker": "MTSI",
+      "side": "long",
+      "entryDate": "2023-03-10",
+      "scheduledExitDate": "2023-03-16",
+      "eventId": 291716
+    },
+    {
+      "ticker": "BJ",
+      "side": "long",
+      "entryDate": "2023-03-13",
+      "scheduledExitDate": "2023-03-17",
+      "eventId": 269774
+    },
+    {
+      "ticker": "FOUR",
+      "side": "long",
+      "entryDate": "2023-03-14",
+      "scheduledExitDate": "2023-03-20",
+      "eventId": 245847
+    },
+    {
+      "ticker": "BSX",
+      "side": "long",
+      "entryDate": "2023-03-15",
+      "scheduledExitDate": "2023-03-21",
+      "eventId": 247209
+    },
+    {
+      "ticker": "DRI",
+      "side": "long",
+      "entryDate": "2023-03-15",
+      "scheduledExitDate": "2023-03-21",
+      "eventId": 265626
+    },
+    {
+      "ticker": "SPXC",
+      "side": "long",
+      "entryDate": "2023-03-16",
+      "scheduledExitDate": "2023-03-22",
+      "eventId": 260924
+    },
+    {
+      "ticker": "UNM",
+      "side": "long",
+      "entryDate": "2023-03-16",
+      "scheduledExitDate": "2023-03-22",
+      "eventId": 273401
+    },
+    {
+      "ticker": "NJR",
+      "side": "long",
+      "entryDate": "2023-03-17",
+      "scheduledExitDate": "2023-03-23",
+      "eventId": 291857
+    },
+    {
+      "ticker": "ELF",
+      "side": "long",
+      "entryDate": "2023-03-17",
+      "scheduledExitDate": "2023-03-23",
+      "eventId": 309854
+    },
+    {
+      "ticker": "ORCL",
+      "side": "long",
+      "entryDate": "2023-03-22",
+      "scheduledExitDate": "2023-03-28",
+      "eventId": 245067
+    },
+    {
+      "ticker": "BRKR",
+      "side": "long",
+      "entryDate": "2023-03-27",
+      "scheduledExitDate": "2023-03-31",
+      "eventId": 305619
+    },
+    {
+      "ticker": "MTZ",
+      "side": "long",
+      "entryDate": "2023-03-28",
+      "scheduledExitDate": "2023-04-03",
+      "eventId": 298106
+    },
+    {
+      "ticker": "ENSG",
+      "side": "long",
+      "entryDate": "2023-03-29",
+      "scheduledExitDate": "2023-04-04",
+      "eventId": 268443
+    },
+    {
+      "ticker": "RNR",
+      "side": "long",
+      "entryDate": "2023-03-30",
+      "scheduledExitDate": "2023-04-05",
+      "eventId": 283609
+    },
+    {
+      "ticker": "SPXC",
+      "side": "long",
+      "entryDate": "2023-03-30",
+      "scheduledExitDate": "2023-04-05",
+      "eventId": 281223
+    },
+    {
+      "ticker": "MCHP",
+      "side": "long",
+      "entryDate": "2023-04-03",
+      "scheduledExitDate": "2023-04-10",
+      "eventId": 283075
+    },
+    {
+      "ticker": "ALGM",
+      "side": "long",
+      "entryDate": "2023-04-03",
+      "scheduledExitDate": "2023-04-10",
+      "eventId": 311794
+    },
+    {
+      "ticker": "LSCC",
+      "side": "long",
+      "entryDate": "2023-04-03",
+      "scheduledExitDate": "2023-04-10",
+      "eventId": 306791
+    },
+    {
+      "ticker": "DKS",
+      "side": "long",
+      "entryDate": "2023-04-05",
+      "scheduledExitDate": "2023-04-12",
+      "eventId": 283950
+    },
+    {
+      "ticker": "DUOL",
+      "side": "long",
+      "entryDate": "2023-04-05",
+      "scheduledExitDate": "2023-04-12",
+      "eventId": 257805
+    },
+    {
+      "ticker": "OXY",
+      "side": "long",
+      "entryDate": "2023-04-06",
+      "scheduledExitDate": "2023-04-13",
+      "eventId": 257655
+    },
+    {
+      "ticker": "XOM",
+      "side": "long",
+      "entryDate": "2023-04-06",
+      "scheduledExitDate": "2023-04-13",
+      "eventId": 276437
+    },
+    {
+      "ticker": "ELF",
+      "side": "long",
+      "entryDate": "2023-04-06",
+      "scheduledExitDate": "2023-04-13",
+      "eventId": 246196
+    },
+    {
+      "ticker": "SMCI",
+      "side": "long",
+      "entryDate": "2023-04-06",
+      "scheduledExitDate": "2023-04-13",
+      "eventId": 296453
+    },
+    {
+      "ticker": "AXTA",
+      "side": "long",
+      "entryDate": "2023-04-17",
+      "scheduledExitDate": "2023-04-21",
+      "eventId": 271753
+    },
+    {
+      "ticker": "WING",
+      "side": "long",
+      "entryDate": "2023-04-18",
+      "scheduledExitDate": "2023-04-24",
+      "eventId": 268269
+    },
+    {
+      "ticker": "WYNN",
+      "side": "long",
+      "entryDate": "2023-04-18",
+      "scheduledExitDate": "2023-04-24",
+      "eventId": 282835
+    },
+    {
+      "ticker": "LVS",
+      "side": "long",
+      "entryDate": "2023-04-18",
+      "scheduledExitDate": "2023-04-24",
+      "eventId": 245334
+    },
+    {
+      "ticker": "BKNG",
+      "side": "long",
+      "entryDate": "2023-04-19",
+      "scheduledExitDate": "2023-04-25",
+      "eventId": 291545
+    },
+    {
+      "ticker": "MS",
+      "side": "long",
+      "entryDate": "2023-04-20",
+      "scheduledExitDate": "2023-04-26",
+      "eventId": 292944
+    },
+    {
+      "ticker": "DUOL",
+      "side": "long",
+      "entryDate": "2023-04-21",
+      "scheduledExitDate": "2023-04-27",
+      "eventId": 298713
+    },
+    {
+      "ticker": "BA",
+      "side": "long",
+      "entryDate": "2023-04-21",
+      "scheduledExitDate": "2023-04-27",
+      "eventId": 290129
+    },
+    {
+      "ticker": "SNA",
+      "side": "long",
+      "entryDate": "2023-04-25",
+      "scheduledExitDate": "2023-05-01",
+      "eventId": 292285
+    },
+    {
+      "ticker": "FICO",
+      "side": "long",
+      "entryDate": "2023-04-25",
+      "scheduledExitDate": "2023-05-01",
+      "eventId": 299351
+    },
+    {
+      "ticker": "LLY",
+      "side": "long",
+      "entryDate": "2023-04-25",
+      "scheduledExitDate": "2023-05-01",
+      "eventId": 308267
+    },
+    {
+      "ticker": "KMB",
+      "side": "long",
+      "entryDate": "2023-04-26",
+      "scheduledExitDate": "2023-05-02",
+      "eventId": 302383
+    },
+    {
+      "ticker": "KNSL",
+      "side": "long",
+      "entryDate": "2023-04-26",
+      "scheduledExitDate": "2023-05-02",
+      "eventId": 285050
+    },
+    {
+      "ticker": "CRS",
+      "side": "long",
+      "entryDate": "2023-04-27",
+      "scheduledExitDate": "2023-05-03",
+      "eventId": 290406
+    },
+    {
+      "ticker": "WFRD",
+      "side": "long",
+      "entryDate": "2023-04-28",
+      "scheduledExitDate": "2023-05-04",
+      "eventId": 254800
+    },
+    {
+      "ticker": "SJM",
+      "side": "long",
+      "entryDate": "2023-04-28",
+      "scheduledExitDate": "2023-05-04",
+      "eventId": 314213
+    },
+    {
+      "ticker": "HUBB",
+      "side": "long",
+      "entryDate": "2023-04-28",
+      "scheduledExitDate": "2023-05-04",
+      "eventId": 250782
+    },
+    {
+      "ticker": "SMCI",
+      "side": "long",
+      "entryDate": "2023-05-01",
+      "scheduledExitDate": "2023-05-05",
+      "eventId": 288289
+    },
+    {
+      "ticker": "MGM",
+      "side": "long",
+      "entryDate": "2023-05-02",
+      "scheduledExitDate": "2023-05-08",
+      "eventId": 311689
+    },
+    {
+      "ticker": "DRI",
+      "side": "long",
+      "entryDate": "2023-05-08",
+      "scheduledExitDate": "2023-05-12",
+      "eventId": 289308
+    },
+    {
+      "ticker": "ROL",
+      "side": "long",
+      "entryDate": "2023-05-08",
+      "scheduledExitDate": "2023-05-12",
+      "eventId": 274633
+    },
+    {
+      "ticker": "ROIV",
+      "side": "long",
+      "entryDate": "2023-05-09",
+      "scheduledExitDate": "2023-05-15",
+      "eventId": 258234
+    },
+    {
+      "ticker": "AXTA",
+      "side": "long",
+      "entryDate": "2023-05-11",
+      "scheduledExitDate": "2023-05-17",
+      "eventId": 278886
+    },
+    {
+      "ticker": "MSA",
+      "side": "long",
+      "entryDate": "2023-05-11",
+      "scheduledExitDate": "2023-05-17",
+      "eventId": 268023
+    },
+    {
+      "ticker": "RGA",
+      "side": "long",
+      "entryDate": "2023-05-11",
+      "scheduledExitDate": "2023-05-17",
+      "eventId": 294601
+    },
+    {
+      "ticker": "KBH",
+      "side": "long",
+      "entryDate": "2023-05-12",
+      "scheduledExitDate": "2023-05-18",
+      "eventId": 282220
+    },
+    {
+      "ticker": "FICO",
+      "side": "long",
+      "entryDate": "2023-05-12",
+      "scheduledExitDate": "2023-05-18",
+      "eventId": 272976
+    },
+    {
+      "ticker": "CTAS",
+      "side": "long",
+      "entryDate": "2023-05-15",
+      "scheduledExitDate": "2023-05-19",
+      "eventId": 288023
+    },
+    {
+      "ticker": "ON",
+      "side": "long",
+      "entryDate": "2023-05-16",
+      "scheduledExitDate": "2023-05-22",
+      "eventId": 296519
+    },
+    {
+      "ticker": "IDCC",
+      "side": "long",
+      "entryDate": "2023-05-16",
+      "scheduledExitDate": "2023-05-22",
+      "eventId": 261956
+    },
+    {
+      "ticker": "ONTO",
+      "side": "long",
+      "entryDate": "2023-05-16",
+      "scheduledExitDate": "2023-05-22",
+      "eventId": 295359
+    },
+    {
+      "ticker": "USFD",
+      "side": "long",
+      "entryDate": "2023-05-17",
+      "scheduledExitDate": "2023-05-23",
+      "eventId": 304738
+    },
+    {
+      "ticker": "TTD",
+      "side": "long",
+      "entryDate": "2023-05-18",
+      "scheduledExitDate": "2023-05-24",
+      "eventId": 273817
+    },
+    {
+      "ticker": "NVDA",
+      "side": "long",
+      "entryDate": "2023-05-18",
+      "scheduledExitDate": "2023-05-24",
+      "eventId": 261961
+    },
+    {
+      "ticker": "TXRH",
+      "side": "long",
+      "entryDate": "2023-05-18",
+      "scheduledExitDate": "2023-05-24",
+      "eventId": 261205
+    },
+    {
+      "ticker": "GE",
+      "side": "long",
+      "entryDate": "2023-05-19",
+      "scheduledExitDate": "2023-05-25",
+      "eventId": 258969
+    },
+    {
+      "ticker": "BLK",
+      "side": "long",
+      "entryDate": "2023-05-22",
+      "scheduledExitDate": "2023-05-26",
+      "eventId": 263700
+    },
+    {
+      "ticker": "INTU",
+      "side": "long",
+      "entryDate": "2023-05-22",
+      "scheduledExitDate": "2023-05-26",
+      "eventId": 263988
+    },
+    {
+      "ticker": "NFLX",
+      "side": "long",
+      "entryDate": "2023-05-22",
+      "scheduledExitDate": "2023-05-26",
+      "eventId": 270268
+    },
+    {
+      "ticker": "SPXC",
+      "side": "long",
+      "entryDate": "2023-05-22",
+      "scheduledExitDate": "2023-05-26",
+      "eventId": 270805
+    },
+    {
+      "ticker": "AVAV",
+      "side": "long",
+      "entryDate": "2023-05-22",
+      "scheduledExitDate": "2023-05-26",
+      "eventId": 305066
+    },
+    {
+      "ticker": "WFRD",
+      "side": "long",
+      "entryDate": "2023-05-23",
+      "scheduledExitDate": "2023-05-30",
+      "eventId": 268117
+    },
+    {
+      "ticker": "ACGL",
+      "side": "long",
+      "entryDate": "2023-05-23",
+      "scheduledExitDate": "2023-05-30",
+      "eventId": 284729
+    },
+    {
+      "ticker": "CPRT",
+      "side": "long",
+      "entryDate": "2023-05-24",
+      "scheduledExitDate": "2023-05-31",
+      "eventId": 312565
+    },
+    {
+      "ticker": "DUOL",
+      "side": "long",
+      "entryDate": "2023-05-24",
+      "scheduledExitDate": "2023-05-31",
+      "eventId": 290957
+    },
+    {
+      "ticker": "AN",
+      "side": "long",
+      "entryDate": "2023-05-25",
+      "scheduledExitDate": "2023-06-01",
+      "eventId": 279662
+    },
+    {
+      "ticker": "AVAV",
+      "side": "long",
+      "entryDate": "2023-05-26",
+      "scheduledExitDate": "2023-06-02",
+      "eventId": 259464
+    },
+    {
+      "ticker": "PANW",
+      "side": "long",
+      "entryDate": "2023-05-26",
+      "scheduledExitDate": "2023-06-02",
+      "eventId": 261892
+    },
+    {
+      "ticker": "VRT",
+      "side": "long",
+      "entryDate": "2023-05-26",
+      "scheduledExitDate": "2023-06-02",
+      "eventId": 255148
+    },
+    {
+      "ticker": "MUSA",
+      "side": "long",
+      "entryDate": "2023-05-26",
+      "scheduledExitDate": "2023-06-02",
+      "eventId": 250160
+    },
+    {
+      "ticker": "ENS",
+      "side": "long",
+      "entryDate": "2023-06-01",
+      "scheduledExitDate": "2023-06-07",
+      "eventId": 310102
+    },
+    {
+      "ticker": "NVT",
+      "side": "long",
+      "entryDate": "2023-06-01",
+      "scheduledExitDate": "2023-06-07",
+      "eventId": 265001
+    },
+    {
+      "ticker": "DT",
+      "side": "long",
+      "entryDate": "2023-06-02",
+      "scheduledExitDate": "2023-06-08",
+      "eventId": 273476
+    },
+    {
+      "ticker": "RCL",
+      "side": "long",
+      "entryDate": "2023-06-02",
+      "scheduledExitDate": "2023-06-08",
+      "eventId": 286735
+    },
+    {
+      "ticker": "DKS",
+      "side": "long",
+      "entryDate": "2023-06-09",
+      "scheduledExitDate": "2023-06-15",
+      "eventId": 268544
+    },
+    {
+      "ticker": "TSCO",
+      "side": "long",
+      "entryDate": "2023-06-12",
+      "scheduledExitDate": "2023-06-16",
+      "eventId": 268171
+    },
+    {
+      "ticker": "CAH",
+      "side": "long",
+      "entryDate": "2023-06-13",
+      "scheduledExitDate": "2023-06-20",
+      "eventId": 280638
+    },
+    {
+      "ticker": "DXCM",
+      "side": "long",
+      "entryDate": "2023-06-13",
+      "scheduledExitDate": "2023-06-20",
+      "eventId": 279215
+    },
+    {
+      "ticker": "ORCL",
+      "side": "long",
+      "entryDate": "2023-06-13",
+      "scheduledExitDate": "2023-06-20",
+      "eventId": 255360
+    },
+    {
+      "ticker": "BSY",
+      "side": "long",
+      "entryDate": "2023-06-14",
+      "scheduledExitDate": "2023-06-21",
+      "eventId": 279165
+    },
+    {
+      "ticker": "CDNS",
+      "side": "long",
+      "entryDate": "2023-06-14",
+      "scheduledExitDate": "2023-06-21",
+      "eventId": 311573
+    },
+    {
+      "ticker": "LSCC",
+      "side": "long",
+      "entryDate": "2023-06-15",
+      "scheduledExitDate": "2023-06-22",
+      "eventId": 288053
+    },
+    {
+      "ticker": "MGM",
+      "side": "long",
+      "entryDate": "2023-06-15",
+      "scheduledExitDate": "2023-06-22",
+      "eventId": 294884
+    },
+    {
+      "ticker": "ANF",
+      "side": "long",
+      "entryDate": "2023-06-20",
+      "scheduledExitDate": "2023-06-26",
+      "eventId": 310045
+    },
+    {
+      "ticker": "PODD",
+      "side": "long",
+      "entryDate": "2023-06-26",
+      "scheduledExitDate": "2023-06-30",
+      "eventId": 289574
+    },
+    {
+      "ticker": "CELH",
+      "side": "long",
+      "entryDate": "2023-06-27",
+      "scheduledExitDate": "2023-07-03",
+      "eventId": 302474
+    },
+    {
+      "ticker": "MLI",
+      "side": "long",
+      "entryDate": "2023-06-28",
+      "scheduledExitDate": "2023-07-05",
+      "eventId": 268085
+    },
+    {
+      "ticker": "GT",
+      "side": "long",
+      "entryDate": "2023-06-30",
+      "scheduledExitDate": "2023-07-07",
+      "eventId": 298595
+    },
+    {
+      "ticker": "RMBS",
+      "side": "long",
+      "entryDate": "2023-07-03",
+      "scheduledExitDate": "2023-07-10",
+      "eventId": 278247
+    },
+    {
+      "ticker": "DVA",
+      "side": "long",
+      "entryDate": "2023-07-05",
+      "scheduledExitDate": "2023-07-11",
+      "eventId": 295403
+    },
+    {
+      "ticker": "VRT",
+      "side": "long",
+      "entryDate": "2023-07-05",
+      "scheduledExitDate": "2023-07-11",
+      "eventId": 302736
+    },
+    {
+      "ticker": "ACGL",
+      "side": "long",
+      "entryDate": "2023-07-05",
+      "scheduledExitDate": "2023-07-11",
+      "eventId": 279717
+    },
+    {
+      "ticker": "MEDP",
+      "side": "long",
+      "entryDate": "2023-07-05",
+      "scheduledExitDate": "2023-07-11",
+      "eventId": 283966
+    },
+    {
+      "ticker": "WFRD",
+      "side": "long",
+      "entryDate": "2023-07-06",
+      "scheduledExitDate": "2023-07-12",
+      "eventId": 300553
+    },
+    {
+      "ticker": "META",
+      "side": "long",
+      "entryDate": "2023-07-07",
+      "scheduledExitDate": "2023-07-13",
+      "eventId": 248217
+    },
+    {
+      "ticker": "OLLI",
+      "side": "long",
+      "entryDate": "2023-07-07",
+      "scheduledExitDate": "2023-07-20",
+      "eventId": 288144
+    },
+    {
+      "ticker": "GM",
+      "side": "long",
+      "entryDate": "2023-07-07",
+      "scheduledExitDate": "2023-07-20",
+      "eventId": 245533
+    },
+    {
+      "ticker": "CROX",
+      "side": "long",
+      "entryDate": "2023-07-07",
+      "scheduledExitDate": "2023-07-20",
+      "eventId": 278028
+    },
+    {
+      "ticker": "ROIV",
+      "side": "long",
+      "entryDate": "2023-07-10",
+      "scheduledExitDate": "2023-07-14",
+      "eventId": 310232
+    },
+    {
+      "ticker": "FCX",
+      "side": "long",
+      "entryDate": "2023-07-13",
+      "scheduledExitDate": "2023-07-19",
+      "eventId": 271797
+    },
+    {
+      "ticker": "ADI",
+      "side": "long",
+      "entryDate": "2023-07-14",
+      "scheduledExitDate": "2023-07-20",
+      "eventId": 263290
+    },
+    {
+      "ticker": "CGNX",
+      "side": "long",
+      "entryDate": "2023-07-14",
+      "scheduledExitDate": "2023-07-20",
+      "eventId": 280809
+    },
+    {
+      "ticker": "CRM",
+      "side": "long",
+      "entryDate": "2023-07-14",
+      "scheduledExitDate": "2023-07-20",
+      "eventId": 291014
+    },
+    {
+      "ticker": "IPGP",
+      "side": "long",
+      "entryDate": "2023-07-14",
+      "scheduledExitDate": "2023-07-20",
+      "eventId": 304717
+    },
+    {
+      "ticker": "MCHP",
+      "side": "long",
+      "entryDate": "2023-07-14",
+      "scheduledExitDate": "2023-07-20",
+      "eventId": 273244
+    },
+    {
+      "ticker": "ONTO",
+      "side": "long",
+      "entryDate": "2023-07-17",
+      "scheduledExitDate": "2023-07-21",
+      "eventId": 292733
+    },
+    {
+      "ticker": "ARES",
+      "side": "long",
+      "entryDate": "2023-07-17",
+      "scheduledExitDate": "2023-07-21",
+      "eventId": 287599
+    },
+    {
+      "ticker": "AAON",
+      "side": "long",
+      "entryDate": "2023-07-18",
+      "scheduledExitDate": "2023-07-24",
+      "eventId": 265656
+    },
+    {
+      "ticker": "CELH",
+      "side": "long",
+      "entryDate": "2023-07-18",
+      "scheduledExitDate": "2023-07-24",
+      "eventId": 274868
+    },
+    {
+      "ticker": "NVDA",
+      "side": "long",
+      "entryDate": "2023-07-18",
+      "scheduledExitDate": "2023-07-24",
+      "eventId": 260519
+    },
+    {
+      "ticker": "LNTH",
+      "side": "long",
+      "entryDate": "2023-07-20",
+      "scheduledExitDate": "2023-07-26",
+      "eventId": 245756
+    },
+    {
+      "ticker": "AOS",
+      "side": "long",
+      "entryDate": "2023-07-20",
+      "scheduledExitDate": "2023-07-26",
+      "eventId": 254620
+    },
+    {
+      "ticker": "DAL",
+      "side": "long",
+      "entryDate": "2023-07-21",
+      "scheduledExitDate": "2023-07-27",
+      "eventId": 285897
+    },
+    {
+      "ticker": "VRSK",
+      "side": "long",
+      "entryDate": "2023-07-25",
+      "scheduledExitDate": "2023-07-31",
+      "eventId": 298681
+    },
+    {
+      "ticker": "WMT",
+      "side": "long",
+      "entryDate": "2023-07-25",
+      "scheduledExitDate": "2023-07-31",
+      "eventId": 308313
+    },
+    {
+      "ticker": "BA",
+      "side": "long",
+      "entryDate": "2023-07-26",
+      "scheduledExitDate": "2023-08-01",
+      "eventId": 289482
+    },
+    {
+      "ticker": "KLAC",
+      "side": "long",
+      "entryDate": "2023-08-01",
+      "scheduledExitDate": "2023-08-07",
+      "eventId": 295384
+    },
+    {
+      "ticker": "FCFS",
+      "side": "long",
+      "entryDate": "2023-08-07",
+      "scheduledExitDate": "2023-08-11",
+      "eventId": 288205
+    },
+    {
+      "ticker": "RBC",
+      "side": "long",
+      "entryDate": "2023-08-08",
+      "scheduledExitDate": "2023-08-14",
+      "eventId": 279706
+    },
+    {
+      "ticker": "APA",
+      "side": "long",
+      "entryDate": "2023-08-09",
+      "scheduledExitDate": "2023-08-15",
+      "eventId": 246184
+    },
+    {
+      "ticker": "MUR",
+      "side": "long",
+      "entryDate": "2023-08-09",
+      "scheduledExitDate": "2023-08-15",
+      "eventId": 261771
+    },
+    {
+      "ticker": "H",
+      "side": "long",
+      "entryDate": "2023-08-10",
+      "scheduledExitDate": "2023-08-16",
+      "eventId": 262033
+    },
+    {
+      "ticker": "STRL",
+      "side": "long",
+      "entryDate": "2023-08-10",
+      "scheduledExitDate": "2023-08-16",
+      "eventId": 305572
+    },
+    {
+      "ticker": "FSLR",
+      "side": "long",
+      "entryDate": "2023-08-14",
+      "scheduledExitDate": "2023-08-18",
+      "eventId": 296957
+    },
+    {
+      "ticker": "HAL",
+      "side": "long",
+      "entryDate": "2023-08-14",
+      "scheduledExitDate": "2023-08-18",
+      "eventId": 256385
+    },
+    {
+      "ticker": "MCK",
+      "side": "long",
+      "entryDate": "2023-08-14",
+      "scheduledExitDate": "2023-08-18",
+      "eventId": 265475
+    },
+    {
+      "ticker": "MANH",
+      "side": "long",
+      "entryDate": "2023-08-15",
+      "scheduledExitDate": "2023-08-21",
+      "eventId": 292769
+    },
+    {
+      "ticker": "ACM",
+      "side": "long",
+      "entryDate": "2023-08-15",
+      "scheduledExitDate": "2023-08-21",
+      "eventId": 246649
+    },
+    {
+      "ticker": "COKE",
+      "side": "long",
+      "entryDate": "2023-08-16",
+      "scheduledExitDate": "2023-08-22",
+      "eventId": 271871
+    },
+    {
+      "ticker": "ORCL",
+      "side": "long",
+      "entryDate": "2023-08-17",
+      "scheduledExitDate": "2023-08-23",
+      "eventId": 248642
+    },
+    {
+      "ticker": "PSN",
+      "side": "long",
+      "entryDate": "2023-08-17",
+      "scheduledExitDate": "2023-08-23",
+      "eventId": 255397
+    },
+    {
+      "ticker": "NTNX",
+      "side": "long",
+      "entryDate": "2023-08-18",
+      "scheduledExitDate": "2023-08-24",
+      "eventId": 325111
+    },
+    {
+      "ticker": "CBOE",
+      "side": "long",
+      "entryDate": "2023-08-21",
+      "scheduledExitDate": "2023-08-25",
+      "eventId": 329502
+    },
+    {
+      "ticker": "TJX",
+      "side": "long",
+      "entryDate": "2023-08-21",
+      "scheduledExitDate": "2023-08-25",
+      "eventId": 348795
+    },
+    {
+      "ticker": "DLB",
+      "side": "long",
+      "entryDate": "2023-08-23",
+      "scheduledExitDate": "2023-08-29",
+      "eventId": 358875
+    },
+    {
+      "ticker": "AIT",
+      "side": "long",
+      "entryDate": "2023-08-24",
+      "scheduledExitDate": "2023-08-30",
+      "eventId": 351676
+    },
+    {
+      "ticker": "NOW",
+      "side": "long",
+      "entryDate": "2023-08-24",
+      "scheduledExitDate": "2023-08-30",
+      "eventId": 345038
+    },
+    {
+      "ticker": "CELH",
+      "side": "long",
+      "entryDate": "2023-08-24",
+      "scheduledExitDate": "2023-08-30",
+      "eventId": 322539
+    },
+    {
+      "ticker": "VRT",
+      "side": "long",
+      "entryDate": "2023-08-24",
+      "scheduledExitDate": "2023-08-30",
+      "eventId": 338917
+    },
+    {
+      "ticker": "THC",
+      "side": "long",
+      "entryDate": "2023-08-25",
+      "scheduledExitDate": "2023-08-31",
+      "eventId": 354433
+    },
+    {
+      "ticker": "ANF",
+      "side": "long",
+      "entryDate": "2023-08-28",
+      "scheduledExitDate": "2023-09-01",
+      "eventId": 367451
+    },
+    {
+      "ticker": "HAE",
+      "side": "long",
+      "entryDate": "2023-08-29",
+      "scheduledExitDate": "2023-09-05",
+      "eventId": 330302
+    },
+    {
+      "ticker": "BSX",
+      "side": "long",
+      "entryDate": "2023-08-30",
+      "scheduledExitDate": "2023-09-06",
+      "eventId": 344943
+    },
+    {
+      "ticker": "APPF",
+      "side": "long",
+      "entryDate": "2023-08-30",
+      "scheduledExitDate": "2023-09-06",
+      "eventId": 346582
+    },
+    {
+      "ticker": "STRL",
+      "side": "long",
+      "entryDate": "2023-09-05",
+      "scheduledExitDate": "2023-09-11",
+      "eventId": 363257
+    },
+    {
+      "ticker": "ANF",
+      "side": "long",
+      "entryDate": "2023-09-05",
+      "scheduledExitDate": "2023-09-11",
+      "eventId": 340183
+    },
+    {
+      "ticker": "BLD",
+      "side": "long",
+      "entryDate": "2023-09-05",
+      "scheduledExitDate": "2023-09-11",
+      "eventId": 358011
+    },
+    {
+      "ticker": "HPE",
+      "side": "long",
+      "entryDate": "2023-09-06",
+      "scheduledExitDate": "2023-09-12",
+      "eventId": 363216
+    },
+    {
+      "ticker": "PSX",
+      "side": "long",
+      "entryDate": "2023-09-06",
+      "scheduledExitDate": "2023-09-12",
+      "eventId": 342932
+    },
+    {
+      "ticker": "HAL",
+      "side": "long",
+      "entryDate": "2023-09-07",
+      "scheduledExitDate": "2023-09-13",
+      "eventId": 374012
+    },
+    {
+      "ticker": "MPC",
+      "side": "long",
+      "entryDate": "2023-09-07",
+      "scheduledExitDate": "2023-09-13",
+      "eventId": 340043
+    },
+    {
+      "ticker": "APO",
+      "side": "long",
+      "entryDate": "2023-09-07",
+      "scheduledExitDate": "2023-09-13",
+      "eventId": 355828
+    },
+    {
+      "ticker": "BKR",
+      "side": "long",
+      "entryDate": "2023-09-07",
+      "scheduledExitDate": "2023-09-13",
+      "eventId": 337659
+    },
+    {
+      "ticker": "ORCL",
+      "side": "long",
+      "entryDate": "2023-09-08",
+      "scheduledExitDate": "2023-09-14",
+      "eventId": 325406
+    },
+    {
+      "ticker": "PCAR",
+      "side": "long",
+      "entryDate": "2023-09-12",
+      "scheduledExitDate": "2023-09-18",
+      "eventId": 317870
+    },
+    {
+      "ticker": "GILD",
+      "side": "long",
+      "entryDate": "2023-09-13",
+      "scheduledExitDate": "2023-09-19",
+      "eventId": 367140
+    },
+    {
+      "ticker": "UBER",
+      "side": "long",
+      "entryDate": "2023-09-13",
+      "scheduledExitDate": "2023-09-19",
+      "eventId": 340303
+    },
+    {
+      "ticker": "FCFS",
+      "side": "long",
+      "entryDate": "2023-09-14",
+      "scheduledExitDate": "2023-09-20",
+      "eventId": 375663
+    },
+    {
+      "ticker": "EVR",
+      "side": "long",
+      "entryDate": "2023-09-18",
+      "scheduledExitDate": "2023-09-22",
+      "eventId": 358534
+    },
+    {
+      "ticker": "H",
+      "side": "long",
+      "entryDate": "2023-09-19",
+      "scheduledExitDate": "2023-09-25",
+      "eventId": 317006
+    },
+    {
+      "ticker": "CRS",
+      "side": "long",
+      "entryDate": "2023-09-22",
+      "scheduledExitDate": "2023-09-28",
+      "eventId": 330065
+    },
+    {
+      "ticker": "DBX",
+      "side": "long",
+      "entryDate": "2023-09-25",
+      "scheduledExitDate": "2023-09-29",
+      "eventId": 324743
+    },
+    {
+      "ticker": "MPC",
+      "side": "long",
+      "entryDate": "2023-09-25",
+      "scheduledExitDate": "2023-09-29",
+      "eventId": 365201
+    },
+    {
+      "ticker": "OLLI",
+      "side": "long",
+      "entryDate": "2023-09-26",
+      "scheduledExitDate": "2023-10-02",
+      "eventId": 352194
+    },
+    {
+      "ticker": "TXT",
+      "side": "long",
+      "entryDate": "2023-09-26",
+      "scheduledExitDate": "2023-10-02",
+      "eventId": 351747
+    },
+    {
+      "ticker": "FTI",
+      "side": "long",
+      "entryDate": "2023-09-26",
+      "scheduledExitDate": "2023-10-02",
+      "eventId": 354254
+    },
+    {
+      "ticker": "VLO",
+      "side": "long",
+      "entryDate": "2023-10-02",
+      "scheduledExitDate": "2023-10-06",
+      "eventId": 350641
+    },
+    {
+      "ticker": "AXON",
+      "side": "long",
+      "entryDate": "2023-10-03",
+      "scheduledExitDate": "2023-10-09",
+      "eventId": 342741
+    },
+    {
+      "ticker": "OLLI",
+      "side": "long",
+      "entryDate": "2023-10-04",
+      "scheduledExitDate": "2023-10-10",
+      "eventId": 326701
+    },
+    {
+      "ticker": "CAH",
+      "side": "long",
+      "entryDate": "2023-10-06",
+      "scheduledExitDate": "2023-10-12",
+      "eventId": 370859
+    },
+    {
+      "ticker": "CNM",
+      "side": "long",
+      "entryDate": "2023-10-09",
+      "scheduledExitDate": "2023-10-13",
+      "eventId": 322023
+    },
+    {
+      "ticker": "TXT",
+      "side": "long",
+      "entryDate": "2023-10-11",
+      "scheduledExitDate": "2023-10-17",
+      "eventId": 337346
+    },
+    {
+      "ticker": "LEN",
+      "side": "long",
+      "entryDate": "2023-10-13",
+      "scheduledExitDate": "2023-10-19",
+      "eventId": 315929
+    },
+    {
+      "ticker": "PHM",
+      "side": "long",
+      "entryDate": "2023-10-13",
+      "scheduledExitDate": "2023-10-19",
+      "eventId": 359468
+    },
+    {
+      "ticker": "GWW",
+      "side": "long",
+      "entryDate": "2023-10-16",
+      "scheduledExitDate": "2023-10-20",
+      "eventId": 354640
+    },
+    {
+      "ticker": "ROK",
+      "side": "long",
+      "entryDate": "2023-10-16",
+      "scheduledExitDate": "2023-10-20",
+      "eventId": 331961
+    },
+    {
+      "ticker": "RNR",
+      "side": "long",
+      "entryDate": "2023-10-16",
+      "scheduledExitDate": "2023-10-20",
+      "eventId": 341224
+    },
+    {
+      "ticker": "CNM",
+      "side": "long",
+      "entryDate": "2023-10-17",
+      "scheduledExitDate": "2023-10-23",
+      "eventId": 372486
+    },
+    {
+      "ticker": "ACGL",
+      "side": "long",
+      "entryDate": "2023-10-17",
+      "scheduledExitDate": "2023-10-23",
+      "eventId": 365044
+    },
+    {
+      "ticker": "SYK",
+      "side": "long",
+      "entryDate": "2023-10-18",
+      "scheduledExitDate": "2023-10-24",
+      "eventId": 353969
+    },
+    {
+      "ticker": "R",
+      "side": "long",
+      "entryDate": "2023-10-19",
+      "scheduledExitDate": "2023-10-25",
+      "eventId": 360521
+    },
+    {
+      "ticker": "ROST",
+      "side": "long",
+      "entryDate": "2023-10-20",
+      "scheduledExitDate": "2023-10-26",
+      "eventId": 329202
+    },
+    {
+      "ticker": "ADBE",
+      "side": "long",
+      "entryDate": "2023-10-23",
+      "scheduledExitDate": "2023-10-27",
+      "eventId": 367428
+    },
+    {
+      "ticker": "FICO",
+      "side": "long",
+      "entryDate": "2023-10-23",
+      "scheduledExitDate": "2023-10-27",
+      "eventId": 344246
+    },
+    {
+      "ticker": "MRK",
+      "side": "long",
+      "entryDate": "2023-10-24",
+      "scheduledExitDate": "2023-11-06",
+      "eventId": 374860
+    },
+    {
+      "ticker": "PEN",
+      "side": "long",
+      "entryDate": "2023-10-24",
+      "scheduledExitDate": "2023-11-06",
+      "eventId": 320935
+    },
+    {
+      "ticker": "HCA",
+      "side": "long",
+      "entryDate": "2023-10-24",
+      "scheduledExitDate": "2023-11-06",
+      "eventId": 376299
+    },
+    {
+      "ticker": "PANW",
+      "side": "long",
+      "entryDate": "2023-10-26",
+      "scheduledExitDate": "2023-11-01",
+      "eventId": 342376
+    },
+    {
+      "ticker": "MSA",
+      "side": "long",
+      "entryDate": "2023-10-27",
+      "scheduledExitDate": "2023-11-02",
+      "eventId": 348605
+    },
+    {
+      "ticker": "NTNX",
+      "side": "long",
+      "entryDate": "2023-11-02",
+      "scheduledExitDate": "2023-11-08",
+      "eventId": 342096
+    },
+    {
+      "ticker": "WDC",
+      "side": "long",
+      "entryDate": "2023-11-02",
+      "scheduledExitDate": "2023-11-08",
+      "eventId": 367367
+    },
+    {
+      "ticker": "GRMN",
+      "side": "long",
+      "entryDate": "2023-11-03",
+      "scheduledExitDate": "2023-11-09",
+      "eventId": 333050
+    },
+    {
+      "ticker": "NVDA",
+      "side": "long",
+      "entryDate": "2023-11-06",
+      "scheduledExitDate": "2023-11-10",
+      "eventId": 372111
+    },
+    {
+      "ticker": "BKNG",
+      "side": "long",
+      "entryDate": "2023-11-08",
+      "scheduledExitDate": "2023-11-14",
+      "eventId": 360365
+    },
+    {
+      "ticker": "DT",
+      "side": "long",
+      "entryDate": "2023-11-08",
+      "scheduledExitDate": "2023-11-14",
+      "eventId": 375032
+    },
+    {
+      "ticker": "NYT",
+      "side": "long",
+      "entryDate": "2023-11-10",
+      "scheduledExitDate": "2023-11-16",
+      "eventId": 376397
+    },
+    {
+      "ticker": "INTU",
+      "side": "long",
+      "entryDate": "2023-11-10",
+      "scheduledExitDate": "2023-11-16",
+      "eventId": 359799
+    },
+    {
+      "ticker": "IR",
+      "side": "long",
+      "entryDate": "2023-11-13",
+      "scheduledExitDate": "2023-11-17",
+      "eventId": 340493
+    },
+    {
+      "ticker": "CNM",
+      "side": "long",
+      "entryDate": "2023-11-13",
+      "scheduledExitDate": "2023-11-17",
+      "eventId": 349137
+    },
+    {
+      "ticker": "CW",
+      "side": "long",
+      "entryDate": "2023-11-15",
+      "scheduledExitDate": "2023-11-21",
+      "eventId": 347948
+    },
+    {
+      "ticker": "USFD",
+      "side": "long",
+      "entryDate": "2023-11-15",
+      "scheduledExitDate": "2023-11-21",
+      "eventId": 368005
+    },
+    {
+      "ticker": "PAG",
+      "side": "long",
+      "entryDate": "2023-11-17",
+      "scheduledExitDate": "2023-11-24",
+      "eventId": 316803
+    },
+    {
+      "ticker": "WSM",
+      "side": "long",
+      "entryDate": "2023-11-17",
+      "scheduledExitDate": "2023-11-24",
+      "eventId": 354092
+    },
+    {
+      "ticker": "INTC",
+      "side": "long",
+      "entryDate": "2023-11-20",
+      "scheduledExitDate": "2023-11-27",
+      "eventId": 370645
+    },
+    {
+      "ticker": "RBA",
+      "side": "long",
+      "entryDate": "2023-11-21",
+      "scheduledExitDate": "2023-11-28",
+      "eventId": 338576
+    },
+    {
+      "ticker": "VRTX",
+      "side": "long",
+      "entryDate": "2023-11-22",
+      "scheduledExitDate": "2023-11-29",
+      "eventId": 323967
+    },
+    {
+      "ticker": "ARES",
+      "side": "long",
+      "entryDate": "2023-11-22",
+      "scheduledExitDate": "2023-11-29",
+      "eventId": 352174
+    },
+    {
+      "ticker": "DBX",
+      "side": "long",
+      "entryDate": "2023-11-22",
+      "scheduledExitDate": "2023-11-29",
+      "eventId": 371578
+    },
+    {
+      "ticker": "DLB",
+      "side": "long",
+      "entryDate": "2023-11-24",
+      "scheduledExitDate": "2023-11-30",
+      "eventId": 356206
+    },
+    {
+      "ticker": "PANW",
+      "side": "long",
+      "entryDate": "2023-11-24",
+      "scheduledExitDate": "2023-11-30",
+      "eventId": 340528
+    },
+    {
+      "ticker": "TRGP",
+      "side": "long",
+      "entryDate": "2023-11-24",
+      "scheduledExitDate": "2023-11-30",
+      "eventId": 339024
+    },
+    {
+      "ticker": "CRH",
+      "side": "long",
+      "entryDate": "2023-11-24",
+      "scheduledExitDate": "2023-11-30",
+      "eventId": 346792
+    },
+    {
+      "ticker": "AVAV",
+      "side": "long",
+      "entryDate": "2023-11-27",
+      "scheduledExitDate": "2023-12-01",
+      "eventId": 358065
+    },
+    {
+      "ticker": "NWS",
+      "side": "long",
+      "entryDate": "2023-11-27",
+      "scheduledExitDate": "2023-12-01",
+      "eventId": 361950
+    },
+    {
+      "ticker": "EXEL",
+      "side": "long",
+      "entryDate": "2023-11-28",
+      "scheduledExitDate": "2023-12-04",
+      "eventId": 361952
+    },
+    {
+      "ticker": "FND",
+      "side": "long",
+      "entryDate": "2023-11-29",
+      "scheduledExitDate": "2023-12-12",
+      "eventId": 363462
+    },
+    {
+      "ticker": "J",
+      "side": "long",
+      "entryDate": "2023-12-01",
+      "scheduledExitDate": "2023-12-07",
+      "eventId": 378491
+    },
+    {
+      "ticker": "STX",
+      "side": "long",
+      "entryDate": "2023-12-01",
+      "scheduledExitDate": "2023-12-07",
+      "eventId": 368094
+    },
+    {
+      "ticker": "PWR",
+      "side": "long",
+      "entryDate": "2023-12-04",
+      "scheduledExitDate": "2023-12-08",
+      "eventId": 350526
+    },
+    {
+      "ticker": "EXEL",
+      "side": "long",
+      "entryDate": "2023-12-04",
+      "scheduledExitDate": "2023-12-08",
+      "eventId": 369682
+    },
+    {
+      "ticker": "ELF",
+      "side": "long",
+      "entryDate": "2023-12-07",
+      "scheduledExitDate": "2023-12-13",
+      "eventId": 356404
+    },
+    {
+      "ticker": "DUOL",
+      "side": "long",
+      "entryDate": "2023-12-07",
+      "scheduledExitDate": "2023-12-13",
+      "eventId": 314250
+    },
+    {
+      "ticker": "BLKB",
+      "side": "long",
+      "entryDate": "2023-12-07",
+      "scheduledExitDate": "2023-12-13",
+      "eventId": 345323
+    },
+    {
+      "ticker": "REGN",
+      "side": "long",
+      "entryDate": "2023-12-08",
+      "scheduledExitDate": "2023-12-14",
+      "eventId": 324506
+    },
+    {
+      "ticker": "COKE",
+      "side": "long",
+      "entryDate": "2023-12-08",
+      "scheduledExitDate": "2023-12-14",
+      "eventId": 341091
+    },
+    {
+      "ticker": "LYV",
+      "side": "long",
+      "entryDate": "2023-12-11",
+      "scheduledExitDate": "2023-12-15",
+      "eventId": 327721
+    },
+    {
+      "ticker": "GOOG",
+      "side": "long",
+      "entryDate": "2023-12-11",
+      "scheduledExitDate": "2023-12-15",
+      "eventId": 317516
+    },
+    {
+      "ticker": "GOOGL",
+      "side": "long",
+      "entryDate": "2023-12-11",
+      "scheduledExitDate": "2023-12-15",
+      "eventId": 350422
+    },
+    {
+      "ticker": "THO",
+      "side": "long",
+      "entryDate": "2023-12-12",
+      "scheduledExitDate": "2023-12-18",
+      "eventId": 373426
+    },
+    {
+      "ticker": "UNM",
+      "side": "long",
+      "entryDate": "2023-12-13",
+      "scheduledExitDate": "2023-12-19",
+      "eventId": 338724
+    },
+    {
+      "ticker": "WCC",
+      "side": "long",
+      "entryDate": "2023-12-13",
+      "scheduledExitDate": "2023-12-19",
+      "eventId": 372660
+    },
+    {
+      "ticker": "MU",
+      "side": "long",
+      "entryDate": "2023-12-13",
+      "scheduledExitDate": "2023-12-19",
+      "eventId": 322906
+    },
+    {
+      "ticker": "LIN",
+      "side": "long",
+      "entryDate": "2023-12-14",
+      "scheduledExitDate": "2023-12-20",
+      "eventId": 362614
+    },
+    {
+      "ticker": "CDNS",
+      "side": "long",
+      "entryDate": "2023-12-14",
+      "scheduledExitDate": "2023-12-20",
+      "eventId": 327200
+    },
+    {
+      "ticker": "CPRT",
+      "side": "long",
+      "entryDate": "2023-12-14",
+      "scheduledExitDate": "2023-12-20",
+      "eventId": 345852
+    },
+    {
+      "ticker": "CHRD",
+      "side": "long",
+      "entryDate": "2023-12-19",
+      "scheduledExitDate": "2023-12-26",
+      "eventId": 328697
+    },
+    {
+      "ticker": "JBL",
+      "side": "long",
+      "entryDate": "2023-12-20",
+      "scheduledExitDate": "2023-12-27",
+      "eventId": 314526
+    },
+    {
+      "ticker": "DBX",
+      "side": "long",
+      "entryDate": "2023-12-21",
+      "scheduledExitDate": "2023-12-28",
+      "eventId": 354053
+    },
+    {
+      "ticker": "TXRH",
+      "side": "long",
+      "entryDate": "2023-12-21",
+      "scheduledExitDate": "2023-12-28",
+      "eventId": 336933
+    },
+    {
+      "ticker": "ENS",
+      "side": "long",
+      "entryDate": "2023-12-22",
+      "scheduledExitDate": "2023-12-29",
+      "eventId": 346602
+    },
+    {
+      "ticker": "COIN",
+      "side": "long",
+      "entryDate": "2023-12-22",
+      "scheduledExitDate": "2023-12-29",
+      "eventId": 362625
+    },
+    {
+      "ticker": "ESNT",
+      "side": "long",
+      "entryDate": "2023-12-26",
+      "scheduledExitDate": "2024-01-02",
+      "eventId": 331962
+    },
+    {
+      "ticker": "CCL",
+      "side": "long",
+      "entryDate": "2023-12-27",
+      "scheduledExitDate": "2024-01-03",
+      "eventId": 316773
+    },
+    {
+      "ticker": "MU",
+      "side": "long",
+      "entryDate": "2023-12-27",
+      "scheduledExitDate": "2024-01-03",
+      "eventId": 344958
+    },
+    {
+      "ticker": "ONTO",
+      "side": "long",
+      "entryDate": "2023-12-27",
+      "scheduledExitDate": "2024-01-03",
+      "eventId": 320012
+    },
+    {
+      "ticker": "AMD",
+      "side": "long",
+      "entryDate": "2023-12-28",
+      "scheduledExitDate": "2024-01-04",
+      "eventId": 342863
+    },
+    {
+      "ticker": "DELL",
+      "side": "long",
+      "entryDate": "2023-12-28",
+      "scheduledExitDate": "2024-01-04",
+      "eventId": 361119
+    },
+    {
+      "ticker": "ENTG",
+      "side": "long",
+      "entryDate": "2023-12-28",
+      "scheduledExitDate": "2024-01-04",
+      "eventId": 316299
+    },
+    {
+      "ticker": "CELH",
+      "side": "long",
+      "entryDate": "2024-01-02",
+      "scheduledExitDate": "2024-01-16",
+      "eventId": 329914
+    },
+    {
+      "ticker": "HIMS",
+      "side": "long",
+      "entryDate": "2024-01-02",
+      "scheduledExitDate": "2024-01-16",
+      "eventId": 348061
+    },
+    {
+      "ticker": "LNTH",
+      "side": "long",
+      "entryDate": "2024-01-02",
+      "scheduledExitDate": "2024-01-16",
+      "eventId": 343783
+    },
+    {
+      "ticker": "BROS",
+      "side": "long",
+      "entryDate": "2024-01-02",
+      "scheduledExitDate": "2024-01-16",
+      "eventId": 379223
+    },
+    {
+      "ticker": "CI",
+      "side": "long",
+      "entryDate": "2024-01-03",
+      "scheduledExitDate": "2024-01-17",
+      "eventId": 326691
+    },
+    {
+      "ticker": "CVS",
+      "side": "long",
+      "entryDate": "2024-01-03",
+      "scheduledExitDate": "2024-01-17",
+      "eventId": 321906
+    },
+    {
+      "ticker": "FE",
+      "side": "long",
+      "entryDate": "2024-01-03",
+      "scheduledExitDate": "2024-01-17",
+      "eventId": 348758
+    },
+    {
+      "ticker": "JNJ",
+      "side": "long",
+      "entryDate": "2024-01-03",
+      "scheduledExitDate": "2024-01-17",
+      "eventId": 337087
+    },
+    {
+      "ticker": "ANF",
+      "side": "long",
+      "entryDate": "2024-01-04",
+      "scheduledExitDate": "2024-01-10",
+      "eventId": 352568
+    },
+    {
+      "ticker": "CNX",
+      "side": "long",
+      "entryDate": "2024-01-05",
+      "scheduledExitDate": "2024-01-11",
+      "eventId": 348182
+    },
+    {
+      "ticker": "APO",
+      "side": "long",
+      "entryDate": "2024-01-08",
+      "scheduledExitDate": "2024-01-12",
+      "eventId": 350080
+    },
+    {
+      "ticker": "RCL",
+      "side": "long",
+      "entryDate": "2024-01-09",
+      "scheduledExitDate": "2024-01-16",
+      "eventId": 341628
+    },
+    {
+      "ticker": "TEX",
+      "side": "long",
+      "entryDate": "2024-01-09",
+      "scheduledExitDate": "2024-01-16",
+      "eventId": 314400
+    },
+    {
+      "ticker": "SMCI",
+      "side": "long",
+      "entryDate": "2024-01-10",
+      "scheduledExitDate": "2024-01-17",
+      "eventId": 327699
+    },
+    {
+      "ticker": "DECK",
+      "side": "long",
+      "entryDate": "2024-01-11",
+      "scheduledExitDate": "2024-01-18",
+      "eventId": 349411
+    },
+    {
+      "ticker": "PANW",
+      "side": "long",
+      "entryDate": "2024-01-11",
+      "scheduledExitDate": "2024-01-18",
+      "eventId": 318171
+    },
+    {
+      "ticker": "CRM",
+      "side": "long",
+      "entryDate": "2024-01-12",
+      "scheduledExitDate": "2024-01-19",
+      "eventId": 332272
+    },
+    {
+      "ticker": "WWD",
+      "side": "long",
+      "entryDate": "2024-01-16",
+      "scheduledExitDate": "2024-01-22",
+      "eventId": 357515
+    },
+    {
+      "ticker": "EME",
+      "side": "long",
+      "entryDate": "2024-01-16",
+      "scheduledExitDate": "2024-01-22",
+      "eventId": 374308
+    },
+    {
+      "ticker": "REGN",
+      "side": "long",
+      "entryDate": "2024-01-18",
+      "scheduledExitDate": "2024-01-24",
+      "eventId": 351963
+    },
+    {
+      "ticker": "GT",
+      "side": "long",
+      "entryDate": "2024-01-19",
+      "scheduledExitDate": "2024-01-25",
+      "eventId": 341271
+    },
+    {
+      "ticker": "TMHC",
+      "side": "long",
+      "entryDate": "2024-01-22",
+      "scheduledExitDate": "2024-01-26",
+      "eventId": 327569
+    },
+    {
+      "ticker": "AMD",
+      "side": "long",
+      "entryDate": "2024-01-22",
+      "scheduledExitDate": "2024-01-26",
+      "eventId": 367894
+    },
+    {
+      "ticker": "ENTG",
+      "side": "long",
+      "entryDate": "2024-01-22",
+      "scheduledExitDate": "2024-01-26",
+      "eventId": 376343
+    },
+    {
+      "ticker": "MAR",
+      "side": "long",
+      "entryDate": "2024-01-22",
+      "scheduledExitDate": "2024-01-26",
+      "eventId": 350019
+    },
+    {
+      "ticker": "RCL",
+      "side": "long",
+      "entryDate": "2024-01-22",
+      "scheduledExitDate": "2024-01-26",
+      "eventId": 324196
+    },
+    {
+      "ticker": "NXPI",
+      "side": "long",
+      "entryDate": "2024-01-23",
+      "scheduledExitDate": "2024-01-29",
+      "eventId": 334220
+    },
+    {
+      "ticker": "SITM",
+      "side": "long",
+      "entryDate": "2024-01-23",
+      "scheduledExitDate": "2024-01-29",
+      "eventId": 333834
+    },
+    {
+      "ticker": "AEIS",
+      "side": "long",
+      "entryDate": "2024-01-24",
+      "scheduledExitDate": "2024-01-30",
+      "eventId": 379723
+    },
+    {
+      "ticker": "APP",
+      "side": "long",
+      "entryDate": "2024-01-25",
+      "scheduledExitDate": "2024-01-31",
+      "eventId": 374501
+    },
+    {
+      "ticker": "ANF",
+      "side": "long",
+      "entryDate": "2024-01-25",
+      "scheduledExitDate": "2024-01-31",
+      "eventId": 353472
+    },
+    {
+      "ticker": "SMCI",
+      "side": "long",
+      "entryDate": "2024-01-25",
+      "scheduledExitDate": "2024-01-31",
+      "eventId": 341368
+    },
+    {
+      "ticker": "SNPS",
+      "side": "long",
+      "entryDate": "2024-01-25",
+      "scheduledExitDate": "2024-01-31",
+      "eventId": 376220
+    },
+    {
+      "ticker": "STX",
+      "side": "long",
+      "entryDate": "2024-01-25",
+      "scheduledExitDate": "2024-01-31",
+      "eventId": 335890
+    },
+    {
+      "ticker": "ADBE",
+      "side": "long",
+      "entryDate": "2024-01-29",
+      "scheduledExitDate": "2024-02-02",
+      "eventId": 350249
+    },
+    {
+      "ticker": "FIX",
+      "side": "long",
+      "entryDate": "2024-01-30",
+      "scheduledExitDate": "2024-02-05",
+      "eventId": 327329
+    },
+    {
+      "ticker": "KKR",
+      "side": "long",
+      "entryDate": "2024-01-30",
+      "scheduledExitDate": "2024-02-05",
+      "eventId": 334754
+    },
+    {
+      "ticker": "NRG",
+      "side": "long",
+      "entryDate": "2024-01-30",
+      "scheduledExitDate": "2024-02-05",
+      "eventId": 357683
+    },
+    {
+      "ticker": "ACGL",
+      "side": "long",
+      "entryDate": "2024-02-02",
+      "scheduledExitDate": "2024-02-08",
+      "eventId": 361172
+    },
+    {
+      "ticker": "AJG",
+      "side": "long",
+      "entryDate": "2024-02-02",
+      "scheduledExitDate": "2024-02-08",
+      "eventId": 323648
+    },
+    {
+      "ticker": "MCO",
+      "side": "long",
+      "entryDate": "2024-02-05",
+      "scheduledExitDate": "2024-02-09",
+      "eventId": 357495
+    },
+    {
+      "ticker": "FICO",
+      "side": "long",
+      "entryDate": "2024-02-05",
+      "scheduledExitDate": "2024-02-09",
+      "eventId": 331270
+    },
+    {
+      "ticker": "AMD",
+      "side": "long",
+      "entryDate": "2024-02-06",
+      "scheduledExitDate": "2024-02-12",
+      "eventId": 317954
+    },
+    {
+      "ticker": "AMZN",
+      "side": "long",
+      "entryDate": "2024-02-06",
+      "scheduledExitDate": "2024-02-12",
+      "eventId": 359321
+    },
+    {
+      "ticker": "APP",
+      "side": "long",
+      "entryDate": "2024-02-07",
+      "scheduledExitDate": "2024-02-13",
+      "eventId": 351427
+    },
+    {
+      "ticker": "ANET",
+      "side": "long",
+      "entryDate": "2024-02-07",
+      "scheduledExitDate": "2024-02-13",
+      "eventId": 362602
+    },
+    {
+      "ticker": "APG",
+      "side": "long",
+      "entryDate": "2024-02-07",
+      "scheduledExitDate": "2024-02-13",
+      "eventId": 337422
+    },
+    {
+      "ticker": "DXCM",
+      "side": "long",
+      "entryDate": "2024-02-08",
+      "scheduledExitDate": "2024-02-14",
+      "eventId": 314348
+    },
+    {
+      "ticker": "CSL",
+      "side": "long",
+      "entryDate": "2024-02-09",
+      "scheduledExitDate": "2024-02-15",
+      "eventId": 338549
+    },
+    {
+      "ticker": "WTS",
+      "side": "long",
+      "entryDate": "2024-02-09",
+      "scheduledExitDate": "2024-02-15",
+      "eventId": 361010
+    },
+    {
+      "ticker": "MTSI",
+      "side": "long",
+      "entryDate": "2024-02-13",
+      "scheduledExitDate": "2024-02-20",
+      "eventId": 349273
+    },
+    {
+      "ticker": "ICE",
+      "side": "long",
+      "entryDate": "2024-02-13",
+      "scheduledExitDate": "2024-02-20",
+      "eventId": 316674
+    },
+    {
+      "ticker": "MPWR",
+      "side": "long",
+      "entryDate": "2024-02-13",
+      "scheduledExitDate": "2024-02-20",
+      "eventId": 333206
+    },
+    {
+      "ticker": "PRI",
+      "side": "long",
+      "entryDate": "2024-02-13",
+      "scheduledExitDate": "2024-02-20",
+      "eventId": 345080
+    },
+    {
+      "ticker": "DVA",
+      "side": "long",
+      "entryDate": "2024-02-15",
+      "scheduledExitDate": "2024-02-22",
+      "eventId": 340090
+    },
+    {
+      "ticker": "GE",
+      "side": "long",
+      "entryDate": "2024-02-15",
+      "scheduledExitDate": "2024-02-22",
+      "eventId": 355691
+    },
+    {
+      "ticker": "NFLX",
+      "side": "long",
+      "entryDate": "2024-02-16",
+      "scheduledExitDate": "2024-02-23",
+      "eventId": 375630
+    },
+    {
+      "ticker": "RSG",
+      "side": "long",
+      "entryDate": "2024-02-16",
+      "scheduledExitDate": "2024-02-23",
+      "eventId": 317303
+    },
+    {
+      "ticker": "TDG",
+      "side": "long",
+      "entryDate": "2024-02-16",
+      "scheduledExitDate": "2024-02-23",
+      "eventId": 341698
+    },
+    {
+      "ticker": "BSY",
+      "side": "long",
+      "entryDate": "2024-02-21",
+      "scheduledExitDate": "2024-02-27",
+      "eventId": 330504
+    },
+    {
+      "ticker": "MDLZ",
+      "side": "long",
+      "entryDate": "2024-02-22",
+      "scheduledExitDate": "2024-02-28",
+      "eventId": 330179
+    },
+    {
+      "ticker": "MUSA",
+      "side": "long",
+      "entryDate": "2024-02-22",
+      "scheduledExitDate": "2024-02-28",
+      "eventId": 347692
+    },
+    {
+      "ticker": "R",
+      "side": "long",
+      "entryDate": "2024-02-23",
+      "scheduledExitDate": "2024-02-29",
+      "eventId": 327072
+    },
+    {
+      "ticker": "RCL",
+      "side": "long",
+      "entryDate": "2024-02-27",
+      "scheduledExitDate": "2024-03-04",
+      "eventId": 320127
+    },
+    {
+      "ticker": "ROIV",
+      "side": "long",
+      "entryDate": "2024-02-29",
+      "scheduledExitDate": "2024-03-06",
+      "eventId": 356800
+    },
+    {
+      "ticker": "SLM",
+      "side": "long",
+      "entryDate": "2024-03-01",
+      "scheduledExitDate": "2024-03-07",
+      "eventId": 363399
+    },
+    {
+      "ticker": "ERIE",
+      "side": "long",
+      "entryDate": "2024-03-01",
+      "scheduledExitDate": "2024-03-07",
+      "eventId": 365392
+    },
+    {
+      "ticker": "NRG",
+      "side": "long",
+      "entryDate": "2024-03-01",
+      "scheduledExitDate": "2024-03-07",
+      "eventId": 372400
+    },
+    {
+      "ticker": "PINS",
+      "side": "long",
+      "entryDate": "2024-03-04",
+      "scheduledExitDate": "2024-03-08",
+      "eventId": 377812
+    },
+    {
+      "ticker": "ABNB",
+      "side": "long",
+      "entryDate": "2024-03-04",
+      "scheduledExitDate": "2024-03-08",
+      "eventId": 349600
+    },
+    {
+      "ticker": "UHS",
+      "side": "long",
+      "entryDate": "2024-03-05",
+      "scheduledExitDate": "2024-03-11",
+      "eventId": 327770
+    },
+    {
+      "ticker": "RMBS",
+      "side": "long",
+      "entryDate": "2024-03-06",
+      "scheduledExitDate": "2024-03-12",
+      "eventId": 323045
+    },
+    {
+      "ticker": "APG",
+      "side": "long",
+      "entryDate": "2024-03-06",
+      "scheduledExitDate": "2024-03-12",
+      "eventId": 358677
+    },
+    {
+      "ticker": "FAST",
+      "side": "long",
+      "entryDate": "2024-03-07",
+      "scheduledExitDate": "2024-03-13",
+      "eventId": 331827
+    },
+    {
+      "ticker": "EHC",
+      "side": "long",
+      "entryDate": "2024-03-08",
+      "scheduledExitDate": "2024-03-14",
+      "eventId": 355685
+    },
+    {
+      "ticker": "CAH",
+      "side": "long",
+      "entryDate": "2024-03-12",
+      "scheduledExitDate": "2024-03-18",
+      "eventId": 341275
+    },
+    {
+      "ticker": "APP",
+      "side": "long",
+      "entryDate": "2024-03-12",
+      "scheduledExitDate": "2024-03-18",
+      "eventId": 357808
+    },
+    {
+      "ticker": "CRWD",
+      "side": "long",
+      "entryDate": "2024-03-12",
+      "scheduledExitDate": "2024-03-18",
+      "eventId": 337775
+    },
+    {
+      "ticker": "ACGL",
+      "side": "long",
+      "entryDate": "2024-03-14",
+      "scheduledExitDate": "2024-03-20",
+      "eventId": 324651
+    },
+    {
+      "ticker": "FCFS",
+      "side": "long",
+      "entryDate": "2024-03-14",
+      "scheduledExitDate": "2024-03-20",
+      "eventId": 358027
+    },
+    {
+      "ticker": "MTG",
+      "side": "long",
+      "entryDate": "2024-03-14",
+      "scheduledExitDate": "2024-03-20",
+      "eventId": 315225
+    },
+    {
+      "ticker": "ORCL",
+      "side": "long",
+      "entryDate": "2024-03-15",
+      "scheduledExitDate": "2024-03-21",
+      "eventId": 342950
+    },
+    {
+      "ticker": "TXRH",
+      "side": "long",
+      "entryDate": "2024-03-15",
+      "scheduledExitDate": "2024-03-21",
+      "eventId": 330367
+    },
+    {
+      "ticker": "AMZN",
+      "side": "long",
+      "entryDate": "2024-03-18",
+      "scheduledExitDate": "2024-03-22",
+      "eventId": 324240
+    },
+    {
+      "ticker": "ANET",
+      "side": "long",
+      "entryDate": "2024-03-18",
+      "scheduledExitDate": "2024-03-22",
+      "eventId": 371936
+    },
+    {
+      "ticker": "ESAB",
+      "side": "long",
+      "entryDate": "2024-03-20",
+      "scheduledExitDate": "2024-03-26",
+      "eventId": 363301
+    },
+    {
+      "ticker": "UHS",
+      "side": "long",
+      "entryDate": "2024-03-21",
+      "scheduledExitDate": "2024-03-27",
+      "eventId": 337803
+    },
+    {
+      "ticker": "SNPS",
+      "side": "long",
+      "entryDate": "2024-03-21",
+      "scheduledExitDate": "2024-03-27",
+      "eventId": 377711
+    },
+    {
+      "ticker": "CELH",
+      "side": "long",
+      "entryDate": "2024-03-22",
+      "scheduledExitDate": "2024-03-28",
+      "eventId": 322643
+    },
+    {
+      "ticker": "FCFS",
+      "side": "long",
+      "entryDate": "2024-03-25",
+      "scheduledExitDate": "2024-04-01",
+      "eventId": 327673
+    },
+    {
+      "ticker": "LIVN",
+      "side": "long",
+      "entryDate": "2024-03-25",
+      "scheduledExitDate": "2024-04-01",
+      "eventId": 375209
+    },
+    {
+      "ticker": "MSA",
+      "side": "long",
+      "entryDate": "2024-03-27",
+      "scheduledExitDate": "2024-04-03",
+      "eventId": 316772
+    },
+    {
+      "ticker": "RJF",
+      "side": "long",
+      "entryDate": "2024-03-27",
+      "scheduledExitDate": "2024-04-03",
+      "eventId": 344387
+    },
+    {
+      "ticker": "CEG",
+      "side": "long",
+      "entryDate": "2024-03-28",
+      "scheduledExitDate": "2024-04-04",
+      "eventId": 339110
+    },
+    {
+      "ticker": "EWBC",
+      "side": "long",
+      "entryDate": "2024-04-01",
+      "scheduledExitDate": "2024-04-05",
+      "eventId": 378374
+    },
+    {
+      "ticker": "HQY",
+      "side": "long",
+      "entryDate": "2024-04-04",
+      "scheduledExitDate": "2024-04-10",
+      "eventId": 354569
+    },
+    {
+      "ticker": "MPC",
+      "side": "long",
+      "entryDate": "2024-04-04",
+      "scheduledExitDate": "2024-04-10",
+      "eventId": 347210
+    },
+    {
+      "ticker": "GDDY",
+      "side": "long",
+      "entryDate": "2024-04-05",
+      "scheduledExitDate": "2024-04-11",
+      "eventId": 321261
+    },
+    {
+      "ticker": "WAB",
+      "side": "long",
+      "entryDate": "2024-04-08",
+      "scheduledExitDate": "2024-04-12",
+      "eventId": 314634
+    },
+    {
+      "ticker": "GE",
+      "side": "long",
+      "entryDate": "2024-04-08",
+      "scheduledExitDate": "2024-04-12",
+      "eventId": 326008
+    },
+    {
+      "ticker": "MLI",
+      "side": "long",
+      "entryDate": "2024-04-09",
+      "scheduledExitDate": "2024-04-15",
+      "eventId": 331085
+    },
+    {
+      "ticker": "COKE",
+      "side": "long",
+      "entryDate": "2024-04-10",
+      "scheduledExitDate": "2024-04-16",
+      "eventId": 324485
+    },
+    {
+      "ticker": "DDOG",
+      "side": "long",
+      "entryDate": "2024-04-10",
+      "scheduledExitDate": "2024-04-16",
+      "eventId": 358003
+    },
+    {
+      "ticker": "EFX",
+      "side": "long",
+      "entryDate": "2024-04-11",
+      "scheduledExitDate": "2024-04-17",
+      "eventId": 347817
+    },
+    {
+      "ticker": "AMKR",
+      "side": "long",
+      "entryDate": "2024-04-11",
+      "scheduledExitDate": "2024-04-17",
+      "eventId": 334960
+    },
+    {
+      "ticker": "WING",
+      "side": "long",
+      "entryDate": "2024-04-12",
+      "scheduledExitDate": "2024-04-18",
+      "eventId": 352443
+    },
+    {
+      "ticker": "MU",
+      "side": "long",
+      "entryDate": "2024-04-15",
+      "scheduledExitDate": "2024-04-19",
+      "eventId": 359866
+    },
+    {
+      "ticker": "NVDA",
+      "side": "long",
+      "entryDate": "2024-04-15",
+      "scheduledExitDate": "2024-04-19",
+      "eventId": 326137
+    },
+    {
+      "ticker": "CEG",
+      "side": "long",
+      "entryDate": "2024-04-16",
+      "scheduledExitDate": "2024-04-22",
+      "eventId": 359039
+    },
+    {
+      "ticker": "ETN",
+      "side": "long",
+      "entryDate": "2024-04-16",
+      "scheduledExitDate": "2024-04-22",
+      "eventId": 372715
+    },
+    {
+      "ticker": "NRG",
+      "side": "long",
+      "entryDate": "2024-04-16",
+      "scheduledExitDate": "2024-04-22",
+      "eventId": 367070
+    },
+    {
+      "ticker": "VRT",
+      "side": "long",
+      "entryDate": "2024-04-16",
+      "scheduledExitDate": "2024-04-22",
+      "eventId": 375416
+    },
+    {
+      "ticker": "ODFL",
+      "side": "long",
+      "entryDate": "2024-04-17",
+      "scheduledExitDate": "2024-04-23",
+      "eventId": 349788
+    },
+    {
+      "ticker": "AMAT",
+      "side": "long",
+      "entryDate": "2024-04-29",
+      "scheduledExitDate": "2024-05-03",
+      "eventId": 336962
+    },
+    {
+      "ticker": "DASH",
+      "side": "long",
+      "entryDate": "2024-05-01",
+      "scheduledExitDate": "2024-05-07",
+      "eventId": 320287
+    },
+    {
+      "ticker": "NVDA",
+      "side": "long",
+      "entryDate": "2024-05-01",
+      "scheduledExitDate": "2024-05-07",
+      "eventId": 331768
+    },
+    {
+      "ticker": "DUOL",
+      "side": "long",
+      "entryDate": "2024-05-02",
+      "scheduledExitDate": "2024-05-08",
+      "eventId": 318864
+    },
+    {
+      "ticker": "FIX",
+      "side": "long",
+      "entryDate": "2024-05-02",
+      "scheduledExitDate": "2024-05-08",
+      "eventId": 315019
+    },
+    {
+      "ticker": "TEX",
+      "side": "long",
+      "entryDate": "2024-05-08",
+      "scheduledExitDate": "2024-05-14",
+      "eventId": 430958
+    },
+    {
+      "ticker": "CBOE",
+      "side": "long",
+      "entryDate": "2024-05-09",
+      "scheduledExitDate": "2024-05-15",
+      "eventId": 445909
+    },
+    {
+      "ticker": "HALO",
+      "side": "long",
+      "entryDate": "2024-05-10",
+      "scheduledExitDate": "2024-05-16",
+      "eventId": 401203
+    },
+    {
+      "ticker": "WWD",
+      "side": "long",
+      "entryDate": "2024-05-10",
+      "scheduledExitDate": "2024-05-16",
+      "eventId": 420661
+    },
+    {
+      "ticker": "NRG",
+      "side": "long",
+      "entryDate": "2024-05-13",
+      "scheduledExitDate": "2024-05-17",
+      "eventId": 432710
+    },
+    {
+      "ticker": "CRS",
+      "side": "long",
+      "entryDate": "2024-05-13",
+      "scheduledExitDate": "2024-05-17",
+      "eventId": 386386
+    },
+    {
+      "ticker": "TPL",
+      "side": "long",
+      "entryDate": "2024-05-14",
+      "scheduledExitDate": "2024-05-20",
+      "eventId": 434729
+    },
+    {
+      "ticker": "APP",
+      "side": "long",
+      "entryDate": "2024-05-14",
+      "scheduledExitDate": "2024-05-20",
+      "eventId": 403269
+    },
+    {
+      "ticker": "FCX",
+      "side": "long",
+      "entryDate": "2024-05-15",
+      "scheduledExitDate": "2024-05-21",
+      "eventId": 427784
+    },
+    {
+      "ticker": "MU",
+      "side": "long",
+      "entryDate": "2024-05-15",
+      "scheduledExitDate": "2024-05-21",
+      "eventId": 400341
+    },
+    {
+      "ticker": "OZK",
+      "side": "long",
+      "entryDate": "2024-05-16",
+      "scheduledExitDate": "2024-05-22",
+      "eventId": 444467
+    },
+    {
+      "ticker": "GTLS",
+      "side": "long",
+      "entryDate": "2024-05-16",
+      "scheduledExitDate": "2024-05-22",
+      "eventId": 447767
+    },
+    {
+      "ticker": "KD",
+      "side": "long",
+      "entryDate": "2024-05-17",
+      "scheduledExitDate": "2024-05-23",
+      "eventId": 387061
+    },
+    {
+      "ticker": "KTOS",
+      "side": "long",
+      "entryDate": "2024-05-20",
+      "scheduledExitDate": "2024-05-24",
+      "eventId": 443097
+    },
+    {
+      "ticker": "ARES",
+      "side": "long",
+      "entryDate": "2024-05-20",
+      "scheduledExitDate": "2024-05-24",
+      "eventId": 423668
+    },
+    {
+      "ticker": "CBOE",
+      "side": "long",
+      "entryDate": "2024-05-21",
+      "scheduledExitDate": "2024-05-28",
+      "eventId": 427317
+    },
+    {
+      "ticker": "CAT",
+      "side": "long",
+      "entryDate": "2024-05-22",
+      "scheduledExitDate": "2024-05-29",
+      "eventId": 403876
+    },
+    {
+      "ticker": "DY",
+      "side": "long",
+      "entryDate": "2024-05-23",
+      "scheduledExitDate": "2024-05-30",
+      "eventId": 444138
+    },
+    {
+      "ticker": "VST",
+      "side": "long",
+      "entryDate": "2024-05-24",
+      "scheduledExitDate": "2024-05-31",
+      "eventId": 395732
+    },
+    {
+      "ticker": "CEG",
+      "side": "long",
+      "entryDate": "2024-05-24",
+      "scheduledExitDate": "2024-05-31",
+      "eventId": 432195
+    },
+    {
+      "ticker": "HLNE",
+      "side": "long",
+      "entryDate": "2024-05-24",
+      "scheduledExitDate": "2024-05-31",
+      "eventId": 390466
+    },
+    {
+      "ticker": "DELL",
+      "side": "long",
+      "entryDate": "2024-05-28",
+      "scheduledExitDate": "2024-06-03",
+      "eventId": 424156
+    },
+    {
+      "ticker": "GE",
+      "side": "long",
+      "entryDate": "2024-05-28",
+      "scheduledExitDate": "2024-06-03",
+      "eventId": 434378
+    },
+    {
+      "ticker": "NWSA",
+      "side": "long",
+      "entryDate": "2024-05-29",
+      "scheduledExitDate": "2024-06-04",
+      "eventId": 424875
+    },
+    {
+      "ticker": "META",
+      "side": "long",
+      "entryDate": "2024-05-29",
+      "scheduledExitDate": "2024-06-04",
+      "eventId": 454583
+    },
+    {
+      "ticker": "DKS",
+      "side": "long",
+      "entryDate": "2024-05-30",
+      "scheduledExitDate": "2024-06-05",
+      "eventId": 427151
+    },
+    {
+      "ticker": "AR",
+      "side": "long",
+      "entryDate": "2024-05-31",
+      "scheduledExitDate": "2024-06-06",
+      "eventId": 384347
+    },
+    {
+      "ticker": "APP",
+      "side": "long",
+      "entryDate": "2024-05-31",
+      "scheduledExitDate": "2024-06-06",
+      "eventId": 440519
+    },
+    {
+      "ticker": "ELAN",
+      "side": "long",
+      "entryDate": "2024-05-31",
+      "scheduledExitDate": "2024-06-06",
+      "eventId": 418161
+    },
+    {
+      "ticker": "HOOD",
+      "side": "long",
+      "entryDate": "2024-05-31",
+      "scheduledExitDate": "2024-06-06",
+      "eventId": 409680
+    },
+    {
+      "ticker": "GM",
+      "side": "long",
+      "entryDate": "2024-06-05",
+      "scheduledExitDate": "2024-06-11",
+      "eventId": 449604
+    },
+    {
+      "ticker": "HQY",
+      "side": "long",
+      "entryDate": "2024-06-05",
+      "scheduledExitDate": "2024-06-11",
+      "eventId": 408397
+    },
+    {
+      "ticker": "NVDA",
+      "side": "long",
+      "entryDate": "2024-06-06",
+      "scheduledExitDate": "2024-06-12",
+      "eventId": 446709
+    },
+    {
+      "ticker": "RCL",
+      "side": "long",
+      "entryDate": "2024-06-06",
+      "scheduledExitDate": "2024-06-12",
+      "eventId": 384016
+    },
+    {
+      "ticker": "FND",
+      "side": "long",
+      "entryDate": "2024-06-10",
+      "scheduledExitDate": "2024-06-14",
+      "eventId": 404323
+    },
+    {
+      "ticker": "COF",
+      "side": "long",
+      "entryDate": "2024-06-11",
+      "scheduledExitDate": "2024-06-17",
+      "eventId": 413961
+    },
+    {
+      "ticker": "AMAT",
+      "side": "long",
+      "entryDate": "2024-06-11",
+      "scheduledExitDate": "2024-06-17",
+      "eventId": 395611
+    },
+    {
+      "ticker": "CRWD",
+      "side": "long",
+      "entryDate": "2024-06-11",
+      "scheduledExitDate": "2024-06-17",
+      "eventId": 415574
+    },
+    {
+      "ticker": "GWRE",
+      "side": "long",
+      "entryDate": "2024-06-11",
+      "scheduledExitDate": "2024-06-17",
+      "eventId": 453974
+    },
+    {
+      "ticker": "HOOD",
+      "side": "long",
+      "entryDate": "2024-06-11",
+      "scheduledExitDate": "2024-06-17",
+      "eventId": 420748
+    },
+    {
+      "ticker": "NRG",
+      "side": "long",
+      "entryDate": "2024-06-13",
+      "scheduledExitDate": "2024-06-20",
+      "eventId": 430547
+    },
+    {
+      "ticker": "WAL",
+      "side": "long",
+      "entryDate": "2024-06-17",
+      "scheduledExitDate": "2024-06-24",
+      "eventId": 396667
+    },
+    {
+      "ticker": "CASY",
+      "side": "long",
+      "entryDate": "2024-06-18",
+      "scheduledExitDate": "2024-06-25",
+      "eventId": 452784
+    },
+    {
+      "ticker": "CMG",
+      "side": "long",
+      "entryDate": "2024-06-18",
+      "scheduledExitDate": "2024-06-25",
+      "eventId": 412551
+    },
+    {
+      "ticker": "NVDA",
+      "side": "long",
+      "entryDate": "2024-06-18",
+      "scheduledExitDate": "2024-06-25",
+      "eventId": 396653
+    },
+    {
+      "ticker": "ROST",
+      "side": "long",
+      "entryDate": "2024-06-20",
+      "scheduledExitDate": "2024-06-26",
+      "eventId": 405965
+    },
+    {
+      "ticker": "PLTR",
+      "side": "long",
+      "entryDate": "2024-06-20",
+      "scheduledExitDate": "2024-06-26",
+      "eventId": 438628
+    },
+    {
+      "ticker": "GE",
+      "side": "long",
+      "entryDate": "2024-06-20",
+      "scheduledExitDate": "2024-06-26",
+      "eventId": 446273
+    },
+    {
+      "ticker": "SYF",
+      "side": "long",
+      "entryDate": "2024-06-21",
+      "scheduledExitDate": "2024-06-27",
+      "eventId": 408824
+    },
+    {
+      "ticker": "IT",
+      "side": "long",
+      "entryDate": "2024-06-24",
+      "scheduledExitDate": "2024-06-28",
+      "eventId": 445894
+    },
+    {
+      "ticker": "PANW",
+      "side": "long",
+      "entryDate": "2024-06-27",
+      "scheduledExitDate": "2024-07-03",
+      "eventId": 382464
+    },
+    {
+      "ticker": "VNOM",
+      "side": "long",
+      "entryDate": "2024-06-28",
+      "scheduledExitDate": "2024-07-05",
+      "eventId": 452153
+    },
+    {
+      "ticker": "META",
+      "side": "long",
+      "entryDate": "2024-06-28",
+      "scheduledExitDate": "2024-07-05",
+      "eventId": 450399
+    },
+    {
+      "ticker": "ANET",
+      "side": "long",
+      "entryDate": "2024-07-01",
+      "scheduledExitDate": "2024-07-08",
+      "eventId": 455118
+    },
+    {
+      "ticker": "FN",
+      "side": "long",
+      "entryDate": "2024-07-01",
+      "scheduledExitDate": "2024-07-08",
+      "eventId": 404747
+    },
+    {
+      "ticker": "HOOD",
+      "side": "long",
+      "entryDate": "2024-07-01",
+      "scheduledExitDate": "2024-07-08",
+      "eventId": 405706
+    },
+    {
+      "ticker": "HBAN",
+      "side": "long",
+      "entryDate": "2024-07-03",
+      "scheduledExitDate": "2024-07-10",
+      "eventId": 429094
+    },
+    {
+      "ticker": "KEY",
+      "side": "long",
+      "entryDate": "2024-07-03",
+      "scheduledExitDate": "2024-07-10",
+      "eventId": 387380
+    },
+    {
+      "ticker": "ENSG",
+      "side": "long",
+      "entryDate": "2024-07-05",
+      "scheduledExitDate": "2024-07-11",
+      "eventId": 438983
+    },
+    {
+      "ticker": "PNC",
+      "side": "long",
+      "entryDate": "2024-07-05",
+      "scheduledExitDate": "2024-07-11",
+      "eventId": 382035
+    },
+    {
+      "ticker": "META",
+      "side": "long",
+      "entryDate": "2024-07-09",
+      "scheduledExitDate": "2024-07-15",
+      "eventId": 382197
+    },
+    {
+      "ticker": "BBY",
+      "side": "long",
+      "entryDate": "2024-07-09",
+      "scheduledExitDate": "2024-07-22",
+      "eventId": 393103
+    },
+    {
+      "ticker": "COLM",
+      "side": "long",
+      "entryDate": "2024-07-09",
+      "scheduledExitDate": "2024-07-22",
+      "eventId": 389028
+    },
+    {
+      "ticker": "COHR",
+      "side": "long",
+      "entryDate": "2024-07-10",
+      "scheduledExitDate": "2024-07-16",
+      "eventId": 445797
+    },
+    {
+      "ticker": "OKTA",
+      "side": "long",
+      "entryDate": "2024-07-10",
+      "scheduledExitDate": "2024-07-16",
+      "eventId": 388932
+    },
+    {
+      "ticker": "ZION",
+      "side": "long",
+      "entryDate": "2024-07-11",
+      "scheduledExitDate": "2024-07-17",
+      "eventId": 446430
+    },
+    {
+      "ticker": "CRUS",
+      "side": "long",
+      "entryDate": "2024-07-11",
+      "scheduledExitDate": "2024-07-17",
+      "eventId": 442254
+    },
+    {
+      "ticker": "LLY",
+      "side": "long",
+      "entryDate": "2024-07-11",
+      "scheduledExitDate": "2024-07-17",
+      "eventId": 383654
+    },
+    {
+      "ticker": "UHS",
+      "side": "long",
+      "entryDate": "2024-07-19",
+      "scheduledExitDate": "2024-07-25",
+      "eventId": 401655
+    },
+    {
+      "ticker": "APH",
+      "side": "long",
+      "entryDate": "2024-07-22",
+      "scheduledExitDate": "2024-07-26",
+      "eventId": 403688
+    },
+    {
+      "ticker": "PHM",
+      "side": "long",
+      "entryDate": "2024-07-30",
+      "scheduledExitDate": "2024-08-05",
+      "eventId": 444203
+    },
+    {
+      "ticker": "RNR",
+      "side": "long",
+      "entryDate": "2024-08-01",
+      "scheduledExitDate": "2024-08-07",
+      "eventId": 401595
+    },
+    {
+      "ticker": "OLLI",
+      "side": "long",
+      "entryDate": "2024-08-01",
+      "scheduledExitDate": "2024-08-07",
+      "eventId": 431781
+    },
+    {
+      "ticker": "ALL",
+      "side": "long",
+      "entryDate": "2024-08-01",
+      "scheduledExitDate": "2024-08-07",
+      "eventId": 429573
+    },
+    {
+      "ticker": "ETN",
+      "side": "long",
+      "entryDate": "2024-08-05",
+      "scheduledExitDate": "2024-08-09",
+      "eventId": 423449
+    },
+    {
+      "ticker": "ENSG",
+      "side": "long",
+      "entryDate": "2024-08-07",
+      "scheduledExitDate": "2024-08-13",
+      "eventId": 390969
+    },
+    {
+      "ticker": "GM",
+      "side": "long",
+      "entryDate": "2024-08-12",
+      "scheduledExitDate": "2024-08-16",
+      "eventId": 444912
+    },
+    {
+      "ticker": "ITT",
+      "side": "long",
+      "entryDate": "2024-08-12",
+      "scheduledExitDate": "2024-08-16",
+      "eventId": 389423
+    },
+    {
+      "ticker": "SN",
+      "side": "long",
+      "entryDate": "2024-08-13",
+      "scheduledExitDate": "2024-08-19",
+      "eventId": 453672
+    },
+    {
+      "ticker": "DVA",
+      "side": "long",
+      "entryDate": "2024-08-14",
+      "scheduledExitDate": "2024-08-20",
+      "eventId": 428252
+    },
+    {
+      "ticker": "BURL",
+      "side": "long",
+      "entryDate": "2024-08-14",
+      "scheduledExitDate": "2024-08-20",
+      "eventId": 406947
+    },
+    {
+      "ticker": "BX",
+      "side": "long",
+      "entryDate": "2024-08-16",
+      "scheduledExitDate": "2024-08-22",
+      "eventId": 430754
+    },
+    {
+      "ticker": "AMP",
+      "side": "long",
+      "entryDate": "2024-08-20",
+      "scheduledExitDate": "2024-08-26",
+      "eventId": 420460
+    },
+    {
+      "ticker": "CROX",
+      "side": "long",
+      "entryDate": "2024-08-21",
+      "scheduledExitDate": "2024-08-27",
+      "eventId": 428449
+    },
+    {
+      "ticker": "PANW",
+      "side": "long",
+      "entryDate": "2024-08-22",
+      "scheduledExitDate": "2024-08-28",
+      "eventId": 385704
+    },
+    {
+      "ticker": "UTHR",
+      "side": "long",
+      "entryDate": "2024-08-22",
+      "scheduledExitDate": "2024-08-28",
+      "eventId": 448197
+    },
+    {
+      "ticker": "LLY",
+      "side": "long",
+      "entryDate": "2024-08-22",
+      "scheduledExitDate": "2024-08-28",
+      "eventId": 389610
+    },
+    {
+      "ticker": "APP",
+      "side": "long",
+      "entryDate": "2024-08-23",
+      "scheduledExitDate": "2024-08-29",
+      "eventId": 380727
+    },
+    {
+      "ticker": "PHM",
+      "side": "long",
+      "entryDate": "2024-08-23",
+      "scheduledExitDate": "2024-08-29",
+      "eventId": 380233
+    },
+    {
+      "ticker": "SFM",
+      "side": "long",
+      "entryDate": "2024-08-28",
+      "scheduledExitDate": "2024-09-04",
+      "eventId": 419541
+    },
+    {
+      "ticker": "AXP",
+      "side": "long",
+      "entryDate": "2024-08-28",
+      "scheduledExitDate": "2024-09-04",
+      "eventId": 395639
+    },
+    {
+      "ticker": "CFG",
+      "side": "long",
+      "entryDate": "2024-08-28",
+      "scheduledExitDate": "2024-09-04",
+      "eventId": 390064
+    },
+    {
+      "ticker": "COST",
+      "side": "long",
+      "entryDate": "2024-08-29",
+      "scheduledExitDate": "2024-09-05",
+      "eventId": 379865
+    },
+    {
+      "ticker": "UTHR",
+      "side": "long",
+      "entryDate": "2024-08-30",
+      "scheduledExitDate": "2024-09-06",
+      "eventId": 387099
+    },
+    {
+      "ticker": "PANW",
+      "side": "long",
+      "entryDate": "2024-09-03",
+      "scheduledExitDate": "2024-09-09",
+      "eventId": 436689
+    },
+    {
+      "ticker": "THG",
+      "side": "long",
+      "entryDate": "2024-09-04",
+      "scheduledExitDate": "2024-09-10",
+      "eventId": 409556
+    },
+    {
+      "ticker": "AMZN",
+      "side": "long",
+      "entryDate": "2024-09-04",
+      "scheduledExitDate": "2024-09-10",
+      "eventId": 430116
+    },
+    {
+      "ticker": "OLLI",
+      "side": "long",
+      "entryDate": "2024-09-05",
+      "scheduledExitDate": "2024-09-11",
+      "eventId": 421832
+    },
+    {
+      "ticker": "NOW",
+      "side": "long",
+      "entryDate": "2024-09-05",
+      "scheduledExitDate": "2024-09-11",
+      "eventId": 422089
+    },
+    {
+      "ticker": "TRGP",
+      "side": "long",
+      "entryDate": "2024-09-05",
+      "scheduledExitDate": "2024-09-11",
+      "eventId": 394280
+    },
+    {
+      "ticker": "CPB",
+      "side": "long",
+      "entryDate": "2024-09-06",
+      "scheduledExitDate": "2024-09-12",
+      "eventId": 408985
+    },
+    {
+      "ticker": "TSCO",
+      "side": "long",
+      "entryDate": "2024-09-06",
+      "scheduledExitDate": "2024-09-12",
+      "eventId": 413580
+    },
+    {
+      "ticker": "AJG",
+      "side": "long",
+      "entryDate": "2024-09-09",
+      "scheduledExitDate": "2024-09-13",
+      "eventId": 446621
+    },
+    {
+      "ticker": "CMS",
+      "side": "long",
+      "entryDate": "2024-09-09",
+      "scheduledExitDate": "2024-09-13",
+      "eventId": 383122
+    },
+    {
+      "ticker": "FE",
+      "side": "long",
+      "entryDate": "2024-09-09",
+      "scheduledExitDate": "2024-09-13",
+      "eventId": 417626
+    },
+    {
+      "ticker": "PHM",
+      "side": "long",
+      "entryDate": "2024-09-10",
+      "scheduledExitDate": "2024-09-16",
+      "eventId": 399159
+    },
+    {
+      "ticker": "CASY",
+      "side": "long",
+      "entryDate": "2024-09-10",
+      "scheduledExitDate": "2024-09-16",
+      "eventId": 388215
+    },
+    {
+      "ticker": "DHI",
+      "side": "long",
+      "entryDate": "2024-09-10",
+      "scheduledExitDate": "2024-09-16",
+      "eventId": 428549
+    },
+    {
+      "ticker": "ERIE",
+      "side": "long",
+      "entryDate": "2024-09-10",
+      "scheduledExitDate": "2024-09-16",
+      "eventId": 411708
+    },
+    {
+      "ticker": "NEU",
+      "side": "long",
+      "entryDate": "2024-09-11",
+      "scheduledExitDate": "2024-09-17",
+      "eventId": 398422
+    },
+    {
+      "ticker": "AVGO",
+      "side": "long",
+      "entryDate": "2024-09-13",
+      "scheduledExitDate": "2024-09-19",
+      "eventId": 393052
+    },
+    {
+      "ticker": "ORCL",
+      "side": "long",
+      "entryDate": "2024-09-16",
+      "scheduledExitDate": "2024-09-20",
+      "eventId": 433308
+    },
+    {
+      "ticker": "PNFP",
+      "side": "long",
+      "entryDate": "2024-09-17",
+      "scheduledExitDate": "2024-09-23",
+      "eventId": 429031
+    },
+    {
+      "ticker": "TMHC",
+      "side": "long",
+      "entryDate": "2024-09-17",
+      "scheduledExitDate": "2024-09-23",
+      "eventId": 454009
+    },
+    {
+      "ticker": "SSB",
+      "side": "long",
+      "entryDate": "2024-09-18",
+      "scheduledExitDate": "2024-09-24",
+      "eventId": 454625
+    },
+    {
+      "ticker": "BLK",
+      "side": "long",
+      "entryDate": "2024-09-20",
+      "scheduledExitDate": "2024-09-26",
+      "eventId": 444599
+    },
+    {
+      "ticker": "PNC",
+      "side": "long",
+      "entryDate": "2024-09-20",
+      "scheduledExitDate": "2024-09-26",
+      "eventId": 395458
+    },
+    {
+      "ticker": "COHR",
+      "side": "long",
+      "entryDate": "2024-09-20",
+      "scheduledExitDate": "2024-09-26",
+      "eventId": 404812
+    },
+    {
+      "ticker": "KEY",
+      "side": "long",
+      "entryDate": "2024-09-20",
+      "scheduledExitDate": "2024-09-26",
+      "eventId": 436641
+    },
+    {
+      "ticker": "AAPL",
+      "side": "long",
+      "entryDate": "2024-09-23",
+      "scheduledExitDate": "2024-09-27",
+      "eventId": 384749
+    },
+    {
+      "ticker": "IBM",
+      "side": "long",
+      "entryDate": "2024-09-25",
+      "scheduledExitDate": "2024-10-01",
+      "eventId": 442205
+    },
+    {
+      "ticker": "OLLI",
+      "side": "long",
+      "entryDate": "2024-09-26",
+      "scheduledExitDate": "2024-10-02",
+      "eventId": 409539
+    },
+    {
+      "ticker": "CR",
+      "side": "long",
+      "entryDate": "2024-09-27",
+      "scheduledExitDate": "2024-10-03",
+      "eventId": 405825
+    },
+    {
+      "ticker": "HL",
+      "side": "long",
+      "entryDate": "2024-09-27",
+      "scheduledExitDate": "2024-10-03",
+      "eventId": 401954
+    },
+    {
+      "ticker": "ERIE",
+      "side": "long",
+      "entryDate": "2024-09-27",
+      "scheduledExitDate": "2024-10-03",
+      "eventId": 443262
+    },
+    {
+      "ticker": "EEFT",
+      "side": "long",
+      "entryDate": "2024-10-01",
+      "scheduledExitDate": "2024-10-07",
+      "eventId": 387212
+    },
+    {
+      "ticker": "WDC",
+      "side": "long",
+      "entryDate": "2024-10-01",
+      "scheduledExitDate": "2024-10-07",
+      "eventId": 447721
+    },
+    {
+      "ticker": "WMS",
+      "side": "long",
+      "entryDate": "2024-10-01",
+      "scheduledExitDate": "2024-10-07",
+      "eventId": 412466
+    },
+    {
+      "ticker": "CRUS",
+      "side": "long",
+      "entryDate": "2024-10-02",
+      "scheduledExitDate": "2024-10-08",
+      "eventId": 427390
+    },
+    {
+      "ticker": "BBY",
+      "side": "long",
+      "entryDate": "2024-10-02",
+      "scheduledExitDate": "2024-10-08",
+      "eventId": 408056
+    },
+    {
+      "ticker": "HOOD",
+      "side": "long",
+      "entryDate": "2024-10-02",
+      "scheduledExitDate": "2024-10-08",
+      "eventId": 401134
+    },
+    {
+      "ticker": "COHR",
+      "side": "long",
+      "entryDate": "2024-10-04",
+      "scheduledExitDate": "2024-10-10",
+      "eventId": 411318
+    },
+    {
+      "ticker": "MPWR",
+      "side": "long",
+      "entryDate": "2024-10-07",
+      "scheduledExitDate": "2024-10-11",
+      "eventId": 414696
+    },
+    {
+      "ticker": "PLTR",
+      "side": "long",
+      "entryDate": "2024-10-07",
+      "scheduledExitDate": "2024-10-11",
+      "eventId": 421047
+    },
+    {
+      "ticker": "DECK",
+      "side": "long",
+      "entryDate": "2024-10-08",
+      "scheduledExitDate": "2024-10-14",
+      "eventId": 441313
+    },
+    {
+      "ticker": "MASI",
+      "side": "long",
+      "entryDate": "2024-10-10",
+      "scheduledExitDate": "2024-10-16",
+      "eventId": 449153
+    },
+    {
+      "ticker": "TSCO",
+      "side": "long",
+      "entryDate": "2024-10-10",
+      "scheduledExitDate": "2024-10-16",
+      "eventId": 421492
+    },
+    {
+      "ticker": "FICO",
+      "side": "long",
+      "entryDate": "2024-10-11",
+      "scheduledExitDate": "2024-10-17",
+      "eventId": 448468
+    },
+    {
+      "ticker": "DOCU",
+      "side": "long",
+      "entryDate": "2024-10-14",
+      "scheduledExitDate": "2024-10-18",
+      "eventId": 383123
+    },
+    {
+      "ticker": "PLTR",
+      "side": "long",
+      "entryDate": "2024-10-14",
+      "scheduledExitDate": "2024-10-18",
+      "eventId": 389214
+    },
+    {
+      "ticker": "FFIN",
+      "side": "long",
+      "entryDate": "2024-10-15",
+      "scheduledExitDate": "2024-10-21",
+      "eventId": 396906
+    },
+    {
+      "ticker": "BX",
+      "side": "long",
+      "entryDate": "2024-10-16",
+      "scheduledExitDate": "2024-10-22",
+      "eventId": 451236
+    },
+    {
+      "ticker": "CG",
+      "side": "long",
+      "entryDate": "2024-10-16",
+      "scheduledExitDate": "2024-10-22",
+      "eventId": 401888
+    },
+    {
+      "ticker": "WFC",
+      "side": "long",
+      "entryDate": "2024-10-16",
+      "scheduledExitDate": "2024-10-22",
+      "eventId": 408142
+    },
+    {
+      "ticker": "EXPE",
+      "side": "long",
+      "entryDate": "2024-10-21",
+      "scheduledExitDate": "2024-10-25",
+      "eventId": 408308
+    },
+    {
+      "ticker": "ANET",
+      "side": "long",
+      "entryDate": "2024-10-21",
+      "scheduledExitDate": "2024-10-25",
+      "eventId": 453090
+    },
+    {
+      "ticker": "NVDA",
+      "side": "long",
+      "entryDate": "2024-10-21",
+      "scheduledExitDate": "2024-10-25",
+      "eventId": 403892
+    },
+    {
+      "ticker": "STRL",
+      "side": "long",
+      "entryDate": "2024-10-21",
+      "scheduledExitDate": "2024-10-25",
+      "eventId": 420186
+    },
+    {
+      "ticker": "SN",
+      "side": "long",
+      "entryDate": "2024-10-22",
+      "scheduledExitDate": "2024-10-28",
+      "eventId": 389812
+    },
+    {
+      "ticker": "VRT",
+      "side": "long",
+      "entryDate": "2024-10-22",
+      "scheduledExitDate": "2024-10-28",
+      "eventId": 427899
+    },
+    {
+      "ticker": "NFLX",
+      "side": "long",
+      "entryDate": "2024-10-23",
+      "scheduledExitDate": "2024-10-29",
+      "eventId": 425158
+    },
+    {
+      "ticker": "KKR",
+      "side": "long",
+      "entryDate": "2024-10-23",
+      "scheduledExitDate": "2024-10-29",
+      "eventId": 391536
+    },
+    {
+      "ticker": "HIMS",
+      "side": "long",
+      "entryDate": "2024-10-24",
+      "scheduledExitDate": "2024-10-30",
+      "eventId": 398585
+    },
+    {
+      "ticker": "SF",
+      "side": "long",
+      "entryDate": "2024-10-28",
+      "scheduledExitDate": "2024-11-01",
+      "eventId": 423018
+    },
+    {
+      "ticker": "ADI",
+      "side": "long",
+      "entryDate": "2024-10-29",
+      "scheduledExitDate": "2024-11-04",
+      "eventId": 402134
+    },
+    {
+      "ticker": "FLEX",
+      "side": "long",
+      "entryDate": "2024-10-29",
+      "scheduledExitDate": "2024-11-04",
+      "eventId": 382376
+    },
+    {
+      "ticker": "DOV",
+      "side": "long",
+      "entryDate": "2024-10-30",
+      "scheduledExitDate": "2024-11-05",
+      "eventId": 436044
+    },
+    {
+      "ticker": "DAL",
+      "side": "long",
+      "entryDate": "2024-11-01",
+      "scheduledExitDate": "2024-11-07",
+      "eventId": 406832
+    },
+    {
+      "ticker": "LPX",
+      "side": "long",
+      "entryDate": "2024-11-05",
+      "scheduledExitDate": "2024-11-11",
+      "eventId": 421751
+    },
+    {
+      "ticker": "CLX",
+      "side": "long",
+      "entryDate": "2024-11-05",
+      "scheduledExitDate": "2024-11-11",
+      "eventId": 382139
+    },
+    {
+      "ticker": "PKG",
+      "side": "long",
+      "entryDate": "2024-11-05",
+      "scheduledExitDate": "2024-11-11",
+      "eventId": 379868
+    },
+    {
+      "ticker": "SITM",
+      "side": "long",
+      "entryDate": "2024-11-07",
+      "scheduledExitDate": "2024-11-13",
+      "eventId": 418618
+    },
+    {
+      "ticker": "SPXC",
+      "side": "long",
+      "entryDate": "2024-11-07",
+      "scheduledExitDate": "2024-11-13",
+      "eventId": 397471
+    },
+    {
+      "ticker": "JPM",
+      "side": "long",
+      "entryDate": "2024-11-11",
+      "scheduledExitDate": "2024-11-15",
+      "eventId": 428389
+    },
+    {
+      "ticker": "NOVT",
+      "side": "long",
+      "entryDate": "2024-11-11",
+      "scheduledExitDate": "2024-11-15",
+      "eventId": 434531
+    },
+    {
+      "ticker": "RTX",
+      "side": "long",
+      "entryDate": "2024-11-13",
+      "scheduledExitDate": "2024-11-19",
+      "eventId": 394318
+    },
+    {
+      "ticker": "FNF",
+      "side": "long",
+      "entryDate": "2024-11-14",
+      "scheduledExitDate": "2024-11-20",
+      "eventId": 424098
+    },
+    {
+      "ticker": "TMUS",
+      "side": "long",
+      "entryDate": "2024-11-14",
+      "scheduledExitDate": "2024-11-20",
+      "eventId": 381694
+    },
+    {
+      "ticker": "FOX",
+      "side": "long",
+      "entryDate": "2024-11-15",
+      "scheduledExitDate": "2024-11-21",
+      "eventId": 422983
+    },
+    {
+      "ticker": "SLM",
+      "side": "long",
+      "entryDate": "2024-11-15",
+      "scheduledExitDate": "2024-11-21",
+      "eventId": 417322
+    },
+    {
+      "ticker": "TFC",
+      "side": "long",
+      "entryDate": "2024-11-15",
+      "scheduledExitDate": "2024-11-21",
+      "eventId": 417324
+    },
+    {
+      "ticker": "BURL",
+      "side": "long",
+      "entryDate": "2024-11-18",
+      "scheduledExitDate": "2024-11-22",
+      "eventId": 423849
+    },
+    {
+      "ticker": "TXRH",
+      "side": "long",
+      "entryDate": "2024-11-18",
+      "scheduledExitDate": "2024-11-22",
+      "eventId": 412830
+    },
+    {
+      "ticker": "CRWD",
+      "side": "long",
+      "entryDate": "2024-11-22",
+      "scheduledExitDate": "2024-11-29",
+      "eventId": 394237
+    },
+    {
+      "ticker": "SN",
+      "side": "long",
+      "entryDate": "2024-11-27",
+      "scheduledExitDate": "2024-12-04",
+      "eventId": 452400
+    },
+    {
+      "ticker": "KBH",
+      "side": "long",
+      "entryDate": "2024-11-29",
+      "scheduledExitDate": "2024-12-05",
+      "eventId": 398384
+    },
+    {
+      "ticker": "NRG",
+      "side": "long",
+      "entryDate": "2024-12-02",
+      "scheduledExitDate": "2024-12-06",
+      "eventId": 418701
+    },
+    {
+      "ticker": "APP",
+      "side": "long",
+      "entryDate": "2024-12-03",
+      "scheduledExitDate": "2024-12-09",
+      "eventId": 456000
+    },
+    {
+      "ticker": "AXON",
+      "side": "long",
+      "entryDate": "2024-12-03",
+      "scheduledExitDate": "2024-12-09",
+      "eventId": 389110
+    },
+    {
+      "ticker": "VICR",
+      "side": "long",
+      "entryDate": "2024-12-03",
+      "scheduledExitDate": "2024-12-16",
+      "eventId": 380254
+    },
+    {
+      "ticker": "CCL",
+      "side": "long",
+      "entryDate": "2024-12-05",
+      "scheduledExitDate": "2024-12-11",
+      "eventId": 453287
+    },
+    {
+      "ticker": "NOW",
+      "side": "long",
+      "entryDate": "2024-12-06",
+      "scheduledExitDate": "2024-12-12",
+      "eventId": 414882
+    },
+    {
+      "ticker": "USFD",
+      "side": "long",
+      "entryDate": "2024-12-09",
+      "scheduledExitDate": "2024-12-13",
+      "eventId": 455622
+    },
+    {
+      "ticker": "FOUR",
+      "side": "long",
+      "entryDate": "2024-12-10",
+      "scheduledExitDate": "2024-12-16",
+      "eventId": 423884
+    },
+    {
+      "ticker": "UAL",
+      "side": "long",
+      "entryDate": "2024-12-10",
+      "scheduledExitDate": "2024-12-16",
+      "eventId": 422495
+    },
+    {
+      "ticker": "CBT",
+      "side": "long",
+      "entryDate": "2024-12-11",
+      "scheduledExitDate": "2024-12-17",
+      "eventId": 391310
+    },
+    {
+      "ticker": "RVTY",
+      "side": "long",
+      "entryDate": "2024-12-11",
+      "scheduledExitDate": "2024-12-17",
+      "eventId": 425199
+    },
+    {
+      "ticker": "JEF",
+      "side": "long",
+      "entryDate": "2024-12-11",
+      "scheduledExitDate": "2024-12-17",
+      "eventId": 400006
+    },
+    {
+      "ticker": "GATX",
+      "side": "long",
+      "entryDate": "2024-12-12",
+      "scheduledExitDate": "2024-12-18",
+      "eventId": 421288
+    },
+    {
+      "ticker": "VRT",
+      "side": "long",
+      "entryDate": "2024-12-17",
+      "scheduledExitDate": "2024-12-23",
+      "eventId": 413412
+    },
+    {
+      "ticker": "WSM",
+      "side": "long",
+      "entryDate": "2024-12-17",
+      "scheduledExitDate": "2024-12-23",
+      "eventId": 382364
+    },
+    {
+      "ticker": "CW",
+      "side": "long",
+      "entryDate": "2024-12-18",
+      "scheduledExitDate": "2024-12-24",
+      "eventId": 448471
+    },
+    {
+      "ticker": "TPR",
+      "side": "long",
+      "entryDate": "2024-12-18",
+      "scheduledExitDate": "2024-12-24",
+      "eventId": 403190
+    },
+    {
+      "ticker": "DUOL",
+      "side": "long",
+      "entryDate": "2024-12-19",
+      "scheduledExitDate": "2024-12-26",
+      "eventId": 391370
+    },
+    {
+      "ticker": "CAH",
+      "side": "long",
+      "entryDate": "2024-12-19",
+      "scheduledExitDate": "2025-01-03",
+      "eventId": 390733
+    },
+    {
+      "ticker": "CBOE",
+      "side": "long",
+      "entryDate": "2024-12-19",
+      "scheduledExitDate": "2025-01-03",
+      "eventId": 439073
+    },
+    {
+      "ticker": "UAL",
+      "side": "long",
+      "entryDate": "2024-12-23",
+      "scheduledExitDate": "2024-12-30",
+      "eventId": 434445
+    },
+    {
+      "ticker": "AEE",
+      "side": "long",
+      "entryDate": "2024-12-23",
+      "scheduledExitDate": "2024-12-30",
+      "eventId": 406899
+    },
+    {
+      "ticker": "CCL",
+      "side": "long",
+      "entryDate": "2024-12-24",
+      "scheduledExitDate": "2024-12-31",
+      "eventId": 422660
+    },
+    {
+      "ticker": "AVGO",
+      "side": "long",
+      "entryDate": "2024-12-27",
+      "scheduledExitDate": "2025-01-03",
+      "eventId": 447111
+    },
+    {
+      "ticker": "FDX",
+      "side": "long",
+      "entryDate": "2024-12-30",
+      "scheduledExitDate": "2025-01-14",
+      "eventId": 445807
+    },
+    {
+      "ticker": "DELL",
+      "side": "long",
+      "entryDate": "2024-12-30",
+      "scheduledExitDate": "2025-01-14",
+      "eventId": 398304
+    },
+    {
+      "ticker": "GME",
+      "side": "long",
+      "entryDate": "2024-12-30",
+      "scheduledExitDate": "2025-01-14",
+      "eventId": 414633
+    },
+    {
+      "ticker": "BBY",
+      "side": "long",
+      "entryDate": "2024-12-30",
+      "scheduledExitDate": "2025-01-14",
+      "eventId": 453874
+    },
+    {
+      "ticker": "RRC",
+      "side": "long",
+      "entryDate": "2024-12-30",
+      "scheduledExitDate": "2025-01-14",
+      "eventId": 397057
+    },
+    {
+      "ticker": "FANG",
+      "side": "long",
+      "entryDate": "2024-12-31",
+      "scheduledExitDate": "2025-01-15",
+      "eventId": 409416
+    },
+    {
+      "ticker": "PR",
+      "side": "long",
+      "entryDate": "2024-12-31",
+      "scheduledExitDate": "2025-01-15",
+      "eventId": 452456
+    },
+    {
+      "ticker": "GXO",
+      "side": "long",
+      "entryDate": "2024-12-31",
+      "scheduledExitDate": "2025-01-15",
+      "eventId": 385360
+    },
+    {
+      "ticker": "UGI",
+      "side": "long",
+      "entryDate": "2024-12-31",
+      "scheduledExitDate": "2025-01-15",
+      "eventId": 421038
+    },
+    {
+      "ticker": "GL",
+      "side": "long",
+      "entryDate": "2025-01-02",
+      "scheduledExitDate": "2025-01-16",
+      "eventId": 384516
+    },
+    {
+      "ticker": "ROIV",
+      "side": "long",
+      "entryDate": "2025-01-02",
+      "scheduledExitDate": "2025-01-16",
+      "eventId": 411753
+    },
+    {
+      "ticker": "HALO",
+      "side": "long",
+      "entryDate": "2025-01-02",
+      "scheduledExitDate": "2025-01-16",
+      "eventId": 436883
+    },
+    {
+      "ticker": "STRL",
+      "side": "long",
+      "entryDate": "2025-01-07",
+      "scheduledExitDate": "2025-01-14",
+      "eventId": 398331
+    },
+    {
+      "ticker": "CVLT",
+      "side": "long",
+      "entryDate": "2025-01-07",
+      "scheduledExitDate": "2025-01-14",
+      "eventId": 395780
+    },
+    {
+      "ticker": "NTNX",
+      "side": "long",
+      "entryDate": "2025-01-08",
+      "scheduledExitDate": "2025-01-15",
+      "eventId": 435533
+    },
+    {
+      "ticker": "TTD",
+      "side": "long",
+      "entryDate": "2025-01-08",
+      "scheduledExitDate": "2025-01-15",
+      "eventId": 452800
+    },
+    {
+      "ticker": "VRT",
+      "side": "long",
+      "entryDate": "2025-01-08",
+      "scheduledExitDate": "2025-01-15",
+      "eventId": 451490
+    },
+    {
+      "ticker": "NI",
+      "side": "long",
+      "entryDate": "2025-01-13",
+      "scheduledExitDate": "2025-01-17",
+      "eventId": 395074
+    },
+    {
+      "ticker": "RSG",
+      "side": "long",
+      "entryDate": "2025-01-14",
+      "scheduledExitDate": "2025-01-21",
+      "eventId": 400558
+    },
+    {
+      "ticker": "TTD",
+      "side": "long",
+      "entryDate": "2025-01-22",
+      "scheduledExitDate": "2025-01-28",
+      "eventId": 403815
+    },
+    {
+      "ticker": "EXLS",
+      "side": "long",
+      "entryDate": "2025-01-23",
+      "scheduledExitDate": "2025-01-29",
+      "eventId": 437288
+    },
+    {
+      "ticker": "RTX",
+      "side": "long",
+      "entryDate": "2025-01-23",
+      "scheduledExitDate": "2025-01-29",
+      "eventId": 391145
+    },
+    {
+      "ticker": "AAON",
+      "side": "long",
+      "entryDate": "2025-01-24",
+      "scheduledExitDate": "2025-01-30",
+      "eventId": 435930
+    },
+    {
+      "ticker": "APH",
+      "side": "long",
+      "entryDate": "2025-01-24",
+      "scheduledExitDate": "2025-01-30",
+      "eventId": 451269
+    },
+    {
+      "ticker": "CIEN",
+      "side": "long",
+      "entryDate": "2025-01-24",
+      "scheduledExitDate": "2025-01-30",
+      "eventId": 399787
+    },
+    {
+      "ticker": "HIMS",
+      "side": "long",
+      "entryDate": "2025-01-27",
+      "scheduledExitDate": "2025-01-31",
+      "eventId": 474558
+    },
+    {
+      "ticker": "NEE",
+      "side": "long",
+      "entryDate": "2025-01-28",
+      "scheduledExitDate": "2025-02-03",
+      "eventId": 515505
+    },
+    {
+      "ticker": "CW",
+      "side": "long",
+      "entryDate": "2025-02-04",
+      "scheduledExitDate": "2025-02-10",
+      "eventId": 485512
+    },
+    {
+      "ticker": "CRBG",
+      "side": "long",
+      "entryDate": "2025-02-04",
+      "scheduledExitDate": "2025-02-10",
+      "eventId": 514331
+    },
+    {
+      "ticker": "AEE",
+      "side": "long",
+      "entryDate": "2025-02-05",
+      "scheduledExitDate": "2025-02-11",
+      "eventId": 516824
+    },
+    {
+      "ticker": "EHC",
+      "side": "long",
+      "entryDate": "2025-02-05",
+      "scheduledExitDate": "2025-02-11",
+      "eventId": 481909
+    },
+    {
+      "ticker": "RTX",
+      "side": "long",
+      "entryDate": "2025-02-05",
+      "scheduledExitDate": "2025-02-11",
+      "eventId": 526718
+    },
+    {
+      "ticker": "NWS",
+      "side": "long",
+      "entryDate": "2025-02-06",
+      "scheduledExitDate": "2025-02-12",
+      "eventId": 478129
+    },
+    {
+      "ticker": "FTI",
+      "side": "long",
+      "entryDate": "2025-02-06",
+      "scheduledExitDate": "2025-02-12",
+      "eventId": 489788
+    },
+    {
+      "ticker": "SLM",
+      "side": "long",
+      "entryDate": "2025-02-06",
+      "scheduledExitDate": "2025-02-12",
+      "eventId": 479728
+    },
+    {
+      "ticker": "VLTO",
+      "side": "long",
+      "entryDate": "2025-02-12",
+      "scheduledExitDate": "2025-02-19",
+      "eventId": 487126
+    },
+    {
+      "ticker": "DOCS",
+      "side": "long",
+      "entryDate": "2025-02-13",
+      "scheduledExitDate": "2025-02-20",
+      "eventId": 528801
+    },
+    {
+      "ticker": "ESAB",
+      "side": "long",
+      "entryDate": "2025-02-19",
+      "scheduledExitDate": "2025-02-25",
+      "eventId": 482019
+    },
+    {
+      "ticker": "TXRH",
+      "side": "long",
+      "entryDate": "2025-02-20",
+      "scheduledExitDate": "2025-02-26",
+      "eventId": 529218
+    },
+    {
+      "ticker": "DE",
+      "side": "long",
+      "entryDate": "2025-02-21",
+      "scheduledExitDate": "2025-02-27",
+      "eventId": 516901
+    },
+    {
+      "ticker": "EOG",
+      "side": "long",
+      "entryDate": "2025-02-21",
+      "scheduledExitDate": "2025-02-27",
+      "eventId": 504925
+    },
+    {
+      "ticker": "MO",
+      "side": "long",
+      "entryDate": "2025-02-24",
+      "scheduledExitDate": "2025-02-28",
+      "eventId": 516440
+    },
+    {
+      "ticker": "COKE",
+      "side": "long",
+      "entryDate": "2025-02-24",
+      "scheduledExitDate": "2025-02-28",
+      "eventId": 511972
+    },
+    {
+      "ticker": "PM",
+      "side": "long",
+      "entryDate": "2025-02-25",
+      "scheduledExitDate": "2025-03-03",
+      "eventId": 487240
+    },
+    {
+      "ticker": "INCY",
+      "side": "long",
+      "entryDate": "2025-02-25",
+      "scheduledExitDate": "2025-03-03",
+      "eventId": 468551
+    },
+    {
+      "ticker": "ALK",
+      "side": "long",
+      "entryDate": "2025-02-26",
+      "scheduledExitDate": "2025-03-04",
+      "eventId": 520828
+    },
+    {
+      "ticker": "GILD",
+      "side": "long",
+      "entryDate": "2025-03-05",
+      "scheduledExitDate": "2025-03-11",
+      "eventId": 488364
+    },
+    {
+      "ticker": "MO",
+      "side": "long",
+      "entryDate": "2025-03-05",
+      "scheduledExitDate": "2025-03-11",
+      "eventId": 524745
+    },
+    {
+      "ticker": "AR",
+      "side": "long",
+      "entryDate": "2025-03-06",
+      "scheduledExitDate": "2025-03-12",
+      "eventId": 456769
+    },
+    {
+      "ticker": "EBAY",
+      "side": "long",
+      "entryDate": "2025-03-06",
+      "scheduledExitDate": "2025-03-12",
+      "eventId": 507823
+    },
+    {
+      "ticker": "MP",
+      "side": "long",
+      "entryDate": "2025-03-07",
+      "scheduledExitDate": "2025-03-13",
+      "eventId": 535650
+    },
+    {
+      "ticker": "DE",
+      "side": "long",
+      "entryDate": "2025-03-10",
+      "scheduledExitDate": "2025-03-14",
+      "eventId": 521032
+    },
+    {
+      "ticker": "ESAB",
+      "side": "long",
+      "entryDate": "2025-03-10",
+      "scheduledExitDate": "2025-03-14",
+      "eventId": 458946
+    },
+    {
+      "ticker": "BJ",
+      "side": "long",
+      "entryDate": "2025-03-10",
+      "scheduledExitDate": "2025-03-14",
+      "eventId": 515566
+    },
+    {
+      "ticker": "LII",
+      "side": "long",
+      "entryDate": "2025-03-11",
+      "scheduledExitDate": "2025-03-17",
+      "eventId": 501170
+    },
+    {
+      "ticker": "SNA",
+      "side": "long",
+      "entryDate": "2025-03-11",
+      "scheduledExitDate": "2025-03-17",
+      "eventId": 460097
+    },
+    {
+      "ticker": "NI",
+      "side": "long",
+      "entryDate": "2025-03-13",
+      "scheduledExitDate": "2025-03-19",
+      "eventId": 517623
+    },
+    {
+      "ticker": "MP",
+      "side": "long",
+      "entryDate": "2025-03-18",
+      "scheduledExitDate": "2025-03-24",
+      "eventId": 465238
+    },
+    {
+      "ticker": "AM",
+      "side": "long",
+      "entryDate": "2025-03-21",
+      "scheduledExitDate": "2025-03-27",
+      "eventId": 499396
+    },
+    {
+      "ticker": "CHTR",
+      "side": "long",
+      "entryDate": "2025-03-25",
+      "scheduledExitDate": "2025-03-31",
+      "eventId": 522314
+    },
+    {
+      "ticker": "KNF",
+      "side": "long",
+      "entryDate": "2025-03-26",
+      "scheduledExitDate": "2025-04-01",
+      "eventId": 477655
+    },
+    {
+      "ticker": "CINF",
+      "side": "long",
+      "entryDate": "2025-04-01",
+      "scheduledExitDate": "2025-04-07",
+      "eventId": 522960
+    },
+    {
+      "ticker": "EQT",
+      "side": "long",
+      "entryDate": "2025-04-02",
+      "scheduledExitDate": "2025-04-08",
+      "eventId": 521770
+    },
+    {
+      "ticker": "COF",
+      "side": "long",
+      "entryDate": "2025-04-04",
+      "scheduledExitDate": "2025-04-10",
+      "eventId": 470120
+    },
+    {
+      "ticker": "R",
+      "side": "long",
+      "entryDate": "2025-04-04",
+      "scheduledExitDate": "2025-04-10",
+      "eventId": 457322
+    },
+    {
+      "ticker": "ORLY",
+      "side": "long",
+      "entryDate": "2025-04-07",
+      "scheduledExitDate": "2025-04-11",
+      "eventId": 506347
+    },
+    {
+      "ticker": "VFC",
+      "side": "long",
+      "entryDate": "2025-04-10",
+      "scheduledExitDate": "2025-04-24",
+      "eventId": 527859
+    },
+    {
+      "ticker": "HIMS",
+      "side": "long",
+      "entryDate": "2025-04-10",
+      "scheduledExitDate": "2025-04-24",
+      "eventId": 505778
+    },
+    {
+      "ticker": "BKH",
+      "side": "long",
+      "entryDate": "2025-04-14",
+      "scheduledExitDate": "2025-04-21",
+      "eventId": 482944
+    },
+    {
+      "ticker": "CAH",
+      "side": "long",
+      "entryDate": "2025-04-14",
+      "scheduledExitDate": "2025-04-21",
+      "eventId": 484652
+    },
+    {
+      "ticker": "CB",
+      "side": "long",
+      "entryDate": "2025-04-14",
+      "scheduledExitDate": "2025-04-21",
+      "eventId": 496996
+    },
+    {
+      "ticker": "COST",
+      "side": "long",
+      "entryDate": "2025-04-16",
+      "scheduledExitDate": "2025-04-23",
+      "eventId": 490376
+    },
+    {
+      "ticker": "CTAS",
+      "side": "long",
+      "entryDate": "2025-04-16",
+      "scheduledExitDate": "2025-04-23",
+      "eventId": 475219
+    },
+    {
+      "ticker": "AWK",
+      "side": "long",
+      "entryDate": "2025-04-23",
+      "scheduledExitDate": "2025-04-29",
+      "eventId": 508970
+    },
+    {
+      "ticker": "DGX",
+      "side": "long",
+      "entryDate": "2025-04-24",
+      "scheduledExitDate": "2025-04-30",
+      "eventId": 466648
+    },
+    {
+      "ticker": "HIMS",
+      "side": "long",
+      "entryDate": "2025-04-24",
+      "scheduledExitDate": "2025-05-07",
+      "eventId": 462615
+    },
+    {
+      "ticker": "APP",
+      "side": "long",
+      "entryDate": "2025-04-24",
+      "scheduledExitDate": "2025-05-07",
+      "eventId": 488942
+    },
+    {
+      "ticker": "VFC",
+      "side": "long",
+      "entryDate": "2025-04-24",
+      "scheduledExitDate": "2025-05-07",
+      "eventId": 494687
+    },
+    {
+      "ticker": "MP",
+      "side": "long",
+      "entryDate": "2025-04-28",
+      "scheduledExitDate": "2025-05-02",
+      "eventId": 466747
+    },
+    {
+      "ticker": "MASI",
+      "side": "long",
+      "entryDate": "2025-04-29",
+      "scheduledExitDate": "2025-05-05",
+      "eventId": 538672
+    },
+    {
+      "ticker": "NTNX",
+      "side": "long",
+      "entryDate": "2025-04-29",
+      "scheduledExitDate": "2025-05-05",
+      "eventId": 464883
+    },
+    {
+      "ticker": "VRSN",
+      "side": "long",
+      "entryDate": "2025-04-30",
+      "scheduledExitDate": "2025-05-06",
+      "eventId": 510272
+    },
+    {
+      "ticker": "PEN",
+      "side": "long",
+      "entryDate": "2025-04-30",
+      "scheduledExitDate": "2025-05-06",
+      "eventId": 467118
+    },
+    {
+      "ticker": "WWD",
+      "side": "long",
+      "entryDate": "2025-05-05",
+      "scheduledExitDate": "2025-05-09",
+      "eventId": 540274
+    },
+    {
+      "ticker": "DE",
+      "side": "long",
+      "entryDate": "2025-05-05",
+      "scheduledExitDate": "2025-05-09",
+      "eventId": 490442
+    },
+    {
+      "ticker": "PLNT",
+      "side": "long",
+      "entryDate": "2025-05-06",
+      "scheduledExitDate": "2025-05-12",
+      "eventId": 476183
+    },
+    {
+      "ticker": "COF",
+      "side": "long",
+      "entryDate": "2025-05-07",
+      "scheduledExitDate": "2025-05-13",
+      "eventId": 489103
+    },
+    {
+      "ticker": "HLI",
+      "side": "long",
+      "entryDate": "2025-05-12",
+      "scheduledExitDate": "2025-05-16",
+      "eventId": 526820
+    },
+    {
+      "ticker": "TRMB",
+      "side": "long",
+      "entryDate": "2025-05-13",
+      "scheduledExitDate": "2025-05-19",
+      "eventId": 537669
+    },
+    {
+      "ticker": "BYD",
+      "side": "long",
+      "entryDate": "2025-05-13",
+      "scheduledExitDate": "2025-05-19",
+      "eventId": 461877
+    },
+    {
+      "ticker": "CRWD",
+      "side": "long",
+      "entryDate": "2025-05-15",
+      "scheduledExitDate": "2025-05-21",
+      "eventId": 472632
+    },
+    {
+      "ticker": "OLLI",
+      "side": "long",
+      "entryDate": "2025-05-15",
+      "scheduledExitDate": "2025-05-21",
+      "eventId": 533698
+    },
+    {
+      "ticker": "CRS",
+      "side": "long",
+      "entryDate": "2025-05-15",
+      "scheduledExitDate": "2025-05-21",
+      "eventId": 486143
+    },
+    {
+      "ticker": "FOXA",
+      "side": "long",
+      "entryDate": "2025-05-16",
+      "scheduledExitDate": "2025-05-22",
+      "eventId": 474346
+    },
+    {
+      "ticker": "KO",
+      "side": "long",
+      "entryDate": "2025-05-19",
+      "scheduledExitDate": "2025-05-23",
+      "eventId": 534350
+    },
+    {
+      "ticker": "KMB",
+      "side": "long",
+      "entryDate": "2025-05-21",
+      "scheduledExitDate": "2025-05-28",
+      "eventId": 467865
+    },
+    {
+      "ticker": "GEV",
+      "side": "long",
+      "entryDate": "2025-05-22",
+      "scheduledExitDate": "2025-05-29",
+      "eventId": 490769
+    },
+    {
+      "ticker": "TTWO",
+      "side": "long",
+      "entryDate": "2025-05-22",
+      "scheduledExitDate": "2025-05-29",
+      "eventId": 465107
+    },
+    {
+      "ticker": "CVNA",
+      "side": "long",
+      "entryDate": "2025-05-27",
+      "scheduledExitDate": "2025-06-02",
+      "eventId": 496177
+    },
+    {
+      "ticker": "PANW",
+      "side": "long",
+      "entryDate": "2025-05-28",
+      "scheduledExitDate": "2025-06-03",
+      "eventId": 493488
+    },
+    {
+      "ticker": "KTOS",
+      "side": "long",
+      "entryDate": "2025-05-28",
+      "scheduledExitDate": "2025-06-03",
+      "eventId": 528168
+    },
+    {
+      "ticker": "SLM",
+      "side": "long",
+      "entryDate": "2025-05-28",
+      "scheduledExitDate": "2025-06-03",
+      "eventId": 531743
+    },
+    {
+      "ticker": "KNSL",
+      "side": "long",
+      "entryDate": "2025-05-29",
+      "scheduledExitDate": "2025-06-04",
+      "eventId": 475175
+    },
+    {
+      "ticker": "GE",
+      "side": "long",
+      "entryDate": "2025-05-30",
+      "scheduledExitDate": "2025-06-05",
+      "eventId": 480954
+    },
+    {
+      "ticker": "PFGC",
+      "side": "long",
+      "entryDate": "2025-05-30",
+      "scheduledExitDate": "2025-06-05",
+      "eventId": 474685
+    },
+    {
+      "ticker": "ORCL",
+      "side": "long",
+      "entryDate": "2025-05-30",
+      "scheduledExitDate": "2025-06-05",
+      "eventId": 518078
+    },
+    {
+      "ticker": "RYAN",
+      "side": "long",
+      "entryDate": "2025-06-03",
+      "scheduledExitDate": "2025-06-09",
+      "eventId": 523972
+    },
+    {
+      "ticker": "GWRE",
+      "side": "long",
+      "entryDate": "2025-06-03",
+      "scheduledExitDate": "2025-06-09",
+      "eventId": 513936
+    },
+    {
+      "ticker": "AON",
+      "side": "long",
+      "entryDate": "2025-06-04",
+      "scheduledExitDate": "2025-06-10",
+      "eventId": 457034
+    },
+    {
+      "ticker": "NEM",
+      "side": "long",
+      "entryDate": "2025-06-04",
+      "scheduledExitDate": "2025-06-10",
+      "eventId": 487032
+    },
+    {
+      "ticker": "TKO",
+      "side": "long",
+      "entryDate": "2025-06-05",
+      "scheduledExitDate": "2025-06-11",
+      "eventId": 486643
+    },
+    {
+      "ticker": "PWR",
+      "side": "long",
+      "entryDate": "2025-06-05",
+      "scheduledExitDate": "2025-06-11",
+      "eventId": 496939
+    },
+    {
+      "ticker": "HQY",
+      "side": "long",
+      "entryDate": "2025-06-06",
+      "scheduledExitDate": "2025-06-12",
+      "eventId": 520213
+    },
+    {
+      "ticker": "TTMI",
+      "side": "long",
+      "entryDate": "2025-06-06",
+      "scheduledExitDate": "2025-06-12",
+      "eventId": 493967
+    },
+    {
+      "ticker": "VEEV",
+      "side": "long",
+      "entryDate": "2025-06-09",
+      "scheduledExitDate": "2025-06-13",
+      "eventId": 517277
+    },
+    {
+      "ticker": "MASI",
+      "side": "long",
+      "entryDate": "2025-06-10",
+      "scheduledExitDate": "2025-06-16",
+      "eventId": 465154
+    },
+    {
+      "ticker": "EQH",
+      "side": "long",
+      "entryDate": "2025-06-10",
+      "scheduledExitDate": "2025-06-16",
+      "eventId": 481988
+    },
+    {
+      "ticker": "VRSN",
+      "side": "long",
+      "entryDate": "2025-06-10",
+      "scheduledExitDate": "2025-06-16",
+      "eventId": 502631
+    },
+    {
+      "ticker": "FCFS",
+      "side": "long",
+      "entryDate": "2025-06-11",
+      "scheduledExitDate": "2025-06-17",
+      "eventId": 483649
+    },
+    {
+      "ticker": "PLTR",
+      "side": "long",
+      "entryDate": "2025-06-11",
+      "scheduledExitDate": "2025-06-17",
+      "eventId": 475154
+    },
+    {
+      "ticker": "CVLT",
+      "side": "long",
+      "entryDate": "2025-06-11",
+      "scheduledExitDate": "2025-06-17",
+      "eventId": 471132
+    },
+    {
+      "ticker": "TTMI",
+      "side": "long",
+      "entryDate": "2025-06-12",
+      "scheduledExitDate": "2025-06-18",
+      "eventId": 497168
+    },
+    {
+      "ticker": "CASY",
+      "side": "long",
+      "entryDate": "2025-06-13",
+      "scheduledExitDate": "2025-06-20",
+      "eventId": 514195
+    },
+    {
+      "ticker": "AVGO",
+      "side": "long",
+      "entryDate": "2025-06-13",
+      "scheduledExitDate": "2025-06-20",
+      "eventId": 472543
+    },
+    {
+      "ticker": "GEV",
+      "side": "long",
+      "entryDate": "2025-06-13",
+      "scheduledExitDate": "2025-06-20",
+      "eventId": 461655
+    },
+    {
+      "ticker": "HOOD",
+      "side": "long",
+      "entryDate": "2025-06-13",
+      "scheduledExitDate": "2025-06-20",
+      "eventId": 485599
+    },
+    {
+      "ticker": "ATI",
+      "side": "long",
+      "entryDate": "2025-06-17",
+      "scheduledExitDate": "2025-06-24",
+      "eventId": 473156
+    },
+    {
+      "ticker": "MO",
+      "side": "long",
+      "entryDate": "2025-06-17",
+      "scheduledExitDate": "2025-06-24",
+      "eventId": 496853
+    },
+    {
+      "ticker": "BSX",
+      "side": "long",
+      "entryDate": "2025-06-18",
+      "scheduledExitDate": "2025-06-25",
+      "eventId": 494312
+    },
+    {
+      "ticker": "MP",
+      "side": "long",
+      "entryDate": "2025-06-18",
+      "scheduledExitDate": "2025-06-25",
+      "eventId": 529372
+    },
+    {
+      "ticker": "OLLI",
+      "side": "long",
+      "entryDate": "2025-06-18",
+      "scheduledExitDate": "2025-06-25",
+      "eventId": 528337
+    },
+    {
+      "ticker": "JBL",
+      "side": "long",
+      "entryDate": "2025-06-20",
+      "scheduledExitDate": "2025-06-26",
+      "eventId": 498846
+    },
+    {
+      "ticker": "ORLY",
+      "side": "long",
+      "entryDate": "2025-06-24",
+      "scheduledExitDate": "2025-06-30",
+      "eventId": 477914
+    },
+    {
+      "ticker": "UBER",
+      "side": "long",
+      "entryDate": "2025-06-26",
+      "scheduledExitDate": "2025-07-02",
+      "eventId": 520556
+    },
+    {
+      "ticker": "FLEX",
+      "side": "long",
+      "entryDate": "2025-06-30",
+      "scheduledExitDate": "2025-07-07",
+      "eventId": 480866
+    },
+    {
+      "ticker": "PAYX",
+      "side": "long",
+      "entryDate": "2025-07-01",
+      "scheduledExitDate": "2025-07-08",
+      "eventId": 475237
+    },
+    {
+      "ticker": "MOS",
+      "side": "long",
+      "entryDate": "2025-07-07",
+      "scheduledExitDate": "2025-07-11",
+      "eventId": 500475
+    },
+    {
+      "ticker": "MTB",
+      "side": "long",
+      "entryDate": "2025-07-08",
+      "scheduledExitDate": "2025-07-14",
+      "eventId": 469110
+    },
+    {
+      "ticker": "NVST",
+      "side": "long",
+      "entryDate": "2025-07-08",
+      "scheduledExitDate": "2025-07-14",
+      "eventId": 496238
+    },
+    {
+      "ticker": "GEV",
+      "side": "long",
+      "entryDate": "2025-07-10",
+      "scheduledExitDate": "2025-07-16",
+      "eventId": 496378
+    },
+    {
+      "ticker": "TPR",
+      "side": "long",
+      "entryDate": "2025-07-10",
+      "scheduledExitDate": "2025-07-16",
+      "eventId": 496344
+    },
+    {
+      "ticker": "MP",
+      "side": "long",
+      "entryDate": "2025-07-15",
+      "scheduledExitDate": "2025-07-21",
+      "eventId": 508932
+    },
+    {
+      "ticker": "PLNT",
+      "side": "long",
+      "entryDate": "2025-07-15",
+      "scheduledExitDate": "2025-07-21",
+      "eventId": 458043
+    },
+    {
+      "ticker": "EQT",
+      "side": "long",
+      "entryDate": "2025-07-17",
+      "scheduledExitDate": "2025-07-23",
+      "eventId": 527913
+    },
+    {
+      "ticker": "HWM",
+      "side": "long",
+      "entryDate": "2025-07-17",
+      "scheduledExitDate": "2025-07-23",
+      "eventId": 535926
+    },
+    {
+      "ticker": "RYAN",
+      "side": "long",
+      "entryDate": "2025-07-18",
+      "scheduledExitDate": "2025-07-24",
+      "eventId": 508426
+    },
+    {
+      "ticker": "CIEN",
+      "side": "long",
+      "entryDate": "2025-07-18",
+      "scheduledExitDate": "2025-07-24",
+      "eventId": 523316
+    },
+    {
+      "ticker": "ARES",
+      "side": "long",
+      "entryDate": "2025-07-22",
+      "scheduledExitDate": "2025-07-28",
+      "eventId": 539573
+    },
+    {
+      "ticker": "IBKR",
+      "side": "long",
+      "entryDate": "2025-07-23",
+      "scheduledExitDate": "2025-07-29",
+      "eventId": 502137
+    },
+    {
+      "ticker": "VST",
+      "side": "long",
+      "entryDate": "2025-07-23",
+      "scheduledExitDate": "2025-07-29",
+      "eventId": 498676
+    },
+    {
+      "ticker": "MAT",
+      "side": "long",
+      "entryDate": "2025-07-25",
+      "scheduledExitDate": "2025-07-31",
+      "eventId": 522305
+    },
+    {
+      "ticker": "NOW",
+      "side": "long",
+      "entryDate": "2025-07-28",
+      "scheduledExitDate": "2025-08-01",
+      "eventId": 529122
+    },
+    {
+      "ticker": "CIEN",
+      "side": "long",
+      "entryDate": "2025-07-29",
+      "scheduledExitDate": "2025-08-04",
+      "eventId": 474047
+    },
+    {
+      "ticker": "ENSG",
+      "side": "long",
+      "entryDate": "2025-07-29",
+      "scheduledExitDate": "2025-08-04",
+      "eventId": 470319
+    },
+    {
+      "ticker": "BR",
+      "side": "long",
+      "entryDate": "2025-07-30",
+      "scheduledExitDate": "2025-08-05",
+      "eventId": 515987
+    },
+    {
+      "ticker": "THC",
+      "side": "long",
+      "entryDate": "2025-07-30",
+      "scheduledExitDate": "2025-08-05",
+      "eventId": 491931
+    },
+    {
+      "ticker": "BYD",
+      "side": "long",
+      "entryDate": "2025-07-30",
+      "scheduledExitDate": "2025-08-05",
+      "eventId": 473631
+    },
+    {
+      "ticker": "FIVE",
+      "side": "long",
+      "entryDate": "2025-07-30",
+      "scheduledExitDate": "2025-08-05",
+      "eventId": 535303
+    },
+    {
+      "ticker": "EVRG",
+      "side": "long",
+      "entryDate": "2025-08-01",
+      "scheduledExitDate": "2025-08-07",
+      "eventId": 522069
+    },
+    {
+      "ticker": "DTM",
+      "side": "long",
+      "entryDate": "2025-08-04",
+      "scheduledExitDate": "2025-08-08",
+      "eventId": 471769
+    },
+    {
+      "ticker": "EHC",
+      "side": "long",
+      "entryDate": "2025-08-04",
+      "scheduledExitDate": "2025-08-08",
+      "eventId": 523219
+    },
+    {
+      "ticker": "AGCO",
+      "side": "long",
+      "entryDate": "2025-08-05",
+      "scheduledExitDate": "2025-08-11",
+      "eventId": 512690
+    },
+    {
+      "ticker": "CVNA",
+      "side": "long",
+      "entryDate": "2025-08-06",
+      "scheduledExitDate": "2025-08-12",
+      "eventId": 466269
+    },
+    {
+      "ticker": "CG",
+      "side": "long",
+      "entryDate": "2025-08-08",
+      "scheduledExitDate": "2025-08-14",
+      "eventId": 460782
+    },
+    {
+      "ticker": "CART",
+      "side": "long",
+      "entryDate": "2025-08-11",
+      "scheduledExitDate": "2025-08-15",
+      "eventId": 468741
+    },
+    {
+      "ticker": "ALV",
+      "side": "long",
+      "entryDate": "2025-08-18",
+      "scheduledExitDate": "2025-08-22",
+      "eventId": 513549
+    },
+    {
+      "ticker": "AMD",
+      "side": "long",
+      "entryDate": "2025-08-18",
+      "scheduledExitDate": "2025-08-22",
+      "eventId": 461494
+    },
+    {
+      "ticker": "HOOD",
+      "side": "long",
+      "entryDate": "2025-08-19",
+      "scheduledExitDate": "2025-08-25",
+      "eventId": 461078
+    },
+    {
+      "ticker": "UBER",
+      "side": "long",
+      "entryDate": "2025-08-20",
+      "scheduledExitDate": "2025-08-26",
+      "eventId": 466316
+    },
+    {
+      "ticker": "DE",
+      "side": "long",
+      "entryDate": "2025-08-21",
+      "scheduledExitDate": "2025-08-27",
+      "eventId": 502041
+    },
+    {
+      "ticker": "URI",
+      "side": "long",
+      "entryDate": "2025-08-27",
+      "scheduledExitDate": "2025-09-03",
+      "eventId": 470419
+    },
+    {
+      "ticker": "NEU",
+      "side": "long",
+      "entryDate": "2025-08-29",
+      "scheduledExitDate": "2025-09-05",
+      "eventId": 530825
+    },
+    {
+      "ticker": "SN",
+      "side": "long",
+      "entryDate": "2025-08-29",
+      "scheduledExitDate": "2025-09-05",
+      "eventId": 458586
+    },
+    {
+      "ticker": "TLN",
+      "side": "long",
+      "entryDate": "2025-08-29",
+      "scheduledExitDate": "2025-09-05",
+      "eventId": 495744
+    },
+    {
+      "ticker": "VRT",
+      "side": "long",
+      "entryDate": "2025-09-02",
+      "scheduledExitDate": "2025-09-08",
+      "eventId": 503930
+    },
+    {
+      "ticker": "ADSK",
+      "side": "long",
+      "entryDate": "2025-09-03",
+      "scheduledExitDate": "2025-09-09",
+      "eventId": 472575
+    },
+    {
+      "ticker": "COR",
+      "side": "long",
+      "entryDate": "2025-09-04",
+      "scheduledExitDate": "2025-09-10",
+      "eventId": 458349
+    },
+    {
+      "ticker": "INCY",
+      "side": "long",
+      "entryDate": "2025-09-05",
+      "scheduledExitDate": "2025-09-11",
+      "eventId": 469530
+    },
+    {
+      "ticker": "LOPE",
+      "side": "long",
+      "entryDate": "2025-09-05",
+      "scheduledExitDate": "2025-09-11",
+      "eventId": 521663
+    },
+    {
+      "ticker": "NXST",
+      "side": "long",
+      "entryDate": "2025-09-05",
+      "scheduledExitDate": "2025-09-11",
+      "eventId": 457064
+    },
+    {
+      "ticker": "AYI",
+      "side": "long",
+      "entryDate": "2025-09-08",
+      "scheduledExitDate": "2025-09-12",
+      "eventId": 456124
+    },
+    {
+      "ticker": "GHC",
+      "side": "long",
+      "entryDate": "2025-09-08",
+      "scheduledExitDate": "2025-09-12",
+      "eventId": 499690
+    },
+    {
+      "ticker": "PNR",
+      "side": "long",
+      "entryDate": "2025-09-09",
+      "scheduledExitDate": "2025-09-15",
+      "eventId": 535482
+    },
+    {
+      "ticker": "WBD",
+      "side": "long",
+      "entryDate": "2025-09-11",
+      "scheduledExitDate": "2025-09-17",
+      "eventId": 523645
+    },
+    {
+      "ticker": "HOOD",
+      "side": "long",
+      "entryDate": "2025-09-11",
+      "scheduledExitDate": "2025-09-17",
+      "eventId": 470882
+    },
+    {
+      "ticker": "PWR",
+      "side": "long",
+      "entryDate": "2025-09-12",
+      "scheduledExitDate": "2025-09-18",
+      "eventId": 491860
+    },
+    {
+      "ticker": "CHRW",
+      "side": "long",
+      "entryDate": "2025-09-16",
+      "scheduledExitDate": "2025-09-22",
+      "eventId": 474557
+    },
+    {
+      "ticker": "HLI",
+      "side": "long",
+      "entryDate": "2025-09-16",
+      "scheduledExitDate": "2025-09-22",
+      "eventId": 487142
+    },
+    {
+      "ticker": "CG",
+      "side": "long",
+      "entryDate": "2025-09-16",
+      "scheduledExitDate": "2025-09-22",
+      "eventId": 477316
+    },
+    {
+      "ticker": "CW",
+      "side": "long",
+      "entryDate": "2025-09-16",
+      "scheduledExitDate": "2025-09-22",
+      "eventId": 519973
+    },
+    {
+      "ticker": "INTC",
+      "side": "long",
+      "entryDate": "2025-09-18",
+      "scheduledExitDate": "2025-09-24",
+      "eventId": 537508
+    },
+    {
+      "ticker": "XPO",
+      "side": "long",
+      "entryDate": "2025-09-18",
+      "scheduledExitDate": "2025-09-24",
+      "eventId": 477188
+    },
+    {
+      "ticker": "FIVE",
+      "side": "long",
+      "entryDate": "2025-09-18",
+      "scheduledExitDate": "2025-09-24",
+      "eventId": 526931
+    },
+    {
+      "ticker": "TTMI",
+      "side": "long",
+      "entryDate": "2025-09-18",
+      "scheduledExitDate": "2025-09-24",
+      "eventId": 505032
+    },
+    {
+      "ticker": "THC",
+      "side": "long",
+      "entryDate": "2025-09-23",
+      "scheduledExitDate": "2025-09-29",
+      "eventId": 458482
+    },
+    {
+      "ticker": "WMB",
+      "side": "long",
+      "entryDate": "2025-09-23",
+      "scheduledExitDate": "2025-09-29",
+      "eventId": 518868
+    },
+    {
+      "ticker": "WDC",
+      "side": "long",
+      "entryDate": "2025-09-24",
+      "scheduledExitDate": "2025-09-30",
+      "eventId": 491111
+    },
+    {
+      "ticker": "GEV",
+      "side": "long",
+      "entryDate": "2025-09-24",
+      "scheduledExitDate": "2025-09-30",
+      "eventId": 515477
+    },
+    {
+      "ticker": "CBOE",
+      "side": "long",
+      "entryDate": "2025-09-25",
+      "scheduledExitDate": "2025-10-01",
+      "eventId": 522711
+    },
+    {
+      "ticker": "NFG",
+      "side": "long",
+      "entryDate": "2025-09-25",
+      "scheduledExitDate": "2025-10-01",
+      "eventId": 477499
+    },
+    {
+      "ticker": "ETR",
+      "side": "long",
+      "entryDate": "2025-09-25",
+      "scheduledExitDate": "2025-10-01",
+      "eventId": 511987
+    },
+    {
+      "ticker": "PPL",
+      "side": "long",
+      "entryDate": "2025-09-26",
+      "scheduledExitDate": "2025-10-02",
+      "eventId": 501348
+    },
+    {
+      "ticker": "RGLD",
+      "side": "long",
+      "entryDate": "2025-09-30",
+      "scheduledExitDate": "2025-10-06",
+      "eventId": 534457
+    },
+    {
+      "ticker": "ARWR",
+      "side": "long",
+      "entryDate": "2025-10-02",
+      "scheduledExitDate": "2025-10-08",
+      "eventId": 504061
+    },
+    {
+      "ticker": "CRH",
+      "side": "long",
+      "entryDate": "2025-10-02",
+      "scheduledExitDate": "2025-10-08",
+      "eventId": 491782
+    },
+    {
+      "ticker": "VMI",
+      "side": "long",
+      "entryDate": "2025-10-02",
+      "scheduledExitDate": "2025-10-08",
+      "eventId": 475930
+    },
+    {
+      "ticker": "AVAV",
+      "side": "long",
+      "entryDate": "2025-10-03",
+      "scheduledExitDate": "2025-10-09",
+      "eventId": 511050
+    },
+    {
+      "ticker": "AEIS",
+      "side": "long",
+      "entryDate": "2025-10-03",
+      "scheduledExitDate": "2025-10-09",
+      "eventId": 468309
+    },
+    {
+      "ticker": "ATO",
+      "side": "long",
+      "entryDate": "2025-10-09",
+      "scheduledExitDate": "2025-10-15",
+      "eventId": 533513
+    },
+    {
+      "ticker": "PLTR",
+      "side": "long",
+      "entryDate": "2025-10-09",
+      "scheduledExitDate": "2025-10-15",
+      "eventId": 470133
+    },
+    {
+      "ticker": "GEV",
+      "side": "long",
+      "entryDate": "2025-10-10",
+      "scheduledExitDate": "2025-10-16",
+      "eventId": 466465
+    },
+    {
+      "ticker": "DAL",
+      "side": "long",
+      "entryDate": "2025-10-13",
+      "scheduledExitDate": "2025-10-17",
+      "eventId": 484117
+    },
+    {
+      "ticker": "AEIS",
+      "side": "long",
+      "entryDate": "2025-10-13",
+      "scheduledExitDate": "2025-10-17",
+      "eventId": 465834
+    },
+    {
+      "ticker": "LITE",
+      "side": "long",
+      "entryDate": "2025-10-15",
+      "scheduledExitDate": "2025-10-21",
+      "eventId": 636657
+    },
+    {
+      "ticker": "LRCX",
+      "side": "long",
+      "entryDate": "2025-10-15",
+      "scheduledExitDate": "2025-10-21",
+      "eventId": 623349
+    },
+    {
+      "ticker": "HIMS",
+      "side": "long",
+      "entryDate": "2025-10-17",
+      "scheduledExitDate": "2025-10-23",
+      "eventId": 582317
+    },
+    {
+      "ticker": "DE",
+      "side": "long",
+      "entryDate": "2025-10-20",
+      "scheduledExitDate": "2025-10-24",
+      "eventId": 627759
+    },
+    {
+      "ticker": "GILD",
+      "side": "long",
+      "entryDate": "2025-10-21",
+      "scheduledExitDate": "2025-10-27",
+      "eventId": 632936
+    },
+    {
+      "ticker": "INTC",
+      "side": "long",
+      "entryDate": "2025-10-21",
+      "scheduledExitDate": "2025-10-27",
+      "eventId": 546101
+    },
+    {
+      "ticker": "WDC",
+      "side": "long",
+      "entryDate": "2025-10-21",
+      "scheduledExitDate": "2025-10-27",
+      "eventId": 614397
+    },
+    {
+      "ticker": "BKR",
+      "side": "long",
+      "entryDate": "2025-10-22",
+      "scheduledExitDate": "2025-10-28",
+      "eventId": 583850
+    },
+    {
+      "ticker": "FSLR",
+      "side": "long",
+      "entryDate": "2025-10-28",
+      "scheduledExitDate": "2025-11-03",
+      "eventId": 585371
+    },
+    {
+      "ticker": "WCC",
+      "side": "long",
+      "entryDate": "2025-10-28",
+      "scheduledExitDate": "2025-11-03",
+      "eventId": 640757
+    },
+    {
+      "ticker": "ELF",
+      "side": "long",
+      "entryDate": "2025-10-30",
+      "scheduledExitDate": "2025-11-05",
+      "eventId": 635259
+    },
+    {
+      "ticker": "ARWR",
+      "side": "long",
+      "entryDate": "2025-10-30",
+      "scheduledExitDate": "2025-11-05",
+      "eventId": 541465
+    },
+    {
+      "ticker": "IVZ",
+      "side": "long",
+      "entryDate": "2025-10-30",
+      "scheduledExitDate": "2025-11-05",
+      "eventId": 624895
+    },
+    {
+      "ticker": "BYD",
+      "side": "long",
+      "entryDate": "2025-11-05",
+      "scheduledExitDate": "2025-11-11",
+      "eventId": 547595
+    },
+    {
+      "ticker": "DBX",
+      "side": "long",
+      "entryDate": "2025-11-05",
+      "scheduledExitDate": "2025-11-11",
+      "eventId": 551835
+    },
+    {
+      "ticker": "ENS",
+      "side": "long",
+      "entryDate": "2025-11-10",
+      "scheduledExitDate": "2025-11-14",
+      "eventId": 559179
+    },
+    {
+      "ticker": "WMB",
+      "side": "long",
+      "entryDate": "2025-11-11",
+      "scheduledExitDate": "2025-11-17",
+      "eventId": 587569
+    },
+    {
+      "ticker": "SITM",
+      "side": "long",
+      "entryDate": "2025-11-12",
+      "scheduledExitDate": "2025-11-18",
+      "eventId": 641980
+    },
+    {
+      "ticker": "MNST",
+      "side": "long",
+      "entryDate": "2025-11-13",
+      "scheduledExitDate": "2025-11-19",
+      "eventId": 595656
+    },
+    {
+      "ticker": "ADM",
+      "side": "long",
+      "entryDate": "2025-11-17",
+      "scheduledExitDate": "2025-11-21",
+      "eventId": 625984
+    },
+    {
+      "ticker": "COHR",
+      "side": "long",
+      "entryDate": "2025-11-21",
+      "scheduledExitDate": "2025-11-28",
+      "eventId": 556674
+    },
+    {
+      "ticker": "FIX",
+      "side": "long",
+      "entryDate": "2025-11-26",
+      "scheduledExitDate": "2025-12-03",
+      "eventId": 543344
+    },
+    {
+      "ticker": "STX",
+      "side": "long",
+      "entryDate": "2025-12-01",
+      "scheduledExitDate": "2025-12-05",
+      "eventId": 642927
+    },
+    {
+      "ticker": "NBIX",
+      "side": "long",
+      "entryDate": "2025-12-02",
+      "scheduledExitDate": "2025-12-08",
+      "eventId": 556923
+    },
+    {
+      "ticker": "WMT",
+      "side": "long",
+      "entryDate": "2025-12-02",
+      "scheduledExitDate": "2025-12-08",
+      "eventId": 589856
+    },
+    {
+      "ticker": "VLO",
+      "side": "long",
+      "entryDate": "2025-12-03",
+      "scheduledExitDate": "2025-12-09",
+      "eventId": 614779
+    },
+    {
+      "ticker": "WBD",
+      "side": "long",
+      "entryDate": "2025-12-03",
+      "scheduledExitDate": "2025-12-09",
+      "eventId": 563719
+    },
+    {
+      "ticker": "AM",
+      "side": "long",
+      "entryDate": "2025-12-09",
+      "scheduledExitDate": "2025-12-15",
+      "eventId": 542474
+    },
+    {
+      "ticker": "PEN",
+      "side": "long",
+      "entryDate": "2025-12-10",
+      "scheduledExitDate": "2025-12-16",
+      "eventId": 541126
+    },
+    {
+      "ticker": "TWLO",
+      "side": "long",
+      "entryDate": "2025-12-10",
+      "scheduledExitDate": "2025-12-16",
+      "eventId": 642872
+    },
+    {
+      "ticker": "ULTA",
+      "side": "long",
+      "entryDate": "2025-12-10",
+      "scheduledExitDate": "2025-12-16",
+      "eventId": 617143
+    },
+    {
+      "ticker": "AVGO",
+      "side": "long",
+      "entryDate": "2025-12-10",
+      "scheduledExitDate": "2025-12-16",
+      "eventId": 577233
+    },
+    {
+      "ticker": "HII",
+      "side": "long",
+      "entryDate": "2025-12-11",
+      "scheduledExitDate": "2025-12-17",
+      "eventId": 602487
+    },
+    {
+      "ticker": "LRCX",
+      "side": "long",
+      "entryDate": "2025-12-11",
+      "scheduledExitDate": "2025-12-17",
+      "eventId": 570460
+    },
+    {
+      "ticker": "POR",
+      "side": "long",
+      "entryDate": "2025-12-17",
+      "scheduledExitDate": "2025-12-23",
+      "eventId": 592319
+    },
+    {
+      "ticker": "LITE",
+      "side": "long",
+      "entryDate": "2025-12-17",
+      "scheduledExitDate": "2025-12-23",
+      "eventId": 549126
+    },
+    {
+      "ticker": "JCI",
+      "side": "long",
+      "entryDate": "2025-12-18",
+      "scheduledExitDate": "2025-12-24",
+      "eventId": 541526
+    },
+    {
+      "ticker": "EQT",
+      "side": "long",
+      "entryDate": "2025-12-19",
+      "scheduledExitDate": "2025-12-26",
+      "eventId": 630085
+    },
+    {
+      "ticker": "FIX",
+      "side": "long",
+      "entryDate": "2025-12-22",
+      "scheduledExitDate": "2025-12-29",
+      "eventId": 629531
+    },
+    {
+      "ticker": "FN",
+      "side": "long",
+      "entryDate": "2025-12-22",
+      "scheduledExitDate": "2025-12-29",
+      "eventId": 549606
+    },
+    {
+      "ticker": "GEV",
+      "side": "long",
+      "entryDate": "2025-12-22",
+      "scheduledExitDate": "2025-12-29",
+      "eventId": 573235
+    },
+    {
+      "ticker": "NRG",
+      "side": "long",
+      "entryDate": "2025-12-23",
+      "scheduledExitDate": "2025-12-30",
+      "eventId": 549907
+    },
+    {
+      "ticker": "NVDA",
+      "side": "long",
+      "entryDate": "2025-12-23",
+      "scheduledExitDate": "2025-12-30",
+      "eventId": 550830
+    },
+    {
+      "ticker": "NVT",
+      "side": "long",
+      "entryDate": "2025-12-24",
+      "scheduledExitDate": "2025-12-31",
+      "eventId": 605744
+    },
+    {
+      "ticker": "PLTR",
+      "side": "long",
+      "entryDate": "2025-12-24",
+      "scheduledExitDate": "2025-12-31",
+      "eventId": 570081
+    },
+    {
+      "ticker": "TTMI",
+      "side": "long",
+      "entryDate": "2025-12-24",
+      "scheduledExitDate": "2025-12-31",
+      "eventId": 638196
+    },
+    {
+      "ticker": "WBD",
+      "side": "long",
+      "entryDate": "2025-12-26",
+      "scheduledExitDate": "2026-01-02",
+      "eventId": 590784
+    },
+    {
+      "ticker": "HII",
+      "side": "long",
+      "entryDate": "2025-12-26",
+      "scheduledExitDate": "2026-01-02",
+      "eventId": 583684
+    },
+    {
+      "ticker": "PATH",
+      "side": "long",
+      "entryDate": "2025-12-30",
+      "scheduledExitDate": "2026-01-13",
+      "eventId": 596720
+    },
+    {
+      "ticker": "CELH",
+      "side": "long",
+      "entryDate": "2025-12-30",
+      "scheduledExitDate": "2026-01-13",
+      "eventId": 559060
+    },
+    {
+      "ticker": "CHWY",
+      "side": "long",
+      "entryDate": "2025-12-30",
+      "scheduledExitDate": "2026-01-13",
+      "eventId": 547874
+    },
+    {
+      "ticker": "AES",
+      "side": "long",
+      "entryDate": "2025-12-30",
+      "scheduledExitDate": "2026-01-13",
+      "eventId": 566633
+    },
+    {
+      "ticker": "OVV",
+      "side": "long",
+      "entryDate": "2025-12-31",
+      "scheduledExitDate": "2026-01-14",
+      "eventId": 578939
+    },
+    {
+      "ticker": "PR",
+      "side": "long",
+      "entryDate": "2025-12-31",
+      "scheduledExitDate": "2026-01-14",
+      "eventId": 547158
+    },
+    {
+      "ticker": "RRC",
+      "side": "long",
+      "entryDate": "2025-12-31",
+      "scheduledExitDate": "2026-01-14",
+      "eventId": 593960
+    },
+    {
+      "ticker": "DAR",
+      "side": "long",
+      "entryDate": "2025-12-31",
+      "scheduledExitDate": "2026-01-14",
+      "eventId": 546877
+    },
+    {
+      "ticker": "INTC",
+      "side": "long",
+      "entryDate": "2026-01-02",
+      "scheduledExitDate": "2026-01-15",
+      "eventId": 629269
+    },
+    {
+      "ticker": "VICR",
+      "side": "long",
+      "entryDate": "2026-01-02",
+      "scheduledExitDate": "2026-01-08",
+      "eventId": 589999
+    },
+    {
+      "ticker": "CYTK",
+      "side": "long",
+      "entryDate": "2026-01-12",
+      "scheduledExitDate": "2026-01-16",
+      "eventId": 632770
+    },
+    {
+      "ticker": "ALGM",
+      "side": "long",
+      "entryDate": "2026-01-20",
+      "scheduledExitDate": "2026-01-26",
+      "eventId": 557269
+    },
+    {
+      "ticker": "MTG",
+      "side": "long",
+      "entryDate": "2026-01-21",
+      "scheduledExitDate": "2026-01-27",
+      "eventId": 610495
+    },
+    {
+      "ticker": "GHC",
+      "side": "long",
+      "entryDate": "2026-01-23",
+      "scheduledExitDate": "2026-01-29",
+      "eventId": 597005
+    },
+    {
+      "ticker": "JBHT",
+      "side": "long",
+      "entryDate": "2026-01-23",
+      "scheduledExitDate": "2026-01-29",
+      "eventId": 618585
+    },
+    {
+      "ticker": "IBKR",
+      "side": "long",
+      "entryDate": "2026-01-27",
+      "scheduledExitDate": "2026-02-02",
+      "eventId": 593529
+    },
+    {
+      "ticker": "DOCN",
+      "side": "long",
+      "entryDate": "2026-01-27",
+      "scheduledExitDate": "2026-02-02",
+      "eventId": 621975
+    },
+    {
+      "ticker": "DG",
+      "side": "long",
+      "entryDate": "2026-01-28",
+      "scheduledExitDate": "2026-02-03",
+      "eventId": 596898
+    },
+    {
+      "ticker": "PM",
+      "side": "long",
+      "entryDate": "2026-01-28",
+      "scheduledExitDate": "2026-02-03",
+      "eventId": 624836
+    },
+    {
+      "ticker": "CBRE",
+      "side": "long",
+      "entryDate": "2026-02-09",
+      "scheduledExitDate": "2026-02-13",
+      "eventId": 553013
+    },
+    {
+      "ticker": "ENS",
+      "side": "long",
+      "entryDate": "2026-02-12",
+      "scheduledExitDate": "2026-02-19",
+      "eventId": 598901
+    },
+    {
+      "ticker": "HII",
+      "side": "long",
+      "entryDate": "2026-02-12",
+      "scheduledExitDate": "2026-02-19",
+      "eventId": 558479
+    },
+    {
+      "ticker": "XOM",
+      "side": "long",
+      "entryDate": "2026-02-23",
+      "scheduledExitDate": "2026-02-27",
+      "eventId": 562764
+    },
+    {
+      "ticker": "RGLD",
+      "side": "long",
+      "entryDate": "2026-02-25",
+      "scheduledExitDate": "2026-03-03",
+      "eventId": 620284
+    },
+    {
+      "ticker": "SITM",
+      "side": "long",
+      "entryDate": "2026-03-05",
+      "scheduledExitDate": "2026-03-11",
+      "eventId": 641436
+    },
+    {
+      "ticker": "TNL",
+      "side": "long",
+      "entryDate": "2026-03-09",
+      "scheduledExitDate": "2026-03-13",
+      "eventId": 563345
+    },
+    {
+      "ticker": "MRNA",
+      "side": "long",
+      "entryDate": "2026-03-09",
+      "scheduledExitDate": "2026-03-13",
+      "eventId": 637378
+    },
+    {
+      "ticker": "ROIV",
+      "side": "long",
+      "entryDate": "2026-03-09",
+      "scheduledExitDate": "2026-03-13",
+      "eventId": 596581
+    },
+    {
+      "ticker": "FCFS",
+      "side": "long",
+      "entryDate": "2026-03-10",
+      "scheduledExitDate": "2026-03-16",
+      "eventId": 583473
+    },
+    {
+      "ticker": "LHX",
+      "side": "long",
+      "entryDate": "2026-03-10",
+      "scheduledExitDate": "2026-03-16",
+      "eventId": 610001
+    },
+    {
+      "ticker": "FCX",
+      "side": "long",
+      "entryDate": "2026-03-12",
+      "scheduledExitDate": "2026-03-18",
+      "eventId": 586191
+    },
+    {
+      "ticker": "CTVA",
+      "side": "long",
+      "entryDate": "2026-03-17",
+      "scheduledExitDate": "2026-03-23",
+      "eventId": 575827
+    },
+    {
+      "ticker": "IBKR",
+      "side": "long",
+      "entryDate": "2026-03-20",
+      "scheduledExitDate": "2026-03-26",
+      "eventId": 569584
+    },
+    {
+      "ticker": "JBHT",
+      "side": "long",
+      "entryDate": "2026-03-24",
+      "scheduledExitDate": "2026-03-30",
+      "eventId": 547253
+    },
+    {
+      "ticker": "ELAN",
+      "side": "long",
+      "entryDate": "2026-03-26",
+      "scheduledExitDate": "2026-04-01",
+      "eventId": 552903
+    },
+    {
+      "ticker": "GLW",
+      "side": "long",
+      "entryDate": "2026-03-26",
+      "scheduledExitDate": "2026-04-01",
+      "eventId": 632623
+    },
+    {
+      "ticker": "WBD",
+      "side": "long",
+      "entryDate": "2026-04-01",
+      "scheduledExitDate": "2026-04-08",
+      "eventId": 590768
+    },
+    {
+      "ticker": "CMI",
+      "side": "long",
+      "entryDate": "2026-04-06",
+      "scheduledExitDate": "2026-04-10",
+      "eventId": 624019
+    },
+    {
+      "ticker": "EME",
+      "side": "long",
+      "entryDate": "2026-04-06",
+      "scheduledExitDate": "2026-04-10",
+      "eventId": 605147
+    },
+    {
+      "ticker": "CAR",
+      "side": "long",
+      "entryDate": "2026-04-07",
+      "scheduledExitDate": "2026-04-13",
+      "eventId": 558819
+    },
+    {
+      "ticker": "MUR",
+      "side": "long",
+      "entryDate": "2026-04-09",
+      "scheduledExitDate": "2026-04-15",
+      "eventId": 582159
+    },
+    {
+      "ticker": "OVV",
+      "side": "long",
+      "entryDate": "2026-04-09",
+      "scheduledExitDate": "2026-04-15",
+      "eventId": 607347
+    },
+    {
+      "ticker": "TPR",
+      "side": "long",
+      "entryDate": "2026-04-14",
+      "scheduledExitDate": "2026-04-20",
+      "eventId": 639347
+    },
+    {
+      "ticker": "HLT",
+      "side": "long",
+      "entryDate": "2026-04-14",
+      "scheduledExitDate": "2026-04-20",
+      "eventId": 631164
+    },
+    {
+      "ticker": "LYB",
+      "side": "long",
+      "entryDate": "2026-04-15",
+      "scheduledExitDate": "2026-04-21",
+      "eventId": 635595
+    },
+    {
+      "ticker": "EXPE",
+      "side": "long",
+      "entryDate": "2026-04-17",
+      "scheduledExitDate": "2026-04-23",
+      "eventId": 635023
+    },
+    {
+      "ticker": "ILMN",
+      "side": "long",
+      "entryDate": "2026-04-17",
+      "scheduledExitDate": "2026-04-23",
+      "eventId": 619544
+    },
+    {
+      "ticker": "ARWR",
+      "side": "long",
+      "entryDate": "2026-04-17",
+      "scheduledExitDate": "2026-04-23",
+      "eventId": 559880
+    },
+    {
+      "ticker": "GOOGL",
+      "side": "long",
+      "entryDate": "2026-04-17",
+      "scheduledExitDate": "2026-04-23",
+      "eventId": 621223
+    },
+    {
+      "ticker": "DVN",
+      "side": "long",
+      "entryDate": "2026-04-23",
+      "scheduledExitDate": "2026-04-29",
+      "eventId": 566615
+    },
+    {
+      "ticker": "EOG",
+      "side": "long",
+      "entryDate": "2026-04-24",
+      "scheduledExitDate": "2026-04-30",
+      "eventId": 632708
+    },
+    {
+      "ticker": "NSC",
+      "side": "long",
+      "entryDate": "2026-04-28",
+      "scheduledExitDate": "2026-05-04",
+      "eventId": 607105
+    },
+    {
+      "ticker": "SMG",
+      "side": "long",
+      "entryDate": "2026-04-28",
+      "scheduledExitDate": "2026-05-04",
+      "eventId": 589672
+    },
+    {
+      "ticker": "ENTG",
+      "side": "long",
+      "entryDate": "2026-04-29",
+      "scheduledExitDate": "2026-05-05",
+      "eventId": 609894
+    },
+    {
+      "ticker": "FLS",
+      "side": "long",
+      "entryDate": "2026-04-30",
+      "scheduledExitDate": "2026-05-06",
+      "eventId": 619460
+    },
+    {
+      "ticker": "APH",
+      "side": "long",
+      "entryDate": "2026-05-01",
+      "scheduledExitDate": "2026-05-07",
+      "eventId": 579884
+    },
+    {
+      "ticker": "GLW",
+      "side": "long",
+      "entryDate": "2026-05-06",
+      "scheduledExitDate": "2026-05-12",
+      "eventId": 583569
+    },
+    {
+      "ticker": "ILMN",
+      "side": "long",
+      "entryDate": "2026-05-06",
+      "scheduledExitDate": "2026-05-12",
+      "eventId": 581750
+    },
+    {
+      "ticker": "IVZ",
+      "side": "long",
+      "entryDate": "2026-05-07",
+      "scheduledExitDate": "2026-05-13",
+      "eventId": 567674
+    },
+    {
+      "ticker": "GE",
+      "side": "long",
+      "entryDate": "2026-05-11",
+      "scheduledExitDate": "2026-05-15",
+      "eventId": 592059
+    },
+    {
+      "ticker": "ONTO",
+      "side": "long",
+      "entryDate": "2026-05-12",
+      "scheduledExitDate": "2026-05-18",
+      "eventId": 542667
+    },
+    {
+      "ticker": "RRX",
+      "side": "long",
+      "entryDate": "2026-05-12",
+      "scheduledExitDate": "2026-05-18",
+      "eventId": 581293
+    },
+    {
+      "ticker": "LLY",
+      "side": "long",
+      "entryDate": "2026-05-15",
+      "scheduledExitDate": "2026-05-21",
+      "eventId": 571710
+    },
+    {
+      "ticker": "TWLO",
+      "side": "long",
+      "entryDate": "2026-05-19",
+      "scheduledExitDate": "2026-05-26",
+      "eventId": 615469
+    },
+    {
+      "ticker": "PWR",
+      "side": "long",
+      "entryDate": "2026-05-28",
+      "scheduledExitDate": "2026-06-03",
+      "eventId": 549036
+    },
+    {
+      "ticker": "HXL",
+      "side": "long",
+      "entryDate": "2026-05-29",
+      "scheduledExitDate": "2026-06-04",
+      "eventId": 623429
+    },
+    {
+      "ticker": "MCHP",
+      "side": "long",
+      "entryDate": "2026-05-29",
+      "scheduledExitDate": "2026-06-04",
+      "eventId": 624709
+    },
+    {
+      "ticker": "FHI",
+      "side": "long",
+      "entryDate": "2026-05-29",
+      "scheduledExitDate": "2026-06-04",
+      "eventId": 570231
+    },
+    {
+      "ticker": "H",
+      "side": "long",
+      "entryDate": "2026-06-01",
+      "scheduledExitDate": "2026-06-05",
+      "eventId": 545270
+    },
+    {
+      "ticker": "DKS",
+      "side": "long",
+      "entryDate": "2026-06-02",
+      "scheduledExitDate": "2026-06-08",
+      "eventId": 579171
+    },
+    {
+      "ticker": "IBKR",
+      "side": "long",
+      "entryDate": "2026-06-02",
+      "scheduledExitDate": "2026-06-08",
+      "eventId": 635429
+    },
+    {
+      "ticker": "APA",
+      "side": "long",
+      "entryDate": "2026-06-03",
+      "scheduledExitDate": "2026-06-09",
+      "eventId": 569075
+    },
+    {
+      "ticker": "CASY",
+      "side": "long",
+      "entryDate": "2026-06-05",
+      "scheduledExitDate": "2026-06-11",
+      "eventId": 619825
+    },
+    {
+      "ticker": "MPWR",
+      "side": "long",
+      "entryDate": "2026-06-11",
+      "scheduledExitDate": "2026-06-17",
+      "eventId": 549185
+    },
+    {
+      "ticker": "DINO",
+      "side": "long",
+      "entryDate": "2026-06-12",
+      "scheduledExitDate": "2026-06-18",
+      "eventId": 582042
+    },
+    {
+      "ticker": "TEX",
+      "side": "long",
+      "entryDate": "2026-06-17",
+      "scheduledExitDate": "2026-06-24",
+      "eventId": 614205
+    },
+    {
+      "ticker": "TLN",
+      "side": "long",
+      "entryDate": "2026-06-17",
+      "scheduledExitDate": "2026-06-24",
+      "eventId": 563619
+    },
+    {
+      "ticker": "CMI",
+      "side": "long",
+      "entryDate": "2026-06-17",
+      "scheduledExitDate": "2026-06-24",
+      "eventId": 551098
+    },
+    {
+      "ticker": "RNR",
+      "side": "long",
+      "entryDate": "2026-06-22",
+      "scheduledExitDate": "2026-06-26",
+      "eventId": 632257
+    },
+    {
+      "ticker": "LSCC",
+      "side": "long",
+      "entryDate": "2026-07-01",
+      "scheduledExitDate": "2026-07-08",
+      "eventId": 596803
+    },
+    {
+      "ticker": "DOCN",
+      "side": "long",
+      "entryDate": "2026-07-02",
+      "scheduledExitDate": "2026-07-09",
+      "eventId": 604114
+    },
+    {
+      "ticker": "KEYS",
+      "side": "long",
+      "entryDate": "2026-07-02",
+      "scheduledExitDate": "2026-07-09",
+      "eventId": 580009
+    },
+    {
+      "ticker": "RRX",
+      "side": "long",
+      "entryDate": "2026-07-06",
+      "scheduledExitDate": "2026-07-10",
+      "eventId": 551116
+    }
+  ]
+}
