@@ -169,6 +169,8 @@ ACT-580.S9     SECTOR MEAN-REVERSION + ROTATION (sub-lane)         PHASE-0-SPEC-
 ACT-580.S9-a   Sector dip-buy (composite RSI(2)<10, long-only)     PHASE-0-SPEC-LOCKED — k=7
 ACT-580.S9-b   Sector rotation (top-3 6mo return, monthly)         PHASE-0-SPEC-LOCKED — k=8
 ACT-580.S9-c   Sector intraday leg                                 DEFERRED-TYPED (unblocks on data purchase IF S9-a/b PASS)
+ACT-580.S10-BACKFILL  Signal-ranked winners on PRICE-DERIVED signals only (historical build) DORMANT / OPERATOR-GATED — filed 2026-07-26 after S10' HALT-AT-STEP-A; unblocks only on explicit operator GO with a pre-registered price-derived-only signal roster
+ACT-580.S10-FORWARD   Signal-ranked winners re-test on LIVE signal_observations (S10' spec verbatim) AUTO-REMINDER 2027-07-01 — unblocks when signal_observations shows ≥12 continuous months of dense coverage on the build-eligible substrate; k-cost recharted at unblock
 ```
 
 ## §10 — Interaction with ACT-577 amendment
@@ -192,3 +194,11 @@ Cross-reference: S3 texture verdict (fails CAGR + worst-year + every-year net) i
 ### REGIME-OVERLAY META-FINDING (filed at S5 close)
 
 > SPY 200-SMA regime overlay applied to 12-1 momentum in this small/mid substrate is **strictly worse than bare** — clips more upside than downside in both LS-symmetric and long-only constructions (LS: −12.06% → −10.02%; long-only: +96.08% → +39.52%). Physics: momentum re-emerges inside SPY drawdowns as D1 crashes and D10 rebounds; gating those months out is anti-additive. **Battery-level policy:** presume aggregate-market-trend regime overlays are cost-additive-with-no-alpha-additive unless the family's substrate specifically motivates the overlay.
+
+### S10' HALT-AT-STEP-A (filed 2026-07-26)
+
+> Signal-ranked winners audit found **0 of 11** longshort-lane signals dense on the 2022-01→2025-12 build window; all rows in `signal_observations` cluster in a ~6-week 2026 window entirely inside the SPENT momentum-family holdout. Per S10' frozen spec ("if <3 qualify, STOP"), Step-B construction was not executed. k=10 consumed-by-halt. Two futures filed as register rows: **S10-BACKFILL** (price-derived-only signals, historical build; dormant, operator-gated) and **S10-FORWARD** (re-test when ≥12mo of live `signal_observations` accrue; auto-reminder ~2027-07-01).
+
+### S9-a TEXTURE (filed 2026-07-26)
+
+> S9-a sector dip-buy (composite RSI(2)<10 → 5-day long-only sector-portfolio hold, 38 bps toll): build 2022–25 net **−9.84% / CAGR −2.55% / Sharpe −0.11 / maxDD −25.94%**, 1,368 baskets. 3/4 gate clauses fail; holdout LOCKED per charter §8. Per-trigger gross edge (+27.7 bps wtd) is below the 38 bps toll — the cost-annihilation showcase pattern from S4 reproduces here. Robustness: substituted equal-weight-all-members proxy for the charter's top-10-ADV basket (D-1 disclosed); top-10 refinement filed as texture-only follow-up `S9-a-basket-refinement`, no k-cost. Ledger: 7/N families TEXTURE; S5-L survivor holds via consumed co-sign. Full receipt: `docs/06-tracking/receipts/ACT-580-S9a-SECTOR-DIP-BUY.md`.
