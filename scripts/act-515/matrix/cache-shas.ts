@@ -27,39 +27,74 @@
 
 export const CORPUS_RUN_ID   = '1888e113-f9b3-43f5-856c-d91666a3c121' as const;
 export const CELLMAP_RUN_ID  = '1888e113-f9b3-43f5-856c-d91666a3c121' as const;
-export const MATRIX_EXPORT_FN_VERSION = 'matrix-export-v1' as const;
+export const MATRIX_EXPORT_FN_VERSION = 'matrix-export-v2-devv' as const;
+
+/**
+ * DEV-V RULING (V-β-SCOPED, 2026-07-26) — SUPERSESSION of Turn-1 slate SHAs.
+ * SHORT rows in the compacted top-25 must pass the certified kernel
+ * qualification (signed excess_at_argmax <= -0.08 AND geometry ∈
+ * SHORT_GEOMETRY_MATRIX) INSIDE the compaction. Turn-1 slate SHAs are
+ * SUPERSEDED (retained in git history for audit). LONG side untouched.
+ * cellmap/universe/calendar untouched by this defect (not re-fetched).
+ *
+ * Displacement measurement (from DB, verified against admit run):
+ *   old_short_top25          = 25,150 (with pollution)
+ *   new_short_top25          =  9,366 (kernel-qualified)
+ *   pollution_short_evicted  = 20,922 (exact match to prior key_mismatch tally)
+ *   displacement_short_rescued = 5,138 (qualifying shorts previously below cut)
+ *   long_top25 unchanged     = 25,150 ≡ 25,150
+ *   admitted lots: 5,030 LONG / 4,157 SHORT (prev provisional: 5,030 / 2,872)
+ */
 
 /** Byte-exact SHA-256 (hex) of the pinned cache files. */
 export const CACHE_SHAS = Object.freeze({
   'cellmap.jsonl':      '6736045788843203d1b0fc6f99a41a8478efc3fc683f52616e1762ea36f93152',
   'universe.jsonl':     '4c439ba21f5d92b455b0f21256b8eb7f7ce88df6bbe1774f8331a85e1129bd4c',
-  'slate-2022.jsonl':   '84e18562f337eb5f52288f3adc931f833c4654e75154822f1ff3c7ec7b4f878a',
-  'slate-2023.jsonl':   '5e45b137ed75552aef25917e6dd4df7e5a713fe0137f1995a507577d5e301027',
-  'slate-2024.jsonl':   '0054c47aa13ab8fb546bb033ff0bbbadf567c4f794707204c45ba0065bbcc4fa',
-  'slate-2025.jsonl':   'ad0fe800a2b1cb55f35082bd66f2a60cd0511803d266579ab065b3e52d36afe3',
-  'slate-2026.jsonl':   'e500e6b04acf1fa4fc99f5f114ed15859fc494828fd3b2f1c3359725fcbb734f',
-  // Turn-2A (RULING 2026-07-26 · DEV-T T-1): calendar sourced from
-  // overshoot-matrix-export?mode=calendar — DISTINCT trade_date from
-  // overshoot_daily_bars WHERE ticker='SPY'. DB-side count
-  // (SELECT count(DISTINCT trade_date) ... WHERE ticker='SPY') = 1011,
-  // byte-matched here.
+  // Slate SHAs — DEV-V V-β-SCOPED re-fetch (supersedes Turn-1).
+  'slate-2022.jsonl':   '2aeb7ef6a08cf4959ec3a572c735da35ec8a4051b13bae8f0a83298a2e637ec6',
+  'slate-2023.jsonl':   '34ac18c1fbf49ecd4a24777ab7a2f5d03e90b1eeaaf51ac04be8440ee8c5c1ad',
+  'slate-2024.jsonl':   'd8db8c824038b598706a18bb01ee48639fcb19e943b5699334d9578a3869b3cc',
+  'slate-2025.jsonl':   '7b623b2ffb9b097d614803c12406bcb1bc7c6b28be9fabf37b7adbecd5bcbe14',
+  'slate-2026.jsonl':   '2520ec70efaee1d82ffdd2c9421ae20dd85caec74c3743764d3f8b1ee64c4e18',
+  // Turn-2A T-1: calendar sourced from overshoot-matrix-export?mode=calendar
+  // — DISTINCT trade_date from overshoot_daily_bars WHERE ticker='SPY'.
   'calendar.jsonl':     'bf0857fe9e9f5c1eb9a57a9b2f81409e7fee451198fddb4ba03d5170a4b73fc5',
+  // Turn-2B Stage-A: bar rows for unique (ticker, entrySession) pairs.
+  // 49,640 rows (Turn-1 basis) + 5,138 delta append (V-β re-fetch).
+  'bars-pairs.jsonl':   '653ff93fac42662ee7273e1e172d6443cceda603f0aa2b0eb194afcfc7a65b7c',
+  // Turn-2B Stage-B: bar rows for admitted lot windows
+  // ([entryDate .. exitAnchor + maxCarry=5]). Year-split (10MB/file cap).
+  'bars-windows-2022.jsonl': 'beba049ae323eaf8732ff7fa96282ebe487ddb054586a1883e2a1bac93b8a031',
+  'bars-windows-2023.jsonl': 'f1fe0a0865f8cb0f3da3dc5b0ac7c886190d6f49f6d8881244d51abdf7134a17',
+  'bars-windows-2024.jsonl': 'd43610b3b490bb0e3849c2dca3c99f2449b0266879bb7b884c4e29c628c7c945',
+  'bars-windows-2025.jsonl': '0b1e8e420a572390cfe64be7775e071f799de3ce6f716a362f333e49f3a5bb5a',
+  'bars-windows-2026.jsonl': '1d94f98910af3f0f608c56f8b963dfdc162f4b49944faab213f71f2468ed9845',
+  // SPY full-window benchmark for config (d) SPY-BH baseline.
+  'spy.jsonl':          '6a98eec8084682f7bb86ed05f1de3eecfde1a70bad4906261253b140fa9b613e',
 } as const);
 
 /** Row counts (audited via `wc -l`). */
 export const CACHE_ROW_COUNTS = Object.freeze({
   'cellmap.jsonl':      6000,
   'universe.jsonl':      906, // 905 active rows + 1 trailer line
-  'slate-2022.jsonl':   6450,
-  'slate-2023.jsonl':  12500,
-  'slate-2024.jsonl':  12600,
-  'slate-2025.jsonl':  12500,
-  'slate-2026.jsonl':   6250,
+  // DEV-V V-β-SCOPED slate row counts (SHORT pruned to kernel-qualified).
+  'slate-2022.jsonl':   4859,
+  'slate-2023.jsonl':   7912,
+  'slate-2024.jsonl':   7946,
+  'slate-2025.jsonl':   8752,
+  'slate-2026.jsonl':   5047,
   'calendar.jsonl':     1011,
+  'bars-pairs.jsonl':      54778,
+  'bars-windows-2022.jsonl': 11899,
+  'bars-windows-2023.jsonl': 21690,
+  'bars-windows-2024.jsonl': 22415,
+  'bars-windows-2025.jsonl': 23163,
+  'bars-windows-2026.jsonl': 12516,
+  'spy.jsonl':          1143,
 } as const);
 
 /** Slate total across yearly slices (excludes universe trailer). */
-export const SLATE_ROW_TOTAL = 6450 + 12500 + 12600 + 12500 + 6250; // 50,300
+export const SLATE_ROW_TOTAL = 4859 + 7912 + 7946 + 8752 + 5047; // 34,516 (DEV-V)
 
 /**
  * Universe intersection/bound aggregate (trailer line of universe.jsonl).
