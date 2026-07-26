@@ -161,10 +161,14 @@ ACT-580.S1     PEAD                                                PHASE-0-SPEC-
 ACT-580.S2     Analyst-revision momentum                           PHASE-0-SPEC-LOCKED
 ACT-580.S3     SI-delta factor                                     PHASE-0-SPEC-LOCKED
 ACT-580.S4     Overnight factor                                    PHASE-0-SPEC-LOCKED
-ACT-580.S5     Trend-chassis (12-1)                                PHASE-0-SPEC-LOCKED
+ACT-580.S5     Trend-chassis (12-1 + SPY200 overlay)               PHASE-1-COMPLETE (TEXTURE — primary LS fails; regime overlay strictly worse; long-only D10 derived-subset would clear build gate — filed as observation, not verdict)
 ACT-580.S6     Sector pairs (sector-neutral)                       PHASE-0-SPEC-LOCKED
 ACT-580.S7     VRP-in-options-month                                PHASE-0-BLOCKED (options)
 ACT-580.S8     Index-events                                        PHASE-0-DEFERRED (ingest)
+ACT-580.S9     SECTOR MEAN-REVERSION + ROTATION (sub-lane)         PHASE-0-SPEC-LOCKED (charter: ACT-580-S9-sector-mean-reversion.md; pre-registered 2026-07-26 with S5 GO)
+ACT-580.S9-a   Sector dip-buy (composite RSI(2)<10, long-only)     PHASE-0-SPEC-LOCKED — k=7
+ACT-580.S9-b   Sector rotation (top-3 6mo return, monthly)         PHASE-0-SPEC-LOCKED — k=8
+ACT-580.S9-c   Sector intraday leg                                 DEFERRED-TYPED (unblocks on data purchase IF S9-a/b PASS)
 ```
 
 ## §10 — Interaction with ACT-577 amendment
@@ -180,3 +184,11 @@ An ACT-580 family PASS (build + locked 2026 holdout, per §1 multiple-comparison
 > Five independent substrates — the R1 walk (equity lane), ACT-570 Q5 continuation study, ACT-573 refused-winners forensics, S1/S1-b miss-wing analysis, and S3 ΔSI decile inversion — agree: **long-side bounce is real, short-side is structurally punished in this universe/era.** All remaining ACT-580 family tests weight the long expression when a symmetric spec is optional; symmetric specs remain scored as-charter but the reading is applied on receipt.
 
 Cross-reference: S3 texture verdict (fails CAGR + worst-year + every-year net) is noted per the reversal law as texture-only and physically consistent with ACT-570 Q5's continuation finding (same-direction: shorts-piling names kept running in the bull tape).
+
+### UNIFIED-PHYSICS UPDATE (filed at S5 close, 2026-07-26)
+
+> Sixth substrate: S5 Trend-chassis. LS-symmetric 12-1 momentum: net −12.06% / CAGR −3.78% / Sharpe −0.12 (TEXTURE). Long-only D10 (derived-subset, not a family PASS): net +96.08% / CAGR +22.39% / Sharpe +1.03. Same asymmetry — the short wing (D1, low-momentum names) crushed the LS book in 2023 (D1 ran hard), while D10 was materially positive every single year. **Six-for-six substrate agreement.** All ACT-580 remaining families default to long-only expression at charter time (S9-a and S9-b pre-registered this turn are already long-only per the law).
+
+### REGIME-OVERLAY META-FINDING (filed at S5 close)
+
+> SPY 200-SMA regime overlay applied to 12-1 momentum in this small/mid substrate is **strictly worse than bare** — clips more upside than downside in both LS-symmetric and long-only constructions (LS: −12.06% → −10.02%; long-only: +96.08% → +39.52%). Physics: momentum re-emerges inside SPY drawdowns as D1 crashes and D10 rebounds; gating those months out is anti-additive. **Battery-level policy:** presume aggregate-market-trend regime overlays are cost-additive-with-no-alpha-additive unless the family's substrate specifically motivates the overlay.
