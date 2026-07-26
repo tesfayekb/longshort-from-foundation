@@ -4,7 +4,13 @@ import type { SlateRow } from './slate-row.ts';
 
 const CAL = ['2024-01-02','2024-01-03','2024-01-04','2024-01-05','2024-01-08','2024-01-09','2024-01-10'];
 const idx = new Map(CAL.map((s,i)=>[s,i]));
-const offset = { sessionAfter: (s: string, n: number) => CAL[(idx.get(s) ?? -1) + n] ?? null };
+const offset = {
+  sessionAfter: (s: string, n: number) => {
+    const i = idx.get(s);
+    if (i === undefined) return null;
+    return CAL[i + n] ?? null;
+  },
+};
 
 function longRow(rank: number, ticker: string, over: Partial<SlateRow> = {}): SlateRow {
   return {
