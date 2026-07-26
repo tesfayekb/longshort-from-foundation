@@ -181,14 +181,19 @@ export async function runR1(
   const clock = new FixedClock(clockMs);
 
   // 1. Corpus + cell map + universe + sessions
-  const [corpus, cellRows, universeRows, sessions] = await Promise.all([
+  const [corpus, cellRows, _universeRows, sessions] = await Promise.all([
     ds.fetchCorpus(),
     ds.fetchCellMap(),
     ds.fetchUniverse(),
     ds.fetchSessions(R1_PROVENANCE.windowStart, R1_PROVENANCE.windowEnd),
   ]);
   const cellMap = buildCellMapLookup(cellRows);
-  const universe = buildUniverseIndex(universeRows);
+  // R-1 (RULING 2026-07-26): the runner no longer constructs a
+  // survivorship-biased UniverseIndex. `buildUniverseIndex` and
+  // `_universeRows` remain reachable for §7 bound reporting and for
+  // out-of-band tooling only. See estimator-assumptions.md §7-survivorship
+  // addendum for the snapshot-based bound.
+  void _universeRows;
   const calendar = new ArraySessionCalendar(sessions);
   const sessionOffset = (s: SessionDate, n: number) => calendar.sessionAfter(s, n);
 
