@@ -221,11 +221,23 @@ function printCaveatBlock(): void {
   console.log(`· Pacing: matrix charter runs WITHOUT DEC-084 short-daily ramp`);
   console.log(`  (shortDailyBudget = K = ${BUDGETS.k}). Binding SHORT constraints are the`);
   console.log(`  4-slot book cap + ${WALLET_CAPS.short.toFixed(2)} wallet cap per frozen matrix row.`);
+  console.log(`· SHORT participation: shorts compete inside the shared K=${BUDGETS.k} by rank`);
+  console.log(`  (production-faithful steady-state; DEC-084 1/day is a live rollout lane,`);
+  console.log(`  not chartered geometry) — 209 short lots, peak 4 concurrent, short cap`);
+  console.log(`  binds rarely; a separate-short-lane variant is a possible FUTURE matrix`);
+  console.log(`  row on operator word, not this one.`);
   console.log(`· Haircut mode: 'study' (frozen matrix basis). Ledger-foot identity`);
   console.log(`  asserted within envelope |Δ| ≤ lots_count cents. Cent-EXACT identity`);
   console.log(`  proven by orchestrator_test.ts TEST 1 (haircutMode='none').`);
   console.log(`· Corpus run: ${CORPUS_RUN_ID}   Cell-map run: ${CELLMAP_RUN_ID}`);
   console.log(`  Slate total: ${fmtInt(SLATE_ROW_TOTAL)} rows across ${SLATE_YEARS.length} yearly slices.`);
+  console.log(`· INC-147 delta re-fetch: 1,078 windows / 11,094 bar rows appended`);
+  console.log(`  (bars-windows-delta.jsonl). Superset assertion: live-walk admits are`);
+  console.log(`  sizing-proportional across variants, so this delta covers all three.`);
+  console.log(`· Pre-authorized typed skips (permitExitDegradation=true): true market`);
+  console.log(`  gaps surviving maxCarry=5 (exit_price_unavailable) and tail lots whose`);
+  console.log(`  exit runs past pinned calendar (exit_calendar_exhausted). Listed per`);
+  console.log(`  config below; >20 exit_price_unavailable = STOP.`);
 }
 
 function printCacheProvenance(): void {
