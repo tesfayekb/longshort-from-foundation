@@ -44,10 +44,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js';
 
-// ONE-SHOT IN-SOURCE TOKEN — third use of the standing mint→fetch→rip
-// pattern (INC-147 delta re-fetch, 1,078 windows). Rips same-session.
-const MATRIX_EXPORT_ONESHOT_TOKEN: string | null =
-  'mx3-06ee2196176fcfd92c90b5d00e9445857924fd2b46287ca036f9cda37ef20ac9';
+// ONE-SHOT IN-SOURCE TOKEN — RIPPED (2026-07-26, post INC-147 delta fetch,
+// third and most recent use of the standing mint→fetch→rip pattern).
+// Auth surface now: triad only (bearer(service_role) / x-cron-secret /
+// x-backfill-secret).
+const MATRIX_EXPORT_ONESHOT_TOKEN: null = null;
 
 const CORPUS_RUN_ID = '1888e113-f9b3-43f5-856c-d91666a3c121';
 
@@ -77,8 +78,7 @@ function authorize(req: Request): { ok: true } | { ok: false; reason: string } {
   const backfillSecret = Deno.env.get('BACKFILL_ONESHOT_SECRET') ?? '';
   if (backfillSecret && backfill === backfillSecret) return { ok: true };
 
-  const mx = req.headers.get('x-matrix-export-token') ?? '';
-  if (MATRIX_EXPORT_ONESHOT_TOKEN && mx === MATRIX_EXPORT_ONESHOT_TOKEN) return { ok: true };
+  // One-shot token intentionally removed; header presence is now a no-op.
 
   return { ok: false, reason: 'no_valid_credential' };
 }
