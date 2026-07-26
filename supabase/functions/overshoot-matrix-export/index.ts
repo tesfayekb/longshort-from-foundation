@@ -44,11 +44,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js';
 
-// ONE-SHOT IN-SOURCE TOKEN (O-4 lifecycle: rip after Fetch-Cache Turn-2).
-// This is not a secret against a determined attacker with source access;
-// it is a defense-in-depth stripe over the triad. Value is high-entropy.
-const MATRIX_EXPORT_ONESHOT_TOKEN =
-  'mx1-7e2a4c9d6b8f13e5a077c1b4d5e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6';
+// ONE-SHOT IN-SOURCE TOKEN — RIPPED (2026-07-26, post Turn-2B DEV-V seal).
+// Auth surface now: triad only (x-cron-secret / bearer(service_role) /
+// x-backfill-secret). Rip-probe receipt below MUST show 401 for any request
+// carrying only the old x-matrix-export-token header.
+const MATRIX_EXPORT_ONESHOT_TOKEN: null = null;
 
 const CORPUS_RUN_ID = '1888e113-f9b3-43f5-856c-d91666a3c121';
 
@@ -78,8 +78,7 @@ function authorize(req: Request): { ok: true } | { ok: false; reason: string } {
   const backfillSecret = Deno.env.get('BACKFILL_ONESHOT_SECRET') ?? '';
   if (backfillSecret && backfill === backfillSecret) return { ok: true };
 
-  const mx = req.headers.get('x-matrix-export-token') ?? '';
-  if (mx && mx === MATRIX_EXPORT_ONESHOT_TOKEN) return { ok: true };
+  // One-shot token intentionally removed; header presence is now a no-op.
 
   return { ok: false, reason: 'no_valid_credential' };
 }
