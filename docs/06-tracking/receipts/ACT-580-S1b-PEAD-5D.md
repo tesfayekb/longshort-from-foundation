@@ -138,4 +138,38 @@ Result: verbatim in §3–§5.
 
 Multiple-comparison ledger: **4/8 families tested, 4 TEXTURE (S1, S2, S3, S1-b)** — bar tightens for the remaining four.
 
+---
+
+## §-Appendix A — DERIVED-SUBSET: beat-side-long-only (zero new queries)
+
+**Label:** DERIVED-SUBSET (post-hoc slice of the pre-registered S1-b substrate). **NOT PROMOTABLE** on this receipt — a derived subset that clears a gate clause must be re-run under fresh pre-registration to count. Expected texture per the family verdict.
+
+**Construction:** drop the SHORT wing entirely; keep only `surprise > +0.02` events (LONG); same T+1 open → T+5 close hold; same 19 bps/leg cost; equal-$-weight per event, one leg per event.
+
+**Inputs (verbatim from §3 LONG column + §4 LONG raw drift):**
+
+| yr | n (LONG) | raw bps/event | net bps/event (−19) | net % |
+|---:|---:|---:|---:|---:|
+| 2022 | 1,840 | +80.37 | **+61.37** | +0.6137% |
+| 2023 | 1,836 | +28.93 |  **+9.93** | +0.0993% |
+| 2024 | 1,828 | +61.27 | **+42.27** | +0.4227% |
+| 2025 | 1,889 | +44.00 | **+25.00** | +0.2500% |
+| **all** | **7,393** | +53.91 (weighted) | +34.91 (weighted) | — |
+
+**Compounded 4-yr net:** 1.006137 × 1.000993 × 1.004227 × 1.002500 ≈ **1.01392 → +1.39% cumulative**.
+
+**Frozen columns (DERIVED-SUBSET):**
+
+| column | value |
+|---|---:|
+| net CAGR (4y) | **≈ +0.346%** |
+| Sharpe (annualized from 4 annual returns) | ≈ 1.56 (n=4, not decision-relevant) |
+| worst-year net | **+0.0993%** (2023) |
+| max drawdown (annual granularity) | 0.00% (all four years positive) |
+| trades | **7,393** |
+
+**Gate verdict:** fails CAGR ≥15% by ~43×. Passes trades. Sharpe headline is annual-n=4 arithmetic — decision-immaterial. **TEXTURE — DERIVED-SUBSET.** Does NOT consume holdout; does NOT count toward the k=8 multiple-comparison ledger (already booked as S1-b). Would require fresh pre-registration ("PEAD-5D-LONG-ONLY") + independent replication on 2026 holdout to enter the promotion path.
+
+**Reading (one line):** dropping the punished SHORT wing turns the sign-portfolio from ~+0.06% CAGR to ~+0.35% CAGR — directionally consistent with the ACT-559 long-only ruling and the unified-physics finding (see ACT-580 charter §findings), but still ~40× short of the CAGR gate. Family S1 is now **fully closed**.
+
 Next: **S4 — overnight (close-to-open) harvest**, the cost-honesty showcase.
