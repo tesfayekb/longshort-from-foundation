@@ -38,6 +38,12 @@ export const CACHE_SHAS = Object.freeze({
   'slate-2024.jsonl':   '0054c47aa13ab8fb546bb033ff0bbbadf567c4f794707204c45ba0065bbcc4fa',
   'slate-2025.jsonl':   'ad0fe800a2b1cb55f35082bd66f2a60cd0511803d266579ab065b3e52d36afe3',
   'slate-2026.jsonl':   'e500e6b04acf1fa4fc99f5f114ed15859fc494828fd3b2f1c3359725fcbb734f',
+  // Turn-2A (RULING 2026-07-26 · DEV-T T-1): calendar sourced from
+  // overshoot-matrix-export?mode=calendar — DISTINCT trade_date from
+  // overshoot_daily_bars WHERE ticker='SPY'. DB-side count
+  // (SELECT count(DISTINCT trade_date) ... WHERE ticker='SPY') = 1011,
+  // byte-matched here.
+  'calendar.jsonl':     'bf0857fe9e9f5c1eb9a57a9b2f81409e7fee451198fddb4ba03d5170a4b73fc5',
 } as const);
 
 /** Row counts (audited via `wc -l`). */
@@ -49,6 +55,7 @@ export const CACHE_ROW_COUNTS = Object.freeze({
   'slate-2024.jsonl':  12600,
   'slate-2025.jsonl':  12500,
   'slate-2026.jsonl':   6250,
+  'calendar.jsonl':     1011,
 } as const);
 
 /** Slate total across yearly slices (excludes universe trailer). */

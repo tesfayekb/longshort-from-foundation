@@ -367,3 +367,31 @@ quantification of the bias size.
 `matrix/run-r1-const_test.ts` will assert this block exists in this file
 AND that the three bound-report field names above appear verbatim in
 `run-r1-const.ts` receipt-writer once landed.
+
+### §7-survivorship addendum (RULING 2026-07-26 · DEV-R R-1)
+
+**Engine gate REMOVED.** The `isActiveAt(ticker, event_date)` filter is no
+longer applied in `run-r1-const.ts` step 2. The corpus inherits its
+universe from the study run (M-1 law, RULING 2026-07-26): filtering rows
+at replay-time against the as-of-today `overshoot_universe` snapshot would
+drop rows the study already accepted, biasing the receipt in the exact
+direction §7-survivorship warns against.
+
+**Bound reporting is now snapshot-based**, not engine-based. R1 receipts
+report the bound from the `universe.jsonl` trailer produced by
+`overshoot-matrix-export?mode=universe`:
+
+- `active_count` — currently-active roster size (905 at Turn-1 seal).
+- `corpus_ticker_count` — distinct tickers in corpus `1888e113` (839).
+- `intersection_count` — tickers in both (824).
+- `corpus_only_count` — in-corpus but no longer active (**15** = the
+  measured survivorship exposure). This is the §7 bound.
+- `active_only_count` — active today but never in corpus (81).
+
+Consequence for the receipt fields defined above:
+`corpus_rows_excluded_by_universe = 0` under R-1 (no engine gate applied).
+`corpus_rows_consumed = corpus_rows_total`. The bound is quantified out-of-band
+via the trailer values above and printed in the receipt's caveat block.
+
+**R-2 rejected:** fabricating a replay-time `added_as_of` value is the
+INC-141 defect class (silent temporal drift). Do not reintroduce.

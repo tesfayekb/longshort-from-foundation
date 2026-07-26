@@ -181,27 +181,35 @@ export async function runR1(
   const clock = new FixedClock(clockMs);
 
   // 1. Corpus + cell map + universe + sessions
-  const [corpus, cellRows, universeRows, sessions] = await Promise.all([
+  const [corpus, cellRows, _universeRows, sessions] = await Promise.all([
     ds.fetchCorpus(),
     ds.fetchCellMap(),
     ds.fetchUniverse(),
     ds.fetchSessions(R1_PROVENANCE.windowStart, R1_PROVENANCE.windowEnd),
   ]);
   const cellMap = buildCellMapLookup(cellRows);
-  const universe = buildUniverseIndex(universeRows);
+  // R-1 (RULING 2026-07-26): the runner no longer constructs a
+  // survivorship-biased UniverseIndex. `buildUniverseIndex` and
+  // `_universeRows` remain reachable for §7 bound reporting and for
+  // out-of-band tooling only. See estimator-assumptions.md §7-survivorship
+  // addendum for the snapshot-based bound.
+  void _universeRows;
   const calendar = new ArraySessionCalendar(sessions);
   const sessionOffset = (s: SessionDate, n: number) => calendar.sessionAfter(s, n);
 
   // 2. Universe filter (survivorship-biased per §7-survivorship). Any
-  //    corpus row whose (ticker, event_date) fails `active_at(event_date)`
-  //    is EXCLUDED before reconstruction.
+  //    RULING 2026-07-26 · DEV-R R-1 (M-1 conforming): the `isActiveAt`
+  //    gate is REMOVED here. The corpus inherits its universe from the
+  //    study run (M-1 law) — filtering at replay-time against the
+  //    as-of-today `overshoot_universe` snapshot would drop rows the
+  //    study already accepted, biasing the receipt. The survivorship
+  //    BOUND is reported instead from the universe.jsonl trailer
+  //    (15/839 corpus-only per UNIVERSE_BOUND) in §7 metadata. R-2
+  //    (fabricating a replay-time `added_as_of`) rejected outright as
+  //    the INC-141 defect class.
   const corpus_rows_total = corpus.length;
-  const kept: CorpusCandidateRow[] = [];
-  let corpus_rows_excluded_by_universe = 0;
-  for (const r of corpus) {
-    if (universe.isActiveAt(r.ticker, r.eventDate)) kept.push(r);
-    else corpus_rows_excluded_by_universe += 1;
-  }
+  const kept: CorpusCandidateRow[] = corpus.slice();
+  const corpus_rows_excluded_by_universe = 0; // R-1: no engine gate.
   const corpus_rows_consumed = kept.length;
   const prune_risk_flag =
     corpus_rows_total > 0 &&

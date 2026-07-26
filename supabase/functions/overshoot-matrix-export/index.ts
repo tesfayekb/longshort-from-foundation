@@ -21,6 +21,18 @@
  *                   line: {trailer:true, active_count, corpus_ticker_count,
  *                   intersection_count, bound_delta_count}.
  *
+ *   TURN-2A SIBLINGS (RULING 2026-07-26 · DEV-T T-1):
+ *   ?mode=calendar         DISTINCT trading sessions from
+ *                          overshoot_daily_bars WHERE ticker='SPY' over
+ *                          [since, until]. SPY = canonical session marker;
+ *                          NEVER a generated date range (INC-class
+ *                          fabrication guard). Emits {session:'YYYY-MM-DD'}.
+ *   POST mode=bars_pairs   Body: {pairs:[[ticker,session],...]}. Cap
+ *                          5000/req (413 above). Returns joined bar rows.
+ *   POST mode=bars_windows Body: {windows:[{ticker,from,to},...]}. Cap 500
+ *                          windows/req, sum(days) 200k (413 above).
+ *   ?mode=spy              Full SPY OHLCV over [since, until].
+ *
  * AUTH: any ONE of —
  *   X-Cron-Secret: $CRON_SECRET
  *   Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY
@@ -39,6 +51,11 @@ const MATRIX_EXPORT_ONESHOT_TOKEN =
   'mx1-7e2a4c9d6b8f13e5a077c1b4d5e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6';
 
 const CORPUS_RUN_ID = '1888e113-f9b3-43f5-856c-d91666a3c121';
+
+// Envelope limits (DEV-T T-1 pins). 413 above these caps.
+const BARS_PAIRS_MAX_PER_REQ   = 5_000;
+const BARS_WINDOWS_MAX_PER_REQ = 500;
+const BARS_WINDOWS_SUM_DAYS_CAP = 200_000;
 
 const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -218,6 +235,78 @@ WHERE active = TRUE
 ORDER BY ticker
 `;
 
+// CALENDAR SOURCING PIN (RULING 2026-07-26 · DEV-T T-1): the session list =
+// DISTINCT trading sessions from overshoot_daily_bars WHERE ticker='SPY'.
+// SPY presence is the canonical session marker for this study; a generated
+// date range would be an INC-class fabrication.
+const CALENDAR_SQL = `
+SELECT trade_date::text AS session
+FROM public.overshoot_daily_bars
+WHERE ticker = 'SPY'
+  AND trade_date >= $1::date
+  AND trade_date <= $2::date
+ORDER BY trade_date
+`;
+
+// SPY full-window OHLCV — served as its own mode so config (d) SPY-BH
+// benchmark can consume it without re-issuing the calendar query.
+const SPY_SQL = `
+SELECT trade_date::text AS trade_date,
+       open::text  AS open,
+       high::text  AS high,
+       low::text   AS low,
+       close::text AS close,
+       volume::text AS volume
+FROM public.overshoot_daily_bars
+WHERE ticker = 'SPY'
+  AND trade_date >= $1::date
+  AND trade_date <= $2::date
+ORDER BY trade_date
+`;
+
+// bars_pairs — joined via unnest for a single planner pass.
+const BARS_PAIRS_SQL = `
+WITH p AS (
+  SELECT unnest($1::text[]) AS ticker,
+         unnest($2::date[]) AS trade_date
+)
+SELECT b.ticker,
+       b.trade_date::text AS trade_date,
+       b.open::text  AS open,
+       b.high::text  AS high,
+       b.low::text   AS low,
+       b.close::text AS close,
+       b.volume::text AS volume
+FROM p
+JOIN public.overshoot_daily_bars b
+  ON b.ticker = p.ticker
+ AND b.trade_date = p.trade_date
+ORDER BY b.ticker, b.trade_date
+`;
+
+// bars_windows — one joined range scan across the union of windows.
+const BARS_WINDOWS_SQL = `
+WITH w AS (
+  SELECT (elem->>'ticker')::text AS ticker,
+         (elem->>'from')::date   AS f,
+         (elem->>'to')::date     AS t
+  FROM jsonb_array_elements($1::text::jsonb) AS elem
+)
+SELECT b.ticker,
+       b.trade_date::text AS trade_date,
+       b.open::text  AS open,
+       b.high::text  AS high,
+       b.low::text   AS low,
+       b.close::text AS close,
+       b.volume::text AS volume
+FROM w
+JOIN public.overshoot_daily_bars b
+  ON b.ticker = w.ticker
+ AND b.trade_date >= w.f
+ AND b.trade_date <= w.t
+ORDER BY b.ticker, b.trade_date
+`;
+
 // Trailer aggregate for universe mode.
 async function universeTrailer(sql: any): Promise<Record<string, unknown>> {
   const rows = await sql.unsafe(`
@@ -269,6 +358,13 @@ Deno.serve(async (req: Request) => {
       oneshot_token_present: true,
       auth: { triad: ['x-cron-secret', 'authorization:bearer(service_role)', 'x-backfill-secret'],
               oneshot: 'x-matrix-export-token' },
+      modes: ['slate','cellmap','universe','calendar','bars_pairs','bars_windows','spy'],
+      envelope: {
+        bars_pairs_max_per_req:   BARS_PAIRS_MAX_PER_REQ,
+        bars_windows_max_per_req: BARS_WINDOWS_MAX_PER_REQ,
+        bars_windows_sum_days_cap: BARS_WINDOWS_SUM_DAYS_CAP,
+      },
+      calendar_source: "distinct trade_date from overshoot_daily_bars where ticker='SPY'",
     }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
@@ -331,8 +427,158 @@ Deno.serve(async (req: Request) => {
                    'X-Mode': 'universe' },
       });
     }
+    if (mode === 'calendar') {
+      const since = url.searchParams.get('since') ?? '2000-01-01';
+      const until = url.searchParams.get('until') ?? '2100-01-01';
+      const rows = await sql.unsafe(CALENDAR_SQL, [since, until]);
+      await sql.end({ timeout: 5 });
+      const encoder = new TextEncoder();
+      const parts: Uint8Array[] = [];
+      for (const row of rows) parts.push(encoder.encode(JSON.stringify(row) + '\n'));
+      const body = new Blob(parts, { type: 'application/x-ndjson; charset=utf-8' });
+      return new Response(body, {
+        headers: { ...CORS, 'Content-Type': 'application/x-ndjson; charset=utf-8',
+                   'X-Mode': 'calendar', 'X-Since': since, 'X-Until': until,
+                   'X-Rows': String(rows.length),
+                   'X-Calendar-Source': 'spy_marker' },
+      });
+    }
+    if (mode === 'spy') {
+      const since = url.searchParams.get('since') ?? '2000-01-01';
+      const until = url.searchParams.get('until') ?? '2100-01-01';
+      const rows = await sql.unsafe(SPY_SQL, [since, until]);
+      await sql.end({ timeout: 5 });
+      const encoder = new TextEncoder();
+      const parts: Uint8Array[] = [];
+      for (const row of rows) parts.push(encoder.encode(JSON.stringify(row) + '\n'));
+      const body = new Blob(parts, { type: 'application/x-ndjson; charset=utf-8' });
+      return new Response(body, {
+        headers: { ...CORS, 'Content-Type': 'application/x-ndjson; charset=utf-8',
+                   'X-Mode': 'spy', 'X-Since': since, 'X-Until': until,
+                   'X-Rows': String(rows.length) },
+      });
+    }
+    if (mode === 'bars_pairs') {
+      if (req.method !== 'POST') {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'method_required_post' }), {
+          status: 405, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      let body: unknown;
+      try { body = await req.json(); } catch {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'bad_json' }), {
+          status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      const pairs = (body as { pairs?: unknown }).pairs;
+      if (!Array.isArray(pairs) || pairs.length === 0) {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'pairs_required' }), {
+          status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      if (pairs.length > BARS_PAIRS_MAX_PER_REQ) {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({
+          error: 'too_many_pairs', cap: BARS_PAIRS_MAX_PER_REQ, got: pairs.length,
+        }), { status: 413, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      }
+      const tickers: string[] = [];
+      const sessions: string[] = [];
+      for (const p of pairs) {
+        if (!Array.isArray(p) || p.length !== 2
+            || typeof p[0] !== 'string' || typeof p[1] !== 'string') {
+          await sql.end({ timeout: 1 });
+          return new Response(JSON.stringify({ error: 'bad_pair_shape' }), {
+            status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+          });
+        }
+        tickers.push(p[0]);
+        sessions.push(p[1]);
+      }
+      const rows = await sql.unsafe(BARS_PAIRS_SQL, [tickers, sessions]);
+      await sql.end({ timeout: 5 });
+      const encoder = new TextEncoder();
+      const parts: Uint8Array[] = [];
+      for (const row of rows) parts.push(encoder.encode(JSON.stringify(row) + '\n'));
+      const respBody = new Blob(parts, { type: 'application/x-ndjson; charset=utf-8' });
+      return new Response(respBody, {
+        headers: { ...CORS, 'Content-Type': 'application/x-ndjson; charset=utf-8',
+                   'X-Mode': 'bars_pairs',
+                   'X-Pairs-In': String(pairs.length),
+                   'X-Rows-Out': String(rows.length) },
+      });
+    }
+    if (mode === 'bars_windows') {
+      if (req.method !== 'POST') {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'method_required_post' }), {
+          status: 405, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      let body: unknown;
+      try { body = await req.json(); } catch {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'bad_json' }), {
+          status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      const windows = (body as { windows?: unknown }).windows;
+      if (!Array.isArray(windows) || windows.length === 0) {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({ error: 'windows_required' }), {
+          status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      if (windows.length > BARS_WINDOWS_MAX_PER_REQ) {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({
+          error: 'too_many_windows', cap: BARS_WINDOWS_MAX_PER_REQ, got: windows.length,
+        }), { status: 413, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      }
+      let sumDays = 0;
+      for (const w of windows) {
+        const ww = w as { ticker?: unknown; from?: unknown; to?: unknown };
+        if (typeof ww.ticker !== 'string' || typeof ww.from !== 'string' || typeof ww.to !== 'string') {
+          await sql.end({ timeout: 1 });
+          return new Response(JSON.stringify({ error: 'bad_window_shape' }), {
+            status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+          });
+        }
+        const df = Date.parse(ww.from), dt = Date.parse(ww.to);
+        if (!Number.isFinite(df) || !Number.isFinite(dt) || dt < df) {
+          await sql.end({ timeout: 1 });
+          return new Response(JSON.stringify({ error: 'bad_window_dates' }), {
+            status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+          });
+        }
+        sumDays += Math.floor((dt - df) / 86400000) + 1;
+      }
+      if (sumDays > BARS_WINDOWS_SUM_DAYS_CAP) {
+        await sql.end({ timeout: 1 });
+        return new Response(JSON.stringify({
+          error: 'too_many_days', cap: BARS_WINDOWS_SUM_DAYS_CAP, got: sumDays,
+        }), { status: 413, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      }
+      const rows = await sql.unsafe(BARS_WINDOWS_SQL, [JSON.stringify(windows)]);
+      await sql.end({ timeout: 5 });
+      const encoder = new TextEncoder();
+      const parts: Uint8Array[] = [];
+      for (const row of rows) parts.push(encoder.encode(JSON.stringify(row) + '\n'));
+      const respBody = new Blob(parts, { type: 'application/x-ndjson; charset=utf-8' });
+      return new Response(respBody, {
+        headers: { ...CORS, 'Content-Type': 'application/x-ndjson; charset=utf-8',
+                   'X-Mode': 'bars_windows',
+                   'X-Windows-In': String(windows.length),
+                   'X-Sum-Days': String(sumDays),
+                   'X-Rows-Out': String(rows.length) },
+      });
+    }
     await sql.end({ timeout: 1 });
-    return new Response(JSON.stringify({ error: 'bad_mode', hint: 'mode=slate|cellmap|universe or probe=version' }), {
+    return new Response(JSON.stringify({ error: 'bad_mode',
+      hint: 'mode=slate|cellmap|universe|calendar|spy|bars_pairs(POST)|bars_windows(POST) or probe=version' }), {
       status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (e) {
