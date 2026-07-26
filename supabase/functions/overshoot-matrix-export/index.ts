@@ -235,6 +235,78 @@ WHERE active = TRUE
 ORDER BY ticker
 `;
 
+// CALENDAR SOURCING PIN (RULING 2026-07-26 · DEV-T T-1): the session list =
+// DISTINCT trading sessions from overshoot_daily_bars WHERE ticker='SPY'.
+// SPY presence is the canonical session marker for this study; a generated
+// date range would be an INC-class fabrication.
+const CALENDAR_SQL = `
+SELECT trade_date::text AS session
+FROM public.overshoot_daily_bars
+WHERE ticker = 'SPY'
+  AND trade_date >= $1::date
+  AND trade_date <= $2::date
+ORDER BY trade_date
+`;
+
+// SPY full-window OHLCV — served as its own mode so config (d) SPY-BH
+// benchmark can consume it without re-issuing the calendar query.
+const SPY_SQL = `
+SELECT trade_date::text AS trade_date,
+       open::text  AS open,
+       high::text  AS high,
+       low::text   AS low,
+       close::text AS close,
+       volume::text AS volume
+FROM public.overshoot_daily_bars
+WHERE ticker = 'SPY'
+  AND trade_date >= $1::date
+  AND trade_date <= $2::date
+ORDER BY trade_date
+`;
+
+// bars_pairs — joined via unnest for a single planner pass.
+const BARS_PAIRS_SQL = `
+WITH p AS (
+  SELECT unnest($1::text[]) AS ticker,
+         unnest($2::date[]) AS trade_date
+)
+SELECT b.ticker,
+       b.trade_date::text AS trade_date,
+       b.open::text  AS open,
+       b.high::text  AS high,
+       b.low::text   AS low,
+       b.close::text AS close,
+       b.volume::text AS volume
+FROM p
+JOIN public.overshoot_daily_bars b
+  ON b.ticker = p.ticker
+ AND b.trade_date = p.trade_date
+ORDER BY b.ticker, b.trade_date
+`;
+
+// bars_windows — one joined range scan across the union of windows.
+const BARS_WINDOWS_SQL = `
+WITH w AS (
+  SELECT (elem->>'ticker')::text AS ticker,
+         (elem->>'from')::date   AS f,
+         (elem->>'to')::date     AS t
+  FROM jsonb_array_elements($1::jsonb) AS elem
+)
+SELECT b.ticker,
+       b.trade_date::text AS trade_date,
+       b.open::text  AS open,
+       b.high::text  AS high,
+       b.low::text   AS low,
+       b.close::text AS close,
+       b.volume::text AS volume
+FROM w
+JOIN public.overshoot_daily_bars b
+  ON b.ticker = w.ticker
+ AND b.trade_date >= w.f
+ AND b.trade_date <= w.t
+ORDER BY b.ticker, b.trade_date
+`;
+
 // Trailer aggregate for universe mode.
 async function universeTrailer(sql: any): Promise<Record<string, unknown>> {
   const rows = await sql.unsafe(`
