@@ -52,6 +52,11 @@ const MATRIX_EXPORT_ONESHOT_TOKEN =
 
 const CORPUS_RUN_ID = '1888e113-f9b3-43f5-856c-d91666a3c121';
 
+// Envelope limits (DEV-T T-1 pins). 413 above these caps.
+const BARS_PAIRS_MAX_PER_REQ   = 5_000;
+const BARS_WINDOWS_MAX_PER_REQ = 500;
+const BARS_WINDOWS_SUM_DAYS_CAP = 200_000;
+
 const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
