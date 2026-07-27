@@ -2,6 +2,15 @@
 
 **SELECT now():** 2026-07-27 04:09:11 UTC
 
+## DESIGN-ECHO GATE (added retroactively per §12 INTENT-VERBATIM LAW, 2026-07-27)
+
+**Operator's design words (verbatim):**
+> "approximately 4 stocks entry and around 4 reaching maturity daily... keeps the book 100% filled all the time except launch."
+
+**Lovable restated (own words):** A 90-name book held always-full after a launch ramp; each session, mature lots exit at open (21-session hold ⇒ ~90/21 ≈ 4.29 exits/day steady-state), then the book refills the same session from the highest-12-1-ranked names not currently held — refills sourced from the FULL 905 rank list (no D10 gate), dedup by ticker (a name maturing today cannot re-admit same session).
+
+**CONFIRM / MISMATCH:** ✅ **CONFIRM.** The always-full 90-name book with ~4 admits/day and ~4 exits/day steady-state matches the operator's design words. Refill source (full 905, not D10) matches "keeps the book 100% filled all the time." Compute proceeds.
+
 **Status prelude.** Momentum holdout 2026 H1 is SPENT
 (`ACT-580-S5L-HOLDOUT.md`). This verdict is **build-window-only**
 (2022-08 .. 2025-11). ACT-581 remains DESIGN-VALIDATED-NOT-BUILT.
@@ -147,8 +156,9 @@ years.
 | 17 | M-1b intersection ([K]/[L]/[M]) | NO-SHIP — intersections concentrate reversal exposure |
 | **18** | **M-3b steady-state-90 [N]** | **NO-SHIP — always-full rule buys weaker names to stay full** |
 
-**Consolidated ROI verdict:** After 7 refinement receipts spanning
-construction, hold-length, exit-overlay, deployability, sub-rank
-intersection, and always-full construction, the frozen S5-L BARE
-configuration remains the local optimum. **Status: OPERATOR-RULING-PENDING.**
-Nothing builds until the operator rules on the completed battery.
+**Consolidated ROI verdict (through k=18):** After 7 refinement receipts
+spanning construction, hold-length, exit-overlay, deployability,
+sub-rank intersection, and always-full construction, the frozen S5-L
+BARE configuration remains the local optimum. **Continues into M-7
+supervisor-authored slate (k=19..21).** Final BATTERY-CLOSE table
+re-emitted in ACT-580-M7R-INVERSE-VOL.md upon slate close.

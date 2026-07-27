@@ -235,7 +235,38 @@ Cross-reference: S3 texture verdict (fails CAGR + worst-year + every-year net) i
 > | 16 | M-6 Deployability variants ([H] sector-cap 25% / [I] ADV-floor top-60 / [J] H+I) | ROI-improvement battery pre-reg 2026-07-27 | ✅ | NO-SHIP — concentration telemetry improves, CAGR drag −0.8pp to −2.1pp; deployability tax is real but small |
 > | 17 | M-1b Intersection test ([K] triple-intersection / [L] consistency-rank / [M] smoothness) | operator pre-reg 2026-07-27 (post-M-6) | ✅ | NO-SHIP — intersections concentrate 3-1 reversal exposure; echo-C reference row still only beat |
 > | 18 | M-3b Steady-state-90 [N] (always-full, refills from full 905) | operator pre-reg 2026-07-27 (post-M-1b) | ✅ | NO-SHIP — always-full rule reaches past rank 100 on 61% of sessions; +137 bps/yr toll + rank-dilution ⇒ −3.45pp CAGR vs A |
+> | 19 | M-7 [P] PURE-ECHO (formal Novy-Marx 12-7, top-90 of full 905, monthly) | M-7 slate pre-reg 2026-07-27 (post-M-3b) | ✅ | NO-SHIP — 12-7 first-class ranker underperforms 12-1 by −3.68pp CAGR; M-1 [C] within-pool prior does NOT transfer to first-class ranker |
+> | 20 | M-7 [Q] RESIDUAL-MOMENTUM (12-1 − β·SPY-12-1, top-90, monthly) | M-7 slate pre-reg 2026-07-27 | ✅ | NO-SHIP (**SHARPE-FAVORED-NON-SHIP**) — crash-tail prior CONFIRMED (2022 Sep-Dec −0.40% vs −4.19%; DD −14.02% vs −18.36%; Sharpe 1.061 > 1.028); CAGR gate fails by 4.25pp |
+> | 21 | M-7 [R] INVERSE-VOL (name-level 1/σ_60d, cap 3× min, incumbent A names, monthly) | M-7 slate pre-reg 2026-07-27 | ✅ | NO-SHIP (**SHARPE-FAVORED-NON-SHIP**) — Sharpe 1.147 vs 1.028, DD −15.42% vs −18.36%, CAGR flat (−0.28pp); distinct from G-2 (name-level weighting, not book-level throttle) |
 >
 > **Not counted (unblocked-and-untested):** S7 VRP-in-options-month (BLOCKED on Polygon Options data); S8 Index-events (DEFERRED on ingest); S9-c Sector intraday leg (DEFERRED-TYPED); S10-BACKFILL (DORMANT, operator-gated); S10-FORWARD (AUTO-REMINDER 2027-07-01).
 >
+
+## §12 — INTENT-VERBATIM LAW (filed 2026-07-27, binds retroactively and henceforth)
+
+**Rule.** Every operator-designed test — charter row, refinement, ROI variant, or any receipt whose spec originates in operator words — MUST:
+
+1. **Quote the operator's design words verbatim** in the charter/pre-registration block. No paraphrase substitution. The verbatim quote is the load-bearing spec artifact.
+2. **Restate the design in Lovable's own words** in the receipt PREAMBLE, immediately followed by a **CONFIRM / MISMATCH** line, BEFORE any compute begins.
+3. **CONFIRM** ⇒ receipt proceeds to Deviations and compute.
+   **MISMATCH** ⇒ STOP, surface the mismatch to the operator, do NOT compute. Design-echo gate is load-bearing: it catches the M-1-class error (relative sub-rank tested when operator meant intersection) and the M-3-class error ([F] D10-gated when operator meant always-full [N]) at pre-compute time, not at ratification time.
+
+**Retroactive application.** M-3b receipt (ACT-580-M3b-STEADY-STATE.md) is amended to carry:
+- The operator's verbatim words: *"approximately 4 stocks entry and around 4 reaching maturity daily... keeps the book 100% filled all the time except launch."*
+- A Lovable-restated preamble with a **CONFIRM** stamp. (The M-3b compute is retained; the design-echo review confirms match — always-full, ~4 admits/day steady-state matches the actualized 90/21 ≈ 4.29 name-turns/session.)
+
+**Scope.** Binds every future operator-designed row in this charter and any downstream charter that inherits ACT-580 pre-registration discipline (ACT-581, and any successor lane).
+
+## §13 — M-7 SUPERVISOR-AUTHORED ROI SLATE (pre-registered 2026-07-27, k-increments each, build-window only, incumbent A control, ship-law standing)
+
+**Substrate.** Frozen S5-L build window 2022-08 .. 2025-11; universe = the 905-name ACT-580 pool; toll = 38 bps RT per name-turn per ACT-506. Priors on record BOTH directions per variant.
+
+| id | spec (frozen) | prior on record |
+|---|---|---|
+| [P] | PURE-ECHO — rank all 905 by t−126/t−252 return (12-7 window; Novy-Marx persistent-C signal in its FORMAL construction, NOT the M-1 half-split); top-90 equal-weight monthly | strongest candidate — C-signal beat A in every M-1/M-1b appearance |
+| [Q] | RESIDUAL-MOMENTUM — rank by (12-1 return) − β·(SPY 12-1 return), β from trailing 252d daily regression vs sealed spy.jsonl; top-90 equal-weight monthly | literature: similar CAGR, smaller crash tail; mechanism check prints 2022 episode months vs A |
+| [R] | INVERSE-VOL WEIGHTS — incumbent A's exact D10 names, weights ∝ 1/realized-60d-vol (capped 3× min-weight), monthly | Sharpe up, CAGR ~flat; DISTINCT from rejected G-2 (G-2 = book-level equity-curve throttle; R = name-level weighting, no leverage, no timing) |
+
+**Sequence.** M-3b (closed k=18) → [P] k=19 → [Q] k=20 → [R] k=21 → BATTERY-CLOSE table update → **OPERATOR-RULING-PENDING**. One receipt per variant. Deviations first, `SELECT now()` opens each. Nothing builds until the operator rules on the completed slate.
+
 > **k = 11 consumed at search-phase close. Refinement-class extensions (M-1, M-3..M-6, M-1b, M-3b) advance k to 18 by 2026-07-27. Survivor count = 1 (S5-L, unchanged).** Tightened bar (CAGR ≥ +18%, Sharpe ≥ +1.15 on holdout) continues to apply to any future promotion. Momentum holdout 2026 H1 is SPENT — every refinement receipt is build-window-only, and no refinement has cleared the ship-law +2pp bar. **Battery status: OPERATOR-RULING-PENDING.**
