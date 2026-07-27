@@ -2,7 +2,7 @@
 // pattern: no Deno.serve, no side-effects at import, no --allow-net needed).
 
 export const OVERSHOOT_FILL_SWEEP_VERSION = 'act493-v1-t3b-exit-adoption-20260715';
-export const OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT = 'sha256:inc90-created-at-window-action-order-id-v2+onconflict-partial-predicate';
+export const OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT = 'sha256:inc148-broker-truth-reconciliation-no-notin-window-v3';
 // ACT-493 v1 Turn 3B — pinned fingerprint for the exit-fill discovery query.
 // Matches action LIKE 'overshoot.exit.submitted.%' scoped by created_at within
 // a 14-day session-date window, then joined to open lots via metadata->>'lot_ids'.
@@ -80,6 +80,76 @@ export function shouldInvokePauseForA5Divergence(args: {
   discoveryShortfall: boolean;
 }): boolean {
   return args.diffCount > 0 && !args.dryRun && !args.discoveryShortfall;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// INC-148 (ACT-XXX) — broker-truth continuation classifier (pure).
+//
+// CATALOG LAW: the fill-sweep pathway is the sole sanctioned channel for
+// ledger mutations that reconcile broker truth to the lot table. The prior
+// discovery query excluded any order_id already present in overshoot_lots
+// via `NOT IN (SELECT source_order_id...)`, so a partial-fill continuation
+// (broker qty grows after initial adoption — the AMKR 2→38 shape) was
+// invisible to every subsequent sweep. This classifier is the pure kernel
+// of the corrective branch: given the broker's cumulative filled_qty and
+// the existing lot (or none), it returns the exact action the sweep must
+// take. NO wall-clock, NO IO, NO mutation — the caller performs the SQL.
+//
+// Rules (operator-ratified, INC-148 remediation):
+//   (i)   no existingLot        → adopt_new (INSERT as before).
+//   (ii)  qty match + cost match → no_change (idempotent no-op).
+//   (iii) mismatch              → update_to_broker with
+//            new_qty           = brokerFilledQty
+//            new_cost_basis    = brokerFilledQty × brokerAvgFillPrice
+//            new_remaining_qty = brokerFilledQty − existingLot.filled_qty
+//            delta_qty         = brokerFilledQty − existingLot.qty
+//         Caller MUST emit `overshoot.lot.updated_by_partial_continuation`
+//         audit with before/after/delta metadata; the true-up MUST
+//         propagate to the exit sizer (see arm-B fixture assertion).
+// ─────────────────────────────────────────────────────────────────────
+
+export interface ExistingLotForContinuation {
+  qty: number;
+  cost_basis: number;
+  filled_qty: number;
+  remaining_qty: number;
+}
+
+export type BrokerContinuationAction =
+  | { kind: 'adopt_new'; qty: number; cost_basis: number }
+  | { kind: 'no_change' }
+  | {
+      kind: 'update_to_broker';
+      new_qty: number;
+      new_cost_basis: number;
+      new_remaining_qty: number;
+      delta_qty: number;
+    };
+
+export function classifyBrokerContinuation(args: {
+  brokerFilledQty: number;
+  brokerAvgFillPrice: number;
+  existingLot: ExistingLotForContinuation | null;
+}): BrokerContinuationAction {
+  const brokerQty = args.brokerFilledQty;
+  const brokerAvg = args.brokerAvgFillPrice;
+  const brokerCost = brokerQty * brokerAvg;
+  if (args.existingLot === null) {
+    return { kind: 'adopt_new', qty: brokerQty, cost_basis: brokerCost };
+  }
+  const l = args.existingLot;
+  const qtyMatches = Math.abs(brokerQty - l.qty) <= 1e-9;
+  const costMatches = Math.abs(brokerCost - l.cost_basis) <= 0.01; // penny tolerance
+  if (qtyMatches && costMatches) {
+    return { kind: 'no_change' };
+  }
+  return {
+    kind: 'update_to_broker',
+    new_qty: brokerQty,
+    new_cost_basis: brokerCost,
+    new_remaining_qty: brokerQty - l.filled_qty,
+    delta_qty: brokerQty - l.qty,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────
