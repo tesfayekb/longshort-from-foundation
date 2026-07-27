@@ -88,3 +88,24 @@ The prior lands cleanly: inverse-vol weighting on the D10 90 delivers a **materi
 - Distinguished from G-2: ACT-580-S5L-G2-VOL-TARGET.md.
 - Cost model: ACT-506 (38 bps RT) + weight-drift toll accounting (this receipt).
 - Charter update owed: `docs/06-tracking/charters/ACT-580-strategy-search.md` §11.KL k=21 row + BATTERY-CLOSE update.
+
+## BATTERY-CLOSE SUMMARY (final, includes full M-1..M-7 refinement battery)
+
+| k | receipt | verdict vs ship-law (+2pp CAGR, DD no worse) |
+|---|---|---|
+| 12 | M-1 recency refinement (relative sub-ranks) | NO-SHIP — operator REJECTED; echo CONFIRMED |
+| 13 | M-3 entry-construction ([F], [G]) | NO-SHIP — timing-luck reduced, toll ate benefit |
+| 14 | M-4 hold-length grid at [F] | NO-SHIP — 21-session hold is local optimum |
+| 15 | M-5 exit-overlay grid | NO-SHIP — literature prior CONFIRMED |
+| 16 | M-6 deployability ([H]/[I]/[J]) | NO-SHIP — [H] cheapest hardening, still short of bar |
+| 17 | M-1b intersection ([K]/[L]/[M]) | NO-SHIP — intersections concentrate reversal exposure |
+| 18 | M-3b steady-state-90 [N] | NO-SHIP — always-full buys weaker names to stay full |
+| 19 | M-7 [P] pure-echo (formal 12-7) | NO-SHIP — first-class ranker weaker than 12-1 by −3.68pp |
+| 20 | M-7 [Q] residual-momentum | **NO-SHIP (SHARPE-FAVORED-NON-SHIP)** — crash-tail prior CONFIRMED; Sharpe up, DD better; CAGR −4.25pp of gate |
+| 21 | **M-7 [R] inverse-vol weights** | **NO-SHIP (SHARPE-FAVORED-NON-SHIP)** — Sharpe 1.147 vs 1.028, CAGR flat; distinct from G-2 |
+
+**Consolidated ROI verdict:** Across 10 refinement receipts spanning entry-construction, hold-length, exit-overlay, deployability, sub-rank intersection, always-full construction, formal Novy-Marx echo, market-residualization, and name-level inverse-vol weighting, **no refinement clears the standing CAGR+2pp / DD-no-worse ship-law**. Two receipts ([Q], [R]) are **SHARPE-FAVORED-NON-SHIP** — they improve risk-adjusted return and DD but not raw CAGR. The frozen S5-L BARE (12-1 D10 monthly, equal-weight) remains the local optimum.
+
+**Standing-ship-law-vs-Sharpe tension flagged.** [Q] and [R] would ship under a Sharpe-or-DD-clause ship-law. No unilateral revision — surfaced for operator ruling.
+
+**Status: OPERATOR-RULING-PENDING.** Nothing builds until the operator rules on the completed M-1..M-7 battery. k=21 consumed total across the refinement battery; survivor count = 1 (S5-L bare).
