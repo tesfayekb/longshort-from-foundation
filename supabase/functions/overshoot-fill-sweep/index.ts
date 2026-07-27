@@ -329,11 +329,6 @@ Deno.serve(createHandler(async (req: Request) => {
         AND created_at >= (${sessionDate}::date - interval '14 days')
         AND created_at <  (${sessionDate}::date + interval '2 days')
         AND metadata->>'order_id' IS NOT NULL
-        AND (metadata->>'order_id') NOT IN (
-          SELECT source_order_id::text
-          FROM overshoot_lots
-          WHERE source_order_id IS NOT NULL
-        )
       ORDER BY metadata->>'ticker'
     `;
 
@@ -982,6 +977,10 @@ Deno.serve(createHandler(async (req: Request) => {
       fill_partial_no_price: tally.fill_partial_no_price,
       fetch_errors: tally.fetch_errors,
       adopted,
+      // INC-148 — broker-truth continuation reconciliation.
+      lots_updated_by_partial_continuation: tally.lots_updated_by_partial_continuation,
+      lots_no_change_broker_matched: tally.lots_no_change_broker_matched,
+      updated_by_continuation: updatedByContinuation,
       // ACT-493 v1 Turn 3B — M7 exit-fill accounting (never-silent).
       exit_candidates_discovered: tally.exit_candidates_discovered,
       exit_fills_applied_lots: tally.exit_fills_applied_lots,

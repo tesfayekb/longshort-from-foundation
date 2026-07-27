@@ -15,12 +15,13 @@ import {
   nextAvgExitPrice,
   realizedPnlDelta,
   OVERSHOOT_EXIT_CID_REGEX_STRING,
+  classifyBrokerContinuation,
 } from './pure.ts';
 
 // SOURCE_VERSION single-constant rail-guard (mechanical mitigation — CI-RED
 // 3c698a5). Every rail assertion here reads from ONE literal so future
 // bumps are a one-line edit; half-misses are structurally impossible.
-const EXPECTED_SOURCE_VERSION = 'fb5fdf13+fix2';
+const EXPECTED_SOURCE_VERSION = 'fb5fdf13+fix2+inc148';
 const FILL_SWEEP_SRC = await Deno.readTextFile(
   new URL('./index.ts', import.meta.url),
 );
@@ -415,5 +416,137 @@ Deno.test('ACT-493 T3B sentinel: exit-fill fingerprint is exported and non-empty
   assert(
     OVERSHOOT_FILL_SWEEP_EXIT_DISCOVERY_QUERY_FINGERPRINT.startsWith('sha256:'),
     'fingerprint must be sha256-prefixed',
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// INC-148 — broker-truth continuation reconciliation fixtures.
+// Covers BOTH live shapes seen 2026-07-27 with today's real order_ids
+// PLUS one arm-B partial mock. Includes a through-sizer assertion that
+// the UPDATE'd AMKR lot's corrected qty/cost_basis propagates into
+// allocateExitFillToLots (the exit sizer path) — the true-up must
+// affect the exit math, not just sit in the row.
+// ─────────────────────────────────────────────────────────────────────
+
+Deno.test('INC-148 fixture (live shape): CIEN adopt-if-missing — no existing lot, broker=6 → INSERT', () => {
+  // Real order_id captured from overshoot_audit_logs at 2026-07-27.
+  const _CIEN_ORDER_ID = '7f1db7f7-61ef-4ccf-a64f-0d188112e4a2';
+  const _CIEN_CID = 'ovs-2d51744e-CIEN-L-entry-0';
+  const a = classifyBrokerContinuation({
+    brokerFilledQty: 6,
+    brokerAvgFillPrice: 84.10,
+    existingLot: null,
+  });
+  assertEquals(a.kind, 'adopt_new');
+  if (a.kind === 'adopt_new') {
+    assertEquals(a.qty, 6);
+    // cost_basis = 6 * 84.10 = 504.60
+    assertEquals(Math.round(a.cost_basis * 100) / 100, 504.60);
+  }
+});
+
+Deno.test('INC-148 fixture (live shape): AMKR UPDATE-to-broker — ledger qty=2 → broker=38, true-up propagates', () => {
+  // Real order_id captured from overshoot_audit_logs at 2026-07-27.
+  // Live ledger row (overshoot_lots, source_order_id=<AMKR order>):
+  //   qty=2, cost_basis=127.78, filled_qty=0, remaining_qty=2.
+  const _AMKR_ORDER_ID = '672533ee-6913-471b-bdfb-d9abeb8b1ce8';
+  const _AMKR_CID = 'ovs-2d51744e-AMKR-L-entry-0';
+  const brokerFilledQty = 38;
+  const brokerAvg = 63.89; // representative broker average fill price
+  const a = classifyBrokerContinuation({
+    brokerFilledQty,
+    brokerAvgFillPrice: brokerAvg,
+    existingLot: { qty: 2, cost_basis: 127.78, filled_qty: 0, remaining_qty: 2 },
+  });
+  assertEquals(a.kind, 'update_to_broker');
+  if (a.kind !== 'update_to_broker') throw new Error('unreachable');
+  assertEquals(a.new_qty, 38);
+  // cost_basis = 38 * 63.89 = 2427.82
+  assertEquals(Math.round(a.new_cost_basis * 100) / 100, 2427.82);
+  // remaining_qty = 38 - filled_qty(0) = 38
+  assertEquals(a.new_remaining_qty, 38);
+  // delta_qty = 38 - 2 = 36 (magnitude of the true-up)
+  assertEquals(a.delta_qty, 36);
+
+  // ── THROUGH-SIZER ASSERTION (operator addition, item 4) ────────────
+  // Post-UPDATE, feed the corrected lot state into the exit sizer.
+  // If the true-up did NOT propagate (stale qty=2), an exit for 5 shares
+  // would look like overflow. Under the corrected qty=38, the same 5
+  // allocates cleanly to remaining=38 with room to spare — proving the
+  // update reached the exit math, not just the row.
+  const updatedLot = {
+    lot_id: 'AMKR-lot',
+    qty: a.new_qty,                    // 38
+    filled_qty: 0,
+    remaining_qty: a.new_remaining_qty, // 38
+  };
+  const alloc = allocateExitFillToLots({
+    brokerFilledQty: 5,
+    lots: [updatedLot],
+  });
+  assertEquals(alloc.overflow, false);
+  assertEquals(alloc.per_lot_deltas.length, 1);
+  assertEquals(alloc.per_lot_deltas[0].delta_qty, 5);
+  assertEquals(alloc.per_lot_deltas[0].will_close, false);
+
+  // Contrapositive: same 5-share exit against the STALE (pre-fix) qty=2
+  // must OVERFLOW-HALT — this is what would have happened if the fix
+  // did not propagate.
+  const staleAlloc = allocateExitFillToLots({
+    brokerFilledQty: 5,
+    lots: [{ lot_id: 'AMKR-lot', qty: 2, filled_qty: 0, remaining_qty: 2 }],
+  });
+  assertEquals(staleAlloc.overflow, true);
+});
+
+Deno.test('INC-148 fixture (arm-B partial mock): broker=4 of 10 with existing lot qty=10, filled=0 → update remaining to 4', () => {
+  // Arm-B (L-01 randomization within the covered pathway) mock partial-
+  // fill continuation: broker cumulative filled_qty is less than the
+  // original submitted qty, and the ledger row still reflects the full
+  // submitted qty from the initial adoption. The classifier must UPDATE
+  // to broker truth (qty=4, remaining=4, cost=4*avg), not silently pass.
+  const brokerFilledQty = 4;
+  const brokerAvg = 25.00;
+  const a = classifyBrokerContinuation({
+    brokerFilledQty,
+    brokerAvgFillPrice: brokerAvg,
+    existingLot: { qty: 10, cost_basis: 250.00, filled_qty: 0, remaining_qty: 10 },
+  });
+  assertEquals(a.kind, 'update_to_broker');
+  if (a.kind !== 'update_to_broker') throw new Error('unreachable');
+  assertEquals(a.new_qty, 4);
+  assertEquals(a.new_cost_basis, 100);
+  assertEquals(a.new_remaining_qty, 4);
+  assertEquals(a.delta_qty, -6);
+});
+
+Deno.test('INC-148 classifier: exact broker match → no_change (idempotent)', () => {
+  const a = classifyBrokerContinuation({
+    brokerFilledQty: 10,
+    brokerAvgFillPrice: 100,
+    existingLot: { qty: 10, cost_basis: 1000, filled_qty: 0, remaining_qty: 10 },
+  });
+  assertEquals(a.kind, 'no_change');
+});
+
+Deno.test('INC-148 sentinel: index.ts discovery removes NOT-IN filter (sanctioned pathway captures continuation)', async () => {
+  const src = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
+  // The pre-fix NOT-IN clause hid partial-fill continuation from every
+  // subsequent sweep tick. It MUST be gone.
+  if (/NOT IN \(\s*SELECT source_order_id::text\s+FROM overshoot_lots/.test(src)) {
+    throw new Error('INC-148: discovery query still excludes existing source_order_ids via NOT IN — continuation invisible');
+  }
+  // The reconciliation branch MUST be present.
+  assert(
+    src.includes('classifyBrokerContinuation'),
+    'INC-148: fill-sweep must invoke classifyBrokerContinuation',
+  );
+  assert(
+    src.includes("action: 'overshoot.lot.updated_by_partial_continuation'"),
+    'INC-148: update branch must emit typed audit overshoot.lot.updated_by_partial_continuation',
+  );
+  assert(
+    src.includes('lots_updated_by_partial_continuation'),
+    'INC-148: response envelope must expose lots_updated_by_partial_continuation',
   );
 });
