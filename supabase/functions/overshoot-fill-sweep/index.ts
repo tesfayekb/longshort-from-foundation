@@ -75,8 +75,12 @@ import { createHandler, apiSuccess } from '../_shared/handler.ts';
 /** SOURCE_VERSION — see overshoot-entry-run for INC-126 rationale.
  *  2026-07-23 — FIX-2 rail-parity bump. No money-path change here
  *  (fill-sweep has no per-lot Polygon fetch); bump preserves uniform
- *  `x-source-version` across the four rail functions. */
-export const SOURCE_VERSION = 'fb5fdf13+fix2';
+ *  `x-source-version` across the four rail functions.
+ *  2026-07-27 — INC-148 remediation bump. Discovery removes NOT-IN
+ *  filter; per-candidate reconciliation branch adopts-if-missing OR
+ *  UPDATEs to broker truth for partial-fill continuation (AMKR shape).
+ *  Ledger mutation stays within the sanctioned sweep pathway. */
+export const SOURCE_VERSION = 'fb5fdf13+fix2+inc148';
 import { authenticateRequest } from '../_shared/authenticate-request.ts';
 import { checkPermissionOrThrow } from '../_shared/authorization.ts';
 import { verifyCronSecret } from '../_shared/cron-auth.ts';
@@ -106,6 +110,7 @@ import {
   allocateExitFillToLots,
   nextAvgExitPrice,
   realizedPnlDelta,
+  classifyBrokerContinuation,
   type A5Diff,
   type ExitFillAllocationInputLot,
 } from './pure.ts';
@@ -343,6 +348,9 @@ Deno.serve(createHandler(async (req: Request) => {
       fill_unfilled_still_working: 0,
       fill_partial_no_price: 0,
       fetch_errors: 0,
+      // INC-148 — broker-truth continuation reconciliation.
+      lots_updated_by_partial_continuation: 0,
+      lots_no_change_broker_matched: 0,
       // ACT-493 v1 Turn 3B — M7 exit-fill loop tallies.
       exit_candidates_discovered: 0,
       exit_fills_applied_lots: 0,
@@ -354,6 +362,14 @@ Deno.serve(createHandler(async (req: Request) => {
       lots_closed_by_exit_fill: 0,
     };
     const adopted: Array<{ ticker: string; side: string; qty: number; avg_price: number; lot_id: string | null; order_id: string }> = [];
+    // INC-148 — records emitted by the update_to_broker branch. Observability
+    // parity with `adopted`; the audit row is the durable evidence.
+    const updatedByContinuation: Array<{
+      ticker: string; side: string; order_id: string; lot_id: string;
+      before_qty: number; before_cost_basis: number; before_filled_qty: number; before_remaining_qty: number;
+      after_qty: number; after_cost_basis: number; after_remaining_qty: number;
+      delta_qty: number; broker_avg_fill_price: number;
+    }> = [];
 
     for (const c of candidates) {
       try {
@@ -368,9 +384,137 @@ Deno.serve(createHandler(async (req: Request) => {
         }
         const qty = fill.filled_qty;
         const avg = fill.avg_fill_price;
-        const costBasis = avg * qty;
 
+        // INC-148 — reconciliation classifier drives the branch. Read
+        // existing lot (if any) FOR UPDATE inside a per-order tx so an
+        // interleaved sweep tick cannot race the UPDATE.
         let lotId: string | null = null;
+        let action: ReturnType<typeof classifyBrokerContinuation> = {
+          kind: 'adopt_new', qty, cost_basis: avg * qty,
+        };
+        let existingLotSnapshot: {
+          lot_id: string; qty: number; cost_basis: number;
+          filled_qty: number; remaining_qty: number;
+        } | null = null;
+
+        // Read existing lot outside the tx first (dry-run needs it too);
+        // the write-branch re-reads FOR UPDATE inside the tx for safety.
+        const existingRows = await sql<{
+          lot_id: string; qty: number; cost_basis: number;
+          filled_qty: number; remaining_qty: number;
+        }[]>`
+          SELECT lot_id::text AS lot_id,
+                 qty::float8 AS qty,
+                 cost_basis::float8 AS cost_basis,
+                 filled_qty::float8 AS filled_qty,
+                 remaining_qty::float8 AS remaining_qty
+          FROM overshoot_lots
+          WHERE source_order_id = ${c.order_id}
+          LIMIT 1
+        `;
+        if (existingRows.length > 0) {
+          existingLotSnapshot = existingRows[0];
+        }
+        action = classifyBrokerContinuation({
+          brokerFilledQty: qty,
+          brokerAvgFillPrice: avg,
+          existingLot: existingLotSnapshot,
+        });
+
+        if (action.kind === 'no_change') {
+          tally.lots_no_change_broker_matched += 1;
+          tally.already_ledgered_skipped += 1;
+          continue;
+        }
+
+        if (action.kind === 'update_to_broker' && existingLotSnapshot) {
+          if (!dryRun) {
+            await sql.begin(async (tx) => {
+              const locked = await tx<{
+                lot_id: string; qty: number; cost_basis: number;
+                filled_qty: number; remaining_qty: number;
+              }[]>`
+                SELECT lot_id::text AS lot_id,
+                       qty::float8 AS qty,
+                       cost_basis::float8 AS cost_basis,
+                       filled_qty::float8 AS filled_qty,
+                       remaining_qty::float8 AS remaining_qty
+                FROM overshoot_lots
+                WHERE source_order_id = ${c.order_id}
+                FOR UPDATE
+              `;
+              if (locked.length === 0) return;
+              const cur = locked[0];
+              // Re-classify under lock (state may have advanced).
+              const reAction = classifyBrokerContinuation({
+                brokerFilledQty: qty,
+                brokerAvgFillPrice: avg,
+                existingLot: cur,
+              });
+              if (reAction.kind !== 'update_to_broker') return;
+              await tx`
+                UPDATE overshoot_lots
+                   SET qty           = ${reAction.new_qty},
+                       cost_basis    = ${reAction.new_cost_basis},
+                       remaining_qty = ${reAction.new_remaining_qty},
+                       updated_at    = now()
+                 WHERE lot_id = ${cur.lot_id}::uuid
+              `;
+              await writeStrategyAuditEvent({
+                strategyKey: 'overshoot',
+                action: 'overshoot.lot.updated_by_partial_continuation',
+                actorId,
+                targetType: 'overshoot_lots',
+                targetId: cur.lot_id,
+                correlationId,
+                metadata: {
+                  severity: 'medium',
+                  symbol: c.ticker, side: c.side,
+                  source_order_id: c.order_id,
+                  client_order_id: c.client_order_id,
+                  before: {
+                    qty: cur.qty, cost_basis: cur.cost_basis,
+                    filled_qty: cur.filled_qty, remaining_qty: cur.remaining_qty,
+                  },
+                  after: {
+                    qty: reAction.new_qty, cost_basis: reAction.new_cost_basis,
+                    filled_qty: cur.filled_qty, remaining_qty: reAction.new_remaining_qty,
+                  },
+                  delta_qty: reAction.delta_qty,
+                  broker_filled_qty: qty,
+                  broker_avg_fill_price: avg,
+                  rationale:
+                    'INC-148 broker-truth continuation: broker cumulative qty exceeds ledger qty; UPDATE-to-broker with cost_basis=broker_qty*avg_fill_price; remaining_qty=broker_qty-filled_qty; true-up propagates to exit sizer via authoritative qty/cost_basis.',
+                  sweep_version: OVERSHOOT_FILL_SWEEP_VERSION,
+                  discovery_query_fingerprint: OVERSHOOT_FILL_SWEEP_DISCOVERY_QUERY_FINGERPRINT,
+                },
+              });
+              updatedByContinuation.push({
+                ticker: c.ticker, side: c.side, order_id: c.order_id, lot_id: cur.lot_id,
+                before_qty: cur.qty, before_cost_basis: cur.cost_basis,
+                before_filled_qty: cur.filled_qty, before_remaining_qty: cur.remaining_qty,
+                after_qty: reAction.new_qty, after_cost_basis: reAction.new_cost_basis,
+                after_remaining_qty: reAction.new_remaining_qty,
+                delta_qty: reAction.delta_qty, broker_avg_fill_price: avg,
+              });
+            });
+          } else {
+            updatedByContinuation.push({
+              ticker: c.ticker, side: c.side, order_id: c.order_id, lot_id: existingLotSnapshot.lot_id,
+              before_qty: existingLotSnapshot.qty, before_cost_basis: existingLotSnapshot.cost_basis,
+              before_filled_qty: existingLotSnapshot.filled_qty,
+              before_remaining_qty: existingLotSnapshot.remaining_qty,
+              after_qty: action.new_qty, after_cost_basis: action.new_cost_basis,
+              after_remaining_qty: action.new_remaining_qty,
+              delta_qty: action.delta_qty, broker_avg_fill_price: avg,
+            });
+          }
+          tally.lots_updated_by_partial_continuation += 1;
+          continue;
+        }
+
+        // action.kind === 'adopt_new' — original INSERT pathway.
+        const costBasis = avg * qty;
         if (!dryRun) {
           const rows = await sql<{ lot_id: string }[]>`
             INSERT INTO overshoot_lots
