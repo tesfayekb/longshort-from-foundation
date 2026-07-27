@@ -1,9 +1,18 @@
-# ACT-581 — S5-L PAPER-ARM LOCK (charter, ARMED-PENDING-OPERATOR)
+# ACT-581 — S5-L PAPER-ARM LOCK (charter, DESIGN-VALIDATED-NOT-BUILT)
 
-**SELECT now():** 2026-07-26 07:33:05 UTC
+**SELECT now():** 2026-07-27 03:45:42 UTC (status-correction re-header)
+**Original filing:** 2026-07-26 07:33:05 UTC
 
-**Status: ARMED-PENDING-OPERATOR.** Nothing trades without operator word.
-First execution target: **Monday 2026-08-03** (first-Monday cadence).
+**Status: DESIGN-VALIDATED-NOT-BUILT.** Per operator redirect
+(2026-07-27), the paper-arm question is DEFERRED. Nothing builds,
+nothing trades, no Monday target. The five-box operator-word
+checklist at the foot of this charter is **WITHDRAWN**; the shipping
+configuration table below is retained as **design record only** — it
+documents what would ship *if* the paper-arm were greenlit, not a
+commitment to build. Momentum holdout 2026 H1 is SPENT
+(`ACT-580-S5L-HOLDOUT.md`); k=12 reservation for the 8-week gate is
+VACATED and will be re-consumed if/when the arm is greenlit under a
+new pre-registration.
 
 ## Deviations first
 - None from the S5-L finalization train. Shipping config is BARE
