@@ -235,6 +235,9 @@ Cross-reference: S3 texture verdict (fails CAGR + worst-year + every-year net) i
 > | 16 | M-6 Deployability variants ([H] sector-cap 25% / [I] ADV-floor top-60 / [J] H+I) | ROI-improvement battery pre-reg 2026-07-27 | ✅ | NO-SHIP — concentration telemetry improves, CAGR drag −0.8pp to −2.1pp; deployability tax is real but small |
 > | 17 | M-1b Intersection test ([K] triple-intersection / [L] consistency-rank / [M] smoothness) | operator pre-reg 2026-07-27 (post-M-6) | ✅ | NO-SHIP — intersections concentrate 3-1 reversal exposure; echo-C reference row still only beat |
 > | 18 | M-3b Steady-state-90 [N] (always-full, refills from full 905) | operator pre-reg 2026-07-27 (post-M-1b) | ✅ | NO-SHIP — always-full rule reaches past rank 100 on 61% of sessions; +137 bps/yr toll + rank-dilution ⇒ −3.45pp CAGR vs A |
+> | 19 | M-7 [P] PURE-ECHO (formal Novy-Marx 12-7, top-90 of full 905, monthly) | M-7 slate pre-reg 2026-07-27 (post-M-3b) | ✅ | NO-SHIP — 12-7 first-class ranker underperforms 12-1 by −3.68pp CAGR; M-1 [C] within-pool prior does NOT transfer to first-class ranker |
+> | 20 | M-7 [Q] RESIDUAL-MOMENTUM (12-1 − β·SPY-12-1, top-90, monthly) | M-7 slate pre-reg 2026-07-27 | ✅ | NO-SHIP (**SHARPE-FAVORED-NON-SHIP**) — crash-tail prior CONFIRMED (2022 Sep-Dec −0.40% vs −4.19%; DD −14.02% vs −18.36%; Sharpe 1.061 > 1.028); CAGR gate fails by 4.25pp |
+> | 21 | M-7 [R] INVERSE-VOL (name-level 1/σ_60d, cap 3× min, incumbent A names, monthly) | M-7 slate pre-reg 2026-07-27 | ✅ | NO-SHIP (**SHARPE-FAVORED-NON-SHIP**) — Sharpe 1.147 vs 1.028, DD −15.42% vs −18.36%, CAGR flat (−0.28pp); distinct from G-2 (name-level weighting, not book-level throttle) |
 >
 > **Not counted (unblocked-and-untested):** S7 VRP-in-options-month (BLOCKED on Polygon Options data); S8 Index-events (DEFERRED on ingest); S9-c Sector intraday leg (DEFERRED-TYPED); S10-BACKFILL (DORMANT, operator-gated); S10-FORWARD (AUTO-REMINDER 2027-07-01).
 >
