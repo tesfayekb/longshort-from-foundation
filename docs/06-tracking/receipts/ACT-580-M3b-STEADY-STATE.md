@@ -156,8 +156,9 @@ years.
 | 17 | M-1b intersection ([K]/[L]/[M]) | NO-SHIP — intersections concentrate reversal exposure |
 | **18** | **M-3b steady-state-90 [N]** | **NO-SHIP — always-full rule buys weaker names to stay full** |
 
-**Consolidated ROI verdict:** After 7 refinement receipts spanning
-construction, hold-length, exit-overlay, deployability, sub-rank
-intersection, and always-full construction, the frozen S5-L BARE
-configuration remains the local optimum. **Status: OPERATOR-RULING-PENDING.**
-Nothing builds until the operator rules on the completed battery.
+**Consolidated ROI verdict (through k=18):** After 7 refinement receipts
+spanning construction, hold-length, exit-overlay, deployability,
+sub-rank intersection, and always-full construction, the frozen S5-L
+BARE configuration remains the local optimum. **Continues into M-7
+supervisor-authored slate (k=19..21).** Final BATTERY-CLOSE table
+re-emitted in ACT-580-M7R-INVERSE-VOL.md upon slate close.
