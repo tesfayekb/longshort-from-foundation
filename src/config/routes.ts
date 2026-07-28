@@ -30,6 +30,7 @@ export const ROUTES = {
   ADMIN_ONBOARDING: '/admin/onboarding',
   ADMIN_SECURITY: '/admin/security',
   ADMIN_API_CONNECTIONS: '/admin/api-connections',
+  ADMIN_KILL_SWITCH: '/admin/kill-switch',
 
   // Trading
   TRADING: '/trading',
