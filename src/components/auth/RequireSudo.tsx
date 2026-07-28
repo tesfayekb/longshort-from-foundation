@@ -12,7 +12,7 @@
  * Use for top-level routes whose mere presence is a sensitive action
  * (e.g. /mfa-enroll). For inline button handlers, prefer `useSudoGate()`.
  */
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ReauthDialog } from '@/components/auth/ReauthDialog';
 import { useSudoMode } from '@/hooks/useSudoMode';
@@ -30,6 +30,10 @@ export function RequireSudo({ actionKey, fallback = '/settings/security', childr
   const { isSudo, grantSudo } = useSudoMode();
   const navigate = useNavigate();
   const [open, setOpen] = useState(!isSudo);
+  // Tracks a just-completed verification. Prevents the dialog-close callback
+  // (which ReauthDialog fires BEFORE onVerified) from bouncing the operator
+  // to `fallback` in the same tick the sudo grant is about to land.
+  const verifiedRef = useRef(false);
 
   // Keep the dialog state in sync if sudo is granted from elsewhere.
   useEffect(() => {
@@ -37,6 +41,7 @@ export function RequireSudo({ actionKey, fallback = '/settings/security', childr
   }, [isSudo]);
 
   const handleVerified = useCallback(() => {
+    verifiedRef.current = true;
     grantSudo();
     void logSudoEvent('auth.sudo_granted', actionKey);
     void logSudoEvent('auth.sensitive_action_performed', actionKey);
@@ -45,7 +50,7 @@ export function RequireSudo({ actionKey, fallback = '/settings/security', childr
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
-      if (!next && !isSudo) {
+      if (!next && !isSudo && !verifiedRef.current) {
         // Cancelled without verifying — bounce back.
         navigate(fallback, { replace: true });
         return;
