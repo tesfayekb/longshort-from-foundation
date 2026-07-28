@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Shield, Key, FileText, Activity, Cog, UserPlus, ShieldCheck, Plug } from 'lucide-react';
+import { LayoutDashboard, Users, Shield, Key, FileText, Activity, Cog, UserPlus, ShieldCheck, Plug, Power } from 'lucide-react';
 import type { NavSection } from './navigation.types';
 import { ROUTES } from './routes';
 
@@ -74,6 +74,12 @@ export const adminNavigation: NavSection[] = [
         url: ROUTES.ADMIN_API_CONNECTIONS,
         icon: Plug,
         permission: 'admin.config',
+      },
+      {
+        title: 'Kill Switch',
+        url: ROUTES.ADMIN_KILL_SWITCH,
+        icon: Power,
+        permission: 'system.kill_switches.manage',
       },
     ],
   },
