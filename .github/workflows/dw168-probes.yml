@@ -13,9 +13,10 @@ name: dw168-probes
 #   SUPABASE_SERVICE_ROLE_KEY
 
 on:
-  schedule:
+  # PROJECT SHUTDOWN 2026-09-03: schedule disabled. Uncomment to resume.
+  # schedule:
     # 06:00 UTC Monday — after weekend accrual, before the operator's RTH week.
-    - cron: '0 6 * * 1'
+    # - cron: '0 6 * * 1'
   workflow_dispatch:
 
 permissions:
