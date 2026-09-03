@@ -40,8 +40,9 @@ name: insider-discovery
 on:
   # Daily mode — 20:15 UTC weekdays, 30-min buffer before the 21:15 UTC
   # consumer cron (cron(longshort.insider.compute) per DEC-058 §(k)).
-  schedule:
-    - cron: '15 20 * * 1-5'
+  # PROJECT SHUTDOWN 2026-09-03: schedule disabled. Uncomment to resume.
+  # schedule:
+    # - cron: '15 20 * * 1-5'
   # Manual one-shot backfill — operator drives via workflow_dispatch with
   # explicit from/to ISO dates. Inputs default to empty so a misclick can
   # NEVER trigger a many-day egress storm.
